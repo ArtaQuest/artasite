@@ -1687,11 +1687,27 @@ function aq_app_current_detection() {
  */
 add_action( 'template_redirect', function () {
 	$path = trim( (string) wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ?? '' ), PHP_URL_PATH ), '/' );
-	if ( 'works' === $path || array_key_exists( $path, aq_feed_hubs() )
-		|| aq_app_is_private_soft_path()
-		|| aq_app_current_notebook()
-		|| aq_app_current_detection() ) {
+	$soft_public = ( 'works' === $path || array_key_exists( $path, aq_feed_hubs() )
+		|| aq_app_current_notebook() || aq_app_current_detection() );
+	if ( $soft_public || aq_app_is_private_soft_path() ) {
 		status_header( 200 );
+	}
+	// AND LET THE EDGE KEEP THEM. These are is_404() to WP, so core's send_headers() has already
+	// attached no-cache/no-store — it runs on `wp`, before this hook, so correcting the STATUS left
+	// the caching untouched. The result: /works/ and all eleven kind hubs, the busiest public pages
+	// on the site, re-executed WordPress at origin on every single view, while / and /about/ (real
+	// pages) were served from the edge.
+	//
+	// Only for a signed-OUT visitor, and only for the public soft routes. The shell injects
+	// window.AQ_USER and a nonce, so a member's response must never be shared — for them the
+	// no-store above is correct and stays. Anonymously AQ_USER is null, and this is exactly what
+	// the front page already does (max-age=30, must-revalidate), so it is the site's own pattern
+	// rather than a new policy. Private surfaces (/console/, /studio/nb/) are excluded outright.
+	if ( $soft_public && ! is_user_logged_in() && ! headers_sent() ) {
+		header_remove( 'Cache-Control' );
+		header_remove( 'Pragma' );
+		header_remove( 'Expires' );
+		header( 'Cache-Control: max-age=30, must-revalidate' );
 	}
 }, 6 );
 
