@@ -119,7 +119,7 @@ const OBJECTIONS: { q: string; a: string }[] = [
 const RULES: { rule: string; body: string }[] = [
   {
     rule: "The checklist never gives a score",
-    body: "It reports facts, and for each fact it shows the evidence it read. No number, no grade, no ranking. It refuses a notebook for one kind of reason only: something that makes the run impossible for a stranger to repeat. Everything else is shown as a warning and lets the work through. Members do rank published work between themselves. They give hearts, and a challenge pays its whole prize to the entry with the most hearts. Hearts decide prizes. Hearts never decide what gets published.",
+    body: "It reports facts, and for each fact it shows the evidence it read. No number, no grade, no ranking. It refuses a notebook for two kinds of reason, and no others: something that makes the run impossible for a stranger to repeat, and our own storage limits — at most 24 files, 512 MB each, 1 GB in total. Everything else is shown as a warning and lets the work through. Members do rank published work between themselves. They give hearts, and a challenge pays its whole prize to the entry with the most hearts. Hearts decide prizes. Hearts never decide what gets published.",
   },
   {
     rule: "Every input must be public",
@@ -254,9 +254,9 @@ export default function About() {
           <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-ink">
             A not-for-profit social feed for science and education. Every post here is a public notebook on Kaggle:
             writing and code that Kaggle has already run on its own computers. Kaggle keeps a public
-            record of that run. We read that record and show you what it says. Only the person who wrote
-            the notebook can publish it here. It stays free to read, and anyone can run it again,
-            forever.
+            record of that run. We read that record and show you what it says. Only the person who wrote the notebook can publish it here. It stays free to read, and anyone can run it
+            again on Kaggle for as long as its author keeps it there — which is why publishing also
+            mints a permanent citation link that outlives the notebook.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <Button href="/works/" size="xl">Open the feed</Button>
