@@ -819,7 +819,13 @@ function aq_app_head_meta() {
 	} elseif ( $det ) {
 		// Describe it the way the page does: an instrument measured something, at a place, at a
 		// time. No interpretation — the detector's own words are all this is allowed to claim.
+		// The headline usually ALREADY carries the place ("Internet connectivity loss, Hong Kong"),
+		// so appending it unconditionally produced "…, Hong Kong, Hong Kong". Append only when the
+		// headline does not already say it.
 		$where = trim( (string) ( $det->place ?: $det->country ) );
+		if ( '' !== $where && false !== stripos( (string) $det->headline, $where ) ) {
+			$where = '';
+		}
 		$meta  = json_decode( (string) ( $det->measures ?? '' ), true );
 		$inst  = trim( (string) ( $meta['source']['name'] ?? '' ) );
 		$desc  = '' !== $inst
