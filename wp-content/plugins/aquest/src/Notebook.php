@@ -1201,8 +1201,16 @@ final class Notebook {
 		$flagged = 0;
 		try {
 			if ( class_exists( '\\AQ\\Fearometer' ) && method_exists( '\\AQ\\Fearometer', 'score' ) ) {
-				$score   = (int) Fearometer::score( $body );
-				$flagged = $score >= Fearometer::LIMIT ? 1 : 0;
+				// score() returns an ARRAY — [ fear, flagged, reason, categories ]. This cast it to
+				// int, and (int) on a non-empty array is 1, so the test was always `1 >= 70` and
+				// every comment was recorded unflagged no matter what it said. ArtaMod has been
+				// running and discarding its own verdict; the /about page meanwhile promises members
+				// that comments ARE checked.
+				//
+				// Read the verdict's own `flagged`, which score() computes against limit() — the
+				// operator-settable threshold — rather than re-deriving it from the constant here.
+				$verdict = Fearometer::score( $body );
+				$flagged = ( is_array( $verdict ) && ! empty( $verdict['flagged'] ) ) ? 1 : 0;
 			}
 		} catch ( \Throwable $e ) { $flagged = 0; } // ArtaMod never blocks posting
 		$cid = Data::insert( 'aq_comments', [
