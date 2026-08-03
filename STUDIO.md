@@ -1,5 +1,10 @@
 ## IMPORTANT: WP-CLI in WordPress Studio
 
+> **Deploying ArtaQuest is not done with `studio push`.** This file is the WordPress Studio
+> CLI reference and describes the tool in general. For this project the only route to
+> production is `git push` to `main` — see [DEPLOYING.md](DEPLOYING.md). Production runs
+> `opcache.validate_timestamps = 0`, so PHP copied in any other way never executes.
+
 When following any WordPress skill or documentation that references `wp` commands, you MUST prefix them with `studio`:
 
 - Skill says: `wp plugin install woocommerce` → Run: `studio wp plugin install woocommerce`

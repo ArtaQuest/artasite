@@ -23,9 +23,12 @@ The short version of the conventions:
 - Backend: one route per row in `Rest::ROUTES`, one static method on a domain class.
   Normalized `aq_*` tables, append-only ledgers, keyset cursors — never OFFSET, never
   `wp_posts` for high-volume data, all SQL through `$wpdb->prepare()`.
-- Frontend: pages are presentational; all backend calls go through
-  `artaquest-web/src/lib/api.ts`. No permanently hardcoded English UI text.
-- Brand: gold `#E8B923` + blue `#2352E8`, never a third accent. British spelling.
+- Frontend: pages are presentational; NEW backend calls go through
+  `artaquest-web/src/lib/api.ts`. Some older paths still use `lib/wp.ts`, the
+  compatibility bridge — do not add to it. No permanently hardcoded English UI text.
+- Brand: gold `#E8B923` + blue `#1746DC`, never a third accent. British spelling.
+  The pair are exact complements — they sum to white per channel (0xE8+0x17, 0xB9+0x46,
+  0x23+0xDC = 255, 255, 255). `#2352E8` was the old value and sums to 267, which clips.
 - Never commit secrets. The entire database is public by design — secrets live in
   environment variables or the encrypted vault, never in the DB or the repo.
 - Commit explicit paths (`git commit -- <paths>`); `npm run build` output in

@@ -37,7 +37,7 @@ Full rationale: **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 ```
 artaquest-web/                 React + TypeScript SPA (Vite)
-  src/lib/api.ts               ← the entire frontend↔backend contract, typed
+  src/lib/api.ts               ← the frontend↔backend contract, typed (new code uses this)
   src/pages/                   presentational pages
 wp-content/plugins/aquest/     the whole backend — one dependency-free plugin
   src/Rest.php                 ← the entire API surface in one route table
@@ -45,7 +45,7 @@ wp-content/plugins/aquest/     the whole backend — one dependency-free plugin
   src/Notebook.php             the one content model — every submission is a row here
   src/Kernel.php               the reproducibility checklist — key one of the gate
   src/Kaggle.php               the read client the checklist runs on
-  src/{Social,Economy,Auth,I18n,…}.php   one domain class each (~26)
+  src/{Social,Economy,Auth,I18n,…}.php   one domain class each (65)
 wp-content/themes/artaquest-theme/   serves the SPA shell + SEO; app/ = the built SPA
 ARCHITECTURE.md                the scaling design
 CUTOVER.md                     historical: the old LMS/Woo stack retirement (complete)

@@ -24,7 +24,7 @@ WordPress here is a runtime and an auth/session provider, not the data model.
             └──────┬────────┘
                    │  /wp-json/aq/v1/*   (JSON, mostly GET → edge-cacheable)
             ┌──────▼────────┐
-            │  aquest        │   one plugin, ~60 domain classes
+            │  aquest        │   one plugin, 65 domain classes
             │  REST router   │
             └──────┬────────┘
                    │ $wpdb (prepared)
@@ -425,7 +425,7 @@ a third-party **service**; see §3, "One dependency that is not code".
 ```
 aquest/
   aquest.php        Plugin bootstrap: constants, autoloader, activation→Schema, rest_api_init→Rest
-  src/              ~60 domain classes; the publication path is these:
+  src/              65 domain classes; the publication path is these:
     Schema.php      Versioned table install/migrate (dbDelta)
     Db.php          Query helpers: page() cursor, bump() counter, one()/all()/json columns
     Rest.php        Route table → domain methods; auth/permission; JSON + cache headers
@@ -459,8 +459,12 @@ to navigate."
 
 ## 7. Frontend (`artaquest-web/`)
 
-Vite + React + TypeScript SPA. `src/lib/api.ts` is the **only** module that talks to
-the backend — one typed client mirroring `Rest::ROUTES`. Pages are presentational and
+Vite + React + TypeScript SPA. `src/lib/api.ts` is the client NEW code talks to the
+backend through — one typed module mirroring `Rest::ROUTES`. It is not yet the only
+one, and the docs used to claim it was: `src/lib/wp.ts` is a compatibility bridge left
+from the MasterStudy cutover (174 exports, imported by 78 files, calling the same
+routes), and `auth.ts`, `i18n.ts` and `verify.ts` each hold their own fetch. Do not add
+to that set — the goal is still one client, and saying so falsely does not get us there. Pages are presentational and
 read from the client. The i18n engine (`src/lib/i18n.ts`) gates first paint so no
 untranslated component is ever shown, and persists new translations back to the cache.
 

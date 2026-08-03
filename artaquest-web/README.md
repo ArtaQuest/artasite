@@ -33,8 +33,10 @@ the cross-origin cookie (see `vite.config.ts` + the WP dev-shim in
 npm run build        # -> wp-content/themes/artaquest-theme/app/ (hashed bundle + manifest)
 ```
 
-The bundle is committed with the theme and deployed via `studio push` — no separate
-front-end host. WP reads the Vite manifest to enqueue the current hashed entry.
+The bundle is **not** committed: `app/` is gitignored, and CI builds it on every push to
+`main`. Deploying is `git push` and nothing else — see [DEPLOYING.md](../DEPLOYING.md).
+Nothing deploys from a laptop, and `studio push` is not the route. WP reads the Vite
+manifest to enqueue the current hashed entry.
 
 ## Layout
 

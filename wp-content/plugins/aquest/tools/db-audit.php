@@ -1,6 +1,6 @@
 <?php
 /**
- * DB lean-audit — the engine of the cleanup/refactor dev cycle (see /CLEANUP.md).
+ * DB lean-audit — the engine of the cleanup/refactor dev cycle.
  *
  * For every schema column it greps the whole codebase (plugin + theme + SPA) for that
  * column name and reports how many times it is referenced OUTSIDE the schema definition.

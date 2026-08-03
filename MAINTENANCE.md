@@ -20,7 +20,7 @@ and built in CI. Committing it makes every working copy fight over the same mani
 - **Scale workers**: claims are atomic + fenced — run extra workers anytime: `cd tools/ticket-agent && nohup node notebook-relay.mjs > ~/Library/Logs/artaquest-notebook-relay-N.log 2>&1 &` (a second permanent worker is installed as `org.artaquest.notebook-relay2`).
 - Executor venv: `~/.artaquest-dev/nb-venv` (jupyter + numpy/pandas/matplotlib/pillow; sitecustomize blocks non-loopback sockets when `AQ_OFFLINE=1`).
 - Pipeline state: `ssh artaquest 'cd ~/htdocs && wp db query "SELECT id,nb_id,type,state,iters_done,score FROM wp_aq_nb_runs ORDER BY id DESC LIMIT 10"'`.
-- Publish gate-passers: `wp eval-file /tmp/publish-notebooks.php` (source: `tools/publish-notebooks.php`). Seed demos: `tools/seed-notebooks.php <dir> <iters>` (filename = kind).
+- Seed demos: `tools/seed-notebooks.php <dir> <iters>` (filename = kind). There is no publish-from-CLI step: publication is requested by the author and confirmed from their own inbox, and nothing else can mint it.
 - Fees: publishing free; challenge entry fees → pools, winner-takes-all at full moons (settlement: lazy + hourly cron `aq_nb_settle`).
 
 ## In-browser runner — the Lab, INSIDE the SPA (2026-07-16; JupyterLite scrapped 2026-07-15)
@@ -57,4 +57,4 @@ and built in CI. Committing it makes every working copy fight over the same mani
 - No astrology surfaces; no radial charts; gold+blue only (`255−gold`); no third accent.
 
 ## GitHub
-- Private repo: `github.com/artaquest/artaquest` (push access via the Vault's GitHub PAT; `gh auth login` for interactive use). Never commit secrets — the Vault is the only secret store.
+- Public repo: `github.com/ArtaQuest/artasite` — the only route to production. Never commit secrets; the Vault is the only secret store.
