@@ -465,6 +465,11 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
 export function AppShell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const active = "/" + (pathname.split("/")[1] || "");
+  // The feed surfaces: an endless stream, not a document with an end.
+  const onFeed = active === "/" || active === "/works";
+  // Arta needs a ledge. The two that exist — the messaging dock and the bottom tab bar — are BOTH
+  // members-only, so a signed-out visitor has none and the figure stands on nothing.
+  const signedIn = isLoggedIn();
   // One state drives both viewports. Desktop has the room, so the menu rests EXPANDED
   // (labels showing); phones have none, so the drawer rests closed and only opens on tap.
   // `md` is Tailwind's 768px breakpoint — keep this matchMedia query in sync with it.
@@ -530,13 +535,20 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className="overflow-x-clip">
           <div className="mx-auto max-w-content px-gutter py-7">{children}</div>
         </main>
-        <Footer />
+        {/* The feed is a stream, not a document. A marketing footer under an endless column of
+            posts is furniture nobody scrolled for, and it lands directly beneath the right rail
+            where it reads as part of it. Every link in it also lives in the left rail. */}
+        {onFeed ? null : <Footer />}
       <BottomTabs />
       </div>
       {/* ONE Arta for the whole app: a fixed, click-through layer, so it stands
           on the real cards of the page and can travel between them. z-30 sits
           under the mobile nav (z-40) and every dialog. */}
-      <Arta fill figure={128} start={0.72} ground={false}
+      {/* `ground` draws the stage line. OFF when a real ledge exists — Arta prefers the messaging
+          dock, its documented home — and ON when none does. Both existing floors (the dock in
+          ArtaBot.tsx and the bottom tab bar above) render only for members, so a signed-out visitor
+          had nothing underfoot at all. Feet on a visible edge either way, which is the rule. */}
+      <Arta fill figure={128} start={0.72} ground={!signedIn}
         className="pointer-events-none fixed inset-0 z-30" />
     </div>
   );

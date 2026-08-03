@@ -581,20 +581,47 @@ function NewsCard({ items }: { items: NewsItem[] | null }) {
   if (!items?.length) return null;
   return (
     <RailCard title="Detected by instruments">
-      {items.slice(0, 4).map((n) => (
-        <div key={n.ekey || n.id} className="-mx-1 rounded-field px-1 py-1.5">
-          <p className="text-[13.5px] font-semibold leading-snug text-ink" data-ay-skip="1">{n.title}</p>
-          <p className="mt-0.5 text-[12px] text-ink-3">
-            {n.measure ? <b className="text-ink-2" data-ay-skip="1">{n.measure}</b> : null}
-            {n.measure && (n.place || n.country) ? " · " : null}
-            <span data-ay-skip="1">{n.place || n.country}</span>
-          </p>
-          <p className="text-[11.5px] text-ink-3">
-            {n.detector ? <span data-ay-skip="1">{n.detector}</span> : null}
-            {n.updated ? ` · ${timeAgo(n.updated)}` : ""}
-          </p>
-        </div>
-      ))}
+      {items.slice(0, 4).map((n) => {
+        // The headline is composed from the same fields as the meta lines, so it usually ALREADY
+        // contains them: "Major heat signature, Russia (483 MW)" was followed by "483 MW · Russia"
+        // and then "Satellite thermal anomaly", which said Russia twice and MW three times. Show a
+        // meta token only when the headline does not already carry it.
+        // A token counts as already-said if the headline contains it, OR contains its leading
+        // value — "483 MW radiated" is redundant beside "…, Russia (483 MW)" even though the exact
+        // phrase differs. Two tokens is the right depth: enough for "483 MW" and "77% below",
+        // not so many that a genuinely different measurement gets suppressed.
+        const said = (t?: string) => {
+          if (!t) return false;
+          const title = n.title.toLowerCase();
+          if (title.includes(t.toLowerCase())) return true;
+          const head = t.split(/\s+/).slice(0, 2).join(" ").toLowerCase();
+          return head.length > 1 && title.includes(head);
+        };
+        const where = n.place || n.country;
+        const meta = [
+          said(n.measure) ? "" : n.measure,
+          said(where) ? "" : where,
+          said(n.detector) ? "" : n.detector,
+        ].filter(Boolean);
+        const when = n.updated ? timeAgo(n.updated) : "";
+        // Every row is a link now. feed() has emitted `url` since the detection pages shipped;
+        // without an anchor each card was a dead end to a page that exists.
+        const Row = n.url ? "a" : "div";
+        return (
+          <Row
+            key={n.ekey || n.id}
+            {...(n.url ? { href: localePath(n.url) } : {})}
+            className={`-mx-1 block rounded-field px-1 py-1.5${n.url ? " transition-colors hover:bg-space-3" : ""}`}
+          >
+            <p className="text-[13.5px] font-semibold leading-snug text-ink" data-ay-skip="1">{n.title}</p>
+            <p className="mt-0.5 text-[12px] text-ink-3">
+              {meta.length ? <span data-ay-skip="1">{meta.join(" · ")}</span> : null}
+              {meta.length && when ? " · " : null}
+              {when}
+            </p>
+          </Row>
+        );
+      })}
     </RailCard>
   );
 }
