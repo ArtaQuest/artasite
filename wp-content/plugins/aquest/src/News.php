@@ -591,7 +591,7 @@ final class News {
 		// The lede must therefore say a signature was measured and that we classified it — never that
 		// the classification itself was observed.
 		$prep  = self::place_prep( (string) $ev['place'], $ev['place_km'] ?? 0 );
-		$sum   = 'A signature classified as a ' . $kind
+		$sum   = 'A signature classified as ' . self::article_for( $kind ) . ' ' . $kind
 			. ( $where ? ' was measured ' . trim( $prep . ' ' . $where ) : ' was measured' )
 			. ' on ' . gmdate( 'j F Y', (int) $ev['first_ts'] ) . ' at ' . gmdate( 'H:i', (int) $ev['first_ts'] ) . ' UTC by ' . $inst . '.';
 		return [
@@ -854,7 +854,7 @@ final class News {
 			'observed'  => (int) $row['first_ts'], 'updated' => (int) $row['last_ts'],
 			// The visualisation ships WITH the data: inline SVG, so the page needs no second request
 			// and a crawler reads the measurements as text.
-			'svg'       => self::extent_svg( $row ),
+			'svg'       => self::detection_svg( $row ),
 			// Stated on every page, not implied: an instrument measured energy, nothing more.
 			'unknown'   => 'These figures describe what an instrument measured. They do not establish the'
 				. ' cause of the event, who was involved, or any consequence on the ground.',
@@ -868,12 +868,33 @@ final class News {
 		return mb_substr( $b ?: 'detection', 0, 90 ) . '-e' . (int) $row['id'];
 	}
 
+	/**
+	 * 'a' or 'an', decided by SOUND rather than spelling where the two disagree.
+	 *
+	 * Every seismic page read "A signature classified as a earthquake". The kind string comes from
+	 * the detector, so the article cannot be baked into the surrounding prose — it has to be chosen
+	 * per kind, in one place both deks call, or the two sentences drift apart the moment a detector
+	 * is added.
+	 */
+	private static function article_for( $noun ) {
+		$n = ltrim( strtolower( trim( (string) $noun ) ) );
+		if ( '' === $n ) { return 'a'; }
+		// Sounded, not spelled: 'an hour' takes 'an', 'a university' and 'a one-off' take 'a'.
+		foreach ( [ 'hour', 'honest', 'honour', 'heir' ] as $vowelish ) {
+			if ( 0 === strpos( $n, $vowelish ) ) { return 'an'; }
+		}
+		foreach ( [ 'uni', 'use', 'user', 'euro', 'one' ] as $consonantish ) {
+			if ( 0 === strpos( $n, $consonantish ) ) { return 'a'; }
+		}
+		return in_array( $n[0], [ 'a', 'e', 'i', 'o', 'u' ], true ) ? 'an' : 'a';
+	}
+
 	/** One sentence: what was measured, where, when, by what. */
 	private static function event_dek( $row, $src ) {
 		$where = self::place_phrase( (string) $row['place'], (string) $row['country'], $row['place_km'] ?? 0, ', ' );
 		$prep  = self::place_prep( (string) $row['place'], $row['place_km'] ?? 0 );
 		$kind  = (string) ( json_decode( (string) $row['measures'], true )['kind'] ?? 'measurement' );
-		return 'A signature classified as a ' . $kind
+		return 'A signature classified as ' . self::article_for( $kind ) . ' ' . $kind
 			. ( $where ? ' was measured ' . trim( $prep . ' ' . $where ) : ' was measured' )
 			. ' on ' . gmdate( 'j F Y', (int) $row['first_ts'] ) . ' at ' . gmdate( 'H:i', (int) $row['first_ts'] )
 			. ' UTC by ' . (string) ( $src['name'] ?? 'a public instrument feed' ) . '.';
@@ -931,6 +952,96 @@ final class News {
 	 * radiometer records where heat was radiating, not a shock front, and nothing here establishes
 	 * that anything exploded.
 	 */
+	/**
+	 * THE RIGHT PICTURE FOR THE INSTRUMENT — dispatches to the visualisation the data can support.
+	 *
+	 * Seismic pages rendered NOTHING: extent_svg() needs the frozen pixel record and a seismic
+	 * solution has none, so every quake page carried a headline, a table and blank space. The answer
+	 * is not to force a thermal map onto a point solution — it is to draw what a seismometer
+	 * actually measures, which is a hypocentre at a DEPTH.
+	 */
+	public static function detection_svg( $ev ) {
+		if ( 'quake' === (string) ( $ev['detector'] ?? '' ) ) { return self::seismic_svg( $ev ); }
+		return self::extent_svg( $ev );
+	}
+
+	/**
+	 * A DEPTH CROSS-SECTION of a seismic solution: the surface, and the hypocentre beneath it at the
+	 * measured depth, sized by magnitude.
+	 *
+	 * WHAT IT DELIBERATELY DOES NOT DRAW: any circle around the epicentre. A shaking or damage radius
+	 * is MODELLED, not measured — it needs ground conditions, attenuation and a magnitude-distance
+	 * relation this platform has not computed. Drawing one would put a fabricated quantity on the
+	 * page, which is the same line the thermal view holds when it refuses to call its extent a blast
+	 * radius. Depth and magnitude are measured; that is what appears.
+	 */
+	private static function seismic_svg( $ev, $w = 640, $h = 340 ) {
+		$meta  = json_decode( (string) ( $ev['measures'] ?? '' ), true );
+		$meas  = (array) ( $meta['measures'] ?? [] );
+		$mag   = (float) ( $ev['severity'] ?? 0 );
+		// Depth is a measured column on the solution; parse it from the measure rather than guessing.
+		$depth = 0.0;
+		if ( preg_match( '/([0-9]+(?:\.[0-9]+)?)/', (string) ( $meas['Depth'] ?? '' ), $dm ) ) { $depth = (float) $dm[1]; }
+		if ( $mag <= 0 ) { return ''; }
+		$esc = static fn( $x ) => esc_html( (string) $x );
+		// Scale: show at least 60 km of crust, or 1.3x the hypocentre, so a deep event still fits.
+		$span   = max( 60.0, $depth * 1.3 );
+		$surf   = 62.0;                       // y of the surface line
+		$floor  = $h - 54.0;                  // y of the deepest gridline
+		$ykm    = static fn( $km ) => $surf + ( $floor - $surf ) * ( $km / $span );
+		$cx     = $w / 2;
+		$cy     = $ykm( $depth );
+		// Marker area tracks RADIATED ENERGY, which rises ~10^1.5 per magnitude unit — so the dot
+		// grows the way the energy does, not the way the number does.
+		$r      = max( 5.0, min( 34.0, 3.2 * pow( 10, 0.25 * ( $mag - 3.0 ) ) ) );
+		$o  = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . $w . ' ' . $h . '" role="img" '
+			. 'aria-label="' . esc_attr( 'Depth cross-section: M' . number_format( $mag, 1 )
+				. ' at ' . number_format( $depth, 1 ) . ' km depth' ) . '" '
+			. 'style="width:100%;height:auto;background:#06121E;border-radius:10px">';
+		$o .= '<title>' . $esc( (string) ( $ev['headline'] ?? 'Seismic event' ) ) . '</title>';
+		$o .= '<desc>' . $esc( 'Cross-section through the crust. The marker is the hypocentre at its '
+			. 'measured depth, sized by magnitude. No shaking or damage radius is drawn: that would be '
+			. 'modelled, not measured.' ) . '</desc>';
+		// depth gridlines, labelled — the numbers are the point of the figure
+		$step = $span > 240 ? 100 : ( $span > 120 ? 50 : ( $span > 60 ? 25 : 10 ) );
+		for ( $d = $step; $d <= $span; $d += $step ) {
+			$y = round( $ykm( $d ), 1 );
+			$o .= '<line x1="58" y1="' . $y . '" x2="' . ( $w - 18 ) . '" y2="' . $y . '" stroke="#22354a" stroke-width="1"/>'
+				. '<text x="50" y="' . ( $y + 4 ) . '" fill="#8fa3b8" font-size="11" text-anchor="end" '
+				. 'font-family="system-ui,sans-serif">' . (int) $d . ' km</text>';
+		}
+		// the surface
+		$o .= '<line x1="58" y1="' . $surf . '" x2="' . ( $w - 18 ) . '" y2="' . $surf . '" stroke="#E8B923" stroke-width="2"/>'
+			. '<text x="58" y="' . ( $surf - 10 ) . '" fill="#E8B923" font-size="12" '
+			. 'font-family="system-ui,sans-serif">surface</text>';
+		// epicentre tick on the surface, and the vertical to the hypocentre
+		$o .= '<line x1="' . $cx . '" y1="' . ( $surf - 7 ) . '" x2="' . $cx . '" y2="' . round( $cy, 1 )
+			. '" stroke="#1746DC" stroke-width="1.4" stroke-dasharray="4 4"/>';
+		// the hypocentre, pulsing once per cycle so it reads as an event rather than a dot
+		$o .= '<circle cx="' . $cx . '" cy="' . round( $cy, 1 ) . '" r="' . round( $r, 1 ) . '" fill="#E8B923" opacity=".28">'
+			. '<animate attributeName="r" values="' . round( $r, 1 ) . ';' . round( $r * 1.9, 1 ) . ';' . round( $r, 1 )
+			. '" dur="2.6s" repeatCount="indefinite"/>'
+			. '<animate attributeName="opacity" values=".28;0;.28" dur="2.6s" repeatCount="indefinite"/></circle>';
+		$o .= '<circle cx="' . $cx . '" cy="' . round( $cy, 1 ) . '" r="' . round( max( 4.0, $r * 0.42 ), 1 )
+			. '" fill="#E8B923" stroke="#06121E" stroke-width="1.5"/>';
+		// the measurements, as real text
+		$o .= '<text x="' . ( $cx + round( $r, 1 ) + 14 ) . '" y="' . round( $cy + 5, 1 ) . '" fill="#e9eef5" '
+			. 'font-size="14" font-family="system-ui,sans-serif">M' . $esc( number_format( $mag, 1 ) )
+			. ' · ' . $esc( number_format( $depth, 1 ) ) . ' km deep</text>';
+		$foot = trim( (string) ( $meas['Network region'] ?? '' ) );
+		if ( '' !== $foot ) {
+			$o .= '<text x="20" y="' . ( $h - 18 ) . '" fill="#8fa3b8" font-size="12" '
+				. 'font-family="system-ui,sans-serif">' . $esc( mb_substr( $foot, 0, 68 ) ) . '</text>';
+		}
+		$felt = (int) ( $meas['Felt reports'] ?? 0 );
+		if ( $felt > 0 ) {
+			$o .= '<text x="' . ( $w - 18 ) . '" y="' . ( $h - 18 ) . '" fill="#8fa3b8" font-size="12" '
+				. 'text-anchor="end" font-family="system-ui,sans-serif">' . $esc( $felt )
+				. ' felt report' . ( 1 === $felt ? '' : 's' ) . '</text>';
+		}
+		return $o . '</svg>';
+	}
+
 	public static function extent_svg( $ev, $w = 640, $h = 460 ) {
 		$px = json_decode( (string) ( $ev['pixels'] ?? '[]' ), true );
 		if ( ! is_array( $px ) || ! $px ) { return ''; }
