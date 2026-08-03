@@ -31,6 +31,7 @@ happened once and had to be cleaned off production by hand.
 | Gate | Why |
 |------|-----|
 | **hygiene** | No keys, and no machine attribution. GitHub counts a `Co-authored-by:` trailer as a *contributor*, so one trailer lists a tool beside the people who built this. Runs first — a grep settles in a second what a build would take minutes to reject. |
+| **route handlers resolve** | `Rest::ROUTES` names handlers as strings, so a missing class OR method is invisible to `php -l`, `tsc` and the bundler — and produces an identical 500 on whatever route names them. This once shipped two endpoints, one public, with no class. |
 | **php -l** | The plugin and theme never reach a runtime in CI, so syntax is all that can be asserted. |
 | **typecheck** | The whole tree must compile. The one signal that is always meaningful. |
 | **lint** | Only what the push *changed*. A full run reports ~35 pre-existing errors, and a gate that can never go green means nothing ever deploys. |

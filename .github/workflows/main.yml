@@ -125,10 +125,10 @@ jobs:
           # skipped: 279 of 398 rows checked, and it reported success on the 30% it never read.
           # Anchoring on the structure also keeps the doc comment atop Rest.php, which names
           # 'Domain::method' as an example, from being mistaken for a route.
-          pat="^[[:space:]]*\[[[:space:]]*'(GET|POST|PUT|PATCH|DELETE)'[[:space:]]*,[[:space:]]*'[^']*'[[:space:]]*,[[:space:]]*'([A-Z][A-Za-z0-9_]+::[a-z_]+)'"
+          pat="^[[:space:]]*\[[[:space:]]*'(GET|POST|PUT|PATCH|DELETE)'[[:space:]]*,[[:space:]]*'[^']*'[[:space:]]*,[[:space:]]*'([A-Z][A-Za-z0-9_]+::[a-z0-9_]+)'"
           src=wp-content/plugins/aquest/src
           echo "route rows read: $(grep -cE "$pat" $src/Rest.php)"
-          grep -oE "$pat" $src/Rest.php | grep -oE "'[A-Z][A-Za-z0-9_]+::[a-z_]+'$" | tr -d "'" | sort -u > /tmp/handlers.txt
+          grep -oE "$pat" $src/Rest.php | grep -oE "'[A-Z][A-Za-z0-9_]+::[a-z0-9_]+'$" | tr -d "'" | sort -u > /tmp/handlers.txt
           miss=0
           while IFS= read -r h; do
             c="${h%%::*}"; m="${h##*::}"
@@ -162,6 +162,10 @@ jobs:
           npm ci --no-audit --fund=false
           ./node_modules/.bin/tsc --noEmit -p tsconfig.app.json
 
+          # NB: the extension filter is '\.tsx?$' with ONE backslash. A YAML block scalar (run: |)
+          # passes text through verbatim, so a second backslash reaches grep as a LITERAL backslash
+          # and the filter matches nothing — lint then prints "nothing to lint" and passes, on the
+          # workflow that deploys. It was in that state. Do not escape it again.
           # `**` is NOT magic in a git pathspec — it acts as a single `*` and still requires a
           # `/` after src/, so depth-1 files (src/App.tsx, src/main.tsx) were never linted at all.
           # A root commit has no baseline to diff against, so there is no "what this push
@@ -173,7 +177,7 @@ jobs:
             echo "root commit — no diff baseline; tsc and the build still cover the whole tree"
           else
             files=$(cd .. && git diff --name-only --diff-filter=ACMR '${{ steps.range.outputs.range }}' \
-                      -- artaquest-web/src | grep -E '\\.tsx?$' | sed 's|^artaquest-web/||' || true)
+                      -- artaquest-web/src | grep -E '\.tsx?$' | sed 's|^artaquest-web/||' || true)
           fi
           if [ -n "$files" ]; then
             echo "linting:"; echo "$files" | sed 's/^/  /'

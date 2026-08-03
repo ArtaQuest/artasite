@@ -72,7 +72,7 @@ Runs on [WordPress Studio](https://developer.wordpress.com/studio/) (PHP-WASM + 
 ```bash
 studio site start --skip-browser          # run WordPress
 studio wp plugin activate aquest           # installs the schema
-cd artaquest-web && npm install && npm run dev   # SPA at :3000, proxies /wp-json
+cd artaquest-web && npm install && npm run dev   # SPA at :5173, proxies /wp-json
 ```
 
 API check:

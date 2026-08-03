@@ -94,10 +94,10 @@ jobs:
           # skipped: 279 of 398 rows checked, and it reported success on the 30% it never read.
           # Anchoring on the structure also keeps the doc comment atop Rest.php, which names
           # 'Domain::method' as an example, from being mistaken for a route.
-          pat="^[[:space:]]*\[[[:space:]]*'(GET|POST|PUT|PATCH|DELETE)'[[:space:]]*,[[:space:]]*'[^']*'[[:space:]]*,[[:space:]]*'([A-Z][A-Za-z0-9_]+::[a-z_]+)'"
+          pat="^[[:space:]]*\[[[:space:]]*'(GET|POST|PUT|PATCH|DELETE)'[[:space:]]*,[[:space:]]*'[^']*'[[:space:]]*,[[:space:]]*'([A-Z][A-Za-z0-9_]+::[a-z0-9_]+)'"
           src=wp-content/plugins/aquest/src
           echo "route rows read: $(grep -cE "$pat" $src/Rest.php)"
-          grep -oE "$pat" $src/Rest.php | grep -oE "'[A-Z][A-Za-z0-9_]+::[a-z_]+'$" | tr -d "'" | sort -u > /tmp/handlers.txt
+          grep -oE "$pat" $src/Rest.php | grep -oE "'[A-Z][A-Za-z0-9_]+::[a-z0-9_]+'$" | tr -d "'" | sort -u > /tmp/handlers.txt
           miss=0
           while IFS= read -r h; do
             c="${h%%::*}"; m="${h##*::}"
