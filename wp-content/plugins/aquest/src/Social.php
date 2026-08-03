@@ -150,8 +150,24 @@ final class Social {
 		if ( $parent && ! Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_comments' ) . " WHERE id = %d AND context_type = 'thread' AND context_id = %d", [ $parent, $tid ] ) ) {
 			$parent = 0;
 		}
+		// ArtaMod. The /about rule says, without qualification, that when you post a comment it is
+		// checked — and this surface did not call the Fearometer at all. The only context that ever
+		// wrote a moderation flag was the section board, whose courses were purged in July, so every
+		// live discussion board was unscreened while the page promised otherwise.
+		//
+		// Same shape as Notebook::comment: read the verdict's own `flagged`, which score() computes
+		// against the operator-settable limit(). score() returns an ARRAY or NULL, so the emptiness
+		// check covers both. Fail-open by design — ArtaMod never blocks posting, it only sets aside.
+		$flagged = 0;
+		try {
+			if ( class_exists( '\\AQ\\Fearometer' ) && method_exists( '\\AQ\\Fearometer', 'score' ) ) {
+				$verdict = Fearometer::score( $body );
+				$flagged = ( is_array( $verdict ) && ! empty( $verdict['flagged'] ) ) ? 1 : 0;
+			}
+		} catch ( \Throwable $e ) { $flagged = 0; }
 		$id  = Data::insert( 'aq_comments', [
 			'context_type' => 'thread', 'context_id' => $tid, 'parent_id' => $parent, 'author_id' => $uid, 'body' => $body,
+			'flagged' => $flagged,
 			'lang' => self::lang( $req ), 'created' => Data::now(),
 		] );
 		if ( $parent ) { Data::bump( 'aq_comments', [ 'id' => $parent ], 'reply_count', 1 ); } // pages "show N more replies"
@@ -1004,6 +1020,10 @@ final class Social {
 			'replies' => (int) ( $c['reply_count'] ?? 0 ),
 			'edited'  => ! empty( $c['edited'] ),
 			'deleted' => $deleted,
+			// ArtaMod's verdict. Without this the flag is stored and never seen: CommentThread.tsx
+			// renders the "Set aside · ArtaMod" pill on exactly this field, so omitting it made the
+			// whole check invisible on the discussion boards even once it started running.
+			'flagged' => ! empty( $c['flagged'] ),
 			'my_vote' => $myvotes[ (int) $c['id'] ] ?? 0,
 			'at'      => (int) $c['created'],
 		];
