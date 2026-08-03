@@ -465,8 +465,11 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
 export function AppShell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const active = "/" + (pathname.split("/")[1] || "");
-  // The feed surfaces: an endless stream, not a document with an end.
-  const onFeed = active === "/" || active === "/works";
+  // The feed surfaces: an endless stream, not a document with an end. "/" is the feed only for a
+  // MEMBER — a signed-out visitor gets the landing page there, and a marketing page is exactly where
+  // About, Privacy and Terms belong. Dropping the footer from both would have taken the legal links
+  // off the one page most likely to be a stranger's first.
+  const onFeed = (active === "/" && isLoggedIn()) || active === "/works";
   // Arta needs a ledge. The two that exist — the messaging dock and the bottom tab bar — are BOTH
   // members-only, so a signed-out visitor has none and the figure stands on nothing.
   const signedIn = isLoggedIn();
