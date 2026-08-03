@@ -383,6 +383,14 @@ add_filter( 'document_title_parts', function ( $parts ) {
 		$parts['title'] = $nb->title;
 		return $parts;
 	}
+	// An ArtaNews detection. Without this the page returns 200 and still titles itself
+	// "Page not found" — the status was corrected but the title was not, which is the worse
+	// half: a crawler and every social share read the title, not the status line.
+	$det = aq_app_current_detection();
+	if ( $det ) {
+		$parts['title'] = (string) $det->headline;
+		return $parts;
+	}
 	$thread = aq_app_current_thread();
 	if ( $thread ) {
 		$parts['title'] = $thread->title;
@@ -799,6 +807,7 @@ function aq_app_head_meta() {
 	$pslug  = get_query_var( 'aq_profile' );
 	$post   = get_post();
 	$nb     = aq_app_current_notebook();   // /nb/<id>/(<slug>/) — a published feed notebook
+	$det    = aq_app_current_detection();  // /news/<slug>/ — one instrument detection
 	$thread = aq_app_current_thread();     // /discussions/?thread=<id> — its own indexable forum post
 	$puser  = null; // resolved profile user (so the canonical gate knows a /u/<slug>/ is real content)
 	if ( $nb ) {
@@ -806,6 +815,17 @@ function aq_app_head_meta() {
 		if ( '' === $desc ) {
 			$desc = 'A published work on the ArtaQuest feed — a public Kaggle notebook that has been run, checked against Kaggle\'s public record and published by its own author with a permanent DOI short link.';
 		}
+		$type = 'article';
+	} elseif ( $det ) {
+		// Describe it the way the page does: an instrument measured something, at a place, at a
+		// time. No interpretation — the detector's own words are all this is allowed to claim.
+		$where = trim( (string) ( $det->place ?: $det->country ) );
+		$desc  = trim( sprintf(
+			'%s — measured by %s%s. The reading, its full provenance and what it does not establish.',
+			(string) $det->headline,
+			(string) $det->detector,
+			'' !== $where ? ' in ' . $where : ''
+		) );
 		$type = 'article';
 	} elseif ( $thread ) {
 		$desc = (string) $thread->body;
@@ -1526,6 +1546,9 @@ function aq_app_is_genuine_404() {
 	}
 	if ( aq_app_current_notebook() ) {
 		return false; // a published notebook at /nb/<id>/(<slug>/) is real, indexable content
+	}
+	if ( function_exists( 'aq_app_current_detection' ) && aq_app_current_detection() ) {
+		return false; // an ArtaNews detection at /news/<slug>/ is real, indexable content
 	}
 	$aq_404_path = trim( (string) wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ?? '' ), PHP_URL_PATH ), '/' );
 	if ( 'works' === $aq_404_path || array_key_exists( $aq_404_path, aq_feed_hubs() ) ) {
