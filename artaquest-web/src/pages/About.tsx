@@ -62,23 +62,23 @@ function H2({ id, children, className = "" }: { id: string; children: ReactNode;
 const FOUNDER: { label: string; body: string }[] = [
   {
     label: "Tehran, 1994",
-    body: "I was born in Tehran on 15 February 1994. I have two sisters, and we were raised by a single mom who taught French and English. I loved physics most of all, and as a teenager I competed in Iran's national olympiads. I have lived most of my life abroad — across Malaysia, Turkey, and Canada. I started teaching very young, and learned that teaching something is the best way to understand it deeply.",
+    body: "I was born in Tehran on 15 February 1994. I have two sisters, and we were raised by a single mom who taught French and English. I loved physics most of all, and as a teenager I competed in Iran's national olympiads. I have lived most of my life abroad — across Malaysia, Turkey and Canada. I started teaching very young, and I learned that teaching something is the best way to understand it deeply.",
   },
   {
     label: "The climb",
-    body: "I had one goal — to figure out how the universe works, and why — and I followed it upward. From gases to galaxies, then to circuits and information systems, then to machine intelligence, and finally toward biological intelligence: the universe's masterpiece, the matter with the most degrees of freedom, the most conscious entropy. That climb led me to artificial intelligence, and I moved to Montréal to study it for a PhD.",
+    body: "I had one goal — to figure out how the universe works, and why — and I followed it upward. From gases to galaxies, then to circuits and information systems, then to machine intelligence, and finally to biological intelligence: the universe's masterpiece, the matter with the most degrees of freedom, the most conscious entropy. That climb led me to artificial intelligence, and I moved to Montréal to study it for a PhD.",
   },
   {
     label: "Why I left the PhD",
-    body: "I passed the qualifying exam, but the more I saw of how these systems are trained, the more they worried me. An AI is trained to minimise entropy — to collapse a world of possibilities into its single most likely answer. That makes it confident, often overconfident: it hands you that answer before you have even finished your question, and points everyone toward the same one. Slowly, this can weaken our ability to think for ourselves — and, by narrowing the variety that change depends on, it could even harm our evolution over time. The danger looked less like the science-fiction fear of machines taking over, and more like people quietly choosing to let the machine think for them. As a researcher, I had no answer to this. As a teacher, I thought I might. So I left the PhD and returned to education.",
+    body: "I passed the qualifying exam, but the more I saw of how these systems are trained, the more they worried me. An AI is trained to minimise entropy — to collapse a world of possibilities into its single most likely answer. That makes it confident, often overconfident: it hands you that answer before you have even finished your question, and points everyone towards the same one. Slowly, this can weaken our ability to think for ourselves — and, by narrowing the variety that change depends on, it could even harm our evolution over time. The danger looked less like the science-fiction fear of machines taking over, and more like people quietly choosing to let the machine think for them. As a researcher, I had no answer to this. As a teacher, I thought I might. So I left the PhD and returned to education.",
   },
   {
     label: "What science cannot ask",
-    body: "I helped found Neuromatch Academy, an online school for science, and my most recent work was at the Center for Rigor, on how to make science itself more honest. Both taught me the same lesson. Science explains how the world works, but on its own it does not ask why — why we use what we learn, or who it serves. That question belongs to philosophy. Without it, science becomes only a tool — and that is how it earns its bad reputation: not because it is wrong, but because, lacking the why, it is so easily turned to domination and the suppression of people.",
+    body: "I helped found Neuromatch Academy, an online school for science. My most recent work was at the Center for Rigor, on how to make science itself more honest. Both taught me the same lesson. Science explains how the world works, but on its own it does not ask why — why we use what we learn, or who it serves. That question belongs to philosophy. Without it, science becomes only a tool — and that is how it earns its bad reputation: not because it is wrong, but because, without the why, it is so easily turned to domination and the suppression of people.",
   },
   {
     label: "Why ArtaQuest",
-    body: "ArtaQuest grew from that: take the best free knowledge the world has already produced — on whatever people most need to learn — and give it an honest, focused home, free of propaganda, where anyone can learn it and think for themselves. I run it alone, on purpose: no employer, no funder, no organisation telling me what to teach. That keeps it honest, and keeps it on the mission I have set for my own life — to widen what every being is free to think, choose, and become, for as many as possible, across time and space. And the second law of thermodynamics ensures that time itself will serve this mission. So our success is only a matter of time…",
+    body: "ArtaQuest grew from that: take the best free knowledge the world has already produced — on whatever people most need to learn — and give it an honest, focused home, free of propaganda, where anyone can learn it and think for themselves. I run it alone, on purpose: no employer, no funder, no organisation telling me what to teach. That keeps it honest, and keeps it on the mission I have set for my own life — to widen what every being is free to think, choose and become, for as many as possible, across time and space. And the second law of thermodynamics ensures that time itself will serve this mission. So our success is only a matter of time…",
   },
 ];
 
@@ -92,58 +92,58 @@ const EQ_BOLTZMANN = String.raw`\[ S \;=\; k_{\mathrm{B}} \log W \]`;
 const EQ_OBJECTIVE = String.raw`\[ J(a) \;=\; \int_{t_{0}}^{\infty} S_{\oplus}\bigl(t \mid a\bigr)\,\mathrm{d}t \]`;
 const EQ_COMPARE = String.raw`\[ a \succ b \iff \lim_{T \to \infty} \int_{t_{0}}^{T} \Bigl[\, S_{\oplus}(t \mid a) - S_{\oplus}(t \mid b) \,\Bigr]\,\mathrm{d}t \;>\; 0 \]`;
 
-/** The objections, answered. Four: the two that would sink the argument if unanswered (heat death,
- *  and the is/ought jump) plus the two an honest reader actually raises. */
+/** The objections, answered. Four: the two that would defeat the argument if left unanswered (heat death,
+ *  and the move from what is to what ought to be) plus the two an honest reader actually raises. */
 const OBJECTIONS: { q: string; a: string }[] = [
   {
-    q: "Maximising entropy means heat death — an argument for destroying the planet",
-    a: "Heat death is not this quantity's maximum. It is its minimum: the molecular count as large as it can ever be, and exactly one distinguishable story left. One way left is the logarithm of one, which is zero. A burnt Earth scores nothing from that moment to eternity — and the integral runs to eternity.",
+    q: "Making entropy as large as possible means heat death, so this is an argument for destroying the planet",
+    a: "Heat death is the largest value of one count and the smallest value of mine. The molecule count is as large as it can ever be. The story has exactly one way left to continue: nothing more happens, ever. When one way is all that remains, my count is zero. A burnt Earth adds zero from that moment onward, and the total keeps adding moments with no end.",
   },
   {
-    q: "The second law says entropy rises anyway, so this is automatic",
-    a: "The second law governs an isolated system — nothing in, nothing out. Earth misses that by about 120,000 terawatts of sunlight. And it only fixes the sign of one derivative. Every extinction obeys it. So does every rescue.",
+    q: "Entropy rises by itself under the second law, so none of this needs doing",
+    a: "The second law describes a closed box: nothing goes in, nothing comes out. Earth is not a closed box. About 120,000 terawatts of sunlight arrive from outside. And the law only tells you which direction one quantity moves. It does not tell you which future you end up in. Losing a species obeys the second law. Saving one obeys it just as well.",
   },
   {
-    q: "Then burn everything. A fire raises entropy fastest",
-    a: "A fire raises the molecular count fastest and destroys the count of futures fastest — and it is the futures that are measured. That is why the limit is forever: over a finite horizon you can win by spending capital; over an unbounded one only by keeping alive the thing that generates futures. An extinction sets every later term to zero, and no spike is large enough to pay for that.",
+    q: "Then burn everything, because a fire raises entropy fastest",
+    a: "A fire does raise the molecule count fastest. It also destroys futures fastest, and futures are what this counts. That is why the sum has no end date. If you only add up the next few years, you can win by using up everything you already have. If you add up all of time, the only way to win is to keep alive the thing that makes new futures. Wiping something out sets every later moment to zero, and no short burst is big enough to make up for that.",
   },
   {
-    q: "Physics describes; it cannot tell you what to want",
-    a: "Correct. This is not a discovery, it is a preference — written in a language that can be argued with. You can point at something I do and argue, with evidence, that it lowers the count, and then I have to answer. It is a floor, not an ethics: a person can be free and miserable. It says only, do not be the one who closes the door.",
+    q: "Physics can describe the world. It cannot tell you what to want",
+    a: "True. This is not a discovery. It is something I want, written down clearly enough to argue with. You can point at something I do, show me evidence that it leaves people with fewer ways to go, and then I have to answer you. It is not a full set of ethics. It is one low line: a person can have many choices and still be unhappy. All it says is, do not be the one who takes other people's choices away.",
   },
 ];
 
 /** The rules the platform actually runs on, one line each. The three that are NOT derived from the
- *  equation stay marked as such: a list that quietly claimed them would be the exact post-hoc
- *  rationalisation this section exists to avoid. */
+ *  equation stay marked as such: a list that quietly claimed them would be exactly the after-the-fact
+ *  excuse-making this section exists to avoid. */
 const RULES: { rule: string; body: string }[] = [
   {
-    rule: "The gate never scores",
-    body: "The checklist returns facts, each naming the evidence it read. No number, no grade. Members do rank published work — the top tab counts hearts, and a challenge pays its most-hearted entry the pool — but that decides prizes, never admission.",
+    rule: "The checklist never gives a score",
+    body: "It reports facts, and for each fact it shows the evidence it read. No number, no grade, no ranking. It refuses a notebook for one kind of reason only: something that makes the run impossible for a stranger to repeat. Everything else is shown as a warning and lets the work through. Members do rank published work between themselves. They give hearts, and a challenge pays its whole prize to the entry with the most hearts. Hearts decide prizes. Hearts never decide what gets published.",
   },
   {
     rule: "Every input must be public",
-    body: "A result built on a private dataset has exactly one possible re-runner.",
+    body: "If a notebook uses private data, almost nobody else can run it again, so almost nobody can check it.",
   },
   {
     rule: "The whole database is public — and this rule argues with itself",
-    body: "Every table, every row, live — bar live credentials, a member's private book sources and a shop delivery address. Publishing a member's activity widens everyone else's view and narrows theirs. I resolved that towards publication, and would most like to be argued out of it.",
+    body: "Every table and every row, live. The only things held back are the site's own live keys, a member's private book files and a shop delivery address. Publishing what a member does widens what everyone else can see and narrows what that member can still choose. I decided in favour of publishing. This is the decision I would most like someone to talk me out of.",
   },
   {
     rule: "Reading, submitting, checking and publishing are free",
-    body: "A price is a filter on who can act. The only fee to take part is a challenge entry, paid back out to the entrants in full.",
+    body: "A price decides who is allowed to take part. The only fee to take part is a challenge entry, and all of that money goes back to the entrants.",
   },
   {
-    rule: "No hate, no fear — a judgement, not a derivation",
-    body: "Every comment under a post is scored for hate or fear as it posts. One over the line is marked, never removed.",
+    rule: "No hate, no fear — my choice, not something the equation proves",
+    body: "When you post a comment, it is checked for language built to make people hate a group, or built to frighten them. A comment over the limit is marked. It is never deleted.",
   },
   {
-    rule: "Publication is the author's alone — not derived",
-    body: "A single-use secret goes to the author's own inbox; their click and device signature publish it. Option-counting alone would happily publish a stranger's work. Consent is a limit I place on the objective, not a result of it.",
+    rule: "Only the author can publish — again my choice, not the equation",
+    body: "We send a one-time link to the author's own registered email address. Their click, together with a signature from their own device, is what publishes the work. No operator, no access key and no AI agent can do it instead. Counting futures on its own would happily publish a stranger's work. Consent is a limit I place on the aim, not something the aim produced.",
   },
   {
-    rule: "Hearts, never downvotes — a judgement, not a derivation",
-    body: "No interface here can produce a minus one. The reason is not the equation: it is that a one-click way to bury a stranger's work makes a worse room to think in.",
+    rule: "Hearts, never downvotes — my choice as well",
+    body: "Nothing on this site can give a work a minus. The equation did not decide that. I did, because a one-click way to push a stranger's work out of sight makes this a worse place to think.",
   },
 ];
 
@@ -159,9 +159,10 @@ function IntegralFigure() {
         >
           <title>Two futures, same second law</title>
           <desc>
-            Two curves start from the same point. One spikes very high, crashes to zero early and stays
-            there, enclosing only a small area. The other rises less far but stays up for the whole
-            width of the picture, enclosing a much larger area — because the area is added up forever.
+            Two lines start from the same point. One rises very high, then falls to zero early and stays at zero, so
+            the shaded area under it is small. The other does not rise as high, but it stays up across
+            the whole picture, so the shaded area under it is much larger. The area keeps adding up with
+            no end.
           </desc>
 
           {/* axes — one L-shaped hairline, no gridlines. The horizontal stops short of the edge so the
@@ -206,13 +207,13 @@ function IntegralFigure() {
             <path d="M430 112 V102" />
           </g>
           <g fontSize="11.5" fill="currentColor" fillOpacity="0.66">
-            <text x="172" y="41">spend it now — a spike, then nothing</text>
-            <text x="430" y="96" textAnchor="middle">keep it alive — the count keeps branching</text>
+            <text x="172" y="41">use it all now — high for a moment, then nothing</text>
+            <text x="430" y="96" textAnchor="middle">keep it alive — new ways keep opening</text>
           </g>
 
           {/* the one thing the figure has to teach */}
           <text x="420" y="222" textAnchor="middle" fontSize="11.5" fill="currentColor" fillOpacity="0.62">
-            the shaded area is the integral
+            the shaded area is the running total
           </text>
 
           {/* axis labels */}
@@ -226,7 +227,7 @@ function IntegralFigure() {
         </svg>
       </div>
       <figcaption className="mx-auto mt-3 max-w-[60ch] text-center text-[12.5px] leading-relaxed text-ink-2">
-        Both obey the second law. Only one of them keeps the integral growing
+        Both obey the second law. Only one of them keeps the total growing
       </figcaption>
     </figure>
   );
@@ -251,9 +252,11 @@ export default function About() {
             Work you can check for yourself
           </h1>
           <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-ink">
-            A not-for-profit social media for science and education. Every post is a public Kaggle
-            notebook, run on Kaggle's own machines, checked against its public record and published
-            only by its author. Free to read and re-run forever.
+            A not-for-profit social feed for science and education. Every post here is a public notebook on Kaggle:
+            writing and code that Kaggle has already run on its own computers. Kaggle keeps a public
+            record of that run. We read that record and show you what it says. Only the person who wrote
+            the notebook can publish it here. It stays free to read, and anyone can run it again,
+            forever.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <Button href="/works/" size="xl">Open the feed</Button>
@@ -338,24 +341,28 @@ export default function About() {
 
             <div className="mt-8 max-w-[68ch] space-y-5 text-[16px] leading-relaxed text-ink [text-wrap:pretty]">
               <p>
-                I ended that note saying the second law of thermodynamics ensures time itself will serve
-                this mission. It does not. Here is what I meant — it needs one idea first.
+                At the end of that note I said the second law of thermodynamics makes sure that time itself will serve
+                this mission. The second law is the rule that says entropy always rises. It does not
+                make sure of anything like that. Here is what I actually meant. It takes one idea to
+                explain, so let me start there.
               </p>
 
               <h3 className="pt-4 text-[19px] font-bold text-ink">Entropy, in plain words</h3>
               <p>
-                Shuffle a deck and you get a mess — not because the universe prefers messes, but because
-                a couple of dozen arrangements run suit by suit, ace to king, and about eight followed by
-                sixty-seven zeros do not. “A mess” is not one outcome. It is very nearly all of them.
+                Shuffle a pack of cards and you get a mess. That is not because the universe prefers messes. It is only
+                counting. A couple of dozen orders come out perfectly tidy. About eight followed by
+                sixty-seven zeros do not. So “a mess” is not one result. It is very nearly all of the
+                results.
               </p>
               <p>
-                Entropy starts from that count: how many ways a situation could be arranged and still
-                look, from outside, like the same situation. A tidy room has one; a lived-in room has
-                billions.
+                Entropy begins with that count. Take any situation and ask one question: how many ways could it be
+                arranged and still look the same to someone watching from outside? A tidy room has one.
+                A room that people actually live in has billions.
               </p>
               <p>
-                Then it takes the logarithm — roughly, how many digits the count has. That sets the floor
-                everything below depends on: one way left scores zero.
+                Then it does one more thing. It does not use that count itself. It uses the number of digits in the
+                count — near enough. What matters here is the bottom of that scale. When only one
+                arrangement is left, the value is zero, and everything I say below rests on that zero.
               </p>
             </div>
 
@@ -363,27 +370,29 @@ export default function About() {
 
             <div className="max-w-[68ch] space-y-5 text-[16px] leading-relaxed text-ink [text-wrap:pretty]">
               <p>
-                Boltzmann arrived at this in the 1870s; the form above is Planck's. Entropy is not decay
-                or waste — that is only what high-count situations look like from where we stand. And once
-                entropy is a count, you can count anything: a field of forty crops survives more kinds of
-                year than a field of one.
+                Boltzmann worked this out in the 1870s. The way it is written above is Planck's. Entropy is not decay,
+                and it is not waste. Decay is simply what a high count looks like to us. And once
+                entropy is a count, you can count other things too. A field with forty kinds of crop
+                survives more kinds of bad year than a field with one kind.
               </p>
 
               <h3 className="pt-4 text-[19px] font-bold text-ink">What I am counting</h3>
               <p>
-                Every entropy counts things somebody decided to treat as the same, so here is what mine
-                counts: how many distinguishable ways Earth's story could still go from a given moment,
-                weighted by how likely each is. Not the positions of the planet's molecules. The
-                branchings its story still has.
+                Every count like this depends on what someone decided to treat as the same thing. So here is what I
+                count. From any moment, how many ways could the story of Earth still go — ways we could
+                actually tell apart, with the more likely ones counting for more? I am not counting
+                where the planet's molecules sit. I am counting the choices the story still has ahead of
+                it.
               </p>
               <p>
-                A hot uniform gas has colossal entropy in the molecular sense and exactly one future: it
-                stays a hot uniform gas.
+                A cloud of hot, evenly mixed gas has an enormous count if you count molecules. And it has exactly one
+                future. It stays a cloud of hot, evenly mixed gas.
               </p>
               <p>
-                Freedom is a count somebody values; entropy is just the count. A person with savings,
-                three languages and a passport has an enormous number of next years available. The same
-                person, ill and under curfew, has very few. Almost nothing about their atoms changed.
+                Freedom is this same count, once someone wants it to be large. Entropy is only the count. Think of a
+                person with savings, three languages and a passport. The number of different next years
+                open to them is huge. Now take the same person, ill and not allowed to leave their home.
+                The number is tiny. Almost nothing about their atoms changed.
               </p>
 
               <h3 className="pt-4 text-[19px] font-bold text-ink">The equation</h3>
@@ -393,15 +402,14 @@ export default function About() {
 
             <div className="max-w-[68ch] space-y-5 text-[16px] leading-relaxed text-ink [text-wrap:pretty]">
               <p>
-                Read aloud: count how many ways Earth's story could still go at each moment from now to
-                forever, and add it up. <strong className="font-semibold">a</strong> is a course of
-                action; <strong className="font-semibold">S</strong> with the Earth symbol is the count
-                at one moment. No discount, no horizon at which the people alive then stop mattering.
+                In words: at every moment from now on, count the ways Earth's story could still go. Then add all of
+                those counts together. <strong className="font-semibold">a</strong> is something a person could do. <strong className="font-semibold">S</strong> with the Earth symbol is the count at one moment. A moment far in the future counts exactly as much as
+                this one, and there is no date after which the people alive stop mattering.
               </p>
               <p>
-                Notice there is no “maximise” on that line, and there cannot be: while Earth keeps some
-                futures open the total grows without limit, so no biggest value exists to pick. The
-                working form is therefore a comparison, not a score:
+                Notice that the line never says “make this as large as possible”. It cannot. As long as Earth keeps some
+                futures open, the total keeps growing and never stops, so there is no largest value to
+                aim at. What you can do instead is compare two futures:
               </p>
             </div>
 
@@ -409,13 +417,14 @@ export default function About() {
 
             <div className="max-w-[68ch] space-y-5 text-[16px] leading-relaxed text-ink [text-wrap:pretty]">
               <p>
-                Two infinities compare nothing. Two futures compare fine. You never need the value —
-                only which of two things you could do leaves more open.
+                Comparing two totals that never stop growing tells you nothing. Comparing two futures works. You never
+                need the number itself. You only need to know which of the two things you could do
+                leaves more open.
               </p>
               <p>
-                The Earth is the honest scope of what is being valued, not of anything I control. I
-                decide how one website behaves, and this is what I decide it by. That does not make those
-                decisions important. It makes them checkable.
+                Earth is the honest size of what I say I care about. It is not the size of anything I control. What I
+                control is how one website behaves, and this is the rule I decide it by. That does not
+                make those decisions important. It makes them possible to check.
               </p>
             </div>
 
@@ -432,32 +441,32 @@ export default function About() {
             </div>
 
             <div className="mt-14 max-w-[68ch] space-y-5 text-[16px] leading-relaxed text-ink [text-wrap:pretty]">
-              <h3 className="text-[19px] font-bold text-ink">Where the machine comes in</h3>
+              <h3 className="text-[19px] font-bold text-ink">Where AI comes in</h3>
               <p>
-                I wrote above that an AI is trained to minimise entropy. That is not how these models are
-                trained, and I would rather correct it here than quietly edit the note. A language model
-                is trained to <em>match</em> the spread of chances in its training text, never to shrink
-                it.
+                Above, I said that an AI is trained to minimise entropy. That is not how these models are trained. I
+                would rather correct it here than quietly change the note. A language model is trained
+                to <em>match</em> how likely each possibility is in its training text, not to narrow that down.
               </p>
               <p>
-                The narrowing comes afterwards, and every step of it is a decision, not a law. Decoding
-                takes the likeliest next word and cuts off the tail. Preference tuning measurably reduces
-                the diversity of what comes out. The interface shows one answer, with no visible
-                alternatives, to hundreds of millions at once. Each step is defensible alone; together
-                they narrow exactly the quantity above.
+                The narrowing happens later, and every step of it is a choice somebody made, not a law of nature. First,
+                when the model writes, it keeps the most likely words and drops the rest. Then the
+                tuning that teaches it what people prefer measurably reduces how varied its answers are.
+                Then the screen shows one answer, with no other options in sight, to hundreds of
+                millions of people at the same time. Each step makes sense on its own. Together they
+                narrow exactly the count above.
               </p>
               <p>
-                Not an argument against these systems — I run this place with a team of AI agents — but
-                about which side of the integral a tool sits on. Hand someone the median answer and the
-                count falls. Hand them a runnable notebook, its inputs, and everything they need to
-                disagree with you, and it rises.
+                This is not an argument against AI. I run this site with a team of AI agents. It is an argument about
+                what a tool does to the count. Give someone one average answer and the count goes down.
+                Give them a notebook they can run, the data it used, and everything they need to
+                disagree with you, and the count goes up.
               </p>
             </div>
 
-            <h3 className="mt-14 text-[19px] font-bold text-ink">What follows from it here</h3>
+            <h3 className="mt-14 text-[19px] font-bold text-ink">What this means for the site</h3>
             <p className="mt-3 max-w-[68ch] text-[16px] leading-relaxed text-ink">
-              An equation earns its place by forbidding things. Three of these are not derived at all,
-              and one cuts against me. I have said which.
+              An idea is only worth having if it rules some things out. Three of the rules below do not come from the
+              equation at all, and one of the rules works against me. I have marked which.
             </p>
             <dl className="mt-6 max-w-[72ch] space-y-5">
               {RULES.map((r) => (
@@ -468,9 +477,9 @@ export default function About() {
               ))}
             </dl>
             <p className="mt-8 max-w-[68ch] text-[16px] leading-relaxed text-ink">
-              None of that follows from thermodynamics. It follows from a decision about what is worth
-              wanting, made precise enough to argue with and to catch me getting wrong. That argument is
-              the point.
+              None of that comes from physics. It comes from a decision about what is worth wanting, written down
+              clearly enough that you can argue with it and catch me when I get it wrong. That argument
+              is the point.
             </p>
           </section>
         </div>
@@ -481,7 +490,7 @@ export default function About() {
       <section className="rounded-card border border-line bg-gradient-to-br from-space-2 to-space-3 px-6 py-12 text-center sm:px-12">
         <h2 className="mx-auto max-w-2xl text-[clamp(1.4rem,3vw,1.9rem)] font-bold leading-snug">We do not need to keep you happy — we need to keep you thinking</h2>
         <div className="mt-7 flex flex-col items-center gap-4">
-          <Button href="/donate/" size="xl">Support the mission</Button>
+          <Button href="/donate/" size="xl">Support this work</Button>
           <a href={localePath("/faq-contact/")} className="text-[14px] font-semibold text-ink-2 hover:text-yin-light hover:underline">
             FAQ &amp; contact
           </a>
