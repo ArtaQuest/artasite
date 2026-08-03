@@ -97,15 +97,15 @@ const EQ_COMPARE = String.raw`\[ a \succ b \iff \lim_{T \to \infty} \int_{t_{0}}
 const OBJECTIONS: { q: string; a: string }[] = [
   {
     q: "Making entropy as large as possible means heat death, so this is an argument for destroying the planet",
-    a: "Heat death is the largest value of one count and the smallest value of mine. The molecule count is as large as it can ever be. The story has exactly one way left to continue: nothing more happens, ever. When one way is all that remains, my count is zero. A burnt Earth adds zero from that moment onward, and the total keeps adding moments with no end.",
+    a: "Heat death is the largest value of one count and the smallest value of mine. The molecule count is as large as it can ever be. The story has exactly one way left to continue: nothing more happens, ever. One way left reads as zero on the scale above, so from that moment my quantity is zero. A burnt Earth is not quite that, but it adds almost nothing from that moment onward and goes on adding almost nothing, while the total keeps adding moments with no end.",
   },
   {
     q: "Entropy rises by itself under the second law, so none of this needs doing",
-    a: "The second law describes a closed box: nothing goes in, nothing comes out. Earth is not a closed box. About 120,000 terawatts of sunlight arrive from outside. And the law only tells you which direction one quantity moves. It does not tell you which future you end up in. Losing a species obeys the second law. Saving one obeys it just as well.",
+    a: "The second law says entropy never falls inside a sealed box — nothing in, nothing out, not even heat. It holds for Earth too. It just does not decide anything here, because Earth is not that box: about 120,000 terawatts of sunlight are soaked up here every second — roughly a kilowatt on each sunny square metre, across a disc the width of the planet, less the near-third that cloud, snow and sea bounce straight back — and every watt of it came from outside. Entropy here is free to fall while the Sun's rises by far more. And the law only tells you which direction one quantity moves. It does not tell you which future you end up in. Losing a species obeys the second law. Saving one obeys it just as well.",
   },
   {
     q: "Then burn everything, because a fire raises entropy fastest",
-    a: "A fire does raise the molecule count fastest. It also destroys futures fastest, and futures are what this counts. That is why the sum has no end date. If you only add up the next few years, you can win by using up everything you already have. If you add up all of time, the only way to win is to keep alive the thing that makes new futures. Wiping something out sets every later moment to zero, and no short burst is big enough to make up for that.",
+    a: "A fire does raise the molecule count fast. It also destroys futures fast, and futures are what this counts. That is why the sum has no end date. If you only add up to some date you pick, you can win by using up everything you have the day before it — and that is true of every date, which is why I name none. If you add up all of time, the only way to win is to keep alive the thing that makes new futures. Wipe that out and every later moment is zero. Wipe out anything smaller and you take a slice out of every later moment instead — and the moments do not stop coming. Either way, no short burst is big enough to make it back.",
   },
   {
     q: "Physics can describe the world. It cannot tell you what to want",
@@ -221,13 +221,13 @@ function IntegralFigure() {
             <text x="110" y="304" textAnchor="middle">now</text>
             <text x="668" y="304" textAnchor="end">time, without end</text>
             <text x="26" y="155" textAnchor="middle" fontSize="11.5" transform="rotate(-90 26 155)">
-              how many ways it could still go
+              how much room the story still has
             </text>
           </g>
         </svg>
       </div>
       <figcaption className="mx-auto mt-3 max-w-[60ch] text-center text-[12.5px] leading-relaxed text-ink-2">
-        Both obey the second law. Only one of them keeps the total growing
+        Both obey the second law. Only one of them keeps the total growing — a line that reaches the floor has one way left, and one way counts as zero
       </figcaption>
     </figure>
   );
@@ -332,7 +332,7 @@ export default function About() {
             <div className="mt-8 max-w-[68ch] space-y-5 text-[16px] leading-relaxed text-ink [text-wrap:pretty]">
               <p>
                 At the end of that note I said the second law of thermodynamics makes sure that time itself will serve
-                this mission. The second law is the rule that says entropy always rises. It does not
+                this mission. The second law is the rule that says entropy never falls: left alone it climbs, and once it has nowhere left to climb it stays there. It does not
                 make sure of anything like that. Here is what I actually meant. It takes one idea to
                 explain, so let me start there.
               </p>
@@ -340,19 +340,30 @@ export default function About() {
               <h3 className="pt-4 text-[19px] font-bold text-ink">Entropy, in plain words</h3>
               <p>
                 Shuffle a pack of cards and you get a mess. That is not because the universe prefers messes. It is only
-                counting. A couple of dozen orders come out perfectly tidy. About eight followed by
-                sixty-seven zeros do not. So “a mess” is not one result. It is very nearly all of the
-                results.
+                counting. Call an order tidy when each suit is kept together and runs ace to king. Then
+                the only thing left to choose is which suit comes first, second, third and fourth:
+                4 × 3 × 2 × 1, which is twenty-four tidy orders. Now count every order the pack can be
+                in: fifty-two cards to choose for the top, fifty-one left for the next, and so on down.
+                That is 52 × 51 × 50 × … × 1, about eight followed by sixty-seven zeros. So “a mess” is
+                not one result. It is very nearly all of the results.
               </p>
               <p>
                 Entropy begins with that count. Take any situation and ask one question: how many ways could it be
-                arranged and still look the same to someone watching from outside? A tidy room has one.
-                A room that people actually live in has billions.
+                arranged and still look the same to someone watching from outside? A room where every
+                single thing has exactly one place it belongs has one. A room that people actually live
+                in has more than that shuffled pack, and by a long way.
               </p>
               <p>
-                Then it does one more thing. It does not use that count itself. It uses the number of digits in the
-                count — near enough. What matters here is the bottom of that scale. When only one
-                arrangement is left, the value is zero, and everything I say below rests on that zero.
+                Then it does one more thing, and it is the one step worth slowing down for. It does not use that count
+                itself. It uses the length of the count: the zeros you write after the first digit.
+                Eight                 followed by sixty-seven zeros becomes sixty-seven. Why the length
+                rather than the count?                 Because counts multiply and lengths add. Put a
+                second shuffled pack beside the first and                 the number of orders for the
+                pair is one count times the other — but sixty-seven zeros                 and
+                sixty-seven zeros simply make a hundred and thirty-four. Two things together should
+                be worth the one plus the other, the way their weights are. And notice where the bottom
+                of that scale sits. One arrangement is written 1. There are no zeros after it, so the
+                value is zero. Everything I say below rests on that zero.
               </p>
             </div>
 
@@ -360,26 +371,37 @@ export default function About() {
 
             <div className="max-w-[68ch] space-y-5 text-[16px] leading-relaxed text-ink [text-wrap:pretty]">
               <p>
-                Boltzmann worked this out in the 1870s. The way it is written above is Planck's. Entropy is not decay,
-                and it is not waste. Decay is simply what a high count looks like to us. And once
-                entropy is a count, you can count other things too. A field with forty kinds of crop
-                survives more kinds of bad year than a field with one kind.
+                W is the count of arrangements, log is the operation just described — it turns that count into its
+                length — and the k in front is a fixed conversion number that puts the answer into the
+                units physicists measure heat in. It never changes, so it can never change which of two
+                things is larger. (Physicists take the length to a different base than ten. That moves
+                the units too, and nothing else.) Boltzmann worked this out in the 1870s. The way it is
+                written above is Planck's. Entropy is not decay, and it is not waste. Decay is simply
+                what a high count looks like to us. And once you have the shape of it — count the ways,
+                take the length, one way left reads zero — you can lay that shape over other lists. That
+                part is no longer physics and I will not dress it up as physics; I will just say plainly
+                what I am counting. A field with forty kinds of crop lives through more kinds of bad
+                year                 than a field with one kind: same shape, different list.
               </p>
 
               <h3 className="pt-4 text-[19px] font-bold text-ink">What I am counting</h3>
               <p>
                 Every count like this depends on what someone decided to treat as the same thing. So here is what I
                 count. From any moment, how many ways could the story of Earth still go — ways we could
-                actually tell apart, with the more likely ones counting for more? I am not counting
-                where the planet's molecules sit. I am counting the choices the story still has ahead of
-                it.
+                actually tell apart, counting a barely possible one for almost nothing and a real
+                possibility in full? I am not counting where the planet's molecules sit. I am counting
+                the choices the story still has ahead of it.
               </p>
               <p>
-                A cloud of hot, evenly mixed gas has an enormous count if you count molecules. And it has exactly one
-                future. It stays a cloud of hot, evenly mixed gas.
+                A sealed box of hot, evenly mixed gas has an enormous count if you count molecules. Count the futures
+                you could tell apart from outside and it has one: it goes on being a box of hot, evenly
+                mixed gas. That is everything it will ever do.
               </p>
               <p>
-                Freedom is this same count, once someone wants it to be large. Entropy is only the count. Think of a
+                Entropy is only the count. It asks for nothing; nothing in physics asks for anything. The wanting is
+                mine: I look at that count and I want it to be large, for one person and for the whole
+                planet. That step is not in the physics, and I answer for it below. Take it with me and
+                freedom and this count are the same thing. Think of a
                 person with savings, three languages and a passport. The number of different next years
                 open to them is huge. Now take the same person, ill and not allowed to leave their home.
                 The number is tiny. Almost nothing about their atoms changed.
@@ -392,9 +414,17 @@ export default function About() {
 
             <div className="max-w-[68ch] space-y-5 text-[16px] leading-relaxed text-ink [text-wrap:pretty]">
               <p>
-                In words: at every moment from now on, count the ways Earth's story could still go. Then add all of
-                those counts together. <strong className="font-semibold">a</strong> is something a person could do. <strong className="font-semibold">S</strong> with the Earth symbol is the count at one moment. A moment far in the future counts exactly as much as
-                this one, and there is no date after which the people alive stop mattering.
+                In words: at every moment from now on, count the ways Earth's story could still go, take that count's
+                length — the zeros, as above — and add those lengths up, moment after moment, with no
+                end.                 The tall stretched S is that adding-up; the t-nought under it is
+                now; the sideways eight                 above it means the adding never stops. <strong
+                className="font-semibold">a</strong> is something a person could do. <strong
+                className="font-semibold">S</strong> with the Earth symbol is that length at one moment.
+                The length is why a dead Earth adds nothing:                 one way left is not a small
+                amount to add up, it is nothing at all. A moment far in the                 future
+                counts exactly as much as this one, and there is no date after which the people
+                alive stop mattering — and whatever date I chose instead, the way to win would be to
+                spend everything the day before it.
               </p>
               <p>
                 Notice that the line never says “make this as large as possible”. It cannot. As long as Earth keeps some
@@ -407,9 +437,18 @@ export default function About() {
 
             <div className="max-w-[68ch] space-y-5 text-[16px] leading-relaxed text-ink [text-wrap:pretty]">
               <p>
-                Comparing two totals that never stop growing tells you nothing. Comparing two futures works. You never
-                need the number itself. You only need to know which of the two things you could do
-                leaves more open.
+                Read that line as: of the two, a is the one to choose. The order of the work is what makes it possible —
+                do not add up two endless totals and then subtract them, because endless minus endless
+                is                 not a number. Subtract first. At every moment ask how much more the
+                one leaves open than                 the other, keep a running total of that difference,
+                and let it run as long as you like.                 Comparing two totals that never stop
+                growing tells you nothing. Comparing the gap between                 them works whenever
+                that gap settles on one side and stays there. It does not always                 settle,
+                and when it does not, this rule has no answer to give and I would rather say so
+                than pretend it does. In the case that matters most it settles very plainly: a future
+                that ends adds nothing for the rest of time, so the gap only widens. You never need the
+                number itself. You only need to know which of the two things you could do leaves more
+                open.
               </p>
               <p>
                 Earth is the honest size of what I say I care about. It is not the size of anything I control. What I

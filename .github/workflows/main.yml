@@ -87,13 +87,18 @@ jobs:
           hits=$(grep -rIlE '(sk-ant-[A-Za-z0-9_-]{20,})|(ghp_[A-Za-z0-9]{30,})|(gho_[A-Za-z0-9]{30,})|(github_pat_[A-Za-z0-9_]{30,})|(AKIA[0-9A-Z]{16})|(ASIA[0-9A-Z]{16})|(sk_live_[A-Za-z0-9]{20,})|(rk_live_[A-Za-z0-9]{20,})|(hf_[A-Za-z0-9]{30,})|(xox[baprs]-[A-Za-z0-9-]{10,})|(AIza[0-9A-Za-z_-]{35})|(ya29\.[0-9A-Za-z_-]{20,})|(SG\.[A-Za-z0-9_-]{20,})|(eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.)|(-----BEGIN [A-Z ]*PRIVATE KEY)' \
                --exclude-dir=.git --exclude-dir=node_modules . || true)
           bad=0
-          for f in $hits; do
+          # `for f in $hits` word-splits on spaces: a file named "my key.php" became two
+          # nonexistent paths, both greps failed, and the step printed clean and exited 0.
+          # Reproduced: a planted Google key in "my key.php" passed the gate untouched.
+          # read -r takes the whole line, so a filename with a space is still one filename.
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
             # A file counts only if it holds a key-shaped value that is NOT the allowed constant.
             if grep -oIE '(sk-ant-[A-Za-z0-9_-]{20,})|(ghp_[A-Za-z0-9]{30,})|(gho_[A-Za-z0-9]{30,})|(github_pat_[A-Za-z0-9_]{30,})|(AKIA[0-9A-Z]{16})|(ASIA[0-9A-Z]{16})|(sk_live_[A-Za-z0-9]{20,})|(rk_live_[A-Za-z0-9]{20,})|(hf_[A-Za-z0-9]{30,})|(xox[baprs]-[A-Za-z0-9-]{10,})|(AIza[0-9A-Za-z_-]{35})|(ya29\.[0-9A-Za-z_-]{20,})|(SG\.[A-Za-z0-9_-]{20,})|(eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.)|(-----BEGIN [A-Z ]*PRIVATE KEY)' "$f" \
                  | grep -qv "$ALLOW"; then
               echo "::error::$f holds a key-shaped value"; bad=1
             fi
-          done
+          done <<< "$hits"
           [ $bad -eq 0 ] || exit 1
           # A TRAILER, not a phrase. GitHub parses `Co-authored-by:` only at the start of a line in
           # the trailer block — so anchoring there is both what actually creates a contributor and
