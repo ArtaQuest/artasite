@@ -73,44 +73,13 @@ export default function Landing() {
             Say something in 280 characters, or publish work anyone can run again for themselves —
             games, art, animations, datasets, models, papers. Every published file comes from a
             public Kaggle notebook that has already been run, and we check that in the open. Hearts
-            decide who wins the prize pools. Real gold, no catch.
+            decide who wins the prize pools.
           </p>
           <div ref={cta} className="mt-7 inline-flex flex-wrap justify-center gap-3 lg:justify-start">
             <Button href={join} size="xl">Join in — it's free</Button>
           </div>
           <p className="mt-3 text-[13px] text-ink-3">No password, no spam — just your email or Google.</p>
         </div>
-      </section>
-
-      {/* What makes a post here different from a post anywhere else — the actual moat, stated plainly.
-          Three cards, four facts: each one is something a stranger can go and check without us. */}
-      <section className="grid gap-4 rounded-card border border-line bg-space-2 p-6 sm:grid-cols-3">
-        {[
-          ["Public, top to bottom", "The notebook is public on Kaggle, and so is everything it was built from: datasets, models, other notebooks. Anyone can open the whole chain without an account, and without asking us."],
-          ["It finished, and these are the files", "Kaggle's own record shows the run completed and produced exactly the files that were published. We read that record and quote it back to you, so nothing is taken on trust."],
-          ["Internet off, or we say so", "Kaggle is what enforces the offline switch, not us. The checklist reports what it finds: ran with the internet switched off, on Kaggle's own record, or plainly marked that it did not."],
-        ].map(([h, b]) => (
-          <div key={h}>
-            <h2 className="text-[15px] font-extrabold text-yang-ink">{h}</h2>
-            <p className="mt-1.5 text-[14px] leading-relaxed text-ink-2">{b}</p>
-          </div>
-        ))}
-      </section>
-
-      {/* Three honest steps — the author's own words for how a work gets published. */}
-      <section className="grid gap-4 sm:grid-cols-3">
-        {[
-          ["Paste your Kaggle link", "You ran your notebook on Kaggle, in public. Paste the link to its output page and tick the files you want to publish."],
-          ["Read the checklist", "About twenty checks run against Kaggle's public API, and each one names the exact evidence it read. Nothing is graded or judged: a check either passes, or it tells you plainly what to fix. Warnings are shown loudly and never block you."],
-          ["Confirm from your inbox", "Publication is requested, never taken. A single-use secret goes to your own registered email, and your click publishes the work, mints its permanent citation link, and puts the files in the Library for any member to post with."],
-        ].map(([h, b]) => (
-          <div key={h} className="rounded-card border border-line bg-space-2 p-6">
-            {/* yang-ink, not yang: the fill token is 1.84:1 on the light canvas an anonymous
-                visitor gets by default — unreadable. yang-ink is the text half of the same pair. */}
-            <h2 className="text-[16px] font-extrabold text-yang-ink">{h}</h2>
-            <p className="mt-2 text-[14px] leading-relaxed text-ink-2">{b}</p>
-          </div>
-        ))}
       </section>
 
       {/* ArtaBot — the free chatbot is a real reason to sign up, so the landing page SELLS it. The

@@ -162,8 +162,10 @@ const NAV: { label: string; href: string; icon: IconKey; divider?: boolean; exte
   // ArtaChat — end-to-end encrypted DMs; keys live on the member's device, the DB holds ciphertext.
   { label: "Messages", href: "/messages/", icon: "mail", external: true, auth: true },
   { label: "Rankings", href: "/rankings/", icon: "trophy", external: true },
-  { label: "Topics", href: "/topics/", icon: "calendar", external: true },
-  { label: "Contributions", href: "/issues/", icon: "bug", external: true },
+  // UNLISTED, not retired (operator 2026-08-03): /topics/ and /issues/ still resolve and still
+  // render. They are reached from where they are actually needed — the seasons and cycles surfaces
+  // link to Topics, Account and ArtaMod link to Contributions for reporting — they are simply off
+  // the menu. Do not "restore" these rows; removing the ROUTES is a different decision, not this one.
   { label: "Donations", href: "/donate/", icon: "heart", external: true },
   { label: "Sponsors", href: "/sponsors/", icon: "megaphone", external: true },
   { label: "Reserve", href: "/reserve/", icon: "coins", external: true },
