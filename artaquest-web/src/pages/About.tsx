@@ -320,16 +320,6 @@ export default function About() {
               {/* Everything the deleted CV section could still tell a reader that his own note does
                   not: the years, and the two outbound links. Dates are load-bearing — undated
                   affiliations under a signature read as present tense, and he left both in 2024. */}
-              <p className="mt-5 border-t border-line pt-4 text-[13.5px] leading-relaxed text-ink-2">
-                Before ArtaQuest:{" "}
-                <a href="https://www.neuromatchacademy.org/" target="_blank" rel="noopener noreferrer" className="text-yin-light underline underline-offset-2">
-                  Neuromatch Academy<span className="sr-only"> (opens in a new tab)</span>
-                </a>{" "}(2021 – 24),{" "}
-                <a href="https://c4r.io" target="_blank" rel="noopener noreferrer" className="text-yin-light underline underline-offset-2">
-                  the Center for Rigor<span className="sr-only"> (opens in a new tab)</span>
-                </a>{" "}(2023 – 24) and SmartAlpha (2019 – 21); PhD studies at ÉTS Montréal (2021 – 24),
-                BSc at Bilkent (2015 – 19).
-              </p>
             </Card>
           </section>
 
