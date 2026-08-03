@@ -1,6 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Button, Card } from "../components/ui";
-import { RailInline, WithRail } from "../components/PageRail";
 import { watchMath } from "../lib/math";
 import { localePath } from "../lib/wp";
 import founderPhoto from "../assets/founder.jpg";
@@ -13,10 +12,12 @@ import founderAvatar from "../assets/founder-avatar.jpg";
  * the place, a journalist after the entity, a donor, and a CEO candidate deep-linked to `#founder`.
  * THREE sections, ordered by commitment — what it is (hero) → who runs it → why he runs it. Everything
  * else was a second telling: the CV retold the founder's own note, the two positioning cards retold
- * the hero, and the funding section retold RULES[3] and the note. The right rail (<WithRail>, the
- * /developers idiom) holds the one card that replaced both the jump-list and the funding section —
- * three links that prove what the page says, so the page does not have to say it twice; <RailInline>
- * puts it in the flow below `lg`.
+ * the hero, and the funding section retold RULES[3] and the note.
+ *
+ * The right rail is GONE (operator, 2026-08-03). It held one "Check it yourself" card — the reserve,
+ * the ledgers and the registration — and those three links live in the page's own text and in the
+ * left nav, so it was a fourth telling of what the page already says. Removing it took WithRail and
+ * RailInline with it: a rail with nothing in it is not a layout, and this page now runs full width.
  *
  * THE PHILOSOPHY SECTION IS THE POINT OF THE PAGE (operator, 2026-07-31). It is the founder's own
  * argument, in first person, placed immediately AFTER his signed note because it is that note's last
@@ -51,34 +52,6 @@ function H2({ id, children, className = "" }: { id: string; children: ReactNode;
     <h2 id={id} className={`scroll-mt-24 text-[clamp(1.5rem,3vw,2.05rem)] font-extrabold leading-tight tracking-tight ${className}`}>
       {children}
     </h2>
-  );
-}
-
-/**
- * The rail card: the three surfaces that prove what this page says, so the page does not have to say
- * it twice. Replaces both the jump-list (five labels for three sections) and the whole "Independent,
- * and checkable" section — the links ARE the argument.
- *
- * The gold sentence names the RATIO, never a reserve level: Economy::reserve() deliberately publishes
- * the true, possibly under-collateralised figure. See the deleted-claims list above.
- */
-function Checkable() {
-  return (
-    <section className="flex flex-col gap-2 rounded-card border border-line bg-space-2 p-4">
-      <h2 className="text-sm font-bold uppercase tracking-wider text-ink-3">Check it yourself</h2>
-      <p className="text-[14.5px] leading-relaxed text-ink-2">
-        It runs on donations, and there is no employer, government or corporate backer. Every coin is
-        one milligram of gold, and the ratio of gold actually held to coins in circulation is published
-        live. So are the ledgers and the rest of the database.
-      </p>
-      <p className="mt-1 flex flex-col gap-1.5 text-[14px] font-semibold">
-        <a href={localePath("/reserve/")} className="text-yang hover:underline">The gold reserve <span aria-hidden>→</span></a>
-        <a href={localePath("/data/")} className="text-yang hover:underline">The ledgers <span aria-hidden>→</span></a>
-        <a href="https://ised-isde.canada.ca/cc/lgcy/fdrlCrpDtls.html?corpId=17948328" target="_blank" rel="noopener noreferrer" className="text-yang hover:underline">
-          The registration <span aria-hidden>→</span><span className="sr-only"> (opens the Corporations Canada record in a new tab)</span>
-        </a>
-      </p>
-    </section>
   );
 }
 
@@ -288,11 +261,8 @@ export default function About() {
         </div>
       </section>
 
-      <WithRail label="Check it yourself" rail={<Checkable />}>
+      <div>
         <div className="flex flex-col gap-16 sm:gap-20">
-          {/* Below lg the rail is out of the flow, so the card rides here instead. */}
-          <RailInline><Checkable /></RailInline>
-
           {/* From the founder — the landing point for /about#founder, where the CEO posting sends a
               candidate. */}
           <section>
@@ -329,7 +299,7 @@ export default function About() {
                   />
                 </a>
                 <figcaption className="mt-2.5 text-[12.5px] leading-snug text-ink-2">
-                  Mid-race at a 10 km in the rain, Montréal
+                  Enjoying the race in the rain — Montréal, Canada, 2024
                 </figcaption>
               </figure>
               {/* The founder's first-person essay — his authentic words. Exempt from the brand-vocab
@@ -504,7 +474,7 @@ export default function About() {
             </p>
           </section>
         </div>
-      </WithRail>
+      </div>
 
       {/* Closing band. ONE ask: a reader who reached the bottom of an About page can reach the feed
           from every other surface. */}
