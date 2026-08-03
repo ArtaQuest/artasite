@@ -443,10 +443,34 @@ async function precacheApp() {
     // Cache the shell under '/' too, so a cold offline navigation has a same-build shell to boot from.
     try { const sh = await fetch("/", { credentials: "include" }); if (sh && sh.ok) await c.put("/", sh.clone()); } catch { /* offline */ }
     const have = new Set((await c.keys()).map((req) => new URL(req.url).pathname));
-    for (const url of m.files || []) {
-      if (have.has(url)) continue;
-      try { const f = await fetch(url, { cache: "reload" }); if (f && f.ok) await c.put(url, f.clone()); } catch { /* a missing chunk just won't be offline */ }
-    }
+    // ORDER, then CONCURRENCY. The manifest is alphabetical, so this fetched About-*.js first and
+    // reached the entry bundle — the one file without which nothing boots — somewhere in the middle
+    // of 377. And it awaited each fetch in turn: on a 200 ms link that is over a minute of round
+    // trips before any of it is useful, and a member who loses the connection part-way (the exact
+    // member this feature exists for) was left holding an alphabetical prefix.
+    //
+    // Same files, same total, policy unchanged. Boot path first, so the app is offline-capable in
+    // seconds; the optional runtimes (speech, ONNX, PDF, KaTeX — about a third of the bytes) last,
+    // so an interrupted precache loses the part nobody needs in order to open a page.
+    const weight = (u) => {
+      const n = u.slice(u.lastIndexOf("/") + 1);
+      if (/^index-.*\.css$/.test(n)) return 0;                              // first paint
+      if (/^index-.*\.js$/.test(n)) return 1;                               // boot
+      if (/\.(woff2?|ttf|otf)$/.test(n)) return 2;                          // text, without a reflow
+      if (/(kokoro|transformers|ort\.|onnx|pdf-|katex)/.test(n)) return 4;   // optional runtimes
+      return 3;                                                             // route chunks
+    };
+    const todo = (m.files || []).filter((u) => !have.has(u)).sort((a, b) => weight(a) - weight(b));
+    // A small window: enough to hide latency, few enough that precaching never competes with
+    // whatever the member is actually doing on the page.
+    let next = 0;
+    await Promise.all(Array.from({ length: Math.min(6, todo.length) }, async () => {
+      for (;;) {
+        const k = next++;
+        if (k >= todo.length) return;
+        try { const f = await fetch(todo[k], { cache: "reload" }); if (f && f.ok) await c.put(todo[k], f.clone()); } catch { /* a missing chunk just won't be offline */ }
+      }
+    }));
     // Drop older app precaches to reclaim space.
     for (const k of await caches.keys()) { if (k.startsWith("aq-app-") && k !== cacheName) await caches.delete(k); }
   } catch { /* manifest unreachable — page-driven precache will cover it */ }
