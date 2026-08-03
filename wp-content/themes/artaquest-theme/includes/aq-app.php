@@ -820,12 +820,20 @@ function aq_app_head_meta() {
 		// Describe it the way the page does: an instrument measured something, at a place, at a
 		// time. No interpretation — the detector's own words are all this is allowed to claim.
 		$where = trim( (string) ( $det->place ?: $det->country ) );
-		$desc  = trim( sprintf(
-			'%s — measured by %s%s. The reading, its full provenance and what it does not establish.',
-			(string) $det->headline,
-			(string) $det->detector,
-			'' !== $where ? ' in ' . $where : ''
-		) );
+		$meta  = json_decode( (string) ( $det->measures ?? '' ), true );
+		$inst  = trim( (string) ( $meta['source']['name'] ?? '' ) );
+		$desc  = '' !== $inst
+			? sprintf(
+				'%s%s — measured by %s. The reading, its full provenance and what it does not establish.',
+				(string) $det->headline,
+				'' !== $where ? ', ' . $where : '',
+				$inst
+			)
+			: sprintf(
+				'%s%s. The reading, its full provenance and what it does not establish.',
+				(string) $det->headline,
+				'' !== $where ? ', ' . $where : ''
+			);
 		$type = 'article';
 	} elseif ( $thread ) {
 		$desc = (string) $thread->body;
@@ -1653,7 +1661,10 @@ function aq_app_current_detection() {
 	// Columns as aq_news_events actually defines them: the headline is `headline`, and the time is
 	// first_ts/last_ts. Only what the SEO layer needs is selected — `pixels` is LONGTEXT and this
 	// runs on every request to a /news/ URL.
-	$cols = 'id, ekey, headline, detector, place, country, first_ts, last_ts, status';
+	// `measures` carries the source block, which holds the INSTRUMENT's name. The `detector`
+	// column is a registry key ('netloss') whose label is a signal TYPE ('Internet connectivity
+	// loss') — neither is the thing that measured this, so neither belongs after "measured by".
+	$cols = 'id, ekey, headline, detector, place, country, first_ts, last_ts, status, measures';
 	$cache = preg_match( '/-e([0-9]+)$/', $slug, $e )
 		? $wpdb->get_row( $wpdb->prepare( "SELECT {$cols} FROM {$t} WHERE id = %d", (int) $e[1] ) )
 		: $wpdb->get_row( $wpdb->prepare( "SELECT {$cols} FROM {$t} WHERE ekey = %s", $slug ) );

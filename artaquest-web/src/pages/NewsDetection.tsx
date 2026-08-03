@@ -70,11 +70,15 @@ export default function NewsDetectionPage() {
     <div className="mx-auto max-w-3xl space-y-8">
       <PageHero eyebrow="ArtaNews · a measurement, not a story" title={d.title} lede={d.summary} />
 
-      {/* The instrument first: a reader should know WHAT saw this before reading any number. */}
+      {/* What, when and where, before any number — the instrument itself is named under
+          provenance, where its product URL and retrieval time sit with it. */}
       <Card className="p-5">
         <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
           <div>
-            <dt className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Detected by</dt>
+            {/* `detector` is the SIGNAL TYPE ("Internet connectivity loss"), not the instrument —
+                the instrument is source.name, shown under provenance below. Labelling this
+                "Detected by" read as though a phenomenon had detected itself. */}
+            <dt className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Signal</dt>
             <dd className="mt-0.5 text-[15px]">{d.detector}</dd>
           </div>
           <div>
