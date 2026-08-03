@@ -77,7 +77,7 @@ makes `article.html` differ across the two executions ⇒ `reproducibility` → 
 
 ## 5. The gate is a BALANCE gate — aim at 50, never upward
 
-⚠️ `CLAUDE.md:33` is stale: it describes the superseded v2 floors ("≥80 per category, mean ≥85").
+⚠️ The operator's own working notes still describe the superseded v2 floors ("≥80 per category, mean ≥85").
 The live code is v3: each axis is a **trade-off position**, ideal **50.0**, safe zone **[40, 60]**,
 **both directions fail** — an axis at 80 fails on the *excess* side. `BALANCE = 100 − 2·mean|s−50|`
 must reach 80, then 3 blind seats must pass unanimously.

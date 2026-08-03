@@ -14,7 +14,7 @@ import sys
 import numpy as np, pandas as pd
 
 RAW = sys.argv[1] if len(sys.argv) > 1 else \
-    "/private/tmp/claude-501/-Users-arash-Studio-artaquest/8c3c064a-abad-4f0f-8dd6-5a1588c5e7b6/scratchpad/citations-quarterly-new.csv"
+    "./citations-quarterly-new.csv"
 OUT = "analysis/citations/citations_received_yearly.csv"
 
 raw = pd.read_csv(RAW, low_memory=False)

@@ -24,9 +24,9 @@ while true; do
     PATHS="artaquest-web/src/data/research.json artaquest-web/src/data/field-daily wp-content/plugins/aquest/data/aq-disciplines-add.json wp-content/plugins/aquest/data/aq-disc-trends.json analysis/_fields_weekly.json"
     git add $PATHS 2>/dev/null
     git commit -q -m "Topic atlas: $F fields collected (topic-centric, by commonness)" -- $PATHS 2>/dev/null
-    # themes (isolated worktree build) THEN plugin data — SEQUENTIAL (two concurrent studio pushes race WP.com's
-    # server-side sync lock); the pair is backgrounded so the collect loop keeps going, but themes finishes before plugins.
-    { bash tools/isolated-deploy.sh && tools/ticket-agent/aq-deploy studio push --path . --options plugins --remote-site https://artaquest.org; } >> /tmp/td_topics.out 2>&1 &
+    # Deployment is NOT done here. This loop commits; getting it live is `git push` to main on
+    # ArtaQuest/artasite — see DEPLOYING.md. What used to run here called two files this repo
+    # does not publish, and pushed to artaquest.org, which has not been the site since 2026-07-27.
   fi
   [ "$R" -eq 0 ] && { echo "[grow_topics] ALL selected fields collected."; break; }
   sleep 5

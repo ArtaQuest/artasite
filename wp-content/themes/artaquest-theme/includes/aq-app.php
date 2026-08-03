@@ -1320,7 +1320,7 @@ function aq_app_route_seo( $slug ) {
  * "Aquest" from the rebrand, so every page title read "… – Aquest" while og:site_name, the JSON-LD
  * Organization, and the logo all say "ArtaQuest" — an inconsistent brand signal that hurts SERP
  * recognition + click-through. Force the canonical name in code so it's correct in every environment
- * (and deploys with the theme), regardless of the DB value. Canonical brand per CLAUDE.md: ArtaQuest.
+ * (and deploys with the theme), regardless of the DB value. Canonical brand: ArtaQuest.
  */
 add_filter( 'pre_option_blogname', function () {
 	return 'ArtaQuest';

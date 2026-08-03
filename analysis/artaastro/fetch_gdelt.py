@@ -35,7 +35,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 HERE   = os.path.dirname(os.path.abspath(__file__))
 OUT    = os.path.join(HERE, "out")
-TMP    = os.environ.get("AQ_GDELT_TMP", "/private/tmp/claude-501/-Users-arash-Studio-artaquest/89a1c066-9c5c-48d0-b9ba-48281569cfb5/scratchpad/gdelt_tmp")
+TMP    = os.environ.get("AQ_GDELT_TMP", "./gdelt_tmp")
 BASE   = "http://data.gdeltproject.org/events/"
 SIZES  = os.environ.get("AQ_GDELT_SIZES", os.path.join(TMP, "..", "gdelt_filesizes.txt"))
 CKPT   = os.path.join(OUT, "_gdelt_checkpoint.json")

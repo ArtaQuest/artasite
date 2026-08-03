@@ -26,7 +26,7 @@ import sys
 import numpy as np, pandas as pd
 
 RAW = sys.argv[1] if len(sys.argv) > 1 else \
-    "/private/tmp/claude-501/-Users-arash-Studio-artaquest/8c3c064a-abad-4f0f-8dd6-5a1588c5e7b6/scratchpad/citations-quarterly.csv"
+    "./citations-quarterly.csv"
 OUT = "analysis/citations/citations_received_quarterly.csv"
 LO_Y, HI = 1700, 2026            # window 1700Q1 .. 2026Q1 (operator 2026-07-24: since 1700)
 

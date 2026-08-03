@@ -52,7 +52,7 @@ if ( ! function_exists( 'aq_sync_lessons' ) ) {
 		// list a video, ownership resolves the same way from either side — it never ping-pongs. A video owned
 		// by ANOTHER course is DROPPED below (and reported in `skipped`), so it can never be duplicated across
 		// courses; segment twins WITHIN this course are unaffected (same course_id = self-owned). This sync is
-		// the single choke point for lesson changes (CLAUDE.md), so it is the right place to enforce this.
+		// the single choke point for lesson changes, so it is the right place to enforce this.
 		$owner  = [];
 		$wanted = [];
 		foreach ( $lessons as $l ) {

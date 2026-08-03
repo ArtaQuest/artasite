@@ -21,8 +21,10 @@ while true; do
   PATHS="artaquest-web/src/data/research.json artaquest-web/src/data/field-daily wp-content/plugins/aquest/data/aq-disciplines-add.json wp-content/plugins/aquest/data/aq-disc-trends.json analysis/_topics_weekly.json analysis/_topics.json analysis/_fields_weekly.json"
   git add $PATHS 2>/dev/null
   git commit -q -m "Science topics: +$(fitted) on the Topics page (monthly atlas)" -- $PATHS 2>/dev/null
-  # deploy themes (SPA incl research.json) THEN plugin data — through the lock; skips/retries if ArtaDev holds it
-  { bash tools/isolated-deploy.sh && tools/ticket-agent/aq-deploy studio push --path . --options plugins --remote-site https://artaquest.org; } >> /tmp/deploy_sci.out 2>&1 &
+  # Deployment is NOT done here. This loop commits; getting it live is `git push` to main
+  # on ArtaQuest/artasite — see DEPLOYING.md. The two commands that used to run here called
+  # tools/isolated-deploy.sh and tools/ticket-agent/aq-deploy (neither is published), and
+  # pushed to artaquest.org, which has not been the site since the 2026-07-27 domain move.
   [ "$(remaining)" -eq 0 ] && { echo "[sci] ALL science topics collected."; break; }
   sleep 5
 done

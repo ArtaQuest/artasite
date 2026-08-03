@@ -1,6 +1,6 @@
 # ArtaQuest — Operations Runbook (2026-07-15)
 
-One page for everything recurring. Architecture: CLAUDE.md · API: [wp-content/plugins/aquest/src/Rest.php](wp-content/plugins/aquest/src/Rest.php) · Coordination: tools/ticket-agent/COORDINATION.md.
+One page for everything recurring. Architecture: [ARCHITECTURE.md](ARCHITECTURE.md) · API: [wp-content/plugins/aquest/src/Rest.php](wp-content/plugins/aquest/src/Rest.php) · Coordination: tools/ticket-agent/COORDINATION.md.
 
 ## Deploy
 

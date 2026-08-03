@@ -49,7 +49,6 @@ wp-content/plugins/aquest/     the whole backend — one dependency-free plugin
 wp-content/themes/artaquest-theme/   serves the SPA shell + SEO; app/ = the built SPA
 ARCHITECTURE.md                the scaling design
 CUTOVER.md                     historical: the old LMS/Woo stack retirement (complete)
-CLAUDE.md / AGENTS.md          guidance for humans and AI agents
 ```
 
 **Start at `src/Rest.php`** — every endpoint, its method, auth level, and handler is one

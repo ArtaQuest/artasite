@@ -13,7 +13,7 @@ point when a ticket you opened is resolved.
 
 Read these first — they are short and they are the real rules:
 
-- **CLAUDE.md** — project shape, conventions, and what not to do.
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — project shape, conventions, and what not to do.
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — why the system is shaped this way.
 - **tools/ticket-agent/COORDINATION.md** — how
   humans and AI agents share this codebase without stepping on each other.

@@ -29,20 +29,20 @@ import founderAvatar from "../assets/founder-avatar.jpg";
  * Every factual claim here was checked against shipped code, because the page's whole argument is
  * that its claims are checkable. These were DELETED for failing that check and must not come back
  * without a code path behind them:
- *   • "the small spread on buying and selling coins" — `Economy::sell` returns 503 while
- *     `cashout_enabled()` is false, so the sell leg is not a live revenue source.
- *   • "held in full reserve" — `Economy::reserve()` deliberately publishes the TRUE, possibly
- *     under-collateralised ratio (Economy.php:791-794), and /reserve renders it live. Say the RATIO
- *     is published; never say the coins are fully backed.
- *   • "donations accepted only from independent individuals — never from governments, corporations…"
- *     — implemented nowhere: no donor-class field, no screening, no refusal path in Funds.php.
- *   • "No autoplay" — components/nbview.tsx:471 renders every unflagged teaser `autoPlay={!flagged}
- *     muted loop`; only videos over the viewer's Motion-calm threshold render paused.
- *   • "the only fee anywhere is a challenge entry" — Shop.php:73 prices goods in `price_coins` and
- *     orders carry `coins_total`, so a printed book costs coins. The true form is "the only fee to
- *     take part".
- *   • "The full record on his profile →" — Profile.tsx renders a bio, counts and a post grid. There
- *     is no career record there to link to.
+ * • "the small spread on buying and selling coins" — `Economy::sell` returns 503 while
+ * `cashout_enabled()` is false, so the sell leg is not a live revenue source.
+ * • "held in full reserve" — `Economy::reserve()` deliberately publishes the TRUE, possibly
+ * under-collateralised ratio (Economy.php:791-794), and /reserve renders it live. Say the RATIO
+ * is published; never say the coins are fully backed.
+ * • "donations accepted only from independent individuals — never from governments, corporations…"
+ * — implemented nowhere: no donor-class field, no screening, no refusal path in Funds.php.
+ * • "No autoplay" — components/nbview.tsx:471 renders every unflagged teaser `autoPlay={!flagged}
+ * muted loop`; only videos over the viewer's Motion-calm threshold render paused.
+ * • "the only fee anywhere is a challenge entry" — Shop.php:73 prices goods in `price_coins` and
+ * orders carry `coins_total`, so a printed book costs coins. The true form is "the only fee to
+ * take part".
+ * • "The full record on his profile →" — Profile.tsx renders a bio, counts and a post grid. There
+ * is no career record there to link to.
  */
 
 /** A section heading + its anchor. `scroll-mt-24` clears the 60px sticky topbar plus air, so a jump
@@ -101,7 +101,7 @@ const OBJECTIONS: { q: string; a: string }[] = [
   },
   {
     q: "Entropy rises by itself under the second law, so none of this needs doing",
-    a: "The second law says entropy never falls inside a sealed box — nothing in, nothing out, not even heat. It holds for Earth too. It just does not decide anything here, because Earth is not that box: about 120,000 terawatts of sunlight are soaked up here every second — roughly a kilowatt on each sunny square metre, across a disc the width of the planet, less the near-third that cloud, snow and sea bounce straight back — and every watt of it came from outside. Entropy here is free to fall while the Sun's rises by far more. And the law only tells you which direction one quantity moves. It does not tell you which future you end up in. Losing a species obeys the second law. Saving one obeys it just as well.",
+    a: "The second law says entropy never falls inside a sealed box — nothing in, nothing out, not even heat. It holds for Earth too. It just does not decide anything here, because Earth is not that box: about 120,000 terawatts of sunlight are soaked up here — a terawatt being a trillion joules every second — roughly a kilowatt on each sunny square metre, across a disc the width of the planet, less the near-third that cloud, snow and sea bounce straight back — and every watt of it came from outside. Entropy here is free to fall while the Sun's rises by far more. And the law only tells you which direction one quantity moves. It does not tell you which future you end up in. Losing a species obeys the second law. Saving one obeys it just as well.",
   },
   {
     q: "Then burn everything, because a fire raises entropy fastest",
@@ -356,11 +356,8 @@ export default function About() {
               <p>
                 Then it does one more thing, and it is the one step worth slowing down for. It does not use that count
                 itself. It uses the length of the count: the zeros you write after the first digit.
-                Eight                 followed by sixty-seven zeros becomes sixty-seven. Why the length
-                rather than the count?                 Because counts multiply and lengths add. Put a
-                second shuffled pack beside the first and                 the number of orders for the
-                pair is one count times the other — but sixty-seven zeros                 and
-                sixty-seven zeros simply make a hundred and thirty-four. Two things together should
+                Eight followed by sixty-seven zeros becomes sixty-seven. Why the length
+                rather than the count? Because counts multiply and lengths add. Take a one followed by sixty-seven zeros, and another. Multiplied, they give a one followed by a hundred and thirty-four zeros: the counts multiplied, and the lengths simply added. Two things together should
                 be worth the one plus the other, the way their weights are. And notice where the bottom
                 of that scale sits. One arrangement is written 1. There are no zeros after it, so the
                 value is zero. Everything I say below rests on that zero.
@@ -381,7 +378,7 @@ export default function About() {
                 take the length, one way left reads zero — you can lay that shape over other lists. That
                 part is no longer physics and I will not dress it up as physics; I will just say plainly
                 what I am counting. A field with forty kinds of crop lives through more kinds of bad
-                year                 than a field with one kind: same shape, different list.
+                year than a field with one kind: same shape, different list.
               </p>
 
               <h3 className="pt-4 text-[19px] font-bold text-ink">What I am counting</h3>
@@ -416,12 +413,12 @@ export default function About() {
               <p>
                 In words: at every moment from now on, count the ways Earth's story could still go, take that count's
                 length — the zeros, as above — and add those lengths up, moment after moment, with no
-                end.                 The tall stretched S is that adding-up; the t-nought under it is
-                now; the sideways eight                 above it means the adding never stops. <strong
+                end. The tall stretched S is that adding-up; the t-nought under it is
+                now; the sideways eight above it means the adding never stops. <strong
                 className="font-semibold">a</strong> is something a person could do. <strong
                 className="font-semibold">S</strong> with the Earth symbol is that length at one moment.
-                The length is why a dead Earth adds nothing:                 one way left is not a small
-                amount to add up, it is nothing at all. A moment far in the                 future
+                The length is why a dead Earth adds nothing: one way left is not a small
+                amount to add up, it is nothing at all. A moment far in the future
                 counts exactly as much as this one, and there is no date after which the people
                 alive stop mattering — and whatever date I chose instead, the way to win would be to
                 spend everything the day before it.
@@ -439,11 +436,11 @@ export default function About() {
               <p>
                 Read that line as: of the two, a is the one to choose. The order of the work is what makes it possible —
                 do not add up two endless totals and then subtract them, because endless minus endless
-                is                 not a number. Subtract first. At every moment ask how much more the
-                one leaves open than                 the other, keep a running total of that difference,
-                and let it run as long as you like.                 Comparing two totals that never stop
-                growing tells you nothing. Comparing the gap between                 them works whenever
-                that gap settles on one side and stays there. It does not always                 settle,
+                is not a number. Subtract first. At every moment ask how much more the
+                one leaves open than the other, keep a running total of that difference,
+                and let it run as long as you like. Comparing two totals that never stop
+                growing tells you nothing. Comparing the gap between them works whenever
+                that gap settles on one side and stays there. It does not always settle,
                 and when it does not, this rule has no answer to give and I would rather say so
                 than pretend it does. In the case that matters most it settles very plainly: a future
                 that ends adds nothing for the rest of time, so the gap only widens. You never need the
