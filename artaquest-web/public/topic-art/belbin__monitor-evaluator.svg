@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Monitor Evaluator — balanced scales weighing the options">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <line x1="40" y1="22" x2="40" y2="58" stroke="#E8B923" stroke-width="3" stroke-linecap="round"/>
+  <line x1="31" y1="58" x2="49" y2="58" stroke="#E8B923" stroke-width="3" stroke-linecap="round"/>
+  <line x1="19" y1="26" x2="61" y2="26" stroke="#E8B923" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="40" cy="21" r="3.2" fill="#E8B923"/>
+  <g stroke="#2352E8" stroke-width="1.6">
+    <line x1="19" y1="26" x2="19" y2="33"/>
+    <line x1="61" y1="26" x2="61" y2="33"/>
+  </g>
+  <path d="M10 33 A9 9 0 0 1 28 33 Z" fill="#2352E8"/>
+  <path d="M52 33 A9 9 0 0 1 70 33 Z" fill="#2352E8"/>
+</svg>

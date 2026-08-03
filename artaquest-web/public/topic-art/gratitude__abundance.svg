@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Sense of abundance — a cup brimming over with gold">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <path d="M27 40 C 27 29, 53 29, 53 40 Z" fill="#E8B923"/>
+  <circle cx="40" cy="21" r="3" fill="#E8B923"/>
+  <circle cx="29" cy="27" r="2" fill="#E8B923"/>
+  <circle cx="51" cy="27" r="2" fill="#E8B923"/>
+  <path d="M26 40 H54 L50.5 61 C 50 63.5, 47.8 65, 45.2 65 H34.8 C 32.2 65, 30 63.5, 29.5 61 Z" fill="#06121E" stroke="#2352E8" stroke-width="3.6" stroke-linejoin="round"/>
+  <path d="M30 44 H50 L47.6 59 C 47.3 60.7, 45.9 61.7, 44.3 61.7 H35.7 C 34.1 61.7, 32.7 60.7, 32.4 59 Z" fill="#E8B923" opacity="0.9"/>
+</svg>

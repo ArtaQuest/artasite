@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="The Everyperson — ordinary people side by side, belonging and solidarity">
+  <g fill="#2352E8">
+    <circle cx="22" cy="34" r="7"/>
+    <path d="M11 56 a11 11 0 0 1 22 0 Z"/>
+    <circle cx="58" cy="34" r="7"/>
+    <path d="M47 56 a11 11 0 0 1 22 0 Z"/>
+  </g>
+  <g fill="var(--ico-gold,#E8B923)">
+    <circle cx="40" cy="30" r="8"/>
+    <path d="M27 54 a13 13 0 0 1 26 0 Z"/>
+  </g>
+</svg>

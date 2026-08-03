@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="High standards">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="62%">
+      <stop offset="0" stop-color="#0C1E32"/>
+      <stop offset="1" stop-color="#010C17"/>
+    </radialGradient>
+  </defs>
+  <circle cx="40" cy="40" r="40" fill="url(#bg)"/>
+  <!-- high standards: aiming up to the very top of the bar, holding out for the best -->
+  <line x1="22" y1="25" x2="58" y2="25" stroke="#E8B923" stroke-width="3.4" stroke-linecap="round"/>
+  <line x1="27" y1="25" x2="27" y2="29" stroke="#E8B923" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+  <line x1="53" y1="25" x2="53" y2="29" stroke="#E8B923" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+  <line x1="40" y1="61" x2="40" y2="33" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M31 41 L40 31 L49 41" fill="none" stroke="#2352E8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img">
+  
+  <!-- three logics woven into one sense of worth -->
+  <g fill="none" stroke-width="3">
+    <circle cx="40" cy="31" r="15" stroke="var(--ico-gold,#E8B923)"/>
+    <circle cx="32.2" cy="44.5" r="15" stroke="#2352E8"/>
+    <circle cx="47.8" cy="44.5" r="15" stroke="var(--ico-gold,#E8B923)"/>
+  </g>
+  <!-- where all three meet: the self they together compose -->
+  <circle cx="40" cy="40" r="4.5" fill="#2352E8"/>
+</svg>

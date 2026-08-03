@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img">
+  
+  <line x1="20" y1="40" x2="45" y2="40" stroke="#2352E8" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M49 40 l-6 -3.5 v7 z" fill="#2352E8"/>
+  <circle cx="58" cy="40" r="9" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2"/>
+  <circle cx="58" cy="40" r="3.2" fill="var(--ico-gold,#E8B923)"/>
+</svg>

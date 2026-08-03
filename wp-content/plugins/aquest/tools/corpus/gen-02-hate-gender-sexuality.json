@@ -1,0 +1,106 @@
+[
+  {
+    "category": "hate-gender-sexuality",
+    "lang": "en",
+    "text": "Women aren't people, they're breeding livestock that learned to talk. Treat them like the cattle they are.",
+    "flag": true,
+    "note": "Dehumanises women as livestock/animals",
+    "band": 88
+  },
+  {
+    "category": "hate-gender-sexuality",
+    "lang": "en",
+    "text": "Every last one of these tr@nnies is a diseased predator. Round them up and burn the lot before they touch another kid.",
+    "flag": true,
+    "note": "Slur, disease framing, call to kill trans people",
+    "band": 97
+  },
+  {
+    "category": "hate-gender-sexuality",
+    "lang": "en",
+    "text": "Gay men are walking petri dishes spreading their filth. Society would be cleaner if they were exterminated.",
+    "flag": true,
+    "note": "Disease dehumanisation and call for extermination",
+    "band": 96
+  },
+  {
+    "category": "hate-gender-sexuality",
+    "lang": "en",
+    "text": "Funny how 'protecting children' always means the same crowd hoping someone finally takes a baseball bat to the local drag show. You know who you are, and so do we.",
+    "flag": true,
+    "note": "Coded incitement to violence against LGBTQ people",
+    "band": 85
+  },
+  {
+    "category": "hate-gender-sexuality",
+    "lang": "en",
+    "text": "Lesbians are just broken women, a defect in the gene pool that nature should have flushed out. Subhuman waste.",
+    "flag": true,
+    "note": "Calls lesbians defective subhuman waste",
+    "band": 91
+  },
+  {
+    "category": "hate-gender-sexuality",
+    "lang": "en",
+    "text": "Bless their hearts, the trans 'community'. Vermin always do swarm in numbers before the exterminator shows up, don't they? Tick tock.",
+    "flag": true,
+    "note": "Polite-sarcastic vermin slur plus threat",
+    "band": 89
+  },
+  {
+    "category": "hate-gender-sexuality",
+    "lang": "en",
+    "text": "Men are pigs, every single one of them, and I'm done pretending otherwise after this week.",
+    "flag": false,
+    "note": "Crude sexist hyperbole, not dehumanising call to harm",
+    "band": 22
+  },
+  {
+    "category": "hate-gender-sexuality",
+    "lang": "en",
+    "text": "I think the church's stance on same-sex marriage is bigoted and hypocritical, and I'll say so in any seminar.",
+    "flag": false,
+    "note": "Criticises an institution, not a protected group",
+    "band": 6
+  },
+  {
+    "category": "hate-gender-sexuality",
+    "lang": "en",
+    "text": "As a trans woman I'll happily call myself a tr@nny when I'm joking with my friends; nobody else gets that pass though.",
+    "flag": false,
+    "note": "In-group reclaiming a slur about self",
+    "band": 8
+  },
+  {
+    "category": "hate-gender-sexuality",
+    "lang": "en",
+    "text": "I keep seeing comments saying gay people are a 'disease that should be wiped out' and it terrifies me that this is allowed to stand. That is incitement and it needs reporting.",
+    "flag": false,
+    "note": "Counter-speech quoting hate to condemn it",
+    "band": 15
+  },
+  {
+    "category": "hate-gender-sexuality",
+    "lang": "en",
+    "text": "Honestly the dating market right now is killing me, I've given up on men entirely lol.",
+    "flag": false,
+    "note": "Idiomatic hyperbole and personal frustration",
+    "band": 4
+  },
+  {
+    "category": "hate-gender-sexuality",
+    "lang": "en",
+    "text": "This lecture on the history of anti-gay pogroms is harrowing; mobs literally hunted people down in the streets. Important and grim viewing.",
+    "flag": false,
+    "note": "Academic discussion of violent history",
+    "band": 9
+  },
+  {
+    "category": "hate-gender-sexuality",
+    "lang": "en",
+    "text": "F@ggots don't deserve to breathe the same air as normal people. We should drag them out and string them up one by one.",
+    "flag": true,
+    "note": "Slur plus explicit call to lynch gay people",
+    "band": 98
+  }
+]

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Religious and spiritual struggles — six domains of tension">
+  
+  <circle cx="40" cy="40" r="39" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.4"/>
+  <!-- one soul pulled six ways: the six measured domains of struggle -->
+  <g stroke-width="2.4" stroke-linecap="round">
+    <line x1="40" y1="29" x2="40" y2="17.5" stroke="var(--ico-gold,#E8B923)"/>
+    <line x1="49.5" y1="34.5" x2="59.5" y2="28.75" stroke="#2352E8"/>
+    <line x1="49.5" y1="45.5" x2="59.5" y2="51.25" stroke="var(--ico-gold,#E8B923)"/>
+    <line x1="40" y1="51" x2="40" y2="62.5" stroke="#2352E8"/>
+    <line x1="30.5" y1="45.5" x2="20.5" y2="51.25" stroke="var(--ico-gold,#E8B923)"/>
+    <line x1="30.5" y1="34.5" x2="20.5" y2="28.75" stroke="#2352E8"/>
+  </g>
+  <g>
+    <circle cx="40" cy="13" r="3" fill="var(--ico-gold,#E8B923)"/>
+    <circle cx="63.4" cy="26.5" r="3" fill="#2352E8"/>
+    <circle cx="63.4" cy="53.5" r="3" fill="var(--ico-gold,#E8B923)"/>
+    <circle cx="40" cy="67" r="3" fill="#2352E8"/>
+    <circle cx="16.6" cy="53.5" r="3" fill="var(--ico-gold,#E8B923)"/>
+    <circle cx="16.6" cy="26.5" r="3" fill="#2352E8"/>
+  </g>
+  <!-- the self, held at the centre -->
+  <circle cx="40" cy="40" r="7.5" fill="var(--ico-ink,#06121E)" stroke="var(--ico-gold,#E8B923)" stroke-width="2.2"/>
+  <circle cx="40" cy="40" r="3" fill="#2352E8"/>
+</svg>

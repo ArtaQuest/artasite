@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img">
+  
+  <circle cx="40" cy="40" r="16" fill="none" stroke="#2352E8" stroke-width="2.4"/>
+  <circle cx="40" cy="40" r="4.5" fill="#2352E8"/>
+  <line x1="29" y1="51" x2="51" y2="29" stroke="var(--ico-gold,#E8B923)" stroke-width="2.6" stroke-linecap="round"/>
+</svg>

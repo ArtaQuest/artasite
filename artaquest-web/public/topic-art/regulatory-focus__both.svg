@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Both — an upward arrow for gains beside a shield against loss, held at once">
+  
+  
+  <circle cx="28" cy="20" r="3" fill="var(--ico-gold,#E8B923)"/>
+  <line x1="28" y1="58" x2="28" y2="28" stroke="var(--ico-gold,#E8B923)" stroke-width="2.6" stroke-linecap="round"/>
+  <polyline points="22,35 28,28 34,35" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M53 25 L64 29 L64 42 Q64 52 53 57 Q42 52 42 42 L42 29 Z" fill="#2352E8" fill-opacity="0.16" stroke="#2352E8" stroke-width="2.2" stroke-linejoin="round"/>
+</svg>

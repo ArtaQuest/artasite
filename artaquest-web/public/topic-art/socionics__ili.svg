@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="ILI — Critic (leading introverted intuition, creative extraverted logic)">
+  
+  
+  <line x1="40" y1="32" x2="40" y2="56" stroke="#2352E8" stroke-width="1.1" stroke-opacity="0.28"/>
+  <polygon points="40,16 26.5,41.8 53.5,41.8" fill="#2352E8" fill-opacity="0.16" stroke="#2352E8" stroke-width="2.55" stroke-linejoin="round"/>
+  <rect x="32.39" y="49.39" width="15.23" height="15.23" rx="1.32" fill="var(--ico-gold,#E8B923)"/>
+</svg>

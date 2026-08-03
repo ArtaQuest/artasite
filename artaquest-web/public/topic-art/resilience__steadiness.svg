@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Staying steady — a gold structure holds level under blue downward strain">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="62%">
+      <stop offset="0" stop-color="#0C1E32"/>
+      <stop offset="1" stop-color="#010C17"/>
+    </radialGradient>
+  </defs>
+  <circle cx="40" cy="40" r="40" fill="url(#bg)"/>
+  <!-- staying steady: blue strain presses down from above, a gold beam on two legs holds level and unbent -->
+  <line x1="28" y1="18" x2="28" y2="29" stroke="#2352E8" stroke-width="2.6" stroke-linecap="round"/>
+  <polygon points="28,34 24.5,27 31.5,27" fill="#2352E8"/>
+  <line x1="40" y1="16" x2="40" y2="27" stroke="#2352E8" stroke-width="2.6" stroke-linecap="round"/>
+  <polygon points="40,32 36.5,25 43.5,25" fill="#2352E8"/>
+  <line x1="52" y1="18" x2="52" y2="29" stroke="#2352E8" stroke-width="2.6" stroke-linecap="round"/>
+  <polygon points="52,34 48.5,27 55.5,27" fill="#2352E8"/>
+  <line x1="20" y1="46" x2="60" y2="46" stroke="#E8B923" stroke-width="3.6" stroke-linecap="round"/>
+  <line x1="26" y1="48" x2="26" y2="62" stroke="#E8B923" stroke-width="3" stroke-linecap="round"/>
+  <line x1="54" y1="48" x2="54" y2="62" stroke="#E8B923" stroke-width="3" stroke-linecap="round"/>
+</svg>

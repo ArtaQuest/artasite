@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Active group dominance">
+  <circle cx="40" cy="27" r="13" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="40" cy="59" r="7" fill="#2352E8"/>
+  <path d="M40 42 L40 50 M34.5 45.5 L40 51 L45.5 45.5" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

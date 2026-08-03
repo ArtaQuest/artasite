@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img">
+  <!-- OMB Directive 15: one combined race/ethnicity question, select as many as apply -->
+  <rect x="15" y="17" width="50" height="46" rx="6" fill="none" stroke="#2352E8" stroke-width="2.4"/>
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <!-- a selected category -->
+    <rect x="21" y="25" width="8" height="8" rx="1.8" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.8"/>
+    <path d="M22.7 29.2 l1.9 2 l3.4 -3.8" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.8"/>
+    <line x1="35" y1="29" x2="58" y2="29" stroke="var(--ico-gold,#E8B923)" stroke-width="2.6"/>
+    <!-- an unselected category -->
+    <rect x="21" y="36" width="8" height="8" rx="1.8" fill="none" stroke="#2352E8" stroke-width="1.8"/>
+    <line x1="35" y1="40" x2="51" y2="40" stroke="#2352E8" stroke-width="2.6" opacity="0.65"/>
+    <!-- a second selected category -->
+    <rect x="21" y="47" width="8" height="8" rx="1.8" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.8"/>
+    <path d="M22.7 51.2 l1.9 2 l3.4 -3.8" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.8"/>
+    <line x1="35" y1="51" x2="58" y2="51" stroke="var(--ico-gold,#E8B923)" stroke-width="2.6"/>
+  </g>
+</svg>

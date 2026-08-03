@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Agency — a gold arrow of forward determination rising from a blue base">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <!-- the ground you set out from -->
+  <path d="M22 60 Q40 66 58 60" fill="none" stroke="#2352E8" stroke-width="2.6" stroke-linecap="round"/>
+  <!-- willpower: a strong upward drive toward the goal -->
+  <line x1="40" y1="60" x2="40" y2="22" stroke="var(--ico-gold,#E8B923)" stroke-width="3.4" stroke-linecap="round"/>
+  <path d="M40 16 L31.5 27 L48.5 27 Z" fill="var(--ico-gold,#E8B923)"/>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Harmonious passion">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <circle cx="40" cy="42" r="27" fill="none" stroke="#2352E8" stroke-width="3"/>
+  <path d="M40 24 C 49 35 53 44 47 53 C 44 58 40 61 40 61 C 40 61 36 58 33 53 C 27 44 31 35 40 24 Z" fill="#E8B923"/>
+</svg>

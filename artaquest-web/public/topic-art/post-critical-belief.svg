@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="How you read religious ideas — two axes (literal/symbolic, immanent/transcendent) crossing into four stances">
+  
+  <circle cx="40" cy="40" r="39" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.4"/>
+  <!-- the two axes: literal<->symbolic (horizontal) x exclude<->include transcendence (vertical) -->
+  <g stroke="var(--ico-gold,#E8B923)" stroke-width="2" stroke-linecap="round" stroke-opacity="0.85">
+    <line x1="40" y1="18" x2="40" y2="62"/>
+    <line x1="18" y1="40" x2="62" y2="40"/>
+  </g>
+  <!-- transcendence pole: a light above -->
+  <path d="M40 3 L41.4 8.6 L47 10 L41.4 11.4 L40 17 L38.6 11.4 L33 10 L38.6 8.6 Z" fill="var(--ico-gold,#E8B923)"/>
+  <!-- immanent pole: the ground below -->
+  <line x1="31" y1="72" x2="49" y2="72" stroke="#2352E8" stroke-width="2" stroke-linecap="round"/>
+  <!-- left column literal (solid disc), right column symbolic (open ring); top gold = transcendent, bottom blue = immanent -->
+  <circle cx="27" cy="28" r="5" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="53" cy="28" r="5" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4"/>
+  <circle cx="27" cy="52" r="5" fill="#2352E8"/>
+  <circle cx="53" cy="52" r="5" fill="none" stroke="#2352E8" stroke-width="2.4"/>
+  <circle cx="40" cy="40" r="3.2" fill="var(--ico-gold,#E8B923)"/>
+</svg>

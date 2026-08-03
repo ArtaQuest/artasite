@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Wood — growth, drive and initiative, shown as a young tree">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <path d="M40 63 L40 30" fill="none" stroke="#E8B923" stroke-width="3.4" stroke-linecap="round"/>
+  <path d="M40 44 C34 41 29 35 28 27" fill="none" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M40 38 C46 35 51 29 52 21" fill="none" stroke="#E8B923" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="28" cy="27" r="3.4" fill="#2352E8"/>
+  <circle cx="52" cy="21" r="3.4" fill="#E8B923"/>
+  <circle cx="40" cy="29" r="3.4" fill="#E8B923"/>
+</svg>

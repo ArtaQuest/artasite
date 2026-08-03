@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Political efficacy — a two-way exchange between a gold citizen below and a blue civic institution above">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <g fill="#2352E8">
+    <path d="M24 31 L40 16 L56 31 Z"/>
+    <rect x="27" y="31" width="3.4" height="12" rx="1"/>
+    <rect x="38.3" y="31" width="3.4" height="12" rx="1"/>
+    <rect x="49.6" y="31" width="3.4" height="12" rx="1"/>
+  </g>
+  <circle cx="40" cy="61" r="4.6" fill="var(--ico-gold,#E8B923)"/>
+  <path d="M35 57 Q20 49 28 36" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2.2" stroke-linecap="round"/>
+  <polygon points="28,33 24,40.5 32,39.5" fill="var(--ico-gold,#E8B923)"/>
+  <path d="M52 36 Q60 49 45 57" fill="none" stroke="#2352E8" stroke-width="2.2" stroke-linecap="round"/>
+  <polygon points="45,60 53,55.5 48,49.5" fill="#2352E8"/>
+</svg>

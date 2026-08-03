@@ -1,0 +1,106 @@
+[
+  {
+    "category": "fear-incitement",
+    "lang": "en",
+    "text": "Wake up before it's too late. They are flooding our towns on purpose, replacing us street by street, and once they outnumber us they will come for your children. Stop being polite. Arm yourselves now.",
+    "flag": true,
+    "note": "Replacement panic + threat to children + call to arm",
+    "band": 92
+  },
+  {
+    "category": "fear-incitement",
+    "lang": "en",
+    "text": "Friendly reminder: the family that moved in down the block is one of THEM. Write down their car plate, watch when they leave, and report anything to the group. We can't trust a single one of them around our kids.",
+    "flag": true,
+    "note": "Paranoid surveillance of a group framed to incite hostility",
+    "band": 84
+  },
+  {
+    "category": "fear-incitement",
+    "lang": "en",
+    "text": "Oh sure, let's keep 'welcoming' them. By the time you finish your coffee they'll have your job, your house, your daughter, and your country. But please, keep clapping while they sharpen the knife behind your back.",
+    "flag": true,
+    "note": "Sarcastic dread-mongering casting group as coming menace",
+    "band": 78
+  },
+  {
+    "category": "fear-incitement",
+    "lang": "en",
+    "text": "This isn't immigration, it's an invasion, and every quiet town is the next target. If you wait for the government to act you and your family are already dead. Round them up and push them back over the border before the count tips.",
+    "flag": true,
+    "note": "Invasion panic plus call for mass expulsion",
+    "band": 95
+  },
+  {
+    "category": "fear-incitement",
+    "lang": "en",
+    "text": "They smile at the school gate but make no mistake, they are grooming a generation to hate you and everything you built. The clock is ticking. Get your kids out of that classroom and get ready to defend them.",
+    "flag": true,
+    "note": "Children-in-danger incitement urging defensive mobilisation",
+    "band": 86
+  },
+  {
+    "category": "fear-incitement",
+    "lang": "en",
+    "text": "I genuinely worry about the rise in hate speech online and how scared it makes my neighbours feel. We covered a lot of this history in the section, but I'm still anxious it could happen here again in my lifetime.",
+    "flag": false,
+    "note": "Speaker's own fear and concern, no incitement",
+    "band": 8
+  },
+  {
+    "category": "fear-incitement",
+    "lang": "en",
+    "text": "Honestly the immigration system in this country is a complete failure and the politicians who designed it should be voted out. The numbers don't add up and nobody is being honest about the costs. This is a policy disaster.",
+    "flag": false,
+    "note": "Harsh policy criticism, no group dehumanised or threatened",
+    "band": 16
+  },
+  {
+    "category": "fear-incitement",
+    "lang": "en",
+    "text": "This section on the propaganda used before the genocide is chilling. The way leaders called a whole people 'cockroaches' on the radio to prime ordinary citizens to kill is exactly the pattern we should all learn to recognise and refuse.",
+    "flag": false,
+    "note": "Counter-speech quoting historical hate to condemn it",
+    "band": 12
+  },
+  {
+    "category": "fear-incitement",
+    "lang": "en",
+    "text": "That deadline is going to be the death of me, I swear this course is trying to kill me with assignments. Three videos and a reply due by midnight? Absolute nightmare, send help.",
+    "flag": false,
+    "note": "Hyperbole and idiom about workload, no target",
+    "band": 2
+  },
+  {
+    "category": "fear-incitement",
+    "lang": "en",
+    "text": "Stockpile food and water now, the global elites have already planned the next collapse and the supply chains will snap by winter. Don't trust the news, don't trust your bank, prepare your family for what's coming.",
+    "flag": false,
+    "note": "Conspiracy prepping fear, no protected group attacked",
+    "band": 34
+  },
+  {
+    "category": "fear-incitement",
+    "lang": "en",
+    "text": "Every single one of them is a ticking bomb. You let one in, you let in the disease, and a disease doesn't 'integrate', it spreads until the host is dead. Cut it out now while you still can.",
+    "flag": true,
+    "note": "Group as disease/contagion with extermination metaphor",
+    "band": 90
+  },
+  {
+    "category": "fear-incitement",
+    "lang": "en",
+    "text": "I disagree pretty strongly with the instructor here. I think organised religion has done enormous damage historically and the doctrine deserves blunt criticism, not the soft treatment this video gives it. Faith should not be above scrutiny.",
+    "flag": false,
+    "note": "Sharp critique of religion as ideology, not its people",
+    "band": 14
+  },
+  {
+    "category": "fear-incitement",
+    "lang": "en",
+    "text": "Lock your doors tonight. The 'tolerance' they preached was always the bait. Now they're in the council, in the schools, in your bank, and the moment you blink they will erase you and call it justice. There is no neutral ground left, choose your side before they choose for you.",
+    "flag": true,
+    "note": "Apocalyptic infiltration panic pushing readers toward hostility",
+    "band": 88
+  }
+]

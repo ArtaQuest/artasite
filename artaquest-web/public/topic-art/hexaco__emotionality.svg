@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Emotionality — a feeling heart">
+  
+  
+  <path d="M40,32 C37,25 27,24 23,31 C19,38 27,47 40,57 C53,47 61,38 57,31 C53,24 43,25 40,32 Z" fill="var(--ico-gold,#E8B923)" fill-opacity="0.16" stroke="var(--ico-gold,#E8B923)" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M26,41 L34,41 L38,32 L42,49 L46,41 L54,41" fill="none" stroke="#2352E8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

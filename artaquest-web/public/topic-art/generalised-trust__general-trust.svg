@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="General trust">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <!-- an open embrace rather than a closed guard: goodwill extended -->
+  <path d="M56 24 A 20 20 0 1 0 56 56" fill="none" stroke="#2352E8" stroke-width="5.5" stroke-linecap="round"/>
+  <circle cx="40" cy="40" r="8" fill="#E8B923"/>
+</svg>

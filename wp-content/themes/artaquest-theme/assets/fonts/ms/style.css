@@ -1,0 +1,106 @@
+@font-face {
+	font-family: 'ms-lms-icon';
+	src: url('ms-lms-icon.eot?ckbcoz');
+	src: url('ms-lms-icon.eot?ckbcoz#iefix') format('embedded-opentype'),
+	url('ms-lms-icon.ttf?ckbcoz') format('truetype'),
+	url('ms-lms-icon.woff?ckbcoz') format('woff'),
+	url('ms-lms-icon.svg?ckbcoz#ms-lms-icon') format('svg');
+	font-weight: normal;
+	font-style: normal;
+	font-display: block;
+}
+
+[class^="ms-lms-icon-"], [class*=" ms-lms-icon-"] {
+	font-family: 'ms-lms-icon' !important;
+	speak: never;
+	font-style: normal;
+	font-weight: normal;
+	font-variant: normal;
+	text-transform: none;
+	line-height: 1;
+
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+.ms-lms-icon-cancel:before {
+  content: "\e91a";
+}
+.ms-lms-icon-document:before {
+  content: "\e916";
+}
+.ms-lms-icon-facebook:before {
+  content: "\e917";
+}
+.ms-lms-icon-life_west:before {
+  content: "\e918";
+}
+.ms-lms-icon-play:before {
+  content: "\e919";
+}
+.ms-lms-icon-edit:before {
+	content: "\e912";
+}
+.ms-lms-icon-reply:before {
+	content: "\e913";
+}
+.ms-lms-icon-checkmark-circle:before {
+	content: "\e914";
+}
+.ms-lms-icon-quote:before {
+	content: "\e915";
+}
+.ms-lms-icon-code:before {
+	content: "\e90d";
+}
+.ms-lms-icon-debug:before {
+	content: "\e90e";
+}
+.ms-lms-icon-practices:before {
+	content: "\e90f";
+}
+.ms-lms-icon-safety:before {
+	content: "\e910";
+}
+.ms-lms-icon-settings:before {
+	content: "\e911";
+}
+.ms-lms-icon-arrow-top:before {
+	content: "\e909";
+}
+.ms-lms-icon-arrow-right:before {
+	content: "\e90a";
+}
+.ms-lms-icon-arrow-bottom:before {
+	content: "\e90b";
+}
+.ms-lms-icon-arrow-left:before {
+	content: "\e90c";
+}
+.ms-lms-icon-chevron-up:before {
+	content: "\e905";
+}
+.ms-lms-icon-chevron-right:before {
+	content: "\e906";
+}
+.ms-lms-icon-chevron-down:before {
+	content: "\e907";
+}
+.ms-lms-icon-chevron-left:before {
+	content: "\e908";
+}
+.ms-lms-icon-doc:before {
+	content: "\e901";
+}
+.ms-lms-icon-footer-builder:before {
+	content: "\e902";
+}
+.ms-lms-icon-header-builder:before {
+	content: "\e903";
+}
+.ms-lms-icon-checklist:before {
+	content: "\e900";
+}
+.ms-lms-icon-check:before {
+	content: "\e904";
+}

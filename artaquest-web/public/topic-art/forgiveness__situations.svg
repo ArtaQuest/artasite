@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Forgiveness of situations — a calm gold sun over still blue water">
+  <circle cx="40" cy="40" r="40" fill="#010C17"/>
+  <!-- a calm sun -->
+  <circle cx="40" cy="34" r="11" fill="var(--ico-gold,#E8B923)"/>
+  <!-- still water, settling to peace -->
+  <path d="M14 51 Q21 47 28 51 T42 51 T56 51 T70 51" fill="none" stroke="#2352E8" stroke-width="3.4" stroke-linecap="round"/>
+  <path d="M16 60 Q23 56 30 60 T44 60 T58 60" fill="none" stroke="#2352E8" stroke-width="3.4" stroke-linecap="round" opacity="0.7"/>
+</svg>

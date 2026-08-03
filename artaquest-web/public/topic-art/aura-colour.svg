@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Your aura colour — a figure haloed by a radiant aura">
+  <path d="M40 36 C 28 36 24 48 24 64 L 56 64 C 56 48 52 36 40 36 Z" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="40" cy="30" r="9" fill="var(--ico-gold,#E8B923)"/>
+  <path d="M14 40 A 26 26 0 0 1 66 40" fill="none" stroke="#2352E8" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M9 40 A 31 31 0 0 1 71 40" fill="none" stroke="#2352E8" stroke-width="2.6" stroke-linecap="round" stroke-opacity="0.55"/>
+  <circle cx="40" cy="7" r="2.2" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="19" cy="22" r="2.2" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="61" cy="22" r="2.2" fill="var(--ico-gold,#E8B923)"/>
+</svg>

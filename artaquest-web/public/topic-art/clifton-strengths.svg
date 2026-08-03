@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Gallup CliftonStrengths — 34 talent themes grouped into four domains around a core">
+  <g fill="none" stroke-width="4">
+    <circle cx="40" cy="25" r="12" stroke="var(--ico-gold,#E8B923)"/>
+    <circle cx="55" cy="40" r="12" stroke="#2352E8"/>
+    <circle cx="40" cy="55" r="12" stroke="var(--ico-gold,#E8B923)"/>
+    <circle cx="25" cy="40" r="12" stroke="#2352E8"/>
+  </g>
+  <circle cx="40" cy="40" r="5" fill="var(--ico-gold,#E8B923)"/>
+</svg>

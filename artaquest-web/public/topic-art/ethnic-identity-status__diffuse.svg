@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img">
+  
+  <!-- not yet formed: a faint, open, drifting ring -->
+  <circle cx="40" cy="42" r="12" fill="none" stroke="#2352E8" stroke-width="1.6" stroke-dasharray="3 6" opacity="0.5"/>
+  <!-- a dim, unsettled centre -->
+  <circle cx="40" cy="42" r="3.2" fill="var(--ico-gold,#E8B923)" opacity="0.45"/>
+  <!-- scattered specks: nothing anchored, nothing reaching out -->
+  <circle cx="22" cy="24" r="1.7" fill="var(--ico-gold,#E8B923)" opacity="0.4"/>
+  <circle cx="58" cy="26" r="1.7" fill="#2352E8" opacity="0.5"/>
+  <circle cx="61" cy="55" r="1.5" fill="var(--ico-gold,#E8B923)" opacity="0.35"/>
+  <circle cx="24" cy="58" r="1.5" fill="#2352E8" opacity="0.45"/>
+</svg>

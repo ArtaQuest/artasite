@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Compete to grow">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <rect x="16" y="52" width="14" height="12" rx="1.5" fill="#2352E8"/>
+  <rect x="33" y="44" width="14" height="20" rx="1.5" fill="#2352E8"/>
+  <rect x="50" y="34" width="14" height="30" rx="1.5" fill="#2352E8"/>
+  <g stroke="#E8B923" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <polyline points="19,47 37,38 55,23"/>
+    <polyline points="46,23 55,23 55,32"/>
+  </g>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Introverted Thinking — building an internal logical framework">
+  
+  
+  <polygon points="40,14 62.5,27 62.5,53 40,66 17.5,53 17.5,27" fill="none" stroke="#2352E8" stroke-width="1.6" stroke-linejoin="round"/>
+  <g stroke="var(--ico-gold,#E8B923)" stroke-width="1.2" stroke-opacity="0.8">
+    <line x1="40" y1="14" x2="40" y2="66"/><line x1="62.5" y1="27" x2="17.5" y2="53"/><line x1="17.5" y1="27" x2="62.5" y2="53"/>
+  </g>
+  <circle cx="40" cy="40" r="3.2" fill="var(--ico-gold,#E8B923)"/>
+</svg>

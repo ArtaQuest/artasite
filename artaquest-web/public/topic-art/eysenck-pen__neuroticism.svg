@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Neuroticism — reactive spikes over a calm baseline">
+  
+  
+  <line x1="12" y1="40" x2="68" y2="40" stroke="#2352E8" stroke-width="1.4" stroke-opacity="0.45" stroke-dasharray="3 3"/>
+  <path d="M12 40 L26 40 L30 19 L35 53 L39 40 L45 40 L49 28 L53 48 L57 40 L68 40" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

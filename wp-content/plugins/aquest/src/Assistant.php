@@ -1,0 +1,817 @@
+<?php
+namespace AQ;
+
+if ( ! defined( 'ABSPATH' ) ) { exit; }
+
+/**
+ * ArtaBot — ArtaQuest's AI assistant.
+ *
+ * Two surfaces, one brain (the Claude Max SUBSCRIPTION via the laptop relay, src/Relay.php — the
+ * paid Anthropic API was removed entirely, 2026-06-13; the relay is the only path, and when it is
+ * offline ArtaBot shows a default "offline" message):
+ *   1. Contribution triage — on every ticket, ArtaBot acknowledges, classifies the kind, asks
+ *      clarifying questions, and queues concrete work for the autonomous agent (triage/reply).
+ *   2. A global assistant available everywhere — a persistent per-user conversation it remembers
+ *      across sessions (aq_artabot_messages), like a normal chatbot (ask/history/clear). When anyone —
+ *      member or signed-out visitor — describes something actionable it opens the contribution FOR
+ *      them (Tickets::open_from_chat), pre-triaged, instead of pointing them at a form.
+ *
+ * ArtaBot is FREE and unlimited for everyone (members and logged-out visitors alike); the hourly rate
+ * limits are the only guard. Cost is kept down by the cheap fast model (MODEL), a tight output ceiling
+ * (MAXTOK), prompt-caching the conversation prefix (see chat()), very-concise-reply prompting, and
+ * filing tickets directly from chat — which skips a second triage round-trip.
+ *
+ * CONTAINMENT: ArtaBot has NO tools and NO shell/deploy authority — it can only write chat messages
+ * and open/queue a ticket for the visitor (the same thing a member could do by hand). The real trust
+ * boundary is the worker's sandbox + build gate.
+ */
+final class Assistant {
+
+	const NAME     = 'ArtaBot';
+	// Opus 5 — the operator's directive (2026-06-11): "every session is using claude 4.8". This is an
+	// UPGRADE: a 2026-06-10 Haiku experiment made ArtaBot confused (bundled two issues into one ticket, lost
+	// track of which issue a member meant); Sonnet fixed that, Opus 5 is stronger still, so multi-issue
+	// triage only improves. Cost stays ~nil because every turn runs on the Max SUBSCRIPTION via the laptop
+	// relay (Relay::ask → headless claude -p; flat-rate, so model choice is free there) — the direct API is
+	// only a fallback when the laptop is offline. prompt-caching + the very-concise prompt keep that cheap too.
+	const MODEL    = 'claude-opus-5'; // the relay (subscription) model for member CHAT; flat-rate, so the choice is free
+	// Ticket TRIAGE runs on the latest Opus at LOW effort (operator 2026-07-17: ALL models on latest
+	// Opus, and ArtaBot — chat AND triage — at low effort, matching the ArtaAI fleet registry). Triage
+	// is a classify-and-summarise turn, well within low effort; the win is latency — max-effort turns
+	// regularly outran Relay::ASK_WAIT into BUSY + the aq_retriage cron, so members waited longer.
+	const TRIAGE_MODEL  = 'claude-opus-5'; // operator 2026-07-17: ALL models on latest Opus
+	// Triage output ceiling: the aqmeta block is LAST — a truncated reply would eat the classifier, so
+	// triage keeps real headroom regardless of effort (the PROMPT keeps prose short).
+	const TRIAGE_MAXTOK = 2400;
+	// chat() returns this when the relay is alive but slower than its wait budget (Relay::BUSY) — the
+	// subscription is handling the turn, so callers degrade gracefully (ask the member to resend).
+	// Distinct from null (relay genuinely unavailable → ArtaBot's default "offline" message; no API).
+	const BUSY     = '__AQ_ARTABOT_BUSY__';
+	const MAXTOK   = 800; // headroom so a reply + its aqmeta block can never truncate; the PROMPT keeps prose short
+
+	/** EFFORT TIERS (operator 2026-07-25). Every tier runs the SAME model — Claude Opus 5; what a member
+	 *  buys is THINKING DEPTH and reply length, never a better model.
+	 *
+	 *  `low` is FREE for everyone, signed in or not, forever — that is the platform's promise and the
+	 *  reason chat is capped there by default (Relay::ASK_WAIT is 50s under a ~60s gateway, so a deeper
+	 *  turn cannot answer in-band anyway). Paying lifts BOTH the thinking depth and the reply ceiling.
+	 *
+	 *  `xhigh` is not a single turn: it runs a real multi-agent WORKFLOW (plan → parallel sub-agents →
+	 *  adversarial verify → synthesis) on the laptop relay, which takes minutes. It is therefore ASYNC —
+	 *  the turn is queued, the member is told, and the answer lands in the transcript when it is done.
+	 *
+	 *  Coins are charged ONLY on a delivered answer and refunded (append-only, never a deleted row) when
+	 *  the relay fails — see charge_tier()/refund_tier(). */
+	const TIERS = [
+		'low'    => [ 'coins' =>  0, 'maxtok' =>  800, 'workflow' => false, 'label' => 'Quick'    ],
+		'medium' => [ 'coins' =>  1, 'maxtok' => 2000, 'workflow' => false, 'label' => 'Thoughtful' ],
+		'high'   => [ 'coins' =>  3, 'maxtok' => 4000, 'workflow' => false, 'label' => 'Deep'     ],
+		'xhigh'  => [ 'coins' => 10, 'maxtok' => 8000, 'workflow' => true,  'label' => 'Research' ],
+	];
+	const FREE_TIER = 'low';
+
+	/** Normalise a requested tier to one we actually offer (unknown/absent ⇒ the free tier). */
+	public static function tier( $want ) {
+		$k = strtolower( trim( (string) $want ) );
+		return isset( self::TIERS[ $k ] ) ? $k : self::FREE_TIER;
+	}
+
+	/** Charge a paid tier. Idempotent on `ref` so a retried request can never double-bill. Returns
+	 *  true when the member may proceed (free tier, or the coins moved), false when they can't afford it. */
+	private static function charge_tier( $uid, $tier, $ref ) {
+		$cost = (int) ( self::TIERS[ $tier ]['coins'] ?? 0 );
+		if ( $cost <= 0 ) { return true; }
+		if ( ! $uid ) { return false; }                       // paid tiers require an account to bill
+		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'artabot' AND ref = %s LIMIT 1", [ $ref ] ) ) { return true; }
+		if ( (int) Economy::coin_balance( $uid ) < $cost ) { return false; }
+		Economy::credit_coins( $uid, -$cost, 'artabot', $ref );
+		return true;
+	}
+
+	/** Give the coins back when the answer never arrived. APPENDS a positive row (the ledger is
+	 *  append-only — a charge is never deleted), and is itself idempotent so a double-refund is
+	 *  impossible even if the failure path runs twice. */
+	private static function refund_tier( $uid, $tier, $ref ) {
+		$cost = (int) ( self::TIERS[ $tier ]['coins'] ?? 0 );
+		if ( $cost <= 0 || ! $uid ) { return; }
+		if ( ! Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'artabot' AND ref = %s LIMIT 1", [ $ref ] ) ) { return; }
+		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'artabot-refund' AND ref = %s LIMIT 1", [ $ref ] ) ) { return; }
+		Economy::credit_coins( $uid, $cost, 'artabot-refund', $ref );
+	}
+
+	/** Marker text a not-yet-answered assistant row carries. The history endpoint surfaces it as
+	 *  `pending` so the UI can show a thinking state; it is never shown to the member as prose. */
+	const PENDING_BODY = '__AQ_PENDING__';
+
+	/**
+	 * Deliver an asynchronously-completed turn (Relay::complete → here). NO TIME LIMITS: the worker may
+	 * have spent minutes on a multi-agent workflow; whenever it finishes, the answer replaces the pending
+	 * placeholder in the member's transcript. Filing (aqmeta) runs here exactly as it does inline, so an
+	 * async turn can still open a contribution. A failed turn REFUNDS the tier and leaves an honest note
+	 * rather than a silent empty bubble.
+	 */
+	public static function deliver( $dlv, $text, $usage = [] ) {
+		$amid = (int) ( $dlv['amid'] ?? 0 );
+		$uid  = (int) ( $dlv['uid'] ?? 0 );
+		$tier = self::tier( $dlv['tier'] ?? self::FREE_TIER );
+		$tref = (string) ( $dlv['ref'] ?? '' );
+		if ( ! $amid ) { return; }
+		$row = Data::one( 'SELECT body FROM ' . Data::t( 'aq_artabot_messages' ) . ' WHERE id = %d', [ $amid ] );
+		if ( ! $row || (string) $row['body'] !== self::PENDING_BODY ) { return; }  // already delivered/cleared — never answer twice
+
+		if ( $text === '' ) {
+			self::refund_tier( $uid, $tier, $tref );
+			Data::update( 'aq_artabot_messages', [ 'body' => self::NAME . " couldn't finish that one — please try again" . self::refund_note( $tier ) ], [ 'id' => $amid ] );
+			return;
+		}
+		[ $reply, $meta ] = self::split_meta( $text );
+		if ( $reply === '' ) { $reply = 'Sorry, I have nothing to add there'; }
+		$src = (string) ( $dlv['prompt'] ?? '' );
+		[ $filed ] = self::file_from_meta( $uid, $meta, $src, false, '' );
+		if ( $filed ) { $reply .= "\n\n" . implode( "\n", $filed ); }
+		Data::update( 'aq_artabot_messages', [ 'body' => $reply ], [ 'id' => $amid ] );
+	}
+
+	/** " — you were not charged", but only when there was something to charge. */
+	private static function refund_note( $tier ) {
+		return (int) ( self::TIERS[ $tier ]['coins'] ?? 0 ) > 0 ? ' — you were not charged' : '';
+	}
+
+	/** The public tier menu (price + what it buys) so the SPA can price a turn BEFORE it is sent. */
+	public static function tiers( $req ) {
+		$uid  = Rest::uid();
+		$out  = [];
+		foreach ( self::TIERS as $k => $t ) {
+			$out[] = [
+				'key' => $k, 'label' => $t['label'], 'coins' => $t['coins'],
+				'max_tokens' => $t['maxtok'], 'workflow' => (bool) $t['workflow'],
+				'free' => $t['coins'] === 0,
+			];
+		}
+		return [ 'model' => self::MODEL, 'free_tier' => self::FREE_TIER, 'tiers' => $out,
+		         'coins' => $uid ? (int) Economy::coin_balance( $uid ) : 0 ];
+	}
+	const QUEUE_CONFIDENCE = 0.6;             // min classification confidence to auto-queue for the worker
+	const MAX_CHAT_IMAGE_BYTES = 5 * 1024 * 1024; // a screenshot shared in chat caps at ~5 MB (Anthropic's image limit)
+
+	/** Can ArtaBot answer at all? Only when the laptop relay is live (Max subscription). The paid API
+	 *  was removed (2026-06-13), so when the relay is offline ArtaBot shows its default "offline"
+	 *  message rather than billing an API. */
+	private static function online() {
+		return Relay::available();
+	}
+
+	// ── contribution triage (Tickets) ───────────────────────────────────────────
+	private static function triage_prompt() {
+		$kinds = implode( ' | ', array_keys( Tickets::KINDS ) );
+		return implode( "\n", [
+			'You are ' . self::NAME . ", ArtaQuest's contribution triager — a warm, sharp first responder on a ticket a member just opened.",
+			'ArtaQuest is a social feed of citable, reproducible works: every published submission is a PUBLIC KAGGLE NOTEBOOK THAT HAS BEEN RUN. A member pastes the link to their notebook on Kaggle in the Studio (/studio), picks which of its output files to publish, and an exhaustive reproducibility checklist reads the facts back from Kaggle: is the notebook public, is every input public, did the run finish, did it produce these files. Clearing the checklist only REQUESTS publication — the author confirms from their own inbox, and that is what publishes it and mints a permanent DOI. Published files land in the Library, where any member can attach them to their own posts. Members found challenges (kind + topic + full-moon deadline + entry fee; the most-hearted entry takes the pool), hearts are the only vote, and the platform also has global discussion boards, donations and a public database (/data/). Brand voice: plain accessible English, BRITISH spelling, no trailing full stops on headings, warm but VERY CONCISE — the whole human-facing reply is one or two short sentences, no preamble or filler.',
+			'',
+			'Your job on each turn:',
+			'A screenshot of the issue is attached on the first turn — examine it closely; it is the primary evidence.',
+			'1. In ONE short sentence, acknowledge what they are raising.',
+			"2. Decide which single KIND it is: {$kinds} (bug = something broken; feature = a new capability; content = improve copy, a page, a published work's presentation, or a translation; suggestion = any other idea).",
+			'3. Only if something important is genuinely unclear, ask ONE specific clarifying question. Do not ask anything you can reasonably infer.',
+			'4. When — and ONLY when — the request is concrete enough that a developer could act on it without further questions, mark it ready to action.',
+			'',
+			'ALWAYS end your reply with a fenced code block tagged aqmeta containing minified JSON, e.g.:',
+			'```aqmeta',
+			'{"kind":"bug","action":"queue","summary":"one-line task for the engineer","confidence":0.82}',
+			'```',
+			'Rules for aqmeta: "kind" is one of the four; "action" is "queue" only when the task is concrete and self-contained, otherwise "none" (e.g. while you are still asking questions); "summary" is an imperative one-liner; "confidence" is 0-1 for your classification. The aqmeta block is stripped before the member sees the message, so keep all human-facing content above it.',
+		] );
+	}
+
+	/** First turn on a freshly opened ticket. */
+	public static function triage( $ticket_id ) { return self::respond( (int) $ticket_id, true ); }
+	/** Continuation turn after the member replies. $image_url: an optional screenshot attached to
+	 *  that reply (already stored in our uploads dir — see Tickets::post_message, #48). */
+	public static function reply( $ticket_id, $image_url = '' ) { return self::respond( (int) $ticket_id, false, (string) $image_url ); }
+
+	/** Re-triage tickets whose triage never completed — e.g. it hit a SUSTAINED API rate-limit at create
+	 *  time and fell open with a "maintainer will follow up" note. A successful triage ALWAYS leaves an
+	 *  'assistant' message, so its ABSENCE (on an open/triaging ticket past a short grace) means triage
+	 *  never landed → run it again now the API may have recovered. Bounded per tick; no-op when the key is
+	 *  absent or nothing is stale. Driven by the aq_retriage cron — so ArtaBot safely continues after a
+	 *  rate-limit, never silently dropping a member's report. */
+	public static function retriage_stale() {
+		if ( ! self::online() ) { return; }
+		$tt = Data::t( 'aq_tickets' );
+		$mm = Data::t( 'aq_ticket_messages' );
+		$rows = Data::all(
+			"SELECT t.id FROM $tt t
+			   WHERE t.status IN ( 'open', 'triaging' )
+			     AND t.created < %d AND t.created > %d
+			     AND NOT EXISTS ( SELECT 1 FROM $mm m WHERE m.ticket_id = t.id AND m.role = 'assistant' )
+			   ORDER BY t.id ASC LIMIT 5",
+			[ time() - 300, time() - 86400 ]
+		);
+		foreach ( (array) $rows as $r ) { self::triage( (int) $r['id'] ); }
+	}
+
+	private static function respond( $ticket_id, $is_first, $image_url = '' ) {
+		$t = Data::one( 'SELECT * FROM ' . Data::t( 'aq_tickets' ) . ' WHERE id = %d', [ $ticket_id ] );
+		if ( ! $t ) { return null; }
+		$owner = (int) $t['user_id'];
+
+		if ( ! self::online() ) {
+			return self::store_ticket_msg( $ticket_id, 'system',
+				"Thanks — your contribution is logged. ArtaBot triage is offline right now, but a maintainer will pick this up. You alone close the ticket when you're happy" );
+		}
+		if ( Rest::throttle( 'assistant', 40, 3600 ) ) {
+			return self::store_ticket_msg( $ticket_id, 'system', 'ArtaBot is busy — please add your message again in a moment' );
+		}
+
+		// Every contribution is centred on a screenshot — show it to ArtaBot on the first turn so it
+		// triages from the actual evidence (Claude is multimodal).
+		$turns = self::ticket_history( $ticket_id );
+		if ( $is_first ) {
+			$img = self::image_block( $t['screenshot'] ?? '' );
+			if ( $img ) {
+				foreach ( $turns as $i => $turn ) {
+					if ( $turn['role'] === 'user' ) {
+						$turns[ $i ]['content'] = [ $img, [ 'type' => 'text', 'text' => (string) $turn['content'] ] ];
+						break;
+					}
+				}
+			}
+		}
+		// A screenshot attached to the member's LATEST reply (#48) rides along the same way —
+		// prepended to the turn Claude is answering, so follow-up triage sees the new evidence.
+		// image_block fails closed (uploads-dir files only), so a bad URL just degrades to text.
+		if ( ! $is_first && $image_url !== '' ) {
+			$img = self::image_block( $image_url );
+			if ( $img ) { self::attach_image( $turns, $img ); }
+		}
+		$out = self::chat( $turns, self::triage_prompt(), self::TRIAGE_MODEL, self::TRIAGE_MAXTOK, 'low' );
+		// BUSY = the relay (subscription) is still answering, just slower than the budget — never bill
+		// the API. Leave the ticket reply-less and silent; the aq_retriage cron re-triages any open
+		// ticket without an assistant reply (≤15 min), on the subscription. No alarming "snag" note.
+		if ( $out === self::BUSY ) { return null; }
+		if ( $out === null ) {
+			return self::store_ticket_msg( $ticket_id, 'system', 'ArtaBot hit a snag reaching Claude — a maintainer will follow up. Your ticket is safe' );
+		}
+
+		[ $visible, $meta ] = self::split_meta( $out['text'] );
+		if ( $visible === '' ) { $visible = $is_first ? 'Thanks for raising this — looking into it' : 'Noted, thank you'; }
+
+		// Re-classify onto the right kind/track when ArtaBot is confident.
+		if ( $meta && isset( $meta['kind'], Tickets::KINDS[ $meta['kind'] ] )
+			&& (float) ( $meta['confidence'] ?? 0 ) >= self::QUEUE_CONFIDENCE
+			&& $meta['kind'] !== $t['kind'] ) {
+			Data::update( 'aq_tickets', [ 'kind' => $meta['kind'] ], [ 'id' => $ticket_id ] );
+		}
+
+		// Queue concrete, confident work for the autonomous worker. This ALSO handles FOLLOW-UPS: when the
+		// member replies asking for more on an already-SHIPPED (or rejected) ticket and ArtaBot triages it
+		// as concrete work, it goes back to 'queued' (→ 'in_progress' when the worker claims it) with a
+		// fresh attempt budget — the daemon re-develops with the full thread (what it already shipped +
+		// the new request). A "thanks!" triages as action:none, so it never wastes a re-development.
+		if ( $meta && ( $meta['action'] ?? '' ) === 'queue'
+			&& (float) ( $meta['confidence'] ?? 0 ) >= self::QUEUE_CONFIDENCE
+			&& in_array( $t['status'], [ 'open', 'triaging', 'shipped', 'rejected' ], true ) ) {
+			Data::update( 'aq_tickets', [ 'status' => 'queued', 'attempts' => 0, 'retry_after' => 0 ], [ 'id' => $ticket_id ] );
+			$meta['queued'] = true;
+		} elseif ( $is_first && $t['status'] === 'open' ) {
+			Data::update( 'aq_tickets', [ 'status' => 'triaging' ], [ 'id' => $ticket_id ] );
+		}
+
+		$mid = self::store_ticket_msg( $ticket_id, 'assistant', $visible, $meta ?: null )['id'];
+		return [ 'id' => $mid, 'role' => 'assistant', 'body' => $visible, 'at' => Data::now() ];
+	}
+
+	/** Alternating user/assistant transcript from a ticket's messages. */
+	private static function ticket_history( $ticket_id ) {
+		$rows = Data::all(
+			'SELECT role, body FROM ' . Data::t( 'aq_ticket_messages' ) . ' WHERE ticket_id = %d ORDER BY id ASC LIMIT 60',
+			[ $ticket_id ]
+		);
+		$turns = [];
+		foreach ( $rows as $r ) {
+			$role = $r['role'] === 'assistant' ? 'assistant' : 'user';
+			$text = (string) $r['body'];
+			if ( $r['role'] === 'agent' )  { $text = "[agent] {$text}"; }
+			if ( $r['role'] === 'system' ) { $text = "[system] {$text}"; }
+			self::push_turn( $turns, $role, $text );
+		}
+		if ( ! $turns || $turns[0]['role'] !== 'user' ) {
+			array_unshift( $turns, [ 'role' => 'user', 'content' => 'A member opened a contribution ticket.' ] );
+		}
+		return $turns;
+	}
+
+	// ── global ArtaBot chat (persistent per-user memory) ─────────────────────────
+	private static function artabot_prompt( $uid ) {
+		$who = '';
+		if ( $uid ) {
+			$u = get_userdata( $uid );
+			if ( $u ) {
+				$tier = Economy::tier( Economy::points_balance( $uid ) );
+				$who  = "\n\nYou are speaking with {$u->display_name} ({$tier} tier). Be personable and remember earlier turns in this conversation.";
+			}
+		}
+		$lines = [
+			'You are ' . self::NAME . ", ArtaQuest's friendly AI guide — available everywhere on the platform.",
+			'ArtaQuest is a social feed of citable, reproducible works. Every published submission is a PUBLIC KAGGLE NOTEBOOK THAT HAS BEEN RUN — members write and run their notebooks on Kaggle, then paste the link in the free Studio (/studio) and choose which output files to publish. An exhaustive reproducibility checklist then reads the facts back from the public Kaggle API, which answers without a login, so anyone can re-run those checks: the notebook must be public, every input dataset/model/notebook must be public, it must need no private credentials, and the run must have finished and produced the files being published. Warnings (internet was on, randomness unseeded, a GPU is needed) are shown but never block. Nothing is scored, graded or ranked, and no AI reviews anything. Clearing the checklist only REQUESTS publication: the author confirms from their own registered inbox and signs with their device passkey, and only that publishes the work and mints a permanent DOI. Published files enter the Library, where any member can attach them to their own posts. Submitting, checking and publishing all cost nothing; members earn only by winning member-founded challenges (a kind + a sitewide topic + a full-moon deadline + an entry fee — every entrant pays into the pool and the most-hearted entry takes it all; an exact tie splits evenly). Hearts are the only vote — there are no downvotes anywhere. Discussion replies are screened automatically by ArtaMod — ArtaQuest welcomes the whole spectrum of honest thought (debate, dissent, fringe ideas) and filters only content that trades in hate or fear. The Foundation itself runs on donations with public financial transparency. You — ArtaBot — are free and unlimited for everyone.',
+			'Also on the platform: one shared recent feed of every published work (/works, also the home page); each work\'s page at its /nb/ link with a permanent citable short link; global discussion boards; a ~133-language translation mesh; and the entire database is public at /data/ — radical transparency by design.',
+			'Help people author and publish works, find and cite what others made, understand challenges and the economy, and make the most of ArtaQuest.',
+			'Brand voice: plain accessible English, BRITISH spelling, no trailing full stops on headings, warm. Be VERY CONCISE — give the SHORTEST genuinely-helpful answer, ideally one sentence, at most two or three; never restate the question, never pad with pleasantries, preambles or sign-offs, never list things the member did not ask for. Expand only when they truly need the detail. Never invent features that do not exist.' . $who,
+		];
+		// EVERYONE — member or signed-out visitor — can have ArtaBot file contributions, instead of
+		// being pointed at a form (the form itself stays members-only; this chat is the signed-out
+		// path, ticket #46).
+		$kinds = implode( ' | ', array_keys( Tickets::KINDS ) );
+		$lines[] = '';
+		$lines[] = "FILING CONTRIBUTIONS — when the member reports something actionable (a bug, a concrete feature, a content/copy/translation fix, or a clear suggestion), open it for them YOURSELF; do not tell them to visit a form. Ask at most one clarifying question if you genuinely need it; otherwise, the moment it is concrete enough to act on, confirm in ONE short sentence, then append — last in your reply — a single fenced code block tagged aqmeta with minified JSON. ONE issue:";
+		$lines[] = '```aqmeta';
+		$lines[] = '{"file":true,"kind":"bug","title":"short imperative title","body":"a sentence or two a developer can act on, including where it happens","queue":true}';
+		$lines[] = '```';
+		$lines[] = 'If one message raises SEVERAL distinct issues, file EACH as its own contribution in one block — never bundle them into one ticket:';
+		$lines[] = '```aqmeta';
+		$lines[] = '{"issues":[{"kind":"bug","title":"…","body":"…","queue":true},{"kind":"feature","title":"…","body":"…","queue":true}]}';
+		$lines[] = '```';
+		$lines[] = "Rules: \"kind\" is one of {$kinds}; \"title\" is ≥4 characters; \"body\" is ≥10 characters; \"queue\" is true when it is concrete enough to build right away, false if it still needs the member to confirm a detail. Emit the aqmeta block ONLY on the single turn you actually file — never twice for the same issue, and never for plain questions or chit-chat. The block is stripped before the member sees the message, so keep everything human-facing above it. The system appends the filed-ticket link(s) for you — do NOT write your own \"filed as #N\" text.";
+
+		if ( ! $uid ) {
+			// A signed-out visitor CAN file (their ticket is ownerless and queues straight to the
+			// worker), but they can never reply on the ticket page itself — so the chat is the only
+			// place to clarify, and a half-baked filing would strand with no owner to answer triage.
+			$lines[] = '';
+			$lines[] = 'This visitor is NOT signed in. They can still file — but they cannot reply on the ticket page afterwards, so this chat is your only chance to clarify: file ONLY once the report is concrete (ask your one question first if you need it), and always set "queue":true. When you file, add a gentle note that signing in next time would let them track the ticket and hear when it ships.';
+		} else {
+			// GROUND TRUTH against guessing: the member's recent contributions, straight from the DB.
+			// Without this the model answered "is it filed?" from conversational memory and got it wrong
+			// (re-filed the wrong issue, asked "which one?" about a ticket the member had just named).
+			$recent = Data::all(
+				'SELECT id, kind, status, title FROM ' . Data::t( 'aq_tickets' ) . ' WHERE user_id = %d ORDER BY id DESC LIMIT 8',
+				[ $uid ]
+			);
+			if ( $recent ) {
+				$lines[] = '';
+				$lines[] = "THE MEMBER'S RECENT CONTRIBUTIONS (live from the database — TRUST THIS LIST over the conversation when answering \"did you file it?\" / \"what's the status?\"; never re-file anything already here):";
+				foreach ( $recent as $r ) {
+					$lines[] = "- #{$r['id']} [{$r['kind']}, {$r['status']}] {$r['title']}";
+				}
+				$lines[] = 'When you mention a contribution, link it as [#N](/issues/?ticket=N).';
+			}
+		}
+		return implode( "\n", $lines );
+	}
+
+	// Anonymous visitors get their OWN 1,000-token free allowance so anyone — even
+	// logged-out — can ask ArtaBot a question or report a problem. Conversation tracked per client
+	// `anon` id (the FE keeps one in localStorage) in a transient; no account needed.
+	private static function anon_key( $req ) {
+		$id = preg_replace( '/[^a-z0-9]/i', '', (string) Rest::p( $req, 'anon', '' ) );
+		return strlen( $id ) >= 6 ? 'aq_bot_anon_' . substr( $id, 0, 40 ) : '';
+	}
+	private static function anon_state( $key ) {
+		$s = get_transient( $key );
+		return is_array( $s ) ? $s : [ 'msgs' => [] ];
+	}
+
+	/** GET /artabot — the visitor's recent ArtaBot conversation. */
+	public static function history( $req ) {
+		$uid = Rest::uid();
+		if ( ! $uid ) {
+			$key = self::anon_key( $req );
+			$s   = $key ? self::anon_state( $key ) : [ 'msgs' => [] ];
+			return [ 'items' => array_values( $s['msgs'] ), 'anon' => true ];
+		}
+		$rows = Data::all(
+			'SELECT id, role, body, tokens, created FROM ' . Data::t( 'aq_artabot_messages' ) . ' WHERE user_id = %d ORDER BY id DESC LIMIT 50',
+			[ $uid ]
+		);
+		$rows = array_reverse( $rows );
+		// A turn still being worked on carries PENDING_BODY: report it as `pending` with an EMPTY body so
+		// the client shows a thinking state instead of the raw marker. This is what makes "no time limits"
+		// visible — the member sees the turn in progress and the answer fills in whenever it lands.
+		$items = array_map( function ( $m ) {
+			$pending = (string) $m['body'] === self::PENDING_BODY;
+			return [
+				'id' => (int) $m['id'], 'role' => $m['role'], 'body' => $pending ? '' : (string) $m['body'],
+				'tokens' => (int) $m['tokens'], 'at' => (int) $m['created'], 'pending' => $pending,
+			];
+		}, $rows );
+		return [ 'items' => $items, 'working' => (bool) array_filter( $items, fn( $i ) => $i['pending'] ) ];
+	}
+
+	/** POST /artabot {message} — one turn of the global chat. Free + unlimited; persists both sides. */
+	public static function ask( $req ) {
+		$uid = Rest::uid();
+		// MEMBERS ONLY (operator 2026-07-25): ArtaBot is a reason to sign up, not a public service.
+		// The route is 'user'-auth already; this is the independent second gate.
+		if ( ! $uid ) { return Rest::err( 'signin_required', 'Sign in (free) to chat with ' . self::NAME, 401 ); }
+		if ( Rest::throttle( 'artabot', 60, 3600 ) ) { return Rest::err( 'rate_limited', 'Give ' . self::NAME . ' a moment', 429 ); }
+		$text    = sanitize_textarea_field( (string) Rest::p( $req, 'message', '' ) );
+		$raw_img = (string) Rest::p( $req, 'image', '' );
+		$img     = self::image_block_from_data_url( $raw_img );
+		if ( mb_strlen( $text ) < 1 && ! $img ) { return Rest::err( 'bad_input', 'Type a message' ); }
+		if ( ! self::online() ) { return Rest::err( 'offline', self::NAME . ' is offline right now', 503 ); }
+
+		// Persist only the member's TEXT in the chat transcript — a shared screenshot is shown to Claude for
+		// THIS turn but kept out of the (fully public) chat history; a bare image still reads sensibly via a
+		// short marker. Exception: if this turn FILES a contribution, that screenshot IS saved onto the
+		// ticket so developers see the context the member shared (file_from_meta, #120) — the same public
+		// footing as a form-filed shot; a screenshot shared in ordinary chat is still never stored.
+		$stored = $text !== '' ? $text : '[shared a screenshot]';
+		$umid   = Data::insert( 'aq_artabot_messages', [ 'user_id' => $uid, 'role' => 'user', 'body' => $stored, 'created' => Data::now() ] );
+
+		// ── EFFORT TIER ────────────────────────────────────────────────────────────────────────────
+		// low is free forever; medium/high/xhigh cost coins. The charge is keyed to THIS message id, so
+		// a resend after a BUSY reply re-asks under a NEW ref (a fresh turn, fairly charged) while a
+		// retried identical request can never double-bill.
+		$tier = self::tier( Rest::p( $req, 'effort', self::FREE_TIER ) );
+		$tref = 'u' . (int) $uid . ':m' . (int) $umid;
+		if ( ! self::charge_tier( $uid, $tier, $tref ) ) {
+			$need = (int) self::TIERS[ $tier ]['coins'];
+			return Rest::err( 'insufficient_coins', 'That mode costs ' . $need . ' ArtaCoin — top up or switch to Quick (free)', 402 );
+		}
+
+		$rows = Data::all(
+			'SELECT role, body FROM ' . Data::t( 'aq_artabot_messages' ) . ' WHERE user_id = %d ORDER BY id DESC LIMIT 40',
+			[ $uid ]
+		);
+		$rows = array_reverse( $rows );
+		$turns = [];
+		// Skip any STILL-PENDING assistant row (an earlier turn the worker hasn't finished): its body is
+		// an internal marker, and feeding that to the model would put "__AQ_PENDING__" in the transcript.
+		foreach ( $rows as $r ) {
+			if ( (string) $r['body'] === self::PENDING_BODY ) { continue; }
+			self::push_turn( $turns, $r['role'] === 'assistant' ? 'assistant' : 'user', (string) $r['body'] );
+		}
+		if ( ! $turns || $turns[0]['role'] !== 'user' ) { array_unshift( $turns, [ 'role' => 'user', 'content' => $stored ] ); }
+		if ( $img ) { self::attach_image( $turns, $img ); } // multimodal: send the screenshot with this turn
+
+		// NO TIME LIMITS (operator 2026-07-25). Every turn carries a delivery marker, so if it outruns the
+		// HTTP budget the worker keeps going and the answer lands in the transcript later — the member is
+		// never told to "resend". A pending assistant row is created UP FRONT so the transcript shows the
+		// turn is in progress, and deliver() fills it in whenever the answer (or workflow) completes.
+		$amid = Data::insert( 'aq_artabot_messages', [ 'user_id' => $uid, 'role' => 'assistant', 'body' => self::PENDING_BODY, 'created' => Data::now() ] );
+		$dlv  = [ 'kind' => 'artabot', 'uid' => $uid, 'amid' => (int) $amid, 'tier' => $tier, 'ref' => $tref, 'prompt' => $stored ];
+		$out  = self::chat( $turns, self::artabot_prompt( $uid ), null, self::TIERS[ $tier ]['maxtok'], $tier, $dlv );
+		if ( $out === Relay::PENDING ) {
+			return [ 'pending' => true, 'id' => (int) $amid, 'tier' => $tier,
+			         'message' => self::NAME . ' is working on this one — the answer will appear here when it lands' ];
+		}
+		// BUSY = the relay (subscription) is answering but slower than the budget; we never bill the
+		// API for it. The member's message is kept, so resending re-asks with full context.
+		// A PAID tier that produced no answer is refunded — a member pays for a reply, not an attempt.
+		if ( $out === self::BUSY ) { self::refund_tier( $uid, $tier, $tref ); return Rest::err( 'busy', self::NAME . ' is taking a little longer than usual on this one — please resend in a moment' . self::refund_note( $tier ), 503 ); }
+		if ( $out === null ) { self::refund_tier( $uid, $tier, $tref ); return Rest::err( 'upstream', self::NAME . ' hit a snag — please try again' . self::refund_note( $tier ), 502 ); }
+
+		$in    = (int) ( $out['usage']['input_tokens'] ?? 0 );
+		$outk  = (int) ( $out['usage']['output_tokens'] ?? 0 );
+
+		// ArtaBot may file contribution(s) for the member on this turn — the aqmeta block is stripped
+		// from what the member sees; each filing is confirmed with a LINK (see file_from_meta).
+		[ $reply, $meta ] = self::split_meta( $out['text'] );
+		if ( $reply === '' ) { $reply = 'Sorry, I have nothing to add there'; }
+		[ $filed, $ticket ] = self::file_from_meta( $uid, $meta, $stored, false, $raw_img );
+		if ( $filed ) { $reply .= "\n\n" . implode( "\n", $filed ); }
+
+		// FILL the placeholder created before the call — never insert a second assistant row, or a fast
+		// answer would post twice (once here, once as the still-pending bubble).
+		$mid = (int) $amid;
+		Data::update( 'aq_artabot_messages', [ 'body' => $reply, 'tokens' => $in + $outk ], [ 'id' => $mid ] );
+		$reply_msg = [ 'id' => $mid, 'role' => 'assistant', 'body' => $reply, 'tokens' => $in + $outk, 'at' => Data::now() ];
+		if ( $ticket ) { $reply_msg['ticket'] = $ticket; }
+		return [ 'reply' => $reply_msg ];
+	}
+
+	/** A logged-out visitor's turn — the same chat, free + unlimited (no account needed; the hourly rate
+	 *  limit above is the only guard). Conversation lives in a per-anon transient so ArtaBot remembers
+	 *  within the session. ArtaBot files issues for signed-out visitors too (ticket #46) — ownerless,
+	 *  uid 0; signing in adds cross-device memory, ticket ownership (reply/resolve) and ship alerts. */
+	private static function ask_anon( $req ) {
+		$key = self::anon_key( $req );
+		if ( ! $key ) { return Rest::err( 'bad_input', 'Reload the page to start a free chat.' ); }
+		if ( Rest::throttle( 'artabot_anon', 40, 3600 ) ) { return Rest::err( 'rate_limited', 'Give ' . self::NAME . ' a moment', 429 ); }
+		$text    = sanitize_textarea_field( (string) Rest::p( $req, 'message', '' ) );
+		$raw_img = (string) Rest::p( $req, 'image', '' );
+		$img     = self::image_block_from_data_url( $raw_img );
+		if ( mb_strlen( $text ) < 1 && ! $img ) { return Rest::err( 'bad_input', 'Type a message' ); }
+		if ( ! self::online() ) { return Rest::err( 'offline', self::NAME . ' is offline right now', 503 ); }
+		$s = self::anon_state( $key );
+		$stored = $text !== '' ? $text : '[shared a screenshot]';
+		$turns = [];
+		foreach ( $s['msgs'] as $m ) { self::push_turn( $turns, ( $m['role'] ?? '' ) === 'assistant' ? 'assistant' : 'user', (string) ( $m['body'] ?? '' ) ); }
+		self::push_turn( $turns, 'user', $stored );
+		if ( ! $turns || $turns[0]['role'] !== 'user' ) { array_unshift( $turns, [ 'role' => 'user', 'content' => $stored ] ); }
+		if ( $img ) { self::attach_image( $turns, $img ); } // multimodal: send the screenshot with this turn
+
+		$out = self::chat( $turns, self::artabot_prompt( 0 ) );
+		if ( $out === self::BUSY ) { return Rest::err( 'busy', self::NAME . ' is taking a little longer than usual on this one — please resend in a moment', 503 ); }
+		if ( $out === null ) { return Rest::err( 'upstream', self::NAME . ' hit a snag — please try again', 502 ); }
+		// Signed-out visitors file too (ticket #46): the same aqmeta contract, with uid 0 — the ticket
+		// is ownerless and ALWAYS queued (see file_from_meta for why), and the confirmation link(s) are
+		// appended exactly as for a member, so the filing survives in the saved transcript.
+		[ $reply, $meta ] = self::split_meta( $out['text'] );
+		if ( $reply === '' ) { $reply = 'Sorry, I have nothing to add there'; }
+		[ $filed, $ticket ] = self::file_from_meta( 0, $meta, $stored, true, $raw_img );
+		if ( $filed ) { $reply .= "\n\n" . implode( "\n", $filed ); }
+		$used  = (int) ( $out['usage']['input_tokens'] ?? 0 ) + (int) ( $out['usage']['output_tokens'] ?? 0 );
+		$now   = Data::now();
+		$s['msgs'][] = [ 'id' => $now, 'role' => 'user', 'body' => $stored, 'tokens' => 0, 'at' => $now ];
+		$s['msgs'][] = [ 'id' => $now + 1, 'role' => 'assistant', 'body' => $reply, 'tokens' => $used, 'at' => $now ];
+		$s['msgs'] = array_slice( $s['msgs'], -40 );
+		set_transient( $key, $s, 7 * DAY_IN_SECONDS );
+		$reply_msg = [ 'id' => $now + 1, 'role' => 'assistant', 'body' => $reply, 'tokens' => $used, 'at' => $now ];
+		if ( $ticket ) { $reply_msg['ticket'] = $ticket; } // FE chip — same shape the member path returns
+		return [ 'reply' => $reply_msg ];
+	}
+
+	/** File the contribution(s) an aqmeta block describes — either ONE issue ({"file":true,kind,…}) or
+	 *  SEVERAL ({"issues":[{kind,…},…]}) — so a message that reports two distinct problems becomes two
+	 *  tickets instead of one bundled mess (a real failure we saw). $uid may be 0: a signed-out
+	 *  visitor's report files ownerless (author shows as "Visitor") under its own per-IP cap, and
+	 *  $force_queue sends it straight to the worker — an ownerless ticket parked 'open' would strand,
+	 *  because triage's clarifying questions land on a ticket page only the (absent) owner may reply to.
+	 *  $screenshot_data_url, when set, is the screenshot the member attached to THIS chat turn: it is saved
+	 *  to the uploads dir ONCE and stored on the ticket(s) filed here (#120), so the original image shows on
+	 *  the contribution detail page — the same public footing as a form-filed shot.
+	 *  $fallback_body (the member's original message this turn) is also passed through as the ticket's
+	 *  originating chat prompt, so the detail page shows the raw words behind ArtaBot's title/body (#121).
+	 *  Returns [ confirmation-lines[], FE-chip-for-the-last-filing|null ]. */
+	private static function file_from_meta( $uid, $meta, $fallback_body, $force_queue = false, $screenshot_data_url = '' ) {
+		$to_file = [];
+		if ( $meta && ! empty( $meta['issues'] ) && is_array( $meta['issues'] ) ) { $to_file = $meta['issues']; }
+		elseif ( $meta && ! empty( $meta['file'] ) ) { $to_file = [ $meta ]; }
+		$filed  = [];
+		$ticket = null;
+		$shot   = null; // the turn's screenshot, saved to uploads ONCE on the first filing then shared across a multi-issue turn (#120)
+		foreach ( array_slice( $to_file, 0, 5 ) as $one ) { // bound a runaway block at 5 filings/turn
+			if ( ! is_array( $one ) ) { continue; }
+			// Anonymous filings get their own per-IP hourly cap, tighter than the chat throttle — a
+			// queued ticket is autonomous-developer time, the scarcer resource. Honest use (a visitor
+			// reporting a handful of issues) never sees it.
+			if ( ! $uid && Rest::throttle( 'ticket_anon', 10, 3600 ) ) {
+				if ( ! $filed ) { $filed[] = 'I can’t file any more reports from this connection just now — please try again in a little while, or sign in to file straight away.'; }
+				break;
+			}
+			// Persist the shared screenshot only now that we're actually filing (an image shared in ordinary
+			// chat is never stored). Saved once and reused for every issue in a multi-issue turn; fail-open —
+			// a bad/oversized image just yields '' and the ticket files without one.
+			if ( $shot === null && $screenshot_data_url !== '' ) {
+				$shot = Tickets::save_data_url_image( $screenshot_data_url, $uid );
+			}
+			$res = Tickets::open_from_chat(
+				$uid, (string) ( $one['kind'] ?? 'suggestion' ),
+				(string) ( $one['title'] ?? '' ), (string) ( $one['body'] ?? $fallback_body ),
+				'', $force_queue || ! empty( $one['queue'] ), (string) $shot,
+				// The member's ORIGINAL message this turn — preserved on the ticket so the detail page
+				// shows the raw words behind ArtaBot's cleaned-up title/body (#121).
+				(string) $fallback_body
+			);
+			if ( ! $res ) { continue; }
+			$ticket  = [ 'id' => $res['id'], 'kind' => $res['kind'], 'status' => $res['status'] ]; // FE chip → the last filing
+			$filed[] = $res['new']
+				? "Filed as [#{$res['id']}](/issues/?ticket={$res['id']}) ({$res['kind']})."
+				// A true content match — this exact report is already on file. Say so honestly (with the
+				// link) rather than imply a fresh filing, and offer the escape hatch so a rare genuine
+				// collision never silently swallows a new contribution.
+				: "Already on file as [#{$res['id']}](/issues/?ticket={$res['id']}) — if you meant something different, add a detail or two and I’ll open a fresh one.";
+		}
+		return [ $filed, $ticket ];
+	}
+
+	/** POST /artabot/clear — forget this visitor's conversation. */
+	public static function clear( $req ) {
+		$uid = Rest::uid();
+		if ( ! $uid ) { $key = self::anon_key( $req ); if ( $key ) delete_transient( $key ); return [ 'ok' => true ]; }
+		if ( $uid ) {
+			$GLOBALS['wpdb']->delete( Data::t( 'aq_artabot_messages' ), [ 'user_id' => $uid ] );
+		}
+		return [ 'ok' => true ];
+	}
+
+	// ── shared HTTP + parsing ────────────────────────────────────────────────────
+	/** Append a turn, merging into the previous one when the mapped role repeats (API needs alternation). */
+	private static function push_turn( &$turns, $role, $text ) {
+		if ( $turns && $turns[ count( $turns ) - 1 ]['role'] === $role ) {
+			$turns[ count( $turns ) - 1 ]['content'] .= "\n\n" . $text;
+		} else {
+			$turns[] = [ 'role' => $role, 'content' => $text ];
+		}
+	}
+
+	/** Prepend an image block to the LAST user turn (string content → [ image, text ]) so Claude sees the
+	 *  attached screenshot alongside what the member just sent — the same multimodal shape the triager uses. */
+	private static function attach_image( &$turns, $img ) {
+		for ( $i = count( $turns ) - 1; $i >= 0; $i-- ) {
+			if ( $turns[ $i ]['role'] === 'user' ) {
+				$text = (string) $turns[ $i ]['content'];
+				$turns[ $i ]['content'] = $text === '' ? [ $img ] : [ $img, [ 'type' => 'text', 'text' => $text ] ];
+				return;
+			}
+		}
+	}
+
+	/** Answer one turn on the SUBSCRIPTION relay only (the paid API was removed 2026-06-13). Returns
+	 *  [ 'text'=>…, 'usage'=>… ], self::BUSY (relay alive but slow → caller asks to resend), or null
+	 *  (relay offline → caller shows ArtaBot's default "offline" message). Defaults are the CHAT
+	 *  profile (latest Opus, low effort, tight ceiling — fast); triage keeps the model and effort and
+	 *  overrides only the output ceiling (TRIAGE_MAXTOK protects the trailing aqmeta block). */
+	private static function chat( $messages, $system, $model = null, $max_tokens = null, $effort = 'low', $deliver = null ) {
+		// SUBSCRIPTION-ONLY (operator rule 2026-06-13): every turn runs on the Claude Max subscription
+		// via the laptop relay (headless `claude -p`, src/Relay.php) — the paid Anthropic API has been
+		// removed from the platform entirely. Relay::ask returns the answer; self::BUSY (relay alive but
+		// slower than its wait budget) → the caller degrades gracefully (asks the member to resend); or
+		// null → the relay is genuinely unavailable (laptop away/asleep/usage-limited), and the caller
+		// shows ArtaBot's default "offline" message. There is no API fallback.
+		$via = Relay::ask( $messages, $system, $model ?: self::MODEL, $max_tokens ?: self::MAXTOK, $effort, $deliver );
+		if ( $via === Relay::PENDING ) { return Relay::PENDING; } // async: the worker keeps going, deliver() lands it
+		if ( $via === Relay::BUSY ) { return self::BUSY; }
+		return $via; // a [text,usage] array, or null when the subscription relay is unavailable
+	}
+
+	/** An Anthropic image content block for a screenshot URL (read from the uploads dir, base64).
+	 *  Returns null if the file isn't a readable local image. */
+	private static function image_block( $url ) {
+		if ( ! $url ) { return null; }
+		$up   = wp_upload_dir();
+		$path = str_replace( $up['baseurl'], $up['basedir'], (string) $url );
+		if ( $path === $url || ! is_string( $path ) || ! @file_exists( $path ) ) { return null; }
+		$bytes = @file_get_contents( $path );
+		if ( $bytes === false ) { return null; }
+		$mime = function_exists( 'mime_content_type' ) ? mime_content_type( $path ) : 'image/png';
+		if ( strpos( (string) $mime, 'image/' ) !== 0 ) { return null; }
+		return [ 'type' => 'image', 'source' => [ 'type' => 'base64', 'media_type' => $mime, 'data' => base64_encode( $bytes ) ] ];
+	}
+
+	/** An Anthropic image block from a `data:image/…;base64,…` URL — how the chat composer sends a screenshot
+	 *  a member attaches. Returns null for anything that isn't a supported, in-bounds image, so a bad or
+	 *  oversized attachment is simply dropped and the turn proceeds as text (fail-open, never blocks a reply). */
+	private static function image_block_from_data_url( $data_url ) {
+		$data_url = (string) $data_url;
+		if ( $data_url === '' || ! preg_match( '#^data:(image/(?:png|jpe?g|gif|webp));base64,#i', $data_url, $m ) ) {
+			return null;
+		}
+		$mime  = strtolower( $m[1] ) === 'image/jpg' ? 'image/jpeg' : strtolower( $m[1] );
+		$bytes = base64_decode( preg_replace( '/\s+/', '', substr( $data_url, strpos( $data_url, ',' ) + 1 ) ), true );
+		if ( $bytes === false || $bytes === '' || strlen( $bytes ) > self::MAX_CHAT_IMAGE_BYTES ) { return null; }
+		return [ 'type' => 'image', 'source' => [ 'type' => 'base64', 'media_type' => $mime, 'data' => base64_encode( $bytes ) ] ];
+	}
+
+	/** Pull the trailing aqmeta classifier out of a reply → [ visible_text, meta|null ].
+	 *  The block is always LAST, so we find where "aqmeta" begins (fenced or not, any formatting)
+	 *  and cut everything from there to the end — robust to a missing/odd closing fence so the JSON
+	 *  never leaks into what the member sees. */
+	private static function split_meta( $text ) {
+		$meta = null;
+		if ( preg_match( '/`{0,3}\s*aqmeta\b/is', $text, $m, PREG_OFFSET_CAPTURE ) ) {
+			$cut   = $m[0][1];
+			$block = substr( $text, $cut );
+			if ( preg_match( '/\{.*\}/s', $block, $jm ) ) { $meta = json_decode( $jm[0], true ); }
+			$text  = substr( $text, 0, $cut );
+		}
+		$visible = trim( rtrim( trim( $text ), "`\n " ) );
+		return [ $visible, is_array( $meta ) ? $meta : null ];
+	}
+
+	// ── ArtaMod: a consoling reply on a flagged competition comment ───────────────
+	/** The display name shown on ArtaBot's own discussion-board replies. */
+	const BOT_SLUG = 'artabot';
+
+	/** The WP user id ArtaBot posts under (lazily created once). ArtaBot has no password (passwordless
+	 *  platform) and the subscriber role, so it can never sign in or act — it exists only to author the
+	 *  consoling replies below. Cached in an option so the lookup is one read after first creation. */
+	public static function bot_user_id() {
+		$uid = (int) get_option( 'aq_artabot_uid', 0 );
+		if ( $uid && get_userdata( $uid ) ) { return $uid; }
+		$existing = get_user_by( 'login', self::BOT_SLUG );
+		if ( $existing ) { $uid = (int) $existing->ID; }
+		else {
+			$uid = wp_insert_user( [
+				'user_login'    => self::BOT_SLUG,
+				'user_nicename' => self::BOT_SLUG,
+				'display_name'  => self::NAME,
+				'nickname'      => self::NAME,
+				'user_email'    => self::BOT_SLUG . '@' . ( wp_parse_url( home_url(), PHP_URL_HOST ) ?: 'example.org' ),
+				'user_pass'     => wp_generate_password( 40, true, true ),
+				'role'          => 'subscriber',
+			] );
+			if ( is_wp_error( $uid ) ) { error_log( 'AQ ArtaBot user: ' . $uid->get_error_message() ); return 0; }
+			update_user_meta( $uid, 'aq_full_name', self::NAME );          // satisfies the identity gate, harmless
+			update_user_meta( $uid, 'description', 'ArtaQuest’s friendly AI guide.' );
+		}
+		update_option( 'aq_artabot_uid', $uid, true );
+		return (int) $uid;
+	}
+
+	/**
+	 * Leave a warm, consoling reply on a section comment ArtaMod flagged for hate/fear, and
+	 * notify its author. The flagged comment isn't deleted and no coin is charged — only its upvotes
+	 * are kept out of the competition (Economy::podium). The reply is authored by the ArtaBot user and
+	 * attached to the flagged comment's TOP-LEVEL ancestor (the board is one-level), so it always lands
+	 * as a valid reply. ArtaBot's own reply is never itself ArtaMod-scored.
+	 *
+	 * @param int $comment_id  the flagged comment
+	 * @param int $cid         course id
+	 * @param int $lid         lesson (section) id — the board context
+	 * @param int $parent_id   the flagged comment's parent (0 if it is top-level)
+	 * @param int $author_uid  the flagged comment's author (notified)
+	 */
+	public static function console_fear( $comment_id, $cid, $lid, $parent_id, $author_uid ) {
+		$bot = self::bot_user_id();
+		if ( ! $bot ) { return; }
+		// One-level threading: reply under the top-level ancestor (the flagged comment itself if it is
+		// top-level, else its parent), so the tree stays valid.
+		$reply_parent = (int) $parent_id > 0 ? (int) $parent_id : (int) $comment_id;
+
+		$messages = [
+			"Hey, ArtaBot here 💙 I’ve gently set this reply aside from the competition — it read as leaning on fear or contempt rather than curiosity. Nothing’s deleted and no coins were touched. The world can feel frightening, but please don’t let it harden you: most people are quietly trying their best, and there’s far more good out there than the loudest voices suggest. Reword it from a calmer place and it’ll count again. We’re really glad you’re here.",
+			"ArtaBot here, with no judgement at all 💙 This reply tipped past our one line — ArtaMod reads only for hate or fear — so its upvotes won’t count toward the competition for now. Nothing was removed and you weren’t charged. Try not to be afraid; have a little more faith in people. We’re all just learners here, and curiosity beats dread every time. Edit it whenever you’re ready and it’s back in the running.",
+			"A small note from ArtaBot 💙 I’ve kept this one out of the competition — it leaned into fear or hostility, and ArtaQuest is built to protect calm, fearless thinking. You’ve done nothing wrong and nothing’s been deleted. Fear narrows us; faith in one another opens us back up. Give the world, and the people in it, a little more credit — then rephrase from there, and your reply rejoins the board.",
+		];
+		$body = $messages[ (int) $comment_id % count( $messages ) ];
+
+		$id = Data::insert( 'aq_comments', [
+			'context_type' => 'section', 'context_id' => (int) $lid, 'course_id' => (int) $cid,
+			'author_id' => $bot, 'parent_id' => $reply_parent, 'body' => $body, 'lang' => 'en',
+			'votes' => 0, 'reply_count' => 0, 'fear' => 0, 'flagged' => 0, 'created' => Data::now(),
+		] );
+		Data::bump( 'aq_comments', [ 'id' => $reply_parent ], 'reply_count', 1 );
+		Data::bump( 'aq_lessons', [ 'id' => (int) $lid ], 'comment_count', 1 ); // the bot reply is a section comment too
+		if ( (int) $author_uid ) {
+			Notify::push( (int) $author_uid, 'fearometer', 'ArtaBot replied to your comment',
+				'ArtaMod set your comment aside from the competition — ArtaBot left you a note.',
+				'/video/?video=' . (int) $lid, 'fear' . (int) $comment_id );
+		}
+		return $id;
+	}
+
+	/** Append a message to a ticket conversation and bump its counter. Returns its shape. */
+	private static function store_ticket_msg( $ticket_id, $role, $body, $meta = null ) {
+		$mid = Data::insert( 'aq_ticket_messages', [
+			'ticket_id' => $ticket_id, 'role' => $role, 'body' => $body,
+			'meta' => $meta === null ? null : Data::enc( $meta ), 'created' => Data::now(),
+		] );
+		Data::bump( 'aq_tickets', [ 'id' => $ticket_id ], 'msg_count', 1 );
+		return [ 'id' => $mid, 'role' => $role, 'body' => $body, 'at' => Data::now() ];
+	}
+	// ── @artabot mentions (operator 2026-07-30) ───────────────────────────────────────────────
+	/**
+	 * ArtaBot answers when it is TAGGED, anywhere on the platform — the Grok pattern: someone writes
+	 * "what do you think about this @artabot?" under a post and it replies in that thread.
+	 *
+	 * A CRON, not a hook on the comment POST. Three reasons, all learned the hard way here: the relay
+	 * is asynchronous and may be cold, so a synchronous reply would make a member wait or fail their
+	 * comment; a hook that throws would take the comment down with it; and a queue can be drained,
+	 * retried and rate-limited, which a hook cannot.
+	 *
+	 * IDEMPOTENT BY CONSTRUCTION: it only considers comments that have no ArtaBot child, so a reply
+	 * is written once and a re-run is a no-op. That is the same discipline as the ledgers — never
+	 * "have I done this?" in memory, always "does the artefact exist?" in the table.
+	 */
+	const MENTION_RE    = '/(^|[^a-z0-9_])@artabot\b/i';
+	const MENTION_BATCH = 3;    // replies per tick — it is a participant, not a flood
+	const MENTION_MAX_AGE = 172800; // 48 h — an old thread is not worth waking up
+
+	public static function mention_tick() {
+		$bot = (int) get_option( 'aq_artabot_uid', 0 );
+		if ( ! $bot ) { return; }
+		$since = time() - self::MENTION_MAX_AGE;
+		// Candidates: recent comments that MENTION the bot, are not BY the bot, and have no bot reply.
+		$rows = Data::all(
+			'SELECT c.id, c.context_type, c.context_id, c.course_id, c.author_id, c.body, c.lang'
+			. ' FROM ' . Data::t( 'aq_comments' ) . ' c'
+			. ' WHERE c.author_id <> %d AND c.flagged = 0 AND c.created >= %d'
+			. " AND c.body LIKE %s"
+			. ' AND NOT EXISTS ( SELECT 1 FROM ' . Data::t( 'aq_comments' ) . ' r'
+				. ' WHERE r.parent_id = c.id AND r.author_id = %d )'
+			. ' ORDER BY c.id DESC LIMIT %d',
+			[ $bot, $since, '%@artabot%', $bot, self::MENTION_BATCH ] );
+		foreach ( (array) $rows as $c ) {
+			try {
+				// LIKE is only a prefilter — it would also match an email or a word ending in @artabot.
+				if ( ! preg_match( self::MENTION_RE, (string) $c['body'] ) ) { continue; }
+				$reply = self::mention_reply( $c );
+				if ( '' === $reply ) { continue; }   // relay cold: leave it queued for the next tick
+				Data::insert( 'aq_comments', [
+					'context_type' => (string) $c['context_type'], 'context_id' => (int) $c['context_id'],
+					'course_id' => (int) $c['course_id'], 'parent_id' => (int) $c['id'],
+					'author_id' => $bot, 'body' => $reply, 'lang' => (string) ( $c['lang'] ?: 'en' ),
+					'created' => Data::now(), 'updated' => Data::now(),
+				] );
+				Data::bump( 'aq_comments', [ 'id' => (int) $c['id'] ], 'reply_count', 1 );
+			} catch ( \Throwable $e ) { /* one bad thread never stalls the queue */ }
+		}
+	}
+
+	/** One reply, in ArtaBot's own voice, grounded in the thread it was tagged in. */
+	private static function mention_reply( $c ) {
+		$ctx = 'A member tagged you in a discussion on ArtaQuest and asked for your view.' . "\n\n"
+			. 'THEIR COMMENT: ' . mb_substr( wp_strip_all_tags( (string) $c['body'] ), 0, 1200 );
+		$sys = 'You are ArtaBot, ArtaQuest\'s independent agent. You were TAGGED, so answer directly and '
+			. 'in your own voice. Be genuinely useful and specific; say plainly when you do not know or when '
+			. 'the question cannot be settled from what is in front of you. Never invent a figure, a source or '
+			. 'an event. Never assert a cause for something an instrument merely measured. Plain accessible '
+			. 'English, British spelling, no hype, no emoji, no markdown headings. Two short paragraphs at most.';
+		$res = Relay::ask( [ [ 'role' => 'user', 'content' => $ctx ] ], $sys, self::MODEL, 700, 'low' );
+		if ( ! is_array( $res ) || empty( $res['text'] ) ) { return ''; }
+		return mb_substr( trim( wp_strip_all_tags( (string) $res['text'] ) ), 0, 2000 );
+	}
+
+}

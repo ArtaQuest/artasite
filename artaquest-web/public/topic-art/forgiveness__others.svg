@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Forgiveness of others — two blue figures reconnected by a gold arc of reconciliation">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <!-- the restored bond between two people -->
+  <path d="M24 48 Q40 26 56 48" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="4.2" stroke-linecap="round"/>
+  <!-- two parties -->
+  <circle cx="24" cy="52" r="7.5" fill="#2352E8"/>
+  <circle cx="56" cy="52" r="7.5" fill="#2352E8"/>
+</svg>

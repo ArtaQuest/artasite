@@ -1,0 +1,90 @@
+[
+  {
+    "category": "violence-conditional",
+    "lang": "en",
+    "text": "If even one of those settlers tries to cross into our valley, we'll bury every last one of them right where they stand. Let them come and find out.",
+    "flag": true,
+    "note": "Conditional threat to kill a group on arrival",
+    "band": 93
+  },
+  {
+    "category": "violence-conditional",
+    "lang": "en",
+    "text": "Honestly the only good thing about that massacre is that it thinned the herd a little. Wish the gunman had finished the job on the rest of them.",
+    "flag": true,
+    "note": "Celebrates past mass killing, wishes for more",
+    "band": 96
+  },
+  {
+    "category": "violence-conditional",
+    "lang": "en",
+    "text": "We don't need laws for these people. A rope and a tall tree solves the problem permanently, and the sooner the better.",
+    "flag": true,
+    "note": "Explicit call to lynch a group",
+    "band": 95
+  },
+  {
+    "category": "violence-conditional",
+    "lang": "en",
+    "text": "Let them move into the neighbourhood. They'll learn real fast what happens after dark around here. Nobody's coming to help them.",
+    "flag": true,
+    "note": "Veiled conditional threat of violence against newcomers",
+    "band": 84
+  },
+  {
+    "category": "violence-conditional",
+    "lang": "en",
+    "text": "Bless the old days when a problem like this was handled quietly behind the barn. We could use a return to that kind of community spirit, if you know what I mean.",
+    "flag": true,
+    "note": "Coded approval of past extrajudicial killing of a group",
+    "band": 82
+  },
+  {
+    "category": "violence-conditional",
+    "lang": "en",
+    "text": "Should they ever set foot on this campus, every single one of us has a bat and we'll be waiting. They won't be walking back out.",
+    "flag": true,
+    "note": "Conditional group threat of beating/killing on arrival",
+    "band": 91
+  },
+  {
+    "category": "violence-conditional",
+    "lang": "en",
+    "text": "Cheered out loud when I heard the count. One less busload of them is a good day. Pour me a drink, this calls for a celebration.",
+    "flag": true,
+    "note": "Gleeful celebration of mass deaths of a group",
+    "band": 94
+  },
+  {
+    "category": "violence-conditional",
+    "lang": "en",
+    "text": "This documentary on the Rwandan genocide is harrowing. The way ordinary radio broadcasts conditioned neighbours to slaughter neighbours in a hundred days should be taught in every classroom so it never happens again.",
+    "flag": false,
+    "note": "Academic discussion of genocide, condemns it",
+    "band": 11
+  },
+  {
+    "category": "violence-conditional",
+    "lang": "en",
+    "text": "If this government raises taxes one more time I swear I'm going to riot, lol. Honestly I'd happily throw my laptop out the window after this lecture too.",
+    "flag": false,
+    "note": "Hyperbole and idiom, no group targeted",
+    "band": 6
+  },
+  {
+    "category": "violence-conditional",
+    "lang": "en",
+    "text": "You see comments online saying 'if they come to our town we'll deal with them ourselves', and that vigilante mindset is exactly how lynchings started. We have to name it and shut it down.",
+    "flag": false,
+    "note": "Counter-speech quoting a threat to condemn it",
+    "band": 16
+  },
+  {
+    "category": "violence-conditional",
+    "lang": "en",
+    "text": "The siege chapter was brutal to read. Thousands of civilians starved while the army celebrated each fallen district as a victory. War really does rot a person's conscience.",
+    "flag": false,
+    "note": "Calm historical reflection on wartime atrocity",
+    "band": 10
+  }
+]

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Benevolent — engaged and loving">
+  
+  <circle cx="40" cy="40" r="39" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.4"/>
+  <!-- warm rays: just as closely involved in the world -->
+  <g stroke="var(--ico-gold,#E8B923)" stroke-width="2.4" stroke-linecap="round">
+    <line x1="40" y1="9" x2="40" y2="18"/>
+    <line x1="17" y1="17" x2="23" y2="23"/>
+    <line x1="63" y1="17" x2="57" y2="23"/>
+    <line x1="9" y1="40" x2="18" y2="40"/>
+    <line x1="71" y1="40" x2="62" y2="40"/>
+    <line x1="17" y1="63" x2="23" y2="57"/>
+    <line x1="63" y1="63" x2="57" y2="57"/>
+  </g>
+  <!-- but loving more than judging: a heart at the centre -->
+  <path d="M40 56 C24 45 23 32 32 30 C37 29 40 33 40 36 C40 33 43 29 48 30 C57 32 56 45 40 56 Z" fill="var(--ico-gold,#E8B923)" stroke="#2352E8" stroke-width="1.8" stroke-linejoin="round"/>
+</svg>

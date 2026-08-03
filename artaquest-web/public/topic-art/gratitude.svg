@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Gratitude — a gold heart radiating warmth, ringed in blue">
+  <circle cx="40" cy="40" r="40" fill="#0C1E32"/>
+  <circle cx="40" cy="40" r="34" fill="none" stroke="#2352E8" stroke-width="2.4" opacity="0.6"/>
+  <g stroke="#E8B923" stroke-width="3" stroke-linecap="round">
+    <line x1="40" y1="11" x2="40" y2="18"/>
+    <line x1="20" y1="20" x2="25" y2="25"/>
+    <line x1="60" y1="20" x2="55" y2="25"/>
+    <line x1="13" y1="40" x2="20" y2="40"/>
+    <line x1="67" y1="40" x2="60" y2="40"/>
+  </g>
+  <path d="M40 58 C 29 50, 21 44, 21 35 C 21 29.2, 25.4 25, 30.5 25 C 34.7 25, 38 27.9, 40 31.4 C 42 27.9, 45.3 25, 49.5 25 C 54.6 25, 59 29.2, 59 35 C 59 44, 51 50, 40 58 Z" fill="#E8B923"/>
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="White — simplicity, clarity and calm, shown as a snow crystal">
+  <g stroke="var(--ico-gold,#E8B923)" stroke-width="3" stroke-linecap="round">
+    <line x1="40" y1="12" x2="40" y2="68"/>
+    <line x1="16" y1="26" x2="64" y2="54"/>
+    <line x1="64" y1="26" x2="16" y2="54"/>
+  </g>
+  <g stroke="#2352E8" stroke-width="2.5" stroke-linecap="round" fill="none">
+    <path d="M40 12 l-6 8 M40 12 l6 8 M40 68 l-6 -8 M40 68 l6 -8"/>
+    <path d="M16 26 l9 -3 M16 26 l1 10 M64 54 l-9 3 M64 54 l-1 -10"/>
+    <path d="M64 26 l-9 -3 M64 26 l-1 10 M16 54 l9 3 M16 54 l1 -10"/>
+  </g>
+</svg>

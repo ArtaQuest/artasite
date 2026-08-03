@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Narcissism — a hand mirror and its reflected shine">
+  
+  
+  <line x1="40" y1="48" x2="40" y2="64" stroke="var(--ico-gold,#E8B923)" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="40" cy="33" r="15" fill="#2352E8" fill-opacity="0.18" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4"/>
+  <line x1="33" y1="39" x2="44" y2="26" stroke="var(--ico-gold,#E8B923)" stroke-width="2" stroke-linecap="round" stroke-opacity="0.85"/>
+  <line x1="37" y1="40" x2="42" y2="34" stroke="var(--ico-gold,#E8B923)" stroke-width="1.5" stroke-linecap="round" stroke-opacity="0.6"/>
+</svg>

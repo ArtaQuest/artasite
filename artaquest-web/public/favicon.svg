@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-9 -9 118 118" fill="none" role="img" aria-label="ArtaQuest">
+  <!-- ArtaQuest brand mark — a solid gold "A" (the Why) cutting through a blue ring (the How).
+       NO BACKGROUND: the moat where the A crosses the ring is transparent, so the mark adopts
+       whatever it is placed on. HARD BRAND INVARIANT — gold + blue = (255,255,255) per channel
+       (#E8B923 + #1746DC); blue is derived as 255-gold and must never be typed by hand.
+       Both themes use the canonical pair (ArtaContrast Standard, K=1) — do not add a
+       prefers-color-scheme swap: any non-complementary blue breaks the identity. -->
+  <defs>
+    <mask id="aq-moat">
+      <rect x="-9" y="-9" width="118" height="118" fill="#fff"/>
+      <path d="M43.33 21.21L56.52 21.21L90.61 96.67L78.18 96.67L66.52 70.3L33.48 70.3L22.73 96.67L9.09 96.67Z" fill="#000" stroke="#000" stroke-width="7" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <circle cx="50" cy="50" r="41.6" fill="none" stroke="#1746DC" style="stroke:#1746DC" stroke-width="11.66" mask="url(#aq-moat)"/>
+  <path fill="#E8B923" style="fill:#E8B923" fill-rule="evenodd" d="M43.33 21.21L56.52 21.21L90.61 96.67L78.18 96.67L66.52 70.3L33.48 70.3L22.73 96.67L9.09 96.67ZM50 34.55L38.57 59.3L61.43 59.3Z"/>
+</svg>

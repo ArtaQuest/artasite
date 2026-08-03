@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80" role="img" aria-label="An arrow pushing up against a barrier">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <line x1="16" y1="33" x2="64" y2="33" stroke="#2352E8" stroke-width="3.6" stroke-linecap="round"/>
+  <line x1="40" y1="62" x2="40" y2="40" stroke="#E8B923" stroke-width="3.4" stroke-linecap="round"/>
+  <path d="M32 48 L40 39 L48 48" fill="none" stroke="#E8B923" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="30" y1="29" x2="26" y2="25" stroke="#E8B923" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="50" y1="29" x2="54" y2="25" stroke="#E8B923" stroke-width="2.2" stroke-linecap="round"/>
+</svg>

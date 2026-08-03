@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Meaningfulness — a guiding star worth orienting toward">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <circle cx="40" cy="40" r="21" fill="none" stroke="#2352E8" stroke-width="2.2" opacity="0.65"/>
+  <path d="M40 18 L44.5 35.5 L62 40 L44.5 44.5 L40 62 L35.5 44.5 L18 40 L35.5 35.5 Z" fill="#E8B923"/>
+</svg>

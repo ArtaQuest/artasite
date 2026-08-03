@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Authoritarian aggression">
+  <rect x="27" y="17" width="26" height="11" rx="3" fill="var(--ico-gold,#E8B923)"/>
+  <rect x="37" y="28" width="6" height="21" rx="3" fill="var(--ico-gold,#E8B923)"/>
+  <rect x="22" y="56" width="36" height="7" rx="3.5" fill="#2352E8"/>
+  <line x1="30" y1="52" x2="26" y2="47" stroke="var(--ico-gold,#E8B923)" stroke-width="2.6" stroke-linecap="round"/>
+  <line x1="50" y1="52" x2="54" y2="47" stroke="var(--ico-gold,#E8B923)" stroke-width="2.6" stroke-linecap="round"/>
+</svg>

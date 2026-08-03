@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="The sacred text">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <path d="M40 26 L17 32 L17 55 L40 50 Z" fill="#2352E8"/>
+  <path d="M40 26 L63 32 L63 55 L40 50 Z" fill="#2352E8"/>
+  <path d="M40 26 L17 32 L17 55 L40 50 M40 26 L63 32 L63 55 L40 50 M40 26 L40 50" fill="none" stroke="#E8B923" stroke-width="2" stroke-linejoin="round"/>
+  <g stroke="#E8B923" stroke-width="1.4" stroke-linecap="round" opacity="0.85">
+    <line x1="22" y1="38" x2="35" y2="35.5"/>
+    <line x1="22" y1="43" x2="35" y2="40.5"/>
+    <line x1="45" y1="35.5" x2="58" y2="38"/>
+    <line x1="45" y1="40.5" x2="58" y2="43"/>
+  </g>
+</svg>

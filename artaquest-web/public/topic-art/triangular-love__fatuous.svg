@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Fatuous love — passion and commitment, the base of the love triangle">
+  
+  
+  <polygon points="40,17 19,53 61,53" fill="none" stroke="#2352E8" stroke-width="1.7" stroke-linejoin="round" stroke-opacity="0.5"/>
+  <circle cx="40" cy="17" r="4" fill="none" stroke="#2352E8" stroke-width="2" stroke-opacity="0.6"/>
+  <line x1="19" y1="53" x2="61" y2="53" stroke="var(--ico-gold,#E8B923)" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="19" cy="53" r="5.8" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="61" cy="53" r="5.8" fill="var(--ico-gold,#E8B923)"/>
+</svg>

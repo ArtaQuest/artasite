@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Scientific Determinism — a fixed chain of cause and effect">
+  <line x1="22" y1="40" x2="58" y2="40" stroke="#2352E8" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="17" cy="40" r="4.8" fill="none" stroke="#2352E8" stroke-width="2.2"/>
+  <circle cx="40" cy="40" r="4.8" fill="none" stroke="#2352E8" stroke-width="2.2"/>
+  <circle cx="63" cy="40" r="5.2" fill="var(--ico-gold,#E8B923)"/>
+</svg>

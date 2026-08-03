@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Big Rip">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="62%">
+      <stop offset="0" stop-color="#0C1E32"/>
+      <stop offset="1" stop-color="#010C17"/>
+    </radialGradient>
+  </defs>
+  <circle cx="40" cy="40" r="40" fill="url(#bg)"/>
+  <!-- a disc torn into two halves pulled apart -->
+  <path d="M34 24 A16 16 0 0 0 34 56 Z" fill="#E8B923" opacity="0.85"/>
+  <path d="M46 24 A16 16 0 0 1 46 56 Z" fill="#E8B923" opacity="0.85"/>
+  <!-- jagged tearing seam -->
+  <path d="M40 19 L36 32 L44 40 L36 48 L40 61" fill="none" stroke="#2352E8" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- pulled outward -->
+  <g stroke="#E8B923" stroke-width="2" stroke-linecap="round">
+    <line x1="22" y1="40" x2="13" y2="40"/>
+    <line x1="58" y1="40" x2="67" y2="40"/>
+  </g>
+</svg>

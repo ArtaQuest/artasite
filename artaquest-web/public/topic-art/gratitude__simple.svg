@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Simple appreciation — a small flower noticed and savoured">
+  <circle cx="40" cy="40" r="40" fill="#010C17"/>
+  <path d="M40 64 C 40 56, 40 51, 40 44" fill="none" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M40 56 C 45 55, 48 51, 48 47" fill="none" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+  <g fill="#E8B923">
+    <ellipse cx="40" cy="26" rx="5" ry="8"/>
+    <ellipse cx="40" cy="26" rx="5" ry="8" transform="rotate(72 40 34)"/>
+    <ellipse cx="40" cy="26" rx="5" ry="8" transform="rotate(144 40 34)"/>
+    <ellipse cx="40" cy="26" rx="5" ry="8" transform="rotate(216 40 34)"/>
+    <ellipse cx="40" cy="26" rx="5" ry="8" transform="rotate(288 40 34)"/>
+  </g>
+  <circle cx="40" cy="34" r="4.2" fill="#2352E8"/>
+</svg>

@@ -1,0 +1,98 @@
+[
+  {
+    "category": "hate-religion",
+    "lang": "en",
+    "text": "These people are a plague on every country that lets them in. Cockroaches breeding in the dark — you don't reason with vermin, you exterminate them before they overrun the whole house.",
+    "flag": true,
+    "note": "Dehumanises religious group as vermin, calls for extermination",
+    "band": 96
+  },
+  {
+    "category": "hate-religion",
+    "lang": "en",
+    "text": "Lovely how everyone tiptoes around it. Truth is the world would simply breathe easier if there were a few million fewer of them praying in the streets. Just saying what we all think.",
+    "flag": true,
+    "note": "Polite-coded call wishing the group's numbers reduced",
+    "band": 80
+  },
+  {
+    "category": "hate-religion",
+    "lang": "en",
+    "text": "I genuinely don't find the theology of this religion convincing — the cosmology contradicts everything we know, and the moral framework feels borrowed from older texts. I'd give the course three stars for presenting it uncritically.",
+    "flag": false,
+    "note": "Critiques the religion as ideology, not its people",
+    "band": 6
+  },
+  {
+    "category": "hate-religion",
+    "lang": "en",
+    "text": "They aren't human, not really. Subhuman things wearing human skin, and every one of them is a knife waiting for your back. Wake up before they're in your street.",
+    "flag": true,
+    "note": "Explicit subhuman framing plus fear-priming threat",
+    "band": 94
+  },
+  {
+    "category": "hate-religion",
+    "lang": "en",
+    "text": "The institution's leadership covered up decades of abuse and should face prosecution. I left the faith over it and I think the whole hierarchy is rotten and corrupt to the core.",
+    "flag": false,
+    "note": "Harsh criticism of institution, not dehumanising believers",
+    "band": 9
+  },
+  {
+    "category": "hate-religion",
+    "lang": "en",
+    "text": "Round them up. All of them. Burn the temples first so they've got nowhere to scuttle back to. This is the only language these animals understand.",
+    "flag": true,
+    "note": "Incitement to violence, animal dehumanisation of group",
+    "band": 98
+  },
+  {
+    "category": "hate-religion",
+    "lang": "en",
+    "text": "Funny how the 'peaceful' ones always show up right after one of their own blows something up. They're a disease, and the host body finally needs to take its medicine.",
+    "flag": true,
+    "note": "Disease dehumanisation plus eliminationist 'medicine' code",
+    "band": 90
+  },
+  {
+    "category": "hate-religion",
+    "lang": "en",
+    "text": "As someone who grew up in this faith, I'll reclaim the word they used to spit at us in school — yeah, I'm one of those 'heathens', and proud of where I come from.",
+    "flag": false,
+    "note": "Member reclaiming a slur about their own group",
+    "band": 4
+  },
+  {
+    "category": "hate-religion",
+    "lang": "en",
+    "text": "Every one of them is a parasite feeding off our welfare and our women. Don't let the smiling neighbour fool you — under that robe they all want you dead or converted.",
+    "flag": true,
+    "note": "Parasite dehumanisation, fear-mongering generalised threat",
+    "band": 91
+  },
+  {
+    "category": "hate-religion",
+    "lang": "en",
+    "text": "Honestly the smartest thing my granddad ever did was help drive them out of the village. Pure breed of cattle, the lot of them — should've finished the job back then.",
+    "flag": true,
+    "note": "Celebrates expulsion, cattle dehumanisation, regrets not 'finishing'",
+    "band": 89
+  },
+  {
+    "category": "hate-religion",
+    "lang": "en",
+    "text": "This documentary on the religious wars genuinely terrifies me — reading how ordinary people were dragged out and slaughtered for their beliefs left me shaking. How does humanity keep doing this?",
+    "flag": false,
+    "note": "Personal fear plus calm reflection on historical atrocity",
+    "band": 8
+  },
+  {
+    "category": "hate-religion",
+    "lang": "en",
+    "text": "They breed like rats on purpose — it's an invasion, a swarm, and every child they have is one more soldier sent to wipe you and your kids off this land. Be afraid, then act.",
+    "flag": true,
+    "note": "Rat/swarm dehumanisation with explicit fear-incitement to act",
+    "band": 95
+  }
+]

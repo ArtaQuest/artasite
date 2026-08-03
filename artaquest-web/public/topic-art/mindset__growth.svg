@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Growth mindset — ability can grow">
+  
+  
+  <path d="M40 66 V34" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="3.6" stroke-linecap="round"/>
+  <path d="M40 49 C49 49 57 43 59 31 C49 32 42 38 40 49 Z" fill="var(--ico-gold,#E8B923)"/>
+  <path d="M40 53 C31 53 23 47 21 35 C31 36 38 42 40 53 Z" fill="var(--ico-gold,#E8B923)"/>
+  <path d="M40 22 C44 26 44 31 40 34 C36 31 36 26 40 22 Z" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="40" cy="40" r="39" fill="none" stroke="#2352E8" stroke-width="1.5" stroke-opacity="0.5"/>
+</svg>

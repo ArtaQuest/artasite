@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="The Persister — a shield with a mark, conviction and values">
+  <path d="M40 14 L60 22 V40 C60 53 51.5 60.5 40 65 C28.5 60.5 20 53 20 40 V22 Z" fill="#2352E8" stroke="var(--ico-gold,#E8B923)" stroke-width="3"/>
+  <path d="M31 40 l6.5 7 13 -16" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

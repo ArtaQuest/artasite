@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Vata — air and ether; light, quick and mobile, shown as wind currents">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <g fill="none" stroke-linecap="round" stroke-width="3.6">
+    <path d="M16 30 H44 a7 7 0 1 0 -7 -7" stroke="#E8B923"/>
+    <path d="M16 42 H52 a8 8 0 1 1 -8 8" stroke="#2352E8"/>
+    <path d="M16 54 H38 a6 6 0 1 0 -6 -6" stroke="#E8B923"/>
+  </g>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Prefer cooperation">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <circle cx="31" cy="40" r="15.5" fill="none" stroke="#E8B923" stroke-width="4"/>
+  <circle cx="49" cy="40" r="15.5" fill="none" stroke="#2352E8" stroke-width="4"/>
+</svg>

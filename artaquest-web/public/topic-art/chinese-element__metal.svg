@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Metal — strength, structure and resolve, shown as a gold ingot">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <path d="M25 37 L55 37 L62 55 L18 55 Z" fill="#E8B923"/>
+  <path d="M25 37 L55 37 L51 44 L29 44 Z" fill="#2352E8"/>
+  <path d="M18 55 L62 55" fill="none" stroke="#2352E8" stroke-width="1.6" stroke-linecap="round"/>
+</svg>

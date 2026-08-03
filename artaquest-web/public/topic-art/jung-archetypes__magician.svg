@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="The Magician — a wand and sparks, transformation">
+  <line x1="24" y1="58" x2="46" y2="34" stroke="#2352E8" stroke-width="5" stroke-linecap="round"/>
+  <polygon points="52,16 55,25 64,28 55,31 52,40 49,31 40,28 49,25" fill="var(--ico-gold,#E8B923)"/>
+  <polygon points="33,22 35,27 40,29 35,31 33,36 31,31 26,29 31,27" fill="var(--ico-gold,#E8B923)"/>
+</svg>

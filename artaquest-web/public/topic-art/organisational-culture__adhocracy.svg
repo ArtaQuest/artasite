@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Adhocracy culture">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <g stroke="#E8B923" stroke-width="3" stroke-linecap="round">
+    <line x1="40" y1="13" x2="40" y2="25"/>
+    <line x1="40" y1="55" x2="40" y2="67"/>
+    <line x1="13" y1="40" x2="25" y2="40"/>
+    <line x1="55" y1="40" x2="67" y2="40"/>
+    <line x1="21" y1="21" x2="30" y2="30"/>
+    <line x1="50" y1="50" x2="59" y2="59"/>
+    <line x1="59" y1="21" x2="50" y2="30"/>
+    <line x1="30" y1="50" x2="21" y2="59"/>
+  </g>
+  <circle cx="40" cy="40" r="10.5" fill="#2352E8"/>
+</svg>

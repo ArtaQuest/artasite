@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Labelling and social reaction">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <g transform="rotate(-22 40 40)">
+    <path d="M28 28 H53 a4 4 0 0 1 4 4 V48 a4 4 0 0 1 -4 4 H28 L20 40 Z" fill="none" stroke="#E8B923" stroke-width="2.8" stroke-linejoin="round"/>
+    <circle cx="27" cy="40" r="3" fill="#2352E8"/>
+  </g>
+</svg>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Appreciation of others — two linked, with a heart of thanks between them">
+  <circle cx="40" cy="40" r="40" fill="#0C1E32"/>
+  <circle cx="31" cy="40" r="15" fill="none" stroke="#2352E8" stroke-width="3.4"/>
+  <circle cx="49" cy="40" r="15" fill="none" stroke="#E8B923" stroke-width="3.4"/>
+  <path d="M40 49 C 35.5 45.4, 32 42.6, 32 39.2 C 32 36.9, 33.7 35.2, 35.7 35.2 C 37.4 35.2, 38.9 36.3, 40 38 C 41.1 36.3, 42.6 35.2, 44.3 35.2 C 46.3 35.2, 48 36.9, 48 39.2 C 48 42.6, 44.5 45.4, 40 49 Z" fill="#E8B923"/>
+</svg>

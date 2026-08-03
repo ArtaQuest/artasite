@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="The Explorer — a compass, freedom and discovery">
+  <circle cx="40" cy="40" r="27" fill="none" stroke="#2352E8" stroke-width="2.6"/>
+  <polygon points="40,17 46,40 34,40" fill="var(--ico-gold,#E8B923)"/>
+  <polygon points="40,63 46,40 34,40" fill="#2352E8"/>
+  <circle cx="40" cy="40" r="3.2" fill="var(--ico-gold,#E8B923)"/>
+</svg>

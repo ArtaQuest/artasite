@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Water — depth, wisdom and adaptability, shown as a droplet">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <path d="M40 16 C40 16 56 38 56 48 C56 57 49 63 40 63 C31 63 24 57 24 48 C24 38 40 16 40 16 Z" fill="#2352E8"/>
+  <path d="M40 30 C45 37 49 43 49 49" fill="none" stroke="#E8B923" stroke-width="2.6" stroke-linecap="round"/>
+  <circle cx="34" cy="50" r="3.2" fill="#E8B923"/>
+</svg>

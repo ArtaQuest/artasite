@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="The Ruler — a crown, order and stability">
+  <polygon points="18,56 18,38 30,47 40,29 50,47 62,38 62,56" fill="var(--ico-gold,#E8B923)"/>
+  <rect x="18" y="56" width="44" height="7" rx="1.5" fill="var(--ico-gold,#E8B923)"/>
+  <g fill="#2352E8">
+    <circle cx="18" cy="36" r="3"/>
+    <circle cx="40" cy="27" r="3.4"/>
+    <circle cx="62" cy="36" r="3"/>
+  </g>
+</svg>

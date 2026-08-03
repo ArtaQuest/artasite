@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Tradition and its teachers">
+  <circle cx="40" cy="40" r="40" fill="#010C17"/>
+  <path d="M40 17 L63 30 L17 30 Z" fill="#E8B923"/>
+  <rect x="17" y="31" width="46" height="4" fill="#E8B923"/>
+  <g fill="#2352E8">
+    <rect x="22" y="37" width="6" height="20"/>
+    <rect x="32" y="37" width="6" height="20"/>
+    <rect x="42" y="37" width="6" height="20"/>
+    <rect x="52" y="37" width="6" height="20"/>
+  </g>
+  <rect x="16" y="58" width="48" height="4" fill="#E8B923"/>
+</svg>

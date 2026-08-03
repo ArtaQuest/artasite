@@ -1,0 +1,216 @@
+%% ===========================================================================
+%%  Journal of Seasonality — submission template (a complete, compiling exemplar)
+%%
+%%  Journal of Seasonality runs a fully automated, AI-run review process. Your
+%%  submission is REVIEWED BY RUNNING IT: an AI compiles this manuscript, clones
+%%  your code, fetches your open data, executes it, and checks that the results
+%%  below actually reproduce — across as many rounds of feedback as it takes.
+%%
+%%  Submit THREE public URLs:
+%%    1. this manuscript, as a zipped LaTeX project        (the .zip)
+%%    2. your open CODE   (a public git repo, ideally)
+%%    3. your open DATA   (a public, downloadable URL)
+%%
+%%  Compile with tectonic (self-contained) or pdfLaTeX (Overleaf: Recompile).
+%%  Keep artaquest.cls next to this file. Add the [review] class option for
+%%  line numbers + double spacing while drafting.
+%%
+%%  This file is a worked example — read it as a guide-by-example, then replace
+%%  the content with your own. The class loads amsmath/mathtools/amsthm and
+%%  tikz/pgfplots for you; you do NOT need to \usepackage them. Full style guide:
+%%    https://artaquest.org/papers/style-guide.html
+%% ===========================================================================
+\documentclass[11pt]{artaquest}   % e.g. \documentclass[11pt,review]{artaquest}
+
+% The class provides the "fillbetween" library for confidence bands; load it once here.
+\usepgfplotslibrary{fillbetween}
+
+\title{Seasonality in Weekly Search Interest: A Reproducible STL Decomposition}
+\runningtitle{Seasonality in weekly search interest}
+
+\author{Ada Lovelace\affmark{1}\orcid{0000-0002-1825-0097} \and
+        Charles Babbage\affmark{1,2}\orcid{0000-0001-5109-3700}}
+\affiliation{\affmark{1}Analytical Engine Group, ArtaQuest Foundation \quad
+             \affmark{2}Department of Computation, Example University}
+\keywords{seasonality; time series; STL decomposition; reproducibility; open data}
+
+% Fill these in — review checks that they are real and that the work reproduces.
+\dataavailability{The weekly series and a copy of the input are openly available at
+  \url{https://example.org/seasonality-demo/data.csv}.}
+\codeavailability{All analysis code is openly available at
+  \url{https://github.com/example/seasonality-demo}; running \texttt{reproduce.py}
+  regenerates every number and figure in this paper.}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We ask whether a single weekly time series carries a stable annual seasonal cycle, and
+quantify it reproducibly. Using \num{521} weekly observations spanning \SI{10}{years}, we
+apply a seasonal--trend decomposition by loess (STL) and measure the strength of the
+seasonal component. We find a pronounced annual cycle: the seasonal component explains
+\SI{63}{\percent} of the detrended variance, with a peak-to-trough amplitude of
+\num{18.4} index points around week~\num{27}. A naive seasonal-mean baseline is
+outperformed by the STL fit on one-step forecasts (root-mean-square error
+\num{4.1} versus \num{5.7}). Every number above is computed by the released code from the
+open data; nothing is hard-coded.
+\end{abstract}
+
+\section{Introduction}
+Many measured quantities --- demand, traffic, disease incidence, search interest --- vary
+on an annual rhythm, and separating that rhythm from the underlying trend is a routine but
+consequential first step in any longitudinal analysis. This template paper demonstrates the
+journal's expectations with a small, fully reproducible study: we take one openly published
+weekly series, decompose it, and report a handful of headline numbers that a reviewer can
+recompute by running our code on our data.
+
+Our contribution is deliberately modest and serves as a guide-by-example: (i) a clean STL
+decomposition~\citep{cleveland1990stl} of an annual cycle, (ii) a quantitative measure of
+seasonal strength, and (iii) a like-for-like forecast comparison against a seasonal-mean
+baseline~\citep{box2015timeseries,hyndman2008forecast}. Cite prior work with
+\verb|\citep{key}| or, in running text, \citet{harris2020numpy}. Every citation must be real
+and verifiable.
+
+\section{Data}
+The open data are \num{521} consecutive weekly observations of a normalised search-interest
+index (range \numrange{0}{100}), spanning \SI{10}{years} at a sampling interval of
+\SI{7}{\day}. There are no missing weeks. The series, and the exact CSV consumed by the
+code, are available at the URL in the Data availability statement --- anyone, including the
+reviewer, must be able to fetch it and reproduce the results below. Summary statistics are
+given in \cref{tab:summary}.
+
+\begin{table}[t]
+  \centering
+  \caption{Summary of the weekly index over the full \SI{10}{year} window. All values are
+    computed by the released code from the open data}
+  \label{tab:summary}
+  \begin{tabular}{l S[table-format=3.1] S[table-format=2.1]}
+    \toprule
+    Quantity & {Value} & {Std.\ dev.} \\
+    \midrule
+    Observations ($n$)          & 521.0 & {--}  \\
+    Mean index                  & 52.3  & 11.8  \\
+    Seasonal amplitude (pk--tr) & 18.4  & 2.6   \\
+    Trend slope (per year)      & 1.2   & 0.3   \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Methods}
+\subsection{Model}
+We model the observed series $y_t$ as the sum of a slowly varying trend $T_t$, a periodic
+seasonal component $S_t$ with period \num{52} weeks, and a remainder $R_t$. Inline maths
+reads naturally: each weekly observation $y_t \in [0,100]$ for $t = 1, \dots, n$ with
+$n = \num{521}$. The additive decomposition is
+\begin{equation}
+  y_t \;=\; T_t + S_t + R_t , \qquad t = 1, \dots, n .
+  \label{eq:decomp}
+\end{equation}
+The components in \cref{eq:decomp} are estimated by STL~\citep{cleveland1990stl}, a robust
+loess-based decomposition, using its standard reference implementation.
+
+\subsection{Estimands}
+We summarise the relative size of the seasonal signal with the seasonal-strength statistic
+$F_S$, and we score one-step forecasts with the root-mean-square error $\RMSE$. State every
+quantity you report as a typeset equation, so the reviewer recomputes exactly what you mean:
+\begin{align}
+  F_S   &\;=\; \max\!\left(0,\; 1 - \frac{\Var(R_t)}{\Var(S_t + R_t)}\right) \in [0,1],
+            \label{eq:strength}\\[2pt]
+  \RMSE &\;=\; \sqrt{\frac{1}{h}\sum_{t=n-h+1}^{n}\bigl(\hat{y}_t - y_t\bigr)^2},
+            \label{eq:rmse}
+\end{align}
+where $\hat{y}_t$ is the one-step forecast over the held-out horizon of $h = \num{52}$ weeks.
+The STL forecast chooses smoothing parameters by minimising held-out error,
+$\hat{\theta} = \argmin_{\theta}\, \RMSE(\theta)$. We fit the decomposition with the
+scientific Python stack~\citep{harris2020numpy,virtanen2020scipy} and evaluate forecasts with
+scikit-learn~\citep{pedregosa2011scikit}; \cref{eq:strength,eq:rmse} are both computed in
+\texttt{reproduce.py}.
+
+\begin{definition}[Seasonal strength]\label{def:strength}
+  For an additive decomposition $y_t = T_t + S_t + R_t$, the \emph{seasonal strength} is the
+  statistic $F_S$ of \cref{eq:strength}. It is the fraction of detrended variance attributable
+  to the seasonal component, clipped to $[0,1]$.
+\end{definition}
+
+\begin{proposition}\label{prop:bound}
+  $F_S = 0$ whenever the seasonal component is constant, and $F_S \to 1$ as the remainder
+  variance vanishes relative to the seasonal-plus-remainder variance.
+\end{proposition}
+\begin{proof}
+  If $S_t$ is constant then $\Var(S_t + R_t) = \Var(R_t)$, so the ratio in \cref{eq:strength}
+  is $1$ and the clipped value is $0$. As $\Var(R_t)/\Var(S_t + R_t) \to 0$ the ratio tends to
+  $1$, hence $F_S \to 1$.
+\end{proof}
+
+\section{Results}
+The decomposition recovers a clear, stable annual cycle (\cref{fig:decomp}). The seasonal
+component peaks near week~\num{27} each year with a peak-to-trough amplitude of
+\num{18.4} index points, and the seasonal-strength statistic of \cref{def:strength} evaluates
+to $F_S = \num{0.63}$ --- that is, the seasonal component explains \SI{63}{\percent} of the
+detrended variance. On one-step-ahead forecasts over a held-out final year, the STL-based
+model achieves $\RMSE = \num{4.1}$ index points against \num{5.7} for a seasonal-mean
+baseline (\cref{eq:rmse}), an improvement of \SI{28}{\percent}. Each of these headline numbers
+follows from running the released code on the open data.
+
+\begin{figure}[t]
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[aq,
+        width=0.88\linewidth, height=5.2cm,
+        xlabel={Week of year}, ylabel={Seasonal component $S_t$ (index points)},
+        xmin=1, xmax=52, ymin=-13, ymax=13,
+        xtick={1,13,26,39,52},
+        legend pos=north west,
+        domain=1:52, samples=104]
+      % A subtle confidence band around the exemplar curve (drawn first, behind it).
+      \addplot[name path=hi, draw=none, forget plot] {9.2*sin((x-13)/52*360)+1.6};
+      \addplot[name path=lo, draw=none, forget plot] {9.2*sin((x-13)/52*360)-1.6};
+      \addplot[aq band, forget plot] fill between[of=hi and lo];
+      % The exemplar (estimated) seasonal curve — heavy brand blue.
+      \addplot[aq emphasis] {9.2*sin((x-13)/52*360)};
+      % A secondary, muted comparison: STL + first harmonic.
+      \addplot[aq warm, dashed] {9.2*sin((x-13)/52*360) + 1.8*sin((x-13)/26*360)};
+      % A reference line at zero (the de-seasonalised baseline).
+      \addplot[aq rule, domain=1:52, samples=2] {0};
+      \legend{STL seasonal, {+\,1st harmonic}, baseline ($S_t{=}0$)}
+    \end{axis}
+  \end{tikzpicture}
+  \caption{The estimated seasonal component $S_t$ across the week of the year, peaking near
+    week~\num{27} (heavy blue, with a $\pm$one-standard-error band). The dashed gold curve adds
+    the first harmonic; the dashed grey line marks the de-seasonalised baseline. Each series
+    differs by colour \emph{and} dash so the figure reads in greyscale. Replace this inline plot
+    with one regenerated by your code --- the web reader re-draws it from your emitted data}
+  \label{fig:decomp}
+\end{figure}
+
+\paragraph{A run-in subheading} groups a short point without a numbered section --- useful
+for a brief aside such as a robustness note.
+
+\section{Discussion}
+The annual cycle is strong and stable, and a decomposition-based forecast beats the naive
+seasonal mean by a clear margin --- a small but honest result that this template exists to
+demonstrate. State plainly what the result does \emph{not} show: a single series cannot
+establish a mechanism, the forecast gain is evaluated on one held-out year, and the
+seasonal-strength statistic of \cref{eq:strength} is sensitive to the STL smoothing
+parameters, which we fix at their reference defaults. Claim no more than the code and data
+support.
+
+\paragraph{Reproducibility} One command regenerates every figure and number above from the
+open data:
+\begin{lstlisting}[language=bash]
+curl -L -o data.csv https://example.org/.../data.csv  # the open data
+python3 reproduce.py                                  # every number
+\end{lstlisting}
+Only claim a number as reproducible if this command actually computes it.
+
+\declarations
+\authorcontributions{A.L.\ designed the analysis and wrote the code; C.B.\ curated the data
+  and verified the reproduction; both authors wrote the manuscript.}
+\competinginterests{The authors declare no competing interests.}
+\funding{This work received no specific grant from any funding agency.}
+\acknowledgements{We thank the ArtaScience reviewer for running the code and checking that
+  the numbers reproduce.}
+
+\bibliography{references}
+
+\end{document}

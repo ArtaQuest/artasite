@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img">
+  
+  <circle cx="40" cy="40" r="29" fill="none" stroke="#2352E8" stroke-width="1" opacity="0.22"/>
+  <line x1="27" y1="21" x2="53" y2="21" stroke="#2352E8" stroke-width="2.4" stroke-linecap="round"/>
+  <line x1="27" y1="59" x2="53" y2="59" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M30 23 L50 23 L40 40 Z" fill="#2352E8" opacity="0.85"/>
+  <path d="M40 40 L50 57 L30 57 Z" fill="var(--ico-gold,#E8B923)" opacity="0.9"/>
+  <circle cx="40" cy="46" r="1.7" fill="var(--ico-gold,#E8B923)"/>
+</svg>

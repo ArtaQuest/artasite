@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Introversion–extraversion spectrum — a gold inward pole and a blue outward pole with a blended midpoint">
+  <line x1="21.5" y1="40" x2="33" y2="40" stroke="var(--ico-gold,#E8B923)" stroke-width="3" stroke-linecap="round"/>
+  <line x1="47" y1="40" x2="58.5" y2="40" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="15" cy="40" r="6.5" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="65" cy="40" r="6.5" fill="#2352E8"/>
+  <path d="M40 33 A7 7 0 0 0 40 47" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="3.5"/>
+  <path d="M40 33 A7 7 0 0 1 40 47" fill="none" stroke="#2352E8" stroke-width="3.5"/>
+</svg>

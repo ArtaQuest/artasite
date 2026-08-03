@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Questioner — questions outer expectations, meets justified inner ones">
+  <circle cx="40" cy="40" r="25" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="4" stroke-dasharray="20.4 18.85"/>
+  <circle cx="40" cy="40" r="12.5" fill="none" stroke="#2352E8" stroke-width="4"/>
+  <circle cx="40" cy="40" r="2.6" fill="var(--ico-gold,#E8B923)"/>
+</svg>

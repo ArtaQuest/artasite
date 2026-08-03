@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Risk and consequence">
+  <circle cx="40" cy="40" r="40" fill="#0C1E32"/>
+  <circle cx="40" cy="40" r="38" fill="none" stroke="#E8B923" stroke-width="1" opacity="0.35"/>
+  <!-- a balance: weighing the odds against the cost -->
+  <rect x="38.5" y="22" width="3" height="34" rx="1.5" fill="#E8B923"/>
+  <circle cx="40" cy="21" r="3.2" fill="#E8B923"/>
+  <rect x="29" y="55" width="22" height="4" rx="2" fill="#E8B923"/>
+  <!-- tipped beam: consequence outweighs gain -->
+  <line x1="22" y1="32" x2="58" y2="26" stroke="#E8B923" stroke-width="2.6" stroke-linecap="round"/>
+  <!-- heavier pan (risk of being caught) -->
+  <line x1="22" y1="32" x2="22" y2="40" stroke="#2352E8" stroke-width="1.6"/>
+  <path d="M14 40 A 8 8 0 0 0 30 40 Z" fill="#2352E8"/>
+  <!-- lighter pan (the gain) -->
+  <line x1="58" y1="26" x2="58" y2="33" stroke="#2352E8" stroke-width="1.6"/>
+  <path d="M51 33 A 7 7 0 0 0 65 33 Z" fill="#2352E8" opacity="0.85"/>
+</svg>

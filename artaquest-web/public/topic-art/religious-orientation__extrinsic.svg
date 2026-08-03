@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+  
+  <path d="M16 55 A24 24 0 0 1 64 55" fill="none" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+  <line x1="14" y1="55" x2="66" y2="55" stroke="#2352E8" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M28 55 A12 12 0 0 1 52 55 Z" fill="var(--ico-gold,#E8B923)"/>
+</svg>

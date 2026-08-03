@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Social learning — behaviour passed between people">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <circle cx="25" cy="40" r="9" fill="#E8B923"/>
+  <circle cx="55" cy="40" r="9" fill="none" stroke="#2352E8" stroke-width="2.8"/>
+  <line x1="34" y1="40" x2="44" y2="40" stroke="#E8B923" stroke-width="2.8" stroke-linecap="round"/>
+  <polyline points="41,36 46,40 41,44" fill="none" stroke="#E8B923" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

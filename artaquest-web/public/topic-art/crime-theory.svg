@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Why crime happens">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <g stroke="#2352E8" stroke-width="2.4" stroke-linecap="round">
+    <line x1="40" y1="40" x2="40" y2="16"/>
+    <line x1="40" y1="40" x2="60.8" y2="28"/>
+    <line x1="40" y1="40" x2="60.8" y2="52"/>
+    <line x1="40" y1="40" x2="40" y2="64"/>
+    <line x1="40" y1="40" x2="19.2" y2="52"/>
+    <line x1="40" y1="40" x2="19.2" y2="28"/>
+  </g>
+  <g fill="#E8B923">
+    <circle cx="40" cy="16" r="4.4"/>
+    <circle cx="60.8" cy="28" r="4.4"/>
+    <circle cx="60.8" cy="52" r="4.4"/>
+    <circle cx="40" cy="64" r="4.4"/>
+    <circle cx="19.2" cy="52" r="4.4"/>
+    <circle cx="19.2" cy="28" r="4.4"/>
+  </g>
+  <circle cx="40" cy="40" r="7.6" fill="#2352E8" stroke="#E8B923" stroke-width="2.4"/>
+</svg>

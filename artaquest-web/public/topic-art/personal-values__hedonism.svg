@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Hedonism — a raised goblet savouring life's pleasures">
+  
+  
+  <path d="M26 24 Q40 45 54 24 Z" fill="#2352E8" fill-opacity="0.55" stroke="var(--ico-gold,#E8B923)" stroke-width="2" stroke-linejoin="round"/>
+  <line x1="40" y1="36" x2="40" y2="54" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4" stroke-linecap="round"/>
+  <line x1="30" y1="56" x2="50" y2="56" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4" stroke-linecap="round"/>
+  <g fill="var(--ico-gold,#E8B923)"><circle cx="60" cy="22" r="1.9"/><circle cx="64" cy="31" r="1.2"/></g>
+</svg>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Faith in humanity — a sun rising over people, a belief that people are fundamentally good">
+  
+  
+  <g stroke="var(--ico-gold,#E8B923)" stroke-width="1.5" stroke-linecap="round">
+    <line x1="40" y1="14" x2="40" y2="9"/>
+    <line x1="27" y1="18" x2="24" y2="13"/>
+    <line x1="53" y1="18" x2="56" y2="13"/>
+    <line x1="18" y1="28" x2="13" y2="25"/>
+    <line x1="62" y1="28" x2="67" y2="25"/>
+  </g>
+  <circle cx="40" cy="29" r="9" fill="var(--ico-gold,#E8B923)" fill-opacity="0.92"/>
+  <line x1="13" y1="53" x2="67" y2="53" stroke="#2352E8" stroke-width="2.2" stroke-linecap="round"/>
+  <g fill="#2352E8">
+    <circle cx="29" cy="48" r="3"/>
+    <circle cx="40" cy="46.5" r="3"/>
+    <circle cx="51" cy="48" r="3"/>
+  </g>
+</svg>

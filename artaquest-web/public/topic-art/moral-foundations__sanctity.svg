@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80" role="img" aria-label="Sanctity — a lotus">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <path d="M20 54 Q40 60 60 54" fill="none" stroke="#2352E8" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M40 54 C30 46 26 36 30 29 C36 33 40 44 40 54 Z" fill="#2352E8"/>
+  <path d="M40 54 C50 46 54 36 50 29 C44 33 40 44 40 54 Z" fill="#2352E8"/>
+  <path d="M40 24 C36 36 36 47 40 54 C44 47 44 36 40 24 Z" fill="#E8B923"/>
+</svg>

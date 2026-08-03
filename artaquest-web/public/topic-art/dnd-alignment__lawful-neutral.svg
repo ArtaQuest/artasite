@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Lawful Neutral — order and a personal code above good or evil">
+  <line x1="40" y1="16" x2="40" y2="60" stroke="var(--ico-gold,#E8B923)" stroke-width="3" stroke-linecap="round"/>
+  <line x1="20" y1="26" x2="60" y2="26" stroke="var(--ico-gold,#E8B923)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M20 26 L13 40 H27 Z" fill="none" stroke="#2352E8" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M60 26 L53 40 H67 Z" fill="none" stroke="#2352E8" stroke-width="2.6" stroke-linejoin="round"/>
+  <rect x="31" y="60" width="18" height="5" rx="2" fill="var(--ico-gold,#E8B923)"/>
+</svg>

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img">
+  
+  <!-- searching outward in every direction -->
+  <g stroke="#2352E8" stroke-width="2" stroke-linecap="round">
+    <line x1="40" y1="40" x2="40" y2="13"/>
+    <line x1="40" y1="40" x2="62" y2="26"/>
+    <line x1="40" y1="40" x2="65" y2="48"/>
+    <line x1="40" y1="40" x2="53" y2="64"/>
+    <line x1="40" y1="40" x2="27" y2="64"/>
+    <line x1="40" y1="40" x2="15" y2="48"/>
+    <line x1="40" y1="40" x2="18" y2="26"/>
+  </g>
+  <!-- open questions at the reach of the search -->
+  <circle cx="40" cy="13" r="2.5" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="65" cy="48" r="2.1" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="27" cy="64" r="2.1" fill="var(--ico-gold,#E8B923)"/>
+  <!-- the centre still open: explored, not yet settled -->
+  <circle cx="40" cy="40" r="7.5" fill="var(--ico-ink,#06121E)" stroke="var(--ico-gold,#E8B923)" stroke-width="2"/>
+</svg>

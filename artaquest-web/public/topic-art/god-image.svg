@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Image of God — two dimensions, four images">
+  
+  <circle cx="40" cy="40" r="39" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.4"/>
+  <!-- the two measured dimensions: engagement (vertical) x judgement (horizontal) -->
+  <g stroke="#2352E8" stroke-width="2" stroke-linecap="round" stroke-opacity="0.85">
+    <line x1="40" y1="15" x2="40" y2="65"/>
+    <line x1="15" y1="40" x2="65" y2="40"/>
+  </g>
+  <!-- one God pictured four ways: top = engaged (solid), bottom = distant (hollow) -->
+  <g fill="var(--ico-gold,#E8B923)">
+    <circle cx="25" cy="25" r="6"/>
+    <circle cx="55" cy="25" r="6"/>
+  </g>
+  <g fill="var(--ico-ink,#06121E)" stroke="var(--ico-gold,#E8B923)" stroke-width="2.2">
+    <circle cx="25" cy="55" r="6"/>
+    <circle cx="55" cy="55" r="6"/>
+  </g>
+  <!-- right column = judging (an eye), left column = loving (plain) -->
+  <g fill="#2352E8">
+    <circle cx="55" cy="25" r="2.1"/>
+    <circle cx="55" cy="55" r="2.1"/>
+  </g>
+</svg>

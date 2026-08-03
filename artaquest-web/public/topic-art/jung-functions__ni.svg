@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Introverted Intuition — converging on a single insight">
+  
+  
+  <g stroke="#2352E8" stroke-width="1.4" stroke-opacity="0.55" stroke-linecap="round">
+    <line x1="18" y1="18" x2="35" y2="35"/><line x1="62" y1="18" x2="45" y2="35"/>
+    <line x1="62" y1="62" x2="45" y2="45"/><line x1="18" y1="62" x2="35" y2="45"/>
+  </g>
+  <g fill="#2352E8"><circle cx="18" cy="18" r="2.6"/><circle cx="62" cy="18" r="2.6"/><circle cx="62" cy="62" r="2.6"/><circle cx="18" cy="62" r="2.6"/></g>
+  <polygon points="40,27 53,40 40,53 27,40" fill="var(--ico-gold,#E8B923)"/>
+</svg>

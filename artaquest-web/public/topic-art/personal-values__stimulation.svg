@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Stimulation — a lightning bolt of excitement and novelty">
+  
+  
+  <g stroke="#2352E8" stroke-width="2" stroke-linecap="round" stroke-opacity="0.7">
+    <line x1="40" y1="13" x2="40" y2="21"/>
+    <line x1="61" y1="22" x2="55" y2="28"/>
+    <line x1="19" y1="22" x2="25" y2="28"/>
+    <line x1="64" y1="47" x2="57" y2="49"/>
+    <line x1="16" y1="47" x2="23" y2="49"/>
+  </g>
+  <polygon points="45,16 28,44 39,44 33,64 54,34 42,34" fill="var(--ico-gold,#E8B923)" stroke="var(--ico-gold,#E8B923)" stroke-width="1" stroke-linejoin="round"/>
+</svg>

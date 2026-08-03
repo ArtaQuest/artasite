@@ -1,0 +1,122 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/theme.json",
+	"version": 2,
+	"settings": {
+		"appearanceTools": true,
+		"useRootPaddingAwareAlignments": true,
+		"layout": {
+			"contentSize": "930px",
+			"wideSize": "1140px"
+		},
+		"spacing": {
+			"margin": true,
+			"padding": true,
+			"blockGap": true,
+			"units": [ "rem", "px", "%" ],
+			"spacingSizes": [
+				{ "name": "10",  "slug": "10",  "size": "1.0rem" },
+				{ "name": "20",  "slug": "20",  "size": "2.0rem" },
+				{ "name": "30",  "slug": "30",  "size": "3.0rem" },
+				{ "name": "40",  "slug": "40",  "size": "4.0rem" },
+				{ "name": "50",  "slug": "50",  "size": "5.0rem" },
+				{ "name": "60",  "slug": "60",  "size": "6.0rem" },
+				{ "name": "100", "slug": "100", "size": "10.0rem" }
+			]
+		},
+		"typography": {
+			"customFontSize": true,
+			"lineHeight": true,
+			"dropCap": true,
+			"fontStyle": true,
+			"fontWeight": true,
+			"letterSpacing": true,
+			"textDecoration": true,
+			"textTransform": true,
+			"fontSizes": [
+				{ "name": "Micro",    "slug": "xxs",    "size": "1.0rem" },
+				{ "name": "Smaller",  "slug": "xs",     "size": "1.2rem" },
+				{ "name": "Small",    "slug": "small",  "size": "1.4rem" },
+				{ "name": "Normal",   "slug": "medium", "size": "1.6rem" },
+				{ "name": "Large",    "slug": "large",  "size": "1.8rem" },
+				{ "name": "Big",      "slug": "xl",     "size": "2rem"   },
+				{ "name": "X Bigger", "slug": "xxl",    "size": "2.4rem" },
+				{ "name": "Huge",     "slug": "xxxl",   "size": "5rem"   },
+				{ "name": "Header 6", "slug": "h6",     "size": "2rem"   },
+				{ "name": "Header 5", "slug": "h5",     "size": "2.2rem" },
+				{ "name": "Header 4", "slug": "h4",     "size": "2.4rem" },
+				{ "name": "Header 3", "slug": "h3",     "size": "2.6rem" },
+				{ "name": "Header 2", "slug": "h2",     "size": "3.6rem" },
+				{ "name": "Header 1", "slug": "h1",     "size": "5rem"   }
+			],
+			"fontFamilies": [
+				{
+					"name":       "Montserrat",
+					"slug":       "primary",
+					"fontFamily": "Montserrat, Open Sans, system-ui, sans-serif"
+				},
+				{
+					"name":       "Body",
+					"slug":       "body",
+					"fontFamily": "Open Sans, system-ui, -apple-system, sans-serif"
+				}
+			]
+		},
+		"color": {
+			"custom": true,
+			"customDuotone": true,
+			"customGradient": true,
+			"link": true,
+			"text": true,
+			"background": true,
+			"defaultGradients": true,
+			"defaultPalette": true,
+			"palette": [
+				{ "name": "ArtaQuest Gold",       "slug": "primary",    "color": "#E8B923" },
+				{ "name": "ArtaQuest Gold Light",  "slug": "orange",     "color": "#F5D060" },
+				{ "name": "ArtaQuest Blue",        "slug": "blue",       "color": "#2352E8" },
+				{ "name": "ArtaQuest Blue Light",  "slug": "blue-light", "color": "#4A72FF" },
+				{ "name": "ArtaQuest Blue Dark",   "slug": "blue-dark",  "color": "#1A3DB5" },
+				{ "name": "ArtaQuest Space",       "slug": "dark-blue",  "color": "#010C17" },
+				{ "name": "ArtaQuest Card",        "slug": "dark-card",  "color": "#06121E" },
+				{ "name": "White",               "slug": "white",      "color": "#FFFFFF" },
+				{ "name": "Black",               "slug": "black",      "color": "#000000" }
+			]
+		}
+	},
+	"styles": {
+		"spacing": {
+			"blockGap": "35px",
+			"margin":  { "top": "0", "right": "0", "bottom": "0", "left": "0" },
+			"padding": { "top": "0", "right": "0", "bottom": "0", "left": "0" }
+		},
+		"typography": {
+			"fontFamily": "var(--wp--preset--font-family--body)",
+			"fontSize":   "1rem",
+			"lineHeight": "1.75"
+		},
+		"color": {
+			"text":       "#1A2B3C",
+			"background": "#FFFFFF"
+		},
+		"elements": {
+			"heading": {
+				"typography": {
+					"fontFamily": "var(--wp--preset--font-family--primary)",
+					"fontWeight": "700",
+					"lineHeight": "1.25"
+				},
+				"color": { "text": "#010C17" }
+			},
+			"h1": { "typography": { "fontWeight": "700", "fontSize": "clamp(2rem, 4vw, 3rem)" } },
+			"h2": { "typography": { "fontWeight": "700", "fontSize": "clamp(1.6rem, 3vw, 2.25rem)" } },
+			"h3": { "typography": { "fontWeight": "700", "fontSize": "clamp(1.2rem, 2vw, 1.6rem)" } },
+			"h4": { "typography": { "fontWeight": "700", "fontSize": "1.15rem" } },
+			"h5": { "typography": { "fontWeight": "700", "fontSize": "18px" } },
+			"h6": { "typography": { "fontWeight": "700", "fontSize": "17px" } },
+			"link": {
+				"color": { "text": "#2352E8" },
+				"typography": { "textDecoration": "none" }
+			}
+		}
+	}
+}

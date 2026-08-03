@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Satisfaction — a gold heart filling with blue">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <defs><clipPath id="s"><path d="M40 58 C 29 50, 21 44, 21 35 C 21 29.2, 25.4 25, 30.5 25 C 34.7 25, 38 27.9, 40 31.4 C 42 27.9, 45.3 25, 49.5 25 C 54.6 25, 59 29.2, 59 35 C 59 44, 51 50, 40 58 Z"/></clipPath></defs>
+  <rect x="19" y="39" width="42" height="22" fill="#2352E8" clip-path="url(#s)"/>
+  <path d="M40 58 C 29 50, 21 44, 21 35 C 21 29.2, 25.4 25, 30.5 25 C 34.7 25, 38 27.9, 40 31.4 C 42 27.9, 45.3 25, 49.5 25 C 54.6 25, 59 29.2, 59 35 C 59 44, 51 50, 40 58 Z" fill="none" stroke="#E8B923" stroke-width="3.4" stroke-linejoin="round"/>
+</svg>

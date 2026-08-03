@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Individual factors">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <circle cx="40" cy="30" r="9.5" fill="#E8B923"/>
+  <path d="M21 62 a19 17 0 0 1 38 0 z" fill="#E8B923"/>
+  <path d="M16 64 h48" stroke="#2352E8" stroke-width="4" stroke-linecap="round" fill="none"/>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Neutral Good — doing good as an end in itself">
+  <g stroke="#2352E8" stroke-width="2.2" stroke-linecap="round">
+    <line x1="40" y1="20" x2="40" y2="11"/>
+    <line x1="24" y1="25" x2="18" y2="18"/>
+    <line x1="56" y1="25" x2="62" y2="18"/>
+  </g>
+  <path d="M40 60 C 18 44 22 26 36 32 C 38 33 40 36 40 38 C 40 36 42 33 44 32 C 58 26 62 44 40 60 Z" fill="var(--ico-gold,#E8B923)"/>
+</svg>

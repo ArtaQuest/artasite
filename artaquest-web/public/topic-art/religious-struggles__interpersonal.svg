@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Interpersonal — conflict over religion with others">
+  
+  <circle cx="40" cy="40" r="39" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.4"/>
+  <!-- two people -->
+  <circle cx="26" cy="40" r="8" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4"/>
+  <circle cx="54" cy="40" r="8" fill="none" stroke="#2352E8" stroke-width="2.4"/>
+  <!-- the rift between them -->
+  <path d="M40 17 L35 31 L45 40 L35 49 L40 63" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

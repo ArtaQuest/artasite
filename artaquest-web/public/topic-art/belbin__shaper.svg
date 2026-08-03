@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Shaper — driving momentum pushing the team forward">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <path d="M22 22 L40 40 L22 58" fill="none" stroke="#2352E8" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M40 22 L58 40 L40 58" fill="none" stroke="#E8B923" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

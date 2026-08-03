@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Ayurvedic dosha (Prakriti) — the three doshas Vata, Pitta and Kapha balanced in one constitution">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <polygon points="40,15 61.65,52.5 18.35,52.5" fill="none" stroke="#E8B923" stroke-width="1.8" stroke-linejoin="round"/>
+  <g fill="#E8B923">
+    <circle cx="40" cy="15" r="5"/>
+    <circle cx="61.65" cy="52.5" r="5"/>
+    <circle cx="18.35" cy="52.5" r="5"/>
+  </g>
+  <circle cx="40" cy="40" r="6.5" fill="#2352E8"/>
+  <circle cx="40" cy="40" r="2.6" fill="#E8B923"/>
+</svg>

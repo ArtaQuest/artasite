@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+<circle cx="40" cy="40" r="40" fill="#06121E"/>
+<g fill="#E8B923">
+<polygon points="59,36 59,44 73,40"/>
+<polygon points="59,36 59,44 73,40" transform="rotate(120 40 40)"/>
+<polygon points="59,36 59,44 73,40" transform="rotate(240 40 40)"/>
+<circle cx="67" cy="40" r="4" transform="rotate(60 40 40)"/>
+<circle cx="67" cy="40" r="4" transform="rotate(180 40 40)"/>
+<circle cx="67" cy="40" r="4" transform="rotate(300 40 40)"/>
+</g>
+<circle cx="40" cy="40" r="22" fill="#2352E8"/>
+<circle cx="40" cy="40" r="8.5" fill="#06121E"/>
+</svg>

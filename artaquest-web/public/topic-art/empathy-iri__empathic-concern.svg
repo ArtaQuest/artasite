@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img">
+  <path d="M40 56 C30 48 23 42 23 35 C23 30 27 27.5 30.5 28.5 C34 29.5 38 33 40 37 C42 33 46 29.5 49.5 28.5 C53 27.5 57 30 57 35 C57 42 50 48 40 56 Z" fill="var(--ico-gold,#E8B923)"/>
+  <path d="M40 23 V16" fill="none" stroke="#2352E8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M26 27 L20 21" fill="none" stroke="#2352E8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M54 27 L60 21" fill="none" stroke="#2352E8" stroke-width="2" stroke-linecap="round"/>
+</svg>

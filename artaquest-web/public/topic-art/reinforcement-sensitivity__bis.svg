@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Behavioural Inhibition — a vigilant shield">
+  <path d="M40 14 L62 23 V41 Q62 58 40 67 Q18 58 18 41 V23 Z" fill="none" stroke="#2352E8" stroke-width="2.2" stroke-linejoin="round"/>
+  <circle cx="40" cy="40" r="4.6" fill="var(--ico-gold,#E8B923)"/>
+  <g stroke="var(--ico-gold,#E8B923)" stroke-width="1.6" stroke-linecap="round">
+    <line x1="40" y1="28" x2="40" y2="33"/>
+    <line x1="40" y1="47" x2="40" y2="52"/>
+    <line x1="28" y1="40" x2="33" y2="40"/>
+    <line x1="47" y1="40" x2="52" y2="40"/>
+  </g>
+</svg>

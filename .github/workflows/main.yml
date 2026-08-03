@@ -1,0 +1,236 @@
+# CI for `main` — prove every push is shippable, then hand off to the deployer.
+#
+# WHY THIS DOES NOT DEPLOY. Production runs `opcache.validate_timestamps = 0` with
+# `opcache.restrict_api = /usr/local/nginx/html/`, so our own code cannot call opcache_reset() and
+# PHP copied in over SSH would never execute — the deploy would report success while the site kept
+# serving old bytecode. Only WordPress.com's pipeline invalidates it, and that needs an interactive
+# session CI cannot hold. A local deployer watches this branch and performs the push, then verifies
+# what production is actually executing.
+#
+# WHAT EACH GATE IS FOR, because a check nobody can justify is a check nobody will maintain:
+#   hygiene    no keys, and no machine attribution — GitHub counts a co-author trailer as a
+#              CONTRIBUTOR, so one trailer lists a tool beside the people who built this
+#   php -l     the plugin and theme never reach a runtime here, so syntax is all CI can assert
+#   typecheck  the whole tree must compile — the one signal that is always meaningful
+#   lint       only what this push CHANGED. A full run reports 35 pre-existing errors, and a gate
+#              that can never go green means nothing ever deploys.
+#   build      code that compiles can still fail to bundle, and the deployer ships this exact output
+
+name: main
+
+on:
+  # SCOPED TO main, AND IT MUST STAY THAT WAY. WordPress.com's deployment binds to this workflow;
+  # widening the trigger to ['**'] made every deployment Error before it even started. Branch
+  # verification lives in branches.yml so this file can stay exactly what the integration expects.
+  #
+  # No `pull_request` trigger, deliberately: a fork's PR must never run with this repository's
+  # permissions or reach anything of ours.
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# NO cancel-in-progress ON THIS BRANCH. It is the deploy authority, so every commit must be
+# verified — and cancelling loses that: the superseding run's range starts at the cancelled commit
+# and therefore EXCLUDES it, so nothing ever checks it. That already happened once here. Runs queue
+# instead; a few wasted minutes is the cheaper mistake.
+concurrency:
+  group: main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The changed-file lint and the commit-message check both diff against this push's
+          # predecessor, which a depth-1 clone does not contain.
+          fetch-depth: 0
+
+      # ONE place computes the range, and everything downstream reads it. It was derived twice
+      # before — two chances to disagree about what "this push" means.
+      - name: Resolve what this push added
+        id: range
+        run: |
+          before='${{ github.event.before }}'
+          if [ -n "$before" ] && [ "$before" != "0000000000000000000000000000000000000000" ] \
+             && git cat-file -e "${before}^{commit}" 2>/dev/null; then
+            echo "range=${before}..${{ github.sha }}" >> "$GITHUB_OUTPUT"; echo "root=0" >> "$GITHUB_OUTPUT"
+          elif git rev-parse -q --verify 'HEAD~1' >/dev/null; then
+            echo "range=HEAD~1..HEAD" >> "$GITHUB_OUTPUT"; echo "root=0" >> "$GITHUB_OUTPUT"
+          else
+            # HEAD is a ROOT commit: HEAD~1 does not exist, and asking git for it is a FATAL error,
+            # not an empty range. That is the state a freshly created repository is in on its first
+            # push — the moment the gates matter most — and it took every one of them down with
+            # exit 128 before a single check had run.
+            echo "range=HEAD" >> "$GITHUB_OUTPUT"; echo "root=1" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Keys and attribution together: both answer "is this fit to be public", both cost a second,
+      # and both should fail before anything slower runs.
+      - name: Hygiene
+        run: |
+          # Widened after a Google API key sat in tracked source through every previous run: the old
+          # pattern list had no Google, Slack, JWT or SendGrid shape, so a real one would have
+          # deployed unchallenged. That particular literal turned out to be YouTube's PUBLIC
+          # InnerTube Android-client key — a constant in every copy of the YouTube app, not ours and
+          # not rotatable — so it is allowed BY EXACT VALUE rather than by weakening the pattern.
+          # Any other AIza… is a finding. Add to this allowance only with a comment saying why.
+          ALLOW='AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w'
+          hits=$(grep -rIlE '(sk-ant-[A-Za-z0-9_-]{20,})|(ghp_[A-Za-z0-9]{30,})|(gho_[A-Za-z0-9]{30,})|(github_pat_[A-Za-z0-9_]{30,})|(AKIA[0-9A-Z]{16})|(ASIA[0-9A-Z]{16})|(sk_live_[A-Za-z0-9]{20,})|(rk_live_[A-Za-z0-9]{20,})|(hf_[A-Za-z0-9]{30,})|(xox[baprs]-[A-Za-z0-9-]{10,})|(AIza[0-9A-Za-z_-]{35})|(ya29\.[0-9A-Za-z_-]{20,})|(SG\.[A-Za-z0-9_-]{20,})|(eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.)|(-----BEGIN [A-Z ]*PRIVATE KEY)' \
+               --exclude-dir=.git --exclude-dir=node_modules . || true)
+          bad=0
+          for f in $hits; do
+            # A file counts only if it holds a key-shaped value that is NOT the allowed constant.
+            if grep -oIE '(sk-ant-[A-Za-z0-9_-]{20,})|(ghp_[A-Za-z0-9]{30,})|(gho_[A-Za-z0-9]{30,})|(github_pat_[A-Za-z0-9_]{30,})|(AKIA[0-9A-Z]{16})|(ASIA[0-9A-Z]{16})|(sk_live_[A-Za-z0-9]{20,})|(rk_live_[A-Za-z0-9]{20,})|(hf_[A-Za-z0-9]{30,})|(xox[baprs]-[A-Za-z0-9-]{10,})|(AIza[0-9A-Za-z_-]{35})|(ya29\.[0-9A-Za-z_-]{20,})|(SG\.[A-Za-z0-9_-]{20,})|(eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.)|(-----BEGIN [A-Z ]*PRIVATE KEY)' "$f" \
+                 | grep -qv "$ALLOW"; then
+              echo "::error::$f holds a key-shaped value"; bad=1
+            fi
+          done
+          [ $bad -eq 0 ] || exit 1
+          # A TRAILER, not a phrase. GitHub parses `Co-authored-by:` only at the start of a line in
+          # the trailer block — so anchoring there is both what actually creates a contributor and
+          # what stops this rejecting honest work. Unanchored, it failed two commits whose messages
+          # merely EXPLAINED this rule, and taught the next author to reword prose to appease a
+          # grep. A check that punishes writing about itself is a check people route around.
+          # Ask GIT'S OWN trailer parser, not a grep. Git only honours Co-authored-by: as a trailer
+          # in the final paragraph, so a line-anchored grep also rejects an indented quotation or a
+          # mid-body mention — it rejected the very commits that documented this rule. Matching the
+          # mechanism rather than the phrasing is the entire point of the gate.
+          bad=$(git log --format='%(trailers:key=Co-authored-by,valueonly)' '${{ steps.range.outputs.range }}' | tr -d '[:space:]')
+          if [ -n "$bad" ]; then
+            echo "::error::a commit in this push carries machine attribution as a git trailer"
+            git log --format='%h %(trailers:key=Co-authored-by)' '${{ steps.range.outputs.range }}' | sed 's/^/  /'
+            exit 1
+          fi
+          echo "clean"
+
+      - name: Route handlers resolve
+        run: |
+          # Rest::ROUTES names handlers as STRINGS ('Health::pulse'), resolved at dispatch, so a
+          # missing class OR a missing method is invisible to php -l and to the bundler. Both raise
+          # the same Error, both are caught by Rest::dispatch, and both answer 500 on whatever route
+          # names them — once, for a public endpoint, while every other gate reported success.
+          #
+          # The pattern reads the ROW'S STRUCTURE — [ 'METHOD', 'path', 'Class::method' — instead of
+          # scanning the line. The previous version used [^]]* for the middle field, a negated class
+          # that cannot cross a ']', so every route carrying a regex param like (?P<id>[0-9]+) was
+          # skipped: 279 of 398 rows checked, and it reported success on the 30% it never read.
+          # Anchoring on the structure also keeps the doc comment atop Rest.php, which names
+          # 'Domain::method' as an example, from being mistaken for a route.
+          pat="^[[:space:]]*\[[[:space:]]*'(GET|POST|PUT|PATCH|DELETE)'[[:space:]]*,[[:space:]]*'[^']*'[[:space:]]*,[[:space:]]*'([A-Z][A-Za-z0-9_]+::[a-z_]+)'"
+          src=wp-content/plugins/aquest/src
+          echo "route rows read: $(grep -cE "$pat" $src/Rest.php)"
+          grep -oE "$pat" $src/Rest.php | grep -oE "'[A-Z][A-Za-z0-9_]+::[a-z_]+'$" | tr -d "'" | sort -u > /tmp/handlers.txt
+          miss=0
+          while IFS= read -r h; do
+            c="${h%%::*}"; m="${h##*::}"
+            if [ ! -f "$src/$c.php" ]; then
+              echo "::error::Rest::ROUTES names $h but $src/$c.php does not exist"; miss=1; continue
+            fi
+            grep -qE "function[[:space:]]+$m[[:space:]]*\(" "$src/$c.php" || {
+              echo "::error::Rest::ROUTES names $h but $c.php defines no $m()"; miss=1; }
+          done < /tmp/handlers.txt
+          [ $miss -eq 0 ] && echo "all $(wc -l < /tmp/handlers.txt) handlers resolve to a class and a method"
+          exit $miss
+
+      - name: PHP syntax
+        run: |
+          shopt -s globstar nullglob
+          fail=0
+          for f in wp-content/plugins/aquest/**/*.php wp-content/themes/artaquest-theme/**/*.php; do
+            php -l "$f" >/dev/null || { echo "::error file=$f::PHP syntax error"; fail=1; }
+          done
+          exit $fail
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: artaquest-web/package-lock.json
+
+      - name: Typecheck, lint, build
+        working-directory: artaquest-web
+        run: |
+          npm ci --no-audit --fund=false
+          ./node_modules/.bin/tsc --noEmit -p tsconfig.app.json
+
+          # `**` is NOT magic in a git pathspec — it acts as a single `*` and still requires a
+          # `/` after src/, so depth-1 files (src/App.tsx, src/main.tsx) were never linted at all.
+          # A root commit has no baseline to diff against, so there is no "what this push
+          # changed". Linting the whole tree instead would gate a fresh repository on every
+          # pre-existing warning in it, and a check that cannot go green blocks every deploy
+          # and gets deleted. tsc and the bundler below still cover the entire tree.
+          if [ "${{ steps.range.outputs.root }}" = "1" ]; then
+            files=""
+            echo "root commit — no diff baseline; tsc and the build still cover the whole tree"
+          else
+            files=$(cd .. && git diff --name-only --diff-filter=ACMR '${{ steps.range.outputs.range }}' \
+                      -- artaquest-web/src | grep -E '\\.tsx?$' | sed 's|^artaquest-web/||' || true)
+          fi
+          if [ -n "$files" ]; then
+            echo "linting:"; echo "$files" | sed 's/^/  /'
+            # shellcheck disable=SC2086
+            # --no-warn-ignored: a changed file under an ignore pattern (src/generated) is
+            # reported as a warning per file, which is pure noise on any sync that touches them.
+            ./node_modules/.bin/eslint --no-warn-ignored $files
+          else
+            echo "no TS/TSX changed — nothing to lint"
+          fi
+
+          npm run build
+
+      # A zero exit from the bundler is not proof the output is usable, and the deploy REPLACES the
+      # live bundle — a hollow build would take the site down. Refuse before the artifact is made.
+      - name: The build produced something shippable
+        run: |
+          app=wp-content/themes/artaquest-theme/app
+          files=$(find "$app" -type f | wc -l)
+          entry=$(ls "$app"/assets/index-*.js 2>/dev/null | wc -l)
+          echo "$files files, $entry entry chunk(s)"
+          [ -f "$app/index.html" ] && [ "$entry" -ge 1 ] && [ "$files" -ge 50 ] \
+            || { echo "::error::build output looks hollow"; exit 1; }
+
+      # ── WHAT WORDPRESS.COM DEPLOYS ────────────────────────────────────────────────────────────
+      # Advanced deployments take an artifact from THIS workflow, so the build that gates the branch
+      # is the same build that ships — there is no second pipeline to drift from it.
+      #
+      # Only wp-content/ travels. The rest of this repository — the SPA source, the research code,
+      # the ops scripts, the docs — is how the site is BUILT, not part of the running site, and
+      # copying it would put source into the public web root.
+      #
+      # The artifact root is wp-content's CONTENTS (plugins/, themes/), which is why the destination
+      # directory is /wp-content/ and not /. It also carries the built SPA at
+      # themes/artaquest-theme/app/, which is gitignored and therefore absent from a plain checkout —
+      # that absence is exactly why Simple mode cannot work here.
+      # ONLY ON MAIN. This artifact is what WordPress.com deploys; producing it on a branch would
+      # hand the deployment pipeline something that was never the released state.
+      # STAGED, so the artifact root is unarguable. Uploading `path: wp-content/` left it ambiguous
+      # whether the artifact root was wp-content/ or its CONTENTS — and that single question decides
+      # whether the destination is / or /wp-content/. Getting it wrong is silent: the first deploy
+      # wrote everything to /wp-content/wp-content/, a path WordPress never reads, and the panel
+      # still reported success while the live site did not change by one byte.
+      #
+      # Copying into a staging directory first makes the answer explicit: the artifact root contains
+      # exactly one entry, `wp-content/`, so the destination directory is `/`.
+      - name: Stage wp-content
+        run: |
+          rm -rf _deploy && mkdir -p _deploy
+          cp -R wp-content _deploy/wp-content
+          echo "artifact root will contain:"; ls -1 _deploy | sed 's/^/  /'
+          echo "files: $(find _deploy -type f | wc -l)"
+
+      - name: Package for deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: wpcom
+          path: _deploy/
+          include-hidden-files: true
+          if-no-files-found: error

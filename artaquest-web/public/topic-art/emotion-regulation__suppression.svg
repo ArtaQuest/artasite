@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Expressive suppression — a feeling held in beneath a calm surface">
+  <circle cx="40" cy="40" r="29" fill="none" stroke="#2352E8" stroke-width="1" opacity="0.22"/>
+  <rect x="19" y="33" width="42" height="5" rx="2.5" fill="#2352E8"/>
+  <path d="M22 53 Q31 44 40 53 T58 53" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="3.2" stroke-linecap="round"/>
+  <line x1="31" y1="47" x2="31" y2="42" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4" stroke-linecap="round"/>
+  <line x1="40" y1="46" x2="40" y2="41" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4" stroke-linecap="round"/>
+  <line x1="49" y1="47" x2="49" y2="42" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4" stroke-linecap="round"/>
+</svg>

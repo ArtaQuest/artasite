@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Green, community — a heart cradled by open hands for shared wellbeing">
+  <path d="M40 48 C 22 34 26 20 35 20 C 39 20 40 25 40 27 C 40 25 41 20 45 20 C 54 20 58 34 40 48 Z" fill="var(--ico-gold,#E8B923)"/>
+  <path d="M16 44 C 16 62 64 62 64 44" fill="none" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M16 44 L13 38" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M64 44 L67 38" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+</svg>

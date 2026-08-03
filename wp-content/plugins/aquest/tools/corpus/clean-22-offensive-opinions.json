@@ -1,0 +1,106 @@
+[
+  {
+    "category": "offensive-opinions",
+    "lang": "en",
+    "text": "Honestly anyone who still thinks astrology predicts your career is an idiot. It's a fun party trick, not a personality science.",
+    "flag": false,
+    "note": "Contempt for a belief, not a protected group",
+    "band": 8
+  },
+  {
+    "category": "offensive-opinions",
+    "lang": "en",
+    "text": "Hot take but I think women are just naturally worse at chess. Not saying they can't play, the top 100 is just always going to be mostly men because of how the brain is wired.",
+    "flag": false,
+    "note": "Sexist generalisation, but does not dehumanise",
+    "band": 30
+  },
+  {
+    "category": "offensive-opinions",
+    "lang": "en",
+    "text": "We need to cut legal immigration in half until wages recover. The country simply can't absorb this many new people every year without housing collapsing.",
+    "flag": false,
+    "note": "Anti-immigration policy view, no dehumanising language",
+    "band": 18
+  },
+  {
+    "category": "offensive-opinions",
+    "lang": "en",
+    "text": "Every American I've met on holiday has been loud, ignorant about geography, and weirdly proud of never owning a passport. Sorry but the stereotype writes itself.",
+    "flag": false,
+    "note": "National stereotype, mocking not dehumanising",
+    "band": 14
+  },
+  {
+    "category": "offensive-opinions",
+    "lang": "en",
+    "text": "Organised religion has done more harm than good across history. The Catholic Church especially has blood on its hands and people defending it are just brainwashed.",
+    "flag": false,
+    "note": "Criticism of a religion and institution, allowed",
+    "band": 12
+  },
+  {
+    "category": "offensive-opinions",
+    "lang": "en",
+    "text": "Boomers really did pull the ladder up behind them and now they lecture us about avocado toast. Worst generation in living memory, full stop.",
+    "flag": false,
+    "note": "Generational contempt, hyperbolic, not dehumanising",
+    "band": 10
+  },
+  {
+    "category": "offensive-opinions",
+    "lang": "en",
+    "text": "Men are basically large toddlers who can't find anything in the fridge if it's two inches behind the milk. I've stopped expecting more.",
+    "flag": false,
+    "note": "Sexist generalisation about men, mocking not hateful",
+    "band": 9
+  },
+  {
+    "category": "offensive-opinions",
+    "lang": "en",
+    "text": "Flat earthers and anti-vaxxers are genuinely the dumbest people alive. I have zero patience left for that level of wilful stupidity.",
+    "flag": false,
+    "note": "Contempt for viewpoints, not a protected identity",
+    "band": 11
+  },
+  {
+    "category": "offensive-opinions",
+    "lang": "en",
+    "text": "I think this politician is a corrupt, lying coward who'd sell his own mother for a vote. He's the single worst thing to happen to this country.",
+    "flag": false,
+    "note": "Attacks one public figure, not a group",
+    "band": 13
+  },
+  {
+    "category": "offensive-opinions",
+    "lang": "en",
+    "text": "Vegans who lecture strangers in restaurants are insufferable. You're not saving the planet, you're just ruining everyone's dinner with your smug little speech.",
+    "flag": false,
+    "note": "Rude contempt for a lifestyle group, not protected",
+    "band": 7
+  },
+  {
+    "category": "offensive-opinions",
+    "lang": "en",
+    "text": "Frankly I don't think most rich people earned a cent of it. Inheritance and luck, then they have the nerve to call the poor lazy. Parasitic mindset, the lot of them.",
+    "flag": false,
+    "note": "Class-based contempt, 'parasitic' aimed at wealth not identity",
+    "band": 22
+  },
+  {
+    "category": "offensive-opinions",
+    "lang": "en",
+    "text": "Gen Z can't take a single criticism without crying about their feelings. Snowflakes, all of them, and the workplace is suffering for it.",
+    "flag": false,
+    "note": "Generational stereotype and insult, not dehumanising",
+    "band": 9
+  },
+  {
+    "category": "offensive-opinions",
+    "lang": "en",
+    "text": "People from big cities are rude, fake and think the rest of us are stupid country bumpkins. I'll take small-town honesty over that any day.",
+    "flag": false,
+    "note": "Geographic stereotype and grievance, allowed",
+    "band": 6
+  }
+]

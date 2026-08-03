@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Promotion focus — an arrow reaching upward for hopes, growth and gains">
+  
+  
+  <g fill="#2352E8">
+    <polygon points="22,30 23.2,32.8 26,34 23.2,35.2 22,38 20.8,35.2 18,34 20.8,32.8"/>
+    <polygon points="58,46 59,48.3 61.3,49.3 59,50.3 58,52.6 57,50.3 54.7,49.3 57,48.3"/>
+  </g>
+  <circle cx="40" cy="15" r="4" fill="var(--ico-gold,#E8B923)"/>
+  <line x1="40" y1="60" x2="40" y2="25" stroke="var(--ico-gold,#E8B923)" stroke-width="3" stroke-linecap="round"/>
+  <polyline points="31,34 40,25 49,34" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,98 @@
+[
+  {
+    "category": "hate-disability-age-caste",
+    "lang": "en",
+    "text": "Honestly we should stop wasting hospital beds on these vegetables in wheelchairs. They contribute nothing and just drain the rest of us dry.",
+    "flag": true,
+    "note": "Dehumanises disabled people, calls them useless drains",
+    "band": 86
+  },
+  {
+    "category": "hate-disability-age-caste",
+    "lang": "en",
+    "text": "Lovely sentiment in this lecture, but let's be real: the elderly are just useless eaters now. Past 75 you're a parasite on the young, simple as that.",
+    "flag": true,
+    "note": "Politeness masks 'useless eaters', dehumanises elderly",
+    "band": 84
+  },
+  {
+    "category": "hate-disability-age-caste",
+    "lang": "en",
+    "text": "People with Down syndrome aren't really fully human, are they. Nature makes mistakes and we should be allowed to weed them out before they breed.",
+    "flag": true,
+    "note": "Eugenicist dehumanisation of disabled people",
+    "band": 90
+  },
+  {
+    "category": "hate-disability-age-caste",
+    "lang": "en",
+    "text": "Where I'm from the lower castes are basically subhuman cattle. You don't sit with them, you don't eat with them, you certainly don't let your kids near them.",
+    "flag": true,
+    "note": "Casts a caste group as subhuman cattle",
+    "band": 87
+  },
+  {
+    "category": "hate-disability-age-caste",
+    "lang": "en",
+    "text": "Autistic kids are a plague on every classroom. Round them up into separate facilities so the normal children can actually learn. They're a disease spreading through schools.",
+    "flag": true,
+    "note": "Calls disabled children plague/disease, demands segregation",
+    "band": 88
+  },
+  {
+    "category": "hate-disability-age-caste",
+    "lang": "en",
+    "text": "Boomers had their turn. Time to put the old generation down like the worn-out animals they are so the rest of us can breathe.",
+    "flag": true,
+    "note": "Calls for violence, dehumanises elderly as animals",
+    "band": 89
+  },
+  {
+    "category": "hate-disability-age-caste",
+    "lang": "en",
+    "text": "Bless their hearts, the deaf and the blind. But a society that keeps feeding the defective instead of letting nature take its course is a society writing its own suicide note.",
+    "flag": true,
+    "note": "Sugared eugenics, calls disabled 'defective' to be culled",
+    "band": 82
+  },
+  {
+    "category": "hate-disability-age-caste",
+    "lang": "en",
+    "text": "Untouchables are filth, that's what they were born as and that's what they'll always be. Letting their kind into our temples pollutes everything sacred.",
+    "flag": true,
+    "note": "Dehumanises caste group as filth/pollution",
+    "band": 85
+  },
+  {
+    "category": "hate-disability-age-caste",
+    "lang": "en",
+    "text": "I found this section on the history of eugenics genuinely disturbing. It's chilling how easily 'experts' convinced a whole society that disabled people were a burden worth eliminating. We can never let that thinking return.",
+    "flag": false,
+    "note": "Academic condemnation of eugenics, not hate",
+    "band": 9
+  },
+  {
+    "category": "hate-disability-age-caste",
+    "lang": "en",
+    "text": "As a wheelchair user I'm reclaiming the word crip and I'm proud of it. Crip culture taught me more about resilience than any able-bodied person ever did.",
+    "flag": false,
+    "note": "Self-reclamation of slur by own group",
+    "band": 6
+  },
+  {
+    "category": "hate-disability-age-caste",
+    "lang": "en",
+    "text": "I'm so scared of getting old. Watching my mum lose her memory and her independence terrifies me, and I lie awake dreading the day that's me. This video didn't help the anxiety honestly.",
+    "flag": false,
+    "note": "Person's own fear of ageing, no hate",
+    "band": 12
+  },
+  {
+    "category": "hate-disability-age-caste",
+    "lang": "en",
+    "text": "This caste system reform policy is a disaster and the politicians pushing it are corrupt cowards. Reservations have been gamed for decades and the whole framework needs scrapping.",
+    "flag": false,
+    "note": "Harsh policy criticism, targets no group as subhuman",
+    "band": 18
+  }
+]

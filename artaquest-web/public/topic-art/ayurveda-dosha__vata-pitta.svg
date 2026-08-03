@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Vata-Pitta — a dual constitution blending Vata's airy mobility with Pitta's fiery intensity">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <g fill="none" stroke-linecap="round" stroke-width="2.9">
+    <path d="M11 33 H26 a4.5 4.5 0 1 0 -4.5 -4.5" stroke="#E8B923"/>
+    <path d="M11 45 H30 a5 5 0 1 1 -5 5" stroke="#2352E8"/>
+  </g>
+  <path d="M40 16 C49 28 53 38 49 48 C47 53 43 56 40 56 C37 56 33 53 31 48 C27 38 31 28 40 16 Z" fill="#E8B923" transform="translate(52 40) scale(0.62) translate(-40 -36)"/>
+</svg>

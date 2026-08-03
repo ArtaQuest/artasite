@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img">
+  <line x1="20" y1="33" x2="57" y2="33" stroke="var(--ico-gold,#E8B923)" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M62 33 l-7 -4 v8 z" fill="var(--ico-gold,#E8B923)"/>
+  <line x1="60" y1="47" x2="23" y2="47" stroke="#2352E8" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M18 47 l7 -4 v8 z" fill="#2352E8"/>
+</svg>

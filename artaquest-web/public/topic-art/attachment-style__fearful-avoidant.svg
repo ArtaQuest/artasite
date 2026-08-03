@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Fearful-avoidant (disorganized) — wanting and fearing closeness at once">
+  
+  
+  <circle cx="22" cy="40" r="8.5" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2.6"/>
+  <circle cx="58" cy="40" r="8.5" fill="none" stroke="#2352E8" stroke-width="2.6"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M33 33 H47" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4"/>
+    <path d="M43 29.5 L47 33 L43 36.5" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4"/>
+    <path d="M47 47 H33" stroke="#2352E8" stroke-width="2.4"/>
+    <path d="M37 43.5 L33 47 L37 50.5" stroke="#2352E8" stroke-width="2.4"/>
+  </g>
+</svg>

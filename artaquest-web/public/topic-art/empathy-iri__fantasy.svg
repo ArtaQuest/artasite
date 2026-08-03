@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img">
+  <path d="M40 33 V62" stroke="#2352E8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M40 33 Q28 27 16 31 V59 Q28 55 40 61" fill="none" stroke="#2352E8" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M40 33 Q52 27 64 31 V59 Q52 55 40 61" fill="none" stroke="#2352E8" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M40 13 L42.4 19.6 L49 22 L42.4 24.4 L40 31 L37.6 24.4 L31 22 L37.6 19.6 Z" fill="var(--ico-gold,#E8B923)"/>
+</svg>

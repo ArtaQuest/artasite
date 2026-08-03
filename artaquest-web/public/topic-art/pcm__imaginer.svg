@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="The Imaginer — a crescent moon and stars, calm reflection and solitude">
+  <path d="M44 16.76 A24 24 0 1 0 44 63.24 A24 24 0 0 1 44 16.76 Z" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="57" cy="27" r="2.6" fill="#2352E8"/>
+  <circle cx="61" cy="41" r="2.2" fill="#2352E8"/>
+  <circle cx="55" cy="52" r="2" fill="#2352E8"/>
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80" role="img" aria-label="Fairness — a balanced scale">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <g stroke="#2352E8" stroke-width="2.6" stroke-linecap="round">
+    <line x1="22" y1="26" x2="58" y2="26"/>
+    <line x1="40" y1="18" x2="40" y2="26"/>
+    <line x1="22" y1="26" x2="22" y2="34"/>
+    <line x1="58" y1="26" x2="58" y2="34"/>
+  </g>
+  <circle cx="40" cy="17" r="3" fill="#E8B923"/>
+  <path d="M14 34 Q22 44 30 34 Z" fill="#E8B923"/>
+  <path d="M50 34 Q58 44 66 34 Z" fill="#E8B923"/>
+</svg>

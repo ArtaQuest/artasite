@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Perfectionism">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <circle cx="40" cy="40" r="26" fill="none" stroke="#2352E8" stroke-width="3"/>
+  <circle cx="40" cy="40" r="16" fill="none" stroke="#E8B923" stroke-width="3"/>
+  <circle cx="40" cy="40" r="6" fill="#E8B923"/>
+  <line x1="40" y1="6" x2="40" y2="18" stroke="#E8B923" stroke-width="2" stroke-linecap="round"/>
+  <line x1="40" y1="62" x2="40" y2="74" stroke="#E8B923" stroke-width="2" stroke-linecap="round"/>
+  <line x1="6" y1="40" x2="18" y2="40" stroke="#E8B923" stroke-width="2" stroke-linecap="round"/>
+  <line x1="62" y1="40" x2="74" y2="40" stroke="#E8B923" stroke-width="2" stroke-linecap="round"/>
+</svg>

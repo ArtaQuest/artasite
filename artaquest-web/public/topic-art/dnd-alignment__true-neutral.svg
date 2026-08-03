@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="True Neutral — balance, committed to neither order nor chaos, good nor evil">
+  <path d="M40 18 A 22 22 0 0 1 40 62 Z" fill="var(--ico-gold,#E8B923)"/>
+  <path d="M40 18 A 22 22 0 0 0 40 62 Z" fill="#2352E8"/>
+  <circle cx="40" cy="40" r="22" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.8"/>
+</svg>

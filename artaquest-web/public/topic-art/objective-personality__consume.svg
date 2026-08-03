@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Consume — energised by taking things in, arrows gathering to a core">
+  <g fill="none" stroke="#2352E8" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="34,16 40,29 46,16"/>
+    <polyline points="64,34 51,40 64,46"/>
+    <polyline points="46,64 40,51 34,64"/>
+    <polyline points="16,46 29,40 16,34"/>
+  </g>
+  <circle cx="40" cy="40" r="7" fill="var(--ico-gold,#E8B923)"/>
+</svg>

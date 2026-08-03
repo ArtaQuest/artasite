@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img">
+  
+  <!-- three cultural logics of self-worth, each bearing on one self -->
+  <g stroke="#2352E8" stroke-width="2.6" stroke-linecap="round">
+    <line x1="40" y1="40" x2="40" y2="21"/>
+    <line x1="40" y1="40" x2="23.6" y2="49.5"/>
+    <line x1="40" y1="40" x2="56.4" y2="49.5"/>
+  </g>
+  <circle cx="40" cy="21" r="7" fill="#2352E8"/>
+  <circle cx="23.6" cy="49.5" r="7" fill="#2352E8"/>
+  <circle cx="56.4" cy="49.5" r="7" fill="#2352E8"/>
+  <!-- honour, face and dignity all ground the same sense of worth -->
+  <circle cx="40" cy="40" r="8" fill="var(--ico-gold,#E8B923)"/>
+</svg>

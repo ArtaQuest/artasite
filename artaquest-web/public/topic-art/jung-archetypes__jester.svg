@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="The Jester — a cap and bells, humour and play">
+  <polygon points="20,50 15,26 30,40 40,18 50,40 65,26 60,50" fill="#2352E8"/>
+  <rect x="20" y="50" width="40" height="6" rx="2" fill="var(--ico-gold,#E8B923)"/>
+  <g fill="var(--ico-gold,#E8B923)">
+    <circle cx="15" cy="24" r="3.4"/>
+    <circle cx="40" cy="16" r="3.4"/>
+    <circle cx="65" cy="24" r="3.4"/>
+  </g>
+</svg>

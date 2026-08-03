@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Opposition to equality between groups">
+  <line x1="22" y1="34" x2="58" y2="50" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M40 43 L33 60 L47 60 Z" fill="#2352E8"/>
+  <circle cx="22" cy="34" r="6" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="58" cy="50" r="6" fill="#2352E8"/>
+</svg>

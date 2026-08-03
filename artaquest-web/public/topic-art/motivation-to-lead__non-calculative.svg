@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Non-calculative — a gold arrow rising straight past the scales, leading without weighing the cost">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <g stroke="#2352E8" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.6">
+    <line x1="24" y1="32" x2="56" y2="32"/>
+    <line x1="24" y1="32" x2="24" y2="39"/>
+    <line x1="56" y1="32" x2="56" y2="39"/>
+    <path d="M18 39 A6 6 0 0 0 30 39"/>
+    <path d="M50 39 A6 6 0 0 0 62 39"/>
+  </g>
+  <line x1="40" y1="62" x2="40" y2="22" stroke="var(--ico-gold,#E8B923)" stroke-width="3" stroke-linecap="round"/>
+  <polyline points="32,30 40,22 48,30" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

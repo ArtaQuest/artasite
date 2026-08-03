@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="The Innocent — an open sun, optimism and simple goodness">
+  <circle cx="40" cy="40" r="12" fill="var(--ico-gold,#E8B923)"/>
+  <g stroke="#2352E8" stroke-width="3" stroke-linecap="round">
+    <line x1="40" y1="14" x2="40" y2="22"/>
+    <line x1="40" y1="58" x2="40" y2="66"/>
+    <line x1="14" y1="40" x2="22" y2="40"/>
+    <line x1="58" y1="40" x2="66" y2="40"/>
+    <line x1="21.8" y1="21.8" x2="27.4" y2="27.4"/>
+    <line x1="52.6" y1="52.6" x2="58.2" y2="58.2"/>
+    <line x1="21.8" y1="58.2" x2="27.4" y2="52.6"/>
+    <line x1="52.6" y1="27.4" x2="58.2" y2="21.8"/>
+  </g>
+</svg>

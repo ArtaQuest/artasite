@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Parasocial bonds — a gold heart reaching from a lone viewer to a media figure on a broadcasting screen, intimacy at a distance">
+  
+  
+  <rect x="9" y="20" width="29" height="31" rx="5" fill="none" stroke="#2352E8" stroke-width="2.4"/>
+  <path d="M41 25 q5 0 5 5" fill="none" stroke="#2352E8" stroke-width="1.9" stroke-linecap="round" stroke-opacity="0.8"/>
+  <path d="M41 20 q10 0 10 10" fill="none" stroke="#2352E8" stroke-width="1.9" stroke-linecap="round" stroke-opacity="0.55"/>
+  <circle cx="23" cy="31" r="5.4" fill="var(--ico-gold,#E8B923)"/>
+  <path d="M14 48 q9 -10.5 18 0" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="3.1" stroke-linecap="round"/>
+  <circle cx="64" cy="58" r="4" fill="var(--ico-gold,#E8B923)"/>
+  <path d="M61.5 55 Q54 51 51 45" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="2.4 2.4"/>
+  <path d="M50 44.5 C50 44.5 42 38.5 42 33.5 C42 31 44 29.4 46.2 29.4 C47.7 29.4 49.1 30.4 50 31.8 C50.9 30.4 52.3 29.4 53.8 29.4 C56 29.4 58 31 58 33.5 C58 38.5 50 44.5 50 44.5 Z" fill="var(--ico-gold,#E8B923)"/>
+</svg>

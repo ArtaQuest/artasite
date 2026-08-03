@@ -1,0 +1,273 @@
+%% ===========================================================================
+%%  Journal of Seasonality — submission (built on artaquest.cls).
+%%  Reviewed by RUNNING it: the reviewer compiles this, fetches the open data,
+%%  runs reproduce.py, and checks the headline numbers below reproduce.
+%% ===========================================================================
+\documentclass[11pt]{artaquest}
+
+% Headline numbers — every one is printed by code/reproduce.py on the open data.
+% They are kept as macros so the manuscript and the reproduction stay in lock-step.
+\newcommand{\headlineN}{24}            % fields fitted
+\newcommand{\headlineW}{1173}          % weeks
+\newcommand{\medianR}{XX.X}            % median in-sample R^2 (%)
+\newcommand{\meanR}{XX.X}              % mean in-sample R^2 (%)
+\newcommand{\scaleEps}{X.X}            % max mean-R^2 spread across the global-scale sweep (pp)
+\newcommand{\scaleFlat}{0.0X}          % mean-R^2 spread for s>=4 (flat-top regime, pp)
+\newcommand{\pcaMean}{XX}              % data-optimal PCA ceiling, mean (%)
+\newcommand{\baselineMean}{XX}         % no-astrology trend+annual baseline, mean (%)
+\newcommand{\zodiacEps}{0.000X}        % R^2 spread across ayanamsa offsets
+
+\title{Globally-Anchored, Robust Seasonality in Worldwide Search Interest, and the
+       Scale-Invariance of Period-Sinc Kernels}
+\runningtitle{Globally-anchored robust seasonality}
+
+\author{Arash Ashrafnejad\affmark{1}}
+\affiliation{\affmark{1}ArtaQuest Foundation}
+\keywords{google trends; search interest; seasonality; robust regression; reproducibility; time series}
+
+\dataavailability{The open dataset of \headlineN{} globally-anchored weekly search-interest series
+  (\headlineW{} weeks, 2004--2026), together with the precomputed sidereal ephemeris, is openly
+  available at \url{https://artaquest.org/wp-content/uploads/research/series2.json} and
+  \url{https://artaquest.org/wp-content/uploads/research/ephemeris2.json}.}
+\codeavailability{A self-contained reproduction bundle is openly available at
+  \url{https://artaquest.org/papers/seasonality2/code.zip}; running \texttt{python3 reproduce.py}
+  regenerates every headline number below (it needs only \texttt{numpy}, \texttt{scipy} and
+  \texttt{scikit-learn}, and ships the data so no network is required).}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We revisit a transparent curve-fitting question --- does the \emph{timing} of worldwide curiosity, as
+indexed by Google Trends, line up with the positions of celestial bodies? --- and harden it in three
+ways, while keeping the same honest stance that correlation is not causation. First, we put every series
+on a \emph{global} popularity scale: each query is measured in the same request against two fixed
+reference words (``arta'' and ``quest''), so interest is comparable \emph{across} topics rather than each
+being normalised to its own maximum. Second, we drop the cube-root variance-stabilising transform of
+prior work and instead fit the \emph{raw} interest under a robust \emph{Huber} loss, moving the defence
+against spikes from the data into the estimator. Third, we add a single global multiplier to the
+period-scaled ``sinc'' kernel and ask whether tuning it helps. For $N=\headlineN{}$ single-word fields ---
+a balanced design covering all twelve zodiac houses with both a noun and an adjective field each --- we
+fit \headlineW{} weeks of stitched weekly interest (2004--2026) with the same fourteen-number model:
+twelve sidereal bodies (the Moon taken synodically), an intercept, and one shared phase angle swept at
+$1^\circ$. The median in-sample $R^2$ is $\medianR\%$ (mean $\meanR\%$). Our central methodological
+finding is a \textbf{scale-invariance}: sweeping the global kernel multiplier over almost two orders of
+magnitude moves the mean in-sample $R^2$ by only $\scaleEps$ percentage points, with no usable optimum, and
+once every body is broad enough to enter the kernel's flat-top ($s\ge4$) the fit is flat to within
+$\scaleFlat$ points. We give the reason analytically --- the slow outer bodies that carry the fit sit in
+the kernel's quadratic flat-top, where rescaling the width merely rescales each feature's amplitude, which
+the non-negative weights absorb \emph{exactly} --- so the single global scale is a redundant parameter, not
+a useful one (the small residual variation is the fast inner bodies, which carry almost none of the fit). As before, three honest bounds (a data-optimal PCA ceiling, a no-astrology trend-plus-annual
+baseline, and invariance to the zodiac convention) show the fit is a compact re-description of trend and
+annual seasonality, not evidence of celestial influence.
+\end{abstract}
+
+\section{Introduction}
+When millions of people type a word into a search box, the aggregate count is a noisy but honest record
+of where collective attention drifts over time~\citep{choi2012predicting}. A companion study~\citep{ashrafnejad2026topics} fit two
+decades of such series to a strict, physics-scaled model of sidereal cycles, and found --- after careful
+bounding --- that the apparent celestial alignment is really trend and annual seasonality expressed in
+orbital language. This paper does not relitigate that conclusion; it \emph{strengthens the method} and
+reports one clean new result about the model itself.
+
+Our contribution is threefold. (i)~\textbf{Global anchoring.} Google Trends normalises every query to its
+own maximum, which destroys cross-topic comparability: a niche word and a household word both peak at
+$100$. We instead measure every query in the \emph{same} three-term request against two fixed anchors,
+recovering a single global interest scale (Section~\ref{sec:data}). (ii)~\textbf{Robust raw fitting.} We
+abandon the cube-root transform and fit raw interest under a Huber loss~\citep{huber1964robust}, which
+down-weights spikes without distorting the bulk of the data (Section~\ref{sec:model}).
+(iii)~\textbf{A scale-invariance result.} We introduce a single global multiplier on the period-scaled
+kernel and show --- analytically and empirically --- that the in-sample fit does not depend on it
+(Section~\ref{sec:scale}). We keep the two self-disciplines that make the exercise hard to over-fit:
+exactly fourteen numbers, and every feature constant a real orbital period.
+
+\section{Data}
+\label{sec:data}
+
+\paragraph{A global popularity anchor.}
+Trends returns each query rescaled so its own maximum is $100$, which makes absolute popularity
+incomparable between queries. To recover a global scale we never request a word alone: every fetch is a
+three-term comparison, \texttt{[query, ``arta'', ``quest'']}. The two anchors are deliberately chosen ---
+``quest'' is a common, stable reference word, and ``arta'' a rarer one that provides a lower rung when a
+query dwarfs ``quest''. We calibrate the fixed ratio between the two anchors once (median over a
+multi-year overlap), cache it, and thereafter express every series as a percentage of the ``quest''
+baseline. The result is one number per week that is comparable \emph{across} topics, not merely within
+one. We report this global popularity alongside each field.
+
+\paragraph{Stitching a 22-year weekly series.}
+Trends returns \emph{weekly} resolution only for windows shorter than about five years, each renormalised
+to its own maximum. To build one continuous weekly series over 2004--2026 we fetch many overlapping
+$\sim$4-year weekly windows and stitch them onto the all-time monthly export as a backbone: rescale each
+chunk to the backbone by least-squares through the origin, average the overlaps, then monthly-anchor each
+month so its weekly mean matches the backbone while preserving within-month shape. We keep only series
+whose pre-anchor stitch correlation is at least $0.95$. We then drop the most recent \num{52} weeks. This crop
+is not arbitrary: it applies the fitting-power criterion of \citet{ashrafnejad2026recency}, who show that
+Google Trends over-weights very recent activity and that in-sample fitting power climbs as the noisy
+recent tail is removed, kneeing near one year. We confirmed the same knee on a held-out tuning sample
+before fixing the crop at \num{52} weeks.
+
+\paragraph{A balanced twelve-house design.}
+Fields are single words drawn from the platform's topic catalogue, each tagged as a noun or an adjective.
+We collect until the design is balanced: every one of the twelve zodiac houses (the model assigns each
+field a best-fit sign) is represented by at least one noun field \emph{and} one adjective field --- the
+$N=\headlineN{}$ fields analysed here. This guards against a sign distribution dominated by one
+part-of-speech or one semantic cluster.
+
+\section{Model}
+\label{sec:model}
+
+For a trial phase angle $\varphi$, swept in $1^\circ$ steps around the full $360^\circ$, each body $b$
+contributes a single feature
+\begin{equation}
+  \mathrm{feature}_b(t) \;=\;
+  \operatorname{sinc}\!\left(
+    \frac{\,\Delta_\varphi\!\big(\lambda_b(t) - \varphi\big)\,}{s\,P_b}
+  \right),
+  \qquad
+  \operatorname{sinc}(x) = \frac{\sin(\pi x)}{\pi x},
+  \label{eq:feature}
+\end{equation}
+where $\lambda_b(t)$ is the body's sidereal longitude at time $t$ (Lahiri ayanamsa), $\Delta_\varphi(\cdot)$
+is the wrapped angular difference in $(-180^\circ,180^\circ]$ expressed in radians, $P_b$ is the body's
+orbital period in years, and $s$ is a \emph{single global scale} shared by all bodies (Section~\ref{sec:scale}).
+Setting $s=1$ recovers the pure period-scaled kernel. We fit the raw (untransformed) weekly series as
+\begin{equation}
+  \mathrm{search}(t) \;\approx\; \beta_0 \;+\; \sum_{b=1}^{12} w_b \cdot \mathrm{feature}_b(t),
+  \qquad w_b \ge 0,
+  \label{eq:fit}
+\end{equation}
+with non-negative weights, by minimising a \textbf{Huber loss}~\citep{huber1964robust} rather than the
+plain squared error. The Huber loss is quadratic for small residuals and linear beyond a knee set robustly
+from the data (the scaled median absolute deviation), so occasional interest spikes are down-weighted
+\emph{without} a non-linear transform of the data. This replaces the cube-root-plus-least-squares recipe
+of prior work: robustness now lives in the estimator, and all $R^2$ values are reported on the raw
+interest scale. The fourteen parameters are the twelve weights $w_b$, the intercept $\beta_0$, and the
+shared phase $\varphi$; the angle of minimum Huber cost is the field's assigned \textbf{sign}. The Moon is
+taken synodically (elongation from the Sun, period \SI{29.53}{\day}); the remaining bodies are the Sun,
+Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto, Chiron and the lunar node.
+
+\section{The global scale is a redundant parameter}
+\label{sec:scale}
+
+The natural question once a global scale $s$ is in \eqref{eq:feature} is how to tune it. The answer,
+perhaps surprisingly, is that one cannot: the in-sample fit is \emph{invariant} to $s$.
+
+\paragraph{Empirically.}
+Sweeping $s$ over $\{0.5, 1, 2, 4, 8, 16, 32\}$ and refitting every field under the model's non-negativity,
+the mean in-sample $R^2$ moves by only $\scaleEps$ percentage points across the whole range, with no usable
+optimum --- $s=1$ sits within noise of the best. The residual variation is confined to \emph{small} $s$,
+where the fast inner bodies still carry oscillatory structure; for $s\ge4$, where every body has entered
+the flat-top, the curve is flat to within $\scaleFlat$ percentage points. Tuning $s$ by in-sample $R^2$ ---
+the right objective in this heavily underparametrised regime (fourteen numbers over $\sim$1{,}000 weekly
+points, where overfitting is not a concern) --- therefore returns essentially a flat line, and we fix
+$s=1$. (An \emph{unconstrained} fit would instead reward small $s$, by freely overfitting the fast bodies'
+aliased high-frequency features; the non-negativity constraint, which suppresses those near-useless bodies,
+is what makes the fit genuinely scale-free.)
+
+\paragraph{Analytically.}
+The reason is structural. The fit is carried by the slow outer bodies (Section~\ref{sec:results}), whose
+angular travel over 22 years is small compared with the period-scaled kernel width $s P_b$. For these
+bodies the sinc argument $x = \Delta_\varphi/(sP_b)$ is small, and
+\begin{equation}
+  \operatorname{sinc}(x) \;=\; 1 - \frac{(\pi x)^2}{6} + O(x^4)
+  \;=\; 1 - \frac{\pi^2}{6}\,\frac{\Delta_\varphi^2}{s^2 P_b^2} + O(s^{-4}).
+  \label{eq:flat}
+\end{equation}
+Changing $s$ in \eqref{eq:flat} rescales the feature's \emph{deviation} from $1$ by the constant factor
+$s^{-2}$ but leaves its \emph{shape} --- proportional to $\Delta_\varphi^2(t)$ --- unchanged. A linear
+model with a free intercept and a free (here, non-negative) weight absorbs that constant exactly: the
+optimum simply rescales $w_b \mapsto s^2 w_b$, leaving the fitted values, the residuals and hence $R^2$
+unchanged. In other words, in the kernel's quadratic flat-top --- where the slow bodies that dominate the
+fit all live --- a global width scale is degenerate with the weights. Only fast bodies, whose features
+have genuine oscillatory structure within the window, can break the degeneracy, and they contribute too
+little to move the aggregate fit. This is a clean negative result: a single global kernel scale is a
+redundant knob, and the parameter-free period scaling ($s=1$) is the right default.
+
+\section{Results}
+\label{sec:results}
+
+On the raw, non-negative, Huber-robust model the in-sample fit is strong: the \textbf{median $R^2$ is
+$\medianR\%$} and the \textbf{mean $\meanR\%$} across the $N=\headlineN{}$ fields. A representative fit and
+the distribution of best-fit signs are shown in \cref{fig:fit,fig:signs}.
+
+\IfFileExists{seasonality2_fig1.png}{%
+  \begin{figure}[ht]\centering
+    \includegraphics[width=0.80\textwidth]{seasonality2_fig1.png}
+    \caption{A representative field: the stitched, globally-anchored weekly interest (observed) and the
+      fourteen-parameter Huber fit. The explained variation is mostly slow multi-year trend plus the
+      annual rhythm.}
+    \label{fig:fit}
+  \end{figure}}{}
+
+\paragraph{Where the fit comes from.}
+A leave-one-flat variance decomposition (flatten each body's feature to its mean, refit, record the
+non-negative $R^2$ drop, normalise to sum to the full $R^2$) gives the same picture as prior work: the fit
+is carried by the \emph{slow outer bodies} (Saturn, Uranus, Neptune, Pluto and the node), which together
+form a smooth multi-year \emph{trend} basis, with the Sun supplying the once-a-year \emph{seasonality}.
+The fast inner bodies contribute little --- which is exactly why the global scale of Section~\ref{sec:scale}
+is degenerate.
+
+\IfFileExists{seasonality2_fig2.png}{%
+  \begin{figure}[ht]\centering
+    \includegraphics[width=0.70\textwidth]{seasonality2_fig2.png}
+    \caption{Distribution of best-fit signs across the $N=\headlineN{}$ fields (the swept phase angle of
+      minimum Huber cost). The balanced design ensures every house carries both a noun and an adjective
+      field.}
+    \label{fig:signs}
+  \end{figure}}{}
+
+\section{What the fit is, and is not (honest bounds)}
+\label{sec:bounds}
+We bound the fit from three directions, exactly as a sceptic should.
+
+\paragraph{(a) A data-optimal ceiling.}
+Principal-component analysis gives the best possible fit of a given size. The best
+\emph{thirteen}-coefficient model (twelve principal components plus a per-field intercept) on the raw
+weekly data explains about $\pcaMean\%$ of the variance (released code). Our fourteen-number model sits
+below this ceiling: it leaves real structure unexplained and is, if anything, weaker than a size-matched
+optimal basis --- consistent with a coarse trend-and-seasonal re-description rather than any
+astrology-specific power.
+
+\paragraph{(b) A plain baseline does at least as well.}
+A no-astrology baseline --- a smooth polynomial trend plus an annual harmonic, with comparable degrees of
+freedom and \emph{zero} celestial input --- explains about $\baselineMean\%$ (mean) of the variance, at
+least as much as the full model. The explanatory work is trend and seasonality, not celestial specificity.
+
+\paragraph{(c) The zodiac system does not matter.}
+Across a sweep of ayanamsa offsets (the choice of sidereal convention) the mean $R^2$ varies by only
+$\zodiacEps$. Switching convention shifts every longitude by a near-constant offset, which the single
+shared phase $\varphi$ absorbs; the synodic Moon is offset-invariant to begin with.
+
+\paragraph{Conclusion.}
+Bounds (a)--(c) repeat the companion study's honest reading under the new, more robust estimator: the
+sidereal alignment is a compact re-description of trend and annual seasonality in orbital language, not
+evidence of celestial influence on human curiosity.
+
+\section{Limitations}
+\begin{itemize}
+  \item \textbf{Descriptive, not predictive.} Every $R^2$ is in-sample; we make no forecasting claim.
+  \item \textbf{Alignment is not causation.} Section~\ref{sec:bounds} shows the fit is plain trend and
+        seasonality with no astrology.
+  \item \textbf{A modest sample, balanced by design.} $N=\headlineN{}$ fields are enough to balance the
+        twelve-house $\times$ \{noun, adjective\} design but remain a small, single-language (English)
+        sample; the headline $R^2$ should be read as descriptive of this set, not a population estimate.
+  \item \textbf{Reproducibility as the safeguard.} Because the claims are easy to over-read, we publish
+        the globally-anchored data and the code so any reader can recompute every number.
+\end{itemize}
+
+\section*{Reproducibility}
+The accompanying script (\texttt{reproduce.py}) regenerates, from the open data, the headline median and
+mean $R^2$, the sign distribution, the global-scale invariance sweep of Section~\ref{sec:scale}, the
+per-body decomposition, and the three bounds of Section~\ref{sec:bounds}.
+
+\declarations
+\authorcontributions{A.A.\ designed the analysis, wrote the code and the manuscript, and verified the
+  reproduction.}
+\competinginterests{The author declares no competing interests.}
+\funding{This work received no external funding.}
+\acknowledgements{This work uses Google Trends data, the Swiss Ephemeris, and the open-source scientific
+  Python stack~\citep{harris2020numpy,virtanen2020scipy,pedregosa2011scikit}. The author thanks the
+  ArtaScience reviewer for running the code and checking that the numbers reproduce.}
+
+\bibliography{references}
+\end{document}

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Self-monitoring spectrum — a gauge from staying true to reading the room">
+  
+  
+  <path d="M14 52 A26 26 0 0 1 40 26" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="4.2" stroke-linecap="round"/>
+  <path d="M40 26 A26 26 0 0 1 66 52" fill="none" stroke="#2352E8" stroke-width="4.2" stroke-linecap="round"/>
+  <circle cx="14" cy="52" r="3.2" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="66" cy="52" r="3.2" fill="#2352E8"/>
+  <line x1="40" y1="51" x2="40" y2="30" stroke="var(--ico-gold,#E8B923)" stroke-width="2.6" stroke-linecap="round"/>
+  <circle cx="40" cy="52" r="4.2" fill="var(--ico-ink,#06121E)" stroke="var(--ico-gold,#E8B923)" stroke-width="2"/>
+</svg>

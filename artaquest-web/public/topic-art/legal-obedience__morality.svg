@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Personal conscience">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <circle cx="40" cy="40" r="38" fill="none" stroke="#E8B923" stroke-width="1" opacity="0.35"/>
+  <!-- a moral compass: conscience as inner north -->
+  <circle cx="40" cy="40" r="21" fill="none" stroke="#2352E8" stroke-width="2.6"/>
+  <!-- the needle pointing to one's own north -->
+  <polygon points="40,23 45,40 40,36 35,40" fill="#E8B923"/>
+  <polygon points="40,57 35,40 40,44 45,40" fill="#2352E8"/>
+  <circle cx="40" cy="40" r="3" fill="#E8B923"/>
+</svg>

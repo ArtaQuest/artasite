@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Authoritative — engaged and judging">
+  
+  <circle cx="40" cy="40" r="39" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.4"/>
+  <!-- rays: closely involved, reaching into the world -->
+  <g stroke="var(--ico-gold,#E8B923)" stroke-width="2.6" stroke-linecap="round">
+    <line x1="40" y1="9" x2="40" y2="19"/>
+    <line x1="40" y1="61" x2="40" y2="71"/>
+    <line x1="9" y1="40" x2="19" y2="40"/>
+    <line x1="61" y1="40" x2="71" y2="40"/>
+    <line x1="17.5" y1="17.5" x2="24.5" y2="24.5"/>
+    <line x1="55.5" y1="55.5" x2="62.5" y2="62.5"/>
+    <line x1="62.5" y1="17.5" x2="55.5" y2="24.5"/>
+    <line x1="24.5" y1="55.5" x2="17.5" y2="62.5"/>
+  </g>
+  <!-- the watching, judging eye of an ever-present God -->
+  <path d="M22 40 Q40 25 58 40 Q40 55 22 40 Z" fill="var(--ico-ink,#0C1E32)" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4"/>
+  <circle cx="40" cy="40" r="7.5" fill="#2352E8"/>
+  <circle cx="40" cy="40" r="3" fill="var(--ico-gold,#E8B923)"/>
+</svg>

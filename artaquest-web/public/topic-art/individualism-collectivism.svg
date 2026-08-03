@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Individualism–collectivism — a lone self beside a bonded group">
+  
+  
+  <!-- the lone individual: one bounded gold self -->
+  <circle cx="22" cy="40" r="13" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.6" stroke-opacity="0.5"/>
+  <circle cx="22" cy="40" r="6.5" fill="var(--ico-gold,#E8B923)"/>
+  <!-- the bonded collective: a connected blue group -->
+  <g stroke="#2352E8" stroke-width="1.6" stroke-linejoin="round" fill="none">
+    <polygon points="56,28 66,40 56,52 46,40"/>
+    <line x1="56" y1="28" x2="56" y2="52"/>
+    <line x1="46" y1="40" x2="66" y2="40"/>
+  </g>
+  <g fill="#2352E8">
+    <circle cx="56" cy="28" r="3.6"/>
+    <circle cx="66" cy="40" r="3.6"/>
+    <circle cx="56" cy="52" r="3.6"/>
+    <circle cx="46" cy="40" r="3.6"/>
+  </g>
+</svg>

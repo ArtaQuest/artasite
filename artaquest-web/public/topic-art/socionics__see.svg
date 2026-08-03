@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="SEE — Politician (leading extraverted sensing, creative introverted ethics)">
+  
+  
+  <line x1="40" y1="32" x2="40" y2="56" stroke="#2352E8" stroke-width="1.1" stroke-opacity="0.28"/>
+  <circle cx="40" cy="31" r="15" fill="var(--ico-gold,#E8B923)"/>
+  <path d="M31.45 48.5 L31.45 65.65 L48.65 65.65 L48.65 58.13 L39.23 58.13 L39.23 48.5 Z" fill="#2352E8" fill-opacity="0.16" stroke="#2352E8" stroke-width="1.9" stroke-linejoin="round"/>
+</svg>

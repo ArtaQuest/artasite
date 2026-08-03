@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Investment model — a gold anchor holding fast, ringed in blue">
+  <circle cx="40" cy="40" r="40" fill="#0C1E32"/>
+  <circle cx="40" cy="40" r="33" fill="none" stroke="#2352E8" stroke-width="2.2" opacity="0.55"/>
+  <g fill="none" stroke="#E8B923" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="40" cy="23" r="5"/>
+    <line x1="40" y1="28" x2="40" y2="59"/>
+    <line x1="29" y1="35" x2="51" y2="35"/>
+    <path d="M23 48 Q24 60 40 62 Q56 60 57 48"/>
+  </g>
+  <g fill="none" stroke="#2352E8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M23 48 L18 43"/>
+    <path d="M57 48 L62 43"/>
+  </g>
+</svg>

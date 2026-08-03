@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img">
+  <circle cx="40" cy="40" r="38" fill="#06121E"/>
+  <!-- the circumplex: cohesion (horizontal) and flexibility (vertical) axes -->
+  <line x1="8" y1="40" x2="72" y2="40" stroke="#2352E8" stroke-width="1.5" opacity="0.55"/>
+  <line x1="40" y1="8" x2="40" y2="72" stroke="var(--ico-gold,#E8B923)" stroke-width="1.5" opacity="0.55"/>
+  <!-- unbalanced outer zone (blue) and the balanced central zone (gold) -->
+  <circle cx="40" cy="40" r="27" fill="none" stroke="#2352E8" stroke-width="2.2"/>
+  <circle cx="40" cy="40" r="16" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4"/>
+  <!-- a family held in the balanced centre: bonds, then members -->
+  <path d="M40 40 L40 30 M40 40 L31 45 M40 40 L49 45" stroke="var(--ico-gold,#E8B923)" stroke-width="1.6"/>
+  <circle cx="40" cy="30" r="3.4" fill="#2352E8"/>
+  <circle cx="31" cy="45" r="3.4" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="49" cy="45" r="3.4" fill="#2352E8"/>
+  <circle cx="40" cy="40" r="3.4" fill="var(--ico-gold,#E8B923)"/>
+</svg>

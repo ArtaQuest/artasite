@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80" role="img" aria-label="Materialist or postmaterialist values">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <rect x="23" y="57" width="34" height="9" rx="2" fill="#E8B923"/>
+  <rect x="29" y="49" width="22" height="7" rx="2" fill="#E8B923" opacity="0.8"/>
+  <path d="M40 49 V28" stroke="#2352E8" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M40 17 L32 31 H48 Z" fill="#2352E8"/>
+  <circle cx="40" cy="13.5" r="3.2" fill="#E8B923"/>
+</svg>

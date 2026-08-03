@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Play — energised by people and the moment, two figures meeting">
+  <circle cx="31" cy="40" r="17" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="3.2"/>
+  <circle cx="49" cy="40" r="17" fill="none" stroke="#2352E8" stroke-width="3.2"/>
+  <circle cx="40" cy="40" r="4.2" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="40" cy="17" r="2.1" fill="#2352E8"/>
+  <circle cx="40" cy="63" r="2.1" fill="var(--ico-gold,#E8B923)"/>
+</svg>

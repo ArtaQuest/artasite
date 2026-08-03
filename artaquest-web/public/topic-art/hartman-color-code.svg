@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Hartman Color Code — a wheel of four motive-based colour types">
+  <path d="M40 40 L40 11 A29 29 0 0 1 69 40 Z" fill="#E8B923"/>
+  <path d="M40 40 L69 40 A29 29 0 0 1 40 69 Z" fill="#2352E8"/>
+  <path d="M40 40 L40 69 A29 29 0 0 1 11 40 Z" fill="#E8B923"/>
+  <path d="M40 40 L11 40 A29 29 0 0 1 40 11 Z" fill="#2352E8"/>
+  <circle cx="40" cy="40" r="8" fill="#2352E8"/>
+  <circle cx="40" cy="40" r="4" fill="#E8B923"/>
+</svg>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Drive — an arrow striking the goal">
+  <circle cx="46" cy="40" r="20" fill="none" stroke="#2352E8" stroke-width="2"/>
+  <circle cx="46" cy="40" r="11" fill="none" stroke="#2352E8" stroke-width="2"/>
+  <circle cx="46" cy="40" r="3" fill="var(--ico-gold,#E8B923)"/>
+  <path d="M10 40 H42" stroke="var(--ico-gold,#E8B923)" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M35 33 L44 40 L35 47" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

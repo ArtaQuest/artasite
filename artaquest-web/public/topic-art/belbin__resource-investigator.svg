@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Resource Investigator — a compass exploring opportunities outside the team">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <circle cx="40" cy="40" r="24" fill="none" stroke="#2352E8" stroke-width="2.4"/>
+  <g stroke="#2352E8" stroke-width="2" stroke-linecap="round">
+    <line x1="40" y1="13" x2="40" y2="18"/>
+    <line x1="40" y1="62" x2="40" y2="67"/>
+    <line x1="13" y1="40" x2="18" y2="40"/>
+    <line x1="62" y1="40" x2="67" y2="40"/>
+  </g>
+  <polygon points="40,18 46,40 40,40" fill="#E8B923"/>
+  <polygon points="40,18 34,40 40,40" fill="#E8B923" opacity="0.65"/>
+  <polygon points="40,62 34,40 40,40" fill="#2352E8"/>
+  <polygon points="40,62 46,40 40,40" fill="#2352E8" opacity="0.65"/>
+  <circle cx="40" cy="40" r="3.4" fill="#E8B923"/>
+</svg>

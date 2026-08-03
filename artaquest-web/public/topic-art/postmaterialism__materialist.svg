@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80" role="img" aria-label="Materialist">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <rect x="17" y="56" width="46" height="3.6" rx="1.8" fill="#2352E8"/>
+  <g fill="#E8B923">
+    <rect x="25" y="45" width="13" height="9.5" rx="1.5"/>
+    <rect x="40" y="45" width="13" height="9.5" rx="1.5"/>
+    <rect x="18" y="34" width="13" height="9.5" rx="1.5" opacity="0.9"/>
+    <rect x="33.5" y="34" width="13" height="9.5" rx="1.5" opacity="0.9"/>
+    <rect x="49" y="34" width="13" height="9.5" rx="1.5" opacity="0.9"/>
+    <rect x="25" y="23" width="13" height="9.5" rx="1.5" opacity="0.78"/>
+    <rect x="40" y="23" width="13" height="9.5" rx="1.5" opacity="0.78"/>
+  </g>
+</svg>

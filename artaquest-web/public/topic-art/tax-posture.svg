@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80" role="img" aria-label="Balance scale">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <line x1="40" y1="22" x2="40" y2="58" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M30 60 H50" stroke="#2352E8" stroke-width="4" stroke-linecap="round"/>
+  <line x1="18" y1="26" x2="62" y2="26" stroke="#E8B923" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="40" cy="26" r="3.4" fill="#E8B923"/>
+  <line x1="18" y1="26" x2="18" y2="37" stroke="#2352E8" stroke-width="1.6"/>
+  <path d="M9 37 a9 9 0 0 0 18 0" fill="none" stroke="#E8B923" stroke-width="2.6" stroke-linecap="round"/>
+  <line x1="62" y1="26" x2="62" y2="37" stroke="#2352E8" stroke-width="1.6"/>
+  <path d="M53 37 a9 9 0 0 0 18 0" fill="none" stroke="#E8B923" stroke-width="2.6" stroke-linecap="round"/>
+</svg>

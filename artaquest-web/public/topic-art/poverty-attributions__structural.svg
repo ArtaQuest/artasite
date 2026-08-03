@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Structural factors">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <path d="M18 30 L40 19 L62 30 Z" fill="#E8B923"/>
+  <rect x="20" y="32" width="40" height="4.5" rx="1.5" fill="#E8B923"/>
+  <g fill="#2352E8">
+    <rect x="24" y="38.5" width="6" height="20" rx="1.5"/>
+    <rect x="37" y="38.5" width="6" height="20" rx="1.5"/>
+    <rect x="50" y="38.5" width="6" height="20" rx="1.5"/>
+  </g>
+  <rect x="20" y="60" width="40" height="4.5" rx="1.5" fill="#E8B923"/>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Indigo aura — deep, introspective and perceptive, shown as a perceptive eye">
+  <path d="M12 40 C 24 24 56 24 68 40 C 56 56 24 56 12 40 Z" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="40" cy="40" r="9" fill="#2352E8"/>
+  <circle cx="40" cy="40" r="3.2" fill="var(--ico-gold,#E8B923)"/>
+</svg>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Green aura — balanced, nurturing and growth-minded, shown as a sprout">
+  <path d="M40 64 L40 34" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M40 42 C 28 42 20 34 20 24 C 32 24 40 32 40 42 Z" fill="#2352E8"/>
+  <path d="M40 36 C 52 36 60 28 60 18 C 48 18 40 26 40 36 Z" fill="var(--ico-gold,#E8B923)"/>
+</svg>

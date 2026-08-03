@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Dark Triad and Dark Tetrad — three traits plus a fourth, sadism">
+  
+  
+  <polygon points="40,18 58,56 22,56" fill="#2352E8" fill-opacity="0.12" stroke="#2352E8" stroke-width="1.6" stroke-linejoin="round"/>
+  <g stroke="#2352E8" stroke-width="1" stroke-opacity="0.45" stroke-dasharray="2.5 2.5">
+    <line x1="40" y1="43" x2="40" y2="18"/>
+    <line x1="40" y1="43" x2="58" y2="56"/>
+    <line x1="40" y1="43" x2="22" y2="56"/>
+  </g>
+  <g fill="var(--ico-gold,#E8B923)">
+    <circle cx="40" cy="18" r="4"/>
+    <circle cx="58" cy="56" r="4"/>
+    <circle cx="22" cy="56" r="4"/>
+  </g>
+  <circle cx="40" cy="43" r="3.4" fill="var(--ico-gold,#E8B923)" fill-opacity="0.22" stroke="var(--ico-gold,#E8B923)" stroke-width="1.4"/>
+</svg>

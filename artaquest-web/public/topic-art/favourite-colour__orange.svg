@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Orange — warmth, enthusiasm and creativity, shown as a radiant sun">
+  <circle cx="40" cy="40" r="14" fill="var(--ico-gold,#E8B923)"/>
+  <g stroke="#2352E8" stroke-width="3" stroke-linecap="round">
+    <line x1="40" y1="10" x2="40" y2="20"/>
+    <line x1="40" y1="60" x2="40" y2="70"/>
+    <line x1="10" y1="40" x2="20" y2="40"/>
+    <line x1="60" y1="40" x2="70" y2="40"/>
+    <line x1="19" y1="19" x2="26" y2="26"/>
+    <line x1="54" y1="54" x2="61" y2="61"/>
+    <line x1="61" y1="19" x2="54" y2="26"/>
+    <line x1="26" y1="54" x2="19" y2="61"/>
+  </g>
+</svg>

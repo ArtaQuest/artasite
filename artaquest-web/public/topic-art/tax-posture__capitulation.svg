@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80" role="img" aria-label="A path bending into line under a rule">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <line x1="18" y1="28" x2="62" y2="28" stroke="#2352E8" stroke-width="3.6" stroke-linecap="round"/>
+  <path d="M22 58 C 34 58, 38 40, 58 38" fill="none" stroke="#E8B923" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M51 35 L58 38 L52.5 43" fill="none" stroke="#E8B923" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

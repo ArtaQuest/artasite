@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Emotion regulation — a strong feeling shaped into a calmer one">
+  <circle cx="40" cy="40" r="29" fill="none" stroke="#2352E8" stroke-width="1" opacity="0.22"/>
+  <path d="M12 40 Q19 20 26 40 T40 40" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M40 40 Q47 33 54 40 T68 40" fill="none" stroke="#2352E8" stroke-width="3.2" stroke-linecap="round"/>
+  <circle cx="40" cy="40" r="4.3" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2.2"/>
+</svg>

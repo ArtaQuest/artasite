@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80" role="img" aria-label="How you'd settle a dispute">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <g fill="none" stroke-linecap="round" stroke-width="2.6">
+    <path d="M40 24 V40" stroke="#E8B923"/>
+    <path d="M26 53 L40 40" stroke="#2352E8"/>
+    <path d="M54 53 L40 40" stroke="#E8B923"/>
+  </g>
+  <circle cx="40" cy="22" r="7" fill="#E8B923"/>
+  <circle cx="26" cy="54" r="7" fill="#2352E8"/>
+  <circle cx="54" cy="54" r="7" fill="#E8B923"/>
+  <circle cx="40" cy="40" r="6.2" fill="#0C1E32" stroke="#E8B923" stroke-width="2"/>
+  <circle cx="40" cy="40" r="2.4" fill="#2352E8"/>
+</svg>

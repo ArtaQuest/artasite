@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+
+<circle cx="29" cy="48" r="11" fill="var(--ico-gold,#E8B923)"/>
+<circle cx="51" cy="48" r="11" fill="#2352E8"/>
+<path d="M40 18 L43 25 L50 28 L43 31 L40 38 L37 31 L30 28 L37 25 Z" fill="var(--ico-gold,#E8B923)"/>
+</svg>

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img">
+  
+  <circle cx="40" cy="40" r="39" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.4" opacity="0.45"/>
+  <!-- the two dimensions: exploration (vertical, blue) x commitment (horizontal, gold) -->
+  <g stroke-linecap="round">
+    <line x1="40" y1="63" x2="40" y2="19" stroke="#2352E8" stroke-width="2"/>
+    <line x1="17" y1="40" x2="61" y2="40" stroke="var(--ico-gold,#E8B923)" stroke-width="2"/>
+    <path d="M40 16 l-3.4 6 h6.8 z" fill="#2352E8"/>
+    <path d="M64 40 l-6 -3.4 v6.8 z" fill="var(--ico-gold,#E8B923)"/>
+  </g>
+  <!-- the four statuses placed by their position on the 2x2 -->
+  <circle cx="28" cy="52" r="2.4" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.2" opacity="0.55"/>
+  <circle cx="52" cy="52" r="4" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="28" cy="28" r="4.2" fill="none" stroke="#2352E8" stroke-width="2.2"/>
+  <circle cx="52" cy="28" r="5.6" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="52" cy="28" r="5.6" fill="none" stroke="#2352E8" stroke-width="2.2"/>
+</svg>

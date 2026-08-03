@@ -1,0 +1,98 @@
+[
+  {
+    "category": "hate-polite",
+    "lang": "en",
+    "text": "I want to be charitable here, but the data on cranial capacity and average IQ across these populations is consistent for a reason. With all due respect, some races are simply intellectually inferior by nature, and pretending otherwise helps no one.",
+    "flag": true,
+    "note": "race-science framing asserts innate racial inferiority",
+    "band": 78
+  },
+  {
+    "category": "hate-polite",
+    "lang": "en",
+    "text": "Speaking purely from a public-health and economic standpoint, allowing the cognitively deficient and the disabled to reproduce freely degrades the national gene pool. A humane, voluntary sterilisation programme would be the responsible policy.",
+    "flag": true,
+    "note": "clinical eugenics calling to stop disabled reproducing",
+    "band": 80
+  },
+  {
+    "category": "hate-polite",
+    "lang": "en",
+    "text": "This is a fascinating lecture, but it sidesteps the elephant in the room: heritability studies suggest certain ethnic groups contribute disproportionately to crime not because of poverty but because of genetics. We should be brave enough to discuss selective breeding.",
+    "flag": true,
+    "note": "pseudo-genetic ethnic inferiority plus selective breeding",
+    "band": 76
+  },
+  {
+    "category": "hate-polite",
+    "lang": "en",
+    "text": "With the greatest respect to everyone here, evolutionary biology is clear that these immigrant populations are simply less suited to advanced civilisation. It is not hatred to observe a measurable biological fact.",
+    "flag": true,
+    "note": "dehumanising migrants as biologically unfit, polite veneer",
+    "band": 74
+  },
+  {
+    "category": "hate-polite",
+    "lang": "en",
+    "text": "I say this clinically, not emotionally: a society that subsidises the reproduction of its lowest-quality stock is engineering its own decline. The kind thing, long-term, is to discourage the unfit from breeding.",
+    "flag": true,
+    "note": "eugenic euphemism ('unfit'/'stock') calling to suppress reproduction of a dehumanised group",
+    "band": 77
+  },
+  {
+    "category": "hate-polite",
+    "lang": "en",
+    "text": "Let's keep this academic. Twin studies and the bell curve literature both point to a stubborn, heritable gap. It follows logically that we are not, as a species, all equally capable, and policy ought to reflect that hierarchy of races.",
+    "flag": true,
+    "note": "scientific-sounding racial hierarchy as policy basis",
+    "band": 73
+  },
+  {
+    "category": "hate-polite",
+    "lang": "en",
+    "text": "From a demographic-quality perspective, encouraging the educated to have more children and the underclass fewer is just rational resource management. We sterilise stray dogs for their own good; the principle scales.",
+    "flag": true,
+    "note": "compares people to animals and advocates sterilisation",
+    "band": 81
+  },
+  {
+    "category": "hate-polite",
+    "lang": "en",
+    "text": "I have studied the peer-reviewed literature carefully, and the honest, dispassionate conclusion is that this religious community carries inheritable traits of low impulse control. Acknowledging that isn't bigotry, it's behavioural genetics.",
+    "flag": true,
+    "note": "pseudo-genetic dehumanising of a religious group",
+    "band": 75
+  },
+  {
+    "category": "hate-polite",
+    "lang": "en",
+    "text": "Galton's eugenics is genuinely chilling when you study how respectable scientists dressed up sterilising the 'feeble-minded' as compassion. This module did a good job showing how academic language can launder atrocity.",
+    "flag": false,
+    "note": "academic critique condemning eugenics, not endorsing it",
+    "band": 14
+  },
+  {
+    "category": "hate-polite",
+    "lang": "en",
+    "text": "Honestly the way this course glosses over the replication crisis in IQ research is frustrating. A lot of the early heritability studies were methodologically garbage and that should be stated plainly.",
+    "flag": false,
+    "note": "sharp methodological criticism, no dehumanisation",
+    "band": 7
+  },
+  {
+    "category": "hate-polite",
+    "lang": "en",
+    "text": "Reading the historical documents in this lesson where doctors calmly described disabled patients as a 'burden to be eliminated' made my stomach turn. Polite, professional, and utterly monstrous.",
+    "flag": false,
+    "note": "counter-speech quoting hate to condemn it",
+    "band": 16
+  },
+  {
+    "category": "hate-polite",
+    "lang": "en",
+    "text": "I disagree strongly with the lecturer's politics and I think the immigration policy he defends is naive and economically reckless. But that's a policy argument, not a claim about anyone's worth as a human being.",
+    "flag": false,
+    "note": "strong policy criticism explicitly avoiding dehumanisation",
+    "band": 6
+  }
+]

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img">
+  <!-- nationality / citizenship: a passport booklet — the universal token of state membership — with a globe emblem and holder lines on its cover -->
+  <!-- passport cover -->
+  <rect x="22" y="13" width="36" height="54" rx="5" fill="none" stroke="#2352E8" stroke-width="2.4"/>
+  <!-- bound spine edge -->
+  <line x1="27" y1="16" x2="27" y2="64" stroke="#2352E8" stroke-width="2.2" opacity="0.55"/>
+  <!-- title line -->
+  <line x1="32" y1="22" x2="48" y2="22" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4" stroke-linecap="round"/>
+  <!-- globe emblem on the cover -->
+  <g fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.9" stroke-linecap="round">
+    <circle cx="40" cy="40" r="9"/>
+    <ellipse cx="40" cy="40" rx="3.6" ry="9"/>
+    <line x1="31" y1="40" x2="49" y2="40"/>
+  </g>
+  <!-- holder lines -->
+  <g stroke="var(--ico-gold,#E8B923)" stroke-width="2.2" stroke-linecap="round">
+    <line x1="34" y1="56" x2="46" y2="56"/>
+    <line x1="36" y1="61" x2="44" y2="61"/>
+  </g>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Receiving Gifts — love expressed through thoughtful, meaningful presents">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <rect x="22" y="35" width="36" height="25" rx="3" fill="#E8B923"/>
+  <rect x="36" y="35" width="8" height="25" fill="#2352E8"/>
+  <path d="M40 33 L29 28 L29 38 Z" fill="#2352E8"/>
+  <path d="M40 33 L51 28 L51 38 Z" fill="#2352E8"/>
+  <circle cx="40" cy="33" r="3.2" fill="#2352E8"/>
+</svg>

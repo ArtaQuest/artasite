@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="ESE — Enthusiast (leading extraverted ethics, creative introverted sensing)">
+  
+  
+  <line x1="40" y1="32" x2="40" y2="56" stroke="#2352E8" stroke-width="1.1" stroke-opacity="0.28"/>
+  <path d="M26.35 17.44 L26.35 44.8 L53.8 44.8 L53.8 32.8 L38.77 32.8 L38.77 17.44 Z" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="40" cy="57" r="9.4" fill="#2352E8" fill-opacity="0.16" stroke="#2352E8" stroke-width="1.9" stroke-linejoin="round"/>
+</svg>

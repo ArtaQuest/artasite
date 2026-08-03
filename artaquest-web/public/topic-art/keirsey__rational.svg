@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Rational — gear of systems">
+  
+  
+  <polygon points="40,13 48.4,19.7 59.1,20.9 60.3,31.6 67,40 60.3,48.4 59.1,59.1 48.4,60.3 40,67 31.6,60.3 20.9,59.1 19.7,48.4 13,40 19.7,31.6 20.9,20.9 31.6,19.7" fill="#2352E8" fill-opacity="0.2" stroke="#2352E8" stroke-width="1.6" stroke-linejoin="round"/>
+  <circle cx="40" cy="40" r="13" fill="none" stroke="#2352E8" stroke-width="1.4" stroke-opacity="0.55"/>
+  <circle cx="40" cy="40" r="5.5" fill="var(--ico-gold,#E8B923)"/>
+</svg>

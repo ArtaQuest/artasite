@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Clan culture">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <path d="M40 28 L26 53 L54 53 Z" fill="none" stroke="#2352E8" stroke-width="2.8" stroke-linejoin="round"/>
+  <g fill="#E8B923">
+    <circle cx="40" cy="28" r="6.5"/>
+    <circle cx="26" cy="53" r="6.5"/>
+    <circle cx="54" cy="53" r="6.5"/>
+  </g>
+</svg>

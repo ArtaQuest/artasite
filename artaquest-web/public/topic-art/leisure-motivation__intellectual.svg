@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Intellectual">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="62%">
+      <stop offset="0" stop-color="#0C1E32"/>
+      <stop offset="1" stop-color="#010C17"/>
+    </radialGradient>
+  </defs>
+  <circle cx="40" cy="40" r="40" fill="url(#bg)"/>
+  <!-- a spark of discovery above an open book of learning -->
+  <path d="M40 13 L41.7 19 L47 20.5 L41.7 22 L40 28 L38.3 22 L33 20.5 L38.3 19 Z" fill="#2352E8"/>
+  <path d="M40 35 L22 31 L22 53 L40 57 Z" fill="none" stroke="#E8B923" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M40 35 L58 31 L58 53 L40 57 Z" fill="none" stroke="#E8B923" stroke-width="2" stroke-linejoin="round"/>
+  <line x1="40" y1="35" x2="40" y2="57" stroke="#E8B923" stroke-width="2"/>
+  <path d="M27 38 L35 40 M27 44 L35 46 M53 38 L45 40 M53 44 L45 46" stroke="#E8B923" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+</svg>

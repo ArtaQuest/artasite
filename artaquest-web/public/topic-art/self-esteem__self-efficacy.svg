@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Belief in your abilities — a mountain climbed to a summit flag, the confidence you can rise to challenges">
+  
+  
+  <polygon points="40,60 56,41 70,60" fill="#2352E8" fill-opacity="0.16"/>
+  <polygon points="14,60 40,24 64,60" fill="#2352E8" fill-opacity="0.30" stroke="#2352E8" stroke-width="2" stroke-linejoin="round"/>
+  <polyline points="26,60 34,49 29,44 38,33 40,28" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="0.1 4.2"/>
+  <line x1="40" y1="26" x2="40" y2="13" stroke="var(--ico-gold,#E8B923)" stroke-width="2" stroke-linecap="round"/>
+  <polygon points="40,14 49,16.5 40,19" fill="var(--ico-gold,#E8B923)"/>
+</svg>

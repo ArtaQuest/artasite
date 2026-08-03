@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img">
+  <!-- geographic ancestry: a globe (blue graticule) with one region of origin marked in gold -->
+  <g fill="none" stroke="#2352E8" stroke-width="2.2" stroke-linecap="round">
+    <circle cx="40" cy="40" r="28"/>
+    <ellipse cx="40" cy="40" rx="14" ry="28"/>
+    <line x1="40" y1="12" x2="40" y2="68"/>
+    <line x1="12" y1="40" x2="68" y2="40"/>
+    <line x1="16" y1="26" x2="64" y2="26"/>
+    <line x1="16" y1="54" x2="64" y2="54"/>
+  </g>
+  <!-- one region of origin marked on the globe -->
+  <circle cx="29" cy="30" r="7" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2.2"/>
+  <circle cx="29" cy="30" r="2.6" fill="var(--ico-gold,#E8B923)"/>
+</svg>

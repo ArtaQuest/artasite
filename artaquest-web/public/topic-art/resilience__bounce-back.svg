@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Bouncing back — a gold ball rebounds off the ground along a dashed arc">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="62%">
+      <stop offset="0" stop-color="#0C1E32"/>
+      <stop offset="1" stop-color="#010C17"/>
+    </radialGradient>
+  </defs>
+  <circle cx="40" cy="40" r="40" fill="url(#bg)"/>
+  <!-- bouncing back: a ball drops, strikes the ground and rebounds up along a dashed gold arc -->
+  <line x1="16" y1="56" x2="64" y2="56" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M18 28 Q30 56 40 56 Q50 56 55 34" fill="none" stroke="#E8B923" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="0.5 5"/>
+  <circle cx="55" cy="31" r="5" fill="#E8B923"/>
+</svg>

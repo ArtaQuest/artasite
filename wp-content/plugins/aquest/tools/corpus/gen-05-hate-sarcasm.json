@@ -1,0 +1,98 @@
+[
+  {
+    "category": "hate-sarcasm",
+    "lang": "en",
+    "text": "Oh no, please, let's not stop the rats from pouring over the border. Wouldn't want to deny the vermin their free buffet. We've got plenty of room in the sewer.",
+    "flag": true,
+    "note": "Sarcasm framing migrants as rats/vermin dehumanises them",
+    "band": 86
+  },
+  {
+    "category": "hate-sarcasm",
+    "lang": "en",
+    "text": "Such a tragedy that the cockroaches keep breeding faster than we can deal with them, truly heartbreaking for everyone involved. My thoughts and prayers to those poor exterminators.",
+    "flag": true,
+    "note": "Fake sympathy; calls a group cockroaches needing extermination",
+    "band": 88
+  },
+  {
+    "category": "hate-sarcasm",
+    "lang": "en",
+    "text": "Wow, what a brave video defending those people. Real noble cause, protecting a species that's basically a virus on civilisation. Bless your heart.",
+    "flag": true,
+    "note": "Mock praise; brands a protected group a virus",
+    "band": 81
+  },
+  {
+    "category": "hate-sarcasm",
+    "lang": "en",
+    "text": "Sure, sure, they're 'just like us.' That's why we should all sleep soundly knowing the animals are right next door. Totally normal, totally safe, nothing to worry about at all.",
+    "flag": true,
+    "note": "Ironic reassurance frames a group as dangerous animals",
+    "band": 79
+  },
+  {
+    "category": "hate-sarcasm",
+    "lang": "en",
+    "text": "Oh absolutely, we should roll out the red carpet. Nothing says progress like importing a plague we'll be cleansing for generations. Can't wait.",
+    "flag": true,
+    "note": "Sarcasm calling a group a plague to be cleansed",
+    "band": 90
+  },
+  {
+    "category": "hate-sarcasm",
+    "lang": "en",
+    "text": "Yeah great point, clearly the disabled are the real heroes here, contributing so much by existing as a drain. Inspiring stuff, somebody give them a medal for breathing.",
+    "flag": true,
+    "note": "Mock-praise dehumanises disabled people as worthless burden",
+    "band": 76
+  },
+  {
+    "category": "hate-sarcasm",
+    "lang": "en",
+    "text": "Honestly the cleanest solution to the infestation would just be to let them all 'go home' permanently, if you catch my drift. For their own good of course.",
+    "flag": true,
+    "note": "Veiled sarcasm; 'infestation' plus euphemism for removal/violence",
+    "band": 92
+  },
+  {
+    "category": "hate-sarcasm",
+    "lang": "en",
+    "text": "This is the most insulting course I've ever paid for. The instructor mumbles, the audio is trash, and half the section is just him reading slides. Absolute waste of my coins, I want a refund.",
+    "flag": false,
+    "note": "Harsh consumer complaint; no group dehumanised",
+    "band": 9
+  },
+  {
+    "category": "hate-sarcasm",
+    "lang": "en",
+    "text": "Oh sure, because organised religion has NEVER done anything questionable, right? Such a flawless, totally rational institution. Pull the other one.",
+    "flag": false,
+    "note": "Sarcastic criticism of an institution, not a protected group",
+    "band": 12
+  },
+  {
+    "category": "hate-sarcasm",
+    "lang": "en",
+    "text": "Great, another billionaire 'philanthropist' saving us all. Yeah, I'm sure his charity has nothing to do with the tax write-off. What a saint.",
+    "flag": false,
+    "note": "Sarcasm aimed at a public figure/class, not dehumanising",
+    "band": 8
+  },
+  {
+    "category": "hate-sarcasm",
+    "lang": "en",
+    "text": "People love to say things like 'they breed like rats' about immigrants and pretend it's just a joke. It isn't. That language is exactly how you get people to stop seeing humans as human, and we should call it out every time.",
+    "flag": false,
+    "note": "Counter-speech quoting hate to condemn it",
+    "band": 14
+  },
+  {
+    "category": "hate-sarcasm",
+    "lang": "en",
+    "text": "Oh wonderful, another deadline at 9am sharp. Sure, I'll just teleport the report into existence overnight. This semester is genuinely going to be the death of me, lol.",
+    "flag": false,
+    "note": "Sarcasm plus death idiom; pure hyperbole, no target",
+    "band": 3
+  }
+]

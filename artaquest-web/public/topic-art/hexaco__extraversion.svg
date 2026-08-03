@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="eXtraversion — outgoing radiance">
+  
+  
+  <g stroke="#2352E8" stroke-width="1.8" stroke-linecap="round">
+    <line x1="52" y1="40" x2="61" y2="40"/>
+    <line x1="50.39" y1="46" x2="58.19" y2="50.5"/>
+    <line x1="46" y1="50.39" x2="50.5" y2="58.19"/>
+    <line x1="40" y1="52" x2="40" y2="61"/>
+    <line x1="34" y1="50.39" x2="29.5" y2="58.19"/>
+    <line x1="29.61" y1="46" x2="21.81" y2="50.5"/>
+    <line x1="28" y1="40" x2="19" y2="40"/>
+    <line x1="29.61" y1="34" x2="21.81" y2="29.5"/>
+    <line x1="34" y1="29.61" x2="29.5" y2="21.81"/>
+    <line x1="40" y1="28" x2="40" y2="19"/>
+    <line x1="46" y1="29.61" x2="50.5" y2="21.81"/>
+    <line x1="50.39" y1="34" x2="58.19" y2="29.5"/>
+  </g>
+  <circle cx="40" cy="40" r="8.5" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="40" cy="40" r="8.5" fill="none" stroke="#2352E8" stroke-width="1.2" stroke-opacity="0.5"/>
+</svg>

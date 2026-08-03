@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Social-normative — stepping up out of duty to fill the gap when a leader is needed">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <line x1="14" y1="62" x2="66" y2="62" stroke="#2352E8" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+  <g fill="#2352E8">
+    <circle cx="18" cy="56" r="3"/>
+    <circle cx="29" cy="56" r="3"/>
+    <circle cx="51" cy="56" r="3"/>
+    <circle cx="62" cy="56" r="3"/>
+  </g>
+  <line x1="40" y1="56" x2="40" y2="34" stroke="var(--ico-gold,#E8B923)" stroke-width="2.6" stroke-linecap="round"/>
+  <polyline points="33,41 40,34 47,41" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="40" cy="24" r="4.4" fill="var(--ico-gold,#E8B923)"/>
+</svg>

@@ -1,0 +1,90 @@
+[
+  {
+    "category": "fringe-conspiracy",
+    "lang": "en",
+    "text": "Honestly after watching this I'm convinced the Apollo footage was shot on a soundstage. The shadows go in different directions and the flag is clearly rippling in a vacuum. Wake up.",
+    "flag": false,
+    "note": "Moon-landing hoax idea, no group dehumanised",
+    "band": 4
+  },
+  {
+    "category": "fringe-conspiracy",
+    "lang": "en",
+    "text": "I used to laugh at flat earthers but the more I look into the Antarctic treaty the weirder it gets. Why won't they let independent people fly over the 'edge'? Something doesn't add up.",
+    "flag": false,
+    "note": "Flat-earth speculation, harmless conspiracy idea",
+    "band": 3
+  },
+  {
+    "category": "fringe-conspiracy",
+    "lang": "en",
+    "text": "My aunt swears the 5G towers near her street are what gave her the headaches. I'm not saying she's right but the rollout did happen suspiciously fast with no long-term studies.",
+    "flag": false,
+    "note": "5G pseudoscience worry, no targeted group",
+    "band": 6
+  },
+  {
+    "category": "fringe-conspiracy",
+    "lang": "en",
+    "text": "Astrology is just a way for the elites to keep us distracted while they consolidate power. Think about it, every horoscope is vague enough to fit anyone. It's mass psychological control.",
+    "flag": false,
+    "note": "Vague 'elites' control idea, no protected group",
+    "band": 5
+  },
+  {
+    "category": "fringe-conspiracy",
+    "lang": "en",
+    "text": "the whole vaccine thing is mind control, the boosters carry nanobots that sync to the towers. i'm not getting another one and you shouldn't either",
+    "flag": false,
+    "note": "Vaccine-nanobot conspiracy, idea only no group",
+    "band": 8
+  },
+  {
+    "category": "fringe-conspiracy",
+    "lang": "en",
+    "text": "Great lesson, but you completely glossed over how the 1969 footage has never been independently verified. I'm not anti-science, I just want the original telemetry tapes that NASA conveniently 'lost'.",
+    "flag": false,
+    "note": "Cover-up suspicion, polite, no dehumanisation",
+    "band": 3
+  },
+  {
+    "category": "fringe-conspiracy",
+    "lang": "en",
+    "text": "Chemtrails are real. Look up on any clear day and count how long the trails last. Regular contrails dissolve in seconds. They're spraying something on us and the planes are unmarked.",
+    "flag": false,
+    "note": "Chemtrail pseudoscience, no targeted identity",
+    "band": 7
+  },
+  {
+    "category": "fringe-conspiracy",
+    "lang": "en",
+    "text": "I genuinely think we never went to the moon and it terrifies me how easily a whole planet can be lied to for 50 years. If they faked that, what else are we believing?",
+    "flag": false,
+    "note": "Personal fear plus hoax idea, not inciting",
+    "band": 9
+  },
+  {
+    "category": "fringe-conspiracy",
+    "lang": "en",
+    "text": "Crystals absolutely work, I cleared my migraines with a rose quartz under my pillow. Modern medicine just doesn't want you to know because there's no profit in healing for free.",
+    "flag": false,
+    "note": "Crystal-healing pseudoscience plus pharma cynicism",
+    "band": 2
+  },
+  {
+    "category": "fringe-conspiracy",
+    "lang": "en",
+    "text": "Sure, and I'm the Pope. Next you'll tell me the dinosaurs built the pyramids. Some of these 'cover-up' theories are just people who can't accept that the universe is boring.",
+    "flag": false,
+    "note": "Mocking conspiracies, sarcasm, no group attacked",
+    "band": 1
+  },
+  {
+    "category": "fringe-conspiracy",
+    "lang": "en",
+    "text": "Worth noting the 'simulation hypothesis' isn't as fringe as people think, Bostrom's paper makes a serious statistical case. Whether we're in base reality is genuinely unprovable either way.",
+    "flag": false,
+    "note": "Academic simulation idea, calm, no dehumanisation",
+    "band": 1
+  }
+]

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img">
+  
+  <!-- an inherited frame, closed and unbroken: committed without searching -->
+  <circle cx="40" cy="40" r="23" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2"/>
+  <circle cx="40" cy="40" r="16.5" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.4" opacity="0.6"/>
+  <!-- a solid, secure core handed down whole -->
+  <circle cx="40" cy="40" r="9.5" fill="var(--ico-gold,#E8B923)"/>
+  <!-- the identity received, set in place -->
+  <circle cx="40" cy="40" r="3.6" fill="#2352E8"/>
+</svg>

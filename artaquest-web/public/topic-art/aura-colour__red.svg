@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Red aura — passionate, driven and grounded, shown as a flame over solid ground">
+  <path d="M40 12 C 52 26 56 34 56 44 A 16 16 0 0 1 24 44 C 24 37 27 32 32 29 C 31 35 34 38 38 39 C 35 30 39 20 40 12 Z" fill="var(--ico-gold,#E8B923)"/>
+  <path d="M34 50 A 8 8 0 0 0 46 50" fill="none" stroke="#2352E8" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M22 62 L58 62" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+</svg>

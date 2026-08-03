@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80" role="img" aria-label="Transitional">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <path d="M26 40 H36" stroke="#E8B923" stroke-width="3" stroke-linecap="round"/>
+  <path d="M44 40 H54" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="24" cy="40" r="6.5" fill="#E8B923"/>
+  <circle cx="56" cy="40" r="6.5" fill="#2352E8"/>
+</svg>

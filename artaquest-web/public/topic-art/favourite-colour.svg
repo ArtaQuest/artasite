@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Your favourite colour — a painter's palette of colours">
+  <ellipse cx="40" cy="40" rx="30" ry="25" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="3"/>
+  <circle cx="40" cy="55" r="6.5" fill="none" stroke="#2352E8" stroke-width="3"/>
+  <circle cx="26" cy="30" r="5" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="40" cy="24" r="5" fill="#2352E8"/>
+  <circle cx="54" cy="30" r="5" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="58" cy="44" r="5" fill="#2352E8"/>
+</svg>

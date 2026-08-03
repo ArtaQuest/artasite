@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80" role="img" aria-label="A knight's-move path across a grid">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <g stroke="#2352E8" stroke-width="1.7" stroke-linecap="round">
+    <line x1="24" y1="24" x2="56" y2="24"/>
+    <line x1="24" y1="40" x2="56" y2="40"/>
+    <line x1="24" y1="56" x2="56" y2="56"/>
+    <line x1="24" y1="24" x2="24" y2="56"/>
+    <line x1="40" y1="24" x2="40" y2="56"/>
+    <line x1="56" y1="24" x2="56" y2="56"/>
+  </g>
+  <path d="M32 52 V32 H46" fill="none" stroke="#E8B923" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M41 27 L47 32 L41 37" fill="none" stroke="#E8B923" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="32" cy="52" r="3.4" fill="#E8B923"/>
+</svg>

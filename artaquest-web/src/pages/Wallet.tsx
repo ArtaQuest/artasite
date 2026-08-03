@@ -1,0 +1,321 @@
+import { type FormEvent, useEffect, useState } from "react";
+import { getDashboard, getDonateOptions, getReserve, getWallet, buyCoins, sellCoins, getStripeVerify, getPayoutStatus, connectPayout, isLoggedIn, localePath, CHECKOUT_LIVE, type Dashboard, type DonateOptions, type Reserve, type WalletData, type BuyCoinsResult, type SellCoinsResult, type PayoutStatus } from "../lib/wp";
+import { Coins, formatCoins, formatFiat, sanitizeDecimal } from "../lib/currency";
+import { Button, Card, ErrorNote, Field, GatewayPicker, Input, OrbitRings, SignInGate } from "../components/ui";
+import { CoinDisc } from "../components/CoinDisc";
+
+// Human label for a coin-ledger reason code (Economy::credit_coins reasons).
+const TXN_LABELS: Record<string, string> = {
+  qreward: "Quester reward · podium prize",
+  donation: "Donation to the learner fund", buy: "Bought coins", sell: "Cashed out", refund: "Refund", grant: "Grant award", bursary: "Bursary grant",
+};
+const txnLabel = (r: string) => TXN_LABELS[r] || (r ? r.charAt(0).toUpperCase() + r.slice(1) : "Transaction");
+
+// Per-coin price to the cent (small CAD figures, e.g. CA$0.13).
+const perCoin = (n: number, cur: string) => {
+  try { return new Intl.NumberFormat(undefined, { style: "currency", currency: cur, minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(n || 0); }
+  catch { return `$${(n || 0).toFixed(4)} ${cur}`; }
+};
+
+// Payment-method-neutral copy keyed by gateway id (the stored descriptions are donation-flavoured).
+const GATEWAY_DESC: Record<string, string> = {
+  ay_interac: "Pay by Interac e-Transfer (Canada). We credit your coins within 1–2 business days.",
+  ay_fast: "Pay by FAST transfer (Türkiye). We credit your coins within 1–2 business days.",
+  ay_iban: "Pay by bank transfer (IBAN). We credit your coins within 1–2 business days.",
+  ay_stripe: "Pay by credit or debit card. A small processing fee is added.",
+};
+
+/* Buy Arta Coins with fiat — mirrors the Checkout result/gateway UI. */
+function BuyPanel({ opts, buyPrice, fiat, payments, onCredited }: { opts: DonateOptions | null; buyPrice: number; fiat: string; payments: boolean; onCredited: () => void }) {
+  const [amount, setAmount] = useState("20");
+  const [email, setEmail] = useState("");
+  const [picked, setPicked] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [result, setResult] = useState<BuyCoinsResult | null>(null);
+  // Effective gateway = the user's pick, else the first available — derived, no effect needed.
+  const gateway = picked || opts?.gateways[0]?.id || "";
+
+  const cad = Math.max(0, parseFloat(amount) || 0);
+  const estCoins = buyPrice > 0 ? Math.floor(cad / buyPrice) : 0;
+  // No inbound payment rail (Stripe not configured) → don't show a form the backend will refuse; coins
+  // are minted ONLY against a captured payment, never for free.
+  const noRails = !payments || (!!opts && opts.gateways.length === 0);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault(); setErr(""); setBusy(true);
+    try {
+      const r = await buyCoins(cad, gateway, email);
+      if (r.redirect && r.url) { window.location.href = r.url; return; }
+      setResult(r); onCredited();
+    } catch (ex) { setErr(ex instanceof Error ? ex.message : "Could not start the purchase."); }
+    finally { setBusy(false); }
+  }
+
+  if (result) {
+    return (
+      <Card role="status" className="p-6 text-center">
+        <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-yang/15 text-yang">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+        </span>
+        <h3 className="mt-3 text-[18px] font-bold tracking-tight">Order #{result.order} — {result.instructions ? "almost there" : "coins credited"}</h3>
+        <p className="mt-1.5 text-[14px] text-ink-2">
+          {result.instructions
+            ? <>Complete your {result.total_display || formatFiat(result.total, fiat)} payment via {result.gateway} to receive <Coins n={result.coins} />. We credit your wallet within 1–2 business days.</>
+            : <>Payment received — <Coins n={result.coins} /> are now in your wallet.</>}
+        </p>
+        {result.instructions && <Card className="mt-4 whitespace-pre-line px-5 py-4 text-left text-[14px] leading-relaxed text-ink-2">{result.instructions}</Card>}
+        <Button variant="outline" onClick={() => setResult(null)} className="mt-4 h-10 px-5 text-[14px]">Buy more</Button>
+      </Card>
+    );
+  }
+
+  return (
+    <Card as="form" onSubmit={submit} className="flex flex-col gap-4 p-6">
+      <div>
+        <h3 className="text-[18px] font-bold tracking-tight">Buy coins</h3>
+        <p className="mt-1 text-[13px] text-ink-3">Top up your wallet with gold-backed Arta Coins. {buyPrice > 0 && <>Currently {perCoin(buyPrice, fiat)} per <bdi dir="ltr" data-ay-skip="1">₳</bdi>.</>}</p>
+      </div>
+      {noRails ? (
+        <p className="rounded-field border border-line bg-space-1 px-4 py-3 text-[14px] text-ink-2">Online payment isn’t available in your country yet. You can still win coins by posting the most-upvoted replies in a course — or apply for a bursary to start.</p>
+      ) : (
+        <>
+          <Field label={`Amount (${fiat})`}>
+            <Input value={amount} onChange={(e) => setAmount(sanitizeDecimal(e.target.value))} inputMode="decimal" className="bg-space-1 px-3.5" />
+          </Field>
+          {buyPrice > 0
+            ? <p className="-mt-1 text-[13px] text-ink-3">≈ <span className="font-semibold text-yang"><Coins n={estCoins} /></span> at today’s price. You receive whole coins; any remainder stays as a small unspent balance.</p>
+            : <p className="-mt-1 text-[13px] text-ink-3">Your coins are calculated at today’s gold price when the payment is confirmed.</p>}
+          <Field label={<>Email <span className="font-normal text-ink-3">— for your receipt (optional; we’ll use your account email)</span></>}>
+            <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" placeholder="you@example.com" className="bg-space-1 px-3.5" />
+          </Field>
+          <GatewayPicker gateways={opts?.gateways || []} value={gateway} onChange={setPicked} descriptions={GATEWAY_DESC} labelId="aq-buy-method-label" />
+          {err && <ErrorNote>{err}</ErrorNote>}
+          <Button type="submit" disabled={busy || cad < 1} className="h-12 w-full text-[16px] disabled:opacity-50">{busy ? "Processing…" : <>Buy {estCoins > 0 ? <Coins n={estCoins} /> : "coins"} — {formatFiat(cad, fiat)}</>}</Button>
+        </>
+      )}
+    </Card>
+  );
+}
+
+/* Cash out Arta Coins for fiat. */
+function SellPanel({ balance, sellPrice, fiat, cashout, onSold }: { balance: number; sellPrice: number; fiat: string; cashout: boolean; onSold: (b: number) => void }) {
+  const [coins, setCoins] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [err, setErr] = useState("");
+  const [result, setResult] = useState<SellCoinsResult | null>(null);
+  const [payout, setPayout] = useState<PayoutStatus | null>(null);
+
+  // Load cash-out readiness (connected account? payouts enabled?) once the rail is live and there's a
+  // balance to redeem — so we show the right state (set up payouts vs. ready to withdraw).
+  useEffect(() => {
+    if (cashout && balance > 0) getPayoutStatus().then(setPayout);
+  }, [cashout, balance]);
+
+  const n = Math.max(0, Math.floor(parseFloat(coins) || 0));
+  const estPayout = sellPrice > 0 ? n * sellPrice : 0;
+  const needsOnboarding = payout != null && !payout.payouts_enabled;
+
+  async function startOnboarding() {
+    setErr(""); setConnecting(true);
+    try {
+      const r = await connectPayout();
+      if (r.ok && r.url) { window.location.href = r.url; return; }
+      setErr(r.message || "Could not start payout setup. Please try again.");
+    } catch { setErr("Could not start payout setup. Please try again."); }
+    finally { setConnecting(false); }
+  }
+
+  async function submit(e: FormEvent) {
+    e.preventDefault(); setErr(""); setBusy(true);
+    try {
+      const r = await sellCoins(n);
+      if (!r.ok) {
+        if (r.error === "needs_onboarding") { setPayout((p) => p ? { ...p, payouts_enabled: false } : p); await startOnboarding(); return; }
+        setErr(r.message || "Could not cash out.");
+        return;
+      }
+      setResult(r); onSold(r.balance);
+    } catch (ex) { setErr(ex instanceof Error ? ex.message : "Could not cash out."); }
+    finally { setBusy(false); }
+  }
+
+  // Cash-out is disabled until a real fiat payout rail exists (reserve.cashout). Show a calm, honest
+  // "coming soon" rather than a form the backend would reject — coins stay fully gold-backed.
+  if (!cashout) {
+    return (
+      <Card className="flex flex-col gap-4 p-6">
+        <div>
+          <h3 className="text-[18px] font-bold tracking-tight">Cash out</h3>
+          <p className="mt-1 text-[13px] text-ink-3">Redeem coins for cash at the published sell price.</p>
+        </div>
+        <p className="rounded-field border border-line bg-space-1 px-4 py-3 text-[14px] text-ink-2">Cash-out is coming soon. Your coins are fully gold-backed and safe — spend or hold them now, and you’ll be able to redeem for cash the moment cash-out launches.</p>
+      </Card>
+    );
+  }
+
+  // Nothing to sell yet — point the learner at the only way to mint coins, rather than a dead form.
+  if (balance <= 0) {
+    return (
+      <Card className="flex flex-col gap-4 p-6">
+        <div>
+          <h3 className="text-[18px] font-bold tracking-tight">Cash out</h3>
+          <p className="mt-1 text-[13px] text-ink-3">Redeem coins for cash at the published sell price.</p>
+        </div>
+        <p className="rounded-field border border-line bg-space-1 px-4 py-3 text-[14px] text-ink-2">You have no coins yet. You earn gold-backed coins by posting the most-upvoted replies in a course — once you’re certified, a share of the course’s revenue is minted into your wallet.</p>
+        <Button href="/courses/" variant="outline" className="h-11 w-full text-[15px]">Win coins by replying</Button>
+      </Card>
+    );
+  }
+
+  return (
+    <Card as="form" onSubmit={submit} className="flex flex-col gap-4 p-6">
+      <div>
+        <h3 className="text-[18px] font-bold tracking-tight">Cash out</h3>
+        <p className="mt-1 text-[13px] text-ink-3">Redeem coins for cash at the published sell price{sellPrice > 0 && <> ({perCoin(sellPrice, fiat)} per <bdi dir="ltr" data-ay-skip="1">₳</bdi>)</>}. This price already includes the 5%-per-side spread.</p>
+      </div>
+      <Field label="Coins to cash out">
+        <div className="flex items-center gap-2">
+          <Input value={coins} onChange={(e) => setCoins(e.target.value.replace(/[^0-9]/g, ""))} inputMode="numeric" placeholder="0" className="min-w-0 flex-1 bg-space-1 px-3.5" />
+          <Button variant="outline" size="md" onClick={() => setCoins(String(balance))} className="shrink-0 px-3 text-[13px]">Max</Button>
+        </div>
+      </Field>
+      <p className="-mt-1 text-[13px] text-ink-3">{sellPrice > 0 && <>≈ <span className="font-semibold text-yin-light">{formatFiat(estPayout, fiat)}</span> · </>}balance after: <Coins n={Math.max(0, balance - n)} /></p>
+      {needsOnboarding && (
+        <p className="rounded-field border border-line bg-space-1 px-4 py-3 text-[13px] text-ink-2">First cash-out? You’ll set up a secure payout account with Stripe (a one-time, 2-minute step) so we can send money straight to your bank.</p>
+      )}
+      {err && <ErrorNote>{err}</ErrorNote>}
+      {result && <p role="status" className="rounded-card border border-yang/40 bg-yang/10 px-4 py-2.5 text-[14px] text-ink">{result.message || <>Cashed out <Coins n={result.coins} /> for {formatFiat(result.payout, result.currency || fiat)}.</>}</p>}
+      {needsOnboarding ? (
+        <Button type="button" variant="primaryYin" onClick={startOnboarding} disabled={connecting} className="h-12 w-full text-[16px] disabled:opacity-50">{connecting ? "Opening secure setup…" : "Set up payouts to cash out"}</Button>
+      ) : (
+        <Button type="submit" variant="primaryYin" disabled={busy || n < 1 || n > balance} className="h-12 w-full text-[16px] disabled:opacity-50">{busy ? "Processing…" : n > 0 ? <>Cash out {formatFiat(estPayout, fiat)}</> : "Cash out"}</Button>
+      )}
+      {n > balance && <p className="-mt-1 text-[12px] text-rose-300">You only have {formatCoins(balance)}.</p>}
+    </Card>
+  );
+}
+
+export default function Wallet() {
+  const [dash, setDash] = useState<Dashboard | null>(null);
+  const [opts, setOpts] = useState<DonateOptions | null>(null);
+  const [reserve, setReserve] = useState<Reserve | null>(null);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [wallet, setWallet] = useState<WalletData | null>(null);
+  // `failed` tracks a reserve fetch error distinct from loading, so prices/cash-out don't hang on "Loading…".
+  const [failed, setFailed] = useState(false);
+
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const logged = isLoggedIn();
+  const refreshWallet = () => getWallet().then((wd) => { if (wd) { setWallet(wd); setBalance(wd.coins); } });
+  useEffect(() => {
+    if (!logged) return;
+    getDashboard().then((d) => { setDash(d); if (d) setBalance(d.coins); });
+    getDonateOptions().then(setOpts);
+    getReserve().then((d) => { if (d) setReserve(d); else setFailed(true); }).catch(() => setFailed(true));
+    refreshWallet();
+  }, [logged]);
+
+  // Returning from Stripe Checkout (coin top-up): verify the session, then refresh the wallet so the
+  // minted coins show. Fulfilment is idempotent server-side (and also covered by the webhook), so a
+  // refresh never double-credits. Strip the query afterwards so a reload doesn't re-show the banner.
+  useEffect(() => {
+    if (!logged) return;
+    const sp = new URLSearchParams(window.location.search);
+    const po = sp.get("payout");
+    if (po) {
+      // Returning from Stripe Express onboarding. "done" = finished (payouts may now be enabled);
+      // "refresh" = the link expired before finishing. Either way, refresh the wallet + clear the query.
+      setNotice(po === "done"
+        ? { ok: true, text: "Payout setup complete — you can cash out below." }
+        : { ok: false, text: "Payout setup wasn’t finished. Start again whenever you’re ready." });
+      refreshWallet();
+      window.history.replaceState({}, "", window.location.pathname);
+      return;
+    }
+    const st = sp.get("stripe");
+    if (!st) return;
+    if (st === "success") {
+      const session = sp.get("session") || "";
+      if (session) getStripeVerify(session).then((v) => {
+        if (v?.paid) { refreshWallet(); setNotice({ ok: true, text: "Payment received — your coins are in your wallet." }); }
+        else setNotice({ ok: false, text: "We couldn't confirm your card payment yet. If you were charged, it'll appear shortly." });
+      });
+    } else if (st === "cancel") {
+      setNotice({ ok: false, text: "Card payment cancelled — nothing was charged." });
+    }
+    window.history.replaceState({}, "", window.location.pathname);
+  }, [logged]);  
+
+  if (!logged) {
+    return <SignInGate title="Your wallet" body="Sign in to buy, hold, and cash out Arta Coins." />;
+  }
+  // A reserve/FX-feed failure must NOT hide the wallet: the balance + ledger come from the coin
+  // ledger and don't need live prices. We degrade gracefully (drop the fiat estimate, show a note)
+  // instead of blocking the whole page — losing sight of your own balance over a price-feed hiccup
+  // is the worst failure here. `failed` now only suppresses the fiat conversion below.
+  const fiat = reserve?.fiat || "CAD";
+  const bal = balance ?? dash?.coins ?? 0;
+
+  return (
+    <div className="flex flex-col gap-8 pb-12">
+      {/* balance header */}
+      <section className="relative overflow-hidden rounded-card border border-line bg-space-2 px-6 py-9 shadow-card sm:px-9">
+        <OrbitRings className="absolute -right-10 top-1/2 hidden h-72 w-72 -translate-y-1/2 text-ink sm:block lg:right-12" />
+        <div className="relative flex items-center justify-between gap-6">
+          <div>
+            <p className="text-[13px] font-semibold uppercase tracking-[0.18em] text-ink-3">Your wallet</p>
+            <div className="mt-2 text-[clamp(2.4rem,6vw,3.2rem)] font-extrabold leading-none text-yang tabular-nums">{balance == null && !dash ? "—" : <Coins n={bal} />}</div>
+            <p className="mt-2 text-[14px] text-ink-2">Arta Coins · gold-backed.{reserve ? <> Cash-out value ≈ <span className="font-semibold text-ink">{formatFiat(bal * reserve.sell, fiat)}</span>.</> : failed ? <> Live cash-out value is temporarily unavailable.</> : null}</p>
+            <a href={localePath("/reserve/")} className="mt-3 inline-block text-[14px] font-semibold text-yang hover:underline">See the reserve →</a>
+          </div>
+          <CoinDisc size={132} className="hidden shrink-0 sm:block" />
+        </div>
+      </section>
+
+      {notice && (
+        <p role="status" className={`rounded-card border px-4 py-3 text-[14px] ${notice.ok ? "border-yang/40 bg-yang/10 text-ink" : "border-line bg-space-1 text-ink-2"}`}>{notice.text}</p>
+      )}
+
+      {CHECKOUT_LIVE ? (
+        // #buy is the scroll target for "Top up your wallet" CTAs (e.g. ArtaBot) so landing here goes
+        // straight to the Buy-coins form; scroll-mt clears the 60px sticky topbar.
+        <div id="buy" className="grid scroll-mt-24 gap-5 lg:grid-cols-2">
+          <BuyPanel opts={opts} buyPrice={reserve?.buy ?? 0} fiat={fiat} payments={reserve?.payments ?? false} onCredited={refreshWallet} />
+          <SellPanel balance={bal} sellPrice={reserve?.sell ?? 0} fiat={fiat} cashout={reserve?.cashout ?? false} onSold={() => refreshWallet()} />
+        </div>
+      ) : (
+        // Buy/cash-out is retired (see CHECKOUT_LIVE) — the BuyPanel filled then failed on submit
+        // (buyCoins is a RETIRED stub). Honest state instead; balance + live gold value stay above.
+        <Card className="flex flex-col items-start gap-3 p-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-[18px] font-bold tracking-tight">Buying and cashing out are being rebuilt</h2>
+            <p className="mt-1 max-w-xl text-[14px] leading-relaxed text-ink-2">Topping up with fiat and cashing out for fiat are coming back on the new platform. Meanwhile you win gold-backed coins by posting the most-upvoted replies in a course — once certified, a share of the course’s revenue is minted into your wallet.</p>
+          </div>
+          <Button href="/courses/" className="shrink-0">Win coins by learning</Button>
+        </Card>
+      )}
+
+      {wallet && wallet.ledger.length > 0 && (
+        <Card as="section" className="p-5 sm:p-6">
+          <h2 className="text-[16px] font-bold tracking-tight">Recent activity</h2>
+          <ul className="mt-3 divide-y divide-line">
+            {wallet.ledger.slice(0, 12).map((t, i) => (
+              <li key={i} className="flex items-center justify-between gap-3 py-2.5">
+                <span className="min-w-0">
+                  <span className="block text-[14px] text-ink-2">{txnLabel(t.reason)}</span>
+                  {t.at > 0 && <span className="block text-[12px] text-ink-3">{new Date(t.at * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>}
+                </span>
+                <span className={`shrink-0 text-[15px] font-semibold tabular-nums ${t.delta >= 0 ? "text-yang" : "text-ink-3"}`}>{t.delta >= 0 ? "+" : "−"}<Coins n={Math.abs(t.delta)} /></span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      <p className="text-center text-[12px] text-ink-3">Prices track the price of gold, not us. You win coins on course podiums, and earn points by learning, donating, volunteering, or winning grants — see the <a href={localePath("/rankings/")} className="text-yang hover:underline">leaderboard</a> or <a href={localePath("/data/?table=wp_aq_coin_ledger")} className="text-yang hover:underline">browse the ledgers</a>.</p>
+    </div>
+  );
+}

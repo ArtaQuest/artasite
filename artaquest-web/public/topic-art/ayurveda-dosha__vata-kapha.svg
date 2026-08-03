@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Vata-Kapha — a dual constitution blending Vata's airy mobility with Kapha's grounded calm">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <g fill="none" stroke-linecap="round" stroke-width="2.9">
+    <path d="M11 33 H26 a4.5 4.5 0 1 0 -4.5 -4.5" stroke="#E8B923"/>
+    <path d="M11 45 H30 a5 5 0 1 1 -5 5" stroke="#2352E8"/>
+  </g>
+  <g transform="translate(53 40)">
+    <path d="M-15 9 A15 15 0 0 1 15 9 Z" fill="#E8B923"/>
+    <rect x="-16" y="9" width="32" height="6" rx="2.4" fill="#2352E8"/>
+  </g>
+</svg>

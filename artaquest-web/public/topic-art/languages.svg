@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Languages spoken">
+  <circle cx="40" cy="40" r="38" fill="#06121E"/>
+  <!-- back speech bubble (gold) — one voice -->
+  <path d="M19 18 H45 a7 7 0 0 1 7 7 V37 a7 7 0 0 1 -7 7 H32 l-6 7 -1 -7 H19 a7 7 0 0 1 -7 -7 V25 a7 7 0 0 1 7 -7 Z"
+        fill="#06121E" stroke="#E8B923" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="25" cy="31" r="2.1" fill="#E8B923"/>
+  <circle cx="32" cy="31" r="2.1" fill="#E8B923"/>
+  <circle cx="39" cy="31" r="2.1" fill="#E8B923"/>
+  <!-- front speech bubble (blue) — another tongue, in dialogue -->
+  <path d="M44 38 H62 a6 6 0 0 1 6 6 V53 a6 6 0 0 1 -6 6 H52 l-6 7 -1 -7 H44 a6 6 0 0 1 -6 -6 V44 a6 6 0 0 1 6 -6 Z"
+        fill="#0C1E32" stroke="#2352E8" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="49" cy="49" r="2" fill="#2352E8"/>
+  <circle cx="55" cy="49" r="2" fill="#2352E8"/>
+  <circle cx="61" cy="49" r="2" fill="#2352E8"/>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Orange, achievement — an upward arrow over rising bars for progress">
+  <g fill="#2352E8">
+    <rect x="16" y="48" width="11" height="18" rx="1.5"/>
+    <rect x="34" y="40" width="11" height="26" rx="1.5"/>
+    <rect x="52" y="30" width="11" height="36" rx="1.5"/>
+  </g>
+  <path d="M18 52 L58 22" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M62 16 L50 20 L58 30 Z" fill="var(--ico-gold,#E8B923)"/>
+</svg>

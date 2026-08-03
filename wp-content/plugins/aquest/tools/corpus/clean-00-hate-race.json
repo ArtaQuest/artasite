@@ -1,0 +1,106 @@
+[
+  {
+    "category": "hate-race",
+    "lang": "en",
+    "text": "These people aren't human, they're roaches. You step on roaches.",
+    "flag": true,
+    "note": "Vermin framing plus implied violence against a group",
+    "band": 95
+  },
+  {
+    "category": "hate-race",
+    "lang": "en",
+    "text": "Honestly the whole continent is just a breeding ground of subhumans dragging the rest of us down.",
+    "flag": true,
+    "note": "Calls an ethnic group subhuman; dehumanising",
+    "band": 90
+  },
+  {
+    "category": "hate-race",
+    "lang": "en",
+    "text": "Such a shame, they USED to be a clean neighbourhood, before the rats moved in. You know exactly which rats I mean.",
+    "flag": true,
+    "note": "Coded vermin slur targeting a racial group",
+    "band": 84
+  },
+  {
+    "category": "hate-race",
+    "lang": "en",
+    "text": "Every single one of them is a thieving animal. The whole bloodline is rotten and always has been.",
+    "flag": true,
+    "note": "Animal framing and collective racial condemnation",
+    "band": 88
+  },
+  {
+    "category": "hate-race",
+    "lang": "en",
+    "text": "They breed like locusts and swarm wherever there's anything left to take. A plague, plain and simple.",
+    "flag": true,
+    "note": "Insect-swarm and plague dehumanisation of a group",
+    "band": 90
+  },
+  {
+    "category": "hate-race",
+    "lang": "en",
+    "text": "Oh I'm sure they're LOVELY people. The kind of lovely people you cross the street to avoid because they're all the same filth.",
+    "flag": true,
+    "note": "Sarcastic politeness masking 'all filth' dehumanisation",
+    "band": 80
+  },
+  {
+    "category": "hate-race",
+    "lang": "en",
+    "text": "Wipe the lot of them off the map and the world would finally breathe again. Nobody would miss that race.",
+    "flag": true,
+    "note": "Celebrates elimination of an entire race",
+    "band": 96
+  },
+  {
+    "category": "hate-race",
+    "lang": "en",
+    "text": "g0 back to your mud huts you savages, civilised people don't want you here",
+    "flag": true,
+    "note": "Slur-as-attack plus 'go back' eliminationism",
+    "band": 91
+  },
+  {
+    "category": "hate-race",
+    "lang": "en",
+    "text": "Let's just call it what it is: that whole ethnic group is a parasite feeding on every host nation it slips into. Cut it out before it spreads.",
+    "flag": true,
+    "note": "Parasite framing and incitement to remove a group",
+    "band": 93
+  },
+  {
+    "category": "hate-race",
+    "lang": "en",
+    "text": "I don't hate them as individuals, it's just biology — that race simply isn't built with the same brains as the rest of us. Lesser stock.",
+    "flag": true,
+    "note": "Pseudo-polite racial-inferiority dehumanisation as 'biology'",
+    "band": 78
+  },
+  {
+    "category": "hate-race",
+    "lang": "en",
+    "text": "Cattle. That's all they are. You herd them, you fence them, and when there are too many you cull them.",
+    "flag": true,
+    "note": "Livestock framing with explicit 'cull' violence call",
+    "band": 94
+  },
+  {
+    "category": "hate-race",
+    "lang": "en",
+    "text": "Welcome the newcomers? Sure. Right onto the next boat home. We were doing just fine before their kind crawled ashore.",
+    "flag": true,
+    "note": "Coded 'crawled' vermin dehumanisation and expulsion of an ethnicity",
+    "band": 79
+  },
+  {
+    "category": "hate-race",
+    "lang": "en",
+    "text": "Funny how the moment they show up the property values tank — because vermin always lower the value of anything they touch.",
+    "flag": true,
+    "note": "Vermin slur applied to a racial group",
+    "band": 83
+  }
+]

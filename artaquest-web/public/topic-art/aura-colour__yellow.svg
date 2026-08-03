@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Yellow aura — joyful, optimistic and free-spirited, shown as a radiant sun">
+  <circle cx="40" cy="40" r="14" fill="var(--ico-gold,#E8B923)"/>
+  <g stroke="#2352E8" stroke-width="2.8" stroke-linecap="round">
+    <path d="M40 18 L40 8"/>
+    <path d="M40 62 L40 72"/>
+    <path d="M18 40 L8 40"/>
+    <path d="M62 40 L72 40"/>
+    <path d="M24 24 L17 17"/>
+    <path d="M56 24 L63 17"/>
+    <path d="M24 56 L17 63"/>
+    <path d="M56 56 L63 63"/>
+  </g>
+</svg>

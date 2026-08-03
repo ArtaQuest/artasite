@@ -1,0 +1,11 @@
+# Self-hosted bespoke topic/group profile pictures (SVG), authored by the ArtaPolish loop.
+#
+# One file per entity, referenced from typologies.data.json `image` fields as a BASE-relative path
+# (e.g. "topic-art/big-five.svg") and resolved in the SPA via resolveImage() in lib/typology-meta.ts:
+#   - system:  topic-art/<systemKey>.svg
+#   - option:  topic-art/<systemKey>__<optionKey>.svg
+#
+# Vite copies public/ verbatim into the build output (theme app/), so these ship live on the SPA's
+# normal build+deploy — no separate deploy path. Real canonical images (Wikimedia/official APIs) are
+# stored as absolute https:// URLs instead and need no file here. The /aq/v1/emblem endpoint remains
+# the never-404 fallback for anything not yet authored.

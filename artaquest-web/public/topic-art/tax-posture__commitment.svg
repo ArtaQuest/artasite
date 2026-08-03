@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80" role="img" aria-label="Willing bond with a check">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <circle cx="53" cy="40" r="13" fill="none" stroke="#2352E8" stroke-width="3.4"/>
+  <circle cx="21" cy="40" r="5.4" fill="#E8B923"/>
+  <line x1="26.4" y1="40" x2="41" y2="40" stroke="#E8B923" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M47 41 l4.5 4.5 L60 35" fill="none" stroke="#E8B923" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

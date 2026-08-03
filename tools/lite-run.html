@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>ArtaQuest Lab — opening…</title>
+<!--
+  Redirect stub (2026-07-16). The notebook editor lives INSIDE the SPA now — pages/Lab.tsx at
+  /lab?src=<raw ipynb url> — one implementation, consistent with the whole platform (shell,
+  ArtaContrast, KaTeX, i18n). This file only keeps the historical
+  /wp-content/lite/run.html?src=… links working, and unregisters any service worker the retired
+  JupyterLite app left under this scope. The self-hosted Pyodide dist stays in ./static/pyodide/.
+-->
+<style>body{margin:0;background:#0d0d0f;color:#8b8e98;font:15px/1.6 -apple-system,'Segoe UI',Roboto,sans-serif;display:grid;place-items:center;min-height:100vh}b{color:#e8b923}</style>
+</head>
+<body>
+<div style="text-align:center"><b style="font-size:19px;letter-spacing:.2em">ARTAQUEST</b><p>Opening the Lab…</p></div>
+<script>
+if (navigator.serviceWorker) {
+  navigator.serviceWorker.getRegistrations().then(function (rs) { rs.forEach(function (r) { r.unregister(); }); }).catch(function () {});
+}
+var src = new URLSearchParams(location.search).get("src") || "";
+location.replace("/lab" + (src ? "?src=" + encodeURIComponent(src) : ""));
+</script>
+</body>
+</html>

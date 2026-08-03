@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Normative commitment — you ought to stay">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <circle cx="40" cy="40" r="34" fill="none" stroke="#2352E8" stroke-width="2.5"/>
+  <path d="M40 21 L57 27 C 57 44, 50 55, 40 60 C 30 55, 23 44, 23 27 Z" fill="#E8B923"/>
+  <path d="M31 38 L40 44 L49 38" fill="none" stroke="#2352E8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

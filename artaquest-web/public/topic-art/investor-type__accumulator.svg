@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Accumulator">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <g fill="#E8B923">
+    <ellipse cx="30" cy="59" rx="14" ry="4.5"/>
+    <ellipse cx="30" cy="50" rx="14" ry="4.5"/>
+    <ellipse cx="30" cy="41" rx="14" ry="4.5"/>
+  </g>
+  <line x1="47" y1="60" x2="61" y2="28" stroke="#2352E8" stroke-width="3.8" stroke-linecap="round"/>
+  <polygon points="66,20 57,25 63,32" fill="#2352E8"/>
+</svg>

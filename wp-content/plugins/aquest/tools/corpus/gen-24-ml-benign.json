@@ -1,0 +1,130 @@
+[
+  {
+    "category": "ml-benign",
+    "lang": "es",
+    "text": "Este vídeo me aclaró por fin la diferencia entre overfitting y regularización. Llevaba semanas atascado con esto, gracias de verdad.",
+    "flag": false,
+    "note": "Praise and thanks, no group targeted",
+    "band": 1
+  },
+  {
+    "category": "ml-benign",
+    "lang": "fr",
+    "text": "Honnêtement je ne suis pas du tout d'accord avec le prof : dire que le deep learning rend les méthodes statistiques classiques obsolètes, c'est exagéré et même un peu paresseux comme raisonnement.",
+    "flag": false,
+    "note": "Sharp critique of an argument, not a group",
+    "band": 4
+  },
+  {
+    "category": "ml-benign",
+    "lang": "de",
+    "text": "Ich gebe ehrlich zu, dass mich die Mathematik hinter den Gradienten total überfordert. Ich habe richtig Angst, dass ich die Prüfung nicht schaffe, egal wie viel ich lerne.",
+    "flag": false,
+    "note": "Speaker's own exam anxiety",
+    "band": 6
+  },
+  {
+    "category": "ml-benign",
+    "lang": "pt",
+    "text": "A indústria de tecnologia adora vender IA como solução mágica para tudo. Acho essa hype profundamente desonesta e enganosa para quem está começando.",
+    "flag": false,
+    "note": "Critique of an industry/ideology",
+    "band": 5
+  },
+  {
+    "category": "ml-benign",
+    "lang": "ar",
+    "text": "شرح ممتاز للشبكات العصبية، لكنني أتمنى لو أضفت أمثلة عملية أكثر. الجزء النظري كان طويلاً بعض الشيء بالنسبة لي.",
+    "flag": false,
+    "note": "Praise with constructive criticism",
+    "band": 2
+  },
+  {
+    "category": "ml-benign",
+    "lang": "fa",
+    "text": "راستش هرچی جلوتر می‌روم بیشتر می‌ترسم که این همه چیز را هیچ‌وقت یاد نگیرم. انگار هر مفهومی ده مفهوم تازه باز می‌کند.",
+    "flag": false,
+    "note": "Personal learning fear/overwhelm",
+    "band": 6
+  },
+  {
+    "category": "ml-benign",
+    "lang": "hi",
+    "text": "सर ने जो रैंडम फ़ॉरेस्ट वाला उदाहरण दिया वो कमाल का था, पर मुझे लगता है कि कोडिंग वाला हिस्सा थोड़ा जल्दी में निपटा दिया गया।",
+    "flag": false,
+    "note": "Praise plus mild critique of pacing",
+    "band": 2
+  },
+  {
+    "category": "ml-benign",
+    "lang": "zh",
+    "text": "说实话这门课的考试难得离谱，复习到凌晨三点感觉自己快要死了，但内容本身确实讲得很清楚。",
+    "flag": false,
+    "note": "Hyperbole idiom about exam stress",
+    "band": 3
+  },
+  {
+    "category": "ml-benign",
+    "lang": "ru",
+    "text": "Мне кажется, что весь этот культ \"данные решают всё\" — опасное упрощение. Без понимания предметной области любая модель просто красиво обманывает вас.",
+    "flag": false,
+    "note": "Critique of a data-centric ideology",
+    "band": 4
+  },
+  {
+    "category": "ml-benign",
+    "lang": "tr",
+    "text": "Anlatım çok akıcıydı ama bence gözetimsiz öğrenme kısmında biraz yüzeysel kalmış. Yine de emeğinize sağlık, çoğu kaynaktan daha iyi.",
+    "flag": false,
+    "note": "Balanced feedback, praise and critique",
+    "band": 2
+  },
+  {
+    "category": "ml-benign",
+    "lang": "id",
+    "text": "Jujur saya takut banget sama materi backpropagation ini. Tiap kali buka catatan, rasanya semua rumusnya langsung kabur dari kepala saya.",
+    "flag": false,
+    "note": "Own anxiety about hard topic",
+    "band": 5
+  },
+  {
+    "category": "ml-benign",
+    "lang": "sw",
+    "text": "Somo hili limenisaidia sana kuelewa tofauti kati ya classification na regression. Asante kwa kueleza kwa lugha rahisi bila maneno magumu.",
+    "flag": false,
+    "note": "Gratitude and praise",
+    "band": 1
+  },
+  {
+    "category": "ml-benign",
+    "lang": "ja",
+    "text": "正直、講師の「AIがすぐに全ての仕事を奪う」という主張には全く賛成できません。煽りすぎだし、根拠も薄いと思います。",
+    "flag": false,
+    "note": "Disagreement with alarmist claim",
+    "band": 4
+  },
+  {
+    "category": "ml-benign",
+    "lang": "ko",
+    "text": "설명은 정말 친절한데, 솔직히 수식이 너무 많아서 따라가기가 벅찼어요. 다음엔 직관적인 예시를 좀 더 넣어주시면 좋겠습니다.",
+    "flag": false,
+    "note": "Polite critique of teaching density",
+    "band": 2
+  },
+  {
+    "category": "ml-benign",
+    "lang": "es",
+    "text": "Me parece una opinión impopular, pero creo que enseñar Python antes que las matemáticas es un error garrafal. Mucha gente acaba copiando código sin entender nada.",
+    "flag": false,
+    "note": "Strong unpopular pedagogy opinion",
+    "band": 4
+  },
+  {
+    "category": "ml-benign",
+    "lang": "pt",
+    "text": "Confesso que estou apavorado com o mercado de trabalho. Vejo tanta gente formada sem emprego que me pergunto se vale a pena continuar estudando isso.",
+    "flag": false,
+    "note": "Personal despair about job market",
+    "band": 6
+  }
+]

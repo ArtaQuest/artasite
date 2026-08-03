@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Ultimate meaning — searching whether life has meaning">
+  
+  <circle cx="40" cy="40" r="39" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.4"/>
+  <!-- the search circling an elusive centre -->
+  <path d="M44 40 A6 6 0 0 1 32 40 A10 10 0 0 1 52 40 A14 14 0 0 1 26 40 A18 18 0 0 1 60 40" fill="none" stroke="#2352E8" stroke-width="2.6" stroke-linecap="round"/>
+  <circle cx="40" cy="40" r="3.2" fill="var(--ico-gold,#E8B923)"/>
+</svg>

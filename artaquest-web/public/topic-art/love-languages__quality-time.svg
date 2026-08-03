@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Quality Time — love given through undivided, focused attention">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <circle cx="40" cy="42" r="18" fill="none" stroke="#E8B923" stroke-width="3.4"/>
+  <line x1="40" y1="42" x2="40" y2="30" stroke="#2352E8" stroke-width="3.4" stroke-linecap="round"/>
+  <line x1="40" y1="42" x2="49" y2="47" stroke="#2352E8" stroke-width="3.4" stroke-linecap="round"/>
+  <circle cx="40" cy="42" r="2.8" fill="#E8B923"/>
+</svg>

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Why you obey the law">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <circle cx="40" cy="40" r="38" fill="none" stroke="#E8B923" stroke-width="1" opacity="0.35"/>
+  <!-- the law: a tablet of statute -->
+  <rect x="29" y="13" width="22" height="16" rx="3" fill="none" stroke="#E8B923" stroke-width="2.4"/>
+  <line x1="34" y1="19" x2="46" y2="19" stroke="#E8B923" stroke-width="1.6" stroke-linecap="round"/>
+  <line x1="34" y1="23.5" x2="44" y2="23.5" stroke="#E8B923" stroke-width="1.6" stroke-linecap="round"/>
+  <!-- three bases of compliance converging on the law -->
+  <path d="M19 63 C 22 46, 33 40, 40 31" fill="none" stroke="#2352E8" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M40 67 L 40 31" fill="none" stroke="#2352E8" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M61 63 C 58 46, 47 40, 40 31" fill="none" stroke="#2352E8" stroke-width="2.6" stroke-linecap="round"/>
+  <circle cx="19" cy="63" r="3" fill="#E8B923"/>
+  <circle cx="40" cy="67" r="3" fill="#E8B923"/>
+  <circle cx="61" cy="63" r="3" fill="#E8B923"/>
+</svg>

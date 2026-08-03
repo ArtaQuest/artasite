@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <clipPath id="yy-left">
+      <rect x="0" y="0" width="50" height="100"/>
+    </clipPath>
+  </defs>
+  <!-- 1. Full outer circle — gold (yang base) -->
+  <circle cx="50" cy="50" r="50" fill="#E8B923"/>
+  <!-- 2. Left half — blue (yin base) -->
+  <circle cx="50" cy="50" r="50" fill="#2352E8" clip-path="url(#yy-left)"/>
+  <!-- 3. Top small circle — gold (yang bulge into yin at top) -->
+  <circle cx="50" cy="25" r="25" fill="#E8B923"/>
+  <!-- 4. Bottom small circle — blue (yin bulge into yang at bottom) -->
+  <circle cx="50" cy="75" r="25" fill="#2352E8"/>
+  <!-- Science (blue) dot inside yang (gold) area -->
+  <circle cx="50" cy="25" r="9" fill="#2352E8"/>
+  <!-- Religion (gold) dot inside yin (blue) area -->
+  <circle cx="50" cy="75" r="9" fill="#E8B923"/>
+</svg>

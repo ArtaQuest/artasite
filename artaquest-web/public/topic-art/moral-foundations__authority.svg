@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80" role="img" aria-label="Authority — a crown">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <path d="M22 50 L24 30 L33 39 L40 26 L47 39 L56 30 L58 50 Z" fill="#E8B923"/>
+  <rect x="22" y="50" width="36" height="6" rx="2" fill="#2352E8"/>
+  <g fill="#2352E8">
+    <circle cx="24" cy="29" r="2.4"/>
+    <circle cx="40" cy="25" r="2.4"/>
+    <circle cx="56" cy="29" r="2.4"/>
+  </g>
+</svg>

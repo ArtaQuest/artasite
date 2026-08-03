@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="A bit of both — fixed and growth">
+  
+  
+  <rect x="26" y="46" width="28" height="22" rx="4" fill="#2352E8"/>
+  <path d="M32 46 V40 A9 9 0 0 1 50 37" fill="none" stroke="#2352E8" stroke-width="4" stroke-linecap="round"/>
+  <path d="M40 50 V22" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M40 33 C46 33 52 29 53 21 C45 22 41 26 40 33 Z" fill="var(--ico-gold,#E8B923)"/>
+  <path d="M40 37 C34 37 28 34 27 27 C34 28 39 31 40 37 Z" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="40" cy="40" r="39" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.5" stroke-opacity="0.4"/>
+</svg>

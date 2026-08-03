@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Power — a crown of status and influence">
+  
+  
+  <path d="M22 50 L18 26 L31 38 L40 22 L49 38 L62 26 L58 50 Z" fill="var(--ico-gold,#E8B923)" stroke="var(--ico-gold,#E8B923)" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="22" y="52" width="36" height="6" rx="1.5" fill="var(--ico-gold,#E8B923)"/>
+  <g fill="#2352E8"><circle cx="18" cy="26" r="2.6"/><circle cx="40" cy="22" r="2.8"/><circle cx="62" cy="26" r="2.6"/><circle cx="40" cy="55" r="2.2"/></g>
+</svg>

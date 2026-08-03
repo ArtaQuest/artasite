@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Self-monitoring — an eye reading the social cues around it">
+  
+  
+  <circle cx="40" cy="40" r="34" fill="none" stroke="#2352E8" stroke-width="1" stroke-opacity="0.4"/>
+  <g fill="var(--ico-gold,#E8B923)">
+    <circle cx="40" cy="9" r="2.5"/>
+    <circle cx="71" cy="40" r="2.5"/>
+    <circle cx="40" cy="71" r="2.5"/>
+    <circle cx="9" cy="40" r="2.5"/>
+  </g>
+  <g fill="#2352E8">
+    <circle cx="61.9" cy="18.1" r="2.5"/>
+    <circle cx="61.9" cy="61.9" r="2.5"/>
+    <circle cx="18.1" cy="61.9" r="2.5"/>
+    <circle cx="18.1" cy="18.1" r="2.5"/>
+  </g>
+  <path d="M20 40 Q40 24 60 40 Q40 56 20 40 Z" fill="var(--ico-ink,#06121E)" stroke="#2352E8" stroke-width="2.4"/>
+  <circle cx="40" cy="40" r="8" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="40" cy="40" r="3.4" fill="var(--ico-ink,#010C17)"/>
+</svg>

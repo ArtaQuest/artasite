@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Tridoshic — Vata, Pitta and Kapha present in equal, balanced measure">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <g>
+    <ellipse cx="40" cy="24" rx="6.5" ry="13" fill="#E8B923"/>
+    <ellipse cx="40" cy="24" rx="6.5" ry="13" fill="#2352E8" transform="rotate(120 40 40)"/>
+    <ellipse cx="40" cy="24" rx="6.5" ry="13" fill="#E8B923" transform="rotate(240 40 40)"/>
+  </g>
+  <circle cx="40" cy="40" r="6" fill="#2352E8"/>
+  <circle cx="40" cy="40" r="2.4" fill="#E8B923"/>
+</svg>

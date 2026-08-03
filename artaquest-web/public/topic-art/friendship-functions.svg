@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="none" role="img">
+  <circle cx="40" cy="40" r="38" fill="#06121E"/>
+  <circle cx="40" cy="40" r="36.5" stroke="#0C1E32" stroke-width="3"/>
+  <g stroke="#E8B923" stroke-width="2.6">
+    <path d="M40 40 L40 18"/>
+    <path d="M40 40 L59 29"/>
+    <path d="M40 40 L59 51"/>
+    <path d="M40 40 L40 62"/>
+    <path d="M40 40 L21 51"/>
+    <path d="M40 40 L21 29"/>
+  </g>
+  <g fill="#2352E8">
+    <circle cx="40" cy="18" r="4.6"/>
+    <circle cx="59" cy="29" r="4.6"/>
+    <circle cx="59" cy="51" r="4.6"/>
+    <circle cx="40" cy="62" r="4.6"/>
+    <circle cx="21" cy="51" r="4.6"/>
+    <circle cx="21" cy="29" r="4.6"/>
+  </g>
+  <circle cx="40" cy="40" r="6.2" fill="#E8B923"/>
+</svg>

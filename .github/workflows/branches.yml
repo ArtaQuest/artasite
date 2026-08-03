@@ -1,0 +1,153 @@
+# Verification for every branch EXCEPT main.
+#
+# WHY THIS IS A SEPARATE FILE. WordPress.com's deployment binds to .github/workflows/main.yml and is
+# fussy about its shape: widening that workflow's trigger to every branch, and making its artifact
+# step conditional, made every deployment fail with "Error" before it even started. main.yml is
+# therefore left exactly as the integration expects, and branch verification lives here where it
+# cannot break production.
+#
+# Identical checks to main.yml, minus the artifact — a branch must never hand the deployment
+# pipeline something that was never released.
+
+name: branches
+
+on:
+  push:
+    branches-ignore: [main]
+  # No `pull_request` trigger: a fork's PR must never run with this repository's permissions.
+
+concurrency:
+  group: branch-${{ github.ref }}
+  cancel-in-progress: true   # on a branch, only the newest commit matters
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve what this push added
+        id: range
+        run: |
+          before='${{ github.event.before }}'
+          if [ -n "$before" ] && [ "$before" != "0000000000000000000000000000000000000000" ] \
+             && git cat-file -e "${before}^{commit}" 2>/dev/null; then
+            echo "range=${before}..${{ github.sha }}" >> "$GITHUB_OUTPUT"; echo "root=0" >> "$GITHUB_OUTPUT"
+          elif git rev-parse -q --verify 'HEAD~1' >/dev/null; then
+            echo "range=HEAD~1..HEAD" >> "$GITHUB_OUTPUT"; echo "root=0" >> "$GITHUB_OUTPUT"
+          else
+            # HEAD is a ROOT commit: HEAD~1 does not exist, and asking git for it is a FATAL error,
+            # not an empty range — it took every gate down with exit 128 on a new repo's first push.
+            echo "range=HEAD" >> "$GITHUB_OUTPUT"; echo "root=1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Hygiene
+        run: |
+          # Widened after a Google API key sat in tracked source through every previous run: the old
+          # pattern list had no Google, Slack, JWT or SendGrid shape, so a real one would have
+          # deployed unchallenged. That particular literal turned out to be YouTube's PUBLIC
+          # InnerTube Android-client key — a constant in every copy of the YouTube app, not ours and
+          # not rotatable — so it is allowed BY EXACT VALUE rather than by weakening the pattern.
+          # Any other AIza… is a finding. Add to this allowance only with a comment saying why.
+          ALLOW='AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w'
+          hits=$(grep -rIlE '(sk-ant-[A-Za-z0-9_-]{20,})|(ghp_[A-Za-z0-9]{30,})|(gho_[A-Za-z0-9]{30,})|(github_pat_[A-Za-z0-9_]{30,})|(AKIA[0-9A-Z]{16})|(ASIA[0-9A-Z]{16})|(sk_live_[A-Za-z0-9]{20,})|(rk_live_[A-Za-z0-9]{20,})|(hf_[A-Za-z0-9]{30,})|(xox[baprs]-[A-Za-z0-9-]{10,})|(AIza[0-9A-Za-z_-]{35})|(ya29\.[0-9A-Za-z_-]{20,})|(SG\.[A-Za-z0-9_-]{20,})|(eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.)|(-----BEGIN [A-Z ]*PRIVATE KEY)' \
+               --exclude-dir=.git --exclude-dir=node_modules . || true)
+          bad=0
+          for f in $hits; do
+            # A file counts only if it holds a key-shaped value that is NOT the allowed constant.
+            if grep -oIE '(sk-ant-[A-Za-z0-9_-]{20,})|(ghp_[A-Za-z0-9]{30,})|(gho_[A-Za-z0-9]{30,})|(github_pat_[A-Za-z0-9_]{30,})|(AKIA[0-9A-Z]{16})|(ASIA[0-9A-Z]{16})|(sk_live_[A-Za-z0-9]{20,})|(rk_live_[A-Za-z0-9]{20,})|(hf_[A-Za-z0-9]{30,})|(xox[baprs]-[A-Za-z0-9-]{10,})|(AIza[0-9A-Za-z_-]{35})|(ya29\.[0-9A-Za-z_-]{20,})|(SG\.[A-Za-z0-9_-]{20,})|(eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.)|(-----BEGIN [A-Z ]*PRIVATE KEY)' "$f" \
+                 | grep -qv "$ALLOW"; then
+              echo "::error::$f holds a key-shaped value"; bad=1
+            fi
+          done
+          [ $bad -eq 0 ] || exit 1
+          # Ask GIT'S OWN trailer parser, not a grep. Git honours Co-authored-by: only as a trailer
+          # in the final paragraph, so a line-anchored grep also rejects an indented quotation or a
+          # mid-body mention — it rejected the very commits documenting this rule.
+          bad=$(git log --format='%(trailers:key=Co-authored-by,valueonly)' '${{ steps.range.outputs.range }}' | tr -d '[:space:]')
+          if [ -n "$bad" ]; then
+            echo "::error::a commit in this push carries machine attribution as a git trailer"
+            git log --format='%h %(trailers:key=Co-authored-by)' '${{ steps.range.outputs.range }}' | sed 's/^/  /'
+            exit 1
+          fi
+          echo "clean"
+
+      - name: Route handlers resolve
+        run: |
+          # Rest::ROUTES names handlers as STRINGS ('Health::pulse'), resolved at dispatch, so a
+          # missing class OR a missing method is invisible to php -l and to the bundler. Both raise
+          # the same Error, both are caught by Rest::dispatch, and both answer 500 on whatever route
+          # names them — once, for a public endpoint, while every other gate reported success.
+          #
+          # The pattern reads the ROW'S STRUCTURE — [ 'METHOD', 'path', 'Class::method' — instead of
+          # scanning the line. The previous version used [^]]* for the middle field, a negated class
+          # that cannot cross a ']', so every route carrying a regex param like (?P<id>[0-9]+) was
+          # skipped: 279 of 398 rows checked, and it reported success on the 30% it never read.
+          # Anchoring on the structure also keeps the doc comment atop Rest.php, which names
+          # 'Domain::method' as an example, from being mistaken for a route.
+          pat="^[[:space:]]*\[[[:space:]]*'(GET|POST|PUT|PATCH|DELETE)'[[:space:]]*,[[:space:]]*'[^']*'[[:space:]]*,[[:space:]]*'([A-Z][A-Za-z0-9_]+::[a-z_]+)'"
+          src=wp-content/plugins/aquest/src
+          echo "route rows read: $(grep -cE "$pat" $src/Rest.php)"
+          grep -oE "$pat" $src/Rest.php | grep -oE "'[A-Z][A-Za-z0-9_]+::[a-z_]+'$" | tr -d "'" | sort -u > /tmp/handlers.txt
+          miss=0
+          while IFS= read -r h; do
+            c="${h%%::*}"; m="${h##*::}"
+            if [ ! -f "$src/$c.php" ]; then
+              echo "::error::Rest::ROUTES names $h but $src/$c.php does not exist"; miss=1; continue
+            fi
+            grep -qE "function[[:space:]]+$m[[:space:]]*\(" "$src/$c.php" || {
+              echo "::error::Rest::ROUTES names $h but $c.php defines no $m()"; miss=1; }
+          done < /tmp/handlers.txt
+          [ $miss -eq 0 ] && echo "all $(wc -l < /tmp/handlers.txt) handlers resolve to a class and a method"
+          exit $miss
+
+      - name: PHP syntax
+        run: |
+          shopt -s globstar nullglob
+          fail=0
+          for f in wp-content/plugins/aquest/**/*.php wp-content/themes/artaquest-theme/**/*.php; do
+            php -l "$f" >/dev/null || { echo "::error file=$f::PHP syntax error"; fail=1; }
+          done
+          exit $fail
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: artaquest-web/package-lock.json
+
+      - name: Typecheck, lint, build
+        working-directory: artaquest-web
+        run: |
+          npm ci --no-audit --fund=false
+          ./node_modules/.bin/tsc --noEmit -p tsconfig.app.json
+          # `**` is NOT magic in a git pathspec — it acts as a single `*` and still requires a
+          # `/` after src/, so depth-1 files (src/App.tsx, src/main.tsx) were never linted at all.
+          # A root commit has no diff baseline; linting the whole tree would gate a fresh repo
+          # on every pre-existing warning. tsc and the build still cover everything.
+          if [ "${{ steps.range.outputs.root }}" = "1" ]; then
+            files=""
+            echo "root commit — no diff baseline"
+          else
+            files=$(cd .. && git diff --name-only --diff-filter=ACMR '${{ steps.range.outputs.range }}' \
+                      -- artaquest-web/src | grep -E '\.tsx?$' | sed 's|^artaquest-web/||' || true)
+          fi
+          if [ -n "$files" ]; then
+            echo "linting:"; echo "$files" | sed 's/^/  /'
+            # shellcheck disable=SC2086
+            # --no-warn-ignored: a changed file under an ignore pattern (src/generated) is
+            # reported as a warning per file, which is pure noise on any sync that touches them.
+            ./node_modules/.bin/eslint --no-warn-ignored $files
+          else
+            echo "no TS/TSX changed — nothing to lint"
+          fi
+          npm run build

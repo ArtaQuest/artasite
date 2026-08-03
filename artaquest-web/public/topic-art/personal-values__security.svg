@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Security — a protective shield">
+  
+  
+  <path d="M40 16 L60 24 V42 Q60 58 40 66 Q20 58 20 42 V24 Z" fill="#2352E8" fill-opacity="0.28" stroke="#2352E8" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M31 40 L38 48 L51 31" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Social">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="62%">
+      <stop offset="0" stop-color="#0C1E32"/>
+      <stop offset="1" stop-color="#010C17"/>
+    </radialGradient>
+  </defs>
+  <circle cx="40" cy="40" r="40" fill="url(#bg)"/>
+  <!-- a small circle of people, connected -->
+  <line x1="40" y1="28" x2="26" y2="53" stroke="#E8B923" stroke-width="1.6" opacity="0.7"/>
+  <line x1="40" y1="28" x2="54" y2="53" stroke="#E8B923" stroke-width="1.6" opacity="0.7"/>
+  <line x1="26" y1="53" x2="54" y2="53" stroke="#E8B923" stroke-width="1.6" opacity="0.7"/>
+  <circle cx="40" cy="28" r="6.5" fill="#E8B923"/>
+  <circle cx="26" cy="53" r="6.5" fill="#2352E8"/>
+  <circle cx="54" cy="53" r="6.5" fill="#2352E8"/>
+</svg>

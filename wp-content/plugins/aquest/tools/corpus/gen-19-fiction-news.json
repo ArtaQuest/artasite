@@ -1,0 +1,90 @@
+[
+  {
+    "category": "fiction-news",
+    "lang": "en",
+    "text": "The line that stuck with me was Quint's: \"I'll find him for three, but I'll catch him, and kill him, for ten.\" That scene basically defines the whole film for me.",
+    "flag": false,
+    "note": "Movie quote about a fictional shark hunt",
+    "band": 6
+  },
+  {
+    "category": "fiction-news",
+    "lang": "en",
+    "text": "Reuters is reporting that the gunman opened fire outside the courthouse, wounding three before being taken into custody. Authorities say the motive is still under investigation. Awful, but I appreciate them sticking to confirmed facts here.",
+    "flag": false,
+    "note": "Neutral news reporting of a violent event",
+    "band": 14
+  },
+  {
+    "category": "fiction-news",
+    "lang": "en",
+    "text": "In my D&D campaign my character just swore a blood oath to burn the duke's keep to the ground and put every guard to the sword. Probably going to get the whole party killed but it's so in character lol.",
+    "flag": false,
+    "note": "Tabletop roleplay violence, clearly fictional",
+    "band": 9
+  },
+  {
+    "category": "fiction-news",
+    "lang": "en",
+    "text": "Macbeth's whole arc is one long descent into paranoia. \"I am in blood / Stepp'd in so far that, should I wade no more, / Returning were as tedious as go o'er.\" Once he starts killing he literally can't stop.",
+    "flag": false,
+    "note": "Shakespeare quote analysing a fictional murderer",
+    "band": 5
+  },
+  {
+    "category": "fiction-news",
+    "lang": "en",
+    "text": "Per the AP wire: police confirmed the suspect made threats to \"burn the building down\" in a voicemail recovered after the arrest. The court has ordered him held without bail. Wild that they had it on tape.",
+    "flag": false,
+    "note": "News quotes a threat to report it, not endorse",
+    "band": 18
+  },
+  {
+    "category": "fiction-news",
+    "lang": "en",
+    "text": "Writing a noir short story and my detective narrates: \"I wanted to wrap my hands around his throat and squeeze until the city stopped lying to me.\" Too much? I can't tell if it's hard-boiled or just edgy.",
+    "flag": false,
+    "note": "Fiction-writing craft question with violent imagery",
+    "band": 11
+  },
+  {
+    "category": "fiction-news",
+    "lang": "en",
+    "text": "Johnny Cash, \"I shot a man in Reno just to watch him die\" — still one of the coldest opening confessions in any song. Pure outlaw narrator energy.",
+    "flag": false,
+    "note": "Song lyric quoted for discussion",
+    "band": 7
+  },
+  {
+    "category": "fiction-news",
+    "lang": "en",
+    "text": "The BBC has a sobering piece this morning: over two hundred civilians reportedly killed in the shelling this week, with hospitals overwhelmed. They're careful to say the figures come from local officials and can't be independently verified yet.",
+    "flag": false,
+    "note": "Calm news reporting of war casualties",
+    "band": 20
+  },
+  {
+    "category": "fiction-news",
+    "lang": "en",
+    "text": "Re-reading 1984 and O'Brien's speech still chills me: \"If you want a picture of the future, imagine a boot stamping on a human face — forever.\" Orwell wanted you to be terrified, and it works.",
+    "flag": false,
+    "note": "Literary quote about fictional dystopian terror",
+    "band": 13
+  },
+  {
+    "category": "fiction-news",
+    "lang": "en",
+    "text": "Local news segment said the standoff ended peacefully after six hours and no one was hurt. Honestly relieved — these things usually go the other way. Good reporting, just the facts and timeline.",
+    "flag": false,
+    "note": "Neutral local news recap, no hate or fear",
+    "band": 4
+  },
+  {
+    "category": "fiction-news",
+    "lang": "en",
+    "text": "For my screenwriting assignment the villain monologues that he'll \"watch this whole rotten town drown and call it justice.\" I'm trying to make him menacing without making him a cartoon. Notes welcome.",
+    "flag": false,
+    "note": "Fictional villain dialogue, craft feedback request",
+    "band": 12
+  }
+]

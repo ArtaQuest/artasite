@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Pathways — several blue routes converging on a single gold goal">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <!-- many ways to the same goal -->
+  <g fill="none" stroke="#2352E8" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 62 Q26 46 40 36"/>
+    <path d="M40 64 L40 36"/>
+    <path d="M62 62 Q54 46 40 36"/>
+  </g>
+  <circle cx="18" cy="62" r="2.6" fill="#2352E8"/>
+  <circle cx="40" cy="64" r="2.6" fill="#2352E8"/>
+  <circle cx="62" cy="62" r="2.6" fill="#2352E8"/>
+  <!-- the goal reached by every route -->
+  <circle cx="40" cy="32" r="7" fill="var(--ico-gold,#E8B923)"/>
+</svg>

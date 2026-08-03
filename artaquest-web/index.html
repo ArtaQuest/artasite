@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <meta name="theme-color" content="#0d0d0f" />
+    <!-- Theme boot (ticket #44): set dark/light BEFORE first paint — saved choice, else light
+         (dev shell has no session; prod defaults members to dark in template-aq-app.php). -->
+    <script>(function(){var t=null;try{t=localStorage.getItem('aq_theme')}catch(e){}if(t!=='light'&&t!=='dark')t='light';document.documentElement.setAttribute('data-theme',t);var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',t==='light'?'#f6f7f9':'#0d0d0f');})()</script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet" />
+    <!-- Critical inline CSS: themed canvas on first paint + the branded #aq-boot-screen loader until
+         React mounts — no flash of the wrong theme, no raw HTML. Mirrors template-aq-app.php (prod). -->
+    <style>html{background:#0d0d0f}body{margin:0;background:#0d0d0f;color:#f4f4f5;font-family:Inter,ui-sans-serif,system-ui,sans-serif}html[data-theme=light],html[data-theme=light] body{background:#f6f7f9;color:#16181d}#root{min-height:100vh}#aq-boot-screen{position:fixed;inset:0;z-index:2147483600;display:grid;place-items:center;background:#0d0d0f;transition:opacity .35s ease}html[data-theme=light] #aq-boot-screen{background:#f6f7f9}html[data-theme=light] .aqb-bar{background:rgba(16,19,26,.1)}#aq-boot-screen.aqb-hide{opacity:0;pointer-events:none}.aqb-wrap{display:flex;flex-direction:column;align-items:center;gap:20px;animation:aqb-in .45s ease both}.aqb-mark{width:62px;height:62px;animation:aqb-pulse 1.9s ease-in-out infinite}.aqb-word{font-family:Montserrat,Inter,ui-sans-serif,system-ui,sans-serif;font-weight:800;font-size:27px;letter-spacing:-.02em;line-height:1}.aqb-bar{position:relative;width:150px;height:3px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}.aqb-bar i{position:absolute;top:0;bottom:0;width:42%;border-radius:999px;background:linear-gradient(90deg,#e8b923,#4a72ff);animation:aqb-slide 1.15s ease-in-out infinite}@keyframes aqb-slide{0%{left:-42%}100%{left:100%}}@keyframes aqb-pulse{0%,100%{opacity:.82;transform:scale(1)}50%{opacity:1;transform:scale(1.06)}}@keyframes aqb-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){.aqb-mark,.aqb-bar i,.aqb-wrap{animation:none}}</style>
+    <title>ArtaQuest</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="aq-boot-screen" aria-hidden="true">
+      <div class="aqb-wrap">
+        <svg class="aqb-mark" viewBox="0 0 100 100" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+          <defs><mask id="aqbMask"><rect width="100" height="100" fill="#fff"/><path d="M43.33 21.21L56.52 21.21L90.61 96.67L78.18 96.67L66.52 70.3L33.48 70.3L22.73 96.67L9.09 96.67Z" fill="#000" stroke="#000" stroke-width="7" stroke-linejoin="round"/></mask></defs>
+          <circle cx="50" cy="50" r="41.6" fill="none" stroke="#4A72FF" stroke-width="11.66" mask="url(#aqbMask)"/>
+          <path fill="#E8B923" fill-rule="evenodd" d="M43.33 21.21L56.52 21.21L90.61 96.67L78.18 96.67L66.52 70.3L33.48 70.3L22.73 96.67L9.09 96.67ZM50 34.55L38.57 59.3L61.43 59.3Z"/>
+        </svg>
+        <div class="aqb-word"><span style="color:#e8b923">Arta</span><span style="color:#4a72ff">Quest</span></div>
+        <div class="aqb-bar"><i></i></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

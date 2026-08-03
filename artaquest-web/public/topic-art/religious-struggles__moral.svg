@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Moral — guilt and living up to your values">
+  
+  <circle cx="40" cy="40" r="39" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.4"/>
+  <!-- a balance that will not sit level -->
+  <g stroke="var(--ico-gold,#E8B923)" stroke-width="2.4" stroke-linecap="round">
+    <line x1="40" y1="22" x2="40" y2="54"/>
+    <line x1="31" y1="54" x2="49" y2="54"/>
+    <line x1="22" y1="23" x2="58" y2="31"/>
+  </g>
+  <g fill="none" stroke="#2352E8" stroke-width="2" stroke-linecap="round">
+    <line x1="22" y1="23" x2="22" y2="33"/>
+    <path d="M16 33 Q22 39 28 33"/>
+    <line x1="58" y1="31" x2="58" y2="41"/>
+    <path d="M52 41 Q58 47 64 41"/>
+  </g>
+  <circle cx="40" cy="22" r="2.4" fill="var(--ico-gold,#E8B923)"/>
+</svg>

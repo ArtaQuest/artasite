@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="EIE — Mentor (leading extraverted ethics, creative introverted intuition)">
+  
+  
+  <line x1="40" y1="32" x2="40" y2="56" stroke="#2352E8" stroke-width="1.1" stroke-opacity="0.28"/>
+  <path d="M26.35 17.44 L26.35 44.8 L53.8 44.8 L53.8 32.8 L38.77 32.8 L38.77 17.44 Z" fill="var(--ico-gold,#E8B923)"/>
+  <polygon points="40,47.6 31.54,63.77 48.46,63.77" fill="#2352E8" fill-opacity="0.16" stroke="#2352E8" stroke-width="1.9" stroke-linejoin="round"/>
+</svg>

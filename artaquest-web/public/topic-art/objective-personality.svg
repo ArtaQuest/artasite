@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Objective Personality — four energy Animals ranked around the self">
+  <g fill="none" stroke-width="3.6" stroke-linecap="round">
+    <path d="M 24.51 17.88 A 27 27 0 0 1 55.49 17.88" stroke="var(--ico-gold,#E8B923)"/>
+    <path d="M 55.49 62.12 A 27 27 0 0 1 24.51 62.12" stroke="var(--ico-gold,#E8B923)"/>
+    <path d="M 62.12 24.51 A 27 27 0 0 1 62.12 55.49" stroke="#2352E8"/>
+    <path d="M 17.88 55.49 A 27 27 0 0 1 17.88 24.51" stroke="#2352E8"/>
+  </g>
+  <circle cx="40" cy="40" r="6.5" fill="var(--ico-gold,#E8B923)"/>
+</svg>

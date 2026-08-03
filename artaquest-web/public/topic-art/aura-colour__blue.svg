@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Blue aura — calm, caring and intuitive, shown as still water">
+  <path d="M14 34 C 24 28 32 28 40 34 C 48 40 56 40 66 34" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M14 46 C 24 40 32 40 40 46 C 48 52 56 52 66 46" fill="none" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M14 58 C 24 52 32 52 40 58 C 48 64 56 64 66 58" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="3" stroke-linecap="round"/>
+</svg>

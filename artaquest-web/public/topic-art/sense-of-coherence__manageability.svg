@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Manageability — a beam held level in balance on a fulcrum">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <polygon points="40,41 31,59 49,59" fill="#E8B923"/>
+  <rect x="16" y="37" width="48" height="4" rx="2" fill="#2352E8"/>
+  <circle cx="21" cy="39" r="5" fill="#E8B923"/>
+  <circle cx="59" cy="39" r="5" fill="#E8B923"/>
+</svg>

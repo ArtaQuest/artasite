@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Extraverted Feeling — attuning to others for social harmony">
+  
+  
+  <polygon points="40,16 60.8,28 60.8,52 40,64 19.2,52 19.2,28" fill="none" stroke="#2352E8" stroke-width="1.3" stroke-opacity="0.5" stroke-linejoin="round"/>
+  <g fill="#2352E8">
+    <circle cx="40" cy="16" r="3"/><circle cx="60.8" cy="28" r="3"/><circle cx="60.8" cy="52" r="3"/><circle cx="40" cy="64" r="3"/><circle cx="19.2" cy="52" r="3"/><circle cx="19.2" cy="28" r="3"/>
+  </g>
+  <path d="M40 48 C 33 42 32 36 35 33.5 C 37 31.8 39 32.5 40 34.5 C 41 32.5 43 31.8 45 33.5 C 48 36 47 42 40 48 Z" fill="var(--ico-gold,#E8B923)"/>
+</svg>

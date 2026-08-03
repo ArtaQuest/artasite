@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80" role="img" aria-label="Transactional">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <path d="M29 40 H51" stroke="#E8B923" stroke-width="3" stroke-linecap="round"/>
+  <g stroke="#2352E8" stroke-width="2.6" stroke-linecap="round">
+    <path d="M37 34 V46"/>
+    <path d="M43 34 V46"/>
+  </g>
+  <circle cx="29" cy="40" r="6.5" fill="#E8B923"/>
+  <circle cx="51" cy="40" r="6.5" fill="#2352E8"/>
+</svg>

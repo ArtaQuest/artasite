@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Fatalistic Determinism — the wheel of fate fixed to a preordained point">
+  <circle cx="40" cy="40" r="18" fill="none" stroke="#2352E8" stroke-width="2.4"/>
+  <g stroke="#2352E8" stroke-width="2" stroke-linecap="round">
+    <line x1="40" y1="22" x2="40" y2="58"/>
+    <line x1="22" y1="40" x2="58" y2="40"/>
+    <line x1="27.3" y1="27.3" x2="52.7" y2="52.7"/>
+    <line x1="52.7" y1="27.3" x2="27.3" y2="52.7"/>
+  </g>
+  <circle cx="40" cy="40" r="3.2" fill="#2352E8"/>
+  <circle cx="40" cy="22" r="4.6" fill="var(--ico-gold,#E8B923)"/>
+</svg>

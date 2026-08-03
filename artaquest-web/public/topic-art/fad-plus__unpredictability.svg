@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Unpredictability — a tumbling die, life left to chance">
+  <g transform="rotate(14 40 40)">
+    <rect x="25" y="25" width="30" height="30" rx="6" fill="none" stroke="#2352E8" stroke-width="2.4"/>
+    <g fill="var(--ico-gold,#E8B923)">
+      <circle cx="33" cy="33" r="2.7"/>
+      <circle cx="47" cy="33" r="2.7"/>
+      <circle cx="40" cy="40" r="2.7"/>
+      <circle cx="33" cy="47" r="2.7"/>
+      <circle cx="47" cy="47" r="2.7"/>
+    </g>
+  </g>
+</svg>

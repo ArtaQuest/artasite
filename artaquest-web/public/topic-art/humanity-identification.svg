@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Identification with all humanity">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <circle cx="40" cy="40" r="11" fill="none" stroke="#2352E8" stroke-width="1.6" opacity="0.5"/>
+  <circle cx="40" cy="40" r="19" fill="none" stroke="#2352E8" stroke-width="1.6" opacity="0.8"/>
+  <circle cx="40" cy="40" r="27" fill="none" stroke="#E8B923" stroke-width="2"/>
+  <circle cx="40" cy="40" r="6" fill="#2352E8"/>
+  <path d="M34 40h12M40 34v12" stroke="#06121E" stroke-width="1"/>
+  <g fill="#E8B923">
+    <circle cx="40" cy="13" r="2.4"/><circle cx="59" cy="21" r="2.4"/><circle cx="67" cy="40" r="2.4"/>
+    <circle cx="59" cy="59" r="2.4"/><circle cx="40" cy="67" r="2.4"/><circle cx="21" cy="59" r="2.4"/>
+    <circle cx="13" cy="40" r="2.4"/><circle cx="21" cy="21" r="2.4"/>
+  </g>
+</svg>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Self-connection">
+  <circle cx="40" cy="40" r="40" fill="#010C17"/>
+  <circle cx="27" cy="40" r="15" fill="none" stroke="#2352E8" stroke-width="3"/>
+  <line x1="36" y1="40" x2="48" y2="40" stroke="#E8B923" stroke-width="2.6"/>
+  <circle cx="55" cy="40" r="9.5" fill="#E8B923"/>
+  <circle cx="27" cy="40" r="3.4" fill="#2352E8"/>
+</svg>

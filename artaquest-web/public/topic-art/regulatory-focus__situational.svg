@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Depends on the situation — the lead alternates between the two foci">
+  
+  
+  <circle cx="24" cy="46" r="6.5" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="56" cy="46" r="6.5" fill="#2352E8"/>
+  <path d="M26 36 Q40 24 54 34" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4" stroke-linecap="round"/>
+  <polyline points="50,29 55,34 48,37" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M54 56 Q40 68 26 58" fill="none" stroke="#2352E8" stroke-width="2.4" stroke-linecap="round"/>
+  <polyline points="30,63 25,58 32,55" fill="none" stroke="#2352E8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

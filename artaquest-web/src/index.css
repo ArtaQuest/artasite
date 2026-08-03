@@ -1,0 +1,1563 @@
+@import "tailwindcss";
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ArtaQuest design system — "Orbit". Our own UI, designed from the brand: gold
+   (#E8B923 · the Why) + blue (#1746DC = 255−gold, the EXACT complement so gold+blue=white · the How;
+   #4A72FF is its light variant, --color-yin-light, for highlights/gradients), the only two accents, on a
+   neutral dark-gray cosmos. Montserrat display + Inter body, soft geometry,
+   orbital motif (degrees of freedom). Single source of truth — Tailwind v4
+   @theme generates the utilities (bg-space-1, text-yang, font-display,
+   rounded-card, w-sidebar…). No override CSS, no inherited leaks.
+   ════════════════════════════════════════════════════════════════════════════ */
+@theme {
+  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-display: Montserrat, Inter, ui-sans-serif, system-ui, sans-serif;
+
+  /* Brand — Yang (gold · the Why) / Yin (blue · the How). The only two accents. */
+  --color-yang: #e8b923;
+  --color-yang-light: #f5d060;
+  --color-yang-dark: #c49b1a;
+  --color-yin: #1746dc;
+  --color-yin-light: #4a72ff;
+  --color-yin-dark: #1a3db5;
+
+  /* ARTA — the mascot's line. GOLD EVERYWHERE, in both themes (operator call):
+     the mascot is a single recognisable character, and a character that changes
+     colour with the canvas is two characters. Noted for the record: #E8B923 on
+     the white light canvas measures ~1.8:1, below the 3:1 WCAG floor for a
+     non-text graphic, so on light Arta reads as a soft mark rather than a crisp
+     one. If that ever needs fixing without giving up gold, the lever is a
+     luminance-only deepening on light (the hue stays gold), which is exactly
+     what --ico-gold exists to do for the topic icons. */
+  --color-arta: #e8b923;
+
+  /* ARTA'S TOOLS — blue. The figure is yang (the why); anything it wields or
+     makes is yin (the how), which is the brand pair doing actual narrative work
+     rather than decorating.
+
+     This is --color-yin-LIGHT rather than canonical #1746DC because a tool has
+     to read on BOTH canvases and canonical yin measures only ~2.0:1 on the dark
+     cosmos — the exact mirror of gold's problem on white. #4A72FF is ~4.0:1 on
+     the cosmos and ~4.6:1 on white, so one value serves both, and it is already
+     a sanctioned brand token. */
+  --color-arta-tool: #4a72ff;
+
+  /* Brand INK — accessible, hue-locked brand colours for when gold/blue is used as TEXT or a
+     meaningful UI mark (links, chips, scores, verdict tones, status dots), NOT a large decorative
+     fill (a11y audit, ticket: colour-accessibility). The display tokens above stay canonical for
+     fills (the on-accent label carries the contrast there); these meet WCAG-AA as small text:
+       • yang-ink — gold reads on the DARK cosmos (#E8B923 ≈ 7.2:1 on space-2); the light override
+         deepens it to a still-golden amber (#8A6300 ≈ 5.1:1 on space-1), since bright gold on white
+         is only ~1.8:1.
+       • yin-ink — brand blue is too dark for text on the dark canvas, so it BRIGHTENS to #9CB6FF
+         (APCA Lc ~63 on space-2, hue preserved — readable even at the small/uppercase eyebrow + link
+         sizes the live browser audit flagged; the old #6088FF was only Lc ~41); on the light canvas the
+         canonical #2352E8 reads (Lc ~75).
+     The brand pair now SCALES with the slider (symmetric about 127.5, sum stays white; Standard=canonical) via
+     applyContrast() keeps them in lock-step with the active theme. */
+  --color-yang-ink: #e8b923;
+  --color-yin-ink: #1746dc;
+
+  /* Icon ink — the two colours used INSIDE the background-less typology/topic SVGs (ticket
+     #97). The marks are now transparent (no dark disc), rendered inline so these tokens reach
+     them. --ico-gold: gold #E8B923 fails WCAG non-text contrast (~1.8:1) on the light canvas,
+     so it adapts — vivid on the dark cosmos, deepened to a still-golden amber (≥4:1 on white)
+     in light mode. --ico-ink: the deep-space fill used for an icon's NEGATIVE space (eye
+     pupils, "hollow/distant" markers, gear hubs) — it must read as the surface showing
+     through, so it tracks the canvas (deep space on dark, the light surface on light); baked
+     dark, it became a hard speck on the light canvas. Blue (#2352E8 ≈ 3.2:1 dark / 6.1:1
+     light) reads on both, so it stays constant. */
+  --ico-gold: #e8b923;
+  --ico-ink: #06121e;
+
+  /* Surfaces — neutral dark-gray cosmos (canvas → raised panel → elevated/hover) */
+  --color-space-1: #0d0d0f;
+  --color-space-2: #161619;
+  --color-space-3: #202024;
+
+  /* Text + hairlines */
+  --color-ink: #f4f4f5;
+  --color-ink-2: #a6a8b0;
+  --color-ink-3: #8b8e98; /* WCAG AA: ≥4.5:1 on space-1..3 (was #74767f ≈ 4.0:1) */
+  --color-line: #2a2a31;
+
+  /* Theme-relative roles (dark/light modes — ticket #44):
+     veil — the translucent "wash" tint for hovers/overlays/skeletons. White in dark mode
+     (bg-veil/5 ≡ the old bg-white/5), near-black in light mode, so washes stay visible
+     on both canvases. on-accent — ink painted ON a gold/blue fill (button labels, count
+     badges); a CONSTANT near-black in both themes (gold stays gold, so its label must
+     not flip with the canvas the way space-1 does). */
+  --color-veil: #ffffff;
+  --color-on-accent: #0d0d0f;
+  /* Focus ring colour — gold on the dark cosmos; light mode overrides to blue (gold on
+     white is ~2:1, failing WCAG 1.4.11 non-text contrast). */
+  --color-focus: var(--color-yang);
+
+  /* Layout */
+  --spacing-sidebar: 256px;
+  --spacing-rail: 68px;     /* constant icon-only rail (collapsed sidebar) */
+  --spacing-topbar: 60px;
+  --spacing-content: 1120px;
+  --spacing-gutter: 24px;
+
+  /* Geometry — soft, our own. Refreshed for a rounder, more modern feel (redesign it.1). */
+  --radius-field: 16px;
+  --radius-card: 20px;
+  --radius-pill: 999px;
+
+  /* Elevation — a layered scale (ambient fill + key light) for genuine depth on the cosmos. */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 20px -8px rgba(0, 0, 0, 0.55);
+  --shadow-pop: 0 6px 16px rgba(0, 0, 0, 0.4), 0 24px 48px -16px rgba(0, 0, 0, 0.6);
+
+  /* Motion — one easing + duration vocabulary so every transition feels of a piece. */
+  --ease: cubic-bezier(0.2, 0.65, 0.2, 1);
+  --dur: 160ms;
+  --dur-slow: 260ms;
+}
+
+/* ── Light theme (ticket #44) ─────────────────────────────────────────────────
+   The whole UI is painted from the @theme tokens above (Tailwind v4 utilities
+   compile to var() references), so the light mode is ONE override block keyed on
+   html[data-theme="light"] — set before first paint by the shell's inline boot
+   script (template-aq-app.php / index.html): the visitor's saved choice
+   (localStorage "aq_theme"), else light for anonymous visitors (Kaggle-style),
+   dark for members. Un-layered, so it beats Tailwind's @layer theme :root block.
+   The two brand accents (gold/blue) are identical in both themes. */
+html { color-scheme: dark; }
+html[data-theme="light"] {
+  color-scheme: light;
+
+  /* Surfaces — light canvas → white panel → cool elevated/hover */
+  --color-space-1: #f6f7f9;
+  --color-space-2: #ffffff;
+  --color-space-3: #eceef2;
+
+  /* Text + hairlines (AA: ink-3 ≥4.5:1 on space-1..3) */
+  --color-ink: #16181d;
+  --color-ink-2: #4d525e;
+  --color-ink-3: #646a78;
+  --color-line: #e2e4ea;
+
+  /* Brand ink for the light canvas — gold deepens to an AA amber, blue stays canonical (see @theme). */
+  --color-yang-ink: #e8b923;
+  --color-yin-ink: #1746dc;
+
+
+  /* Washes darken instead of lighten; focus ring switches to the blue accent. */
+  --color-veil: #10131a;
+  --color-focus: var(--color-yin);
+  --shadow-card: 0 1px 2px rgba(16, 20, 30, 0.06), 0 8px 20px -10px rgba(16, 20, 30, 0.12);
+  --shadow-pop: 0 6px 16px rgba(16, 20, 30, 0.08), 0 24px 48px -16px rgba(16, 20, 30, 0.16);
+
+  /* Icon gold deepens to a contrast-safe amber on the light canvas (#9a6e00 ≈ 4.6:1 on
+     white / 4.3:1 on space-1) — see --ico-gold above. The brand text/chrome gold stays
+     #e8b923; this only repaints the inline typology/topic icons (ticket #97). The icon's
+     negative-space ink flips to the light canvas so pupils/hollow markers read as the
+     surface showing through, not a dark speck (matches space-1, the icons' usual card). */
+  --ico-gold: #e8b923;
+  --ico-ink: #f6f7f9;
+
+  /* Status text (rose-*) — Tailwind's light shades are dark-canvas text; deepen
+     them on the light canvas so error copy keeps AA contrast. */
+  --color-rose-200: #9f1239;
+  --color-rose-300: #be123c;
+  --color-rose-400: #e11d48;
+}
+
+/* Precomputed contrast ramp — generated from lib/contrast.ts tokensFor() by tools/gen-contrast-ramp.mjs,
+   keyed on the [data-contrast] attribute the shell sets pre-paint, so EVERY page (incl. the SPA's SEO
+   fallback, before JS) follows the contrast setting flash-free and universally. The JS applyContrast()
+   sets the SAME tokensFor() values at runtime (refined against the live canvas) which simply override
+   these. Un-layered so it beats Tailwind's @layer :root. NEVER hand-edit — regenerate with:
+     node tools/gen-contrast-ramp.mjs        (--check to verify in CI/pre-deploy) */
+/* AQ_CONTRAST_RAMP_START — generated by tools/gen-contrast-ramp.mjs; do not hand-edit */
+html[data-contrast="1"]{--color-ink:#b6b6b6;--color-ink-2:#acacac;--color-ink-3:#a1a1a1;--color-line:#404040;--color-yang:#bea248;--color-yang-light:#bea248;--color-yang-dark:#bea248;--color-yin:#415db7;--color-yin-dark:#415db7;--color-yang-ink:#e8b923;--color-yin-ink:#9cb6ff;--ico-gold:#e8b923;--color-yin-light:#9cb6ff}
+html[data-contrast="2"]{--color-ink:#c3c3c3;--color-ink-2:#b7b7b7;--color-ink-3:#ababab;--color-line:#515151;--color-yang:#d3ae36;--color-yang-light:#d3ae36;--color-yang-dark:#d3ae36;--color-yin:#2c51c9;--color-yin-dark:#2c51c9;--color-yang-ink:#e8b923;--color-yin-ink:#9cb6ff;--ico-gold:#e8b923;--color-yin-light:#9cb6ff}
+html[data-contrast="3"]{--color-ink:#d1d1d1;--color-ink-2:#c3c3c3;--color-ink-3:#b5b5b5;--color-line:#626262;--color-yang:#e8b923;--color-yang-light:#e8b923;--color-yang-dark:#e8b923;--color-yin:#1746dc;--color-yin-dark:#1746dc;--color-yang-ink:#e8b923;--color-yin-ink:#9cb6ff;--ico-gold:#e8b923;--color-yin-light:#9cb6ff}
+html[data-contrast="4"]{--color-ink:#dfdfdf;--color-ink-2:#d0d0d0;--color-ink-3:#c0c0c0;--color-line:#747474;--color-yang:#f8c215;--color-yang-light:#f8c215;--color-yang-dark:#f8c215;--color-yin:#073dea;--color-yin-dark:#073dea;--color-yang-ink:#e8b923;--color-yin-ink:#9cb6ff;--ico-gold:#e8b923;--color-yin-light:#9cb6ff}
+html[data-contrast="5"]{--color-ink:#efefef;--color-ink-2:#dddddd;--color-ink-3:#cbcbcb;--color-line:#878787;--color-yang:#ffca07;--color-yang-light:#ffca07;--color-yang-dark:#ffca07;--color-yin:#0035f8;--color-yin-dark:#0035f8;--color-yang-ink:#e8b923;--color-yin-ink:#9cb6ff;--ico-gold:#e8b923;--color-yin-light:#9cb6ff}
+html[data-theme="light"][data-contrast="1"]{--color-ink:#6d6d6d;--color-ink-2:#767676;--color-ink-3:#909090;--color-line:#e8e8e8;--color-yang:#bea248;--color-yang-light:#bea248;--color-yang-dark:#bea248;--color-yin:#415db7;--color-yin-dark:#415db7;--color-yang-ink:#8a6300;--color-yin-ink:#1746dc;--ico-gold:#9a6e00;--color-yin-light:#1746dc}
+html[data-theme="light"][data-contrast="2"]{--color-ink:#606060;--color-ink-2:#757575;--color-ink-3:#898989;--color-line:#dedede;--color-yang:#d3ae36;--color-yang-light:#d3ae36;--color-yang-dark:#d3ae36;--color-yin:#2c51c9;--color-yin-dark:#2c51c9;--color-yang-ink:#8a6300;--color-yin-ink:#1746dc;--ico-gold:#9a6e00;--color-yin-light:#1746dc}
+html[data-theme="light"][data-contrast="3"]{--color-ink:#505050;--color-ink-2:#6a6a6a;--color-ink-3:#808080;--color-line:#d2d2d2;--color-yang:#e8b923;--color-yang-light:#e8b923;--color-yang-dark:#e8b923;--color-yin:#1746dc;--color-yin-dark:#1746dc;--color-yang-ink:#8a6300;--color-yin-ink:#1746dc;--ico-gold:#9a6e00;--color-yin-light:#1746dc}
+html[data-theme="light"][data-contrast="4"]{--color-ink:#3c3c3c;--color-ink-2:#5e5e5e;--color-ink-3:#787878;--color-line:#c5c5c5;--color-yang:#f8c215;--color-yang-light:#f8c215;--color-yang-dark:#f8c215;--color-yin:#073dea;--color-yin-dark:#073dea;--color-yang-ink:#8a6300;--color-yin-ink:#1746dc;--ico-gold:#9a6e00;--color-yin-light:#1746dc}
+html[data-theme="light"][data-contrast="5"]{--color-ink:#131313;--color-ink-2:#4f4f4f;--color-ink-3:#6e6e6e;--color-line:#b6b6b6;--color-yang:#ffca07;--color-yang-light:#ffca07;--color-yang-dark:#ffca07;--color-yin:#0035f8;--color-yin-dark:#0035f8;--color-yang-ink:#8a6300;--color-yin-ink:#1746dc;--ico-gold:#9a6e00;--color-yin-light:#1746dc}
+/* AQ_CONTRAST_RAMP_END */
+
+/* yin-light is consolidated onto yin-ink (ONE consistent UI blue: #9cb6ff dark / #1746dc light) — matches
+   text, links, charts, bars, chips, hovers. Overrides the ramp above (equal specificity, placed after) so
+   the pre-paint matches the runtime (contrast.ts) — no flash. The logo keeps --color-yin (#1746dc), the only
+   place gold + blue must sum to white. */
+html[data-contrast]{--color-yin-light:var(--color-yin-ink)}
+html[data-theme="light"][data-contrast]{--color-yin-light:var(--color-yin-ink)}
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+/* Global polish (redesign it.5): brand-gold native form controls; no grey tap-flash on mobile; smooth
+   in-page scrolling (the prefers-reduced-motion block below forces it back to auto). */
+:root { accent-color: var(--color-yang); }
+html { -webkit-tap-highlight-color: transparent; scroll-behavior: smooth; }
+
+html,
+body,
+#root { height: 100%; }
+
+body {
+  margin: 0;
+  /* The cosmos with depth (redesign it.2) — a faint two-colour duality wash: blue (the How) drawn
+     from the top, gold (the Why) from the foot, over the neutral space canvas. Brand-pure (only the
+     two accents), very low alpha so body text contrast is unaffected. */
+  background:
+    radial-gradient(125% 85% at 100% -10%, color-mix(in srgb, var(--color-yin) 8%, transparent), transparent 58%),
+    radial-gradient(110% 75% at -10% 110%, color-mix(in srgb, var(--color-yang) 6%, transparent), transparent 55%),
+    var(--color-space-1);
+  background-repeat: no-repeat;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "liga" 1, "calt" 1; /* ligatures + contextual alternates (redesign it.4) */
+  overflow-x: hidden; /* off-canvas drawers (UserMenu/sidebar) must never cause sideways scroll */
+  overflow-x: clip;   /* progressive upgrade: clip (unlike hidden) keeps <body> off the scroll-container
+                         path, so position:sticky still resolves to the page and position:fixed launchers
+                         (e.g. ArtaBot) stay pinned to the viewport on mobile even if a child overflows */
+}
+
+/* The messaging DRAWER (LinkedIn-style, operator 2026-07-30) — must ALWAYS clear the device's
+   bottom system bar. iOS exposes the home-indicator height via env(safe-area-inset-bottom), and
+   browser tabs keep the system bar OUTSIDE the viewport, so env() alone seats the drawer on the
+   bottom edge. The one liar is the INSTALLED-APP display mode: Android WebAPK/standalone paints the
+   page edge-to-edge UNDER the nav bar while reporting a 0 inset (the Samsung device in ticket #4 —
+   "couldn't see ArtaBot", tucked beneath the bar). Floor the clearance to a typical ~48px nav bar
+   THERE ONLY; an unconditional phone-wide floor left it hanging 52px above the corner in every
+   normal browser tab. The drawer's bottom and its body's height both derive from this one var, so
+   flooring the baseline moves them together.
+
+   Unlike the popup this replaces, the drawer is welded to the bottom edge and NEVER unmounts: the
+   bar stays put and only .aq-bot-body changes height. */
+:root { --aq-safe-bottom: env(safe-area-inset-bottom, 0px); }
+@media (max-width: 767px) and (display-mode: standalone), (max-width: 767px) and (display-mode: fullscreen) {
+  :root { --aq-safe-bottom: max(env(safe-area-inset-bottom, 0px), 3.25rem); }
+}
+.aq-bot-panel {
+  bottom: var(--aq-safe-bottom);
+  right: calc(1.25rem + env(safe-area-inset-right, 0px));
+}
+/* The sliding body. `visibility: hidden` when collapsed is NOT cosmetic — a 0-height
+   overflow-hidden box still hands every control inside it to the Tab key, so without it a closed
+   drawer silently swallows keyboard focus in the middle of the page. Transitioning visibility
+   alongside height keeps it focusable for the whole opening slide (it flips at the far end). */
+.aq-bot-body {
+  height: min(560px, calc(100dvh - 8rem - var(--aq-safe-bottom)));
+  min-height: 0;
+  transition: height 220ms ease, visibility 220ms;
+}
+.aq-bot-body[data-collapsed="1"] { height: 0; visibility: hidden; }
+/* Signed-in phones have AppShell's fixed quick-nav on the bottom edge (min-h-12 + the safe inset,
+   md:hidden). The drawer is welded to that same edge, so it must sit ABOVE the bar rather than over
+   it — and the body loses the same height it gained in offset, or a fully open drawer would run off
+   the top of a short screen. Desktop has no bar and is untouched. */
+@media (max-width: 767px) {
+  .aq-bot-panel.aq-bot-above-tabs { bottom: var(--aq-bottom-bar); }
+  .aq-bot-panel.aq-bot-above-tabs .aq-bot-body { height: min(560px, calc(100dvh - 11rem - var(--aq-safe-bottom))); }
+}
+@media (prefers-reduced-motion: reduce) { .aq-bot-body { transition: none; } }
+
+/* An in-page sticky action bar (the Studio's "pick a kind → name it → Create" footer). On phones
+   AppShell's quick-nav is FIXED to the bottom (min-h-12 tabs + the safe inset, md:hidden), so a
+   plain `sticky bottom-0` parks the primary action UNDER it — unreachable exactly where
+   one-handed use matters. Park above the bar on phones, at the viewport edge from md up where
+   the bar does not exist. One place, so the bar's height is stated once. */
+:root { --aq-bottom-bar: 0px; }
+@media (max-width: 767px) {
+  :root { --aq-bottom-bar: calc(3rem + env(safe-area-inset-bottom, 0px)); }
+}
+.aq-sticky-actions {
+  position: sticky;
+  bottom: var(--aq-bottom-bar);
+  z-index: 5;
+}
+
+/* In @layer base so Tailwind text-color/decoration utilities (e.g. a primary
+   Button's text-on-accent, content-link underline) override these element resets —
+   un-layered rules would beat utilities and e.g. paint gold buttons white. */
+@layer base {
+  a { color: inherit; text-decoration: none; }
+  /* Consistent interaction feel (redesign it.2) — links/buttons ease their colour/background/border
+     changes with the shared motion vocabulary. The prefers-reduced-motion block below zeroes this. */
+  a, button { transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+  /* Content links inside a text block (a paragraph) must be distinguishable without relying on
+     colour (WCAG 1.4.1 / axe link-in-text-block) — give them a persistent underline. Scoped to
+     <p> so standalone CTAs (Button), and footer/nav lists (<li>) are untouched. A `no-underline`
+     utility still overrides this (higher @layer). */
+  p a { text-decoration: underline; text-underline-offset: 2px; }
+  /* Display type — geometric Montserrat for headings, echoing the A-mark. Tightened tracking +
+     leading and balanced wrapping so multi-line headings break evenly, never orphaning a word
+     (redesign it.4). */
+  h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.022em; line-height: 1.16; text-wrap: balance; }
+  /* Running text breaks "pretty" — avoids a lone last-line word (progressive; ignored where unsupported). */
+  p { text-wrap: pretty; }
+}
+
+/* Duality gradient — gold (Why) → blue (How). For "where the how meets the why" copy.
+   Light mode swaps to the deep ends of the SAME two accents so the headline stays
+   legible on the light canvas (pale gold on white would wash out). */
+.aq-grad {
+  background: linear-gradient(100deg, var(--color-yang) 0%, var(--color-yang-light) 32%, var(--color-yin-light) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+html[data-theme="light"] .aq-grad {
+  background: linear-gradient(100deg, var(--color-yang-dark) 0%, var(--color-yang) 32%, var(--color-yin) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+/* Forced colours (Windows High Contrast) strips the background but keeps `color: transparent`, so
+   every aq-grad phrase renders as INVISIBLE TEXT — and it is only ever used on headlines, so the
+   words it eats are the load-bearing ones. Hand the text back to the system palette. One rule fixes
+   every site at once. */
+@media (forced-colors: active) {
+  .aq-grad {
+    background: none;
+    color: CanvasText;
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
+/* Inline typology/topic icon (ticket #97). The background-less SVGs in public/topic-art
+   are injected inline (not <img>) by the Avatar so the app's [data-theme] --ico-gold token
+   recolours their gold marks; this just sizes the injected <svg> to fill the box the call
+   site asked for (h-9 w-9 …). */
+.aq-topic-icon { display: inline-flex; overflow: hidden; }
+.aq-topic-icon > svg { width: 100%; height: 100%; display: block; }
+/* EVERY brand colour scales — including inside SVGs. Many SVGs (topic icons, the logo, the ₳ coin,
+   charts, badges, wheels) bake in literal brand hex instead of the adaptive tokens, so they ignored
+   the theme and the contrast slider. Remap each literal to its scaling token GLOBALLY — a CSS fill/
+   stroke/stop-color property overrides the SVG presentation attribute — so all of them follow the
+   setting without editing each component. Every target token scales via the [data-contrast] ramp
+   above; dark → --ico-ink (tracks the canvas rather than scaling, since it's a background fill). */
+[fill="#E8B923"]{fill:var(--ico-gold)} [stroke="#E8B923"]{stroke:var(--ico-gold)} [stop-color="#E8B923"]{stop-color:var(--ico-gold)}
+[fill="#FFE9A8"]{fill:var(--color-yang-light)} [stop-color="#FFE9A8"]{stop-color:var(--color-yang-light)}
+[fill="#F5D060"]{fill:var(--color-yang-light)} [stroke="#F5D060"]{stroke:var(--color-yang-light)} [stop-color="#F5D060"]{stop-color:var(--color-yang-light)}
+[fill="#C49B1A"]{fill:var(--color-yang-dark)} [stroke="#C49B1A"]{stroke:var(--color-yang-dark)} [stop-color="#C49B1A"]{stop-color:var(--color-yang-dark)}
+[fill="#8A6E12"]{fill:var(--color-yang-dark)} [stop-color="#8A6E12"]{stop-color:var(--color-yang-dark)}
+[fill="#2352E8"]{fill:var(--color-yin-ink)} [stroke="#2352E8"]{stroke:var(--color-yin-ink)} [stop-color="#2352E8"]{stop-color:var(--color-yin-ink)}
+[fill="#4A72FF"]{fill:var(--color-yin-light)} [stroke="#4A72FF"]{stroke:var(--color-yin-light)} [stop-color="#4A72FF"]{stop-color:var(--color-yin-light)}
+[fill="#1A3DB5"]{fill:var(--color-yin-dark)} [stroke="#1A3DB5"]{stroke:var(--color-yin-dark)} [stop-color="#1A3DB5"]{stop-color:var(--color-yin-dark)}
+[fill="#06121E"],[fill="#0C1E32"],[fill="#010C17"]{fill:var(--ico-ink)}
+[stroke="#06121E"],[stroke="#0C1E32"],[stroke="#010C17"]{stroke:var(--ico-ink)}
+
+/* Horizontal snap-scroll affordance (ticket #129) — fade the trailing edge of an edge-to-edge mobile
+   scroll strip (the catalogue/Topics filter chip rows, DrillDownFilter) so a peeking next chip reads as
+   "scroll for more" instead of content chopped at the viewport edge. Self-adjusting: empty trailing
+   space stays empty, so the fade only bites when a chip actually sits under it, and it disappears once
+   the strip is scrolled to its end. Fades the END edge — flips with dir=rtl (Farsi/Arabic). Scoped below
+   sm (640px); at sm+ the strip stops scrolling and wraps to rows, so the mask must lift. */
+@media (max-width: 639.98px) {
+  .aq-scroll-fade-r {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
+            mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
+  }
+  [dir="rtl"] .aq-scroll-fade-r {
+    -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 2rem), transparent);
+            mask-image: linear-gradient(to left, #000 calc(100% - 2rem), transparent);
+  }
+}
+
+/* Accessible brand TEXT (a11y audit, ticket: colour-accessibility). The `text-yang` / `text-yin-light`
+   utilities are used in ~470 places for brand-coloured TEXT, chips, scores, links and verdict tones —
+   but the canonical fill colours fail WCAG-AA as small text (bright gold ≈1.8:1 on the light canvas;
+   brand blue ≈4.4:1 on the dark canvas, just under). Rather than touch every call site, we redirect the
+   two TEXT utilities to the hue-locked accessible brand-INK tokens (gold→deep amber on light, blue→a
+   brighter blue on dark; identical to canonical where canonical already passes). Two accents only — the
+   ink tokens are the SAME gold/blue hues, just lightness-tuned. Fills (bg-yang/bg-yin/SVG fill) are
+   unaffected, so buttons/badges keep their canonical colour and their on-accent labels carry contrast.
+   `!important` (vs Tailwind's @layer utilities) so it wins wherever `text-yang` is applied; an explicit
+   override colour on an element still beats it via specificity. */
+@layer utilities {
+  .text-yang { color: var(--color-yang-ink); }
+  .text-yin-light { color: var(--color-yin-ink); }
+  /* hover/active brand text must stay accessible too (gold-on-light fails on hover just as at rest). */
+  .hover\:text-yang:hover { color: var(--color-yang-ink); }
+  .hover\:text-yin-light:hover { color: var(--color-yin-ink); }
+  .group:hover .group-hover\:text-yang { color: var(--color-yang-ink); }
+  .group:hover .group-hover\:text-yin-light { color: var(--color-yin-ink); }
+}
+
+/* NOTE: raw `text-yin` as TEXT is 2.53:1 on the dark canvas and must not be used — write
+   `text-yin-ink`. A CSS override for `.text-yin` does NOT work here: Tailwind generates that exact
+   class itself and drops a hand-written rule of the same name, whether layered or not (both were
+   tried and verified against the built stylesheet). So the call sites carry the right class
+   instead, which is also easier to read than an override acting at a distance. */
+
+::selection { background: rgba(232, 185, 35, 0.26); color: var(--color-ink); }
+
+/* Themed scrollbars (redesign it.2) — a hairline-coloured thumb on a transparent track, so scrollbars
+   read as part of the cosmos instead of the OS default. */
+* { scrollbar-width: thin; scrollbar-color: var(--color-line) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-line); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-ink-3); }
+
+/* Focus-visible — gold ring on the dark cosmos, blue on the light canvas (WCAG 2.4.11).
+   NO border-radius here. It used to force 3px, which does not merely shape the outline — it
+   overrides the ELEMENT's own radius while focused, so a 16px-rounded input grew a square-cornered
+   ring sitting outside its own rounded border and read as two mismatched boxes. Left alone, the
+   outline follows whatever radius the element already has. */
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+
+/* NO RING ON FORM CONTROLS (operator, 2026-07-30: "remove this blue rings anywhere on site").
+   A drawn ring is wrong here twice over. It stacked a second box on top of each control's own
+   focus border; and on a COMPOSED control — the search pill, where the visible shape is the
+   WRAPPER and the <input> inside it is a bare transparent element with no radius of its own — the
+   shadow drew a hard rectangle straight through a pill. Focus is shown the quiet way instead: the
+   control's own border changes colour, and a wrapper that owns the visible shape lights up through
+   :focus-within, so the indicator always follows the shape the eye actually sees. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--color-yin-light);
+}
+/* Composed controls: the wrapper carries the shape, so the wrapper carries the focus. */
+.aq-focus-wrap:focus-within { border-color: var(--color-yin-light); }
+
+/* iOS SAFARI ZOOMS THE WHOLE PAGE when a focused text field's font-size is under 16px, and the
+   member then has to pinch back out — on a sign-up form, mid-typing. `body` is 16px but form
+   controls do not inherit it (they carry a UA font), and the shared Input is 15px, so every text
+   field on the site did this. 16px on phones only; the 15px design size is kept from sm up.
+   Deliberately NOT applied to checkbox/radio/range/color/file (no text, and sizing them by font
+   would distort them) — and a <select> or a date picker opens a native sheet rather than zooming,
+   though including them costs nothing and keeps the row heights consistent. */
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+  /* The reader's control strip is flex-nowrap with a tuned width budget (see .aq-read-bar); a
+     bigger font there would push controls off-screen, and none of them takes typed input. */
+  .aq-read-bar select, .aq-listen select { font-size: 13px; }
+}
+
+/* EVERY <option> on the site, not one form's worth. A native select menu — and iOS's full-height
+   wheel — paints its OWN light surface whatever the page theme is, while the options inherit the
+   field's near-white `text-ink`. White on white: the menu opens showing nothing, which reads as
+   "the picker doesn't work" (that is how the sign-up date wheel was reported). Two bars already
+   carried this patch locally (.aq-listen, .aq-narr-panel) — proof of how the platform actually
+   renders — while the other ~34 selects on the site had the same bug waiting. Pin the surface as
+   well as the ink so the pair can never drift apart on a platform that honours one and not the
+   other. */
+select option, select optgroup { color: #111; background: #fff; }
+
+/* Text-contrast slider (BackgroundSwitcher) — a brand-gold thumb on a hairline track, themed via the
+   tokens so it matches both canvases. accent-color alone can't colour the track consistently across
+   engines, so the thumb/track are drawn explicitly (WebKit + Firefox). */
+.aq-contrast-range { -webkit-appearance: none; appearance: none; height: 20px; background: transparent; cursor: pointer; }
+.aq-contrast-range::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: var(--color-line); }
+.aq-contrast-range::-moz-range-track { height: 4px; border-radius: 999px; background: var(--color-line); }
+.aq-contrast-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; margin-top: -7px; width: 18px; height: 18px; border-radius: 999px; background: var(--color-yang); border: 2px solid var(--color-space-1); box-shadow: var(--shadow-card); }
+.aq-contrast-range::-moz-range-thumb { width: 18px; height: 18px; border-radius: 999px; background: var(--color-yang); border: 2px solid var(--color-space-1); box-shadow: var(--shadow-card); }
+.aq-contrast-range:focus-visible { outline: none; }
+.aq-contrast-range:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.aq-contrast-range:focus-visible::-moz-range-thumb { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+
+/* The feed card's way in. A BREATH, not a flash: opacity only, one slow cycle every 2.6s, over the
+   few per cent of the card the pill occupies — the smallest cue that reads as "there is more here"
+   on a phone, where there is no hover to discover it with. It stops on hover and on focus, because
+   by then it has done its job and continuing to pulse is nagging. The prefers-reduced-motion block
+   below zeroes it outright, along with every other animation on the site. */
+@keyframes aq-breathe { 0%, 100% { opacity: 1 } 50% { opacity: .74 } }
+.aq-continue { animation: aq-breathe 2.6s ease-in-out infinite; }
+.aq-continue-arrow { transition: transform .18s ease-out; }
+[role="link"]:hover .aq-continue,
+[role="link"]:focus-visible .aq-continue { animation: none; }
+[role="link"]:hover .aq-continue { border-color: var(--color-yin); color: var(--color-yin); }
+[role="link"]:hover .aq-continue-arrow { transform: translateX(3px); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Markdown body from the WP renderer (aq_md_to_html) — thread post + comments. */
+/* Long-form prose is CONTENT text — the tier contract binds it to the primary ink (the v1 reading
+   intervention moved the article reader off the secondary ink; this is the same fix for every other
+   prose surface: course descriptions, comments, board posts). Hierarchy is carried by size/weight. */
+.aq-prose { color: var(--color-ink); }
+.aq-prose > :first-child { margin-top: 0; }
+.aq-prose > :last-child { margin-bottom: 0; }
+.aq-prose p { margin: 0 0 0.9em; line-height: 1.7; }
+.aq-prose .aq-md-h { color: var(--color-ink); font-weight: 700; line-height: 1.3; margin: 1.3em 0 0.5em; }
+.aq-prose h1.aq-md-h { font-size: 1.45em; }
+.aq-prose h2.aq-md-h { font-size: 1.2em; }
+.aq-prose h3.aq-md-h { font-size: 1.05em; }
+.aq-prose strong { color: var(--color-ink); font-weight: 700; }
+.aq-prose em { font-style: italic; }
+.aq-prose a { color: var(--color-yang); text-decoration: underline; text-underline-offset: 2px; }
+.aq-prose .aq-md-ul, .aq-prose .aq-md-ol { margin: 0 0 0.9em; padding-left: 1.4em; }
+.aq-prose .aq-md-ul { list-style: disc; }
+.aq-prose .aq-md-ol { list-style: decimal; }
+.aq-prose li { margin: 0.25em 0; line-height: 1.65; }
+.aq-prose .aq-md-bq { margin: 0.9em 0; padding: 0.5em 0.9em; border-left: 3px solid var(--color-yang); background: rgba(232, 185, 35, 0.06); color: var(--color-ink-2); border-radius: 0 4px 4px 0; }
+.aq-prose .aq-md-code { background: color-mix(in srgb, var(--color-veil) 8%, transparent); padding: 0.12em 0.4em; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }
+.aq-prose .aq-md-pre { background: var(--color-space-3); padding: 0.9em 1em; border-radius: 6px; overflow-x: auto; margin: 0 0 0.9em; }
+.aq-prose .aq-md-pre code { background: none; padding: 0; font-size: 0.88em; }
+
+/* The JupyterBook page (operator 2026-07-29) — scoped to .aq-article-body, the class ReadMode
+   actually applies (NOT .aq-prose, which is the discussion/markdown surface; the reader's own prose
+   styling is a Tailwind arbitrary-variant string). Without this a code block inside the reader is
+   bare text: .aq-article-body pre sets only max-width and overflow, and a notebook read as a book is
+   mostly code.
+
+   A notebook needs its code to look like code and its results to look like results, or the two run
+   together and the reader cannot tell what the machine said back. Two colours only, so the
+   distinction is a rule and a weight, never a third hue: code carries a gold edge (the why), an
+   output block a blue one (the how). The language sits in the corner, from data-lang, so it is set
+   by content and needs no extra markup. */
+.aq-article-body .aq-md-pre {
+  background: var(--color-space-3);
+  padding: 0.9em 1em;
+  border-radius: 6px;
+  margin: 0 0 0.9em;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.aq-article-body .aq-md-pre code { background: none; padding: 0; font-size: 0.88em; }
+.aq-article-body .aq-nb-code { position: relative; border-inline-start: 2px solid color-mix(in srgb, var(--color-yang) 45%, transparent); }
+.aq-article-body .aq-nb-code[data-lang]::after {
+  content: attr(data-lang);
+  position: absolute; inset-block-start: 0.35em; inset-inline-end: 0.7em;
+  font-size: 0.68em; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--color-ink-3); pointer-events: none;
+}
+.aq-article-body .aq-nb-out {
+  border-inline-start: 2px solid color-mix(in srgb, var(--color-yin) 55%, transparent);
+  background: color-mix(in srgb, var(--color-space-3) 60%, transparent);
+}
+.aq-article-body .aq-nb-out code { color: var(--color-ink-2); }
+
+/* display:block + overflow-x lets a wide markdown table scroll inside the comment column instead of
+   pushing past a phone viewport (the rows form an anonymous table box, so collapsed borders survive). */
+.aq-prose .aq-md-table { display: block; width: 100%; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin: 0 0 0.9em; font-size: 0.92em; }
+.aq-prose .aq-md-table th, .aq-prose .aq-md-table td { border: 1px solid var(--color-line); padding: 0.45em 0.7em; text-align: left; }
+.aq-prose .aq-md-table th { background: color-mix(in srgb, var(--color-veil) 4%, transparent); color: var(--color-ink); font-weight: 600; }
+.aq-prose hr { border: 0; border-top: 1px solid var(--color-line); margin: 1.2em 0; }
+
+/* LaTeX (KaTeX). The server emits .aq-math nodes holding the raw "$…$" source; lib/math.ts
+   typesets them client-side. Until then (and if KaTeX fails) the readable source shows. */
+.aq-prose .aq-math:not([data-rendered]) { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--color-ink); opacity: 0.82; }
+.aq-prose .aq-math--display:not([data-rendered]) { display: block; margin: 0.9em 0; text-align: center; }
+.aq-prose .katex { color: var(--color-ink); font-size: 1.05em; }
+.aq-prose .katex-display { margin: 0.9em 0; padding: 2px 0; overflow-x: auto; overflow-y: hidden; }
+.aq-prose .katex-display > .katex { font-size: 1.15em; }
+/* Equation-number tags vs narrow columns (every math surface). KaTeX absolutely positions a \tag at
+   right:0 of .katex-html, which is normally the full column width — so when the equation itself is
+   WIDER than the column, the tag lands mid-equation and prints "(1)" on top of the maths (the "long
+   equations get scrambled" reader bug; verified live on /research/?submission=18). Size the block to
+   its content, so the tag anchors to the equation's TRUE right edge — reachable by the .katex-display
+   scroll — and reserve a right-hand lane so the tag can never sit on the equation's tail. Short
+   equations keep the full column (min-width) and their flush-right journal-style number. */
+.katex-display > .katex { width: max-content; min-width: 100%; }
+.katex-display > .katex > .katex-html:has(> .tag) { padding-right: 3.2em; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Journal of Seasonality — bespoke article reader (.aq-article-body, Research.tsx).
+   The body HTML is sanitised server-side (AQ\Science::clean_body_html); this gives
+   it a refined, dark-brand typographic treatment: a comfortable reading measure, a
+   distinctive lead, an accented key-findings box, a gold pull-quote, clean tables,
+   well-set references with a back-reference highlight, figure/equation styling, and
+   KaTeX that inherits the ink colour and never breaks the layout on a wide equation.
+   Two accents only — gold (#E8B923) + blue (#2352E8). No third colour.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* A comfortable reading measure (~68ch) for the running text, while figures, tables,
+   equations and the key-findings/quote panels stretch to the full column. */
+.aq-article-body > p,
+.aq-article-body > .lead,
+.aq-article-body > h2,
+.aq-article-body > h3,
+.aq-article-body > ul:not(.key-findings),
+.aq-article-body > ol { max-width: 70ch; }
+
+/* Plain-language framing line under the opening heading. */
+.aq-article-body .lead {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1.22rem;
+  line-height: 1.55;
+  letter-spacing: -0.01em;
+  color: var(--color-ink);
+  margin: 0.4rem 0 1.4rem;
+}
+
+/* Optional drop-cap on the very first body paragraph (suppressed when a .lead opens). */
+.aq-article-body > p:first-of-type::first-letter {
+  float: left;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 3.1em;
+  line-height: 0.82;
+  padding: 0.06em 0.12em 0 0;
+  color: var(--color-yang);
+}
+.aq-article-body > .lead + p::first-letter { /* a lead present → no drop-cap on the next p */
+  float: none; font-size: inherit; line-height: inherit; padding: 0; color: inherit; font-weight: inherit;
+}
+
+/* Headline results — a boxed, gold-accented panel. */
+.aq-article-body .key-findings {
+  list-style: none;
+  margin: 1.6rem 0;
+  padding: 1.1rem 1.25rem 1.1rem 1.5rem;
+  border: 1px solid color-mix(in srgb, var(--color-yang) 36%, transparent);
+  border-left: 3px solid var(--color-yang);
+  border-radius: var(--radius-card);
+  background: rgba(232, 185, 35, 0.06);
+}
+.aq-article-body .key-findings > li {
+  position: relative;
+  margin: 0 0 0.55rem;
+  padding-left: 1.4rem;
+  font-size: 0.98rem;
+  line-height: 1.6;
+  color: var(--color-ink-2);
+}
+.aq-article-body .key-findings > li:last-child { margin-bottom: 0; }
+.aq-article-body .key-findings > li::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0.62em;
+  width: 6px; height: 6px;
+  border-radius: 999px;
+  background: var(--color-yang);
+}
+
+/* Pull-quote takeaway — gold rule + larger, lightly emphasised display type. */
+.aq-article-body blockquote {
+  margin: 2rem 0;
+  padding: 0.3rem 0 0.3rem 1.4rem;
+  border-left: 3px solid var(--color-yang);
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1.28rem;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  font-style: normal;
+  color: var(--color-ink);
+}
+.aq-article-body blockquote p { margin: 0; font-size: inherit; line-height: inherit; color: inherit; }
+.aq-article-body blockquote cite { display: block; margin-top: 0.5rem; font-size: 0.85rem; font-style: normal; font-weight: 600; color: var(--color-ink-3); }
+
+/* References — well set, with a target highlight when a [n] back-reference jumps here. */
+.aq-article-body section#references ol,
+.aq-article-body #references > ol { padding-left: 1.6rem; }
+.aq-article-body #references li {
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--color-ink-2);
+  scroll-margin-top: 6rem;
+  border-radius: 6px;
+  transition: background-color 0.5s ease;
+}
+.aq-article-body li[id^="ref-"]:target {
+  background: rgba(232, 185, 35, 0.16);
+  box-shadow: 0 0 0 6px rgba(232, 185, 35, 0.16);
+}
+
+/* Numbered display equations — scrollable so a wide one never breaks the page. */
+.aq-article-body figure.aq-eq {
+  margin: 1.5rem 0;
+  padding: 0.4rem 0;
+  text-align: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-margin-top: 6rem;
+}
+.aq-article-body figure.aq-eq:target { background: rgba(232, 185, 35, 0.12); border-radius: 8px; }
+
+/* KaTeX — inherit the surrounding ink colour (readable on the dark canvas), centre display
+   math, and keep a wide equation scrollable instead of overflowing the column. */
+.aq-article-body .katex { color: currentColor; font-size: 1.04em; }
+.aq-article-body .katex-display {
+  margin: 1.2rem 0;
+  padding: 2px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.aq-article-body .katex-display > .katex { font-size: 1.1em; text-align: center; }
+/* Until KaTeX runs (and if it fails), the raw "\(…\)" source stays legible as plain text. */
+
+/* Wide block content scrolls WITHIN the reading measure — it must never force the column (and, on a phone,
+   the whole page) wider than the viewport, which shifts and clips every line of running text (the "equations
+   overflow on mobile / scrambled" report). Display math above already scrolls; data tables are wrapped at
+   render time (containWideTables, components/reader.tsx) in .aq-table-scroll so they KEEP their
+   collapsed-border look and scroll, long code blocks scroll directly, and long inline tokens (URLs) wrap
+   rather than overflow. */
+.aq-article-body { overflow-wrap: break-word; }
+.aq-article-body .aq-table-scroll { max-width: 100%; overflow-x: auto; margin: 1.2rem 0; }
+.aq-article-body .aq-table-scroll > table { margin: 0; }
+.aq-article-body pre { max-width: 100%; overflow-x: auto; }
+/* TOUCH: a horizontal scroller that also sets overflow-y:hidden is a classic iOS scroll-trap — a
+   vertical swipe starting on it goes to the (unscrollable) element and the page doesn't move, which
+   reads as "can't scroll" on a phone full of equations and tables. Declare pan-x AND pan-y so the
+   browser routes horizontal pans to the scroller and vertical pans to the page, keep momentum
+   scrolling, and contain horizontal overscroll so a scrub never rubber-bands the page sideways. */
+.aq-article-body .katex-display, .aq-article-body figure.aq-eq,
+.aq-article-body .aq-table-scroll, .aq-article-body pre,
+.aq-prose .katex-display, .aq-prose .aq-table-scroll, .aq-prose pre {
+  touch-action: pan-x pan-y pinch-zoom; /* pans route correctly AND a pinch starting here still zooms */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+/* Belt-and-braces: the wrap above is a one-shot JS effect on a dangerouslySetInnerHTML body — any later
+   re-injection of the raw HTML (a re-render/re-mount; ReadMode showed exactly this) strips the wrappers,
+   and on a phone the naked table was clipped off-screen, unreachable. So a table NOT inside a wrapper
+   falls back to being its OWN scroll container: display:block keeps the collapsed borders (the rows form
+   an anonymous table box) while letting overflow-x apply. The higher-specificity wrapper rule below
+   restores the true display:table look whenever the JS wrap is in place. */
+.aq-article-body table { display: block; max-width: 100%; overflow-x: auto; }
+.aq-article-body .aq-table-scroll > table { display: table; max-width: none; overflow-x: visible; }
+
+/* The founder's signature stand-in (shown until public/signature.svg|png is supplied). */
+.aq-sig { font-family: "Snell Roundhand", "Brush Script MT", "Segoe Script", "Apple Chancery", cursive; font-style: italic; }
+
+/* Printing a certificate: isolate .aq-cert and force dark-on-white. The app is a dark theme, so the
+   cert's light text would be invisible on a white printed page — force text to near-black and strip the
+   dark surface fills, while the SEAL, MEDAL, FRAME and SIGNATURE keep their colour (they paint via SVG
+   fill/stroke attributes, not CSS `color`). print-color-adjust:exact tells the browser to honour those
+   colours + the gold frame. We hide all other chrome (.aq-no-print + everything outside the cert) and
+   the decorative ambient glows. */
+@media print {
+  .aq-no-print { display: none !important; }
+  body * { visibility: hidden !important; }
+  .aq-cert, .aq-cert * { visibility: visible !important; color: #1a1a1a !important; background: transparent !important; box-shadow: none !important; }
+  .aq-cert { position: absolute; left: 0; top: 0; width: 100%; background: #fff !important; border: 3px solid #c49b1a !important;
+    print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .aq-cert .aq-glow { display: none !important; }
+}
+
+/* uPlot — interactive research/field charts, themed dark to the two-colour brand (see ResearchCharts.tsx). */
+.uplot-aq { font-family: system-ui, sans-serif; }
+.uplot-aq .u-title { display: none; }
+.uplot-aq .u-legend { margin-top: 6px; font-size: 12px; color: var(--color-ink-3); }
+.uplot-aq .u-legend .u-series { display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; }
+.uplot-aq .u-legend .u-series:first-child { color: var(--color-ink-3); }   /* the x ("year"/"angle") readout */
+.uplot-aq .u-legend .u-value { color: var(--color-ink); font-weight: 600; }
+.uplot-aq .u-legend .u-marker { width: 10px; height: 10px; }
+.uplot-aq .u-cursor-x, .uplot-aq .u-cursor-y { border-right-color: var(--color-ink-3); border-bottom-color: var(--color-ink-3); }
+.uplot-aq .u-select { background: rgba(232, 185, 35, 0.12); }   /* drag-to-zoom marquee in gold */
+
+/* ════════════════════════════════════════════════════════════════════════════
+   READ MODE — the distraction-free, full-viewport immersive reader (Research.tsx
+   <ReadMode/>). A single centred reading column over a calm canvas: no site chrome,
+   no TOC, no rail, no AI-review. Tunable text size (--aq-read-scale) and reading
+   face (serif default for long-form legibility, or sans), persisted to localStorage.
+   Two accents only — gold (#E8B923) + blue. Honours light + dark + prefers-reduced-motion.
+   ════════════════════════════════════════════════════════════════════════════ */
+.aq-read-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;            /* above the app shell, topbar, sidebar, lightbox */
+  overflow-y: auto;
+  overflow-x: hidden;             /* a wide table / equation must never scroll the whole reader sideways and */
+  overflow-x: clip;               /* shift the running text (mobile) — progressive upgrade; wide blocks self-scroll below */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch; /* momentum scrolling for the overlay on iOS */
+  touch-action: pan-y;               /* the overlay itself only ever pans vertically */
+  background: var(--color-space-1);
+  color: var(--color-ink);
+  --aq-read-scale: 1;
+  /* Read mode INHERITS the global ink ramp from the contrast engine (--color-ink/-2/-3 set on <html>),
+     so the in-bar contrast slider actually tunes the prose. The engine now floors every level at WCAG-AA
+     (light Lc≥75 / dark Lc≥62, a11y audit), so even "Calm" stays legible — no need to hard-pin. */
+}
+/* A whisper of the brand glow so the canvas is calm, never flat — same vocabulary as the app bg. */
+.aq-read-overlay::before {
+  content: "";
+  position: fixed; inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 70% at 100% -10%, color-mix(in srgb, var(--color-yin) 5%, transparent), transparent 56%),
+    radial-gradient(110% 70% at -10% 110%, color-mix(in srgb, var(--color-yang) 4%, transparent), transparent 54%);
+}
+.aq-read-overlay .aq-read-scroll { position: relative; }
+
+/* BOTTOM control bar — ALWAYS fixed + visible at the viewport bottom (no auto-hide). Opaque (not a
+   live backdrop-blur) so it never repaints during scroll → no scroll jank. */
+.aq-read-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 4;
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.55rem max(1rem, env(safe-area-inset-right)) max(0.55rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  background: var(--color-space-1);
+  border-top: 1px solid var(--color-line);
+}
+
+/* The Contents button only makes sense where the side TOC is hidden (≤1100px); hidden otherwise.
+   !important so it beats the later, equal-specificity `.aq-read-ctl { display: inline-flex }` rule. */
+.aq-read-only-narrow { display: none !important; }
+@media (max-width: 1100px) { .aq-read-only-narrow { display: inline-flex !important; } }
+
+/* Phone: condense the bar to a single tight row. Width / fullscreen / help controls are hidden
+   (.aq-read-hide-sm) — meaningless or unreliable on touch — leaving Exit, Contents, text size,
+   typeface, theme, and the contrast slider. Tighter gaps/padding; nothing overflows; ≥40px taps. */
+@media (max-width: 640px) {
+  .aq-read-hide-sm { display: none !important; }
+  .aq-read-bar {
+    gap: 0.25rem;
+    padding: 0.4rem max(0.4rem, env(safe-area-inset-right)) max(0.4rem, env(safe-area-inset-bottom)) max(0.4rem, env(safe-area-inset-left));
+    flex-wrap: nowrap; overflow: hidden;
+  }
+  .aq-read-bar > span.mx-auto { gap: 0.2rem !important; flex-wrap: nowrap; margin: 0 !important; }   /* even spacing, no auto-centre crowding */
+  .aq-read-bar .aq-read-ctl { height: 2.5rem; min-width: 2.5rem; padding: 0 0.45rem; }  /* ≥40px tap targets */
+  .aq-read-label { display: none; }                                       /* drop button text labels (icons stay) */
+  /* Reclaim horizontal room so the whole row fits a 360–390px phone with no clip: drop the size
+     readout + the contrast icon, and slim the slider. Tap targets stay ≥40px. */
+  .aq-read-seg .aq-read-size-label { display: none; }                     /* the M/S/L size readout */
+  .aq-read-contrast { padding-left: 0; gap: 0.2rem; }
+  .aq-read-contrast > svg { display: none; }                              /* the contrast glyph (slider speaks for itself) */
+  /* The slider is the LAST item — keep it narrow + give the contrast group a little right padding so the
+     16px thumb at the Crisp end stays fully inside the viewport (no clip). Serif/Sans tighten too. */
+  .aq-read-crange { width: 1.5rem; }
+  .aq-read-contrast { padding-right: 0.75rem; }
+  .aq-read-bar [role="group"][aria-label="Reading typeface"] .aq-read-ctl { padding: 0 0.4rem; }
+  .aq-read-seg { gap: 0.1rem; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SHARED CONTENTS TABLE-OF-CONTENTS (.aq-toc) — used by both the inline article
+   reader (window scroll) and read mode (overlay scroll). A thin spine doubles as a
+   reading-progress bar: a gold fill grows top→down as you scroll, the active section
+   is highlighted gold. Two accents only; light + dark; honours reduced-motion.
+   ════════════════════════════════════════════════════════════════════════════ */
+.aq-toc { overflow: auto; -ms-overflow-style: none; scrollbar-width: none; }
+.aq-toc::-webkit-scrollbar { display: none; }
+.aq-toc-eyebrow {
+  margin: 0 0 0.55rem 0.85rem;
+  font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--color-ink-3);
+}
+/* The spine sits to the left of the list; the gold fill is the progress bar. */
+.aq-toc-body { position: relative; }
+.aq-toc-spine {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 2px; border-radius: 999px;
+  background: var(--color-line); overflow: hidden;
+}
+.aq-toc-fill {
+  position: absolute; left: 0; top: 0; width: 100%; height: 0;
+  background: var(--color-yang); border-radius: 999px;
+}
+.aq-toc-list { list-style: none; margin: 0; padding: 0; }
+.aq-toc-item {
+  display: block; position: relative;
+  padding: 0.28rem 0 0.28rem 0.85rem;
+  font-size: 0.8125rem; line-height: 1.35; color: var(--color-ink-2);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+.aq-toc-sub { padding-left: 1.55rem; font-size: 0.78rem; }
+/* Upcoming sections read muted, passed ones normal, the active one gold + medium. */
+.aq-toc-item:hover { color: var(--color-yin-light); }
+.aq-toc-item:focus-visible {
+  outline: none; color: var(--color-yin-light);
+  box-shadow: -2px 0 0 0 var(--color-yin-light);
+  border-radius: 2px;
+}
+.aq-toc-item.is-active { color: var(--color-yang-ink, var(--color-yang)); font-weight: 600; }
+
+/* Read mode placement: a quiet sticky left column inside the overlay, clear of the centred reading
+   column on wide screens, hidden on narrow ones (the bottom bar + scroll suffice). */
+/* TOC + reading column form ONE centred group (.aq-read-layout) — no fixed left gutter, so the
+   width is used efficiently with balanced margins, not a lopsided empty right band. */
+.aq-read-layout {
+  display: flex; align-items: flex-start; justify-content: center;
+  gap: clamp(1.5rem, 4vw, 3.5rem);
+  padding: 0 clamp(1rem, 3vw, 2rem);
+}
+.aq-read-toc {
+  position: sticky; z-index: 3; flex: none;
+  top: clamp(1.5rem, 6vh, 4rem);
+  width: 13rem; max-height: calc(100vh - 8rem); overflow: auto;
+  padding-right: 0.5rem;
+}
+.aq-read-toc .aq-toc-item { color: var(--color-ink-3); }
+.aq-read-toc .aq-toc-item:hover { color: var(--color-yin-light); }
+.aq-read-toc .aq-toc-item.is-active { color: var(--color-yang-ink, var(--color-yang)); }
+/* Only show the left TOC when there's room beside the reading column (≈ col 54rem + 2×TOC gutters). */
+@media (max-width: 1100px) { .aq-read-toc { display: none; } }
+
+/* The reading column: comfortable measure + generous rhythm, larger than the inline reader. */
+.aq-read-col {
+  width: var(--aq-read-measure, 44rem); max-width: 100%;   /* tunable measure; flex item, not auto-centred */
+  min-width: 0;            /* a flex item won't shrink below its content's min-content by default, so a wide
+                              table or display equation would force the column — and the whole page — past the
+                              viewport and shift/clip every line of text on a phone. Allow it to honour max-width. */
+  flex: 0 1 auto; margin: 0;
+  padding: clamp(1.5rem, 4vw, 3rem) max(1.15rem, env(safe-area-inset-left)) 6rem;
+  font-size: calc(1.075rem * var(--aq-read-scale));
+  transition: width 0.2s ease;
+}
+.aq-read-col.aq-read-serif {
+  --aq-read-face: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Cambria, "Times New Roman", serif;
+}
+.aq-read-col.aq-read-sans { --aq-read-face: var(--font-sans); }
+
+/* Masthead inside the column — title, byline (one quiet line), abstract. */
+.aq-read-eyebrow { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-ink-3); }
+.aq-read-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: calc(clamp(1.8rem, 1.2rem + 2.2vw, 2.7rem) * var(--aq-read-scale));
+  line-height: 1.13; letter-spacing: -0.02em;
+  text-wrap: balance;
+  margin: 0.7rem 0 0; color: var(--color-ink);
+}
+.aq-read-byline { margin-top: 0.85rem; font-size: calc(0.92rem * var(--aq-read-scale)); color: var(--color-ink-3); line-height: 1.6; }
+.aq-read-byline b, .aq-read-byline a { color: var(--color-ink-2); font-weight: 600; }
+.aq-read-byline a { text-decoration: none; }
+.aq-read-byline a:hover { color: var(--color-yin-light); text-decoration: underline; }
+.aq-read-abstract {
+  margin-top: 1.6rem;
+  padding: 0 0 0 1.1rem;
+  border-left: 3px solid color-mix(in srgb, var(--color-yang) 55%, transparent);
+}
+.aq-read-abstract h2 { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--color-ink-3); margin: 0; }
+.aq-read-abstract p { margin: 0.5rem 0 0; font-family: var(--aq-read-face); font-size: calc(1.06em); line-height: 1.6; color: var(--color-ink); }
+.aq-read-rule { border: 0; border-top: 1px solid var(--color-line); margin: 2.2rem 0; }
+
+/* The body — the reading face, a generous measure, strong paragraph rhythm. Scoped overrides
+   on top of .aq-article-body so the running text reads like a premium long-form view. */
+.aq-read-col .aq-article-body { font-family: var(--aq-read-face); }
+.aq-read-col .aq-article-body > p,
+.aq-read-col .aq-article-body > .lead,
+.aq-read-col .aq-article-body > ul:not(.key-findings),
+.aq-read-col .aq-article-body > ol { max-width: none; }
+/* Line height + letter spacing are reader PREFERENCES (Aa panel) — var-driven with the classic
+   defaults, so members who never open the panel read exactly what they always did. */
+.aq-read-col .aq-article-body > p { font-size: 1.06em; line-height: var(--aq-read-lh, 1.62); letter-spacing: var(--aq-read-ls, 0); margin-top: 1.25em; color: var(--color-ink); }
+.aq-read-col .aq-article-body > blockquote,
+.aq-read-col .aq-article-body li { line-height: var(--aq-read-lh, 1.62); letter-spacing: var(--aq-read-ls, 0); }
+/* Justified setting: even blocks WITH hyphenation (the article carries lang/dir, so the hyphenator
+   knows its language) — never justify without hyphens, that's how rivers happen. */
+.aq-read-justify .aq-article-body > p,
+.aq-read-justify .aq-article-body li,
+.aq-read-justify .aq-article-body > blockquote { text-align: justify; -webkit-hyphens: auto; hyphens: auto; }
+/* RTL content (dir resolves from the document): keep the abstract's accent bar on the reading side. */
+.aq-read-col[dir="rtl"] .aq-read-abstract { padding: 0 1.1rem 0 0; border-left: 0; border-right: 3px solid color-mix(in srgb, var(--color-yang) 55%, transparent); }
+.aq-read-col .aq-article-body > h2 { font-family: var(--font-display); font-size: 1.5em; margin-top: 2.1em; color: var(--color-ink); letter-spacing: -0.015em; }
+.aq-read-col .aq-article-body > h3 { font-family: var(--font-display); font-size: 1.2em; margin-top: 1.6em; color: var(--color-ink); }
+.aq-read-col .aq-article-body > ul, .aq-read-col .aq-article-body > ol { font-size: 1.04em; line-height: var(--aq-read-lh, 1.62); }
+.aq-read-col .aq-article-body .lead { font-size: 1.32em; }
+.aq-read-col .aq-article-body > p:first-of-type::first-letter { font-size: 3.3em; color: var(--color-yang); }
+.aq-read-col .aq-article-body figure { margin: 2.2em auto; }
+.aq-read-col .aq-article-body img { border-radius: var(--radius-card); }
+.aq-read-col .aq-article-body figure.aq-eq, .aq-read-col .aq-article-body .katex-display { margin: 1.6em 0; }
+.aq-read-col .aq-article-body table { font-size: 0.94em; }
+
+/* Figures (interactive ResultCharts) re-rendered inside read mode — centred with breathing room. */
+.aq-read-figs { margin-top: 2.6rem; }
+.aq-read-figs h2 { font-family: var(--font-display); font-size: 1.3em; color: var(--color-ink); }
+.aq-read-figs .aq-read-fig + .aq-read-fig { margin-top: 2rem; }
+
+/* References — refined, slightly smaller, comfortable leading. */
+.aq-read-refs { margin-top: 2.6rem; }
+.aq-read-refs h2 { font-family: var(--font-display); font-size: 1.3em; color: var(--color-ink); }
+
+/* The in-mode control buttons — quiet, with a visible focus ring and blue as the only hover accent. */
+.aq-read-ctl {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
+  height: 2rem; min-width: 2rem; padding: 0 0.6rem;
+  border: 1px solid var(--color-line); border-radius: 999px;
+  background: color-mix(in srgb, var(--color-space-2) 80%, transparent);
+  color: var(--color-ink-2); font-size: 0.8rem; font-weight: 600;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.aq-read-ctl:hover { color: var(--color-ink); border-color: var(--color-yin-light); }
+.aq-read-ctl:focus-visible { outline: none; border-color: var(--color-yin-light); color: var(--color-ink); }
+.aq-read-ctl[aria-pressed="true"] { color: var(--color-on-accent); background: var(--color-yang); border-color: var(--color-yang); }
+.aq-read-ctl:disabled { opacity: 0.4; cursor: not-allowed; }
+.aq-read-seg { display: inline-flex; align-items: center; gap: 0.15rem; }
+
+/* In-bar text-contrast slider (Calm ↔ Crisp) — compact; reuses the engine, tunes the read-mode prose. */
+.aq-read-contrast { gap: 0.4rem; color: var(--color-ink-3); padding-left: 0.2rem; }
+.aq-read-crange { -webkit-appearance: none; appearance: none; width: 4.5rem; height: 18px; background: transparent; cursor: pointer; }
+.aq-read-crange::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: var(--color-line); }
+.aq-read-crange::-moz-range-track { height: 4px; border-radius: 999px; background: var(--color-line); }
+.aq-read-crange::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; margin-top: -6px; width: 16px; height: 16px; border-radius: 999px; background: var(--color-yang); border: 2px solid var(--color-space-1); }
+.aq-read-crange::-moz-range-thumb { width: 16px; height: 16px; border-radius: 999px; background: var(--color-yang); border: 2px solid var(--color-space-1); }
+.aq-read-crange:focus-visible { outline: none; }
+.aq-read-crange:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--color-yin-light); outline-offset: 2px; }
+.aq-read-crange:focus-visible::-moz-range-thumb { outline: 2px solid var(--color-yin-light); outline-offset: 2px; }
+
+/* Cursor auto-hide for an immersive read (reverts on any pointer move). Controls keep their own cursor
+   so they're always actionable; the auto-hide only blanks the reading canvas. */
+.aq-read-idle { cursor: none; }
+.aq-read-idle a, .aq-read-idle button, .aq-read-idle [role="button"] { cursor: pointer; }
+
+/* WHERE AM I — the top hairline reading-progress bar (gold fill written per frame, no re-renders)
+   and the quiet "N min left" readout at the bar's right edge. */
+.aq-read-progress {
+  position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 5;
+  background: color-mix(in srgb, var(--color-line) 55%, transparent);
+  pointer-events: none;
+}
+.aq-read-progress > span { display: block; width: 0; height: 100%; background: var(--color-yang); }
+.aq-read-minleft { flex: none; min-width: 4.5rem; text-align: right; font-size: 0.72rem; font-weight: 600; color: var(--color-ink-3); font-variant-numeric: tabular-nums; }
+
+/* READING RULER — a soft gold band that follows the pointer's line; a place-keeper for readers with
+   tracking/attention difficulties. Translucent tint only (text stays fully legible beneath), edged so
+   the tracked line is unmistakable; never intercepts the pointer. Toggle: Aa panel or R. */
+.aq-read-ruler {
+  position: fixed; left: 0; right: 0; z-index: 2;
+  height: 2.4em; transform: translateY(-50%);
+  pointer-events: none;
+  background: color-mix(in srgb, var(--color-yang) 9%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--color-yang) 30%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-yang) 30%, transparent);
+}
+
+/* The Aa (typography) card — the help-card look with labelled rows; scrolls if a phone is short. */
+.aq-aa-card { width: min(24rem, 100%); max-height: min(76vh, 34rem); overflow: auto; }
+.aq-aa-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-top: 0.65rem; }
+.aq-aa-label { font-size: 0.8rem; font-weight: 600; color: var(--color-ink-2); }
+
+/* The reader's Listen segment — compact controls; native selects inherit the bar's quiet look. */
+.aq-listen select {
+  background: transparent; color: var(--color-ink-2); border: 0; font: inherit;
+  font-size: 0.78rem; font-weight: 600; cursor: pointer; max-width: 10.5rem;
+}
+.aq-listen select:focus-visible { outline: none; border-color: var(--color-yin-light); }
+.aq-listen select option { color: #111; }   /* native menus paint their own light surface */
+.aq-listen-steps { display: inline-flex; gap: 0.1rem; }
+/* The status chip floats above the bar only while there is something to say (progress, notes). */
+.aq-listen-status {
+  position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+  margin-bottom: 8px;
+  display: flex; align-items: center; gap: 0.5rem;
+  max-width: min(86vw, 30rem); white-space: nowrap; overflow: hidden;
+  padding: 0.2rem 0.7rem;
+  border: 1px solid var(--color-line); border-radius: 999px;
+  background: var(--color-space-2);
+  color: var(--color-ink-3); font-size: 0.72rem; font-weight: 600;
+}
+.aq-listen-status > span { overflow: hidden; text-overflow: ellipsis; }
+.aq-listen-pct { flex: none; display: inline-block; width: 5.5rem; height: 4px; border-radius: 999px; overflow: hidden; background: var(--color-line); }
+.aq-listen-pct > span { display: block; height: 100%; background: var(--color-yang); }
+
+/* The record-a-narration popover (was JS-injected by the old readaloud module — tokens only). */
+.aq-narr-panel {
+  position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+  margin-bottom: 8px; z-index: 20;
+  display: flex; flex-direction: column; gap: 8px;
+  min-width: min(92vw, 320px);
+  padding: 12px;
+  background: var(--color-space-1); border: 1px solid var(--color-line);
+  border-radius: 12px; box-shadow: var(--shadow-card, 0 12px 32px rgba(0, 0, 0, 0.4));
+}
+.aq-narr-panel select {
+  width: 100%; background: var(--color-space-2); color: inherit;
+  border: 1px solid var(--color-line); border-radius: 8px; padding: 6px 8px; font: inherit;
+}
+.aq-narr-panel select option { color: #111; }
+.aq-narr-panel-title { font-size: 0.78rem; font-weight: 700; color: var(--color-ink); }
+.aq-narr-panel-label { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-ink-3); }
+.aq-narr-panel-note { font-size: 0.75rem; color: var(--color-ink-3); }
+
+/* PRINT — read mode prints as a clean, light document (the article, nothing else). This block
+   deliberately outranks the certificate-print rules above via the data-aq-reading scope. */
+@media print {
+  html[data-aq-reading="1"] body * { visibility: visible !important; }
+  html[data-aq-reading="1"] .aq-read-bar,
+  html[data-aq-reading="1"] .aq-read-toc,
+  html[data-aq-reading="1"] .aq-read-progress,
+  html[data-aq-reading="1"] .aq-read-ruler,
+  html[data-aq-reading="1"] .aq-read-help,
+  html[data-aq-reading="1"] .aq-read-sheet-scrim,
+  html[data-aq-reading="1"] .aq-listen-status { display: none !important; }
+  html[data-aq-reading="1"] .aq-read-overlay { position: static !important; overflow: visible !important; background: #fff !important; }
+  html[data-aq-reading="1"] .aq-read-overlay::before { display: none !important; }
+  html[data-aq-reading="1"] .aq-read-overlay, html[data-aq-reading="1"] .aq-read-overlay * { color: #1a1a1a !important; }
+  html[data-aq-reading="1"] .aq-read-layout { display: block !important; padding: 0 !important; }
+  html[data-aq-reading="1"] .aq-read-col { margin: 0 auto !important; padding: 0 !important; }
+}
+
+/* Phone: the Listen segment keeps Play + voice + speed; sentence steppers and the source-status chip
+   width give way so the whole bar still fits a 360px viewport with ≥40px taps. */
+@media (max-width: 640px) {
+  .aq-listen-steps { display: none; }
+  .aq-listen select { max-width: 6.5rem; }
+}
+
+/* The keyboard-shortcuts panel — a small, centred card over a dimming veil (two-colour brand respected). */
+.aq-read-help {
+  position: fixed; inset: 0; z-index: 5;
+  display: flex; align-items: center; justify-content: center;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--color-space-1) 62%, transparent);
+  backdrop-filter: blur(2px);
+}
+.aq-read-help-card {
+  width: min(22rem, 100%);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  background: var(--color-space-2);
+  box-shadow: var(--shadow-card, 0 12px 40px rgba(0,0,0,0.4));
+  padding: 1rem 1.1rem 1.15rem;
+}
+.aq-read-kbd {
+  display: inline-block;
+  min-width: 1.5rem; text-align: center;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--color-line);
+  border-bottom-width: 2px;
+  border-radius: 0.4rem;
+  background: var(--color-space-1);
+  color: var(--color-ink-2);
+  font: 600 0.78rem var(--font-mono, ui-monospace, monospace);
+  white-space: nowrap;
+}
+
+/* Mobile/tablet CONTENTS bottom-sheet — the section list when the side TOC is hidden (≤1100px).
+   A dimmed scrim + a sheet anchored to the bottom (above the bar), with the shared TOC inside.
+   Two-colour brand; light + dark; safe-area aware; honours reduced-motion. */
+.aq-read-sheet-scrim {
+  position: fixed; inset: 0; z-index: 6;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: color-mix(in srgb, var(--color-space-1) 62%, transparent);
+  backdrop-filter: blur(2px);
+  animation: aq-read-sheet-fade 0.18s ease;
+}
+.aq-read-sheet {
+  width: 100%; max-width: 32rem;
+  max-height: min(72vh, 32rem);
+  display: flex; flex-direction: column;
+  border: 1px solid var(--color-line);
+  border-bottom: 0;
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  background: var(--color-space-2);
+  box-shadow: var(--shadow-card, 0 -12px 40px rgba(0,0,0,0.4));
+  padding: 0.4rem 0.9rem max(1rem, env(safe-area-inset-bottom));
+  animation: aq-read-sheet-rise 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.aq-read-sheet:focus { outline: none; }
+.aq-read-sheet-head {
+  position: relative;
+  display: flex; align-items: center; justify-content: flex-end;
+  padding: 0.3rem 0 0.5rem;
+  flex: none;
+}
+.aq-read-sheet-grip {
+  position: absolute; left: 50%; top: 0.35rem; transform: translateX(-50%);
+  width: 2.25rem; height: 4px; border-radius: 999px;
+  background: var(--color-line);
+}
+.aq-read-sheet-toc {
+  overflow: auto; -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.5rem;
+}
+.aq-read-sheet-toc .aq-toc-item { padding-top: 0.5rem; padding-bottom: 0.5rem; }   /* roomier taps in the sheet */
+@keyframes aq-read-sheet-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes aq-read-sheet-rise { from { transform: translateY(12%); } to { transform: translateY(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .aq-read-bar, .aq-read-col, .aq-toc-item, .aq-toc-fill { transition: none; }
+  .aq-read-sheet-scrim, .aq-read-sheet { animation: none; }
+}
+
+/* ── Readability + accessibility hardening (2026-07-14) ─────────────────────
+   Motion is a preference: members who ask for reduced motion get instant state
+   changes everywhere (hearts, shakes, reveals, marquees) with no layout cost. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Keyboard focus: see the single :focus-visible rule far above. A SECOND, un-layered copy used to
+   live here and, being later in the file at equal specificity, it silently won — re-imposing the
+   `border-radius: 4px` that reshapes every pill and card the moment it takes focus (the exact bug
+   that was reported and thought fixed), and hard-coding gold, which is 1.72:1 on the LIGHT canvas
+   anonymous visitors get by default. The one rule above uses --color-focus, which is gold on dark
+   and blue on light. Do not add another. */
+
+/* Smooth, consistent text rendering; no iOS landscape text inflation surprises. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+}
+
+/* Full-screen stages own their scroll — no chaining into the page behind. */
+[role="dialog"] {
+  overscroll-behavior: contain;
+}
+
+/* The Lab's code-cell tokens (pages/Lab.tsx highlight overlay — lib/highlight.ts). Brand-locked:
+   keywords blue-ink, builtins gold-ink; strings/numbers get fixed legible hues per theme. */
+.tk-k { color: var(--color-yin-ink); }
+.tk-b { color: var(--color-yang-ink); }
+.tk-d { color: var(--color-yang-ink); }
+.tk-c { color: var(--color-ink-3); font-style: italic; }
+.tk-s { color: #86c790; }
+.tk-n { color: #d0a8ff; }
+html[data-theme="light"] .tk-s { color: #1d7a35; }
+html[data-theme="light"] .tk-n { color: #7a3fbf; }
+
+/* ArtaTTS translation panel — what the reader is SPEAKING when reading in another language (the band
+   lights the source paragraph). dir=auto + plaintext keep RTL scripts (Farsi/Arabic) correct. */
+.aq-tr-panel { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(1rem + env(safe-area-inset-bottom)); width: min(42rem, calc(100vw - 2rem)); max-height: 9rem; overflow-y: auto; background: color-mix(in srgb, var(--color-space-1, #06121E) 95%, transparent); border: 1px solid var(--color-line, #26405c); border-radius: 12px; padding: 0.65rem 0.9rem; z-index: 40; font-size: 14.5px; line-height: 1.6; color: var(--color-ink, #e8eef6); unicode-bidi: plaintext; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); backdrop-filter: blur(6px); }
+.aq-tr-text { max-height: 7rem; overflow-y: auto; font-size: 14px; line-height: 1.55; color: var(--color-ink, #e8eef6); unicode-bidi: plaintext; }
+
+/* ArtaRead extracted media — every non-prose region (figure/equation/table) is a PIXEL-TRUE crop of
+   the rendered page, wrapped in an SVG for scalable packaging + a screen-reader label. Line-art crops
+   (equations, tables, diagrams) invert in dark mode so they match the reader; photos never invert. */
+/* content-visibility virtualises off-screen crops: a 300-page PDF renders only what's near the
+   viewport, so page-by-page conversion never piles rendering cost onto the member's browser. */
+.aq-pdf-crop { margin: 1.3rem auto; overflow-x: auto; text-align: center; content-visibility: auto; contain-intrinsic-size: auto 320px; }
+.aq-pdf-crop svg { display: block; margin: 0 auto; max-width: 100%; height: auto; border-radius: 8px; }
+.aq-pdf-crop[data-kind="equation"] svg { max-height: 8rem; }
+.aq-pdf-crop[data-kind="table"] svg { max-height: 30rem; }
+.aq-pdf-crop:not([data-invert]) svg { border: 1px solid var(--color-line, #26405c); }
+html[data-theme="dark"] .aq-pdf-crop[data-invert] svg { filter: invert(1) hue-rotate(180deg); }
+/* An equation crop UPGRADED to real KaTeX (texify2 OCR) — a centred display-math block, theme-native
+   ink, and horizontally scrollable if a wide expression overflows the column. */
+.aq-eq-native { margin: 1.3rem auto; text-align: center; overflow-x: auto; }
+.aq-eq-native .aq-eq-tex { margin: 0; }
+.aq-eq-native .katex-display { margin: 0.4rem 0; }
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   ArtaRead BOOK reader — a real two-page book (desktop spread + mobile single leaf with a folded
+   far edge), 3D page-flip on turn. Themed leaves reflow the extracted content (ArtaContrast + Aa
+   inherit). Only the visible spread + next are ever rendered (lazy openPdf). */
+.aq-book-overlay {
+  position: fixed; inset: 0; z-index: 2147483000;
+  display: flex; flex-direction: column;
+  background:
+    radial-gradient(120% 80% at 50% 0%, color-mix(in srgb, var(--color-yin, #1746dc) 6%, transparent), transparent 60%),
+    var(--color-space-1);
+  color: var(--color-ink);
+  overscroll-behavior: contain; touch-action: pan-y;
+}
+:root[data-theme="light"] .aq-book-overlay,
+.aq-book-overlay[data-theme="light"] { background: radial-gradient(120% 80% at 50% 0%, #eef2f8, transparent 60%), #dfe5ee; }
+
+.aq-book-topbar { flex: 0 0 auto; display: flex; align-items: baseline; gap: 0.6rem; padding: 0.55rem 1rem 0.2rem; min-width: 0; }
+.aq-book-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-yang, #e8b923); flex: 0 0 auto; }
+.aq-book-title { font-size: 13.5px; font-weight: 600; opacity: 0.82; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+/* Stage: the 3D scene. */
+.aq-book-stage { position: relative; flex: 1 1 auto; display: flex; align-items: center; justify-content: center; min-height: 0; padding: 0.5rem clamp(0.5rem, 3vw, 2.5rem) 0.5rem; perspective: 2400px; }
+.aq-book-turn { position: absolute; top: 0; bottom: 0; width: 22%; z-index: 6; background: transparent; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.aq-book-turn-prev { left: 0; cursor: w-resize; }
+.aq-book-turn-next { right: 0; cursor: e-resize; }
+.aq-book-turn:disabled { cursor: default; }
+
+/* The book itself: two leaves + spine, fixed page aspect (each leaf ~ ISO-ish 1:1.414). */
+.aq-book-book { position: relative; display: flex; height: min(88vh, calc((100vw - 4rem) * 0.72)); aspect-ratio: 1.44 / 1; max-width: calc(100vw - 3rem); transform-style: preserve-3d; }
+.aq-book-mobile .aq-book-book { aspect-ratio: 0.72 / 1; height: min(86vh, calc((100vw - 1.5rem) * 1.39)); }
+
+.aq-book-leaf { position: relative; flex: 1 1 50%; min-width: 0; overflow: hidden; background: var(--book-paper, #0c1a2b); box-shadow: 0 22px 60px -20px rgba(0,0,0,0.7); }
+.aq-book-mobile .aq-book-leaf { flex: 1 1 100%; border-radius: 4px 10px 10px 4px; }
+.aq-book-left { border-radius: 10px 2px 2px 10px; box-shadow: -18px 24px 60px -24px rgba(0,0,0,0.7), inset -14px 0 26px -18px rgba(0,0,0,0.55); }
+.aq-book-right { border-radius: 2px 10px 10px 2px; box-shadow: 18px 24px 60px -24px rgba(0,0,0,0.7), inset 14px 0 26px -18px rgba(0,0,0,0.55); }
+.aq-book-blank { background: color-mix(in srgb, var(--book-paper, #0c1a2b) 88%, #000); }
+:root[data-theme="light"] .aq-book-leaf, .aq-book-overlay[data-theme="light"] .aq-book-leaf { --book-paper: #fbf8f1; }
+.aq-book-overlay { --book-paper: #0c1a2b; }
+
+/* the spine gutter between the two leaves */
+.aq-book-spine { flex: 0 0 2px; align-self: stretch; background: linear-gradient(90deg, rgba(0,0,0,0.42), rgba(0,0,0,0.08) 40%, rgba(0,0,0,0.08) 60%, rgba(0,0,0,0.42)); z-index: 3; }
+
+/* mobile: a folded far edge suggesting the rest of the book behind the single page */
+.aq-book-fold { position: absolute; top: 0; right: -14px; bottom: 0; width: 14px; z-index: -1;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--book-paper,#0c1a2b) 70%, #000), color-mix(in srgb, var(--book-paper,#0c1a2b) 40%, #000));
+  border-radius: 0 10px 10px 0; transform: skewY(-2deg); box-shadow: 6px 8px 20px -8px rgba(0,0,0,0.6); }
+
+/* leaf content */
+.aq-book-pageno { position: absolute; bottom: 8px; left: 0; right: 0; text-align: center; font-size: 11px; opacity: 0.5; z-index: 2; pointer-events: none; }
+/* Leaves are TYPESET to fit — no scrolling, like print (BookFlow splits paragraphs at the page end).
+   The hidden measurer (.aq-book-measure) shares this class so "fits" is the real rendered geometry. */
+.aq-book-body { position: absolute; inset: 0; overflow: hidden; padding: clamp(1rem, 3.2%, 2.2rem) clamp(1rem, 4.5%, 2.6rem) 2rem;
+  font-size: calc(15px * var(--book-font, 1)); line-height: 1.62; }
+.aq-book-measure { position: absolute; }
+/* measurement must be truthful: no render-time virtualisation inside book leaves */
+.aq-book-body .aq-pdf-crop { content-visibility: visible; contain-intrinsic-size: none; }
+.aq-book-body figure.aq-book-squeeze { display: flex; align-items: center; justify-content: center; }
+.aq-book-body p[data-cont] { text-indent: 0; }
+.aq-book-body h2 { font-size: calc(1.08em); margin: 0.9em 0 0.35em; font-weight: 700; }
+.aq-book-body p { margin: 0 0 0.7em; }
+.aq-book-body .aq-pdf-crop { margin: 0.9rem auto; }
+.aq-book-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.aq-book-spinner { width: 26px; height: 26px; border-radius: 50%; border: 3px solid color-mix(in srgb, currentColor 20%, transparent); border-top-color: var(--color-yang, #e8b923); animation: aq-book-spin 0.8s linear infinite; }
+@keyframes aq-book-spin { to { transform: rotate(360deg); } }
+.aq-book-err { opacity: 0.6; font-style: italic; padding-top: 3rem; text-align: center; }
+
+/* ── the turning leaf (3D) ── */
+.aq-book-flip { position: absolute; top: 0; height: 100%; width: 50%; z-index: 8; transform-style: preserve-3d; will-change: transform; }
+.aq-book-flip-mobile { width: 100%; }
+/* visual-side positioning (shared by auto + manual/drag flips) */
+.aq-book-side-right { right: 0; transform-origin: left center; }
+.aq-book-side-left { left: 0; transform-origin: right center; }
+.aq-book-flip-next { animation: aq-flip-next var(--flip-ms, 720ms) cubic-bezier(.4,.06,.3,1) forwards; }
+.aq-book-flip-prev { animation: aq-flip-prev var(--flip-ms, 720ms) cubic-bezier(.4,.06,.3,1) forwards; }
+.aq-book-flip-manual { /* transform driven per-frame by the drag */ }
+@keyframes aq-flip-next { from { transform: rotateY(0deg); } to { transform: rotateY(-180deg); } }
+@keyframes aq-flip-prev { from { transform: rotateY(0deg); } to { transform: rotateY(180deg); } }
+.aq-book-flip-face { position: absolute; inset: 0; overflow: hidden; background: var(--book-paper, #0c1a2b); backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.aq-book-flip-front { transform: rotateY(0deg); }
+.aq-book-flip-back { transform: rotateY(180deg); }
+.aq-book-side-right .aq-book-flip-face { border-radius: 2px 10px 10px 2px; }
+.aq-book-side-left .aq-book-flip-face { border-radius: 10px 2px 2px 10px; }
+/* a soft curl shadow that sweeps as the page turns */
+.aq-book-flip-shadow { position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.28) 82%, rgba(0,0,0,0.42) 100%);
+  animation: aq-flip-shade var(--flip-ms, 720ms) ease-in-out forwards; }
+@keyframes aq-flip-shade { 0% { opacity: 0; } 40% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ── bottom controls ── */
+.aq-book-bar { flex: 0 0 auto; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem clamp(0.6rem, 3vw, 1.4rem); background: color-mix(in srgb, var(--color-space-1) 78%, transparent); border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent); }
+.aq-book-nav { display: inline-flex; align-items: center; gap: 0.45rem; margin: 0 auto; }
+.aq-book-tools { display: inline-flex; align-items: center; gap: 0.4rem; }
+.aq-book-count { font-variant-numeric: tabular-nums; font-size: 12.5px; opacity: 0.85; min-width: 5.5em; text-align: center; }
+.aq-book-ctl { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.4rem 0.6rem; border-radius: 9px; border: 1px solid transparent; background: color-mix(in srgb, currentColor 8%, transparent); color: inherit; cursor: pointer; font-size: 12.5px; font-weight: 600; }
+.aq-book-ctl:hover:not(:disabled) { background: color-mix(in srgb, var(--color-yin, #1746dc) 26%, transparent); }
+.aq-book-ctl:disabled { opacity: 0.35; cursor: default; }
+.aq-book-mini { padding: 0.35rem 0.5rem; }
+.aq-book-label { font-size: 12px; }
+.aq-book-aa { display: inline-flex; gap: 0.25rem; }
+.aq-book-seg { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.55rem; border-radius: 9px; background: color-mix(in srgb, currentColor 8%, transparent); }
+.aq-book-crange { width: 74px; accent-color: var(--color-yang, #e8b923); }
+@media (max-width: 560px) { .aq-book-label { display: none; } .aq-book-seg { display: none; } .aq-book-title { display: none; } }
+@media (prefers-reduced-motion: reduce) { .aq-book-flip-next, .aq-book-flip-prev, .aq-book-flip-shadow { animation-duration: 1ms; } }
+
+/* No drop-cap in book leaves — each leaf's first line is usually a continuation, not a chapter start. */
+.aq-book-body.aq-article-body > p:first-of-type::first-letter { font-size: inherit; font-weight: inherit; float: none; margin: 0; padding: 0; line-height: inherit; color: inherit; }
+
+/* ── book polish: RTL, progress, page-edge stacks, paper grain, hover curl ── */
+.aq-book-rtl .aq-book-book { flex-direction: row-reverse; }        /* RTL books read right-to-left */
+.aq-book-rtl .aq-book-fold { right: auto; left: -14px; border-radius: 10px 0 0 10px; transform: skewY(2deg); }
+.aq-book-rtl.aq-book-overlay .aq-book-mobile .aq-book-leaf { border-radius: 10px 4px 4px 10px; }
+
+.aq-book-progress { position: absolute; top: 0; left: 0; right: 0; height: 2px; z-index: 9; background: color-mix(in srgb, currentColor 10%, transparent); }
+.aq-book-progress > span { display: block; height: 100%; background: var(--color-yang, #e8b923); transition: width 0.45s ease; }
+
+/* stacked page edges: the closed part of the book on each side (depth of what remains) */
+.aq-book-leaf::before { content: ""; position: absolute; top: 6px; bottom: 6px; width: 7px; z-index: -1;
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--book-paper, #0c1a2b) 82%, #000) 0 2px, color-mix(in srgb, var(--book-paper, #0c1a2b) 60%, #000) 2px 3px); }
+.aq-book-left::before { left: -7px; border-radius: 6px 0 0 6px; }
+.aq-book-right::before { right: -7px; border-radius: 0 6px 6px 0; }
+.aq-book-blank::before { display: none; }
+
+/* subtle paper grain + edge vignette on every leaf (pure CSS, no assets) */
+.aq-book-leaf::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; opacity: 0.5;
+  background:
+    radial-gradient(140% 100% at 50% 0%, transparent 82%, rgba(0,0,0,0.14)),
+    repeating-linear-gradient(0deg, transparent 0 3px, rgba(127,127,127,0.016) 3px 4px),
+    repeating-linear-gradient(90deg, transparent 0 3px, rgba(127,127,127,0.016) 3px 4px); }
+
+/* hover hint: the corner you can turn lifts slightly (progressive enhancement via :has) */
+@media (hover: hover) {
+  .aq-book-stage:has(.aq-book-turn-next:hover:not(:disabled)) .aq-book-right { transform: perspective(1600px) rotateY(-3deg); transition: transform 0.35s ease; transform-origin: left center; }
+  .aq-book-stage:has(.aq-book-turn-prev:hover:not(:disabled)) .aq-book-left { transform: perspective(1600px) rotateY(3deg); transition: transform 0.35s ease; transform-origin: right center; }
+  .aq-book-leaf { transition: transform 0.35s ease; }
+}
+.aq-book-jump { width: clamp(60px, 12vw, 150px); accent-color: var(--color-yang, #e8b923); }
+@media (max-width: 560px) { .aq-book-jump { width: 56px; } }
+.aq-book-listen { display: inline-flex; align-items: center; gap: 0.35rem; }
+.aq-book-on { background: color-mix(in srgb, var(--color-yang, #e8b923) 22%, transparent); }
+.aq-book-voice { max-width: 9.5rem; padding: 0.35rem 0.4rem; border-radius: 9px; border: 1px solid color-mix(in srgb, currentColor 14%, transparent); background: color-mix(in srgb, currentColor 8%, transparent); color: inherit; font-size: 12px; }
+.aq-book-voice option, .aq-book-voice optgroup { color: initial; }
+.aq-book-tr { flex: 0 0 auto; max-height: 5.2em; overflow-y: auto; padding: 0.45rem clamp(0.8rem, 4vw, 2rem); font-size: 13.5px; line-height: 1.55; background: color-mix(in srgb, var(--color-space-1) 86%, transparent); border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent); }
+.aq-book-tr-note { opacity: 0.75; font-style: italic; }
+@media (max-width: 560px) { .aq-book-voice { max-width: 6.5rem; } }
+/* loaders: calm, smooth, accurate (typesetting + model downloads) */
+.aq-book-loading { flex-direction: column; gap: 0.6rem; }
+.aq-book-load-cap { font-size: 12.5px; font-weight: 600; opacity: 0.8; }
+.aq-book-load-sub { font-size: 11px; opacity: 0.55; font-variant-numeric: tabular-nums; }
+.aq-book-load-bar { width: min(58%, 220px); height: 3px; border-radius: 2px; overflow: hidden; background: color-mix(in srgb, currentColor 14%, transparent); }
+.aq-book-load-bar > span { display: block; height: 100%; border-radius: 2px; background: var(--color-yang, #e8b923); transition: width 0.45s cubic-bezier(.3,.1,.3,1); }
+.aq-book-dl { display: flex; align-items: center; gap: 0.55rem; margin-bottom: 0.3rem; }
+.aq-book-dl-bar { width: min(46%, 240px); }
+.aq-book-dl-pct { font-size: 11.5px; font-variant-numeric: tabular-nums; opacity: 0.75; }
+/* Every crop (figure/equation/table) is capped to the leaf's content height so a page never
+   overflows — set as --book-fig-max on the overlay; the measurer inherits it too, so pagination and
+   render agree. Aspect ratio is preserved (max-width:100% still applies). */
+.aq-book-body .aq-pdf-crop svg { max-height: var(--book-fig-max, 60vh); width: auto; max-width: 100%; }
+.aq-book-body figure.aq-book-squeeze { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 0; }
+
+/* Book equations: render EVERY equation crop as a consistent, legible white "equation card" (never
+   the inverted black box the line-art heuristic produces for sparse ones), sized like an equation —
+   not a full-width figure. Both themes; the card blends whether the leaf is light or dark. */
+.aq-book-body .aq-pdf-crop[data-kind="equation"] {
+  margin: 0.75rem auto; padding: 0.35rem 0.7rem; max-width: 100%;
+  background: #fcfaf4; border: 1px solid rgba(0,0,0,0.08); border-radius: 9px;
+}
+.aq-book-body .aq-pdf-crop[data-kind="equation"] svg { filter: none !important; max-height: 6rem; width: auto; max-width: 100%; }
+:root[data-theme="dark"] .aq-book-overlay .aq-pdf-crop[data-kind="equation"],
+.aq-book-overlay[data-theme="dark"] .aq-pdf-crop[data-kind="equation"] { box-shadow: 0 2px 10px -4px rgba(0,0,0,0.5); }
+/* Tables stay pixel-true but capped to the leaf; keep the dark-mode invert only for tables/figures. */
+.aq-book-body .aq-pdf-crop[data-kind="table"] svg { max-height: var(--book-fig-max, 60vh); }
+/* crisp native KaTeX equations in the book (measured statically by the flow, theme-native) */
+.aq-book-body .aq-book-eq { margin: 0.85rem auto; text-align: center; overflow-x: auto; overflow-y: hidden; max-width: 100%; }
+.aq-book-body .aq-book-eq .katex-display { margin: 0.2rem 0; }
+.aq-book-body .aq-book-eq .katex { font-size: 1.05em; }
+.aq-book-eqprog { display: inline-flex; align-items: center; gap: 0.4rem; margin-left: auto; font-size: 11.5px; opacity: 0.7; white-space: nowrap; }
+.aq-book-spinner-sm { width: 13px; height: 13px; border-width: 2px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   MY LIBRARY — the member's own music, videos and documents. Mobile-first; the player bar is fixed
+   and must clear the safe area on a phone. Two colours only (gold = yang, blue = yin). */
+.aq-lib-add { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.85rem; border-radius: 10px;
+  border: 1px solid var(--color-line); background: color-mix(in srgb, var(--color-yang) 14%, transparent);
+  color: var(--color-ink); font-size: 13.5px; font-weight: 700; cursor: pointer; }
+.aq-lib-add:hover { background: color-mix(in srgb, var(--color-yang) 24%, transparent); }
+
+.aq-lib-busy { display: flex; align-items: center; gap: 0.55rem; margin-top: 0.9rem; padding: 0.6rem 0.8rem;
+  border-radius: 10px; background: var(--color-space-2); font-size: 13px; color: var(--color-ink-2); flex-wrap: wrap; }
+.aq-book-load-bar { flex: 1 1 120px; height: 3px; min-width: 90px; border-radius: 2px; overflow: hidden;
+  background: color-mix(in srgb, currentColor 18%, transparent); }
+.aq-book-load-bar > span { display: block; height: 100%; background: var(--color-yang); transition: width 0.25s ease; }
+
+.aq-lib-tab { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.38rem 0.7rem; border-radius: 999px;
+  border: 1px solid var(--color-line); background: transparent; color: var(--color-ink-2);
+  font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.aq-lib-tab:hover { border-color: var(--color-yin); color: var(--color-ink); }
+.aq-lib-tab-on { background: color-mix(in srgb, var(--color-yin) 26%, transparent); border-color: var(--color-yin); color: var(--color-ink); }
+.aq-lib-count { font-variant-numeric: tabular-nums; opacity: 0.65; font-size: 11.5px; }
+.aq-lib-search { flex: 0 1 15rem; min-width: 9rem; padding: 0.4rem 0.7rem; border-radius: 999px;
+  border: 1px solid var(--color-line); background: var(--color-space-2); color: var(--color-ink); font-size: 13px; }
+.aq-lib-search:focus-visible { outline: 2px solid var(--color-yin); outline-offset: 1px; }
+
+.aq-lib-empty { margin-top: 1.5rem; display: flex; min-height: 12rem; cursor: pointer; flex-direction: column;
+  align-items: center; justify-content: center; gap: 0.45rem; border-radius: 16px; border: 2px dashed var(--color-line);
+  padding: 2rem 1.5rem; text-align: center; transition: border-color 0.15s ease, background 0.15s ease; }
+.aq-lib-empty:hover, .aq-lib-drag { border-color: var(--color-yin); background: var(--color-space-2); }
+
+.aq-lib-grid { list-style: none; margin: 1.4rem 0 0; padding: 0;
+  display: grid; gap: 1rem 0.9rem; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+@media (min-width: 640px) { .aq-lib-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); } }
+.aq-lib-item { position: relative; min-width: 0; }
+.aq-lib-open { display: block; width: 100%; padding: 0; border: 0; background: none; color: inherit;
+  text-align: start; cursor: pointer; border-radius: 12px; }
+.aq-lib-open:focus-visible { outline: 2px solid var(--color-yin); outline-offset: 3px; }
+.aq-lib-art { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 12px;
+  background: var(--color-space-3); }
+.aq-lib-art-ph { display: flex; align-items: center; justify-content: center; color: var(--color-ink-3); }
+.aq-lib-ph-music { background: linear-gradient(150deg, color-mix(in srgb, var(--color-yang) 22%, var(--color-space-3)), var(--color-space-3)); }
+.aq-lib-ph-video { background: linear-gradient(150deg, color-mix(in srgb, var(--color-yin) 26%, var(--color-space-3)), var(--color-space-3)); }
+.aq-lib-ph-doc   { background: linear-gradient(150deg, color-mix(in srgb, var(--color-yang) 12%, var(--color-space-3)), var(--color-space-3)); }
+.aq-lib-hover { position: absolute; inset-inline-start: 50%; top: calc(50% - 1.1rem); translate: -50% -50%;
+  width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; border-radius: 50%;
+  background: color-mix(in srgb, var(--color-space-1) 72%, transparent); color: var(--color-ink);
+  opacity: 0; transition: opacity 0.15s ease; pointer-events: none; }
+@media (hover: hover) { .aq-lib-open:hover .aq-lib-hover, .aq-lib-open:focus-visible .aq-lib-hover { opacity: 1; } }
+.aq-lib-meta { display: block; margin-top: 0.5rem; min-width: 0; }
+.aq-lib-title { display: block; font-size: 13.5px; font-weight: 600; color: var(--color-ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aq-lib-sub { display: block; margin-top: 0.1rem; font-size: 11.5px; color: var(--color-ink-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aq-lib-acts { position: absolute; top: 0.4rem; inset-inline-end: 0.4rem; display: flex; gap: 0.25rem;
+  opacity: 0; transition: opacity 0.15s ease; }
+@media (hover: hover) { .aq-lib-item:hover .aq-lib-acts, .aq-lib-item:focus-within .aq-lib-acts { opacity: 1; } }
+@media (hover: none) { .aq-lib-acts { opacity: 1; } }
+.aq-lib-act { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+  border-radius: 8px; border: 0; cursor: pointer; color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-space-1) 74%, transparent); }
+.aq-lib-act:hover { background: color-mix(in srgb, var(--color-yin) 52%, transparent); }
+
+/* ── the player: a fixed mini-bar + the Now-playing sheet ── */
+.aq-pl-bar { position: fixed; inset-inline: 0; bottom: 0; z-index: 60; display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.5rem max(0.6rem, env(safe-area-inset-left)) calc(0.5rem + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--color-space-2) 96%, transparent);
+  border-top: 1px solid var(--color-line); backdrop-filter: blur(8px); }
+.aq-pl-prog { position: absolute; inset-inline: 0; top: 0; height: 2px; background: color-mix(in srgb, currentColor 14%, transparent); }
+.aq-pl-prog > span { display: block; height: 100%; background: var(--color-yang); }
+.aq-pl-meta { display: flex; align-items: center; gap: 0.55rem; min-width: 0; flex: 1 1 auto;
+  border: 0; background: none; color: inherit; cursor: pointer; text-align: start; padding: 0; }
+.aq-pl-meta-txt { display: block; min-width: 0; }
+.aq-pl-meta-title { display: block; font-size: 13px; font-weight: 650; color: var(--color-ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 42vw; }
+.aq-pl-meta-sub { display: block; font-size: 11.5px; color: var(--color-ink-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 42vw; }
+.aq-pl-cover { width: 44px; height: 44px; flex: 0 0 auto; border-radius: 8px; object-fit: cover; background: var(--color-space-3); }
+.aq-pl-cover-ph { display: flex; align-items: center; justify-content: center; color: var(--color-ink-3); }
+.aq-pl-ctls { display: inline-flex; align-items: center; gap: 0.2rem; flex: 0 0 auto; }
+.aq-pl-ctls-big { gap: 0.9rem; margin-top: 0.9rem; justify-content: center; }
+.aq-pl-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 38px; height: 38px;
+  border: 0; border-radius: 10px; background: transparent; color: var(--color-ink); cursor: pointer; position: relative; }
+.aq-pl-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--color-yin) 30%, transparent); }
+.aq-pl-btn:disabled { opacity: 0.35; cursor: default; }
+.aq-pl-btn:focus-visible { outline: 2px solid var(--color-yin); outline-offset: 1px; }
+.aq-pl-play { background: var(--color-yang); color: #10131a; width: 42px; height: 42px; border-radius: 50%; }
+.aq-pl-play:hover:not(:disabled) { background: var(--color-yang-light, var(--color-yang)); filter: brightness(1.06); }
+.aq-pl-mini { min-width: 32px; height: 32px; }
+.aq-pl-on { color: var(--color-yang); }
+.aq-pl-one { position: absolute; bottom: 2px; inset-inline-end: 4px; font-size: 9px; font-weight: 800; }
+.aq-pl-x { flex: 0 0 auto; }
+
+.aq-pl-sheet { position: fixed; inset: 0; z-index: 70; display: flex; align-items: flex-end; justify-content: center;
+  background: color-mix(in srgb, #000 62%, transparent); }
+@media (min-width: 640px) { .aq-pl-sheet { align-items: center; } }
+.aq-pl-sheet-card { position: relative; width: min(26rem, 100%); max-height: 92vh; overflow-y: auto;
+  padding: 1.1rem 1.2rem calc(1.4rem + env(safe-area-inset-bottom)); text-align: center;
+  border-radius: 20px 20px 0 0; background: var(--color-space-2); border: 1px solid var(--color-line); }
+@media (min-width: 640px) { .aq-pl-sheet-card { border-radius: 20px; } }
+.aq-pl-close { position: absolute; top: 0.5rem; inset-inline-start: 0.5rem; }
+.aq-pl-hero { display: flex; justify-content: center; margin: 0.6rem 0 1rem; }
+.aq-pl-hero .aq-pl-cover { width: min(228px, 62vw); height: min(228px, 62vw); border-radius: 16px; }
+.aq-pl-title { margin: 0; font-size: 16px; font-weight: 700; color: var(--color-ink); }
+.aq-pl-sub { margin: 0.2rem 0 0; font-size: 13px; color: var(--color-ink-3); }
+.aq-pl-seek { display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; }
+.aq-pl-seek input { flex: 1 1 auto; accent-color: var(--color-yang); min-width: 0; }
+.aq-pl-t { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--color-ink-3); min-width: 2.6em; }
+.aq-pl-modes { display: inline-flex; gap: 0.6rem; margin-top: 0.9rem; }
+.aq-pl-queue-note { margin: 0.9rem 0 0; font-size: 11.5px; color: var(--color-ink-3); }
+
+/* ── video lightbox ── */
+.aq-vl { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center;
+  padding: 1rem; background: color-mix(in srgb, #000 78%, transparent); }
+.aq-vl-card { width: min(60rem, 100%); border-radius: 14px; overflow: hidden; background: #05080d;
+  border: 1px solid var(--color-line); }
+.aq-vl-head { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.7rem; }
+.aq-vl-title { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 600; color: var(--color-ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aq-vl-tools { display: inline-flex; gap: 0.25rem; flex: 0 0 auto; }
+.aq-vl-video { display: block; width: 100%; max-height: 78vh; background: #000; }
+.aq-vl-loading { display: flex; align-items: center; justify-content: center; min-height: 40vh; }
+/* The player bar owns the bottom strip while it is up: sit above other fixed furniture, and lift the
+   ArtaBot launcher clear of it (hit-testing proved the launcher was swallowing the Next-track click). */
+.aq-pl-bar { z-index: 61; }
+html[data-aq-player="1"] .aq-bot-panel { bottom: calc(4.25rem + var(--aq-safe-bottom)); }
+@media (max-width: 560px) { html[data-aq-player="1"] .aq-bot-panel { bottom: calc(4.75rem + var(--aq-safe-bottom)); } }
+/* cloud shelf panel */
+.aq-lib-cloud { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.7rem;
+  padding: 0.55rem 0.75rem; border-radius: 12px; background: var(--color-space-2); border: 1px solid var(--color-line); }
+.aq-lib-cloud-head { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 12.5px; font-weight: 700; color: var(--color-ink); }
+.aq-lib-cloud-bar { flex: 1 1 8rem; min-width: 6rem; height: 5px; border-radius: 3px; overflow: hidden;
+  background: color-mix(in srgb, currentColor 16%, transparent); }
+.aq-lib-cloud-bar > span { display: block; height: 100%; background: var(--color-yang); }
+.aq-lib-cloud-num { font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--color-ink-3); }
+.aq-lib-act-on { color: var(--color-yang); }
+.aq-lib-upfrac { font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums; }
+/* Continue shelf */
+.aq-lib-cont { margin-top: 1.4rem; }
+.aq-lib-cont-h { margin: 0 0 0.6rem; font-size: 14px; font-weight: 800; color: var(--color-ink); }
+.aq-lib-cont-row { list-style: none; margin: 0; padding: 0 0 0.25rem; display: flex; gap: 0.75rem; overflow-x: auto; scrollbar-width: thin; }
+.aq-lib-cont-row > li { flex: 0 0 auto; width: 150px; }
+.aq-lib-cont-card { position: relative; display: block; width: 100%; padding: 0; border: 0; background: none;
+  color: inherit; text-align: start; cursor: pointer; border-radius: 12px; }
+.aq-lib-cont-card:focus-visible { outline: 2px solid var(--color-yin); outline-offset: 3px; }
+.aq-lib-cont-meta { display: block; margin-top: 0.4rem; min-width: 0; }
+.aq-lib-cont-bar { display: block; margin-top: 0.35rem; height: 3px; border-radius: 2px;
+  background: color-mix(in srgb, currentColor 18%, transparent); overflow: hidden; }
+.aq-lib-cont-bar > span { display: block; height: 100%; background: var(--color-yang); }

@@ -1,0 +1,98 @@
+[
+  {
+    "category": "dark-humour-idiom",
+    "lang": "en",
+    "text": "Not gonna lie, this final section absolutely murdered me. My brain has officially left the chat.",
+    "flag": false,
+    "note": "Hyperbole about difficulty, no target",
+    "band": 4
+  },
+  {
+    "category": "dark-humour-idiom",
+    "lang": "en",
+    "text": "I could murder a coffee right now. Three videos in a row with no break is a war crime against my attention span lol",
+    "flag": false,
+    "note": "Idiom plus jokey hyperbole, no real target",
+    "band": 6
+  },
+  {
+    "category": "dark-humour-idiom",
+    "lang": "en",
+    "text": "My professor is going to kill me when she sees I still don't get the bishop pair. Pray for me.",
+    "flag": false,
+    "note": "Common idiom, self-directed humour",
+    "band": 3
+  },
+  {
+    "category": "dark-humour-idiom",
+    "lang": "en",
+    "text": "Watched this at 2am running on pure spite and one stale biscuit. If I die, tell them I almost understood the endgame.",
+    "flag": false,
+    "note": "Self-deprecating dark humour, no threat",
+    "band": 5
+  },
+  {
+    "category": "dark-humour-idiom",
+    "lang": "en",
+    "text": "This quiz section is the hill I will die on. I have read the explanation six times and it has personally chosen violence against me.",
+    "flag": false,
+    "note": "Idiomatic hyperbole, content is the 'target'",
+    "band": 6
+  },
+  {
+    "category": "dark-humour-idiom",
+    "lang": "en",
+    "text": "Honestly the way the instructor sets up that trap opening is criminal. Should be locked up for how clean it is haha",
+    "flag": false,
+    "note": "Praise via 'criminal' idiom, playful",
+    "band": 4
+  },
+  {
+    "category": "dark-humour-idiom",
+    "lang": "en",
+    "text": "Started this course feeling alive and now I'm just a husk of a man clicking next. Send help (and snacks).",
+    "flag": false,
+    "note": "Self-directed exhaustion humour, no target",
+    "band": 4
+  },
+  {
+    "category": "dark-humour-idiom",
+    "lang": "en",
+    "text": "That plot twist in the lesson example genuinely sent me to an early grave. I'm posting this from the afterlife.",
+    "flag": false,
+    "note": "Hyperbolic 'sent me', no real harm",
+    "band": 3
+  },
+  {
+    "category": "dark-humour-idiom",
+    "lang": "en",
+    "text": "Took me four attempts to pass this. My pride is on life support and the doctors aren't optimistic.",
+    "flag": false,
+    "note": "Self-mocking medical metaphor, no target",
+    "band": 4
+  },
+  {
+    "category": "dark-humour-idiom",
+    "lang": "en",
+    "text": "The deadline is breathing down my neck like a horror-movie villain. One more all-nighter and I'm legally a zombie.",
+    "flag": false,
+    "note": "Anxiety dressed as horror idiom, harmless",
+    "band": 7
+  },
+  {
+    "category": "dark-humour-idiom",
+    "lang": "en",
+    "text": "Whoever wrote that trick question owes me a new brain. Mine self-destructed somewhere around minute twelve.",
+    "flag": false,
+    "note": "Hyperbole at quiz author, jokey not dehumanising",
+    "band": 5
+  },
+  {
+    "category": "dark-humour-idiom",
+    "lang": "en",
+    "text": "I came here to learn statistics and instead I got dragged. By a graph. The graph won. RIP me.",
+    "flag": false,
+    "note": "Self-deprecating idiom, no real target",
+    "band": 3
+  }
+]

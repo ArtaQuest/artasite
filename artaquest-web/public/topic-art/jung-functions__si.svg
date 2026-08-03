@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Introverted Sensing — comparing the present against stored memory">
+  
+  
+  <g fill="none" stroke="#2352E8" stroke-width="1.5">
+    <circle cx="40" cy="40" r="30" stroke-opacity="0.4"/>
+    <circle cx="40" cy="40" r="22" stroke-opacity="0.6"/>
+    <circle cx="40" cy="40" r="14" stroke-opacity="0.85"/>
+  </g>
+  <circle cx="40" cy="40" r="6" fill="var(--ico-gold,#E8B923)"/>
+</svg>

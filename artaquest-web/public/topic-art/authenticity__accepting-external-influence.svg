@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="External influence">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <path d="M40 21 L33 8 L47 8 Z" fill="#2352E8"/>
+  <path d="M40 59 L33 72 L47 72 Z" fill="#2352E8"/>
+  <path d="M21 40 L8 33 L8 47 Z" fill="#2352E8"/>
+  <path d="M59 40 L72 33 L72 47 Z" fill="#2352E8"/>
+  <circle cx="40" cy="40" r="11.5" fill="#E8B923"/>
+  <circle cx="40" cy="40" r="3.4" fill="#06121E"/>
+</svg>

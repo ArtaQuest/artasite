@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Process Communication Model — six personality types linked around a communication hub">
+  <g stroke="#2352E8" stroke-width="2.4">
+    <line x1="40" y1="40" x2="40" y2="15"/>
+    <line x1="40" y1="40" x2="61.65" y2="27.5"/>
+    <line x1="40" y1="40" x2="61.65" y2="52.5"/>
+    <line x1="40" y1="40" x2="40" y2="65"/>
+    <line x1="40" y1="40" x2="18.35" y2="52.5"/>
+    <line x1="40" y1="40" x2="18.35" y2="27.5"/>
+  </g>
+  <g fill="var(--ico-gold,#E8B923)">
+    <circle cx="40" cy="15" r="6"/>
+    <circle cx="61.65" cy="27.5" r="6"/>
+    <circle cx="61.65" cy="52.5" r="6"/>
+    <circle cx="40" cy="65" r="6"/>
+    <circle cx="18.35" cy="52.5" r="6"/>
+    <circle cx="18.35" cy="27.5" r="6"/>
+  </g>
+  <circle cx="40" cy="40" r="8.5" fill="#2352E8" stroke="var(--ico-gold,#E8B923)" stroke-width="2.2"/>
+</svg>

@@ -1,0 +1,21 @@
+# ArtaQuest deploy-ignore — overrides Studio's SYNC_IGNORE_DEFAULTS.
+#
+# Studio CLI's push uses gitignore-style patterns from
+# `SYNC_IGNORE_DEFAULTS` which includes `database` (intended to
+# exclude the local SQLite `wp-content/database/` folder) and `cache`
+# (intended to exclude transient caches).
+#
+# The `ignore` npm library matches case-insensitively against basename,
+# so `database` ALSO silently excludes ANY directory named `Database`
+# (capital D) anywhere in the tree — including the LMS PSR-4 namespace
+# directory `wp-content/plugins/artaquest-lms/core/includes/Database/`
+# and WooCommerce's `wp-content/plugins/woocommerce/src/Database/`.
+# Same problem with `cache` matching PayPal SDK's `lib/PayPal/Cache/`.
+#
+# Re-include these directories so they actually reach production:
+!wp-content/plugins/artaquest-lms/core/includes/Database
+!wp-content/plugins/artaquest-lms/core/includes/Database/**
+!wp-content/plugins/woocommerce/src/Database
+!wp-content/plugins/woocommerce/src/Database/**
+!wp-content/plugins/artaquest-lms/core/_core/libraries/paypal/includes/classes/vender/paypal/rest-api-sdk-php/lib/PayPal/Cache
+!wp-content/plugins/artaquest-lms/core/_core/libraries/paypal/includes/classes/vender/paypal/rest-api-sdk-php/lib/PayPal/Cache/**

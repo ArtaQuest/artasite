@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Anxious-preoccupied — craving closeness while fearing abandonment">
+  
+  
+  <circle cx="54" cy="40" r="15" fill="#2352E8"/>
+  <circle cx="18" cy="40" r="6" fill="var(--ico-gold,#E8B923)"/>
+  <g fill="var(--ico-gold,#E8B923)">
+    <circle cx="28" cy="40" r="2" fill-opacity="0.8"/>
+    <circle cx="34" cy="40" r="2.5" fill-opacity="0.9"/>
+    <circle cx="40" cy="40" r="3"/>
+  </g>
+</svg>

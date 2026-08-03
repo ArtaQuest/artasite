@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img">
+  
+  <!-- a shield: worth as a good name, earned and defended -->
+  <path d="M22 19 H58 V39 Q58 55 40 64 Q22 55 22 39 Z" fill="var(--ico-gold,#E8B923)"/>
+  <!-- a double chevron — merit, courage, a word kept -->
+  <g fill="none" stroke="#2352E8" stroke-width="4.2" stroke-linejoin="round" stroke-linecap="round">
+    <polyline points="31,42 40,33 49,42"/>
+    <polyline points="31,52 40,43 49,52"/>
+  </g>
+</svg>

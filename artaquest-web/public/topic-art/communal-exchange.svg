@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Communal and exchange orientation — giving freely and returning in kind">
+  <!-- two people in a close relationship -->
+  <circle cx="26" cy="42" r="6" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="54" cy="42" r="6" fill="#2352E8"/>
+  <!-- communal: a gift given freely (gold) -->
+  <path d="M31,37 Q40,26 49,37" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.7" stroke-linecap="round"/>
+  <circle cx="49" cy="37" r="2.3" fill="var(--ico-gold,#E8B923)"/>
+  <!-- exchange: a benefit returned in kind (blue) -->
+  <path d="M49,47 Q40,58 31,47" fill="none" stroke="#2352E8" stroke-width="1.7" stroke-linecap="round"/>
+  <circle cx="31" cy="47" r="2.3" fill="#2352E8"/>
+</svg>

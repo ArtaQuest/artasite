@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Universalism — a globe and leaf for the welfare of all people and of nature">
+  
+  
+  <circle cx="40" cy="42" r="20" fill="#2352E8" fill-opacity="0.22" stroke="#2352E8" stroke-width="1.8"/>
+  <g fill="none" stroke="#2352E8" stroke-width="1.4" stroke-opacity="0.8">
+    <line x1="20" y1="42" x2="60" y2="42"/>
+    <ellipse cx="40" cy="42" rx="8" ry="20"/>
+    <path d="M22 33 Q40 40 58 33"/>
+    <path d="M22 51 Q40 44 58 51"/>
+  </g>
+  <path d="M40 42 Q41 25 53 19 Q49 33 40 42 Z" fill="var(--ico-gold,#E8B923)"/>
+</svg>

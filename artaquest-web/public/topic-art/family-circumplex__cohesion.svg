@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img">
+  <circle cx="40" cy="40" r="38" fill="#06121E"/>
+  <!-- cohesion = emotional closeness: an embrace arc over two bonded members -->
+  <path d="M20 50 A22 22 0 0 1 60 50" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4" opacity="0.75"/>
+  <line x1="31" y1="44" x2="49" y2="44" stroke="#2352E8" stroke-width="2.6"/>
+  <circle cx="31" cy="44" r="7" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="49" cy="44" r="7" fill="#2352E8"/>
+</svg>

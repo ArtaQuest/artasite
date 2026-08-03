@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Neuroticism — emotional volatility over a calm baseline">
+  
+  
+  <line x1="14" y1="40" x2="66" y2="40" stroke="#2352E8" stroke-width="1.4" stroke-opacity="0.45" stroke-dasharray="3 3"/>
+  <path d="M14 40 Q20.5 37 27 40 Q33.5 46 40 40 Q46.5 28 53 40 Q59.5 53 66 40" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

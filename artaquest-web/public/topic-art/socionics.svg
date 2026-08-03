@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Socionics — sixteen information-metabolism types from eight information elements">
+  
+  
+  <g stroke="#2352E8" stroke-width="1.1" stroke-opacity="0.30"><line x1="40" y1="40" x2="40" y2="20"/><line x1="40" y1="40" x2="60" y2="40"/><line x1="40" y1="40" x2="40" y2="60"/><line x1="40" y1="40" x2="20" y2="40"/></g>
+  <polygon points="40,10.6 32.44,25.05 47.56,25.05" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="61" cy="40" r="7.6" fill="#2352E8" fill-opacity="0.16" stroke="#2352E8" stroke-width="1.9" stroke-linejoin="round"/>
+  <rect x="34.01" y="55.01" width="11.99" height="11.99" rx="1.04" fill="var(--ico-gold,#E8B923)"/>
+  <path d="M11.9 32.95 L11.9 47.18 L26.18 47.18 L26.18 40.94 L18.36 40.94 L18.36 32.95 Z" fill="#2352E8" fill-opacity="0.16" stroke="#2352E8" stroke-width="1.9" stroke-linejoin="round"/>
+  <circle cx="40" cy="40" r="4.6" fill="var(--ico-gold,#E8B923)"/>
+</svg>

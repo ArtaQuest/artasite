@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Purple, tribal — kin gathered within a protective circle">
+  <circle cx="40" cy="40" r="27" fill="none" stroke="#2352E8" stroke-width="2.4" stroke-opacity="0.6"/>
+  <g fill="var(--ico-gold,#E8B923)">
+    <circle cx="40" cy="22" r="5"/>
+    <path d="M33 27 a 7 7 0 0 1 14 0 Z"/>
+  </g>
+  <g fill="#2352E8">
+    <circle cx="24" cy="47" r="5"/>
+    <path d="M17 52 a 7 7 0 0 1 14 0 Z"/>
+  </g>
+  <g fill="var(--ico-gold,#E8B923)">
+    <circle cx="56" cy="47" r="5"/>
+    <path d="M49 52 a 7 7 0 0 1 14 0 Z"/>
+  </g>
+</svg>

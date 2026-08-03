@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Blue, order — a classical column for structure and discipline">
+  <rect x="21" y="16" width="38" height="7" rx="1.5" fill="var(--ico-gold,#E8B923)"/>
+  <rect x="19" y="57" width="42" height="7" rx="1.5" fill="var(--ico-gold,#E8B923)"/>
+  <rect x="27" y="23" width="26" height="34" fill="var(--ico-gold,#E8B923)" fill-opacity="0.22"/>
+  <g stroke="#2352E8" stroke-width="2.4" stroke-linecap="round">
+    <line x1="34" y1="26" x2="34" y2="54"/>
+    <line x1="40" y1="26" x2="40" y2="54"/>
+    <line x1="46" y1="26" x2="46" y2="54"/>
+  </g>
+</svg>

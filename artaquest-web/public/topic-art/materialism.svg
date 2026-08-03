@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Material values — a gold gem, the prized possession, ringed in blue">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <circle cx="40" cy="40" r="33" fill="none" stroke="#2352E8" stroke-width="2.2" opacity="0.5"/>
+  <path d="M27 32 L33 25 L47 25 L53 32 L40 59 Z" fill="#E8B923"/>
+  <g stroke="#2352E8" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" fill="none">
+    <path d="M27 32 L53 32"/>
+    <path d="M33 25 L36.5 32 L40 59"/>
+    <path d="M47 25 L43.5 32 L40 59"/>
+  </g>
+</svg>

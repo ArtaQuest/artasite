@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Lawful Good — the protector who upholds order for the good of all">
+  <path d="M40 14 L62 22 V42 C62 56 52 64 40 68 C28 64 18 56 18 42 V22 Z" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="3" stroke-linejoin="round"/>
+  <line x1="40" y1="27" x2="40" y2="55" stroke="#2352E8" stroke-width="3.6" stroke-linecap="round"/>
+  <line x1="29" y1="38" x2="51" y2="38" stroke="#2352E8" stroke-width="3.6" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img">
+  
+  <!-- the community whose regard confers your standing -->
+  <circle cx="40" cy="40" r="24" fill="none" stroke="#2352E8" stroke-width="2"/>
+  <g fill="#2352E8">
+    <circle cx="64" cy="40" r="4"/>
+    <circle cx="56.97" cy="56.97" r="4"/>
+    <circle cx="40" cy="64" r="4"/>
+    <circle cx="23.03" cy="56.97" r="4"/>
+    <circle cx="16" cy="40" r="4"/>
+    <circle cx="23.03" cy="23.03" r="4"/>
+    <circle cx="40" cy="16" r="4"/>
+    <circle cx="56.97" cy="23.03" r="4"/>
+  </g>
+  <!-- you, holding your place within it -->
+  <circle cx="40" cy="40" r="9" fill="var(--ico-gold,#E8B923)"/>
+</svg>

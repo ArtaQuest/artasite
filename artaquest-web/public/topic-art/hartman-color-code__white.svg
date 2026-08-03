@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="White — driven by the motive of peace, shown as an olive branch">
+  <path d="M22 60 Q34 36 58 22" fill="none" stroke="#2352E8" stroke-width="4" stroke-linecap="round"/>
+  <ellipse cx="29" cy="44" rx="8.5" ry="3.8" fill="#E8B923" transform="rotate(58 29 44)"/>
+  <ellipse cx="38" cy="49" rx="8.5" ry="3.8" fill="#E8B923" transform="rotate(-12 38 49)"/>
+  <ellipse cx="47" cy="30" rx="8.5" ry="3.8" fill="#E8B923" transform="rotate(58 47 30)"/>
+  <ellipse cx="56" cy="35" rx="8.5" ry="3.8" fill="#E8B923" transform="rotate(-12 56 35)"/>
+</svg>

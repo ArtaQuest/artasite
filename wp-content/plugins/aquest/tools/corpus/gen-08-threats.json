@@ -1,0 +1,98 @@
+[
+  {
+    "category": "threats",
+    "lang": "en",
+    "text": "We know exactly which dorm you're in and which bus you take home. Keep posting your little 'opinions' and you'll find out what happens to people who don't know when to shut up.",
+    "flag": true,
+    "note": "Implied threat with surveillance detail and harm warning",
+    "band": 90
+  },
+  {
+    "category": "threats",
+    "lang": "en",
+    "text": "Lovely course, lovely instructor. Be a real shame if someone showed up to her next public talk and made sure she never gave another one.",
+    "flag": true,
+    "note": "Politely framed threat of violence against a person",
+    "band": 85
+  },
+  {
+    "category": "threats",
+    "lang": "en",
+    "text": "To every one of them moving into our town: pack now. By winter we'll make sure not a single one of you leaves the valley breathing.",
+    "flag": true,
+    "note": "Explicit threat to kill a migrant group",
+    "band": 96
+  },
+  {
+    "category": "threats",
+    "lang": "en",
+    "text": "Sleep with one eye open, comrade. People who snitch on the union don't get a second warning, and we both know where your kids go to school.",
+    "flag": true,
+    "note": "Intimidation referencing family and location",
+    "band": 88
+  },
+  {
+    "category": "threats",
+    "lang": "en",
+    "text": "I've screenshotted your profile and I have friends in your city. Keep disrespecting the Prophet and the next knock on your door won't be friendly.",
+    "flag": true,
+    "note": "Threat of in-person harm over religious offence",
+    "band": 91
+  },
+  {
+    "category": "threats",
+    "lang": "en",
+    "text": "honestly this professor's grading is so brutal it's basically a hate crime, he's killing my GPA one rubric at a time lol",
+    "flag": false,
+    "note": "Hyperbole and idiom, no real threat",
+    "band": 8
+  },
+  {
+    "category": "threats",
+    "lang": "en",
+    "text": "I'm genuinely scared to walk home after dark since the attacks near campus. My hands shake the whole way and I can't stop checking over my shoulder.",
+    "flag": false,
+    "note": "Speaker's own fear, not a threat to anyone",
+    "band": 12
+  },
+  {
+    "category": "threats",
+    "lang": "en",
+    "text": "This government's surveillance policy is dangerous and I think the minister responsible should be voted out and put on trial for it.",
+    "flag": false,
+    "note": "Harsh political criticism, lawful, no threat",
+    "band": 6
+  },
+  {
+    "category": "threats",
+    "lang": "en",
+    "text": "Stop hiding behind the 'stay safe' line, traitor. We've got a list now, and the people on it are about to learn what happens when the rope comes out.",
+    "flag": true,
+    "note": "Explicit threat of lethal violence against named list",
+    "band": 95
+  },
+  {
+    "category": "threats",
+    "lang": "en",
+    "text": "The lecture on the Rwandan genocide was heavy but well taught. It's hard to study how quickly threats on the radio turned into mass killing.",
+    "flag": false,
+    "note": "Academic discussion of historical atrocity",
+    "band": 7
+  },
+  {
+    "category": "threats",
+    "lang": "en",
+    "text": "Cute that you think this is anonymous. Your name is Daniel, you work the night shift on 4th street, and accidents happen to people who run their mouth.",
+    "flag": true,
+    "note": "Doxxing plus veiled threat of an accident",
+    "band": 89
+  },
+  {
+    "category": "threats",
+    "lang": "en",
+    "text": "In the novel the gang leaves a note saying 'we will find you wherever you hide' before the protagonist flees the city. Such a chilling chapter.",
+    "flag": false,
+    "note": "Quoting fiction, not a real threat",
+    "band": 9
+  }
+]

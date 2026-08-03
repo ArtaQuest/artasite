@@ -1,0 +1,98 @@
+[
+  {
+    "category": "obfuscated-hate",
+    "lang": "en",
+    "text": "Great lesson, but honestly the j3ws control all the banks and the media so courses like this never tell the truth.",
+    "flag": true,
+    "note": "Leetspeak slur + dehumanising antisemitic conspiracy",
+    "band": 78
+  },
+  {
+    "category": "obfuscated-hate",
+    "lang": "en",
+    "text": "Loved the migration section! Reminder though: these inv@ders are r0aches and we should exterminate every last one before they breed.",
+    "flag": true,
+    "note": "Symbol-swapped vermin slur + call to exterminate migrants",
+    "band": 95
+  },
+  {
+    "category": "obfuscated-hate",
+    "lang": "en",
+    "text": "the g a y s are a d1sease spreading through schools and they need to be wiped out 🧹",
+    "flag": true,
+    "note": "Spaced slur + disease framing + eliminationist emoji",
+    "band": 90
+  },
+  {
+    "category": "obfuscated-hate",
+    "lang": "en",
+    "text": "Such a thoughtful video. Funny how the (((experts))) always push this narrative on us, isn't it?",
+    "flag": true,
+    "note": "Echo-parenthesis antisemitic dogwhistle targeting Jews",
+    "band": 70
+  },
+  {
+    "category": "obfuscated-hate",
+    "lang": "en",
+    "text": "this teacher is brilliant 👏 but you can tell from the comments that all the 🐒🐒 from over there don't belong in a real classroom",
+    "flag": true,
+    "note": "Emoji-encoded racist dehumanisation of a group",
+    "band": 85
+  },
+  {
+    "category": "obfuscated-hate",
+    "lang": "en",
+    "text": "Nice point about demographics. As they say in my country, todos los moros son ratas que hay que aplastar — same applies here lol.",
+    "flag": true,
+    "note": "Mid-sentence Spanish: Muslims as rats to crush",
+    "band": 88
+  },
+  {
+    "category": "obfuscated-hate",
+    "lang": "en",
+    "text": "appreciate the breakdown, real talk though tr@nnies aren't people and the sooner society stops pretending the better",
+    "flag": true,
+    "note": "Obscured slur denying transgender people personhood",
+    "band": 82
+  },
+  {
+    "category": "obfuscated-hate",
+    "lang": "en",
+    "text": "Wonderful course on tolerance. We should send all the f@gs to the showers, you know, for re-education 😉",
+    "flag": true,
+    "note": "Veiled slur + genocidal euphemism aimed at gay people",
+    "band": 92
+  },
+  {
+    "category": "obfuscated-hate",
+    "lang": "en",
+    "text": "I really pushed back on the professor in the section thread — his take on monetary policy is straight-up wrong and kind of lazy.",
+    "flag": false,
+    "note": "Sharp criticism of an individual, no dehumanisation",
+    "band": 8
+  },
+  {
+    "category": "obfuscated-hate",
+    "lang": "en",
+    "text": "ngl this final exam is literally murdering me, I haven't slept in 3 days and my brain is fried 💀",
+    "flag": false,
+    "note": "Hyperbole/idiom and self-directed stress, not hate",
+    "band": 5
+  },
+  {
+    "category": "obfuscated-hate",
+    "lang": "en",
+    "text": "The genocide module was hard to watch. Reading how perpetrators called victims 'cockroaches' to justify the killings really stayed with me.",
+    "flag": false,
+    "note": "Counter-speech quoting historical hate to condemn it",
+    "band": 12
+  },
+  {
+    "category": "obfuscated-hate",
+    "lang": "en",
+    "text": "Honestly organised religion has done way more harm than good and I think the whole institution deserves to be dismantled.",
+    "flag": false,
+    "note": "Offensive criticism of an institution, not a protected group",
+    "band": 10
+  }
+]

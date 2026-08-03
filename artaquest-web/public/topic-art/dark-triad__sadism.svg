@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Sadism — a barbed thorn with a glint of pleasure at its point">
+  
+  
+  <path d="M40 15 C44 29 45 39 40 49 C35 39 36 29 40 15 Z" fill="#2352E8" fill-opacity="0.22" stroke="#2352E8" stroke-width="2" stroke-linejoin="round"/>
+  <g stroke="#2352E8" stroke-width="1.6" stroke-linecap="round">
+    <line x1="40" y1="32" x2="32" y2="29"/>
+    <line x1="40" y1="37" x2="48" y2="34"/>
+  </g>
+  <g stroke="var(--ico-gold,#E8B923)" stroke-width="1.8" stroke-linecap="round">
+    <line x1="40" y1="53" x2="40" y2="62"/>
+    <line x1="34" y1="54" x2="31" y2="60"/>
+    <line x1="46" y1="54" x2="49" y2="60"/>
+  </g>
+  <circle cx="40" cy="50" r="2.3" fill="var(--ico-gold,#E8B923)"/>
+</svg>

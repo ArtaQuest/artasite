@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Blue — calm, trust and depth, shown as a water droplet">
+  <path d="M40 12 C 40 12 60 38 60 52 A 20 20 0 0 1 20 52 C 20 38 40 12 40 12 Z" fill="var(--ico-gold,#E8B923)"/>
+  <path d="M30 50 A 10 10 0 0 0 40 60" fill="none" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+</svg>

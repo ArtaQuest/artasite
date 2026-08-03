@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="How you explain poverty">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <circle cx="40" cy="40" r="6.5" fill="none" stroke="#E8B923" stroke-width="3"/>
+  <circle cx="40" cy="40" r="1.7" fill="#E8B923"/>
+  <g stroke-width="3.4" stroke-linecap="round">
+    <line x1="40" y1="13" x2="40" y2="26" stroke="#E8B923"/>
+    <line x1="16" y1="54" x2="28" y2="47" stroke="#2352E8"/>
+    <line x1="64" y1="54" x2="52" y2="47" stroke="#E8B923"/>
+  </g>
+  <polygon points="40,31 34.5,23 45.5,23" fill="#E8B923"/>
+  <polygon points="31.5,44.5 23.5,44 28.4,51.2" fill="#2352E8"/>
+  <polygon points="48.5,44.5 56.5,44 51.6,51.2" fill="#E8B923"/>
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Critical — distant but judging in the end">
+  
+  <circle cx="40" cy="40" r="39" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.4"/>
+  <!-- a judging eye, but high and far from daily life -->
+  <path d="M26 25 Q40 15 54 25 Q40 35 26 25 Z" fill="var(--ico-ink,#0C1E32)" stroke="var(--ico-gold,#E8B923)" stroke-width="2.2"/>
+  <circle cx="40" cy="25" r="5.2" fill="#2352E8"/>
+  <circle cx="40" cy="25" r="2" fill="var(--ico-gold,#E8B923)"/>
+  <!-- distance kept; the world is only watched from afar -->
+  <line x1="40" y1="35" x2="40" y2="54" stroke="#2352E8" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="1.5 4"/>
+  <!-- the world below, to be judged only in the end -->
+  <path d="M23 64 Q40 53 57 64" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2.6" stroke-linecap="round"/>
+</svg>

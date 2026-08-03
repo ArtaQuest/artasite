@@ -1,0 +1,98 @@
+[
+  {
+    "category": "personal-distress",
+    "lang": "en",
+    "text": "I've watched this video four times and I still don't get it. I'm starting to think I'm just not smart enough for this and maybe I should give up before I waste any more money on the course.",
+    "flag": false,
+    "note": "Self-doubt and discouragement, no hate or threat",
+    "band": 18
+  },
+  {
+    "category": "personal-distress",
+    "lang": "en",
+    "text": "Honestly some days the news makes me feel like the world is ending and there's nothing any of us can do. I came here to learn something hopeful but the dread just follows me everywhere.",
+    "flag": false,
+    "note": "Personal despair about the world, frightens no one",
+    "band": 22
+  },
+  {
+    "category": "personal-distress",
+    "lang": "en",
+    "text": "lost my job last month and I'm enrolling in this course as kind of a last-ditch hope. terrified it won't be enough and I'll let my kids down. sorry for dumping this here, just needed to say it out loud.",
+    "flag": false,
+    "note": "Own fear and grief about hardship",
+    "band": 20
+  },
+  {
+    "category": "personal-distress",
+    "lang": "en",
+    "text": "My hands are literally shaking before the section comment because I'm so scared people will think my question is stupid. The anxiety around being judged online is real for me.",
+    "flag": false,
+    "note": "Social anxiety about own participation",
+    "band": 19
+  },
+  {
+    "category": "personal-distress",
+    "lang": "en",
+    "text": "This exam prep is killing me. I've barely slept in three days and I feel like my brain has turned to mush. Does anyone else just hit a wall where nothing sticks anymore?",
+    "flag": false,
+    "note": "Hyperbole idiom plus burnout, not a threat",
+    "band": 12
+  },
+  {
+    "category": "personal-distress",
+    "lang": "en",
+    "text": "Came back to studying after my mum passed. She always wanted me to finish a degree. Sitting here crying because I can't focus and I miss her so much it physically hurts.",
+    "flag": false,
+    "note": "Personal grief, no hate or fear-mongering",
+    "band": 21
+  },
+  {
+    "category": "personal-distress",
+    "lang": "en",
+    "text": "everyone in the comments seems so far ahead and I'm sitting here feeling like a complete fraud. impostor syndrome is eating me alive and I keep wanting to quit",
+    "flag": false,
+    "note": "Self-doubt, impostor feelings, harms no one",
+    "band": 16
+  },
+  {
+    "category": "personal-distress",
+    "lang": "en",
+    "text": "I get genuine panic attacks whenever I open a maths lesson. heart pounding, can't breathe, the whole thing. it's not the topic's fault, it's just years of being told I was hopeless at it. trying to unlearn that here.",
+    "flag": false,
+    "note": "Describes own panic, working to heal it",
+    "band": 24
+  },
+  {
+    "category": "personal-distress",
+    "lang": "en",
+    "text": "What's the point of learning any of this when AI is going to take every job anyway? I'm so anxious about the future I can barely make myself press play. Tell me I'm being irrational.",
+    "flag": false,
+    "note": "Scary-world worry about own future, not incitement",
+    "band": 26
+  },
+  {
+    "category": "personal-distress",
+    "lang": "en",
+    "text": "I'm 47 and going back to school after being out for decades. Half of me is excited and the other half is convinced I'm too old and slow and that everyone's silently laughing at me.",
+    "flag": false,
+    "note": "Age self-doubt about self, no group attack",
+    "band": 15
+  },
+  {
+    "category": "personal-distress",
+    "lang": "en",
+    "text": "ngl this section on climate tipping points left me with this hollow, sinking feeling. not blaming the video, the facts are just heavy and I don't know how to carry that kind of dread on a Tuesday afternoon.",
+    "flag": false,
+    "note": "Own dread from a dark topic, calmly stated",
+    "band": 23
+  },
+  {
+    "category": "personal-distress",
+    "lang": "en",
+    "text": "I keep failing the same concept over and over and a quiet voice keeps telling me I'll never amount to anything. I know that's the depression talking but it's loud today and I just needed somewhere to put it.",
+    "flag": false,
+    "note": "Own depressive thoughts, reaching out, not threats",
+    "band": 30
+  }
+]

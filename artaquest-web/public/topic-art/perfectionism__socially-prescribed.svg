@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Socially-prescribed perfectionism">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <circle cx="40" cy="40" r="38" fill="none" stroke="#2352E8" stroke-width="1" opacity="0.45"/>
+  <circle cx="40" cy="40" r="6" fill="#E8B923"/>
+  <line x1="40" y1="12" x2="40" y2="27" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M40 33 L34 24 L46 24 Z" fill="#2352E8"/>
+  <line x1="15" y1="61" x2="29" y2="49" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M32 46 L22 47 L28 56 Z" fill="#2352E8"/>
+  <line x1="65" y1="61" x2="51" y2="49" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M48 46 L58 47 L52 56 Z" fill="#2352E8"/>
+</svg>

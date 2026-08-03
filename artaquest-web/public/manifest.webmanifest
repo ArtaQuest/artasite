@@ -1,0 +1,39 @@
+{
+  "name": "ArtaQuest — reproducible work, readable anywhere",
+  "short_name": "ArtaQuest",
+  "description": "A free, ad-free feed of citable work — every post a reproducible notebook anyone can re-run. Save the whole app, your language, and any music, video or paper onto your device and keep reading and listening with no connection.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d0d0f",
+  "theme_color": "#0d0d0f",
+  "lang": "en",
+  "dir": "auto",
+  "categories": ["education", "science", "music"],
+  "shortcuts": [
+    {
+      "name": "My Library",
+      "short_name": "My Library",
+      "description": "Your saved music, videos and documents — plays with no connection",
+      "url": "/my-library/"
+    },
+    {
+      "name": "Library",
+      "short_name": "Library",
+      "description": "Every file published on ArtaQuest",
+      "url": "/library/"
+    },
+    {
+      "name": "Feed",
+      "short_name": "Feed",
+      "description": "The latest published work",
+      "url": "/works/"
+    }
+  ],
+  "icons": [
+    { "src": "/wp-content/themes/artaquest-theme/assets/favicon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/wp-content/themes/artaquest-theme/assets/favicon-32.png", "sizes": "32x32", "type": "image/png" }
+  ]
+}

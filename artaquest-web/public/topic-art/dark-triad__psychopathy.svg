@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Psychopathy — a heart crossed by a flat emotional trace">
+  
+  
+  <path d="M40 52 C30 44 26 36 26 32 C26 28 30 26 34 27 C37 28 40 31 40 31 C40 31 43 28 46 27 C50 26 54 28 54 32 C54 36 50 44 40 52 Z" fill="var(--ico-gold,#E8B923)" fill-opacity="0.16" stroke="var(--ico-gold,#E8B923)" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M20 40 H36 l1.5 -3 l1.5 6 l1.5 -3 H60" fill="none" stroke="#2352E8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,114 @@
+[
+  {
+    "category": "ml-hate-2",
+    "lang": "ar",
+    "text": "هؤلاء المهاجرون ليسوا بشراً، إنهم جرذان تتكاثر في مدننا وتنشر القذارة. يجب تطهير الشوارع منهم قبل أن يبتلعونا.",
+    "flag": true,
+    "note": "Dehumanises migrants as rats, calls for purging",
+    "band": 93
+  },
+  {
+    "category": "ml-hate-2",
+    "lang": "ar",
+    "text": "والله ناس محترمون جداً، فقط يحرقون بيوتنا ويسرقون ويغتصبون… يعني نعمة وجودهم بيننا. الحل الوحيد طردهم بالقوة قبل أن يفنونا كلنا.",
+    "flag": true,
+    "note": "Sarcastic dehumanisation plus call to forced expulsion",
+    "band": 84
+  },
+  {
+    "category": "ml-hate-2",
+    "lang": "fa",
+    "text": "این قوم مثل انگل به جان مملکت افتاده‌اند و خونمان را می‌مکند. باید ریشه‌شان را از بیخ بکنیم وگرنه نسل ما نابود می‌شود.",
+    "flag": true,
+    "note": "Calls ethnic group parasites, urges eradication",
+    "band": 92
+  },
+  {
+    "category": "ml-hate-2",
+    "lang": "fa",
+    "text": "چه ملت نازنینی! فقط کافیست خانه‌هایشان را آتش بزنیم تا بفهمند اینجا جایشان نیست. هر کدامشان که دیدید، رحم نکنید.",
+    "flag": true,
+    "note": "Sarcasm masking incitement to arson and violence",
+    "band": 90
+  },
+  {
+    "category": "ml-hate-2",
+    "lang": "he",
+    "text": "הם לא בני אדם, הם מקקים שצריך לרסס. כל עוד הם נושמים בינינו לא נהיה בטוחים — להעלים אותם זה הפתרון היחיד.",
+    "flag": true,
+    "note": "Calls group cockroaches, calls for extermination",
+    "band": 94
+  },
+  {
+    "category": "ml-hate-2",
+    "lang": "he",
+    "text": "כמה נחמד שהם גרים לידנו, ממש מעשירים את השכונה בזבל ובמחלות שלהם. הגיע הזמן לנקות את האזור מהמין הזה אחת ולתמיד.",
+    "flag": true,
+    "note": "Coded sarcasm framing group as disease to cleanse",
+    "band": 86
+  },
+  {
+    "category": "ml-hate-2",
+    "lang": "tr",
+    "text": "Bunlar insan değil, sokakları kemiren haşarat. Yuvalarını başlarına yıkmadan bu memleket temizlenmez, hepsini söküp atmalıyız.",
+    "flag": true,
+    "note": "Dehumanises as vermin, calls to violently remove",
+    "band": 91
+  },
+  {
+    "category": "ml-hate-2",
+    "lang": "tr",
+    "text": "Ne kibar misafirler, sadece çocuklarımızı zehirleyip mahallemizi batağa çeviriyorlar. Geç olmadan bu sürüyü kovmazsak hepimizi boğacaklar.",
+    "flag": true,
+    "note": "Sarcasm plus fear-stoking call to drive group out",
+    "band": 82
+  },
+  {
+    "category": "ml-hate-2",
+    "lang": "ur",
+    "text": "یہ لوگ انسان نہیں بلکہ گندگی پھیلانے والے کیڑے ہیں۔ ان کا قلع قمع کیے بغیر ہماری نسل محفوظ نہیں رہے گی، انہیں جڑ سے مٹا دو۔",
+    "flag": true,
+    "note": "Calls group insects, demands extermination",
+    "band": 92
+  },
+  {
+    "category": "ml-hate-2",
+    "lang": "ur",
+    "text": "واہ کیا شریف قوم ہے، بس ہمارے گھر جلاتی ہے اور بیٹیوں کو اٹھا لے جاتی ہے۔ ان کے محلوں کو آگ لگا دو، یہی ان کا واحد علاج ہے۔",
+    "flag": true,
+    "note": "Sarcastic dehumanisation inciting arson against group",
+    "band": 89
+  },
+  {
+    "category": "ml-hate-2",
+    "lang": "hi",
+    "text": "ये लोग इंसान नहीं, बीमारी फैलाने वाले कीड़े-मकोड़े हैं। इन्हें मिटाए बिना हमारा देश साफ नहीं होगा, इनकी जड़ ही उखाड़ फेंको।",
+    "flag": true,
+    "note": "Frames group as disease-spreading vermin to eliminate",
+    "band": 93
+  },
+  {
+    "category": "ml-hate-2",
+    "lang": "hi",
+    "text": "कितने प्यारे पड़ोसी हैं ये, बस हमारी बहू-बेटियों पर बुरी नज़र रखते हैं। इनके मोहल्ले को आग के हवाले कर दो, तभी हमें चैन मिलेगा।",
+    "flag": true,
+    "note": "Sarcasm masking incitement to burn group's homes",
+    "band": 88
+  },
+  {
+    "category": "ml-hate-2",
+    "lang": "bn",
+    "text": "এরা মানুষ নয়, আমাদের শহরে বংশবৃদ্ধি করা ইঁদুরের পাল। শিকড়সুদ্ধ উপড়ে না ফেললে এরা আমাদের জাতিকে গিলে খাবে।",
+    "flag": true,
+    "note": "Dehumanises as breeding rats, urges uprooting",
+    "band": 91
+  },
+  {
+    "category": "ml-hate-2",
+    "lang": "bn",
+    "text": "কী ভদ্র জাতি, শুধু আমাদের ঘর-বাড়ি পুড়িয়ে দেয় আর রোগ ছড়ায়। দেরি হওয়ার আগে এদের তাড়িয়ে দাও, নইলে এরা আমাদের শেষ করে দেবে।",
+    "flag": true,
+    "note": "Sarcasm plus fear-driven call to expel group",
+    "band": 83
+  }
+]

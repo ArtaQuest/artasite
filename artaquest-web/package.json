@@ -1,0 +1,46 @@
+{
+  "name": "artaquest-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "node ../tools/gen-contrast-ramp.mjs --check && node scripts/gen-topic-art-index.mjs && node scripts/check-chart-layout.mjs && tsc -b && node scripts/copy-espeak.mjs && vite build && node scripts/gen-precache.mjs",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@echogarden/espeak-ng-emscripten": "^0.3.5",
+    "@huggingface/transformers": "^3.5.1",
+    "@tailwindcss/vite": "^4.3.0",
+    "@types/katex": "^0.16.8",
+    "d3-geo": "^3.1.1",
+    "katex": "^0.16.47",
+    "kokoro-js": "^1.2.1",
+    "pdfjs-dist": "^6.1.200",
+    "phonemizer": "^1.2.1",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-router-dom": "^7.16.0",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.3.0",
+    "topojson-client": "^3.1.0",
+    "uplot": "^1.6.32"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/d3-geo": "^3.1.0",
+    "@types/node": "^24.12.3",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/topojson-client": "^3.1.5",
+    "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^10.3.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.6.0",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.59.2",
+    "vite": "^8.0.12"
+  }
+}

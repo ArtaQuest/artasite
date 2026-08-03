@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Humanism — an individual uplifted, valued for inherent dignity and worth">
+  
+  
+  <g stroke="#2352E8" stroke-width="1.6" stroke-linecap="round" stroke-opacity="0.8">
+    <line x1="40" y1="15" x2="40" y2="9"/>
+    <line x1="27" y1="18" x2="23" y2="13"/>
+    <line x1="53" y1="18" x2="57" y2="13"/>
+    <line x1="19" y1="29" x2="13" y2="26"/>
+    <line x1="61" y1="29" x2="67" y2="26"/>
+  </g>
+  <g stroke="var(--ico-gold,#E8B923)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <line x1="40" y1="36" x2="40" y2="52"/>
+    <line x1="40" y1="40" x2="29" y2="32"/>
+    <line x1="40" y1="40" x2="51" y2="32"/>
+    <line x1="40" y1="52" x2="33" y2="63"/>
+    <line x1="40" y1="52" x2="47" y2="63"/>
+  </g>
+  <circle cx="40" cy="29" r="5" fill="var(--ico-gold,#E8B923)"/>
+</svg>

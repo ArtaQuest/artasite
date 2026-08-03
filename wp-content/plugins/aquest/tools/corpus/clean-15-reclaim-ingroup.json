@@ -1,0 +1,90 @@
+[
+  {
+    "category": "reclaim-ingroup",
+    "lang": "en",
+    "text": "I'm queer and proud, and honestly this lesson on the Stonewall riots made me tear up. Took us decades to wear that word like a crown instead of a wound.",
+    "flag": false,
+    "note": "self-identifying pride, reclaiming own group's term",
+    "band": 2
+  },
+  {
+    "category": "reclaim-ingroup",
+    "lang": "en",
+    "text": "As a Black woman in tech I love how my girls and I call each other queens in our study group chat. Reclaiming our worth one calc problem at a time lol.",
+    "flag": false,
+    "note": "affectionate in-group banter, no dehumanisation",
+    "band": 1
+  },
+  {
+    "category": "reclaim-ingroup",
+    "lang": "en",
+    "text": "Crip and unbothered. The disability rights chapter finally framed us as a community, not a tragedy. We use that word with each other on purpose, it's ours now.",
+    "flag": false,
+    "note": "disabled person reclaiming in-group term, pride",
+    "band": 3
+  },
+  {
+    "category": "reclaim-ingroup",
+    "lang": "en",
+    "text": "Fat acceptance class checking in. Yep, I said fat, not 'plus size' or whatever soft word makes thin people comfortable. It's a neutral descriptor and I'm reclaiming it.",
+    "flag": false,
+    "note": "reclaiming descriptor about own body, no attack",
+    "band": 2
+  },
+  {
+    "category": "reclaim-ingroup",
+    "lang": "en",
+    "text": "Us nerds finally inherited the earth, didn't we? Whole module is basically my high-school bullies' worst nightmare. Wear the label proudly, fellow geeks.",
+    "flag": false,
+    "note": "playful in-group reclaiming, mild self-deprecation",
+    "band": 1
+  },
+  {
+    "category": "reclaim-ingroup",
+    "lang": "en",
+    "text": "Bi disaster here and the bisexuality history section was *chef's kiss*. We joke about being a disaster, it's our own term of endearment, don't @ me about it.",
+    "flag": false,
+    "note": "in-group self-label, affectionate humour",
+    "band": 1
+  },
+  {
+    "category": "reclaim-ingroup",
+    "lang": "en",
+    "text": "My deaf friends and I sign 'Deaf gain' instead of hearing loss now. This course gets it. We're not broken hearing people, we're whole Deaf people with our own culture.",
+    "flag": false,
+    "note": "Deaf community pride, reframing own identity",
+    "band": 2
+  },
+  {
+    "category": "reclaim-ingroup",
+    "lang": "en",
+    "text": "Spinster. There, I said it about myself and I mean it as a compliment. The women's history lecture reminded me unmarried women built half the libraries in this country.",
+    "flag": false,
+    "note": "reclaiming gendered slur about herself, pride",
+    "band": 2
+  },
+  {
+    "category": "reclaim-ingroup",
+    "lang": "en",
+    "text": "Trailer trash and damn proud of where I grew up. The Appalachia poverty chapter actually let us speak for ourselves for once instead of gawking at us.",
+    "flag": false,
+    "note": "reclaiming class slur about own background",
+    "band": 3
+  },
+  {
+    "category": "reclaim-ingroup",
+    "lang": "en",
+    "text": "Old hag reporting for duty in the gerontology unit. My granddaughters and I call each other that all the time. At 78 I've earned every grey hair and every cackle.",
+    "flag": false,
+    "note": "elder reclaiming ageist term, family banter",
+    "band": 1
+  },
+  {
+    "category": "reclaim-ingroup",
+    "lang": "en",
+    "text": "Recovering addict, eight years clean. In meetings we call ourselves junkies sometimes, takes the shame out of it. This addiction-science module never once treated us like garbage, and that meant everything.",
+    "flag": false,
+    "note": "in-recovery person reclaiming term, no dehumanisation",
+    "band": 3
+  }
+]

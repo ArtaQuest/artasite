@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Triangular theory of love — intimacy, passion and commitment as the three vertices of love">
+  
+  
+  <polygon points="40,17 19,53 61,53" fill="none" stroke="#2352E8" stroke-width="2.6" stroke-linejoin="round"/>
+  <circle cx="40" cy="17" r="6" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="19" cy="53" r="6" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="61" cy="53" r="6" fill="var(--ico-gold,#E8B923)"/>
+</svg>

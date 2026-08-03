@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Extrovert — energy projected outward, recharging with other people">
+  <g fill="none" stroke="#2352E8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="32,25 40,17 48,25"/>
+    <polyline points="32,55 40,63 48,55"/>
+    <polyline points="25,32 17,40 25,48"/>
+    <polyline points="55,32 63,40 55,48"/>
+  </g>
+  <circle cx="40" cy="40" r="6" fill="#2352E8"/>
+</svg>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Benevolence — a heart cradled with care for those close to you">
+  
+  
+  <path d="M16 40 Q16 60 40 64 Q64 60 64 40" fill="none" stroke="#2352E8" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M40 50 C28 41 26 30 34 26 C38 24 40 28 40 30 C40 28 42 24 46 26 C54 30 52 41 40 50 Z" fill="var(--ico-gold,#E8B923)"/>
+</svg>

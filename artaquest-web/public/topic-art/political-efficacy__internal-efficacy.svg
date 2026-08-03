@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Internal efficacy — a gold figure rising with confidence to take part, within the blue circle of public life">
+  <circle cx="40" cy="40" r="40" fill="#06121E"/>
+  <circle cx="40" cy="40" r="22" fill="none" stroke="#2352E8" stroke-width="2" opacity="0.75"/>
+  <circle cx="40" cy="55" r="4.4" fill="var(--ico-gold,#E8B923)"/>
+  <line x1="40" y1="53" x2="40" y2="29" stroke="var(--ico-gold,#E8B923)" stroke-width="2.6" stroke-linecap="round"/>
+  <polygon points="40,23 34.5,33 45.5,33" fill="var(--ico-gold,#E8B923)"/>
+  <g stroke="var(--ico-gold,#E8B923)" stroke-width="2" stroke-linecap="round" opacity="0.85">
+    <line x1="29" y1="46" x2="33" y2="40"/>
+    <line x1="51" y1="46" x2="47" y2="40"/>
+  </g>
+</svg>

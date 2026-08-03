@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Red, power — a lightning bolt for raw, assertive energy">
+  <path d="M47 10 L23 44 L37 44 L33 70 L59 34 L44 34 Z" fill="var(--ico-gold,#E8B923)"/>
+  <path d="M14 24 L24 30" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M66 52 L56 46" stroke="#2352E8" stroke-width="3" stroke-linecap="round"/>
+</svg>

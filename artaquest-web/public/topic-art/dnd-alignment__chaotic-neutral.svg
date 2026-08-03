@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Chaotic Neutral — prizing personal freedom above all">
+  <path d="M40 40 C 40 33 50 33 50 41 C 50 52 36 53 33 41 C 29 25 49 22 57 35" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="3" stroke-linecap="round"/>
+  <g stroke="#2352E8" stroke-width="2.4" stroke-linecap="round">
+    <line x1="22" y1="31" x2="34" y2="31"/>
+    <line x1="17" y1="42" x2="31" y2="42"/>
+    <line x1="22" y1="53" x2="36" y2="53"/>
+  </g>
+</svg>

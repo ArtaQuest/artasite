@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Parenting style — the warmth by demandingness matrix">
+
+<g stroke="#2352E8" stroke-width="1.6" fill="none" opacity="0.5" stroke-linejoin="round">
+<rect x="24" y="24" width="32" height="32" rx="4"/>
+<line x1="40" y1="24" x2="40" y2="56"/>
+<line x1="24" y1="40" x2="56" y2="40"/>
+</g>
+<circle cx="32" cy="32" r="3.8" fill="var(--ico-gold,#E8B923)"/>
+<circle cx="48" cy="32" r="3.8" fill="var(--ico-gold,#E8B923)"/>
+<circle cx="32" cy="48" r="3.8" fill="#2352E8"/>
+<circle cx="48" cy="48" r="3.8" fill="#2352E8"/>
+<g fill="none" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" opacity="0.85">
+<path d="M16 55 L16 25 M12.7 29 L16 24 L19.3 29" stroke="var(--ico-gold,#E8B923)"/>
+<path d="M25 64 L55 64 M51 60.7 L56 64 L51 67.3" stroke="#2352E8"/>
+</g>
+</svg>

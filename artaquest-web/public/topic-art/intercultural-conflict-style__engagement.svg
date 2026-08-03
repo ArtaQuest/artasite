@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Engagement style">
+  <circle cx="40" cy="40" r="39" fill="#0C1E32"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.4">
+    <path d="M20 30 H55" stroke="#E8B923"/>
+    <path d="M49 24 L58 30 L49 36" stroke="#E8B923"/>
+    <path d="M21 53 L30 46 L39 58 L48 46 L57 53" stroke="#2352E8"/>
+  </g>
+</svg>

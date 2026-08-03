@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Spiritual forces — concern about evil or supernatural forces">
+  
+  <circle cx="40" cy="40" r="39" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="1.4"/>
+  <!-- dark forces pressing inward -->
+  <g fill="#2352E8">
+    <path d="M34 11 L46 11 L40 24 Z"/>
+    <path d="M34 69 L46 69 L40 56 Z"/>
+    <path d="M11 34 L11 46 L24 40 Z"/>
+    <path d="M69 34 L69 46 L56 40 Z"/>
+  </g>
+  <!-- the soul's light, held at the centre -->
+  <path d="M40 28 C46 36 45 45 40 51 C35 45 34 36 40 28 Z" fill="var(--ico-gold,#E8B923)"/>
+  <circle cx="40" cy="41" r="3" fill="#2352E8"/>
+</svg>

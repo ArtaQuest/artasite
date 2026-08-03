@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Reinforcement Sensitivity — approach-reward and inhibition-threat systems">
+  <path d="M40 56 L58 27" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="60" cy="23" r="7" fill="none" stroke="var(--ico-gold,#E8B923)" stroke-width="2"/>
+  <circle cx="60" cy="23" r="2.4" fill="var(--ico-gold,#E8B923)"/>
+  <path d="M40 56 L22 27" fill="none" stroke="#2352E8" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M13 16 L25 30" fill="none" stroke="#2352E8" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M13 30 L25 16" fill="none" stroke="#2352E8" stroke-width="2.2" stroke-linecap="round"/>
+  <circle cx="40" cy="57" r="3.8" fill="var(--ico-gold,#E8B923)"/>
+</svg>
