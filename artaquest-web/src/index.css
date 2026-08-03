@@ -731,6 +731,14 @@ select option, select optgroup { color: #111; background: #fff; }
 /* The founder's signature stand-in (shown until public/signature.svg|png is supplied). */
 .aq-sig { font-family: "Snell Roundhand", "Brush Script MT", "Segoe Script", "Apple Chancery", cursive; font-style: italic; }
 
+/* The founder's scanned signature is black ink on transparent. On the dark cosmos it has to be
+   inverted to read; on the LIGHT theme inverting it turns the ink white and the signature vanishes
+   into the card — which is what a Tailwind `invert print:invert-0` (dark-theme-only reasoning) did.
+   Print always shows the ink as scanned, on white paper. */
+.aq-sig-img { filter: invert(1); }
+html[data-theme="light"] .aq-sig-img { filter: none; }
+@media print { .aq-sig-img { filter: none !important; } }
+
 /* Printing a certificate: isolate .aq-cert and force dark-on-white. The app is a dark theme, so the
    cert's light text would be invisible on a white printed page — force text to near-black and strip the
    dark surface fills, while the SEAL, MEDAL, FRAME and SIGNATURE keep their colour (they paint via SVG

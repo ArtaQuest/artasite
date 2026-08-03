@@ -227,6 +227,19 @@ final class Rest {
 		// Donations are charged through the cart checkout (course-checkout → Stripe → fulfil_session); there
 		// is no direct /donate route, so no fund row or donate points can be written without captured fiat.
 
+		// ── ArtaCredits: a donor pays a stranger's challenge entry fee (Credits) ──
+		// Every write here is reached from the captured-payment fulfilment or from ch_enter — there is
+		// deliberately NO route that creates a gift or spends one directly.
+		[ 'GET',  'credits/options',              'Credits::options',      'public' ], // picker vocabulary — carries NO member counts
+		[ 'GET',  'credits/reach',                'Credits::reach',        'public' ], // how many members one slice reaches, floored to REACH_MIN
+		[ 'GET',  'credits/mine',                 'Credits::mine',         'user'   ], // the donor's own gifts and what became of each
+		[ 'POST', 'identity/gender',              'Verify::set_gender',    'user'   ], // opt-in, revocable ('clear'), never inferred
+
+		// ── Certificate of Participation (every challenge entrant holds one) ──
+		[ 'GET',  'participation',                'Credits::certificate',  'user'   ], // ?challenge= : the holder's own
+		[ 'GET',  'participation/mine',           'Credits::mine_certs',   'user'   ], // every certificate this member holds
+		[ 'GET',  'participation/verify',         'Credits::cert_verify',  'public' ], // ?p=&u=&k= : anyone can confirm a printed one
+
 		// ── Topic (typology-system) registry — DB-backed, authored + editable + sponsorable (Typology) ──
 		[ 'GET',  'topics',                        'Typology::all',          'public' ], // whole registry, SPA shape
 		[ 'GET',  'sponsor/topics',               'Typology::sponsorable',  'public' ], // topics with a live course → sponsorable (Donate picker)
@@ -683,8 +696,14 @@ final class Rest {
 	// ── Helpers used by every domain ────────────────────────────────────────
 	public static function uid() { return (int) get_current_user_id(); }
 
-	public static function err( $code, $msg, $status = 400 ) {
-		return new \WP_REST_Response( [ 'error' => $code, 'message' => $msg ], $status );
+	/** $extra merges extra fields into the error body — for a refusal the client must ACT on rather
+	 *  than merely display (e.g. `credit_offered` carries the donor and slice the member is being
+	 *  asked to accept). `error` and `message` always win, so no caller can overwrite them. */
+	public static function err( $code, $msg, $status = 400, $extra = [] ) {
+		return new \WP_REST_Response(
+			array_merge( (array) $extra, [ 'error' => $code, 'message' => $msg ] ),
+			$status
+		);
 	}
 
 	/** Read a raw request param, or $default when absent. Handlers sanitize at the point of use. */

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DobWheel } from "../components/DobWheel";
 import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, postProfileUpdate, type CourseCard, type Dashboard, type UsernameCheck } from "../lib/wp";
-import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, Passkeys, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type SessionItem, type BursaryResult, type BursaryStatus, type ShareKit } from "../lib/api";
+import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, Passkeys, setGender as setGender_, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type SessionItem, type BursaryResult, type BursaryStatus, type ShareKit } from "../lib/api";
 import { signOut } from "../lib/auth";
 import { VerifyApi, fileToImage, type VerifyStatus } from "../lib/verify";
 import { countryName, countryOptions, flagEmoji } from "../lib/flags";
@@ -653,12 +653,21 @@ function IdentityVerification() {
   // Every country, localized + sorted for the active language (no allow-list — see lib/flags.ts).
   const countries = useMemo(() => countryOptions(), []);
 
+  const [gender, setGender] = useState("");
   const load = () => VerifyApi.status().then((s) => {
     if (s && !("error" in s && (s as { error?: string }).error)) {
       setSt(s); setName(s.full_name || ""); setBday(s.birthday || ""); setNat(s.nationality || "");
+      setGender(s.gender || "");
     }
   });
   useEffect(() => { load(); }, []);
+
+  /** Gender saves on change (its own route), so choosing "Prefer not to say" revokes it immediately
+   *  rather than waiting on a Save the member might never press. */
+  function saveGenderNow(g: string) {
+    setGender(g);
+    setGender_(g === "" ? "clear" : g).then(() => setIdMsg(g === "" ? "Gender removed" : "Saved"), () => setIdMsg("Couldn’t save that — try again."));
+  }
 
   async function saveIdentity() {
     // Check here as well as on the server. The server is the rule (Rest::birthday_gate), but a
@@ -714,7 +723,23 @@ function IdentityVerification() {
             <select value={nat} onChange={(e) => setNat(e.target.value)} aria-label="Nationality"
               className="h-11 w-full rounded-field border border-line bg-space-1 px-3.5 text-[15px] text-ink outline-none focus:border-yin-light">
               <option value="">Choose your nationality…</option>
+              {/* Revocable: CLEAR is the sentinel Verify::set_identity deletes on. Without a way to
+                  take it back the claim was write-only, which matters now that a donor's ArtaCredit
+                  can be aimed at a nationality. */}
+              {st?.nationality && <option value="CLEAR">Remove my nationality</option>}
               {countries.map((c) => <option key={c.code} value={c.code}>{`${flagEmoji(c.code)} ${c.name}`}</option>)}
+            </select>
+          </Field>
+          {/* GENDER — the only axis of a donor's ArtaCredit that ArtaQuest does not otherwise know.
+              Opt-in, revocable, never inferred, and useless for anything else: it is read by exactly
+              one thing (Credits::buckets_for_user). Saying nothing is a complete answer. */}
+          <Field label="Gender" optional hint="Public, like everything on ArtaQuest. Used only so a donor’s gift can find the members it was given for.">
+            <select value={gender} onChange={(e) => saveGenderNow(e.target.value)} aria-label="Gender"
+              className="h-11 w-full rounded-field border border-line bg-space-1 px-3.5 text-[15px] text-ink outline-none focus:border-yin-light">
+              <option value="">Prefer not to say</option>
+              <option value="w">Woman</option>
+              <option value="m">Man</option>
+              <option value="n">Non-binary</option>
             </select>
           </Field>
         </div>

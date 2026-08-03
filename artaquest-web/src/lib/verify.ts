@@ -13,6 +13,8 @@ const NONCE =
 
 export type VerifyStatus = {
   full_name: string; birthday: string; nationality: string; has_identity: boolean;
+  /** '' unless the member chose to say. Read by exactly one thing — ArtaCredits matching. */
+  gender?: string;
   verified: boolean; verified_at: number; last_note: string;
   configured: boolean;
 };

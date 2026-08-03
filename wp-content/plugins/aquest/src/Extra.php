@@ -3133,12 +3133,56 @@ final class Extra {
 			foreach ( $donations as $d ) {
 				$cents = (int) round( ( is_array( $d ) ? (float) ( $d['amount'] ?? 0 ) : 0 ) * 100 );
 				if ( $cents < 1 ) { continue; }
-				$norm[] = [
+				$row = [
 					'c' => $cents,
 					'g' => array_values( array_filter( array_map( 'sanitize_key', (array) ( $d['groups'] ?? [] ) ) ) ),
 					'y' => array_values( array_filter( array_map( 'sanitize_key', (array) ( $d['countries'] ?? [] ) ) ) ),
 					't' => array_values( array_filter( array_map( 'sanitize_key', (array) ( $d['topics'] ?? [] ) ) ) ),
 				];
+				// An ARTACREDITS gift also carries the slice it is for and — frozen HERE, at the price the
+				// donor was actually quoted on the page — how many entries it promises. Re-deriving the
+				// count at fulfilment (or again at redemption) would silently turn one promise into three
+				// different ones, because the coin sell price moves between all three moments.
+				$k = is_array( $d['credit'] ?? null ) ? $d['credit'] : null;
+				if ( $k ) {
+					$bucket = Credits::bucket(
+						(string) ( $k['country'] ?? '' ), (string) ( $k['gender'] ?? '' ), (string) ( $k['band'] ?? '' ) );
+					// SELL, because that is what a redemption is priced at (Credits::cents_for) and what
+					// the page quotes — freezing one side of the spread and charging the other made the
+					// stored promise something the donor was never actually shown.
+					$unit = max( 1, (int) round( (float) Economy::coin_price()['sell'] * 100 ) );
+					$cap  = max( 1, min( Credits::FEE_CAP, (int) ( $k['fee_cap'] ?? Credits::FEE_CAP ) ) );
+					$row['k'] = [
+						'b' => $bucket,
+						// A GUARANTEE, not an estimate: entries this gift covers even if every one of
+						// them costs the maximum ₳{cap}. `$unit` is the price of ONE COIN and an entry
+						// costs `fee` coins (1..FEE_CAP), so dividing by $unit alone counted coins and
+						// called them entries — overstating what the gift buys by up to FEE_CAP times.
+						'n' => max( 1, intdiv( $cents, $unit * $cap ) ),
+						'u' => $unit,
+						'f' => $cap,
+						'm' => Credits::clean_donor_name( (string) ( $k['name'] ?? '' ) ),
+					];
+				}
+				// COALESCE credit gifts to the same slice within one checkout. Fulfilment records ONE
+				// aq_credit_gifts row per (ref, bucket) — the dedupe that makes a replayed webhook safe —
+				// so two separate rows for one slice appended both amounts to the earmark but recorded
+				// only the first gift's entitlement, stranding the second donor's promise. Merging here
+				// keeps the money and the promise describing the same gift.
+				$merged = false;
+				if ( isset( $row['k'] ) ) {
+					foreach ( $norm as &$prev ) {
+						if ( isset( $prev['k'] ) && $prev['k']['b'] === $row['k']['b'] && $prev['k']['f'] === $row['k']['f'] ) {
+							$prev['c']     += $cents;
+							$prev['k']['n'] = max( 1, intdiv( $prev['c'], $prev['k']['u'] * $prev['k']['f'] ) );
+							if ( $prev['k']['m'] === '' ) { $prev['k']['m'] = $row['k']['m']; }
+							$merged = true;
+							break;
+						}
+					}
+					unset( $prev );
+				}
+				if ( ! $merged ) { $norm[] = $row; }
 				$total_cents += $cents;
 			}
 			if ( ! $norm ) { return Rest::err( 'bad_input', 'No valid donation amount.', 400 ); }
@@ -3149,15 +3193,45 @@ final class Extra {
 			// safely, collapse it to one general gift for the total — the charge is always honoured; only
 			// the per-earmark split is lost (rare: ~14+ donations in one cart).
 			$donations_json = wp_json_encode( $norm );
-			if ( strlen( $donations_json ) > 450 ) { $donations_json = wp_json_encode( [ [ 'c' => $total_cents, 'g' => [], 'y' => [] ] ] ); }
+			if ( strlen( $donations_json ) > 450 ) {
+				// Too big to carry safely. Keep the ARTACREDIT gifts (a credit is a promise to a named
+				// slice of members — collapsing it would silently turn a targeted gift into a general one
+				// AND drop the donor's name from certificates), and fold everything else into one general
+				// gift for the remainder. The charge is always honoured; only the untargeted split is lost.
+				$credits = array_values( array_filter( $norm, static fn( $d ) => isset( $d['k'] ) ) );
+				$rest    = $total_cents - array_sum( array_column( $credits, 'c' ) );
+				if ( $rest > 0 ) { $credits[] = [ 'c' => $rest, 'g' => [], 'y' => [] ]; }
+				$donations_json = wp_json_encode( $credits );
+				// Still too big (many credit gifts in one cart) — keep the largest CREDIT and record the
+				// whole remainder as one general gift, so the recorded total always equals what was
+				// charged. Money is never dropped; only the finer targeting is. Sorting $credits (which
+				// by now also holds the general remainder row) could have put that general row first
+				// and dropped every credit — the exact outcome this branch exists to prevent — so the
+				// pick is made from the credit-carrying rows alone.
+				if ( strlen( $donations_json ) > 450 ) {
+					$only = array_values( array_filter( $credits, static fn( $d ) => isset( $d['k'] ) ) );
+					usort( $only, static fn( $a, $b ) => (int) $b['c'] - (int) $a['c'] );
+					$keep = $only[0] ?? null;
+					$left = $total_cents - (int) ( $keep['c'] ?? 0 );
+					$rows = $keep ? [ $keep ] : [];
+					if ( $left > 0 || ! $keep ) { $rows[] = [ 'c' => max( 0, $left ) ?: $total_cents, 'g' => [], 'y' => [] ]; }
+					$donations_json = wp_json_encode( $rows );
+				}
+			}
 
 			if ( Stripe::enabled() ) {
-				// Return to /wallet/ DIRECTLY — the surface that reads ?stripe= (Wallet.tsx) and the same
-				// one Economy::buy() returns to. /enroll/ looks equivalent and is not: the theme 301s it to
-				// /wallet/ at parse_request priority 1 and wp_safe_redirect carries no query string, so
-				// ?stripe=success&session=… was dropped in the hop and no donor was ever told their payment
-				// had arrived. A redirect between Stripe and the confirmation is a broken confirmation.
-				$return = home_url( '/wallet/' );
+				// Return the DONOR to /donate/, not the retired /enroll/ — that is where the thank-you
+				// belongs, and where an ArtaCredit gift can tell them what it now covers. The wallet's
+				// "your coins are in your wallet" is not what happened to a gift.
+				//
+				// The reason this was broken at all is worth keeping: /enroll/ is not merely retired, it is
+				// 301'd to /wallet/ by the theme at parse_request priority 1, and wp_safe_redirect carries
+				// NO query string — so ?stripe=success&session=… was dropped in the hop and no donor has
+				// ever been told their payment arrived. Whatever this returns to must be a route that
+				// answers 200 directly. /donate/ does (checked against production, query intact); anything
+				// in the theme's redirect map does not. A redirect between Stripe and the confirmation is
+				// a broken confirmation.
+				$return = home_url( '/donate/' );
 				$sess = Stripe::create_session(
 					$total_cents,
 					'Donation to the ArtaQuest Foundation',
@@ -3228,7 +3302,35 @@ final class Extra {
 				$uid  = (int) ( $meta['aq_uid'] ?? 0 );
 				$dons = json_decode( (string) ( $meta['aq_donations'] ?? '[]' ), true );
 				foreach ( is_array( $dons ) ? $dons : [] as $d ) {
-					Funds::record_gift( $uid, (int) ( $d['c'] ?? 0 ), (array) ( $d['g'] ?? [] ), (array) ( $d['y'] ?? [] ), $ref, (array) ( $d['t'] ?? [] ) );
+					$cents = (int) ( $d['c'] ?? 0 );
+					$k     = is_array( $d['k'] ?? null ) ? $d['k'] : null;
+					if ( $k ) {
+						// An ARTACREDITS gift: the money lands in its slice earmark exactly like any other
+						// earmarked donation (+ donate points), and the gift row records what the donor was
+						// PROMISED — the entry count and unit price quoted on the page they paid from, not a
+						// figure re-derived here at a coin price that has since moved.
+						// The ledger ref stays EXACTLY $ref — the replay guard above probes
+						// aq_fund_ledger WHERE ref = $ref, so a suffixed ref would make a
+						// credits-only session invisible to it and a replayed webhook would record
+						// the gift twice. The gift row is deduped on (ref, bucket) instead.
+						$dupe = Data::col( 'SELECT id FROM ' . Data::t( 'aq_credit_gifts' ) . ' WHERE ref = %s AND bucket = %s LIMIT 1', [ $ref, (string) $k['b'] ] );
+						$gid  = Funds::record_credit( $uid, $cents, (string) $k['b'], $ref );
+						if ( $gid && ! $dupe ) {
+							Data::insert( 'aq_credit_gifts', [
+								'donor_id'   => $uid,
+								'bucket'     => (string) $k['b'],
+								'cents'      => $cents,
+								'entries'    => max( 1, (int) ( $k['n'] ?? 1 ) ),
+								'unit_cents' => max( 1, (int) ( $k['u'] ?? 1 ) ),
+								'fee_cap'    => max( 1, (int) ( $k['f'] ?? Credits::FEE_CAP ) ),
+								'donor_name' => (string) ( $k['m'] ?? '' ),
+								'ref'        => $ref,
+								'created'    => Data::now(),
+							] );
+						}
+						continue;
+					}
+					Funds::record_gift( $uid, $cents, (array) ( $d['g'] ?? [] ), (array) ( $d['y'] ?? [] ), $ref, (array) ( $d['t'] ?? [] ) );
 				}
 			}
 		} elseif ( $kind === 'coins' ) {

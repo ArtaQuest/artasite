@@ -6,8 +6,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  chCreate, chEnter, chOptions, getChallenge, listChallenges, myNotebooks,
-  type Challenge, type NbKind, type NotebookCard, commodities, type Commodities,} from "../lib/api";
+  ApiError, chCreate, chEnter, chOptions, getChallenge, listChallenges, myNotebooks,
+  type Challenge, type CreditOffer, type NbKind, type NotebookCard, commodities, type Commodities,} from "../lib/api";
 import { NB_KIND_META } from "../components/nbview";
 import { Avatar, Button, Chip, cx, EmptyState, HeartGlyph, PageHero, SectionHeader } from "../components/ui";
 import { CommoditiesCard } from "../components/commodities";
@@ -99,6 +99,8 @@ function Board({ id }: { id: number }) {
   const [mine, setMine] = useState<NotebookCard[]>([]);
   const [nbId, setNbId] = useState(0);
   const [note, setNote] = useState("");
+  const [offer, setOffer] = useState<CreditOffer | null>(null);
+  const [certUrl, setCertUrl] = useState("");
   // A swallowed rejection left `c` null forever, and the null branch below is the loading skeleton —
   // so a failed board pulsed indefinitely, said nothing, offered no retry, and (aria-hidden) announced
   // nothing at all to a screen reader. Reloading was the only way out and looked identical.
@@ -122,10 +124,28 @@ function Board({ id }: { id: number }) {
   }
   if (!c) return <div className="h-40 animate-pulse rounded-2xl bg-veil/[0.06]" aria-hidden />;
   const eligible = mine.filter((n) => n.kind === c.kind);
-  const join = () => {
+  // ARTACREDITS: when the member is short the fee and a donor's gift matches them, the backend
+  // REFUSES the first call with `credit_offered` and the donor's name. We show that, and only a
+  // deliberate second click accepts — a stranger's gift is never spent on someone silently.
+  const join = (acceptCredit = false) => {
     if (!nbId) return;
-    chEnter(c.id, nbId).then((r) => { setNote(`You're in — the pool is ₳${r.pool}.`); return getChallenge(id).then(setC); })
-      .catch((e) => setNote(e instanceof Error ? e.message : "Could not enter"));
+    setNote("");
+    chEnter(c.id, nbId, acceptCredit)
+      .then((r) => {
+        setOffer(null);
+        setNote(r.credited
+          ? `You're in — ${r.credited.donor} paid your ₳${r.credited.fee} entry fee. Your certificate names them.`
+          : `You're in — the pool is ₳${r.pool}.`);
+        setCertUrl(r.certificate || "");
+        return getChallenge(id).then(setC);
+      })
+      .catch((e) => {
+        if (e instanceof ApiError && e.code === "credit_offered") {
+          setOffer((e.data as { credit?: CreditOffer }).credit || null);
+          return;
+        }
+        setNote(e instanceof Error ? e.message : "Could not enter");
+      });
   };
   return (
     <div className="rounded-2xl border border-line bg-space-2 p-4">
@@ -156,8 +176,26 @@ function Board({ id }: { id: number }) {
             <option value={0}>Enter with your {NB_KIND_META[c.kind]?.label.toLowerCase()}…</option>
             {eligible.map((n) => <option key={n.id} value={n.id}>{n.title}</option>)}
           </select>
-          <Button size="sm" onClick={join} disabled={!nbId}>Enter (₳{c.fee})</Button>
-          {note ? <p className="w-full text-[12px] text-yang-ink">{note}</p> : null}
+          <Button size="sm" onClick={() => join()} disabled={!nbId}>Enter (₳{c.fee})</Button>
+          {note ? (
+            <p className="w-full text-[12px] text-yang-ink">
+              {note}
+              {certUrl ? <> <Link to={certUrl} className="font-semibold underline-offset-2 hover:underline">See your certificate</Link></> : null}
+            </p>
+          ) : null}
+          {offer ? (
+            <div className="w-full rounded-xl border border-yang/40 bg-yang/[0.07] p-3.5">
+              <p className="text-[13.5px] leading-relaxed text-ink">
+                <span className="font-semibold" data-ay-skip={offer.named ? "1" : undefined}>{offer.donor}</span> has already paid an
+                entry fee for {offer.slice}. Accept it and you're in for ₳0 — their name goes on your Certificate of Participation.
+              </p>
+              <p className="mt-1.5 text-[12px] text-ink-3">{offer.notice}</p>
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                <Button size="sm" onClick={() => join(true)}>Accept and enter</Button>
+                <Button size="sm" variant="outline" onClick={() => { setOffer(null); setNote("No problem — nothing was accepted."); }}>No thanks</Button>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

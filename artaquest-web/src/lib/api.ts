@@ -129,11 +129,16 @@ export class ApiError extends Error {
   /** The backend's machine-readable `error` code (Rest::err), when it sent one — callers should
    *  branch on this, never on the human message (which is translated and may change). */
   code: string;
-  constructor(path: string, status: number, message?: string, code = "") {
+  /** The rest of the error body. Most refusals carry nothing here, but some are a refusal the caller
+   *  must ACT on rather than merely display — `credit_offered` carries the donor and the slice the
+   *  member is being asked to accept, and there is nowhere else for that to arrive. */
+  data: Record<string, unknown>;
+  constructor(path: string, status: number, message?: string, code = "", data: Record<string, unknown> = {}) {
     super(message || `${path} → ${status}`);
     this.path = path;
     this.status = status;
     this.code = code;
+    this.data = data;
   }
 }
 
@@ -153,7 +158,7 @@ function apiError(path: string, status: number, j: unknown): ApiError {
   if (code === "birthday_required" && typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(BIRTHDAY_REQUIRED_EVENT));
   }
-  return new ApiError(path, status, body.message, code);
+  return new ApiError(path, status, body.message, code, (j ?? {}) as Record<string, unknown>);
 }
 
 // ── Types (mirror the PHP response shapes) ──────────────────────────────────
@@ -1885,8 +1890,87 @@ export function chOptions() {
 export function chCreate(b: { kind: NbKind; topic: string; title: string; deadline: number; fee: number; nb_id: number }) {
   return post<Challenge>("/challenges", b);
 }
-export function chEnter(id: number, nbId: number) {
-  return post<{ ok: boolean; pool: number }>(`/challenges/${id}/enter`, { nb_id: nbId });
+/** Enter a challenge. When the member is short the fee and a donor's ArtaCredit matches them, the
+ *  FIRST call is refused with `credit_offered` (ApiError.data.credit names the donor and the slice);
+ *  calling again with acceptCredit=true redeems it. Nothing is ever spent on a member's behalf
+ *  without that second, informed call — see Notebook::ch_enter. */
+export function chEnter(id: number, nbId: number, acceptCredit = false) {
+  return post<{ ok: boolean; pool: number; certificate: string; credited?: CreditUsed }>(
+    `/challenges/${id}/enter`,
+    acceptCredit ? { nb_id: nbId, accept_credit: 1 } : { nb_id: nbId },
+  );
+}
+
+/* ── ArtaCredits ─────────────────────────────────────────────────────────────
+   A donor pays a stranger's challenge entry fee, targeted at a slice of the membership. */
+
+/** The offer a member sees when a donor has already paid their fee (ApiError.data.credit on a 402). */
+export type CreditOffer = { donor: string; named: boolean; slice: string; fee: number; notice: string };
+export type CreditUsed = { donor: string; named: boolean; fee: number };
+export type CreditOptions = {
+  countries: { iso: string; name: string }[];
+  genders: { key: string; label: string }[];
+  bands: { key: string; label: string }[];
+  fee_cap: number; moon_cap: number; reach_min: number; symbol: string;
+};
+/** Members a slice reaches. `exact` is false when the true count is below the floor — we report
+ *  "fewer than N" rather than a precise number, so a narrow pick can never count identifiable people. */
+export type CreditReach = { bucket: string; words: string; exact: boolean; members: number; floor: number };
+export type CreditGift = {
+  id: number; words: string; cents: number; entries: number; used: number; held: number; name: string; date: number;
+};
+
+export function creditOptions() { return get<CreditOptions>("/credits/options"); }
+export function creditReach(country: string, gender: string, band: string) {
+  return get<CreditReach>("/credits/reach", { country, gender, band });
+}
+export function myCredits() { return get<{ items: CreditGift[] }>("/credits/mine"); }
+/** State, change, or clear ("clear") your gender. Opt-in, revocable, never inferred. */
+export function setGender(gender: string) { return post<{ ok: boolean; gender: string }>("/identity/gender", { gender }); }
+
+/* ── Certificate of Participation ────────────────────────────────────────────
+   Every challenge entrant holds one. `place` is read from the FROZEN settlement board, so a printed
+   certificate says the same thing in a year; it is 0 until the challenge settles at its full moon. */
+export type PartCert = {
+  valid: boolean;
+  member: string; challenge: string; topic: string; kind: string;
+  work: string; work_url: string;
+  entered_ts: number; moon_ts: number; settled: boolean;
+  place: number; field: number; prize: number;
+  donor: string; slice: string; sponsored: boolean;
+  code: string; verify_url: string;
+};
+/** A filled-in specimen for the donate page: the real document, with the donor's own name on it as
+ *  they type. Everything but `donor` and `slice` is fixed illustrative content, and the face carries
+ *  a Sample mark — so a preview can never be mistaken for an issued certificate. */
+export function sampleCert(donorName: string, slice: string): PartCert {
+  const now = Math.floor(Date.now() / 1000);
+  return {
+    valid: true,
+    member: "Niloofar Rezaei",
+    challenge: "What the Karun river carried",
+    topic: "Earth science",
+    kind: "dataset",
+    work: "Sediment load, 1976–2025",
+    work_url: "",
+    entered_ts: now,
+    moon_ts: now + 18 * 86400,
+    settled: false,
+    place: 0, field: 0, prize: 0,
+    donor: donorName.trim(),
+    slice,
+    sponsored: true,
+    code: "A7F2K9D4C1",
+    verify_url: "",
+  };
+}
+
+export function participationCert(challenge: number) { return get<PartCert>("/participation", { challenge }); }
+export function myParticipation() {
+  return get<{ items: { challenge_id: number; challenge: string; kind: string; topic: string; moon_ts: number; settled: boolean; url: string }[] }>("/participation/mine");
+}
+export function verifyParticipation(p: number, u: number, k: string) {
+  return get<PartCert>("/participation/verify", { p, u, k });
 }
 /** The publish fee, mirrored from Notebook::pub_fee — the poster's pool contribution. */
 export function nbPubFee(sizeBytes: number) {

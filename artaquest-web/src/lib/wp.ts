@@ -448,14 +448,18 @@ export async function getSearch(q: string): Promise<SearchResults> {
 
 // ── Donations + transparency ──────────────────────────────────────────────────
 export type DonateGateway = { id: string; title: string; desc: string };
-export type DonateOptions = { currency: string; symbol: string; presets: number[]; gateways: DonateGateway[]; coin_buy_price?: number; coin_fiat?: string };
+export type DonateOptions = { currency: string; symbol: string; presets: number[]; gateways: DonateGateway[]; coin_buy_price?: number; coin_sell_price?: number; coin_fiat?: string };
 export async function getDonateOptions(): Promise<DonateOptions> {
   const base: DonateOptions = { currency: "CAD", symbol: "$", presets: [5, 15, 30, 60, 120], gateways: [{ id: "card", title: "Card", desc: "Pay by card" }] };
-  // Supply the gold-backed coin buy price (from /reserve) so the donate page can show the
-  // coin-equivalent ("your CA$30 mints ≈ ₳143"); without it coinRate is 0 → "₳0 for learners".
+  // Supply the gold-backed coin price (from /reserve) so the donate page can show what a gift
+  // covers. BOTH sides of the spread: `buy` for the mint figure, and `sell` because that is what a
+  // redeemed ArtaCredit actually costs the fund (Credits::cents_for) and what the server freezes
+  // onto the gift. Quoting one side while charging the other made the donor's figure a number they
+  // were never actually charged at.
   try {
     const r = await getReserve();
     if (r && r.buy > 0) { base.coin_buy_price = r.buy; base.coin_fiat = r.fiat; }
+    if (r && r.sell > 0) { base.coin_sell_price = r.sell; }
   } catch { /* keep the static base if the reserve fetch fails */ }
   return base;
 }
@@ -1199,7 +1203,10 @@ export async function verifyCertificate(c: number, u: number, k: string): Promis
 
 // Course checkout (charges the entry fee → enrolment) + Stripe verify
 export type CheckoutResult = { ok: boolean; already?: boolean; order?: string; total?: number; currency?: string; total_display?: string; course: string; items?: string[]; gateway?: string; instructions?: string; url?: string; redirect?: boolean };
-export async function postCourseCheckout(body: { slug?: string; slugs?: string[]; donations?: { amount: number; countries?: string[]; groups?: string[] }[]; email: string; name: string; gateway: string }): Promise<CheckoutResult> {
+/** A donation's ArtaCredits targeting — the slice of the membership whose challenge entry fees this
+ *  gift will cover. Every axis is optional; omitting one means "no preference" on it. */
+export type DonationCredit = { country?: string; gender?: string; band?: string; fee_cap?: number; name?: string };
+export async function postCourseCheckout(body: { slug?: string; slugs?: string[]; donations?: { amount: number; countries?: string[]; groups?: string[]; credit?: DonationCredit }[]; email: string; name: string; gateway: string }): Promise<CheckoutResult> {
   return post(`${AQ}/course-checkout`, { ...body, country: aqCountryId() });
 }
 export type StripeVerify = { ok: boolean; paid: boolean; order: string; course: string; total: number };

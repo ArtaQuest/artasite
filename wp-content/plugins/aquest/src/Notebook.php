@@ -2528,14 +2528,55 @@ final class Notebook {
 		if ( ! Economy::acquire_lock( $wlock, 15 ) ) {
 			return Rest::err( 'busy', 'Another payment is in progress. Please try again in a moment.', 429 );
 		}
+		$credited = null;
 		try {
-			if ( Economy::coin_balance( $uid ) < $fee ) { return Rest::err( 'poor', 'The entry fee is ₳' . $fee, 402 ); }
-			$new = Data::upsert( 'aq_nb_entries', [ 'ch_id' => (int) $c['id'], 'user_id' => $uid ], [ 'nb_id' => (int) $nb['id'], 'created' => Data::now() ] );
-			if ( ! $new ) { return Rest::err( 'entered', 'You are already in — one entry per member', 409 ); }
-			$ref = 'chfee:' . $c['id'] . ':' . $uid;
-			if ( ! Data::col( 'SELECT id FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'chfee' AND ref = %s LIMIT 1", [ $ref ] ) ) {
-				Economy::credit_coins( $uid, -$fee, 'chfee', $ref );
-				Data::bump( 'aq_nb_challenges', [ 'id' => (int) $c['id'] ], 'pool', $fee );
+			// One entry per member: settle this BEFORE any money moves, so a repeat call can never spend
+			// a donor's credit on a seat this member already holds. Only this member can insert this key
+			// and we hold their wallet lock, so the read and the insert below cannot be interleaved.
+			if ( Data::col( 'SELECT id FROM ' . Data::t( 'aq_nb_entries' ) . ' WHERE ch_id = %d AND user_id = %d', [ (int) $c['id'], $uid ] ) ) {
+				return Rest::err( 'entered', 'You are already in — one entry per member', 409 );
+			}
+
+			// ── ARTACREDITS ────────────────────────────────────────────────────────────────────────
+			// Short of the fee? A donor may have already paid it for someone like this member. We never
+			// spend a stranger's gift silently: the FIRST call is refused with the donor's name and the
+			// slice the gift was given for, and only a SECOND call carrying accept_credit=1 redeems it.
+			// So consent is informed and in the moment, and nothing anywhere records that a member would
+			// LIKE to be sponsored — there is no standing "please help me" flag for the public DB to hold.
+			if ( Economy::coin_balance( $uid ) < $fee ) {
+				$gift = Credits::match( $uid, $c, $fee );
+				if ( ! $gift ) { return Rest::err( 'poor', 'The entry fee is ₳' . $fee, 402 ); }
+				if ( ! Rest::pint( $req, 'accept_credit', 0 ) ) {
+					$donor = Credits::donor_name( $gift );
+					return Rest::err( 'credit_offered', 'Your entry fee has already been paid — accept it to enter.', 402, [
+						'credit' => [
+							'donor'  => $donor !== '' ? $donor : 'A friend of ArtaQuest',
+							'named'  => $donor !== '',
+							'slice'  => Credits::bucket_words( $gift['bucket'] ),
+							'fee'    => $fee,
+							'notice' => 'Accepting records publicly, in the open database, that this entry was paid for you.',
+						],
+					] );
+				}
+				// redeem() claims the ENTRY and the credit and moves the money as one critical section,
+				// so a 0 means a losing race in which nothing was charged and no entry was made.
+				if ( ! Credits::redeem( $uid, $c, $fee, $gift, (int) $nb['id'] ) ) {
+					return Rest::err( 'poor', 'The entry fee is ₳' . $fee, 402 );
+				}
+				$credited = $gift;
+			}
+
+			// A credited entry's fee was paid from the fund and its row was written inside redeem(), so
+			// the member is charged nothing here — and no coin was minted to them on the way, which is
+			// what keeps coins_issued and the full-reserve invariant untouched.
+			if ( ! $credited ) {
+				$new = Data::upsert( 'aq_nb_entries', [ 'ch_id' => (int) $c['id'], 'user_id' => $uid ], [ 'nb_id' => (int) $nb['id'], 'created' => Data::now() ] );
+				if ( ! $new ) { return Rest::err( 'entered', 'You are already in — one entry per member', 409 ); }
+				$ref = 'chfee:' . $c['id'] . ':' . $uid;
+				if ( ! Data::col( 'SELECT id FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'chfee' AND ref = %s LIMIT 1", [ $ref ] ) ) {
+					Economy::credit_coins( $uid, -$fee, 'chfee', $ref );
+					Data::bump( 'aq_nb_challenges', [ 'id' => (int) $c['id'] ], 'pool', $fee );
+				}
 			}
 		} finally {
 			Economy::release_lock( $wlock ); // released before the notification tail, as everywhere else
@@ -2544,7 +2585,12 @@ final class Notebook {
 			$me = get_userdata( $uid );
 			Notify::push( (int) $c['creator_id'], 'challenge', ( $me ? $me->display_name : 'Someone' ) . ' entered "' . $c['title'] . '" — the pool grew to ₳' . ( (int) $c['pool'] + $fee ), '', '/challenges/', 'chent' . $c['id'] . ':' . $uid );
 		}
-		return [ 'ok' => true, 'pool' => (int) $c['pool'] + $fee ];
+		$out = [ 'ok' => true, 'pool' => (int) $c['pool'] + $fee, 'certificate' => '/certificate/?challenge=' . (int) $c['id'] ];
+		if ( $credited ) {
+			$donor = Credits::donor_name( $credited );
+			$out['credited'] = [ 'donor' => $donor !== '' ? $donor : 'A friend of ArtaQuest', 'named' => $donor !== '', 'fee' => $fee ];
+		}
+		return $out;
 	}
 
 	/** Winner takes all at the full moon; an exact tie splits evenly, odd coins one each to the
@@ -2607,7 +2653,30 @@ final class Notebook {
 					$paid += $share;
 					$results[] = [ 'place' => 1, 'prize' => $share ] + $w;
 				}
-				Data::update( 'aq_nb_challenges', [ 'state' => 'settled', 'results' => Data::enc( [ 'podium' => $results, 'paid' => $paid ] ) ], [ 'id' => (int) $c['id'] ] );
+				// FREEZE the whole board, not just the podium. `hearts` keeps moving after the moon, so a
+				// board recomputed later would keep re-ranking a settled challenge — and every entrant's
+				// Certificate of Participation prints its placement. The certificate reads THIS and only
+				// this, so what a member prints today still says the same thing in a year.
+				// Carry the settlement's OWN place, not the board's array index. An exact tie makes every
+				// tied entry place 1 and splits the pool, so an index would have printed "2nd of 5" on
+				// a co-winner's certificate beside the prize they actually shared for first.
+				$place_by = []; $prize_by = [];
+				foreach ( $results as $r ) {
+					$place_by[ (int) $r['nb_id'] ] = (int) $r['place'];
+					$prize_by[ (int) $r['nb_id'] ] = (int) $r['prize'];
+				}
+				$frozen = array_map( static function ( $b, $i ) use ( $place_by, $prize_by ) {
+					$id = (int) $b['nb_id'];
+					return [
+						'nb_id'  => $id,
+						'title'  => (string) $b['title'],
+						'hearts' => (int) $b['hearts'],
+						'author' => (int) $b['author']['id'],
+						'place'  => $place_by[ $id ] ?? ( $i + 1 ),
+						'prize'  => $prize_by[ $id ] ?? 0,
+					];
+				}, $board, array_keys( $board ) );
+				Data::update( 'aq_nb_challenges', [ 'state' => 'settled', 'results' => Data::enc( [ 'podium' => $results, 'paid' => $paid, 'board' => $frozen ] ) ], [ 'id' => (int) $c['id'] ] );
 			}
 		} finally {
 			Economy::release_lock( 'nbsettle' );

@@ -29,6 +29,7 @@ final class Funds {
 	private static function earmark_label( $kind, $key ) {
 		if ( $kind === 'grp' ) { return self::GROUPS[ $key ] ?? ucwords( str_replace( [ '_', '-' ], ' ', $key ) ); }
 		if ( $kind === 'cty' ) { return strtoupper( $key ); } // ISO code (FE maps to a country name)
+		if ( $kind === 'crd' ) { return 'ArtaCredits for ' . Credits::bucket_words( 'crd_' . $key ); }
 		return ucwords( str_replace( [ '_', '-' ], ' ', $key ) );
 	}
 
@@ -113,7 +114,10 @@ final class Funds {
 			$total += $c;
 			if ( array_key_exists( $b, $buckets ) ) {
 				$buckets[ $b ] = $c;
-			} elseif ( preg_match( '/^(grp|cty|typ)_(.+)$/', $b, $m ) ) {
+			// `crd` belongs here too: without it, ArtaCredit money counted toward the public TOTAL but
+			// appeared in no per-bucket line, so credit held for a slice was invisible in the books
+			// that are the whole point of publishing them.
+			} elseif ( preg_match( '/^(grp|cty|typ|crd)_(.+)$/', $b, $m ) ) {
 				$earmarks[] = [ 'bucket' => $b, 'kind' => $m[1], 'key' => $m[2], 'label' => self::earmark_label( $m[1], $m[2] ), 'cents' => $c ];
 			}
 		}
@@ -241,7 +245,7 @@ final class Funds {
 		$cents  = max( 0, (int) $cents );
 		// Core buckets stay validated; an earmark bucket (grp_/cty_/typ_ prefix) is allowed through for
 		// the finer-grained per-group/country distribution. Anything else falls back to the general fund.
-		$bucket = ( in_array( $bucket, self::BUCKETS, true ) || preg_match( '/^(grp|cty|typ)_[a-z0-9_-]+$/i', (string) $bucket ) )
+		$bucket = ( in_array( $bucket, self::BUCKETS, true ) || preg_match( '/^(grp|cty|typ|crd)_[a-z0-9_-]+$/i', (string) $bucket ) )
 			? (string) $bucket : 'bursary';
 		if ( $cents < 1 ) { return 0; }
 		$id = self::fund_append(
@@ -252,6 +256,31 @@ final class Funds {
 		);
 		Economy::award_points( $uid, max( 1, (int) floor( $cents / 100 ) ), 'donate', 'fund' . $id );
 		return $id;
+	}
+
+	// ── ArtaCredits (Credits.php) ───────────────────────────────────────────
+	// A credit gift is an ordinary earmarked donation into a `crd_<cty>_<gender>_<band>` bucket, and a
+	// redemption is an ordinary negative append out of it — the same two moves a topic sponsorship
+	// already makes. Both go through fund_append, so the counter projection and the public statement
+	// stay correct with no new accounting concept. Credits.php owns the matching and the locking; this
+	// class stays the only thing that touches the ledger.
+
+	/** Record a donor's ArtaCredit gift into its slice earmark (+ donate points, like any gift).
+	 *  Reached ONLY from the captured-payment fulfilment, exactly like every other positive append. */
+	public static function record_credit( $uid, $cents, $bucket, $ref = '' ) {
+		if ( ! preg_match( '/^crd_[a-z0-9_]+$/', (string) $bucket ) ) { return 0; }
+		return self::record_donation( $uid, $cents, $bucket, 'ArtaCredits: ' . Credits::bucket_words( $bucket ), $ref );
+	}
+
+	/** Spend from a credit earmark when a member accepts a credit. Follows the house sign convention
+	 *  exactly — fund_append never negates, every caller passes the sign (see the bursary debit at
+	 *  line ~393 and the sponsorship debit at ~206). A non-negative amount is a NO-OP rather than a
+	 *  silent inflation of the "credits waiting" figure, so a sign slip can never mint against money
+	 *  that was never spent. Callers hold the crdgift_<id> lock (Credits::redeem). */
+	public static function spend_credit( $bucket, $cents, $ref = '', $note = '' ) {
+		if ( ! preg_match( '/^crd_[a-z0-9_]+$/', (string) $bucket ) ) { return 0; }
+		if ( (int) $cents >= 0 ) { return 0; }
+		return self::fund_append( (string) $bucket, (int) $cents, sanitize_text_field( (string) $ref ), sanitize_text_field( (string) $note ) );
 	}
 
 	/** Bursary money available to cover a grant: the general `bursary` bucket plus, when a group is

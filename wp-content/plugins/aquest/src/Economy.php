@@ -235,7 +235,11 @@ final class Economy {
 		}
 		foreach ( $checks as &$c ) { $c['ok'] = ( (int) $c['projected'] === (int) $c['ledger'] ); }
 		unset( $c );
-		return array_merge( $checks, Funds::verify_fund_counters() ); // fund counters: same proof, same tool
+		// Fund counters + ArtaCredits: same proof, same tool. Credits::verify_credits adds a SIGNED
+		// check (no crd_ bucket may be negative) that projection-EQUALITY can never catch — a racing
+		// over-spend moves the counter and the ledger together, so both go negative in lockstep and
+		// every equality check still passes while the public books are wrong.
+		return array_merge( $checks, Funds::verify_fund_counters(), Credits::verify_credits() );
 	}
 
 	/**

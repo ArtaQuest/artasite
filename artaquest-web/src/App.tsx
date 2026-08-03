@@ -18,6 +18,16 @@ const Account = lazy(() => import("./pages/Account"));
 const Login = lazy(() => import("./pages/Login"));
 const ArtaProfile = lazy(() => import("./pages/ArtaProfile"));
 const Donate = lazy(() => import("./pages/Donate"));
+const Participation = lazy(() => import("./pages/Participation"));
+
+/** Redirect that CARRIES THE QUERY STRING. The retired /enroll and /cart slugs are still where
+ *  Stripe returns a payer (Extra::course_checkout sets return_url = /enroll/?stripe=success&
+ *  session=…), and a plain <Navigate to="/wallet"> dropped the search — so the browser leg of
+ *  fulfilment silently never ran and every payment waited on the webhook alone. */
+function KeepQuery({ to }: { to: string }) {
+  const loc = useLocation();
+  return <Navigate to={to + loc.search} replace />;
+}
 const About = lazy(() => import("./pages/About"));
 const NewsDetection = lazy(() => import("./pages/NewsDetection"));
 const FaqContact = lazy(() => import("./pages/FaqContact"));
@@ -500,14 +510,17 @@ export default function App() {
           <Route path="/data/" element={<Data />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/pricing/" element={<Pricing />} />
-          <Route path="/enroll" element={<Navigate to="/wallet" replace />} />
-          <Route path="/enroll/" element={<Navigate to="/wallet" replace />} />
-          <Route path="/cart" element={<Navigate to="/wallet" replace />} />
-          <Route path="/cart/" element={<Navigate to="/wallet" replace />} />
-          <Route path="/certificate" element={<Navigate to="/" replace />} />
-          <Route path="/certificate/" element={<Navigate to="/" replace />} />
-          <Route path="/verify" element={<Navigate to="/" replace />} />
-          <Route path="/verify/" element={<Navigate to="/" replace />} />
+          <Route path="/enroll" element={<KeepQuery to="/wallet" />} />
+          <Route path="/enroll/" element={<KeepQuery to="/wallet" />} />
+          <Route path="/cart" element={<KeepQuery to="/wallet" />} />
+          <Route path="/cart/" element={<KeepQuery to="/wallet" />} />
+          {/* The Certificate of Participation — every challenge entrant holds one. Both slugs are
+              long-standing WP pages already served by the SPA, so neither is a new production route
+              (a new slug that PREFIXES an existing WP page 301s on prod only). */}
+          <Route path="/certificate" element={<Participation />} />
+          <Route path="/certificate/" element={<Participation />} />
+          <Route path="/verify" element={<Participation />} />
+          <Route path="/verify/" element={<Participation />} />
           <Route path="/offline" element={<OfflinePage />} />
           <Route path="/offline/" element={<OfflinePage />} />
           <Route path="/recommendations" element={<Navigate to="/" replace />} />

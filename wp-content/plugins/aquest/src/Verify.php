@@ -124,6 +124,7 @@ final class Verify {
 			'full_name'    => self::full_name( $uid ),
 			'birthday'     => self::birthday( $uid ),
 			'nationality'  => self::nationality( $uid ),   // the CLAIM (flag only shows once verified)
+			'gender'       => self::gender( $uid ),        // '' unless the member chose to say (ArtaCredits matching only)
 			'has_identity' => self::has_identity( $uid ),
 			'verified'     => $ts > 0,
 			'verified_at'  => $ts,
@@ -144,16 +145,70 @@ final class Verify {
 		$nat  = strtoupper( trim( sanitize_text_field( (string) Rest::p( $req, 'nationality', '' ) ) ) );
 		if ( mb_strlen( $name ) < 2 ) { return Rest::err( 'bad_name', 'Enter your full name.' ); }
 		if ( ! self::valid_birthday( $bday ) ) { return Rest::err( 'bad_birthday', 'Enter a valid birthday (you must be at least ' . self::MIN_AGE . ').' ); }
-		if ( $nat !== '' && ! self::valid_country( $nat ) ) { return Rest::err( 'bad_country', 'Pick your nationality from the list.' ); }
+		// 'CLEAR' is the revocation sentinel — it must pass the validator, which rejects anything that
+		// is not an ISO-3166 code. Without this exemption the revocation branch below is unreachable
+		// dead code and the claim stays write-only, which is exactly what it was before.
+		if ( $nat !== '' && $nat !== 'CLEAR' && ! self::valid_country( $nat ) ) { return Rest::err( 'bad_country', 'Pick your nationality from the list.' ); }
 		// Editing identity after being verified invalidates the check (the verified facts changed).
 		$nat_changed = $nat !== '' && $nat !== self::nationality( $uid );
 		if ( self::is_verified( $uid ) && ( $name !== self::full_name( $uid ) || $bday !== self::birthday( $uid ) || $nat_changed ) ) {
 			delete_user_meta( $uid, 'aq_verified' );
 		}
 		update_user_meta( $uid, 'aq_full_name', $name );
+		if ( $bday !== self::birthday( $uid ) ) { self::stamp( $uid, 'aq_birthday' ); }
 		update_user_meta( $uid, 'aq_birthday', $bday );
-		if ( $nat !== '' ) { update_user_meta( $uid, 'aq_nationality', $nat ); }
+		// 'clear' REVOKES the nationality claim. Without it the claim was write-only: nothing anywhere
+		// deleted it, so a member could state a nationality and never take it back — which makes the
+		// "tell us only what you want to share" promise false, and matters more now that ArtaCredits
+		// matches on it (Credits::buckets_for_user).
+		if ( $nat === 'CLEAR' ) {
+			// Revocation leaves NO trace. Writing a stamp here would publish, in a world-readable
+			// usermeta row, that this member once claimed a nationality and when they took it back —
+			// a worse disclosure than the claim. The settle gate stays correct because every SET
+			// writes a fresh stamp, so a re-stated claim still has to stand for SETTLE_DAYS.
+			delete_user_meta( $uid, 'aq_nationality' );
+			delete_user_meta( $uid, 'aq_nationality_at' );
+		} elseif ( $nat !== '' ) {
+			if ( $nat_changed ) { self::stamp( $uid, 'aq_nationality' ); }
+			update_user_meta( $uid, 'aq_nationality', $nat );
+		}
 		return [ 'ok' => true, 'full_name' => $name, 'birthday' => $bday, 'nationality' => self::nationality( $uid ), 'verified' => self::is_verified( $uid ) ];
+	}
+
+	/** Record WHEN a self-claimed identity facet last changed. Nationality, gender and birthday are all
+	 *  freely rewritable, so anything that acts on them — ArtaCredits matching — must be able to tell a
+	 *  long-standing statement from one typed thirty seconds ago to reach a waiting gift. The stamp is
+	 *  public user meta like the facts themselves; it reveals only that something changed, never what. */
+	public static function stamp( $uid, $meta ) {
+		update_user_meta( (int) $uid, $meta . '_at', Data::now() );
+	}
+
+	/** A member's stated gender, or '' — the default. Opt-in, revocable, and NEVER inferred from a
+	 *  name, a pronoun or anything else. Only the member writes it (set_gender below). */
+	public static function gender( $uid ) {
+		$g = (string) get_user_meta( (int) $uid, 'aq_gender', true );
+		return isset( Credits::GENDERS[ $g ] ) ? $g : '';
+	}
+
+	/** POST /identity/gender {gender} — state it, change it, or send 'clear' to take it back. It is
+	 *  used for exactly one thing: letting a donor's ArtaCredit find members it was given for. Saying
+	 *  nothing is a complete answer — a member who never answers is matched on the axes they have
+	 *  actually stated, and by every gift that names no gender at all. */
+	public static function set_gender( $req ) {
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+		$g = sanitize_key( (string) Rest::p( $req, 'gender', '' ) );
+		if ( $g === 'clear' || $g === '' ) {
+			// Revocation leaves NO trace — see the nationality clear above. Deleting the stamp too
+			// means the public database does not record that this member once answered and withdrew it.
+			delete_user_meta( $uid, 'aq_gender' );
+			delete_user_meta( $uid, 'aq_gender_at' );
+			return [ 'ok' => true, 'gender' => '' ];
+		}
+		if ( ! isset( Credits::GENDERS[ $g ] ) ) { return Rest::err( 'bad_gender', 'Choose one of the listed answers, or clear it.' ); }
+		if ( $g !== self::gender( $uid ) ) { self::stamp( $uid, 'aq_gender' ); }
+		update_user_meta( $uid, 'aq_gender', $g );
+		return [ 'ok' => true, 'gender' => $g ];
 	}
 
 	/** The member's saved "fine-tune" birth time (minutes past local midnight, 0–1439), or '' if unset. */

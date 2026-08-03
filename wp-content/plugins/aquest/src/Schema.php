@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.63.5';
+	const VERSION = '1.64.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -517,6 +517,51 @@ final class Schema {
 				created INT UNSIGNED NOT NULL DEFAULT 0,
 				PRIMARY KEY  (session_id)",
 
+			// ── ArtaCredits (2026-08-03, Credits.php) ─────────────────────────
+			// One row per DONOR GIFT earmarked to a slice of the membership. IMMUTABLE: nothing ever
+			// UPDATEs this table. `bucket` is the crd_<cty>_<gender>_<band> fund earmark the money sits
+			// in; `entries` and `unit_cents` FREEZE what the donor was actually promised, at the gold
+			// rate quoted on the page they paid from — the coin price moves, and a promise re-derived
+			// at redemption would silently become a different promise. Remaining entries on a gift =
+			// entries - COUNT(aq_credit_grants WHERE gift_id = id): a COUNT over an append-only table,
+			// so there is no mutable "spent" counter to drift or to lose a compare-and-swap race.
+			// `donor_name` is what prints on a sponsored entrant's certificate ('' = gave anonymously);
+			// it is ArtaMod-screened at capture, so a slur can never be printed under a stranger's name.
+			'aq_credit_gifts' => "
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				donor_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				bucket VARCHAR(24) NOT NULL DEFAULT '',
+				cents BIGINT NOT NULL DEFAULT 0,
+				entries INT NOT NULL DEFAULT 0,
+				unit_cents INT NOT NULL DEFAULT 0,
+				fee_cap INT NOT NULL DEFAULT 5,
+				donor_name VARCHAR(80) NOT NULL DEFAULT '',
+				ref VARCHAR(64) NOT NULL DEFAULT '',
+				created INT UNSIGNED NOT NULL DEFAULT 0,
+				PRIMARY KEY  (id),
+				KEY bucket_id (bucket, id),
+				KEY donor (donor_id, id),
+				KEY ref (ref)",
+
+			// One row per REDEEMED entry — the member accepted a named donor's credit and it paid this
+			// challenge's fee. APPEND-ONLY; UNIQUE (ch_id, user_id) is what makes Data::upsert's "true =
+			// this call created the row" a correct single-claim primitive under a race, so a losing
+			// racer is refused rather than inserted-then-deleted. `bucket` is deliberately NOT copied
+			// here: it stays one hop away on the gift, so no single public row states a member's
+			// nationality, gender and age band beside their user id.
+			'aq_credit_grants' => "
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				gift_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				ch_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				fee INT NOT NULL DEFAULT 0,
+				cents INT NOT NULL DEFAULT 0,
+				created INT UNSIGNED NOT NULL DEFAULT 0,
+				PRIMARY KEY  (id),
+				UNIQUE KEY ch_user (ch_id, user_id),
+				KEY gift (gift_id, id),
+				KEY member (user_id, created)",
+
 			// ── Issues / bug-bounty ───────────────────────────────────────────
 			// Issue reports (the /issues/ page → Extra::bug_finding). Ownership moved here from the
 			// theme's aq-bug-bounty.php (aq_bb_install_table) so the plugin owns the table it writes.
@@ -986,7 +1031,9 @@ final class Schema {
 			'aq_tr_rounds'      => [ 'desc' => 'ArtaTranslate public record: every adversarial improvement round (draft → critique → rewrite) behind each upgraded translation.', 'cols' => [ 'source_hash' => 'md5 of the source string', 'lang' => 'target language', 'round' => 'round number', 'engine' => 'who produced the candidate (google | HF model | claude critic)', 'candidate' => 'the round\'s translation', 'critique' => 'the adversarial critique', 'score' => 'critic score 0-100' ] ],
 			'aq_reviews'        => [ 'desc' => 'Course reviews, one per (user, course).', 'cols' => [ 'rating' => '1–5 stars' ] ],
 			'aq_bursary'        => [ 'desc' => 'Outreach grant covering a learner\'s entry fee (donation-funded).', 'cols' => [ 'group_key' => 'eligibility group the donation was earmarked to', 'amount' => 'coins covered' ] ],
-			'aq_fund_ledger'    => [ 'desc' => 'APPEND-ONLY foundation money ledger (cents), the basis of public financial transparency.', 'cols' => [ 'bucket' => 'fund (bursary | typ_…)', 'cents' => 'signed amount' ] ],
+			'aq_fund_ledger'    => [ 'desc' => 'APPEND-ONLY foundation money ledger (cents), the basis of public financial transparency.', 'cols' => [ 'bucket' => 'fund (bursary | typ_… | crd_…)', 'cents' => 'signed amount' ] ],
+			'aq_credit_gifts'   => [ 'desc' => 'ArtaCredits: one row per donor gift earmarked to a slice of the membership (nationality · gender · age band). Immutable. Entries still available on a gift = entries − the number of aq_credit_grants rows pointing at it.', 'cols' => [ 'bucket' => 'the crd_<country>_<gender>_<age> fund earmark holding this money', 'entries' => 'entry fees this gift promised to cover', 'unit_cents' => 'what one entry cost at the gold rate quoted when the gift was captured', 'fee_cap' => 'largest single entry fee (₳) this gift will cover', 'donor_name' => 'the name printed on a sponsored entrant\'s certificate; empty when the donor gave anonymously' ] ],
+			'aq_credit_grants'  => [ 'desc' => 'ArtaCredits: one row per entry a donor\'s credit paid for — written only when the member was offered the credit, saw who gave it and for whom, and accepted. Append-only; one per (challenge, member). The slice the gift was given for is on aq_credit_gifts, not here.', 'cols' => [ 'gift_id' => 'the gift this entry was paid from', 'fee' => 'the challenge entry fee covered (₳)', 'cents' => 'what that cost the fund on the day' ] ],
 			'aq_bug_findings'   => [ 'desc' => 'Issue/bug-bounty reports.', 'cols' => [ 'severity' => 'critical | major | minor', 'category' => 'functional | content | …', 'status' => 'pending | accepted | resolved', 'points_awarded' => 'volunteer points granted' ] ],
 			'aq_tickets'        => [ 'desc' => 'Contribution tickets (bug | feature | content | suggestion), Claude-triaged then shipped by the autonomous worker.', 'cols' => [ 'kind' => 'bug→Sentinel | feature→Visionary | content→Curator | suggestion→Sage', 'status' => 'open → triaging → queued → in_progress → (awaiting operator OK) → shipped → resolved', 'arch_ok' => '1 once the operator approved a major architectural change for this ticket', 'resolved_by' => 'user who closed it (the owner)' ] ],
 			'aq_ticket_messages'=> [ 'desc' => 'The conversation on a ticket.', 'cols' => [ 'role' => 'user | assistant (Claude) | agent (worker) | system', 'meta' => 'JSON (classification, run sha, …)' ] ],

@@ -1,12 +1,30 @@
-import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { getDonateOptions, getFoundationFinances, getTypologyTargets, getSponsorableTopics, isLoggedIn, localePath, CHECKOUT_LIVE, type DonateOptions, type FoundationFinances, type TypologyTargets, type TypologyTargetSystem, type SponsorableTopic } from "../lib/wp";
-import { addDonation, cartCount, onCartChange } from "../lib/cart";
+import { useEffect, useMemo, useState } from "react";
+import {
+  getDonateOptions, getFoundationFinances, getStripeVerify, postCourseCheckout, isLoggedIn,
+  localePath, currentUser, type DonateOptions, type FoundationFinances,
+} from "../lib/wp";
+import { creditOptions, creditReach, myCredits, sampleCert, type CreditOptions, type CreditReach, type CreditGift } from "../lib/api";
 import { Coins, formatFiat, sanitizeDecimal } from "../lib/currency";
-import { Button, Card, Chip, PageHero, StatusNote } from "../components/ui";
+import { Button, Card, Chip, PageHero, StatusNote, cx } from "../components/ui";
 import { DomainGlyph } from "../components/catalogue";
+import { ParticipationDoc } from "../components/participation";
 
 const w = (typeof window !== "undefined" ? (window as unknown as Record<string, string>) : {}) || {};
+
+/**
+ * DONATE (rebuilt 2026-08-03 around ArtaCredits).
+ *
+ * A donation is now ONE decision made three times: who your gift reaches, how much, and what name
+ * goes on their certificate. It buys challenge entry fees — the only thing on ArtaQuest that costs a
+ * member money — for a slice of the membership the donor chooses by nationality, gender and age.
+ *
+ * Two things this page must not do, both learned the hard way:
+ *   · It must not publish who is where. The database is public, so a per-country member count next
+ *     to a money bucket is both a disclosure and a targeting oracle. The reach line is asked for one
+ *     slice at a time, for the donor's own pick, and floors to "fewer than 5".
+ *   · It must not overclaim. A credit buys ONE entry. It is not a prize, not a vote, not standing,
+ *     and it never reaches a member who has not agreed to accept it, in the moment, by name.
+ */
 
 /** The foundation's entire public financial picture — donations in (fiat), the gold-backed
  *  coin fund, and the recent coin ledger. 100% real data, public to everyone. */
@@ -20,7 +38,7 @@ function FoundationBooks({ fin }: { fin: FoundationFinances }) {
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Donations received</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-yang">{formatFiat(fin.donations_fiat, fin.fiat)}</p><p className="text-[12px] text-ink-3">{fin.donations_count} gift{fin.donations_count === 1 ? "" : "s"}</p></Card>
-        <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Fund on hand</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-yin-light"><Coins n={fin.fund_balance} /></p><p className="text-[12px] text-ink-3"><Coins n={fin.fund_issued} /> issued to learners</p></Card>
+        <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Fund on hand</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-yin-light"><Coins n={fin.fund_balance} /></p><p className="text-[12px] text-ink-3"><Coins n={fin.fund_issued} /> issued to members</p></Card>
         <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Coins in circulation</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-ink"><Coins n={fin.coin_supply} /></p><p className="text-[12px] text-ink-3">{(fin.reserve_mg / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} g of gold held</p></Card>
         <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Backing</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-yang">{Math.round((fin.backing_ratio || 1) * 100)}%</p><p className="text-[12px] text-ink-3">gold-backed</p></Card>
       </div>
@@ -65,269 +83,312 @@ function FoundationBooks({ fin }: { fin: FoundationFinances }) {
   );
 }
 
-// General-purpose target picker: pick a typology SYSTEM (one of the frameworks members self-identify
-// with on the Topics page), then one or more of its TYPES. Only types that real members have chosen
-// appear — top 10 per system. Selecting nothing = the general learner fund.
-function TargetPicker({ targets, activeSystem, setActiveSystem, selKeys, setSelKeys }: {
-  targets: TypologyTargets | null;
-  activeSystem: string;
-  setActiveSystem: (k: string) => void;
-  selKeys: Set<string>;
-  setSelKeys: (s: Set<string>) => void;
-}) {
-  if (!targets) return <Card className="px-6 py-2"><StatusNote className="py-6">Loading communities…</StatusNote></Card>;
-  const sys: TypologyTargetSystem | undefined = targets.systems.find((s) => s.key === activeSystem);
-
-  if (targets.systems.length === 0) {
-    return (
-      <Card className="px-6 py-7 text-[14px] leading-relaxed text-ink-2">
-        <p className="font-semibold text-ink">Your gift goes to the general member fund.</p>
-        <p className="mt-1.5 text-ink-3">As members self-identify on the <a href={localePath("/topics/")} className="text-yang hover:underline">Topics page</a>, the communities they belong to — by gender, heritage, nationality, faith, neurodivergence, and more — will appear here so you can direct your gift to any of them.</p>
-      </Card>
-    );
-  }
-
-  const pickType = (key: string) => {
-    const n = new Set(selKeys);
-    if (n.has(key)) n.delete(key); else n.add(key);
-    setSelKeys(n);
-  };
-
+/** One numbered step. The whole page is three of these, so the flow reads as finite. */
+function Step({ n, title, hint, children }: { n: number; title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-4">
-      {/* Framework chooser — a compact select (mirrors the topic-sponsor picker below) rather than a
-          wall of chips; the readable system names (#151) make each option self-explanatory. */}
-      <Card className="p-5">
-        <label htmlFor="community-framework" className="text-[13px] font-semibold text-ink-2">Pick a framework — then choose the communities within it to support.</label>
-        <select id="community-framework" value={activeSystem}
-          onChange={(e) => { setActiveSystem(e.target.value); setSelKeys(new Set()); }}
-          className="mt-2 h-11 w-full rounded-field border border-line bg-space-1 px-3 text-[15px] text-ink outline-none focus:border-yin-light">
-          <option value="">General fund — wherever the need is greatest</option>
-          {targets.systems.map((s) => (
-            <option key={s.key} value={s.key}>{s.name}</option>
-          ))}
-        </select>
-        {!sys && <p className="mt-3 text-[13px] leading-relaxed text-ink-3">Your gift goes to the <span className="font-semibold text-ink">general member fund</span> — directed wherever the need is greatest. Pick a framework to support a specific community.</p>}
-      </Card>
-
-      {sys && (
-        <Card className="p-0">
-          <p className="border-b border-line px-4 py-2.5 text-[13px] text-ink-2">Choose who in <span className="font-semibold text-ink">{sys.name}</span> to support — the {sys.types.length} most-represented, by members who self-identify.</p>
-          <ul className="divide-y divide-line">
-            {sys.types.map((t) => {
-              const on = selKeys.has(t.key);
-              return (
-                <li key={t.key}>
-                  <button type="button" role="checkbox" aria-checked={on} onClick={() => pickType(t.key)}
-                    className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${on ? "bg-yang/[0.06]" : "hover:bg-veil/[0.02]"}`}>
-                    <span aria-hidden className={`grid h-4 w-4 shrink-0 place-items-center rounded-[4px] border ${on ? "border-yang bg-yang" : "border-ink-3"}`}>
-                      {on && <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="var(--color-on-accent)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5 10 17 19 6" /></svg>}
-                    </span>
-                    <span className="min-w-0 flex-1 text-[14px] font-semibold text-ink">{t.label}</span>
-                    <span className="shrink-0 text-[12px] text-ink-3">{t.count} member{t.count === 1 ? "" : "s"}{t.raised > 0 ? <> · <span className="text-yang-dark"><Coins n={t.raised} /></span> raised</> : null}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </Card>
-      )}
-    </div>
+    <section className="flex flex-col gap-3">
+      <div className="flex items-baseline gap-3">
+        <span aria-hidden className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-yang/50 text-[12px] font-bold text-yang">{n}</span>
+        <div className="min-w-0">
+          <h2 className="text-[19px] font-bold tracking-tight">{title}</h2>
+          {hint && <p className="mt-1 text-[13.5px] leading-relaxed text-ink-3">{hint}</p>}
+        </div>
+      </div>
+      {children}
+    </section>
   );
 }
 
-// Sponsor a TOPIC's prize pool — pick one of the topics that has a live course (the only ones whose pool
-// can receive a gift). The donation flows into that course's revenue and is distributed 80% to the top
-// questers + the creator's tier share at each season (Funds::sponsor_topic).
-function SponsorTopicPicker({ topics, sel, setSel }: { topics: SponsorableTopic[]; sel: string; setSel: (k: string) => void }) {
-  if (topics.length === 0) {
-    return (
-      <Card className="px-6 py-7 text-[14px] leading-relaxed text-ink-2">
-        <p className="font-semibold text-ink">No topics are sponsorable yet.</p>
-        <p className="mt-1.5 text-ink-3">A topic becomes sponsorable once it has a live course. Explore them on the <a href={localePath("/topics/")} className="text-yang hover:underline">Topics page</a>.</p>
-      </Card>
-    );
-  }
-  const cur = topics.find((t) => t.key === sel);
+/** A labelled <select> in the house field style. */
+function Picker({ id, label, value, onChange, children }: {
+  id: string; label: string; value: string; onChange: (v: string) => void; children: React.ReactNode;
+}) {
   return (
-    <Card className="p-5">
-      <label htmlFor="sponsor-topic" className="text-[13px] font-semibold text-ink-2">Pick a topic to sponsor — your gift becomes gold-backed coins earmarked to that topic.</label>
-      <select id="sponsor-topic" value={sel} onChange={(e) => setSel(e.target.value)}
-        className="mt-2 h-11 w-full rounded-field border border-line bg-space-1 px-3 text-[15px] text-ink outline-none focus:border-yin-light">
-        <option value="">Choose a topic…</option>
-        {topics.map((t) => <option key={t.key} value={t.key}>{t.name}</option>)}
+    <label htmlFor={id} className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold text-ink-2">
+      {label}
+      <select id={id} value={value} onChange={(e) => onChange(e.currentTarget.value)}
+        className="h-11 w-full rounded-field border border-line bg-space-1 px-3 text-[15px] font-normal text-ink outline-none focus:border-yin-light">
+        {children}
       </select>
-      {cur && <p className="mt-3 text-[13px] leading-relaxed text-ink-3">Sponsoring <span className="font-semibold text-ink">{cur.name}</span> — your gift becomes gold-backed coins earmarked to this topic, held in the public ledgers until the members working in it are funded.</p>}
-    </Card>
+    </label>
   );
 }
 
 export default function Donate() {
   const [opts, setOpts] = useState<DonateOptions | null>(null);
-  const [targets, setTargets] = useState<TypologyTargets | null>(null);
-  const [activeSystem, setActiveSystem] = useState("");
-  const [selKeys, setSelKeys] = useState<Set<string>>(new Set());
-  const [giftMode, setGiftMode] = useState<"community" | "topic">("community");
-  const [sponsorTopics, setSponsorTopics] = useState<SponsorableTopic[]>([]);
-  const [sponsorKey, setSponsorKey] = useState("");
-  const [preset, setPreset] = useState(30);
-  const [custom, setCustom] = useState("");
-  const [added, setAdded] = useState(false);
-  const [count, setCount] = useState(0);
+  const [copts, setCopts] = useState<CreditOptions | null>(null);
   const [fin, setFin] = useState<FoundationFinances | null>(null);
   const [finFailed, setFinFailed] = useState(false);
+  const [gifts, setGifts] = useState<CreditGift[]>([]);
+
+  // step 1 — who
+  const [country, setCountry] = useState("");
+  const [gender, setGender] = useState("");
+  const [band, setBand] = useState("");
+  const [reach, setReach] = useState<CreditReach | null>(null);
+  // step 2 — how much
+  const [preset, setPreset] = useState(30);
+  const [custom, setCustom] = useState("");
+  // step 3 — the name on the certificate
+  const me = currentUser();
+  const [donorName, setDonorName] = useState("");
+  const [anon, setAnon] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [thanks, setThanks] = useState("");
 
   const logged = isLoggedIn();
-  const [sp] = useSearchParams();
 
   // The foundation's books are PUBLIC — fetched regardless of login state.
   useEffect(() => { getFoundationFinances().then((d) => (d ? setFin(d) : setFinFailed(true))); }, []);
-
+  useEffect(() => { creditOptions().then(setCopts).catch(() => setCopts(null)); }, []);
   useEffect(() => {
     if (!logged) return;
     getDonateOptions().then(setOpts);
-    getTypologyTargets().then(setTargets);
-    getSponsorableTopics().then(setSponsorTopics);
-    setCount(cartCount());
-    return onCartChange(() => setCount(cartCount()));
-  }, [logged]);
+    myCredits().then((r) => setGifts(r.items)).catch(() => {});
+    setDonorName((me?.name || "").trim());
+  }, [logged]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Preselect a community from a ?cause=<system>:<type> deep link (e.g. Explore's cause cards).
+  // Returning from Stripe: confirm the payment and thank the donor HERE, where they gave.
   useEffect(() => {
-    const cause = sp.get("cause");
-    if (!cause || !targets) return;
-    const i = cause.indexOf(":");
-    const sysKey = i >= 0 ? cause.slice(0, i) : cause;
-    const typeKey = i >= 0 ? cause.slice(i + 1) : "";
-    if (targets.systems.some((s) => s.key === sysKey)) {
-      setActiveSystem(sysKey);
-      if (typeKey) setSelKeys(new Set([typeKey]));
+    const sp = new URLSearchParams(window.location.search);
+    const st = sp.get("stripe");
+    if (!st) return;
+    if (st === "success") {
+      const session = sp.get("session") || "";
+      if (session) getStripeVerify(session).then((v) => {
+        setThanks(v?.paid
+          ? "Thank you — your gift is recorded in the books below, and its credits are waiting for the members you chose."
+          : "We couldn’t confirm the payment yet. If you were charged it will appear in the books shortly.");
+        myCredits().then((r) => setGifts(r.items)).catch(() => {});
+      });
+    } else if (st === "cancel") {
+      setThanks("Nothing was charged.");
     }
-  }, [sp, targets]);
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
+
+  // Reach for the CURRENT pick only — one slice at a time, never a published map.
+  useEffect(() => {
+    let live = true;
+    creditReach(country, gender, band).then((r) => { if (live) setReach(r); }, () => { if (live) setReach(null); });
+    return () => { live = false; };
+  }, [country, gender, band]);
+
+  const cur = opts?.currency || "CAD";
+  const sym = opts?.symbol || "$";
+  const amount = custom ? Math.max(0, parseFloat(custom) || 0) : preset;
+  // SELL — what a redeemed credit actually costs the fund (Credits::cents_for) and what the server
+  // freezes onto the gift. The page used to quote `buy`, so the donor's figure was computed on the
+  // other side of the spread from the one they were charged at.
+  const coinRate = opts?.coin_sell_price || opts?.coin_buy_price || 0;
+  const feeCap = copts?.fee_cap || 5;
+  // A RANGE, not a false precision. An entry fee is set by whoever founded the challenge and a
+  // credit covers up to ₳{feeCap}, so one gift buys somewhere between (all at the cap) and (all at
+  // ₳1) entries. Quoting the ₳1 figure alone — cents ÷ price-of-one-coin — counted COINS and called
+  // them entries, overstating what the gift buys by up to feeCap times.
+  const entriesMax = coinRate > 0 ? Math.floor(amount / coinRate) : 0;
+  const entriesMin = coinRate > 0 ? Math.floor(amount / (coinRate * feeCap)) : 0;
+
+  const sliceWords = reach?.words || "any member of ArtaQuest";
+  const printedName = anon ? "" : donorName.trim();
+  const specimen = useMemo(() => sampleCert(printedName, sliceWords), [printedName, sliceWords]);
 
   const books = fin ? <FoundationBooks fin={fin} /> : finFailed ? (
     <StatusNote error>Couldn’t load the foundation’s books right now. Please refresh to try again.</StatusNote>
   ) : null;
 
-  const cur = opts?.currency || "CAD";
-  const sym = opts?.symbol || "$";
-  const amount = custom ? Math.max(0, parseFloat(custom) || 0) : preset;
-  const coinRate = opts?.coin_buy_price || 0;
-  const coins = coinRate > 0 ? Math.round(amount / coinRate) : 0;
-
-  const sys = targets?.systems.find((s) => s.key === activeSystem);
-  const directed = sys && selKeys.size > 0;
-  const directedShorts = sys ? sys.types.filter((t) => selKeys.has(t.key)).map((t) => t.short) : [];
-  const directedLabel = directed ? `${sys!.name}: ${directedShorts.join(", ")}` : "the general member fund";
-  const sponsorName = sponsorTopics.find((t) => t.key === sponsorKey)?.name || "";
-  const isTopic = giftMode === "topic" && sponsorKey !== "";
-
-  function addToCartNow(thenCheckout: boolean) {
-    if (amount < 1) return;
-    if (isTopic) {
-      addDonation(amount, cur, 0, { mode: "global", countries: [], groups: [], topics: [sponsorKey] }, `Sponsor ${sym}${amount} · ${sponsorName}`);
-    } else {
-      const groups = directed ? [...selKeys] : [];
-      addDonation(amount, cur, 0, { mode: "global", countries: [], groups }, `Donation ${sym}${amount} · ${directed ? directedLabel : "learner fund"}`);
-    }
-    setAdded(true);
-    if (thenCheckout) window.location.assign(localePath("/enroll/"));
+  function give() {
+    if (busy || amount < 1) return;
+    setBusy(true); setErr("");
+    postCourseCheckout({
+      donations: [{ amount, credit: { country, gender, band, fee_cap: copts?.fee_cap, name: anon ? "" : donorName.trim() } }],
+      // No email: the donations branch of Extra::course_checkout never reads it, and currentUser()
+      // does not carry one — referencing it was a type error the root `tsc --noEmit` could not see
+      // (this project is solution-style, so only `tsc -b` actually checks the sources).
+      email: "", name: me?.name || "", gateway: "card",
+    })
+      .then((r) => { if (r.url) window.location.assign(r.url); else setErr("Payment couldn’t be started. Please try again shortly."); })
+      .catch((e) => setErr(e instanceof Error ? e.message : "Payment couldn’t be started."))
+      .finally(() => setBusy(false));
   }
 
+  const heroLede = (
+    <>Every member can read, publish and be cited for free. The one thing that costs money is <strong className="text-ink">entering a challenge</strong> — and that is what your gift pays for. Choose who it reaches, and your name goes on their Certificate of Participation.</>
+  );
+
   if (!logged) {
-    const login = w.AQ_LOGIN_URL || "/login/";
     return (
-      <div className="flex flex-col gap-12 pb-12">
-        <div className="mx-auto max-w-lg py-12 text-center">
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-yang/15 text-yang">
-            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10Z" /></svg>
-          </span>
-          <h1 className="mt-4 text-[26px] font-bold tracking-tight">Sign in to donate</h1>
-          <p className="mt-2 text-[15px] leading-relaxed text-ink-2">Your donation is converted to gold-backed Arta Coins and held for learners — so you’ll need to be signed in. It only takes a moment.</p>
-          <div className="mt-6 flex justify-center gap-3">
-            <Button href={login} size="xl">Sign in</Button>
-            <Button variant="outline" href="/courses/" size="xl">Browse courses</Button>
+      <div className="flex flex-col gap-10 pb-12">
+        <PageHero eyebrow="Donations" glyph={<DomainGlyph domain="cause" />} title="Pay someone’s way into a challenge" lede={heroLede} />
+        <Card className="mx-auto w-full max-w-lg px-6 py-8 text-center">
+          <h2 className="text-[20px] font-bold tracking-tight">Sign in to give</h2>
+          <p className="mt-2 text-[14.5px] leading-relaxed text-ink-2">Your gift is recorded against your account so it can be traced from your payment to the exact entry it paid for — and so we know whose name to print.</p>
+          <div className="mt-5 flex justify-center gap-3">
+            <Button href={w.AQ_LOGIN_URL || "/login/"} size="lg">Sign in</Button>
+            <Button variant="outline" href="/challenges/" size="lg">See the challenges</Button>
           </div>
-        </div>
+        </Card>
+        <section className="flex flex-col gap-4">
+          <h2 className="text-[20px] font-bold tracking-tight">The certificate your name goes on</h2>
+          <ParticipationDoc cert={sampleCert("Your name", "any member of ArtaQuest")} sample />
+        </section>
         {books}
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-8 pb-12">
-      <PageHero
-        eyebrow="Donations" glyph={<DomainGlyph domain="cause" />}
-        title="Where your donation goes"
-        lede={<>Your donation is minted into gold-backed Arta Coins and held in the member fund, issued when someone needs it. You also earn one donor point for every coin you give — a lifetime score that raises your rank in the <a href={localePath("/rankings/")} className="text-yang hover:underline">rankings</a>. Give to the general fund, or direct it to any community members belong to — chosen from the frameworks on the <a href={localePath("/topics/")} className="text-yang hover:underline">Topics page</a>.</>}
-      />
+    <div className="flex flex-col gap-10 pb-12">
+      <PageHero eyebrow="Donations" glyph={<DomainGlyph domain="cause" />} title="Pay someone’s way into a challenge" lede={heroLede} />
 
-      {/* Step 1 — who your gift supports: a community (bursaries) OR a topic's prize pool (sponsorship) */}
-      <section>
-        <h2 className="mb-1 text-[20px] font-bold tracking-tight">Choose who your gift supports</h2>
-        <div className="mb-3 mt-2 flex flex-wrap gap-2">
-          <Chip active={giftMode === "community"} onClick={() => setGiftMode("community")}>A community · bursaries</Chip>
-          <Chip active={giftMode === "topic"} onClick={() => setGiftMode("topic")}>A topic · prize pool</Chip>
-        </div>
-        {giftMode === "community" ? (
-          <>
-            <p className="mb-3 text-[13.5px] text-ink-3">Only communities members actually identify with are shown — the top groups in each framework.</p>
-            <TargetPicker targets={targets} activeSystem={activeSystem} setActiveSystem={setActiveSystem} selKeys={selKeys} setSelKeys={setSelKeys} />
-          </>
-        ) : (
-          <>
-            <p className="mb-3 text-[13.5px] text-ink-3">Sponsor a topic — your gift becomes gold-backed coins earmarked to that topic, and every one of them is traceable in the public ledgers.</p>
-            <SponsorTopicPicker topics={sponsorTopics} sel={sponsorKey} setSel={setSponsorKey} />
-          </>
-        )}
-      </section>
+      {thanks && (
+        <p role="status" className="rounded-card border border-yang/40 bg-yang/10 px-5 py-3 text-[14.5px] leading-relaxed text-ink">{thanks}</p>
+      )}
 
-      {/* amount + add to cart */}
-      <section className="mx-auto w-full max-w-lg">
-        <Card className="p-6">
-          <h2 className="text-[20px] font-bold tracking-tight">Your donation</h2>
-          <p className="mt-1 text-[14px] text-ink-2">{isTopic ? <>Sponsoring <span className="font-semibold text-ink">{sponsorName}</span>’s prize pool.</> : <>Directing to <span className="font-semibold text-ink">{directedLabel}</span>.</>}</p>
-          <div className="mt-5">
-            <label className="text-[13px] font-semibold text-ink-2">Amount ({cur})</label>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {(opts?.presets || [5, 15, 30, 60, 120]).map((p) => (
-                <Chip key={p} active={!custom && preset === p} onClick={() => { setPreset(p); setCustom(""); }}
-                  className="h-10 min-w-[64px] justify-center px-4 text-[15px] font-semibold">{sym}{p}</Chip>
-              ))}
-              <div className="flex h-10 items-center rounded-pill border border-line px-3 text-ink-2 focus-within:border-yin-light">
-                <span className="text-[15px]">{sym}</span>
-                <input value={custom} onChange={(e) => setCustom(sanitizeDecimal(e.target.value))} inputMode="decimal" placeholder="Other" aria-label={`Custom amount (${cur})`} className="h-full w-20 bg-transparent px-1 text-[15px] text-ink outline-none" />
-              </div>
-            </div>
-          </div>
-          {coins > 0 && (
-            <p className="mt-3 text-[13px] text-ink-3">Your <span className="font-semibold text-ink">{sym}{amount}</span> mints ≈ <span className="font-semibold text-yang"><Coins n={coins} /></span> for learners — and earns you ≈ {coins.toLocaleString()} donor points.</p>
-          )}
-          {/* SR-only status: announce the coins/points estimate as the chosen amount changes (WCAG
-              4.1.3) — the visible estimate above isn't a live region, so it's silent for SR users. */}
-          <p className="sr-only" role="status" aria-live="polite">
-            {coins > 0 ? `${sym}${amount} mints about ${coins.toLocaleString()} coins for learners and earns about ${coins.toLocaleString()} donor points.` : ""}
-          </p>
-          {added && (
-            <p role="status" className="mt-4 rounded-card border border-yang/40 bg-yang/10 px-4 py-2.5 text-[14px] text-ink">
-              Added to cart ✓ — <a href={localePath("/cart/")} className="font-semibold text-yang hover:underline">view cart ({count})</a>
+      {/* The form is a single centred column and the certificate runs FULL WIDTH beneath it. It was
+          briefly a sticky right-hand rail, which squeezed a landscape document into ~440px: the
+          record wrapped mid-phrase, the two footer plates collided, and the tall empty rail left the
+          Arta mascot standing over the certificate with no border under its feet. */}
+      <div className="flex flex-col gap-10">
+        {/* ── the three decisions ── */}
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-9">
+          <Step n={1} title="Who your gift reaches"
+            hint="Leave any answer as “Anyone”. Members are matched only on what they have chosen to say about themselves — nothing is ever inferred.">
+            <Card className="grid gap-4 p-5 sm:grid-cols-3">
+              <Picker id="cr-country" label="Nationality" value={country} onChange={setCountry}>
+                <option value="">Anyone</option>
+                {(copts?.countries || []).map((c) => <option key={c.iso} value={c.iso}>{c.name}</option>)}
+              </Picker>
+              <Picker id="cr-gender" label="Gender" value={gender} onChange={setGender}>
+                <option value="">Anyone</option>
+                {(copts?.genders || []).map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
+              </Picker>
+              <Picker id="cr-band" label="Age group" value={band} onChange={setBand}>
+                <option value="">Any age</option>
+                {(copts?.bands || []).map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
+              </Picker>
+            </Card>
+            {/* Honest about reach, including zero — a donor is entitled to know their gift would wait. */}
+            <p role="status" aria-live="polite" className={cx("text-[13.5px] leading-relaxed", reach && reach.members === 0 ? "text-ink-2" : "text-ink-3")}>
+              {!reach ? "Counting who this reaches…" : reach.members === 0 ? (
+                <>No member matches this yet. Your gift would be held in the open books, under your chosen slice, until someone does — it is never spent on anyone else.</>
+              ) : (
+                <>Reaches <strong className="text-ink">{reach.exact ? reach.members : `fewer than ${reach.floor}`}</strong> {reach.members === 1 ? "member" : "members"} — <span className="text-ink-2">{reach.words}</span>. We never publish a count below {reach.floor}, so a narrow choice can’t identify anyone.</>
+              )}
             </p>
-          )}
-          {CHECKOUT_LIVE ? (
-            <>
-              <div className="mt-5 flex flex-col gap-2.5">
-                <Button onClick={() => addToCartNow(true)} disabled={amount < 1} className="h-12 w-full text-[16px] disabled:opacity-50">Donate {sym}{amount || 0} now</Button>
-                <Button variant="outline" onClick={() => addToCartNow(false)} disabled={amount < 1} className="h-11 w-full text-[14px] text-ink hover:text-yin-light disabled:opacity-50">Add to cart</Button>
+          </Step>
+
+          <Step n={2} title="How much" hint={`An entry fee is set by whoever founded the challenge — usually ₳1, and a credit covers up to ₳${feeCap}. One coin is ${sym}${coinRate ? coinRate.toFixed(2) : "—"} at today’s gold rate, and your gift is fixed at that rate the moment you give.`}>
+            <Card className="p-5">
+              <div className="flex flex-wrap gap-2">
+                {(opts?.presets || [5, 15, 30, 60, 120]).map((p) => (
+                  <Chip key={p} active={!custom && preset === p} onClick={() => { setPreset(p); setCustom(""); }}
+                    className="h-10 min-w-[64px] justify-center px-4 text-[15px] font-semibold">{sym}{p}</Chip>
+                ))}
+                <div className="flex h-10 items-center rounded-pill border border-line px-3 text-ink-2 focus-within:border-yin-light">
+                  <span className="text-[15px]">{sym}</span>
+                  <input value={custom} onChange={(e) => setCustom(sanitizeDecimal(e.target.value))} inputMode="decimal" placeholder="Other" aria-label={`Custom amount (${cur})`} className="h-full w-20 bg-transparent px-1 text-[15px] text-ink outline-none" />
+                </div>
               </div>
-              <p className="mt-3 text-center text-[12px] text-ink-3">You’ll choose a payment method at checkout. Your gift is converted to gold-backed Arta Coins held for learners.</p>
-            </>
-          ) : (
-            // Payment/checkout is retired (see CHECKOUT_LIVE) — the old buttons dead-ended on the
-            // removed /enroll + /cart pages. Show an honest state instead; the public books stay below.
-            <p className="mt-5 rounded-field border border-line bg-space-1 px-4 py-3 text-center text-[14px] leading-relaxed text-ink-2">Online donations are being rebuilt on the new platform. The foundation’s books below stay fully public in the meantime — thank you for standing with our learners.</p>
-          )}
-        </Card>
+              {entriesMax > 0 && (
+                <p className="mt-4 text-[14px] text-ink-2">
+                  <span className="font-semibold text-ink">{sym}{amount}</span> covers{" "}
+                  <span className="font-extrabold text-yang">{entriesMin >= 1 ? `${entriesMin}–${entriesMax}` : `up to ${entriesMax}`}</span>{" "}
+                  {entriesMax === 1 ? "entry" : "entries"}, depending on each challenge’s fee
+                  {copts ? <> · at most {copts.moon_cap} per member per moon</> : null}
+                </p>
+              )}
+              <p className="sr-only" role="status" aria-live="polite">
+                {entriesMax > 0 ? `${sym}${amount} covers ${entriesMin >= 1 ? `between ${entriesMin} and ${entriesMax}` : `up to ${entriesMax}`} challenge entries, depending on each challenge's fee.` : ""}
+              </p>
+            </Card>
+          </Step>
+
+          <Step n={3} title="The name on their certificate" hint="This prints on the Certificate of Participation of every member your gift helps, so we keep it to a name — letters and spaces — and ArtaMod checks it.">
+            <Card className="flex flex-col gap-3 p-5">
+              <input value={donorName} onChange={(e) => setDonorName(e.target.value.slice(0, 80))} disabled={anon}
+                placeholder="Your name, as it should appear" aria-label="Your name as it should appear on the certificate"
+                className="h-11 w-full rounded-field border border-line bg-space-1 px-3 text-[15px] text-ink outline-none focus:border-yin-light disabled:opacity-50" />
+              <label className="flex items-center gap-2.5 text-[14px] text-ink-2">
+                <input type="checkbox" checked={anon} onChange={(e) => setAnon(e.currentTarget.checked)} className="h-4 w-4 accent-yang" />
+                Give without my name — the certificate will read “A friend of ArtaQuest”
+              </label>
+              <p className="text-[12.5px] leading-relaxed text-ink-3">
+                The gift itself is public either way: the amount and the slice you chose appear in the books below, beside your account. Anonymity is about the printed certificate, not the ledger.
+              </p>
+            </Card>
+          </Step>
+
+        </div>
+
+        {/* ── the certificate, live: the donor sees their own name on the real document before
+              they give, which is the whole reason the name field sits directly above it ── */}
+        <section className="flex flex-col gap-3">
+          <div className="mx-auto w-full max-w-2xl">
+            <h2 className="text-[19px] font-bold tracking-tight">What they receive</h2>
+            <p className="mt-1 text-[13.5px] leading-relaxed text-ink-3">
+              Every entrant holds this certificate whether or not anyone paid their way — your plate is added to a document they had already earned, never the reason it exists.
+            </p>
+          </div>
+          <ParticipationDoc cert={specimen} sample />
+        </section>
+
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-2.5">
+          {err && <StatusNote error className="py-2 text-left">{err}</StatusNote>}
+          <Button onClick={give} disabled={busy || amount < 1} className="h-12 w-full text-[16px] disabled:opacity-50">
+            {busy ? "Starting…" : `Give ${sym}${amount || 0}`}
+          </Button>
+          <p className="text-center text-[12px] text-ink-3">You’ll choose how to pay on the next screen. Nothing is charged until you do.</p>
+        </div>
+      </div>
+
+      {/* ── what a credit is, and is not ── */}
+      <section className="flex flex-col gap-3">
+        <h2 className="text-[20px] font-bold tracking-tight">What an ArtaCredit is</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Card className="p-5 text-[14px] leading-relaxed text-ink-2">
+            <p className="font-semibold text-ink">It buys one entry</p>
+            <p className="mt-1.5">A credit pays a member’s challenge entry fee and nothing else. It is not a prize, not a vote, not standing, and it can’t be cashed out — the money goes straight into the challenge’s pool, which the community’s hearts award at the full moon.</p>
+          </Card>
+          <Card className="p-5 text-[14px] leading-relaxed text-ink-2">
+            <p className="font-semibold text-ink">Nobody is sponsored without saying yes</p>
+            <p className="mt-1.5">When a member is short the fee and your gift matches them, we show them your name and who the gift was for, and they choose. Refusing costs them nothing, and we never record anywhere that a member would like to be helped.</p>
+          </Card>
+          <Card className="p-5 text-[14px] leading-relaxed text-ink-2">
+            <p className="font-semibold text-ink">It can’t be farmed</p>
+            <p className="mt-1.5">A credit never pays the fee of the member who founded the challenge, never opens an empty one, and never reaches an automated token. An answer about yourself has to have stood for a month before it can attract a gift.</p>
+          </Card>
+          <Card className="p-5 text-[14px] leading-relaxed text-ink-2">
+            <p className="font-semibold text-ink">It is all in the open</p>
+            <p className="mt-1.5">Your gift, the slice you chose and every entry it paid for are rows anyone can read in the <a href={localePath("/data/")} className="text-yang hover:underline">Data explorer</a>. Accepting a credit records that publicly, and the member is told so before they accept.</p>
+          </Card>
+        </div>
       </section>
+
+      {gifts.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-[20px] font-bold tracking-tight">Your gifts</h2>
+          <Card className="overflow-hidden p-0">
+            <ul className="divide-y divide-line">
+              {gifts.map((g) => (
+                <li key={g.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-[14.5px] text-ink">For {g.words}</p>
+                    <p className="text-[12.5px] text-ink-3">
+                      {new Date(g.date * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                      {g.name ? <> · printed as <span className="text-ink-2" data-ay-skip="1">{g.name}</span></> : <> · anonymous</>}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-[14px] font-semibold tabular-nums text-yang">
+                    {g.used} of {g.entries} {g.entries === 1 ? "entry" : "entries"} used
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </section>
+      )}
 
       {books}
     </div>
