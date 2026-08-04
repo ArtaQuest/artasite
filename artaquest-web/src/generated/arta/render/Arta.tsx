@@ -1,5 +1,5 @@
 /* GENERATED — DO NOT EDIT HERE.
- * Vendored from artalife src/render/Arta.tsx @ 23cc946.
+ * Vendored from artalife src/render/Arta.tsx @ e37c551.
  * Source of truth: https://github.com/ArtaQuest/artalife.git
  * Re-run: node tools/arta-sync.mjs
  */
@@ -94,7 +94,24 @@ export default function Arta({
     // In companion mode the scale is set by how tall ARTA should be, and the
     // world grows to whatever the host box is. In band mode the world is a fixed
     // 380 tall and the scale is set by the band's height.
-    const scale = fill ? RIG.HEIGHT / figure : WORLD_H / height;
+    /*
+     * How TALL Arta is drawn, and it is not one number.
+     *
+     * 128 px reads as a companion beside desktop content and as a third of the
+     * screen on a 390-wide phone — the same figure, and far too much of it. So
+     * the height tapers with the viewport: full size from 640 px up, 68% of it
+     * on a phone, interpolated between so a tablet is not either extreme.
+     *
+     * Recomputed in `setBox`, which already runs on resize, because a rotation
+     * crosses the breakpoint and a figure that only sized itself once would
+     * stay wrong until the next navigation. `scale` is therefore a `let` that
+     * every frame reads, not a constant captured at mount.
+     */
+    const figureFor = (w: number) => {
+      const u = Math.max(0, Math.min(1, (w - 390) / (640 - 390)));
+      return figure * (0.68 + 0.32 * u);
+    };
+    let scale = fill ? RIG.HEIGHT / figureFor(el.clientWidth) : WORLD_H / height;
     let vw = Math.max(240, el.clientWidth * scale);
     let wh = fill ? Math.max(320, el.clientHeight * scale) : WORLD_H;
     let gnd = fill ? wh - 52 : GROUND;
@@ -123,6 +140,8 @@ export default function Arta({
      *  of letting it start on the invisible stage floor and walk in. The first
      *  thing a visitor sees should already be correct. */
     let placed = false;
+    /** false while the page offers no ledge, in which case Arta is not drawn. */
+    let shown = true;
     const readFloors = (): Floor[] => {
       if (!fill) return [];
       const r = root.getBoundingClientRect();
@@ -156,6 +175,7 @@ export default function Arta({
     let prev = 0;
 
     const setBox = () => {
+      if (fill) scale = RIG.HEIGHT / figureFor(el.clientWidth);
       vw = Math.max(240, el.clientWidth * scale);
       wh = fill ? Math.max(320, el.clientHeight * scale) : WORLD_H;
       gnd = fill ? wh - 52 : GROUND;
@@ -310,6 +330,23 @@ export default function Arta({
           const home = homeFloor(floors);
           if (home) { placed = true; brain.placeAt({ x: (home.x1 + home.x2) / 2, y: home.y - RIG.HIP }, gnd); }
         }
+        /*
+         * No ledge on this page means nowhere to stand, and a figure standing on
+         * nothing is the one thing the rule forbids. So Arta is not drawn — it is
+         * not shrunk, or moved out of the way, or stood on an invisible line: the
+         * page simply does not have a companion.
+         *
+         * A logged-out visitor is the live case. The message dock and the phone
+         * tab bar are both members-only, so the landing page has no fixed surface
+         * at all, and Arta was standing over the middle of a card explaining what
+         * the site checks. Better absent than levitating.
+         */
+        const grounded = floors.length > 0;
+        if (grounded !== shown) {
+          shown = grounded;
+          el.style.visibility = grounded ? "" : "hidden";
+          el.setAttribute("data-arta-grounded", grounded ? "1" : "0");
+        }
       }
       const f = brain.step(dt, {
         look, busy: now < busyUntil, ground: gnd, scale, floors,
@@ -328,7 +365,7 @@ export default function Arta({
     // ── inputs ──────────────────────────────────────────────────────────────
     // Dead zone: below this the pointer has not really moved, it has wobbled.
     // Stated in CSS px so it means the same thing at every stage size.
-    const DEAD = 4 * scale;
+    const dead = () => 4 * scale;   // reads the CURRENT scale, which resize can change
     const onMove = (e: PointerEvent) => {
       /*
        * A finger is not a look.
@@ -347,7 +384,7 @@ export default function Arta({
        */
       if (e.pointerType === "touch") { busyUntil = performance.now() + 450; return; }
       const p = toWorld(e.clientX, e.clientY);
-      if (!rawLook || Math.hypot(p.x - rawLook.x, p.y - rawLook.y) > DEAD) rawLook = p;
+      if (!rawLook || Math.hypot(p.x - rawLook.x, p.y - rawLook.y) > dead()) rawLook = p;
     };
     const onLeave = () => { rawLook = null; look = null; };
     const onScroll = () => { busyUntil = performance.now() + 450; sync(); };
