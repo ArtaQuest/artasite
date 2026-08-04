@@ -3,7 +3,7 @@
  * Plugin Name: ArtaQuest
  * Description: The entire ArtaQuest platform — LMS, economy, social, i18n, funds — in one
  *              lean, dependency-free plugin. Replaces MasterStudy LMS + WooCommerce.
- * Version:     1.20.589
+ * Version:     1.20.590
  * Author:      ArtaQuest Foundation
  * License:     GNU AGPLv3
  * License URI: https://www.gnu.org/licenses/agpl-3.0.html
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 // disagree will send the next person chasing a production divergence that is not there: the
 // header is what get_plugin_data() reads, AQ_VERSION is what /version reports and what the
 // integrity sweep keys on. Bump them together, always.
-define( 'AQ_VERSION', '1.20.589' );
+define( 'AQ_VERSION', '1.20.590' );
 define( 'AQ_DIR', __DIR__ );
 define( 'AQ_URL', plugins_url( '', __FILE__ ) );
 
@@ -145,6 +145,20 @@ add_action( 'plugins_loaded', function () {
 	//    a table was empty or a bundled file's mtime moved — after the full data purge that would silently
 	//    resurrect the old platform. The legacy tables stay (empty) until their code is retired; handlers
 	//    still self-ensure their tables on first touch. Do NOT re-add a seeder without an operator order.
+	//
+	//    ONE exception, restored 2026-08-04 by operator order, and it is not a legacy seeder: the GRANTS
+	//    catalogue. Grants are live and member-facing — the bursaries that let someone enter a challenge
+	//    they cannot otherwise afford are paid from this table — so it was collateral damage of that
+	//    sweep rather than a target of it. The consequence ran for weeks in silence: import_grants() had
+	//    no caller anywhere, /outreach answered {"grants":0}, and Schema.php's own comment went on saying
+	//    the catalogue was "refreshed from data/outreach-grants.json on deploy". Nothing was refreshing
+	//    anything. Restoring the call is what makes that sentence true again.
+	//
+	//    It is safe to run on every load and cheap: import_grants() is filemtime-gated, so after the
+	//    first request following a deploy it is one stat and one autoloaded get_option. It upserts by
+	//    slug and deactivates slugs absent from the file — it never resurrects a retired platform,
+	//    because the file it reads is synced from ArtaQuest/artagrants and contains grants only.
+	AQ\Extra::import_grants();
 } );
 
 /** Language-prefix URL router (/es/, /fa/, …) — must run before WordPress parses the
