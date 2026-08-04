@@ -26,37 +26,54 @@ const w = (typeof window !== "undefined" ? (window as unknown as Record<string, 
  *     and it never reaches a member who has not agreed to accept it, in the moment, by name.
  */
 
-/** The foundation's entire public financial picture — donations in (fiat), the gold-backed
- *  coin fund, and the recent coin ledger. 100% real data, public to everyone. */
+/** The foundation's entire public financial picture — what the fund holds (fiat), the gold-backed
+ *  coin reserve, and the recent fund movements. 100% real data, public to everyone.
+ *
+ *  Every figure here is read STRICTLY as the API returns it, which is not what the old labels said:
+ *  `foundation/finances` sums the per-bucket COUNTERS, so `total_cents` is the money still on hand
+ *  (a spend appends a negative row and lowers it), not a lifetime "donations received"; `recent` is
+ *  the last 25 ledger rows in DOLLARS, spends included, so a row is not always a gift and never a
+ *  coin; and `fund_issued` is not carried at all (wp.ts fills 0). Labels below match all three. */
 function FoundationBooks({ fin }: { fin: FoundationFinances }) {
   const fmt = (s: number) => (s ? new Date(s * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—");
+  // ArtaCredits held: the crd_ earmarks, which are a SUBSET of the fund total beside them. Matched on
+  // the bucket prefix (Funds::finances emits kind 'crd'), because the FundEarmark type in wp.ts still
+  // narrows `kind` to grp|cty|typ and the prefix is the same fact without the cast.
+  const creditsHeld = fin.earmarks.filter((e) => e.bucket.startsWith("crd_")).reduce((s, e) => s + e.dollars, 0);
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <h2 className="text-[20px] font-bold tracking-tight">The foundation’s books</h2>
-        <span className="text-[13px] text-ink-3">Public · real, current values · every coin accounted for</span>
+        <span className="text-[13px] text-ink-3">Public · real, current values · every gift and every spend accounted for</span>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Donations received</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-yang">{formatFiat(fin.donations_fiat, fin.fiat)}</p><p className="text-[12px] text-ink-3">{fin.donations_count} gift{fin.donations_count === 1 ? "" : "s"}</p></Card>
-        <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Fund on hand</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-yin-light"><Coins n={fin.fund_balance} /></p><p className="text-[12px] text-ink-3"><Coins n={fin.fund_issued} /> issued to members</p></Card>
+        <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">In the fund</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-yang">{formatFiat(fin.donations_fiat, fin.fiat)}</p><p className="text-[12px] text-ink-3">donated money still on hand, every bucket</p></Card>
+        <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">ArtaCredits held</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-yin-light">{formatFiat(creditsHeld, fin.fiat)}</p><p className="text-[12px] text-ink-3">of the above, waiting for the slices donors chose</p></Card>
         <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Coins in circulation</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-ink"><Coins n={fin.coin_supply} /></p><p className="text-[12px] text-ink-3">{(fin.reserve_mg / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} g of gold held</p></Card>
         <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Backing</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-yang">{Math.round((fin.backing_ratio || 1) * 100)}%</p><p className="text-[12px] text-ink-3">gold-backed</p></Card>
       </div>
       <Card className="overflow-hidden p-0">
-        <p className="border-b border-line px-5 py-2.5 text-[13px] font-semibold text-ink-2">Recent coin movements</p>
+        <p className="border-b border-line px-5 py-2.5 text-[13px] font-semibold text-ink-2">Recent fund movements</p>
         {fin.ledger.length === 0 ? (
-          <p className="px-5 py-8 text-center text-[14px] text-ink-3">No movements yet — the books open at zero. Every coin issued and redeemed will appear here.</p>
+          <p className="px-5 py-8 text-center text-[14px] text-ink-3">No movements yet — the books open at zero. Every gift received and every credit spent will appear here.</p>
         ) : (
           <ul className="divide-y divide-line">
-            {fin.ledger.map((r) => (
-              <li key={r.id} className="flex items-center justify-between gap-4 px-5 py-2.5">
-                <div className="min-w-0">
-                  <span className="block truncate text-[14px] text-ink">{r.reason || r.scope}</span>
-                  <span className="text-[12px] text-ink-3">{fmt(r.date)} · {r.scope}</span>
-                </div>
-                <span className={`shrink-0 text-[14px] font-semibold tabular-nums ${r.direction === "out" ? "text-yin-light" : "text-yang-dark"}`}>{r.direction === "out" ? "−" : "+"}<Coins n={r.coins} /></span>
-              </li>
-            ))}
+            {fin.ledger.map((r) => {
+              // These are aq_fund_ledger rows: FIAT, and negative when money left the fund (a credit
+              // redeemed, a bursary paid, a gift released to another slice). Direction is read from
+              // the amount's own sign — the mapper in wp.ts stamps every row "in" — and the value is
+              // rendered as money, not as coins: nothing on this ledger is denominated in ₳.
+              const out = r.coins < 0;
+              return (
+                <li key={r.id} className="flex items-center justify-between gap-4 px-5 py-2.5">
+                  <div className="min-w-0">
+                    <span className="block truncate text-[14px] text-ink">{r.reason || r.scope}</span>
+                    <span className="text-[12px] text-ink-3">{fmt(r.date)} · {r.scope}</span>
+                  </div>
+                  <span className={`shrink-0 text-[14px] font-semibold tabular-nums ${out ? "text-yin-light" : "text-yang-dark"}`}>{out ? "−" : "+"}{formatFiat(Math.abs(r.coins), fin.fiat)}</span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>
@@ -64,12 +81,15 @@ function FoundationBooks({ fin }: { fin: FoundationFinances }) {
         const maxE = Math.max(...fin.earmarks.map((e) => e.dollars), 1);
         return (
           <Card className="overflow-hidden p-0">
-            <p className="border-b border-line px-5 py-2.5 text-[13px] font-semibold text-ink-2">Where directed gifts went</p>
+            <p className="border-b border-line px-5 py-2.5 text-[13px] font-semibold text-ink-2">What each directed gift still holds</p>
             <ul className="divide-y divide-line">
               {fin.earmarks.map((e) => (
                 <li key={e.bucket} className="px-5 py-2.5">
+                  {/* An earmark's figure is its COUNTER — the balance left in it, not the total ever
+                      given to it. `crd_` is an ArtaCredits slice; `typ_` is a sponsored topic, which
+                      the chip used to call "type". */}
                   <div className="flex items-center justify-between gap-4">
-                    <span className="min-w-0 truncate text-[14px] text-ink">{e.label} <span className="text-[12px] text-ink-3">· {e.kind === "cty" ? "country" : e.kind === "grp" ? "group" : "type"}</span></span>
+                    <span className="min-w-0 truncate text-[14px] text-ink">{e.label} <span className="text-[12px] text-ink-3">· {e.bucket.startsWith("crd_") ? "credits" : e.kind === "cty" ? "country" : e.kind === "grp" ? "group" : "topic"}</span></span>
                     <span className="shrink-0 text-[14px] font-semibold tabular-nums text-yang">{formatFiat(e.dollars, fin.fiat)}</span>
                   </div>
                   <div className="mt-1.5 h-1.5 overflow-hidden rounded-pill bg-veil/5"><div className="h-full rounded-pill bg-yang" style={{ width: `${Math.max(4, Math.round((e.dollars / maxE) * 100))}%` }} /></div>
@@ -184,12 +204,21 @@ export default function Donate() {
   // other side of the spread from the one they were charged at.
   const coinRate = opts?.coin_sell_price || opts?.coin_buy_price || 0;
   const feeCap = copts?.fee_cap || 5;
-  // A RANGE, not a false precision. An entry fee is set by whoever founded the challenge and a
-  // credit covers up to ₳{feeCap}, so one gift buys somewhere between (all at the cap) and (all at
-  // ₳1) entries. Quoting the ₳1 figure alone — cents ÷ price-of-one-coin — counted COINS and called
-  // them entries, overstating what the gift buys by up to feeCap times.
-  const entriesMax = coinRate > 0 ? Math.floor(amount / coinRate) : 0;
-  const entriesMin = coinRate > 0 ? Math.floor(amount / (coinRate * feeCap)) : 0;
+  // THE NUMBER THE SERVER WILL GRANT — the only number this page may quote. It mirrors, exactly, the
+  // ArtaCredits branch of Extra::course_checkout (~line 3153), which FREEZES the promise onto the
+  // gift at checkout and never re-derives it afterwards:
+  //     unit = max(1, round(coin sell price × 100))          // one coin, in cents
+  //     cap  = the fee cap, clamped server-side to Credits::FEE_CAP
+  //     n    = max(1, intdiv(round(amount × 100), unit × cap))
+  // Both halves matter. Dividing by the price of one COIN rather than by the capped price of one
+  // ENTRY counts coins and calls them entries — up to feeCap times what the gift can ever buy (a $30
+  // gift was quoted 173 while the server granted 35) — and doing the sum in dollars instead of whole
+  // cents drifts a further entry off the frozen figure. A gift's entries are a GUARANTEE priced at
+  // the cap, so this is one number and never a range: the server grants exactly this many.
+  const unitCents = Math.max(1, Math.round(coinRate * 100));
+  const entries = coinRate > 0 && amount >= 1
+    ? Math.max(1, Math.floor(Math.round(amount * 100) / (unitCents * Math.max(1, feeCap))))
+    : 0;
 
   const sliceWords = reach?.words || "any member of ArtaQuest";
   const printedName = anon ? "" : donorName.trim();
@@ -283,7 +312,7 @@ export default function Donate() {
             </p>
           </Step>
 
-          <Step n={2} title="How much" hint={`An entry fee is set by whoever founded the challenge — usually ₳1, and a credit covers up to ₳${feeCap}. One coin is ${sym}${coinRate ? coinRate.toFixed(2) : "—"} at today’s gold rate, and your gift is fixed at that rate the moment you give.`}>
+          <Step n={2} title="How much" hint={`An entry fee is set by whoever founded the challenge — ₳1 by default — and a credit covers one entry of up to ₳${feeCap}. One coin is ${sym}${coinRate ? coinRate.toFixed(2) : "—"} at today’s gold rate, and your gift is fixed at that rate the moment you give.`}>
             <Card className="p-5">
               <div className="flex flex-wrap gap-2">
                 {(opts?.presets || [5, 15, 30, 60, 120]).map((p) => (
@@ -295,21 +324,32 @@ export default function Donate() {
                   <input value={custom} onChange={(e) => setCustom(sanitizeDecimal(e.target.value))} inputMode="decimal" placeholder="Other" aria-label={`Custom amount (${cur})`} className="h-full w-20 bg-transparent px-1 text-[15px] text-ink outline-none" />
                 </div>
               </div>
-              {entriesMax > 0 && (
-                <p className="mt-4 text-[14px] text-ink-2">
-                  <span className="font-semibold text-ink">{sym}{amount}</span> covers{" "}
-                  <span className="font-extrabold text-yang">{entriesMin >= 1 ? `${entriesMin}–${entriesMax}` : `up to ${entriesMax}`}</span>{" "}
-                  {entriesMax === 1 ? "entry" : "entries"}, depending on each challenge’s fee
-                  {copts ? <> · at most {copts.moon_cap} per member per moon</> : null}
-                </p>
+              {entries > 0 && (
+                <>
+                  <p className="mt-4 text-[14px] text-ink-2">
+                    <span className="font-semibold text-ink">{sym}{amount}</span> covers{" "}
+                    <span className="font-extrabold text-yang">{entries}</span>{" "}
+                    {entries === 1 ? "entry" : "entries"}, counted at the ₳{feeCap} a credit covers at most, so the gift is never short
+                    {copts ? <> · at most {copts.moon_cap} per member per moon</> : null}
+                  </p>
+                  {/* Said plainly because the count is frozen at the cap when you give: a run of ₳1
+                      entries does not stretch it further, and the difference stays in the fund. */}
+                  <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-3">
+                    That count is fixed the moment you give. Cheaper entries don’t stretch it further — whatever they cost, the rest of your gift stays in the fund under the slice you chose, and is never spent on anyone else.
+                  </p>
+                </>
               )}
               <p className="sr-only" role="status" aria-live="polite">
-                {entriesMax > 0 ? `${sym}${amount} covers ${entriesMin >= 1 ? `between ${entriesMin} and ${entriesMax}` : `up to ${entriesMax}`} challenge entries, depending on each challenge's fee.` : ""}
+                {entries > 0 ? `${sym}${amount} covers ${entries} challenge ${entries === 1 ? "entry" : "entries"}, counted at the ₳${feeCap} a credit covers at most.` : ""}
               </p>
             </Card>
           </Step>
 
-          <Step n={3} title="The name on their certificate" hint="This prints on the Certificate of Participation of every member your gift helps, so we keep it to a name — letters and spaces — and ArtaMod checks it.">
+          {/* What actually runs on this field is Credits::clean_donor_name — a character-class strip,
+              not moderation. This hint used to say "ArtaMod checks it"; ArtaMod scores discussion
+              comments, and the one Fearometer call in that function only fires if a verdict already
+              exists (it is produced asynchronously, so at checkout it is null). Describe the strip. */}
+          <Step n={3} title="The name on their certificate" hint="This prints on the Certificate of Participation of every member your gift helps, so we keep it to the shape of a name: letters in any script, spaces, and the apostrophes, hyphens and initials names contain. Anything else — links, handles, slogans — is removed, and a field left with no letters in it simply prints as anonymous.">
             <Card className="flex flex-col gap-3 p-5">
               <input value={donorName} onChange={(e) => setDonorName(e.target.value.slice(0, 80))} disabled={anon}
                 placeholder="Your name, as it should appear" aria-label="Your name as it should appear on the certificate"
@@ -318,8 +358,11 @@ export default function Donate() {
                 <input type="checkbox" checked={anon} onChange={(e) => setAnon(e.currentTarget.checked)} className="h-4 w-4 accent-yang" />
                 Give without my name — the certificate will read “A friend of ArtaQuest”
               </label>
+              {/* The books below aggregate a slice's earmark across every donor to it — the row that
+                  names YOUR account is the gift row in the open database, so say that, not "beside
+                  your account in the books". */}
               <p className="text-[12.5px] leading-relaxed text-ink-3">
-                The gift itself is public either way: the amount and the slice you chose appear in the books below, beside your account. Anonymity is about the printed certificate, not the ledger.
+                The gift itself is public either way: its amount, the slice you chose and your account are one row anyone can read in the open database, and the money shows up in the slice’s total in the books below. Anonymity is about the printed certificate, not the ledger.
               </p>
             </Card>
           </Step>
@@ -361,7 +404,7 @@ export default function Donate() {
           </Card>
           <Card className="p-5 text-[14px] leading-relaxed text-ink-2">
             <p className="font-semibold text-ink">It can’t be farmed</p>
-            <p className="mt-1.5">A credit never pays the fee of the member who founded the challenge, never opens an empty one, and never reaches an automated token. An answer about yourself has to have stood for a month before it can attract a gift.</p>
+            <p className="mt-1.5">A credit never pays the fee of the member who founded the challenge, and it only ever joins a challenge that already holds other members’ entries — so a gift can’t seed a field for a friend to walk away with. It is never offered to an automated token, and an answer about yourself has to have stood for a month before it can attract a gift.</p>
           </Card>
           <Card className="p-5 text-[14px] leading-relaxed text-ink-2">
             <p className="font-semibold text-ink">It is all in the open</p>

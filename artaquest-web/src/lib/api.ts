@@ -1698,6 +1698,38 @@ export function deleteNotebook(id: number) {
   return post<{ ok: boolean }>(`/studio/notebooks/${id}/delete`, {});
 }
 
+/* ──────────────── Proving a Kaggle handle (operator, 2026-08-04) ────────────────
+   A member may submit only a notebook from a Kaggle account they have PROVEN they control.
+   Publication mints a permanent DOI crediting the notebook's KAGGLE author — until now that author
+   never consented and might never learn of it. The proof runs entirely on Kaggle's credential-free
+   read API, so a stranger can re-run it: claim a handle → the server mints a one-time string and
+   keeps only its sha256 → the member puts the string in any public notebook under that handle →
+   pastes that notebook's URL back → we pull the kernel with NO credential and check that it is
+   public, that its owner is the claimed handle, and that the string is in its source. */
+
+export type KaggleIdState = "pending" | "verified";
+export type KaggleIdItem = {
+  /** The Kaggle username, lowercased (how the server stores it) */
+  handle: string;
+  state: KaggleIdState;
+  /** The public kernel the proof was read from — '' until the handle is verified */
+  proof_kernel: string;
+  /** Unix seconds; 0 while pending */
+  verified_at: number;
+};
+export const KaggleIds = {
+  /** Every handle this member has claimed, pending and proven. `_` defeats any edge cache — a claim
+   *  made a second ago must appear. */
+  list: () => get<{ items: KaggleIdItem[] }>("/kaggle-id", { _: Date.now() }),
+  /** Claim a handle → the one-time proof string. The server stores only its sha256, so this is the
+   *  ONLY time the string exists anywhere we can show it; claiming again mints a fresh one (and the
+   *  old one stops working). */
+  claim: (handle: string) => post<{ ok: true; handle: string; proof: string }>("/kaggle-id/claim", { handle }),
+  /** Prove the claim from a public kernel of yours; answers with the handle's new state. */
+  verify: (handle: string, url: string) =>
+    post<{ ok: true; handle: string; state: KaggleIdState }>("/kaggle-id/verify", { handle, url }),
+};
+
 /* ─────────────────── The Kaggle submission (2026-07-28) ───────────────────
    A submission is the URL of a public Kaggle notebook's output page. The member picks which
    output files to publish, an exhaustive reproducibility checklist runs against Kaggle's public

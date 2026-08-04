@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.64.1';
+	const VERSION = '1.65.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -530,8 +530,18 @@ final class Schema {
 			// at redemption would silently become a different promise. Remaining entries on a gift =
 			// entries - COUNT(aq_credit_grants WHERE gift_id = id): a COUNT over an append-only table,
 			// so there is no mutable "spent" counter to drift or to lose a compare-and-swap race.
-			// `donor_name` is what prints on a sponsored entrant's certificate ('' = gave anonymously);
-			// it is ArtaMod-screened at capture, so a slur can never be printed under a stranger's name.
+			// `donor_name` is what prints on a sponsored entrant's certificate ('' = gave anonymously).
+			// It is stripped to a conservative character class at capture (Credits.php) — NOT screened by
+			// ArtaMod, which this comment used to claim. ArtaMod is a queued model pass over comments; it
+			// has never run on this field, and saying it did would be a promise about a stranger's name
+			// that nothing keeps.
+			//
+			// UNIQUE is on (ref, bucket), never on `ref` alone: ONE donation legitimately produces one
+			// row per bucket the donor split it across, all carrying the payment's ref, so a unique `ref`
+			// would refuse every community after the first and silently drop that money. (ref, bucket) is
+			// exactly the tuple Extra.php's webhook already SELECTs to decide whether a redelivery is a
+			// duplicate — making it an index moves that decision out of a check-then-insert race and into
+			// a guarantee the database keeps.
 			'aq_credit_gifts' => "
 				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 				donor_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
@@ -547,7 +557,7 @@ final class Schema {
 				PRIMARY KEY  (id),
 				KEY bucket_id (bucket, id),
 				KEY donor (donor_id, id),
-				KEY ref (ref)",
+				UNIQUE KEY ref_bucket (ref, bucket)",
 
 			// One row per REDEEMED entry — the member accepted a named donor's credit and it paid this
 			// challenge's fee. APPEND-ONLY; UNIQUE (ch_id, user_id) is what makes Data::upsert's "true =
@@ -567,6 +577,38 @@ final class Schema {
 				UNIQUE KEY ch_user (ch_id, user_id),
 				KEY gift (gift_id, id),
 				KEY member (user_id, created)",
+
+			// ── Proven Kaggle account ownership (2026-08-04, KaggleId.php) ────
+			// The platform mints a PERMANENT DOI crediting a notebook's Kaggle author. Until today any
+			// member could submit any public notebook, so it could mint a citation in the name of someone
+			// who never consented and might never learn of it. This table is the link that closes that:
+			// a member proves they control a Kaggle account before they may submit its work.
+			//
+			// The proof uses only Kaggle's credential-free read API, so a stranger can re-run it: we mint
+			// a one-time string, the member puts it in a PUBLIC notebook under that handle, and we pull
+			// that kernel and check the owner and the string. `proof_kernel` keeps the URL so the check
+			// stays re-runnable by anyone, forever — the claim is not "we checked once, trust us".
+			//
+			// `nonce_hash` is a sha256 and NEVER the string itself. Every row of this database is public;
+			// storing the plaintext would publish the proof and let anyone claim the handle. It is
+			// cleared on success, so a verified row carries no verifier at all.
+			//
+			// UNIQUE is (user_id, handle) deliberately, NOT (handle): two members may hold competing
+			// PENDING claims on the same handle — only one can prove it — and refusing the second claim
+			// at insert would let anyone block a handle they do not own. That exactly one member may hold
+			// a handle as `verified` is enforced in KaggleId, where it can answer with a reason.
+			'aq_kaggle_ids' => "
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				handle VARCHAR(120) NOT NULL DEFAULT '',
+				nonce_hash CHAR(64) NOT NULL DEFAULT '',
+				proof_kernel VARCHAR(300) NOT NULL DEFAULT '',
+				state VARCHAR(16) NOT NULL DEFAULT 'pending',
+				created INT UNSIGNED NOT NULL DEFAULT 0,
+				verified_at INT UNSIGNED NOT NULL DEFAULT 0,
+				PRIMARY KEY  (id),
+				UNIQUE KEY user_handle (user_id, handle),
+				KEY handle_state (handle, state)",
 
 			// ── Issues / bug-bounty ───────────────────────────────────────────
 			// Issue reports (the /issues/ page → Extra::bug_finding). Ownership moved here from the

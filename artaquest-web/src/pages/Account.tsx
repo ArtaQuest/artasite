@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DobWheel } from "../components/DobWheel";
 import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, postProfileUpdate, type CourseCard, type Dashboard, type UsernameCheck } from "../lib/wp";
-import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, Passkeys, myParticipation, setGender as setGender_, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type SessionItem, type BursaryResult, type BursaryStatus, type ShareKit } from "../lib/api";
+import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, KaggleIds, Passkeys, myParticipation, setGender as setGender_, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type KaggleIdItem, type SessionItem, type BursaryResult, type BursaryStatus, type ShareKit } from "../lib/api";
 import { signOut } from "../lib/auth";
 import { VerifyApi, fileToImage, type VerifyStatus } from "../lib/verify";
 import { countryName, countryOptions, flagEmoji } from "../lib/flags";
@@ -788,6 +788,205 @@ function IdentityVerification() {
   );
 }
 
+// ── Kaggle handle — the account whose notebooks you may submit ──────────────
+// Publishing mints a permanent DOI that credits the notebook's KAGGLE author, so the platform has
+// to know that author is you. The proof reads Kaggle's public API with no credential at all: we
+// mint a one-time string and keep only its sha256, the member puts it in a public notebook under
+// the handle, and we read it back — a check any stranger can repeat against the same kernel.
+
+/** Kaggle's own path segments — never a username, so a half-pasted URL can't be claimed as one. */
+const KAGGLE_SECTIONS = /^(code|datasets|models|competitions|discussions|organizations|learn|work)$/;
+
+/** Accept a bare handle, an @handle, or a pasted Kaggle URL (profile, /code/… or the legacy
+ *  owner/slug shape) — all of them name the same account, and members paste all three. A URL we
+ *  cannot read an owner out of gives '' rather than a handle made of its own characters. */
+function kaggleHandle(v: string) {
+  const s = v.trim().replace(/^@+/, "");
+  const looksUrl = /^https?:\/\//i.test(s) || /kaggle\.com\//i.test(s);
+  const m = s.match(/kaggle\.com\/(?:code\/|datasets\/|models\/)?([^/?#]+)/i);
+  const h = (looksUrl ? (m ? m[1] : "") : s).toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  return KAGGLE_SECTIONS.test(h) ? "" : h;
+}
+const kernelLink = (u: string) => (/^https?:\/\//i.test(u) ? u : "");
+
+function KaggleIdentity() {
+  const [items, setItems] = useState<KaggleIdItem[] | null>(null);
+  const [loadErr, setLoadErr] = useState(false);
+  const [handle, setHandle] = useState("");
+  const [proving, setProving] = useState("");   // the handle the paste-back form is aimed at
+  // The minted string, held in memory only — the server kept a hash, so once this is gone it is
+  // gone for everyone. Never persisted anywhere.
+  const [proof, setProof] = useState<{ handle: string; proof: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState<"" | "claim" | "verify">("");
+  // `at` decides whether the "check all of these" list belongs under the message: it answers a
+  // failed READ of the notebook, and would be noise under a refused claim.
+  const [err, setErr] = useState<{ at: "claim" | "verify"; text: string } | null>(null);
+  const [done, setDone] = useState("");
+  // The field holds what the member typed; the handle is DERIVED for display and for the call, so a
+  // half-typed URL is never rewritten under their cursor.
+  const wanted = kaggleHandle(handle);
+
+  const load = () =>
+    KaggleIds.list().then((r) => { setItems(r.items); setLoadErr(false); }).catch(() => setLoadErr(true));
+  useEffect(() => { void load(); }, []);
+
+  async function claim(raw: string) {
+    const name = kaggleHandle(raw);
+    if (!name || busy) return;
+    setBusy("claim"); setErr(null); setDone(""); setCopied(false); setUrl("");
+    try {
+      const r = await KaggleIds.claim(name);
+      setProof({ handle: r.handle || name, proof: r.proof });
+      setProving(r.handle || name);
+      void load();
+    } catch (e) {
+      setErr({ at: "claim", text: e instanceof ApiError ? e.message : "Could not start that claim — please try again." });
+    } finally { setBusy(""); }
+  }
+
+  async function verify() {
+    if (!proving || !url.trim() || busy) return;
+    setBusy("verify"); setErr(null); setDone("");
+    try {
+      const r = await KaggleIds.verify(proving, url.trim());
+      if (r.state === "verified") {
+        setDone(`@${r.handle || proving} is yours — you can submit its notebooks`);
+        setProof(null); setProving(""); setUrl(""); setHandle("");
+      } else {
+        // Kaggle answered and the handle is still pending — the proof was not in what it gave us.
+        setErr({ at: "verify", text: "We read that notebook but did not find your string in it." });
+      }
+      void load();
+    } catch (e) {
+      setErr({ at: "verify", text: e instanceof ApiError ? e.message : "Could not check that notebook — please try again." });
+    } finally { setBusy(""); }
+  }
+
+  return (
+    <section>
+      <h2 className="text-[20px] font-bold tracking-tight">Your Kaggle handle</h2>
+      <p className="mt-1 text-[13px] text-ink-3">
+        Publishing a work mints a permanent DOI crediting the notebook's Kaggle author, so we only accept
+        notebooks from an account you have proved is yours. Type your Kaggle username, copy the one-time
+        string, paste it into any public notebook of yours on Kaggle, then paste that notebook's URL back
+        here. We read the notebook with no login at all, exactly as any stranger can.
+      </p>
+
+      {loadErr && <ErrorNote className="mt-4">We couldn't load your handles. Please reload the page.</ErrorNote>}
+      {!items && !loadErr && <StatusNote className="py-4 text-start">Loading handles…</StatusNote>}
+      {done && <StatusNote className="mt-3 py-2 text-start text-yang-ink">{done}</StatusNote>}
+
+      {items && items.length > 0 && (
+        <ul className="mt-4 flex list-none flex-col gap-3 p-0">
+          {items.map((k) => (
+            <li key={k.handle}>
+              <Card className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <a href={`https://www.kaggle.com/${k.handle}`} target="_blank" rel="noopener noreferrer"
+                      data-ay-skip="1" className="text-[15px] font-semibold hover:text-yang">@{k.handle}</a>
+                    {k.state === "verified"
+                      ? <Pill className="px-2 py-0.5 text-[11px]">proved</Pill>
+                      : <Pill className="bg-yin/15 px-2 py-0.5 text-[11px] text-yin-ink">not proved yet</Pill>}
+                  </div>
+                  <div className="mt-0.5 text-[12px] text-ink-3">
+                    {k.state === "verified" ? (
+                      <>
+                        {k.verified_at ? `proved ${ago(k.verified_at)}` : "proved"}
+                        {kernelLink(k.proof_kernel) && (
+                          <> · <a className="text-yin-light hover:underline" href={kernelLink(k.proof_kernel)}
+                            target="_blank" rel="noopener noreferrer">the notebook we read it from</a></>
+                        )}
+                      </>
+                    ) : "Waiting for your string to appear in a public notebook under this handle"}
+                  </div>
+                </div>
+                {k.state !== "verified" && proving !== k.handle && (
+                  <Button variant="outline" onClick={() => { setProving(k.handle); setErr(null); setDone(""); }}
+                    className="h-9 px-3 text-[13px]">Finish proving it</Button>
+                )}
+              </Card>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Claim — a first handle, or another one. */}
+      <Card className="mt-4 px-4 py-4">
+        <Field label="Kaggle username"
+          hint={wanted && wanted !== handle.trim()
+            ? <>This claims @<span data-ay-skip="1">{wanted}</span></>
+            : "A profile or notebook URL works too — we take the username out of it."}>
+          <Input value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="your-kaggle-username"
+            maxLength={300} autoCapitalize="none" autoCorrect="off" spellCheck={false}
+            className="bg-space-1 px-3.5" />
+        </Field>
+        <Button variant="outline" onClick={() => void claim(handle)} disabled={!wanted || busy === "claim"}
+          className="mt-4 h-9 px-4 text-[13px] disabled:opacity-40">
+          {busy === "claim" ? "Minting…" : "Get my one-time string"}
+        </Button>
+      </Card>
+
+      {proving && (
+        <Card className={`mt-3 px-4 py-4 ${proof ? "border-yang/40" : ""}`}>
+          {proof && proof.handle === proving ? (
+            <>
+              <div className="text-[14px] font-semibold text-yang-ink">Your string for @<span data-ay-skip="1">{proving}</span> — copy it now</div>
+              <div className="mt-1 text-[12.5px] text-ink-3">
+                This is the only time it is shown: we keep just a fingerprint of it, so nobody here can read it
+                back to you. Lose it and you claim again for a new one.
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <code data-ay-skip="1" className="break-all rounded bg-space-2 px-2 py-1 text-[13px] text-ink">{proof.proof}</code>
+                <Button variant="outline" className="h-8 px-3 text-[12px]"
+                  onClick={() => { navigator.clipboard?.writeText(proof.proof).then(() => setCopied(true)).catch(() => {}); }}>
+                  {copied ? "Copied" : "Copy"}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="text-[13px] text-ink-3">
+              You claimed @<span data-ay-skip="1" className="font-semibold text-ink">{proving}</span> earlier. Your string was shown once
+              and we cannot show it again —{" "}
+              <button type="button" onClick={() => void claim(proving)} disabled={busy === "claim"} className="text-yin-light hover:underline">
+                claim again for a new one
+              </button>{" "}
+              if you no longer have it. The old string stops working the moment you do.
+            </div>
+          )}
+
+          <Field className="mt-4" label="The notebook you put it in"
+            hint="Any public notebook under this handle — the string can sit in a cell or in the title.">
+            <Input value={url} onChange={(e) => setUrl(e.target.value)} type="url" inputMode="url"
+              placeholder="https://www.kaggle.com/code/…" autoCapitalize="none" autoCorrect="off"
+              spellCheck={false} className="bg-space-1 px-3.5" />
+          </Field>
+          <Button onClick={() => void verify()} disabled={!url.trim() || busy === "verify"}
+            className="mt-4 h-10 px-5 text-[14px] disabled:opacity-40">
+            {busy === "verify" ? "Reading Kaggle…" : "Check it"}
+          </Button>
+        </Card>
+      )}
+
+      {err && (
+        <>
+          <ErrorNote className="mt-3">{err.text}</ErrorNote>
+          {err.at === "verify" && (
+            <ul className="mt-2 flex list-none flex-col gap-1 p-0 text-[13px] text-ink-3">
+              <li>The notebook is public and saved — Kaggle answers for a private, draft or deleted one the same way, and we can read none of them</li>
+              <li>It belongs to @<span data-ay-skip="1">{proving}</span> — a notebook you can edit but do not own says nothing about the account</li>
+              <li>The string is somewhere in it: any cell, or the title, exactly as it was given to you</li>
+              <li>Nobody else has proved that handle already — only one member can hold it. If it is truly yours, <a className="text-yin-light hover:underline" href={localePath("/issues/")}>report an issue</a></li>
+            </ul>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 // "Help grow the fund" — shown when the bursary fund can't cover a place. Turns a
 // dead-end into a one-minute way to refill it: ready-to-share posts + share links.
 function GrowFund({ share, donateUrl, note }: { share: ShareKit; donateUrl: string; note?: string }) {
@@ -1033,6 +1232,8 @@ export default function Account() {
       <PalmBackPhoto user={d.user} onChange={(palm) => setD((prev) => (prev ? { ...prev, user: { ...prev.user, palm } } : prev))} />
 
       <IdentityVerification />
+
+      <KaggleIdentity />
 
       <SessionManager />
 

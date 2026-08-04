@@ -24,12 +24,15 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * The entrant pays nothing and receives nothing spendable: the credit buys ONE entry, nothing else.
  *
  * ── WHAT SERIALISES IT ──────────────────────────────────────────────────────────────────────────
- * The contended resource is the GIFT, not the member: two different members racing for the last
- * entry of one gift hold different `wallet_u<uid>` locks and would both pass an unlocked balance
- * check. Every read-then-write below runs under `crdgift_<gift>` (Economy::acquire_lock — the same
- * atomic option-INSERT primitive `wallet_u*` and `nbsettle` use). The grant row is written ONCE, at
- * the end, via Data::upsert, whose `true` return means "this call created the row" even under a
- * race — so nothing is ever inserted-then-deleted and both tables stay honestly append-only.
+ * The contended resource is the EARMARK, not the member and not the gift: two members racing for the
+ * last of one slice's money hold different `wallet_u<uid>` locks and would both pass an unlocked
+ * balance check, and a per-gift lock is no better because many gifts share one `crd_<slice>` bucket
+ * (see redeem()). Every read-then-write below runs under `crdbucket_<bucket>` (Economy::acquire_lock
+ * — the same atomic option-INSERT primitive `wallet_u*` and `nbsettle` use). The grant row is written ONCE, by
+ * self::claim() — a bare INSERT under a UNIQUE key, so the DATABASE picks the winner, the loser
+ * writes nothing at all, and a row that records money is never inserted-then-deleted or rewritten.
+ * The release (widen) claims the same way: a compare-and-swap on `widened` decides who releases a
+ * gift, before a cent moves.
  *
  * ── WHAT STOPS A MEMBER FARMING IT ──────────────────────────────────────────────────────────────
  * A challenge's fee is chosen by its founder and a sole entrant takes the whole pool at the moon,
@@ -223,6 +226,14 @@ final class Credits {
 		if ( $others < self::MIN_FIELD ) { return null; }
 		if ( self::used_this_moon( $uid ) >= self::MOON_CAP ) { return null; }
 
+		// An entry that prices at NOTHING must never be offered. The earmark test at the foot of this
+		// function is `held >= cost`, which EVERY empty bucket passes when the cost is 0 — so a zero
+		// price would hand out entries no donor ever paid for, and redeem's debit would be a silent
+		// no-op (Funds::spend_credit refuses a non-negative amount). Economy::coin_price floors the
+		// spot price, so this can only fire on a misconfigured spread; it is money, so it is checked.
+		$cents = self::cents_for( $fee );
+		if ( $cents < 1 ) { return null; }
+
 		$buckets = self::buckets_for_user( $uid );
 		if ( ! $buckets ) { return null; }
 		$in = implode( ',', array_fill( 0, count( $buckets ), '%s' ) );
@@ -247,7 +258,7 @@ final class Credits {
 		foreach ( $rows as $g ) {
 			// The earmark must still hold the money this entry costs (a gift's promised `entries` is
 			// quoted at the gold rate on the day it was captured; the coin price moves).
-			if ( Economy::counter( 'fund_' . $g['bucket'] ) >= self::cents_for( $fee ) ) { return $g; }
+			if ( Economy::counter( 'fund_' . $g['bucket'] ) >= $cents ) { return $g; }
 		}
 		return null;
 	}
@@ -265,13 +276,35 @@ final class Credits {
 	}
 
 	/**
-	 * SPEND one entry of $gift on $uid's entry of notebook $nb_id into $ch. Returns the grant row id,
-	 * or 0 if the gift was exhausted, the earmark drained, or the member turned out to already hold an
-	 * entry — every one of which is a losing race in which NOTHING has been charged, so the caller
-	 * simply falls back to the ordinary "you need ₳fee" refusal.
+	 * Claim a row that may exist at most ONCE — insert-only, and never a rewrite of one already there.
+	 * Both tables it is used on carry the UNIQUE key that decides the winner, so a losing racer (or a
+	 * retry) touches nothing and gets false back.
 	 *
-	 * Runs entirely under `crdbucket_<bucket>`: exhaustion, earmark balance, BOTH claims and the money
-	 * are one critical section on THE CONTENDED RESOURCE, which is the EARMARK — not the member and
+	 * Data::upsert returns the same false, but it UPDATES the row it found first — which on a money
+	 * record is the wrong answer twice over: on aq_credit_grants it re-points a grant that has ALREADY
+	 * been paid at whichever gift matched this time, un-counting the spend from the gift that actually
+	 * funded it (so widen() would then release money that is long gone), and on aq_nb_entries it swaps
+	 * the notebook a member entered with. A table we call append-only has to be append-only in the
+	 * code that writes it, not merely in the one caller that happens to check first.
+	 */
+	private static function claim( $key, $row ) {
+		global $wpdb;
+		$prev = $wpdb->suppress_errors( true ); // the collision is expected, not an error to log
+		$ok   = $wpdb->insert( Data::t( $key ), $row );
+		$wpdb->suppress_errors( $prev );
+		return (bool) $ok;
+	}
+
+	/**
+	 * SPEND one entry of $gift on $uid's entry of notebook $nb_id into $ch. Returns the grant row id,
+	 * or 0 if the challenge closed, the gift was exhausted, the earmark drained, the member reached
+	 * MOON_CAP, or they turned out to already hold an entry — every one of which is a losing race in
+	 * which NOTHING has been charged, so the caller simply falls back to the ordinary "you need ₳fee"
+	 * refusal. It also returns 0 rather than trusting a fee or a founder its own gates would refuse.
+	 *
+	 * Runs entirely under `crdbucket_<bucket>`: the challenge's state, exhaustion, earmark balance,
+	 * BOTH claims and the money are one critical section on THE CONTENDED RESOURCE, which is the
+	 * EARMARK — not the member and
 	 * not the gift. A per-member wallet lock cannot serialise two different members racing for the
 	 * same money, and a per-GIFT lock cannot either: many gifts share one `crd_<slice>` bucket (every
 	 * donor who picks that slice funds it), so two members redeeming two DIFFERENT gifts would hold
@@ -293,29 +326,62 @@ final class Credits {
 		$gid   = (int) $gift['id'];
 		$chid  = (int) $ch['id'];
 		$cents = self::cents_for( $fee );
+		if ( $cents < 1 ) { return 0; } // an entry priced at nothing buys nothing — see match()
+		// A method that debits the public fund must not trust its arguments. match() applied every gate
+		// before handing this gift over, but it is a separate call: these two cost nothing to re-assert
+		// and are the two whose absence would be worth money to a caller that skipped it — a fee above
+		// the gift's own ceiling (or the platform's), and the founder cashing a stranger's gift out of
+		// a pool they take at the moon. MIN_FIELD is not re-read: entries are never deleted, so a field
+		// that was large enough when the offer was drawn cannot since have shrunk.
+		if ( $fee < 1 || $fee > self::FEE_CAP || $fee > (int) $gift['fee_cap'] ) { return 0; }
+		if ( (int) $ch['creator_id'] === $uid ) { return 0; }
 		$lock  = 'crdbucket_' . (string) $gift['bucket'];
 		if ( ! Economy::acquire_lock( $lock, 15 ) ) { return 0; }
 		try {
+			// The challenge has to be OPEN as the money moves, not merely when the offer was drawn.
+			// settle_due() runs under a DIFFERENT lock (nbsettle) and pays out the pool it read, so a
+			// fee bumped in just after the moon is donor money added to a pot that will never pay out
+			// again — spent, and on nothing. ch_enter checked this before the member was shown the
+			// offer and before they accepted it, which is two round trips ago; re-read it.
+			$live = Data::one( 'SELECT state, deadline FROM ' . Data::t( 'aq_nb_challenges' ) . ' WHERE id = %d', [ $chid ] );
+			if ( ! $live || (string) $live['state'] !== 'open' || (int) $live['deadline'] <= Data::now() ) { return 0; }
+
 			$used = (int) Data::col( 'SELECT COUNT(*) FROM ' . Data::t( 'aq_credit_grants' ) . ' WHERE gift_id = %d', [ $gid ] );
 			if ( $used >= (int) $gift['entries'] ) { return 0; }
+			// MOON_CAP, re-read inside the section. match() counted this member's grants before the offer
+			// was drawn, and today only the caller's own `wallet_u<uid>` lock stops the same member racing
+			// two entries past that count — a lock this method neither takes nor requires, and one that
+			// would not serialise them anyway if they ever redeemed against two different slice earmarks.
+			// The cap is what bounds how much of the donated fund one member can direct at themselves, so
+			// it is re-asserted where the money actually moves.
+			if ( self::used_this_moon( $uid ) >= self::MOON_CAP ) { return 0; }
 			if ( Economy::counter( 'fund_' . $gift['bucket'] ) < $cents ) { return 0; }
 
 			// Claim 1 — the entry. UNIQUE (ch_id, user_id) makes this the one row that can exist for
-			// this member on this challenge, and Data::upsert reports true ONLY when this call created
-			// it (it suppresses and reports the expected collision rather than throwing).
-			if ( ! Data::upsert( 'aq_nb_entries', [ 'ch_id' => $chid, 'user_id' => $uid ], [ 'nb_id' => (int) $nb_id, 'created' => Data::now() ] ) ) {
+			// this member on this challenge, and self::claim reports true ONLY when this call created
+			// it: the loser of the race writes nothing whatsoever.
+			if ( ! self::claim( 'aq_nb_entries', [ 'ch_id' => $chid, 'user_id' => $uid, 'nb_id' => (int) $nb_id, 'created' => Data::now() ] ) ) {
 				return 0; // already in — no money moves
 			}
 			// Claim 2 — the credit, on the same key.
-			if ( ! Data::upsert( 'aq_credit_grants', [ 'ch_id' => $chid, 'user_id' => $uid ], [ 'gift_id' => $gid, 'fee' => $fee, 'cents' => $cents, 'created' => Data::now() ] ) ) {
+			if ( ! self::claim( 'aq_credit_grants', [ 'ch_id' => $chid, 'user_id' => $uid, 'gift_id' => $gid, 'fee' => $fee, 'cents' => $cents, 'created' => Data::now() ] ) ) {
 				return 0; // already credited on this challenge — never pay twice
 			}
 
-			// The money, in the order Funds::bursary_apply established: the pot grows, the gold that will
-			// back the coins that pot mints is bought FIRST, then the spent CAD leaves the fund.
+			// THE MONEY. The donated CAD leaves the fund FIRST, and the pot and the gold behind it move
+			// only once that debit is on record — the ref makes it one effect per (challenge, member).
+			// Funds::bursary_apply buys backing before it debits because it MINTS in the same breath;
+			// nothing is minted here (this pool becomes coin days later, at the moon, in settle_due), so
+			// the safer order is the one whose failure leaves the donor's money still in the fund rather
+			// than a prize pot and a gold counter grown by money nobody ever spent. A failed debit is
+			// also said out loud: the grant row cannot be un-appended, and verify_credits' grants=spends
+			// check is the standing alarm for exactly this shape of break.
+			if ( ! Funds::spend_credit( $gift['bucket'], -$cents, 'credit:' . $chid . ':' . $uid, 'ArtaCredit: challenge ' . $chid ) ) {
+				error_log( 'AQ Credits::redeem: fund debit FAILED bucket=' . (string) $gift['bucket'] . ' ' . $cents . 'c ch=' . $chid . ' u=' . $uid . ' — grant claimed, NOTHING charged' );
+				return 0;
+			}
 			Data::bump( 'aq_nb_challenges', [ 'id' => $chid ], 'pool', $fee );
 			Economy::add_backing( $fee );
-			Funds::spend_credit( $gift['bucket'], -$cents, 'credit:' . $chid . ':' . $uid, 'ArtaCredit: challenge ' . $chid );
 			return (int) Data::col( 'SELECT id FROM ' . Data::t( 'aq_credit_grants' ) . ' WHERE ch_id = %d AND user_id = %d', [ $chid, $uid ] );
 		} finally {
 			Economy::release_lock( $lock );
@@ -333,16 +399,21 @@ final class Credits {
 	 * verifiable certificate. Returns '' (give anonymously) rather than refusing, so a payment is
 	 * never blocked by this — fail-open, as everywhere else.
 	 *
-	 * TWO passes, because neither alone is enough:
-	 *  1. SHAPE. A donor name is a NAME. Keep only letters (any script), marks, spaces and the
-	 *     punctuation names actually contain; collapse runs. That deterministically removes URLs,
-	 *     @handles, markup and slogans — prose is what a slur needs to be a slur — and it works
-	 *     synchronously, which matters because…
-	 *  2. ARTAMOD, when a verdict exists. Fearometer::score returns an ARRAY or NULL — never an int.
-	 *     The live verdict is produced ASYNCHRONOUSLY by the relay batch, so at checkout it is
-	 *     normally null and this pass is a no-op; comparing its return to a number (`score() >= LIMIT`)
-	 *     was worse than useless — array>=int is always true in PHP and null>=int always false, so it
-	 *     blanked every name under the test seam and screened nothing in production.
+	 * SAY WHAT THIS IS. In production a donor name is screened by ONE thing: a CHARACTER-CLASS STRIP.
+	 * No model reads it. A donor name is a NAME, so we keep only letters (any script), marks, spaces
+	 * and the punctuation names actually contain, collapse runs and cut to 80 BYTES (the width of the
+	 * column that has to hold it — see the cut itself for why bytes and not characters). That
+	 * deterministically removes URLs, @handles, markup and slogans — prose is what a slur needs to be
+	 * a slur — and it is synchronous, which is the whole reason it carries the load at checkout. It is
+	 * a shape test and nothing more: a two-word insult made only of letters and a space walks straight
+	 * through it, and no wording anywhere (the donate page, the schema notes) may promise otherwise.
+	 *
+	 * ArtaMod is CONSULTED, and is normally silent. Fearometer::score returns an ARRAY or NULL, never
+	 * an int, and the live verdict is produced ASYNCHRONOUSLY by the relay batch over comments — so at
+	 * checkout it is null and this pass does nothing. It is kept because it costs nothing and honours a
+	 * verdict the day one exists for this field. (Comparing its return to a number, as this once did,
+	 * was worse than useless: array>=int is always true in PHP and null>=int always false, so it
+	 * blanked every name under the test seam and screened nothing at all in production.)
 	 */
 	public static function clean_donor_name( $raw ) {
 		$n = trim( preg_replace( '/\s+/u', ' ', (string) $raw ) );
@@ -353,8 +424,15 @@ final class Credits {
 		// advertising on someone else's certificate. Initials are always followed by a space or the end.
 		$n = preg_replace( '/(?<=\p{L})\.(?=\p{L})/u', '', $n );
 		$n = trim( preg_replace( '/\s+/u', ' ', (string) $n ) );
+		// 80 BYTES, not 80 characters. `aq_credit_gifts.donor_name` is VARCHAR(80) and this value is
+		// written LONG AFTER the money: fulfilment appends the donor's cents to the slice earmark first
+		// and inserts the gift row second (Extra::fulfil_session), so a row the database refuses for an
+		// over-long name leaves those cents in a slice with no gift to spend them and none to release
+		// them — money stranded in the open books by a Persian or CJK name, which mb_substr's character
+		// count would have let straight through at up to four bytes each. mb_strcut cuts on a character
+		// boundary, so such a name is shortened, never mangled.
+		$n = trim( mb_strcut( $n, 0, 80, 'UTF-8' ) );
 		if ( $n === '' || ! preg_match( '/\p{L}/u', $n ) ) { return ''; }
-		$n = mb_substr( $n, 0, 80 );
 		$v = class_exists( '\\AQ\\Fearometer' ) ? Fearometer::score( $n ) : null;
 		if ( is_array( $v ) && (int) ( $v['fear'] ?? 0 ) >= Fearometer::limit() ) { return ''; }
 		return $n;
@@ -482,9 +560,26 @@ final class Credits {
 	 * move: the reach meter warns before payment, but a slice can also empty afterwards, and without
 	 * this the gift would sit in the open books for ever with no recourse and no refund path.
 	 *
-	 * Only the donor may do it, only to their own gift, only while it has entries left, and only
-	 * toward the general bucket — never toward another slice, because re-aiming someone else's money
-	 * at a different group of people is not a release, it is a new gift.
+	 * Only the donor may do it, only to their own gift, only while it still holds unspent money, and
+	 * only toward the general bucket — never toward another slice, because re-aiming someone else's
+	 * money at a different group of people is not a release, it is a new gift.
+	 *
+	 * MONEY LEFT, not entries left, is the test. A gift's promised `entries` is a guarantee priced at
+	 * the FEE CAP, so a gift whose entries were all spent on cheaper challenges still holds real cents
+	 * — and refusing those with "used in full" left them earmarked to a slice, unreachable by match()
+	 * (which only offers a gift with entries to spare) and unreleasable here. That is stranded money.
+	 * The successor's promise is therefore re-derived from the cents actually released, by the same
+	 * formula the donor was quoted at checkout (Extra::stripe_session: cents ÷ unit ÷ fee_cap), so it
+	 * can never promise more entries than the money that moved with it can pay for — and when the
+	 * residue is under a single entry it promises none, because there is no successor at all: that
+	 * money joins the general earmark and is spent by the general gifts already standing in it.
+	 *
+	 * WHO RELEASES IT is decided by the DATABASE, not by a read: the `widened` stamp is a
+	 * compare-and-swap (UPDATE … WHERE id = %d AND widened = 0) whose affected-row count is the gate,
+	 * taken inside the lock and BEFORE a single cent moves. Read-then-write, with the read outside the
+	 * lock, is how one gift gets released twice — and a duplicate release is a −m/+m pair that sums to
+	 * zero as innocently as the first, so nothing downstream would ever have noticed (verify_credits
+	 * now counts the rows per ref as well, so it would).
 	 *
 	 * The money moves as a ZERO-SUM PAIR of fund appends (Funds::move_credit_earmark), never a
 	 * rewrite; the released amount is this gift's own unspent share, clamped to what the source
@@ -497,32 +592,58 @@ final class Credits {
 		$id  = Rest::pint( $req, 'id', 0 );
 		$g   = Data::one( 'SELECT * FROM ' . Data::t( 'aq_credit_gifts' ) . ' WHERE id = %d', [ $id ] );
 		if ( ! $g || (int) $g['donor_id'] !== $uid ) { return Rest::err( 'not_yours', 'That is not one of your gifts', 403 ); }
-		if ( (int) $g['widened'] > 0 ) { return Rest::err( 'already', 'You have already released this gift', 409 ); }
 		$general = self::bucket( self::ANY, self::ANY, self::ANY );
 		if ( (string) $g['bucket'] === $general ) { return Rest::err( 'already_general', 'This gift is already open to any member', 409 ); }
+		// A courtesy answer for the ordinary repeat click; the claim below is what actually decides.
+		if ( (int) $g['widened'] > 0 ) { return Rest::err( 'already', 'You have already released this gift', 409 ); }
 
 		$lock = 'crdbucket_' . (string) $g['bucket'];
 		if ( ! Economy::acquire_lock( $lock, 15 ) ) { return Rest::err( 'busy', 'Try again in a moment', 429 ); }
 		try {
-			$used  = (int) Data::col( 'SELECT COUNT(*) FROM ' . Data::t( 'aq_credit_grants' ) . ' WHERE gift_id = %d', [ $id ] );
-			$left  = (int) $g['entries'] - $used;
-			if ( $left < 1 ) { return Rest::err( 'spent', 'This gift has already been used in full', 409 ); }
 			$spent = (int) Data::col( 'SELECT COALESCE(SUM(cents),0) FROM ' . Data::t( 'aq_credit_grants' ) . ' WHERE gift_id = %d', [ $id ] );
 			$move  = min( max( 0, (int) $g['cents'] - $spent ), max( 0, Economy::counter( 'fund_' . $g['bucket'] ) ) );
 			if ( $move < 1 ) { return Rest::err( 'empty', 'There is nothing left in this gift to release', 409 ); }
+			// What the released money GUARANTEES, at the unit price and fee cap frozen when the donor
+			// paid — never the untouched share of the original count, which was quoted against cents
+			// that may since have been clamped away by a bucket the rest of its slice has drained.
+			// intdiv, with NO floor of one. A residue smaller than a single maximum-fee entry cannot
+			// buy an entry, and a successor that claimed one anyway would be offered against the general
+			// earmark and spend a DIFFERENT donor's money to keep a promise this money cannot keep —
+			// which is precisely the overstatement the re-derivation exists to stop. Rounding down loses
+			// no money: every cent of the remainder still moves, in $move.
+			$left = intdiv( $move, max( 1, (int) $g['unit_cents'] ) * max( 1, (int) $g['fee_cap'] ) );
 
+			// THE CLAIM. One row affected means this call is the release; anything else means another
+			// request (or another click) already is, and it must not move the same money a second time.
+			$stamp = Data::now();
+			if ( 1 !== Data::update( 'aq_credit_gifts', [ 'widened' => $stamp ], [ 'id' => $id, 'widened' => 0 ] ) ) {
+				return Rest::err( 'already', 'You have already released this gift', 409 );
+			}
 			$ref  = 'widen:' . $id;
 			$note = 'Released to any member: ' . self::bucket_words( $g['bucket'] );
 			if ( ! Funds::move_credit_earmark( $g['bucket'], $general, $move, $ref, $note ) ) {
+				// Rejected before either append (move_credit_earmark validates first), so no money has
+				// moved and this gift was never released — hand the claim back, or the stamp alone would
+				// strand the gift for good: stamped gifts stop matching, and a stamped gift cannot be
+				// released again. `widened` is a state flag on the gift, not a ledger row, so putting it
+				// back is not a rewrite of money; the CAS on our own stamp keeps that precise.
+				Data::update( 'aq_credit_gifts', [ 'widened' => 0 ], [ 'id' => $id, 'widened' => $stamp ] );
 				return Rest::err( 'server_error', 'Could not release the gift', 500 );
 			}
-			// The successor carries the remaining promise; the original is stamped so it stops matching.
-			$new = Data::insert( 'aq_credit_gifts', [
-				'donor_id' => $uid, 'bucket' => $general, 'cents' => $move, 'entries' => $left,
-				'unit_cents' => (int) $g['unit_cents'], 'fee_cap' => (int) $g['fee_cap'],
-				'donor_name' => (string) $g['donor_name'], 'ref' => $ref, 'widened' => 0, 'created' => Data::now(),
-			] );
-			Data::update( 'aq_credit_gifts', [ 'widened' => Data::now() ], [ 'id' => $id ] );
+			// The successor carries the remaining promise. It is written AFTER the money, deliberately:
+			// a successor with no money behind it would be offered against the general bucket and spend
+			// another donor's gift, whereas money that arrives with no successor is simply money in the
+			// general earmark — still ArtaCredits, still doing the job the donor released it for. A
+			// residue under one entry takes that second road on purpose (see $left): no gift row is
+			// written, the cents join the general earmark, and any live general gift can spend them.
+			$new = 0;
+			if ( $left > 0 ) {
+				$new = (int) Data::insert( 'aq_credit_gifts', [
+					'donor_id' => $uid, 'bucket' => $general, 'cents' => $move, 'entries' => $left,
+					'unit_cents' => (int) $g['unit_cents'], 'fee_cap' => (int) $g['fee_cap'],
+					'donor_name' => (string) $g['donor_name'], 'ref' => $ref, 'widened' => 0, 'created' => Data::now(),
+				] );
+			}
 			return [ 'ok' => true, 'moved_cents' => $move, 'entries' => $left, 'gift' => (int) $new,
 				'message' => 'Released — your gift is now open to any member of ArtaQuest.' ];
 		} finally {
@@ -536,24 +657,30 @@ final class Credits {
 		$G    = Data::t( 'aq_credit_gifts' );
 		$R    = Data::t( 'aq_credit_grants' );
 		$rows = Data::all(
-			"SELECT g.*, ( SELECT COUNT(*) FROM $R r WHERE r.gift_id = g.id ) AS used
+			"SELECT g.*, ( SELECT COUNT(*) FROM $R r WHERE r.gift_id = g.id ) AS used,
+			        ( SELECT COALESCE(SUM(r.cents),0) FROM $R r WHERE r.gift_id = g.id ) AS spent
 			 FROM $G g WHERE g.donor_id = %d ORDER BY g.id DESC LIMIT 50", [ $uid ] );
 		$general = self::bucket( self::ANY, self::ANY, self::ANY );
 		return [ 'items' => array_map( static function ( $g ) use ( $general ) {
-			$left = (int) $g['entries'] - (int) $g['used'];
+			$held = Economy::counter( 'fund_' . $g['bucket'] );
+			// What widen() would actually be able to move: this gift's own unspent cents, clamped to
+			// what the shared slice earmark still holds.
+			$loose = min( max( 0, (int) $g['cents'] - (int) $g['spent'] ), max( 0, $held ) );
 			return [
 				'id'       => (int) $g['id'],
 				'words'    => self::bucket_words( $g['bucket'] ),
 				'cents'    => (int) $g['cents'],
 				'entries'  => (int) $g['entries'],
 				'used'     => (int) $g['used'],
-				'held'     => Economy::counter( 'fund_' . $g['bucket'] ),
+				'held'     => $held,
 				'name'     => self::donor_name( $g ),
 				'date'     => (int) $g['created'],
 				'widened'  => (int) $g['widened'] > 0,
-				// Can the donor release what is left to the general slice? Only a targeted, unspent,
-				// not-yet-released gift — the UI shows the control on exactly these.
-				'can_widen' => (int) $g['widened'] === 0 && $left > 0 && (string) $g['bucket'] !== $general,
+				// Can the donor release what is left to the general slice? Money left decides it, not
+				// entries left — a gift whose entries all went on cheap challenges still holds cents,
+				// and those are exactly the cents that would otherwise be stranded. The UI shows the
+				// control on precisely the gifts widen() would accept, so it never offers a dead button.
+				'can_widen' => (int) $g['widened'] === 0 && $loose > 0 && (string) $g['bucket'] !== $general,
 			];
 		}, $rows ) ];
 	}
@@ -672,8 +799,12 @@ final class Credits {
 	 *      ONLY: a donor's release (Credits::widen) also writes a negative crd_ row, and counting
 	 *      that as a spend would make this check fail permanently the first time anyone released a
 	 *      gift — a proof that cries wolf is worse than no proof.
-	 *   4. Every release is zero-sum. Its −from/+to pair shares one `widen:<gift>` ref, so the pair
-	 *      must sum to exactly 0; a non-zero sum means money was created or destroyed by a move.
+	 *   4. Every release is zero-sum AND is exactly one pair. Its −from/+to appends share one
+	 *      `widen:<gift>` ref, so they must sum to exactly 0 — a non-zero sum means money was created
+	 *      or destroyed by a move. The sum ALONE proves too little: a gift released twice writes a
+	 *      second −m/+m pair that nets to zero just as innocently, so the count of rows under the ref
+	 *      is what makes a double release visible at all. Exactly 2, or something moved money twice.
+	 *      (A manual reversal must therefore carry its own ref, not reuse the release's.)
 	 */
 	public static function verify_credits() {
 		global $wpdb;
@@ -693,11 +824,13 @@ final class Credits {
 			[ $wpdb->esc_like( 'crd_' ) . '%', $wpdb->esc_like( 'credit:' ) . '%' ] );
 		$checks[] = [ 'check' => 'credit:grants=spends', 'projected' => $grants, 'ledger' => $spends, 'ok' => $grants === $spends ];
 
-		// Every release must be exactly zero-sum across its own ref.
-		foreach ( Data::all( "SELECT ref, COALESCE(SUM(cents),0) net FROM $L WHERE ref LIKE %s GROUP BY ref",
+		// Every release must be exactly zero-sum across its own ref — and exactly ONE pair of appends.
+		foreach ( Data::all( "SELECT ref, COUNT(*) cnt, COALESCE(SUM(cents),0) net FROM $L WHERE ref LIKE %s GROUP BY ref",
 			[ $wpdb->esc_like( 'widen:' ) . '%' ] ) as $r ) {
 			$checks[] = [ 'check' => 'credit:' . (string) $r['ref'] . ':zero-sum', 'projected' => 0,
 				'ledger' => (int) $r['net'], 'ok' => (int) $r['net'] === 0 ];
+			$checks[] = [ 'check' => 'credit:' . (string) $r['ref'] . ':one-pair', 'projected' => 2,
+				'ledger' => (int) $r['cnt'], 'ok' => 2 === (int) $r['cnt'] ];
 		}
 		return $checks;
 	}

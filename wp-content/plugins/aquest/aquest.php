@@ -37,7 +37,7 @@ spl_autoload_register( function ( $class ) {
  * that worker, yielding "Class AQ\Db not found". Loading all classes up-front (each guarded
  * by class_exists) makes the backend deterministic regardless of autoload/opcache timing.
  */
-foreach ( [ 'Data', 'Schema', 'Cron', 'Secrets', 'Vault', 'Watchdog', 'Integrity', 'Health', 'Rest', 'Auth', 'Sessions', 'Account', 'Verify', 'Courses', 'Topics', 'Typology', 'Learn', 'Economy', 'Season', 'Social', 'Search', 'I18n', 'Funds', 'Extra', 'Offline', 'Notify', 'Meet', 'Assistant', 'Relay', 'Science', 'Library', 'Music', 'Motion', 'Narrate', 'Film', 'Illustration', 'Fearometer', 'Tickets', 'Stripe', 'YouTube', 'Console', 'Trends', 'Houses', 'Competitions', 'Translate', 'Artaai', 'Games', 'Challenges', 'Demo', 'Doi', 'Notebook', 'Chat', 'Api', 'Passkey', 'News', 'Kaggle', 'Kernel', 'Gist' ] as $aq_cls ) {
+foreach ( [ 'Data', 'Schema', 'Cron', 'Secrets', 'Vault', 'Watchdog', 'Integrity', 'Health', 'Rest', 'Auth', 'Sessions', 'Account', 'Verify', 'Courses', 'Topics', 'Typology', 'Learn', 'Economy', 'Season', 'Social', 'Search', 'I18n', 'Funds', 'Extra', 'Offline', 'Notify', 'Meet', 'Assistant', 'Relay', 'Science', 'Library', 'Music', 'Motion', 'Narrate', 'Film', 'Illustration', 'Fearometer', 'Tickets', 'Stripe', 'YouTube', 'Console', 'Trends', 'Houses', 'Competitions', 'Translate', 'Artaai', 'Games', 'Challenges', 'Demo', 'Doi', 'Notebook', 'Chat', 'Api', 'Passkey', 'News', 'Kaggle', 'Kernel', 'Gist', 'Credits', 'KaggleId' ] as $aq_cls ) {
 	$aq_file = AQ_DIR . '/src/' . $aq_cls . '.php';
 	if ( ! class_exists( 'AQ\\' . $aq_cls, false ) && is_readable( $aq_file ) ) { require_once $aq_file; }
 }

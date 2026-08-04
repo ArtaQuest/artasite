@@ -435,7 +435,11 @@ add_action( 'template_redirect', 'aq_redirect_legacy_account_tabs', 5 );
  *  these are a "sign in"/checkout/form gate: thin, no crawl value, wrong to index. (The public
  *  /bursaries/ info page stays indexable; only the application FORM is suppressed.) */
 /** Page slugs that are private/transactional → noindex AND excluded from the XML sitemap (a sitemap
- *  must only advertise indexable URLs). Single source of truth for both. */
+ *  must only advertise indexable URLs). Single source of truth for both. NOT a retirement list: every
+ *  slug here is a LIVE page-backed React route. 'certificate' and 'verify' in particular are the two
+ *  halves of the Certificate of Participation and both must keep resolving with their query string —
+ *  they are noindex because an HMAC-bearing URL has no business in an index, not because they are
+ *  dead. Never mirror this array into the parse_request redirect map above. */
 function aq_app_noindex_page_slugs() {
 	return array( 'user-account', 'login', 'wallet', 'enroll', 'bursary-application', 'certificate', 'verify', 'studio' );
 }
@@ -1415,8 +1419,10 @@ function aq_faq_items() {
  * REQUEST_URI by now (belt-and-braces strip below), and home_url() re-adds the active locale, so
  * the hops stay locale-correct. Still-live routes (/, /about, /wallet, /donate, /sponsors, /reserve,
  * /data, /careers, /issues, /faq-contact, /login, /user-account, /u/<slug>, /library, /challenges,
- * /offline, /fearometer, /pricing, /d/<code>, /works + the eleven kind hubs, /nb, /studio, /console)
- * never match this map. (/discussions is NOT one of them — it is in the map below.)
+ * /offline, /fearometer, /pricing, /d/<code>, /works + the eleven kind hubs, /nb, /studio, /console,
+ * /certificate, /verify) never match this map. (/discussions is NOT one of them — it is in the map
+ * below.) Anything that reads a QUERY STRING is doubly unsafe here: this map redirects to a bare
+ * home_url() path, so a match does not merely move the reader, it silently deletes their parameters.
  */
 add_action( 'parse_request', function () {
 	$path = trim( (string) wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ?? '' ), PHP_URL_PATH ), '/' );
@@ -1467,14 +1473,23 @@ add_action( 'parse_request', function () {
 		'shop'             => '/works/',
 		'discussions'      => '/works/', // forum retired 2026-07-14 — every post carries its own board
 		'arena'            => '/games/', // arena retired 2026-07-14 — games live fully inside the feed
-		// Transactional renames + retired verification surfaces.
+		// Transactional renames.
 		'enroll'           => '/wallet/',
 		'cart'             => '/wallet/',
 		// 'checkout' was reaching /wallet/ as a 302 from elsewhere while every other retired slug
 		// here is a 301. A retired path is permanently retired: a 302 tells a crawler to keep asking.
 		'checkout'         => '/wallet/',
-		'verify'           => '/',
-		'certificate'      => '/',
+		// 'verify' and 'certificate' are NOT retired and must never return to this map. Both are LIVE
+		// React routes (App.tsx → pages/Participation.tsx) behind real published WP pages, and both
+		// carry their meaning in the QUERY STRING — /certificate/?challenge=<id> for the holder's own
+		// Certificate of Participation, /verify/?p=<ch>&u=<uid>&k=<hmac> for the public authenticity
+		// check. This map runs at parse_request priority 1, so it intercepted before is_page() could
+		// resolve, and home_url('/') drops the query: the verify URL PRINTED ON THE CERTIFICATE
+		// (components/participation.tsx: 'artaquest.com/verify') sent every reader to the home page
+		// with their code discarded, and the certificate itself was unreachable. Producers of those
+		// links: Credits.php (verify_url / certificate url), Notebook.php (challenge entry) and
+		// Extra.php. They stay noindex + out of the sitemap via aq_app_noindex_page_slugs() — an
+		// HMAC-bearing URL should never be indexed — which is a page-level policy, not a redirect.
 	);
 	if ( isset( $map[ $seg ] ) ) {
 		wp_safe_redirect( home_url( $map[ $seg ] ), 301 );
@@ -1847,6 +1862,11 @@ add_action(
 		// Recommendations — purged 2026-06-24 (the daily "what to study now" now lives on Home only). The
 		// slug stays published purely as the 301 anchor registered in the template_redirect block above.
 		aq_ensure_app_page( 'recommendations', 'Recommendations' );
+		// The Certificate of Participation — /certificate/?challenge=<id>, the holder's own copy
+		// (pages/Participation.tsx). Its public half, /verify/, self-heals in aq_ensure_verify_page()
+		// below; both need a real published page for the same reason, so heal both or the two halves
+		// of one document drift apart on a fresh site. Noindex via aq_app_noindex_page_slugs().
+		aq_ensure_app_page( 'certificate', 'Certificate of Participation' );
 	},
 	20
 );
@@ -1856,6 +1876,13 @@ add_action(
  * a real published WP page at that slug so a verification link resolves to a 200 (served through the
  * app template) instead of a 404 — both locally and after a deploy where no migration created it.
  * Idempotent + option-cached so it costs nothing once the page exists. (Mirrors aq_ensure_app_page().)
+ *
+ * LOAD-BEARING, and the opposite of the 2026-08-04 bug: the page is what lets /verify/?p&u&k resolve
+ * through is_page() with its query intact. What broke the route was the parse_request map above
+ * claiming the slug at priority 1 — a redirect that fired before this page was ever consulted. Delete
+ * this and a cold site falls back to is_404(), where WP's redirect_guess_404_permalink can hand the
+ * URL to whatever slug it prefixes before the theme sees it (see /arta → /artaillustration/,
+ * 2026-07-31). React renders the page from pages/Participation.tsx (Verify.tsx is no longer routed).
  */
 function aq_ensure_verify_page() {
 	$id = (int) get_option( 'aq_verify_page_id' );

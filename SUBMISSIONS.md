@@ -1,14 +1,16 @@
 # ArtaQuest submissions — the reproducibility contract
 
-**Effective 2026-07-28 (operator order).** A submission is a **public Kaggle notebook that has been
-run**. The author pastes the URL of that notebook's output page, picks which of its output files to
-publish, and an exhaustive **reproducibility checklist** runs against Kaggle's public API. Published
-files land in the **Library**, where any member can attach them to their posts.
+**Effective 2026-07-28 (operator order), amended 2026-08-04.** A submission is a **public Kaggle
+notebook that has been run**, from a **Kaggle account the submitting member has proved they
+control**. The author pastes the URL of that notebook's output page, picks which of its output files
+to publish, and an exhaustive **reproducibility checklist** runs against Kaggle's public API.
+Published files land in the **Library**, where any member can attach them to their posts.
 
 Everything the platform asserts about a work is read back from Kaggle and listed, item by item, in
 public. Nothing is graded, ranked or judged; no number is attached to a work. This file is the
 contract; the code that enforces it is `wp-content/plugins/aquest/src/Kernel.php` (the checklist),
-`Kaggle.php` (the read client) and `Notebook.php` (the author's key). Keep the four in sync.
+`Kaggle.php` (the read client), `KaggleId.php` (the account proof) and `Notebook.php` (the author's
+key). Keep the five in sync.
 
 ## The claim we make
 
@@ -24,21 +26,94 @@ Four facts, each checkable by a stranger with no account and no credential:
 Our checklist is not a private judgement. It is a public assertion anybody can re-run against the
 same public API and contradict.
 
-## Who gets the credit
+A fifth claim is about people rather than about the run, so it sits in **Whose notebook is it** below:
+the member who submitted the work has **proved they control the Kaggle account it belongs to**. It
+holds for every submission made from 2026-08-04, and for none of the three works published before
+that date. It is re-runnable by a stranger too — read from the same endpoint, which needs no
+credential, out of a public notebook whose URL we keep and publish.
 
-**Any member may submit any PUBLIC Kaggle notebook** (operator decision 2026-07-28) — you do not
-have to own it. What follows from that is a rule, not a nicety: **the notebook is credited to its
-Kaggle author**, always.
+## Whose notebook is it
 
-- The permanent DOI records the Kaggle author as the **creator**; the ArtaQuest member who brought
-  it here is recorded as a **contributor**.
+**A member may submit only a notebook from a Kaggle account they have proved they control** (operator
+decision 2026-08-04). This replaced the rule of 2026-07-28, under which any member could submit any
+public notebook.
+
+The reason for the change is the DOI. Publication mints a permanent CC-BY citation crediting the
+notebook's Kaggle author, and under the old rule that author had never been asked and might never
+learn of it. Every other blocking item on the checklist describes something an author can go and fix;
+this one describes something a stranger cannot undo, because a citation of record is built to outlive
+the kernel it came from.
+
+### The proof, step by step
+
+It runs entirely on Kaggle's credential-free read API, so it is not a private judgement either — a
+stranger can repeat it against the same kernel, today or next year.
+
+1. **You claim a handle** in Account → Your Kaggle handle. A bare username, an `@handle` or any
+   Kaggle URL works; the username is taken out of it and stored lowercased.
+2. **We mint a one-time string** and show it to you once. We store only its **sha256**. Every row of
+   this database is public, so the string itself is never written down here — nobody at ArtaQuest can
+   read it back to you, and losing it costs nothing: claim again for a fresh one, and the old one
+   stops working.
+3. **You put that string in a public notebook under that handle** — any cell, or the title — and
+   paste that notebook's URL back to us.
+4. **We read that kernel back off Kaggle's public endpoint** — literally
+   `GET /kernels/pull?userName=<the handle you claimed>&kernelSlug=<the slug in your URL>` — and
+   check three things. It answers **200** — for that URL only a notebook that exists, opens without
+   a login and sits under *that account* does, because Kaggle answers 403 for one that is private,
+   deleted, or simply not that account's, and it matches the handle case-insensitively, as we do.
+   Its metadata **confirms it is not private**, which we read rather than infer from the status
+   code. And its source or its title carries a string whose sha256 is the fingerprint we stored —
+   we look for the fingerprint, never for the string, because we do not hold the string.
+5. On success the handle is marked **verified**, the fingerprint is cleared — a proved row keeps no
+   verifier at all — and the **URL of the proof kernel is kept**: on your account page, and in the
+   register itself, which like every other table here is public in the Data explorer. The check
+   stays re-runnable by anyone; the claim is not "we checked once, trust us".
+
+That endpoint takes **no credential at all**, re-verified 2026-08-04: an unauthenticated `GET` of the
+call in step 4 answers 200 with the full metadata and source, and the same call naming the wrong
+owner answers 403. Our own client sends the platform's Kaggle token, because it sends one on every
+Kaggle call; the endpoint does not ask for it. A stranger running that URL with no account, no key
+and no permission from us gets the same answer we did — which is what makes this a check anybody can
+repeat, rather than one only we can make.
+
+Only **one member** may hold a handle as verified. Two members may hold competing *pending* claims on
+the same handle, deliberately: only one of them can produce the string, and refusing the second claim
+at the point of asking would let anybody block a handle they do not own.
+
+### What that proves, and what it does not
+
+It proves **control of the account** at the moment of the proof — enough to write inside it, which is
+all Kaggle lets anyone establish from the outside. It does **not** prove who wrote which cell. A
+notebook can have collaborators; an account can be shared or handed over. We claim what we check, and
+what we check is the account.
+
+The proof kernel is also yours to edit or delete. We record where we read the string so anybody can
+go and re-read it; if you take that notebook down, the verified row stays and its evidence does not.
+Leave the proof notebook up if you want the check to stay repeatable by a stranger.
+
+### Who gets the credit
+
+Because the account is proved, the member who publishes a submission made under this rule is the
+notebook's Kaggle author, and the citation credits them:
+
+- The permanent DOI records the **Kaggle author, exactly as Kaggle reports them**, as the creator;
+  the ArtaQuest member is recorded as a **contributor**. For a submission under this rule that is two
+  names for one person — the two platforms hold different names for you — not two people.
 - The exported BibTeX names the Kaggle author.
-- Where the submitter and the author differ, the work's page says so in plain words, and links the
-  Kaggle profile.
-- The publication request, though, goes to the **submitting member's** inbox — not the Kaggle
-  author's. We hold no verified address for a stranger on another platform, and a passkey we cannot
-  check is not consent. Credit and consent are deliberately separate roles: the citation names the
-  author, the confirmation belongs to the member who brought the work here.
+- Where the two names differ, the work's page still says so in plain words and links the Kaggle
+  profile. That line predates the ownership rule and stays: a display name is not an identity, and
+  showing both is the honest thing whatever the reason for the difference.
+- The publication request goes to the **member's own registered email address**. It always did. What
+  changed is that the inbox and the credit now belong to the same person.
+
+**Everything published before this rule existed is outside it** — three works as this is written
+(`9318`, `9319`, `9321`; count them yourself in the Data explorer under `aq_notebooks`, or in
+`GET /wp-json/aq/v1/notebooks`). All three were submitted by the same member, and they name **two
+different Kaggle accounts**; nothing in their record *proves* either link. The check did not exist
+when they were published, no path ever re-inspects a published row, and their frozen checklists
+therefore do not carry the item. Any blanket statement about published work on this platform should
+be read with that exception in mind — including on this page.
 
 Silent re-attribution would be the single most dishonest thing this platform could do, and a DOI is
 permanent — so this is enforced in the deposit itself, not only in the interface.
@@ -48,12 +123,14 @@ permanent — so this is enforced in the deposit itself, not only in the interfa
 | # | Key | Who holds it | What it takes |
 |---|-----|--------------|---------------|
 | 1 | **The reproducibility checklist** | Kaggle's public API, read back item by item | ~20 deterministic checks in four groups. Every blocking check must pass. Warnings are shown loudly and never block. Every check names the exact evidence it read. |
-| 2 | **The author** — the member who submitted it | their own registered email + their device passkey | Publication is REQUESTED, never taken. A single-use secret goes to the address that member registered with; their click, plus their device passkey signature over the work, is what publishes it and mints the permanent DOI. No token, agent, relay or operator can stand in for that. |
+| 2 | **The author** — the member who submitted it, from a Kaggle account they proved is theirs | their own registered email + their device passkey | Publication is REQUESTED, never taken. A single-use secret goes to the address that member registered with; their click, plus their device passkey signature over the work, is what publishes it and mints the permanent DOI. No token, agent, relay or operator can stand in for that. |
 
-The secret goes to **the member who brought the notebook here** — they are the one with an inbox we
-can reach and a passkey we can verify. The **citation** still names the Kaggle author, as above: the
-person who consents to publication and the person credited for the work are two different roles, and
-the platform keeps them apart on purpose.
+The secret goes to **the member who submitted the notebook** — they are the one with an inbox we can
+reach and a passkey we can verify. Since 2026-08-04 that member has also proved they control the
+Kaggle account the notebook belongs to, so on a new submission the person who consents and the person
+credited are the same human. They remain two separate **roles** in the code, and deliberately so:
+consent is checked against an inbox and a device, credit is read off Kaggle, and neither is ever
+inferred from the other.
 
 **Precisely what key two guarantees.** Exactly one code path sets a work's status to
 `published`: `Notebook::author_confirm()`, reached only by an explicit `POST` carrying the raw
@@ -76,8 +153,11 @@ publication cannot be made to verify — it can only be made to appear, briefly,
 
 ## The flow, in the author's words
 
-Paste a Kaggle notebook URL → pick the files to publish → read the checklist → request publication →
-confirm from your inbox.
+Prove your Kaggle account, once → paste a Kaggle notebook URL → pick the files to publish → read the
+checklist → request publication → confirm from your inbox.
+
+The proof is a one-off. Prove a handle and every notebook under it can be submitted from then on; you
+can prove more than one account if you have more than one.
 
 The checklist runs the moment the URL is pasted, before any files are chosen — a private dataset
 should be reported straight away, not after the work of choosing files. Checks that are still waiting
@@ -110,8 +190,24 @@ prominently, never in the way.
 
 | id | The check | Severity | What it reads |
 |----|-----------|----------|---------------|
+| `owner_proven` | The submitter has proved they control the Kaggle account | BLOCK | the register of proved handles (`aq_kaggle_ids`), against the kernel's owner |
 | `kernel_public` | The notebook is public on Kaggle | BLOCK | `GET /kernels/pull` status and `metadata.isPrivate` |
 | `source_readable` | Its code can be read | BLOCK | `blob.source` — its byte length and cell counts |
+
+`owner_proven` is asked **first**, and answered without touching Kaggle: the work of proving happened
+earlier, in the register, and this only asks it one question. It sits in this group because `open` is
+the group asking who a notebook belongs to and who can reach it; the other three groups are about the
+run, and none of them is about consent.
+
+Where it cannot be answered — the register is unreadable, or the checklist is being run outside a
+member session — the item is neither passed nor failed. It is emitted as **pending**, which refuses
+publication (that needs blocks *and* pending both at zero) while accusing nobody. A green tick beside
+"the account is theirs" on a signal we never read would be the exact quiet overclaim this gate exists
+to refuse; a cross would blame an author for a fault in our plumbing.
+
+Nothing already published can be turned into a failure by this check. A published row is never
+re-inspected — the checklist a stranger reads on a published work is the frozen report stored at
+submission, and `integrity_sweep()` reads the ledger and the signatures, never the checklist.
 
 ### Can anyone re-run it?
 
@@ -188,19 +284,21 @@ a crashed Kaggle run leaves its traceback as the last thing in the log and write
 
 ## How to pass first time
 
-1. **Make it public before you paste it** — the notebook, and every dataset, model and notebook it
+1. **Prove your Kaggle account first** — it takes a minute and you only do it once. Submit a notebook
+   from an account you have not proved and the very first item on the checklist blocks it.
+2. **Make it public before you paste it** — the notebook, and every dataset, model and notebook it
    attaches. A reader who cannot open your inputs cannot re-run your work.
-2. **Save & Run All on Kaggle, and let it finish.** Files left behind by a crashed run are not a
+3. **Save & Run All on Kaggle, and let it finish.** Files left behind by a crashed run are not a
    result.
-3. **Write your result into `/kaggle/working`**, ideally into a clean subfolder, so a reader can find
+4. **Write your result into `/kaggle/working`**, ideally into a clean subfolder, so a reader can find
    it among whatever else the run leaves behind.
-4. **Switch Internet off** unless the work genuinely needs it. Anything downloaded at run time can
+5. **Switch Internet off** unless the work genuinely needs it. Anything downloaded at run time can
    change or vanish, and then a reader gets a different result.
-5. **Seed every library you draw randomness from**, at the top of the notebook.
-6. **Pin every install** as `name==version`. A different version next month is a different experiment.
-7. **Keep the clock out of your output.** If `datetime.now()` reaches a published file, no re-run can
+6. **Seed every library you draw randomness from**, at the top of the notebook.
+7. **Pin every install** as `name==version`. A different version next month is a different experiment.
+8. **Keep the clock out of your output.** If `datetime.now()` reaches a published file, no re-run can
    match it.
-8. **Check your inbox.** Passing the checklist only *requests* publication: your emailed confirmation,
+9. **Check your inbox.** Passing the checklist only *requests* publication: your emailed confirmation,
    signed by your device passkey, is what publishes the work and mints the DOI.
 
 ## Free
@@ -220,6 +318,13 @@ can be edited, made private or deleted by its owner; a citation must not rot.
 
 - **A 403 is ambiguous.** A private resource and a deleted one answer identically, so we never guess
   which it is — we say **"not publicly readable"**, which is the honest verdict either way.
+- **The account proof is not an authorship proof.** It establishes that a member could write inside a
+  Kaggle account, which is what makes them the right person to consent to a citation in that
+  account's name. It says nothing about who wrote a given cell, and we never claim otherwise.
+- **The proof is dated, and the works published before it are not covered.** It arrived 2026-08-04;
+  everything published before that date — three works, naming two Kaggle accounts — carries no such
+  item and was never re-checked, because nothing re-inspects a published row. "Every published work
+  was author-verified" is not a sentence this platform may write.
 - **We do not execute anything.** Kaggle does. We read its record and report it.
 - **We do not enforce the offline condition.** Kaggle enforces it; we read the flag. The correct
   phrasing, everywhere, is "ran with the internet switched off, on Kaggle's own record".

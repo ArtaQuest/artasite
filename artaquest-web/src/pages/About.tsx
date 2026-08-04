@@ -43,13 +43,25 @@ import founderAvatar from "../assets/founder-avatar.jpg";
  * take part".
  * • "The full record on his profile →" — Profile.tsx renders a bio, counts and a post grid. There
  * is no career record there to link to.
- * • "Only the person who wrote the notebook can publish it here" — `author_confirm_email()` mails
- * the single-use secret to `get_userdata( $r['author_id'] )->user_email`, i.e. the MEMBER who
- * submitted it. `kaggle.author` is a name read back off Kaggle, and nothing anywhere links a
- * member account to a Kaggle handle, so we could not check that claim even if we made it. The
- * gate is exactly as strong as it says — one human, one inbox, one device signature — it is just
- * a different human. Say "the member who brought it here", and credit the Kaggle author in the
- * citation, which is where the credit was always going.
+ * • "Only the person who wrote the notebook can publish it here" — DELETED 2026-08-03, RESTORED in a
+ * NARROWER form 2026-08-04. The blanket claim was false: `author_confirm_email()` mails the
+ * single-use secret to `get_userdata( $r['author_id'] )->user_email`, i.e. the MEMBER who
+ * submitted it, `kaggle.author` is a name read back off Kaggle, and nothing linked a member
+ * account to a Kaggle handle — so we could not check the claim even if we made it. That link now
+ * exists: `Kernel::inspect` blocks on `owner_proven`, which asks `KaggleId::verified_handle()`
+ * whether this member has proved control of the kernel's Kaggle account (a one-time string posted
+ * in a public notebook under that handle, read back off an endpoint that needs no credential —
+ * re-runnable by anyone). Note the endpoint, not our call: `Kaggle::get()` sends the platform's
+ * Bearer token on every request and `pull()` refuses to run without one, so "WE read it with no
+ * login" is false. What is true, and checked live 2026-08-04, is that an unauthenticated GET of
+ * the same URL answers 200, and a wrong owner answers 403.
+ * So the page may say you can only submit from an account you have proved is yours, and that
+ * publishing is still the member's own emailed, passkey-signed decision. It may NOT say every
+ * published work was author-verified: the check dates from 2026-08-04, no path re-inspects a
+ * published row, and the THREE works published before it (9318, 9319, 9321 — one member, two
+ * different Kaggle handles; counted in the public `aq_notebooks` register, not assumed) carry no
+ * such item. Nor may it say we verify who WROTE the code — the proof is control of the account,
+ * and nothing more.
  * • "it is checked" (the hate/fear line, read as happening at post time) — `Social::comment` and
  * `Notebook::comment` both store the comment with `modq = 1` and return; the reading happens later,
  * when `Fearometer::process_queue` drains the queue through the subscription relay. Since the paid
@@ -151,8 +163,8 @@ const RULES: { rule: string; body: string }[] = [
     body: "When you post a comment, it is queued and read for language built to make people hate a group, or built to frighten them. A comment over the limit is marked. It is never deleted, and the check never holds up your post.",
   },
   {
-    rule: "Only the member who brought it here can publish it — again my choice, not the equation",
-    body: "We send a one-time link to that member's own registered email address. Their click, together with a signature from their own device, is what publishes the work. No operator, no access key and no AI agent can do it instead. The citation credits the person who wrote the notebook on Kaggle, who is often someone else — we can read a Kaggle handle, but we cannot prove a member is the human behind it, so we do not pretend to. Counting futures on its own would happily publish without asking anyone. Consent is a limit I place on the aim, not something the aim produced.",
+    rule: "You can only publish a notebook from a Kaggle account you have proved is yours — again my choice, not the equation",
+    body: "From 4 August 2026 you can only submit a notebook from a Kaggle account you have proved you control: we give you a one-time string, you put it in a public notebook under that account, and we read it back from an address on Kaggle that answers anybody, with no login at all — so it is a check a stranger can repeat, not one you have to take my word for. Before that, anyone could submit anyone's public notebook, and a permanent citation could be minted in the name of a person who had never been asked. Three works were published under the old rule, naming two different Kaggle accounts, and nothing can go back and check them: the check did not exist yet, and a published work is never re-examined here. So this rule is about what happens from now on, and I would rather say that than let you assume it covers everything on the site. What the proof shows is that the account is yours, not that you typed every line — I say what I check and no more. Publishing is still a request, never a taking: a one-time link goes to your own registered email address, and your click, together with a signature from your own device, is what publishes the work. No operator, no access key and no AI agent can do it instead. Counting futures on its own would happily publish without asking anyone. Consent is a limit I place on the aim, not something the aim produced.",
   },
   {
     rule: "Hearts, never downvotes — my choice as well",
@@ -267,7 +279,11 @@ export default function About() {
           <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-ink">
             A not-for-profit social feed for science and education. Every post here is a public notebook on Kaggle:
             writing and code that Kaggle has already run on its own computers. Kaggle keeps a public
-            record of that run. We read that record and show you what it says. Only the member who brought a notebook here can publish it, from their own inbox; the citation credits the notebook's Kaggle author. It stays free to read, and anyone can run it
+            record of that run. We read that record and show you what it says. Since 4 August 2026 you can only
+            submit a notebook from a Kaggle account you have proved you control, so on every work submitted
+            since, the member who publishes it is its Kaggle author and the citation credits them. Publishing
+            takes a one-time link sent to your own inbox and a signature from your own device — nothing and
+            nobody else can do it. It stays free to read, and anyone can run it
             again on Kaggle for as long as its author keeps it there — which is why publishing also
             mints a permanent citation link that outlives the notebook.
           </p>

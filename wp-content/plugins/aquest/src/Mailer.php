@@ -118,16 +118,24 @@ class Mailer {
 			'vars'     => [ 'id', 'title', 'kind', 'plan', 'approve_url', 'decline_url', 'url' ],
 			'sample'   => [ 'id' => '42', 'title' => 'Example ticket', 'kind' => 'feature', 'plan' => 'A sample plan.', 'approve_url' => '/', 'decline_url' => '/', 'url' => '/issues/?ticket=42' ],
 		],
-		// The gate is the SUBMITTING MEMBER's inbox, not the Kaggle author's: any member may submit any
-		// public kernel (operator 2026-07-28), author_id is that member, and nothing links an account to
-		// a Kaggle handle — so "the author IS the publisher" claimed a binding the code cannot make.
-		// What IS true, and what this email now says: only the member who brought the notebook here can
-		// publish it, from their own inbox, and the citation credits the notebook's Kaggle author.
+		// The gate is the SUBMITTING MEMBER's inbox: author_id is that member, and the secret goes to the
+		// address they registered with. Until 2026-08-04 nothing linked that account to a Kaggle handle,
+		// so "the author IS the publisher" claimed a binding the code could not make; since then a member
+		// may only submit a notebook from a Kaggle account they have PROVED they control (KaggleId), and
+		// Kernel::inspect blocks on it. The wording below DATES that rule and asks the reader to check
+		// this one work against it, rather than asserting the proof per-send: a draft checked before that
+		// date keeps its frozen report, so not every recipient of this email has been held to the rule —
+		// and the template has no var that could tell them apart.
+		//
+		// "cleared every check that can block publication", not "every reproducibility check": warnings
+		// do not block (Kernel::report only counts BLOCK failures and pending), and checks_html prints
+		// every non-passing item underneath — so a mail promising a clean sheet would be contradicted a
+		// paragraph later by the very list it introduces.
 		'nb_confirm' => [
-			'label'     => 'Publish your work? (only the member who brought it here can)',
+			'label'     => 'Publish your work? (only you can, from your own inbox)',
 			'audience'  => 'member',
 			'subject'   => 'Confirm to publish? — {{title}}',
-			'body'      => "The work you brought here, “{{title}}”, cleared every reproducibility check. One question remains, and it is yours alone:\n\nDo you want to publish it?\n\nConfirming publishes it IMMEDIATELY: the work is listed publicly, its files enter the Library, and a PERMANENT DOI mints — crediting the notebook's Kaggle author, with you recorded as the member who brought it here. A DOI is forever and cannot be quietly undone, so look it over first. Nothing publishes until you confirm here, whoever (or whatever) requested it — not even an app or AI agent using your own API token.\n\nWhat we checked, read back from Kaggle:\n\n{{checks_html}}\n\nThe notebook on Kaggle:\n{{kernel}}\n\nRead the draft (the work page):\n{{draft}}\n\nThe button opens a review page that embeds your working deliverable and shows exactly what publishing means (nothing happens on the click itself). Publish there, or withdraw and the work stays a private draft. The link is single-use and bound to this exact version; any edit on Kaggle voids it. If you did not request publication, simply do nothing — or withdraw.",
+			'body'      => "The work you submitted, “{{title}}”, cleared every check that can block publication. Warnings never block — any that this work carries are listed below, and they publish with it. One question remains, and it is yours alone:\n\nDo you want to publish it?\n\nConfirming publishes it IMMEDIATELY: the work is listed publicly, its files enter the Library, and a PERMANENT DOI mints — crediting the notebook's Kaggle author, with your ArtaQuest name recorded on it as contributor. Since 4 August 2026 we accept a notebook only from a Kaggle account its submitter has proved they control, so that author should be you: check that the Kaggle link below is your own account, and if it is not, withdraw instead. A DOI is forever and cannot be quietly undone, so look it over first. Nothing publishes until you confirm here, whoever (or whatever) requested it — not even an app or AI agent using your own API token.\n\nWhat we checked, read back from Kaggle:\n\n{{checks_html}}\n\nThe notebook on Kaggle:\n{{kernel}}\n\nRead the draft (the work page):\n{{draft}}\n\nThe button opens a review page that embeds your working deliverable and shows exactly what publishing means (nothing happens on the click itself). Publish there, or withdraw and the work stays a private draft. The link is single-use and bound to this exact version; any edit on Kaggle voids it. If you did not request publication, simply do nothing — or withdraw.",
 			'cta'       => [ 'Review & publish (mints the DOI)', '{{url}}' ],
 			'vars'      => [ 'id', 'title', 'kind', 'checks_html', 'kernel', 'url', 'draft' ],
 			'html_vars' => [ 'checks_html' ],

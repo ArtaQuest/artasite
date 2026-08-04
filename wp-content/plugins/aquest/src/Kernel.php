@@ -285,9 +285,9 @@ class Kernel {
 	}
 
 	/** A check that could not be run at all (e.g. nothing selected yet). */
-	private static function skip( $id, $group, $sev, $title, $detail ) {
+	private static function skip( $id, $group, $sev, $title, $detail, $evidence = '' ) {
 		return [ 'id' => $id, 'group' => $group, 'severity' => $sev, 'title' => $title,
-			'state' => 'skip', 'detail' => $detail, 'fix' => '', 'evidence' => '' ];
+			'state' => 'skip', 'detail' => $detail, 'fix' => '', 'evidence' => $evidence ];
 	}
 
 	/**
@@ -298,9 +298,23 @@ class Kernel {
 	 * is the point — a private dataset should be reported the moment the URL is pasted, not after
 	 * they have done the work of choosing files).
 	 *
+	 * $user_id is the member whose submission this is — the one held to the account proof below.
+	 * 0 means UNKNOWN, and unknown is neither a pass nor a failure: the ownership item is emitted as
+	 * `skip` (pending), which refuses publication without accusing anybody. Two different callers
+	 * need that distinction and it is the whole reason the check exists:
+	 *
+	 *   · `store()` always knows the member (the row's author_id), so a stored report always carries
+	 *     a real pass or a real failure — never the abstention.
+	 *   · A READER never reaches this function. The checklist a signed-out stranger sees on a
+	 *     published work is the FROZEN report on the row (`Notebook::full`, `checks`), so this check
+	 *     reports what was true at submission and is never re-evaluated against the viewer. That is
+	 *     also why nothing already published can be turned into a failure by this change: no path
+	 *     re-inspects a published row (`own()` refuses one, `import()` returns its stored report),
+	 *     and `integrity_sweep()` reads the ledger and the signatures, never the checklist.
+	 *
 	 * Returns the report array stored verbatim on the work and rendered, unchanged, in public.
 	 */
-	public static function inspect( $owner, $slug, $selection = [] ) {
+	public static function inspect( $owner, $slug, $selection = [], $user_id = 0 ) {
 		$items = [];
 		$facts = [
 			'owner' => (string) $owner, 'slug' => (string) $slug,
@@ -308,6 +322,69 @@ class Kernel {
 		];
 
 		// ── open ──────────────────────────────────────────────────────────────
+		//
+		// WHOSE NOTEBOOK IS THIS? Asked FIRST, and answered without touching Kaggle.
+		//
+		// Until today any member could paste any public Kaggle notebook and the platform would mint a
+		// permanent CC-BY DOI crediting its Kaggle author — who never consented and might never learn
+		// of it. Every other item on this list describes something the author can go and fix; this one
+		// describes something a stranger cannot undo, because a citation of record is meant to outlive
+		// the kernel it came from. So it BLOCKS, and it is the first line anybody reads.
+		//
+		// It lives in `open` because that is the group asking who this notebook belongs to and who can
+		// reach it. The other three are about the run — its inputs, its files, its repeatability — and
+		// none of them is about consent. The heading does not literally cover this; of the four it is
+		// the only honest home for it.
+		//
+		// The proof itself is NOT re-run here: KaggleId owns it (a one-time string the member posts in
+		// a public notebook under the handle they claim, read back with no credential — checkable by a
+		// stranger, exactly like every other item on this list). This asks that register one question.
+		$owner_h = strtolower( trim( (string) $owner ) );
+		$uid     = (int) $user_id;
+		$reg     = __NAMESPACE__ . '\\KaggleId';
+		$can_ask = class_exists( $reg ) && method_exists( $reg, 'verified_handle' );
+		$facts['owner_proven'] = null;
+		if ( $uid <= 0 || ! $can_ask ) {
+			// UNKNOWN IS NOT A PASS — and it is not a refusal either. `skip` counts as pending, so the
+			// work cannot publish (report() needs blocks AND pending at zero) while the checklist says
+			// plainly that nobody was accused of anything. Rendering a green tick beside "the account
+			// is theirs" on a signal we never read would be the exact quiet overclaim this gate exists
+			// to refuse; rendering a blue cross would accuse an author of a failure in our plumbing.
+			$items[] = self::skip( 'owner_proven', 'open', self::BLOCK,
+				'Whether the submitter controls the Kaggle account could not be confirmed',
+				$uid > 0
+					? 'The register of proven Kaggle accounts could not be read just now, so this was left unanswered rather than assumed. Nothing publishes on a check we did not run — try again in a moment.'
+					: 'This checklist was run outside a member session, so there is nobody to hold the account proof against. It is left unanswered rather than treated as a pass.',
+				'kernel owner=' . $owner_h . ' · submitter=' . ( $uid > 0 ? '#' . $uid : 'unknown' ) );
+		} else {
+			$proven = KaggleId::verified_handle( $uid, $owner_h );
+			$facts['owner_proven'] = (bool) $proven;
+			// THE EVIDENCE IS BUILT FROM THE VERDICT'S OWN CALL, never from the register's listing:
+			// handles() returns what a member has CLAIMED, and a pending claim printed beside a tick
+			// would read as a proof that does not exist. So every handle it lists is put back through
+			// verified_handle(), and the line names only what actually decided this item. Bounded — a
+			// member with a hundred claims does not get a hundred lookups.
+			$mine = [];
+			if ( method_exists( $reg, 'handles' ) ) {
+				foreach ( array_slice( (array) KaggleId::handles( $uid ), 0, 12 ) as $h ) {
+					$v = is_array( $h ) ? ( $h['handle'] ?? '' ) : $h;
+					$v = is_scalar( $v ) ? strtolower( trim( (string) $v ) ) : '';
+					if ( '' !== $v && KaggleId::verified_handle( $uid, $v ) ) { $mine[] = $v; }
+				}
+			}
+			$mine = array_values( array_unique( $mine ) );
+			$items[] = self::item( 'owner_proven', 'open', self::BLOCK,
+				'The submitter has proven they control the Kaggle account',
+				$proven,
+				$proven
+					? 'This submission names kaggle.com/' . $owner_h . ', and that account has been proven to be this member\'s own — so the person publishing this work is the person who made it.'
+					: 'This submission names the Kaggle account "' . $owner_h . '", which this member has not proven they control'
+						. ( $mine ? ' (they have proven: ' . implode( ', ', $mine ) . ')' : ' (they have proven no Kaggle account yet)' )
+						. '. Publishing it would mint a permanent citation crediting somebody who has not asked for one.',
+				'Prove the account is yours: we give you a one-time string, you put it in a public notebook under that Kaggle account, and we read it back with no credential — then run this checklist again. If the notebook is not yours, ask its author to submit it themselves. A citation in someone else\'s name is not ours to mint.',
+				'kernel owner=' . $owner_h . ' · proven for this member: ' . ( $mine ? implode( ', ', $mine ) : 'none' ) );
+		}
+
 		[ $code, $meta, $src ] = Kaggle::pull( $owner, $slug );
 		$private = ! empty( $meta['isPrivate'] );
 		$open_ok = ( 200 === $code && ! $private );
@@ -761,10 +838,18 @@ class Kernel {
 			[ 'id' => (int) $r['id'], 'status' => 'pending' ] );
 	}
 
-	/** Persist a fresh checklist onto a work and return the stored report. */
+	/**
+	 * Persist a fresh checklist onto a work and return the stored report.
+	 *
+	 * The row's `author_id` — the MEMBER who submitted this, never the Kaggle author — is what the
+	 * account-proof check is held against, and it is passed from here rather than read from the
+	 * session so that a re-check, a cron pass and an API-token call all judge the same person: the
+	 * one whose submission it is. The report this writes is the one a signed-out reader is served
+	 * for good, so the answer is frozen here, at submission, with the member in hand.
+	 */
 	public static function store( $r, $selection = null ) {
 		$sel  = null === $selection ? (array) ( Data::dec( $r['selection'] ?? '' ) ?: [] ) : $selection;
-		$rep  = self::inspect( (string) $r['kg_owner'], (string) $r['kg_slug'], $sel );
+		$rep  = self::inspect( (string) $r['kg_owner'], (string) $r['kg_slug'], $sel, (int) ( $r['author_id'] ?? 0 ) );
 		$f    = $rep['facts'];
 		$save = [
 			'checks'     => Data::enc( $rep ),

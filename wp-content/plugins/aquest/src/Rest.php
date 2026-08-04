@@ -535,6 +535,14 @@ final class Rest {
 		[ 'POST', 'notebooks/(?P<id>[0-9]+)/poll',           'Notebook::poll_answer',    'user'   ],
 		[ 'GET',  'notebooks/(?P<id>[0-9]+)/pick',           'Notebook::pick_get',       'public' ], // single-select typology tally
 		[ 'POST', 'notebooks/(?P<id>[0-9]+)/pick',           'Notebook::pick_answer',    'user'   ], // pick a character → sets your avatar
+		// Proving a member controls the Kaggle account they submit from (KaggleId.php). A one-time string
+		// goes in a public notebook under that handle and we read it back — so the proof is re-runnable
+		// by a stranger, not a claim we ask anyone to take on trust. The checklist's `owner_proven` BLOCK
+		// asks this register the one question, and a work cannot publish until it answers yes.
+		[ 'GET',  'kaggle-id',                               'KaggleId::mine',           'user'   ], // my claims + their state
+		[ 'POST', 'kaggle-id/claim',                         'KaggleId::claim',          'user'   ], // mint the one-time proof — returned ONCE, stored only as a hash
+		[ 'POST', 'kaggle-id/verify',                        'KaggleId::verify',         'user'   ], // read the notebook back and settle the claim
+
 		[ 'GET',  'studio/notebooks',                        'Notebook::mine',           'user'   ],
 		[ 'POST', 'studio/notebooks',                        'Notebook::create',         'user'   ],
 		[ 'POST', 'studio/notebooks/(?P<id>[0-9]+)/save',    'Notebook::save',           'user'   ], // title/abstract only — the code lives on Kaggle
