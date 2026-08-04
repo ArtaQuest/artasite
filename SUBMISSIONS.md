@@ -72,9 +72,11 @@ Four groups, in the order an author reads them:
 | `run` | Did that run produce these files? |
 | `rigour` | How repeatable is the result? |
 
-Severity is binary and honest. **BLOCK** is reserved for facts that make the run un-repeatable by a
-stranger — a private input, a needed credential, a run that ended in a crash. **WARN** is judgement:
-surfaced prominently, never in the way.
+Severity is binary and honest. **BLOCK** covers three kinds of fact, and no others: one that makes the
+run un-repeatable by a stranger (a private input, a needed credential, a run that ended in a crash); our
+own limits on what we can store and serve (at most 24 files, 512 MB each, 1 GB in total, in a type we
+can render); and a drawing we cannot rebuild from an allow-list. **WARN** is judgement: surfaced
+prominently, never in the way.
 
 ### Can anyone open it?
 
@@ -107,9 +109,10 @@ reader must join that competition and accept its rules first, and Kaggle's compe
 | `run_completed` | The run finished | BLOCK | Kaggle's own completion marker, matched **on stderr only**: `[NbConvertApp] Writing … to __results__`. Absent + a traceback ⇒ blocked. Absent + no traceback ⇒ downgraded to a WARNING, because we genuinely cannot tell |
 | `has_output` | The run produced files | BLOCK | the file list from `kernels/output` |
 | `selection` | You have chosen what to publish | BLOCK | the chosen names are still in the current output, and there are at most 24 |
-| `type_supported` | Every chosen file is a type we can serve | BLOCK | the extension, against `Kernel::TYPES` (audio · image · video · model3d · data · weights · doc · notebook) |
+| `type_supported` | Every chosen file is a type we can serve | BLOCK | the extension, against `Kernel::TYPES` (audio · image · scene · video · model3d · data · weights · doc · notebook) |
 | `files_fetchable` | Every chosen file downloads | BLOCK | a one-byte ranged GET per file |
 | `size_limit` | Every chosen file is within the size limit | BLOCK | 512 MB per file, 1 GB per submission |
+| `svg_safe` | Every chosen drawing is self-contained and carries no code | BLOCK | the real bytes of each chosen `.svg`, rebuilt by `Svg::clean()` from an allow-list of shapes, gradients, styles and animation — no script, no embedded document, no reference to another host. An SVG is the only artifact a browser executes, so we publish our own rebuild rather than the file as it arrived |
 
 `run_completed` reads a POSITIVE marker, not the absence of a bad one. Kaggle's runner always ends a
 successful notebook by converting it and writing the rendered result, so that line is decisive.

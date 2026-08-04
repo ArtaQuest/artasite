@@ -52,7 +52,7 @@ and built in CI. Committing it makes every working copy fight over the same mani
 - DOIs are permanent — removal only unlists.
 
 ## Hard platform rules (enforced in code — do not soften)
-- Reproducibility: `Notebook::blob_guard` rejects opaque payloads at save + dev-update; critic zeroes reproducibility on smuggled data; offline sandbox blocks the network.
+- Reproducibility: the gate is `Kernel::inspect()` — ~20 deterministic checks read back from Kaggle's public API. We execute nothing and enforce no offline condition; Kaggle does both, and we read and report its record. `Notebook::blob_guard` still rejects opaque payloads at save + dev-update.
 - Ledgers append-only (Watchdog alarms on rewrites; `rebaseline()` after intentional bulk ops).
 - No astrology surfaces; no radial charts; gold+blue only (`255−gold`); no third accent.
 

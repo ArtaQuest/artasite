@@ -146,8 +146,10 @@ deterministic checks in four groups, which are the four questions an author actu
 *Can anyone open it? · Can anyone re-run it? · Did that run produce these files? · How repeatable
 is the result?* (`Kernel::GROUPS`).
 
-Severity is binary and honest. `BLOCK` is reserved for facts that make the run un-repeatable by a
-stranger — a private input, a needed credential, a run that ended in a crash. `WARN` is everything
+Severity is binary and honest. `BLOCK` covers three kinds of fact, and no others: one that makes the run
+un-repeatable by a stranger (a private input, a needed credential, a run that ended in a crash); our own
+storage and serving limits (24 files, 512 MB each, 1 GB, a type we can render); and a drawing
+`Svg::clean()` cannot rebuild from an allow-list. `WARN` is everything
 that is judgement — an unseeded random source, an unpinned install, a wall-clock read, an
 accelerator a reader may not have, internet left on. Warnings are shown loudly and never block.
 Nothing is scored, ranked, graded or judged, and every item carries the exact evidence it read:

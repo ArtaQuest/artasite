@@ -13,8 +13,8 @@ point when a ticket you opened is resolved.
 
 Read these first — they are short and they are the real rules:
 
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** — project shape, conventions, and what not to do.
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** — why the system is shaped this way.
+- **[README.md](README.md)** — what the platform is, and where every part of it lives. -
+**[ARCHITECTURE.md](ARCHITECTURE.md)** — project shape, conventions, and why it is shaped this way.
 - **tools/ticket-agent/COORDINATION.md** — how
   humans and AI agents share this codebase without stepping on each other.
 
@@ -47,7 +47,7 @@ The short version of the conventions:
     fails too. Describe it, don't quote it. (Both failure modes were hit in a row while
     writing this entry, which is why it says so.)
 
-Verify before you ship: `cd artaquest-web && npx tsc --noEmit && npm run build`,
+Verify before you ship: `cd artaquest-web && npx tsc -b --force && npm run build`,
 and the plugin test harness under `wp-content/plugins/aquest/tools/`.
 
 ## License

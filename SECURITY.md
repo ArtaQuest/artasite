@@ -15,8 +15,10 @@ Reports that member data is "exposed" there are working as intended, not a bug.
 
 What we *do* treat as serious vulnerabilities:
 
-- Leakage of **secrets**: API keys, payment/signing keys, SMTP credentials,
-  session tokens, sign-in codes, or administrator password hashes.
+- Leakage of **secrets**: API keys, payment/signing keys, SMTP credentials,   session tokens, sign-in
+codes, API token hashes, or a live publication-confirm   verifier. (Password hashes, including
+administrators', are public in `/data` by   design — password login is disabled platform-wide, so a read
+hash is inert.)
 - **Authentication bypass** — acting as another member, or reaching wp-admin
   without operator credentials.
 - **Ledger integrity** — any way to mint, duplicate, or redirect coins/points
