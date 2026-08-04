@@ -161,6 +161,44 @@ jobs:
           cache: npm
           cache-dependency-path: artaquest-web/package-lock.json
 
+      # Part of what this site serves is RESEARCHED in its own repository and vendored in here: the
+      # funder catalogue from ArtaQuest/artagrants, and Arta herself from ArtaQuest/artalife. Those
+      # repositories are the source of record; a sync tool writes the copy that ships
+      # (tools/grants-sync.mjs, tools/arta-sync.mjs).
+      #
+      # WHY THIS GATE EXISTS. When the catalogue moved out to artagrants, the copy and its sync tool
+      # were added to the OTHER repository and never reached this one. Extra::import_grants() returns
+      # silently when the file is not readable, so production served an EMPTY grants programme — 166
+      # researched funders, not one of them reachable — and no signal anywhere said so. A missing
+      # vendored file is invisible: no route 500s, no build fails, the page simply renders nothing.
+      #
+      # It checks PRESENCE AND USABILITY, never freshness. Comparing against upstream's HEAD would
+      # turn a push here red the moment an unrelated repository moved ahead, and a gate that cannot
+      # go green is a gate that gets deleted. Re-syncing is a local step, and drift is what those
+      # tools' own `--check` reports.
+      - name: Vendored satellite content is present
+        run: |
+          bad=0
+          g=wp-content/plugins/aquest/data/outreach-grants.json
+          if [ ! -s "$g" ]; then
+            echo "::error::$g is missing or empty — run: node tools/grants-sync.mjs"; bad=1
+          elif n=$(node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const r=Array.isArray(d)?d:(d.grants||[]);if(!r.length)throw new Error('no grants');console.log(r.length)" "$g" 2>/dev/null); then
+            echo "grant catalogue: $n funders"
+          else
+            echo "::error::$g does not parse, or holds no grants — run: node tools/grants-sync.mjs"; bad=1
+          fi
+          for f in artaquest-web/src/generated/arta/rig/arta.ts artaquest-web/src/generated/arta/render/Arta.tsx; do
+            if [ ! -s "$f" ]; then
+              echo "::error::$f is missing or empty — run: node tools/arta-sync.mjs"; bad=1
+            elif ! grep -q 'GENERATED' "$f"; then
+              # The banner names the upstream commit it came from. Losing it means the copy was
+              # hand-edited here — which the next sync silently overwrites, and forks the mascot
+              # in the meantime.
+              echo "::error::$f has lost its GENERATED banner — edit it upstream in artalife, not here"; bad=1
+            fi
+          done
+          exit $bad
+
       - name: Typecheck, lint, build
         working-directory: artaquest-web
         run: |

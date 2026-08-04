@@ -130,6 +130,31 @@ jobs:
           cache: npm
           cache-dependency-path: artaquest-web/package-lock.json
 
+      # Mirrors main.yml — see the long note there. The funder catalogue (ArtaQuest/artagrants) and
+      # Arta (ArtaQuest/artalife) are researched in their own repositories and vendored in here. A
+      # vendored file that goes missing is invisible: import_grants() returns silently, nothing
+      # 500s, nothing fails to build, and production just serves an empty programme. Presence and
+      # usability only — never freshness, which would go red whenever an unrelated repo moved on.
+      - name: Vendored satellite content is present
+        run: |
+          bad=0
+          g=wp-content/plugins/aquest/data/outreach-grants.json
+          if [ ! -s "$g" ]; then
+            echo "::error::$g is missing or empty — run: node tools/grants-sync.mjs"; bad=1
+          elif n=$(node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const r=Array.isArray(d)?d:(d.grants||[]);if(!r.length)throw new Error('no grants');console.log(r.length)" "$g" 2>/dev/null); then
+            echo "grant catalogue: $n funders"
+          else
+            echo "::error::$g does not parse, or holds no grants — run: node tools/grants-sync.mjs"; bad=1
+          fi
+          for f in artaquest-web/src/generated/arta/rig/arta.ts artaquest-web/src/generated/arta/render/Arta.tsx; do
+            if [ ! -s "$f" ]; then
+              echo "::error::$f is missing or empty — run: node tools/arta-sync.mjs"; bad=1
+            elif ! grep -q 'GENERATED' "$f"; then
+              echo "::error::$f has lost its GENERATED banner — edit it upstream in artalife, not here"; bad=1
+            fi
+          done
+          exit $bad
+
       - name: Typecheck, lint, build
         working-directory: artaquest-web
         run: |
