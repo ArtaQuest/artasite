@@ -119,7 +119,7 @@ const OBJECTIONS: { q: string; a: string }[] = [
 const RULES: { rule: string; body: string }[] = [
   {
     rule: "The checklist never gives a score",
-    body: "It reports facts, and for each fact it shows the evidence it read. No number, no grade, no ranking. It refuses a notebook for two kinds of reason, and no others: something that makes the run impossible for a stranger to repeat, and our own storage limits — at most 24 files, 512 MB each, 1 GB in total. Everything else is shown as a warning and lets the work through. Members do rank published work between themselves. They give hearts, and a challenge pays its whole prize to the entry with the most hearts. Hearts decide prizes. Hearts never decide what gets published.",
+    body: "It reports facts, and for each fact it shows the evidence it read. No number, no grade, no ranking. It refuses a notebook for three kinds of reason, and no others: something that makes the run impossible for a stranger to repeat; our own limits on what we can store and serve — at most 24 files, 512 MB each, 1 GB in total, in a format we can render; and a drawing we cannot rebuild without script, because an SVG is the one thing published here that a reader's browser executes. Everything else is shown as a warning and lets the work through. Members do rank published work between themselves. They give hearts, and a challenge pays its whole prize to the entry with the most hearts. Hearts decide prizes. Hearts never decide what gets published.",
   },
   {
     rule: "Every input must be public",
@@ -127,7 +127,7 @@ const RULES: { rule: string; body: string }[] = [
   },
   {
     rule: "The whole database is public — and this rule argues with itself",
-    body: "Every table and every row, live. The only things held back are the site's own live keys, a member's private book files and a shop delivery address. Publishing what a member does widens what everyone else can see and narrows what that member can still choose. I decided in favour of publishing. This is the decision I would most like someone to talk me out of.",
+    body: "Every table and every row, live. The only things held back are a member's own credentials — sign-in sessions and codes, password-reset keys, API token hashes and a live publication confirm link — plus a member's private book files and a shop delivery address. The site's own keys are never in the database at all; they live in the environment. Publishing what a member does widens what everyone else can see and narrows what that member can still choose. I decided in favour of publishing. This is the decision I would most like someone to talk me out of.",
   },
   {
     rule: "Reading, submitting, checking and publishing are free",

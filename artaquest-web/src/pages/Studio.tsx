@@ -89,13 +89,13 @@ export default function Studio() {
     return (courses ?? []).filter((c) => !needle || c.title.toLowerCase().includes(needle) || c.slug.includes(needle));
   }, [courses, q]);
 
-  if (!isLoggedIn()) return <SignInGate title="Studio" body="Sign in to create and edit your courses." />;
+  if (!isLoggedIn()) return <SignInGate title="Console" body="Sign in to open the operator console." />;
   if (status === undefined) return <SkeletonGrid count={6} />;
   if (!status?.caps?.can_create) {
     return (
       <div className="flex flex-col gap-4">
-        <PageHero title="Studio" lede="Create and edit your own courses." />
-        <StatusNote>The Studio unlocks at the <strong>Creator</strong> tier (1,000 points). Keep learning, replying and contributing — your points add up.</StatusNote>
+        <PageHero title="Console" lede="The operator console." />
+        <StatusNote>The Console unlocks at the <strong>Creator</strong> tier (1,000 points). Keep publishing, replying and contributing — your points add up. (The Studio, where you submit a Kaggle notebook, needs nothing but an account.)</StatusNote>
       </div>
     );
   }
@@ -110,7 +110,7 @@ export default function Studio() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHero title="Studio" lede="Create new courses and edit the ones you own. Watching stays free for everyone; lesson changes reset the course's trending rank while it re-earns its place." />
+      <PageHero title="Console" lede="The operator console — books, music, topics, sponsors and the surfaces the platform is run from. To publish a Kaggle notebook, use the Studio." />
 
       <Tabs label="Studio sections" active={mode} onChange={(k) => switchMode(k as Mode)}
         tabs={(([["courses", "Courses"], ["books", "Books"], ["music", "Music"], ["animations", "Animations"], ["illustrations", "Illustrations"], ["topics", "Topics"], ["grants", "Sponsors"], ...(status?.operator ? [["health", "Health"], ["artaai", "ArtaAI"], ["shop", "Shop"], ["houses", "Houses"], ["disciplines", "Disciplines"], ["videos", "Videos"], ["console", "Console"], ["members", "Members"]] : [])]) as [Mode, string][]).map(([m, label]) => ({ key: m, label, title: TAB_TIPS[m] }))} />

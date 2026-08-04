@@ -6,8 +6,8 @@ import { CoinDisc } from "../components/CoinDisc";
 
 // Human label for a coin-ledger reason code (Economy::credit_coins reasons).
 const TXN_LABELS: Record<string, string> = {
-  qreward: "Quester reward · podium prize",
-  donation: "Donation to the learner fund", buy: "Bought coins", sell: "Cashed out", refund: "Refund", grant: "Grant award", bursary: "Bursary grant",
+  chprize: "Challenge prize · pool won", chfee: "Challenge entry fee", donation: "Donation to the member fund",
+  buy: "Bought coins", sell: "Cashed out", refund: "Refund", grant: "Grant award", bursary: "Bursary grant",
 };
 const txnLabel = (r: string) => TXN_LABELS[r] || (r ? r.charAt(0).toUpperCase() + r.slice(1) : "Transaction");
 
@@ -77,7 +77,7 @@ function BuyPanel({ opts, buyPrice, fiat, payments, onCredited }: { opts: Donate
         <p className="mt-1 text-[13px] text-ink-3">Top up your wallet with gold-backed Arta Coins. {buyPrice > 0 && <>Currently {perCoin(buyPrice, fiat)} per <bdi dir="ltr" data-ay-skip="1">₳</bdi>.</>}</p>
       </div>
       {noRails ? (
-        <p className="rounded-field border border-line bg-space-1 px-4 py-3 text-[14px] text-ink-2">Online payment isn’t available in your country yet. You can still win coins by posting the most-upvoted replies in a course — or apply for a bursary to start.</p>
+        <p className="rounded-field border border-line bg-space-1 px-4 py-3 text-[14px] text-ink-2">Online payment isn’t available in your country yet. You can still win coins by taking a challenge pool — at the full moon the most-hearted entry takes the whole thing.</p>
       ) : (
         <>
           <Field label={`Amount (${fiat})`}>
@@ -163,8 +163,11 @@ function SellPanel({ balance, sellPrice, fiat, cashout, onSold }: { balance: num
           <h3 className="text-[18px] font-bold tracking-tight">Cash out</h3>
           <p className="mt-1 text-[13px] text-ink-3">Redeem coins for cash at the published sell price.</p>
         </div>
-        <p className="rounded-field border border-line bg-space-1 px-4 py-3 text-[14px] text-ink-2">You have no coins yet. You earn gold-backed coins by posting the most-upvoted replies in a course — once you’re certified, a share of the course’s revenue is minted into your wallet.</p>
-        <Button href="/courses/" variant="outline" className="h-11 w-full text-[15px]">Win coins by replying</Button>
+        <p className="rounded-field border border-line bg-space-1 px-4 py-3 text-[14px] text-ink-2">You have no
+        coins yet. You win gold-backed coins by taking a challenge pool: enter with work you have
+        published, and if yours is the most-hearted entry at the full moon the whole pool is minted into
+        your wallet.</p>         <Button href="/challenges/" variant="outline" className="h-11 w-full
+        text-[15px]">Win coins in a challenge</Button>
       </Card>
     );
   }
@@ -292,9 +295,11 @@ export default function Wallet() {
         <Card className="flex flex-col items-start gap-3 p-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-[18px] font-bold tracking-tight">Buying and cashing out are being rebuilt</h2>
-            <p className="mt-1 max-w-xl text-[14px] leading-relaxed text-ink-2">Topping up with fiat and cashing out for fiat are coming back on the new platform. Meanwhile you win gold-backed coins by posting the most-upvoted replies in a course — once certified, a share of the course’s revenue is minted into your wallet.</p>
-          </div>
-          <Button href="/courses/" className="shrink-0">Win coins by learning</Button>
+            <p className="mt-1 max-w-xl text-[14px] leading-relaxed text-ink-2">Topping up with cash and cashing out
+            for cash are coming back on the new platform. Meanwhile you win gold-backed coins by taking
+            a challenge pool — the most-hearted entry at the full moon takes the whole thing.</p>
+            </div>           <Button href="/challenges/" className="shrink-0">Win coins in a
+            challenge</Button>
         </Card>
       )}
 
@@ -315,7 +320,7 @@ export default function Wallet() {
         </Card>
       )}
 
-      <p className="text-center text-[12px] text-ink-3">Prices track the price of gold, not us. You win coins on course podiums, and earn points by learning, donating, volunteering, or winning grants — see the <a href={localePath("/rankings/")} className="text-yang hover:underline">leaderboard</a> or <a href={localePath("/data/?table=wp_aq_coin_ledger")} className="text-yang hover:underline">browse the ledgers</a>.</p>
+      <p className="text-center text-[12px] text-ink-3">Prices track the price of gold, not us. You win coins by taking a challenge pool, and earn points by publishing, replying, donating, volunteering, or winning grants — see the <a href={localePath("/rankings/")} className="text-yang hover:underline">rankings</a> or <a href={localePath("/data/?table=wp_aq_coin_ledger")} className="text-yang hover:underline">browse the ledgers</a>.</p>
     </div>
   );
 }

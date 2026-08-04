@@ -29,11 +29,11 @@ const UC = {
 } as const;
 
 const USE_CASES: { icon: keyof typeof UC; title: string; body: string }[] = [
-  { icon: "audit", title: "Audit the economy", body: "Reconcile the Arta Coin ledger against the gold-rate history and confirm for yourself that every coin in circulation is fully backed by gold." },
+  { icon: "audit", title: "Audit the economy", body: "Reconcile the Arta Coin ledger against the gold-rate history and work out the gold backing behind every coin in circulation for yourself — the same ratio the Reserve page publishes." },
   { icon: "money", title: "Follow the money", body: "Trace donations, fund balances, and bursary grants — amounts, dates, and status — from the moment they arrive to where they are spent." },
-  { icon: "book", title: "See what is taught", body: "Browse every course and video, and the reply each learner writes after finishing a video." },
-  { icon: "chat", title: "See which replies rise", body: "Read the replies learners post and the upvotes that rank them — the raw signal behind every course's leaderboard." },
-  { icon: "users", title: "Measure the community", body: "Forum threads, comments, and course reviews, exactly as written — useful for discourse and sentiment research." },
+  { icon: "book", title: "See what is published", body: "Browse every published work, the Kaggle notebook behind it, the checklist it cleared and the files it put in the Library." },
+  { icon: "chat", title: "See which replies rise", body: "Read every reply members post and the hearts that rank them — the raw signal behind every challenge board." },
+  { icon: "users", title: "Measure the community", body: "Discussion threads and replies, exactly as written — useful for discourse and sentiment research." },
   { icon: "code", title: "Build on it", body: "Pull any table from a single public REST endpoint — reproducible for papers, notebooks, and live dashboards." },
 ];
 
@@ -317,7 +317,7 @@ export default function Data() {
             </blockquote>
             <div className="mt-auto space-y-2 border-t border-line/60 pt-4 text-[13px] leading-relaxed text-ink-3">
               <p><span className="font-semibold text-ink-2">Licence — </span>free to use for research, journalism, and analysis. Please credit the ArtaQuest Foundation and link back to this page.</p>
-              <p><span className="font-semibold text-ink-2">As provided — </span>the data is supplied as-is, with the redactions noted above. It contains no private contact details and is not personal advice.</p>
+              <p><span className="font-semibold text-ink-2">As provided — </span>the data is supplied as-is, with the redactions noted above. It includes members' registered email addresses and other personal data, published by design. It is not personal advice.</p>
             </div>
           </Card>
         </div>

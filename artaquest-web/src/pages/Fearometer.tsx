@@ -257,7 +257,7 @@ export default function Fearometer() {
               Why such a light touch? Because <strong className="font-semibold text-ink">we know we can be wrong</strong>. No filter is perfect, and neither are the people who build one. To erase your words would be to claim a certainty we simply don’t have — and that is exactly the kind of fear-of-being-wrong we refuse to give in to.
             </p>
             <p className="mt-3 text-[16px] leading-relaxed text-ink-2">
-              So the most that ever happens is this: when ArtaMod senses a reply could cause real harm, we take it out of the prize competition — we <strong className="font-semibold text-ink">demonetise it, we don’t remove it</strong>. Its upvotes simply stop counting toward the coins. You keep your account, your place, and your voice. Reword it whenever you like and it counts again.
+              So the most that ever happens is this: when ArtaMod senses a reply could cause real harm, we take it out of the running for coins — we <strong className="font-semibold text-ink">demonetise it, we don’t remove it</strong>. Its hearts simply stop counting toward the coins. You keep your account, your place, and your voice. Reword it whenever you like and it counts again.
             </p>
             <p className="mt-3 text-[16px] leading-relaxed text-ink-2">
               And we genuinely want to be argued with. We are open-minded, and open to your criticism — of an idea, of a flag, of us. <strong className="font-semibold text-ink">Think we got one wrong? Challenge it.</strong> A real person reads every challenge, and every fair one makes ArtaMod better for the next person. Holding us to account is not a nuisance to us — it is the whole spirit of ArtaQuest.

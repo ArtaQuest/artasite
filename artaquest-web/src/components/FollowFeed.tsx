@@ -9,8 +9,7 @@ import { Avatar, Button, Card, Chip, FlagBadge, LoadMoreButton, SectionHeader, V
 const VERB: Record<string, string> = {
   thread: "started a discussion",
   reply: "replied in",
-  upvote: "upvoted a reply in",
-  upvote_thread: "upvoted the discussion",
+  upvote: "hearted a reply in",   upvote_thread: "hearted the discussion",
   enroll: "joined the course",
 };
 
@@ -21,8 +20,9 @@ const VERB: Record<string, string> = {
 const GLYPH: Record<string, { d: string; tone: string; tint: string; fill?: boolean; label: string }> = {
   thread: { d: "M21 11.5a8.38 8.38 0 0 1-8.5 8.5A8.5 8.5 0 0 1 9 19.07L3 21l1.93-6A8.5 8.5 0 1 1 21 11.5Z", tone: "text-yin-light", tint: "bg-yin/15", label: "New discussion" },
   reply: { d: "M9 17l-5-5 5-5M20 18v-2a4 4 0 0 0-4-4H4", tone: "text-yin-light", tint: "bg-yin/15", label: "Reply" },
-  upvote: { d: "M12 4l8 10h-5v6H9v-6H4z", tone: "text-yang", tint: "bg-yang/15", fill: true, label: "Upvote" },
-  upvote_thread: { d: "M12 4l8 10h-5v6H9v-6H4z", tone: "text-yang", tint: "bg-yang/15", fill: true, label: "Upvote" },
+  upvote: { d: "M12 4l8 10h-5v6H9v-6H4z", tone: "text-yang", tint: "bg-yang/15", fill: true, label:
+  "Heart" },   upvote_thread: { d: "M12 4l8 10h-5v6H9v-6H4z", tone: "text-yang", tint: "bg-yang/15",
+  fill: true, label: "Heart" },
   enroll: { d: "M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z", tone: "text-yang", tint: "bg-yang/15", label: "Joined a course" },
 };
 
@@ -45,7 +45,7 @@ const FILTERS: { key: string; label: string; types: FeedItem["type"][] | null }[
   { key: "all", label: "All", types: null },
   { key: "discussions", label: "Discussions", types: ["thread"] },
   { key: "replies", label: "Replies", types: ["reply"] },
-  { key: "upvotes", label: "Upvotes", types: ["upvote", "upvote_thread"] },
+  { key: "upvotes", label: "Hearts", types: ["upvote", "upvote_thread"] },
   { key: "courses", label: "Courses", types: ["enroll"] },
 ];
 
@@ -192,7 +192,7 @@ function PeerRail({ followedIds, onFollowed }: { followedIds: number[]; onFollow
   };
 
   return (
-    <RailCard title="Questers to follow" action={railLink("/rankings/", "Rankings →")}>
+    <RailCard title="Members to follow" action={railLink("/rankings/", "Rankings →")}>
       <ul className="flex flex-col gap-3">
         {rows.map((p) => {
           const done = followedHere.includes(p.id);
@@ -342,7 +342,7 @@ export default function FollowFeed() {
     <Card className="flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h3 className="text-[16px] font-bold">Your feed is waiting</h3>
-        <p className="mt-1 max-w-md text-[14px] text-ink-2">Follow fellow questers to see their replies, upvotes and new courses here — start with the suggestions alongside, find people on the rankings, or tap Follow on any profile.</p>
+        <p className="mt-1 max-w-md text-[14px] text-ink-2">Follow other members to see their replies and hearts here — start with the suggestions alongside, find people in the rankings, or tap Follow on any profile.</p>
       </div>
       <Button variant="outline" href="/rankings/">See the rankings</Button>
     </Card>

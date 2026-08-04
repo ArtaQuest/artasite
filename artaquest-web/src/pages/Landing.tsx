@@ -93,13 +93,13 @@ export default function Landing() {
         <p className="mx-auto mt-3 max-w-[60ch] text-[14.5px] leading-relaxed text-ink-2">
           ArtaBot runs on Claude Opus 5, one of the most capable models there is. Ask it anything, think
           out loud, get help making something — it remembers your conversation and it costs nothing.
-          Members can spend ArtaCoin for deeper thinking when a question deserves it, but the everyday
+          Members can spend Arta Coin for deeper thinking when a question deserves it, but the everyday
           chat is simply free.
         </p>
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           <Button href={join} size="lg">Sign up free to chat</Button>
         </div>
-        <p className="mt-3 text-[12.5px] text-ink-3">No card, no trial, no message limit</p>
+        <p className="mt-3 text-[12.5px] text-ink-3">No card, no trial, no monthly quota — just an hourly pace limit</p>
       </section>
 
       {/* The live feed IS the pitch. Embedded: no second <h1>, no nested <main>, no rail calls. */}
@@ -117,8 +117,8 @@ export default function Landing() {
         <h2 className="text-[22px] font-extrabold">Make the next one</h2>
         <p className="mx-auto mt-2 max-w-[52ch] text-[14.5px] leading-relaxed text-ink-2">
           Submitting, checking and publishing are all free — always, because the Foundation runs on
-          donations. You only ever pay to enter a tournament, and every coin of that fee goes straight
-          into its prize pool, where the most-hearted entry takes it all.
+          donations. The only fee to take part is a challenge entry, and every coin of that fee goes
+          straight into its prize pool, where the most-hearted entry takes it all.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <Button href={join} size="lg">Create your free account</Button>

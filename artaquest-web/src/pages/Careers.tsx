@@ -268,16 +268,16 @@ export default function Careers() {
           <div>
             <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-ink-3">The deal</p>
             <h2 className="mt-3 text-[clamp(1.7rem,3.5vw,2.4rem)] font-extrabold leading-tight">
-              Up to a <span className="text-yang">100%</span> revenue share
+              The winner takes <span className="text-yang">100%</span> of the pool
             </h2>
             <p className="mt-4 text-[16px] leading-relaxed text-ink-2">
-              Watching is free; learners pay 1 coin per video to join a course’s competition, and it earns further revenue from donations and sponsorship. <strong className="font-semibold text-ink">80%</strong> of that revenue becomes a prize pool for the top three questers on its leaderboard (50/30/20) — so strong learners win their fee back and more, and bursary donations cover the fee for those who need it. Your share of what remains grows as you climb the creator ladder, from <strong className="font-semibold text-ink">50%</strong> at the first teaching rung to <strong className="font-semibold text-ink">100%</strong> at the top. What ArtaQuest keeps covers hosting, payment processing, and day-to-day running costs. No investor, manager, or staff member profits from it — ArtaQuest is a registered non-profit foundation.
+              Reading, submitting, checking and publishing are free. Members earn by winning member-founded challenges: every entrant’s fee goes into the pool, and at the full moon the most-hearted entry takes <strong className="font-semibold text-ink">the whole pool</strong> — an exact tie splits it evenly. The Foundation never takes a cut of a pool; it runs on donations, and bursary donations exist so an entry fee never decides who takes part. What ArtaQuest keeps covers hosting, payment processing, and day-to-day running costs. No investor, manager, or staff member profits from it — ArtaQuest is a registered non-profit foundation.
             </p>
           </div>
           <Card className="p-6 sm:p-7">
             <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Your share</p>
-            <p className="mt-3 text-[clamp(2.6rem,7vw,3.4rem)] font-extrabold leading-none text-yang tabular-nums">50–100%</p>
-            <p className="mt-2 text-[14px] leading-relaxed text-ink-2">of every enrolment’s revenue on your own courses — rising at each rung of the creator ladder.</p>
+            <p className="mt-3 text-[clamp(2.6rem,7vw,3.4rem)] font-extrabold leading-none text-yang tabular-nums">100%</p>
+            <p className="mt-2 text-[14px] leading-relaxed text-ink-2">of every challenge pool you win — the entry fees in full, with nothing taken by the Foundation.</p>
             <hr className="my-5 border-line" />
             <p className="text-[13px] leading-relaxed text-ink-3">The remainder covers hosting and payment processing only. Nobody takes a profit — ArtaQuest is a non-profit foundation.</p>
           </Card>

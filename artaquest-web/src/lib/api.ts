@@ -1799,7 +1799,7 @@ export function libraryItems(opts?: { class?: string; q?: string; mine?: boolean
   });
 }
 
-// Challenges (MEMBER-CREATED tournaments, 2026-07-14): pick category + topic + a full-moon
+// Challenges (MEMBER-FOUNDED challenges, 2026-07-14): pick category + topic + a full-moon
 // deadline + entry fee, found it with your own notebook; every entrant pays in; winner takes all.
 export type ChBoardRow = { rank: number; nb_id: number; title: string; slug: string; hearts: number; score: number; author: NotebookCard["author"] };
 export type Challenge = {

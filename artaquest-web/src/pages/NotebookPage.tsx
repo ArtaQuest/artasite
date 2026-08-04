@@ -299,7 +299,7 @@ export function PostThread({ id, count }: { id: number; count: number }) {
             </span>
             <p className="hidden text-[11px] text-ink-3 sm:block">$x^2$ for maths · ArtaMod filters only hate and fear</p>
             <span aria-live="polite" className={"ml-auto text-[11px] tabular-nums " + (280 - body.length < 0 ? "font-bold text-yang" : 280 - body.length <= 20 ? "text-yang-ink" : "text-ink-3")}>{280 - body.length}</span>
-            <Button size="sm" onClick={send} disabled={busy || body.trim().length < 2 || body.length > 280}>{busy ? "Posting…" : replyTo ? "Reply" : "Comment"}</Button>
+            <Button size="sm" onClick={send} disabled={busy || body.trim().length < 2 || body.length > 280}>{busy ? "Posting…" : "Reply"}</Button>
           </div>
         </div>
       ) : (
@@ -315,10 +315,10 @@ export function PostThread({ id, count }: { id: number; count: number }) {
               {(c.replies || []).map((rep) => <CommentRow key={rep.id} c={rep} nbId={id} mine={mine} depth={1} onReply={() => {}} onDeleted={() => load()} />)}
             </div>
           ))}
-          {next != null ? <Button variant="outline" size="sm" className="self-center" onClick={() => load(next)}>More comments</Button> : null}
+          {next != null ? <Button variant="outline" size="sm" className="self-center" onClick={() => load(next)}>More replies</Button> : null}
         </div>
       ) : (
-        <p className="text-sm text-ink-3">No comments yet — say the first thing.</p>
+        <p className="text-sm text-ink-3">No replies yet — say the first thing.</p>
       )}
     </section>
   );

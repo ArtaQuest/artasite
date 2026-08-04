@@ -309,7 +309,7 @@ export default function Developers() {
           <ul className="flex list-disc flex-col gap-2 pl-5 text-[15px] leading-relaxed text-ink-2">
             <li>Errors are <code>{`{ "error": code, "message": text }`}</code> with an honest HTTP status.</li>
             <li>Lists return <code>{`{ items, next }`}</code> keyset cursors — pass <code>next</code> back as <code>?cursor=</code>; there are no page numbers.</li>
-            <li>1,000 requests per hour per token, plus per-action limits (for example 12 checklist runs per hour). A 429 means pause and retry.</li>
+            <li>1,000 requests per hour per token, plus per-action limits (20 kernel imports per hour, 40 checklist re-runs per 10 minutes). A 429 means pause and retry.</li>
             <li>A draft is a Kaggle notebook URL: the <code>/code/{"{owner}"}/{"{slug}"}</code> form and its <code>/output</code> page both resolve. The notebook must be public and finished, and so must every dataset, model and notebook it takes as an input.</li>
             <li>We never execute anything. Kaggle ran it; we read its public record and report what it says — including whether the run had the internet switched off, which is Kaggle's flag, not our promise.</li>
             <li>Reproducible here means anyone can copy the notebook on Kaggle and run it from public inputs and get this. It is weaker than a claim about identical bytes and stronger than trusting a laptop, and we state it that way everywhere.</li>

@@ -1,5 +1,5 @@
 /**
- * Rankings (member tournaments, 2026-07-14) — live standings of every open tournament: each
+ * Rankings (member-founded challenges, 2026-07-14) — live standings of every open challenge: each
  * board ranked by hearts, winner-takes-all at its full moon.
  */
 import { useEffect, useState } from "react";
@@ -31,8 +31,8 @@ export default function Rankings() {
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-6">
       <PageHero
         title="Rankings"
-        lede="Live standings, tournament by tournament. Top entry at the full moon takes the pool."
-        aside={isLoggedIn() ? <Button onClick={() => nav("/challenges")}>Enter a tournament</Button> : <Button href="/login/">Join to compete</Button>}
+        lede="Live standings, challenge by challenge. Top entry at the full moon takes the pool."
+        aside={isLoggedIn() ? <Button onClick={() => nav("/challenges")}>Enter a challenge</Button> : <Button href="/login/">Join to compete</Button>}
       />
       {open === null ? (
         <div className="h-40 animate-pulse rounded-2xl bg-veil/[0.06]" aria-hidden />
@@ -74,7 +74,7 @@ export default function Rankings() {
           ) : <div className="h-40 animate-pulse rounded-2xl bg-veil/[0.06]" aria-hidden />}
         </>
       ) : (
-        <EmptyState title="No open tournaments yet" body={<span>Standings appear the moment someone <Link className="text-yin-ink hover:underline" to="/challenges">founds one</Link>.</span>} />
+        <EmptyState title="No open challenges yet" body={<span>Standings appear the moment someone <Link className="text-yin-ink hover:underline" to="/challenges">founds one</Link>.</span>} />
       )}
     </main>
   );

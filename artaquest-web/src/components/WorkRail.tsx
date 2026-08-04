@@ -27,7 +27,7 @@ function bibtex(nb: NotebookFull) {
     `  year   = {${year}},`,
     `  howpublished = {ArtaQuest ${NB_KIND_META[normalizeNbKind(nb.kind)]?.label || nb.kind}},`,
     `  url    = {${nb.doi_link || `https://artaquest.com/nb/${nb.id}/${nb.slug}`}},`,
-    `  note   = {Fully reproducible offline notebook}`,
+    `  note   = {Public Kaggle notebook, checked against Kaggle's public record on ArtaQuest}`,
     `}`,
   ].join("\n");
 }

@@ -825,7 +825,7 @@ function BursaryApply() {
     <Card className="flex flex-col gap-4 p-6">
       <div>
         <h2 className="text-[20px] font-bold tracking-tight">Apply for a bursary</h2>
-        <p className="mt-1 text-[14px] leading-relaxed text-ink-2">Watching is always free. If the 1-coin-per-video competition fee is a barrier, a bursary from the fund covers it in full — usually within a day. The process is confidential.</p>
+        <p className="mt-1 text-[14px] leading-relaxed text-ink-2">Reading, playing and running every work is always free. Where an entry fee is a barrier, a bursary from the member fund covers it in full — usually within a day. The process is confidential.</p>
       </div>
       {res?.ok ? (
         <div data-goal="bursary-granted" className="rounded-field border border-yang/40 bg-yang/[0.06] p-4">

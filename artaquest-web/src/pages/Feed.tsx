@@ -151,7 +151,7 @@ function NbBlock({ nb, compact }: { nb: NotebookCard; compact?: boolean }) {
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-ink-3">
         <span>{meta?.label || nb.kind}</span>
         {nb.doi_link ? <span className="rounded-pill border border-line px-1.5">DOI</span> : null}
-        {nb.calm < 100 ? <span className="rounded-pill border border-line px-1.5" title="Measured change rate — higher is calmer">Calm {nb.calm}</span> : null}
+        {nb.calm < 100 ? <span className="rounded-pill border border-line px-1.5" title="Measured change rate — higher is calmer">Calm {nb.calm}/100</span> : null}
       </div>
       <h3 className="mt-0.5 text-[15px] font-semibold leading-snug text-ink">{nb.title}</h3>
 
@@ -481,11 +481,11 @@ function ChallengeRow({ c }: { c: Challenge }) {
 
 function ChallengesCard({ items }: { items: Challenge[] | null }) {
   if (items === null) return <div className="h-40 shrink-0 animate-pulse rounded-2xl bg-veil/[0.06]" aria-hidden />;
-  if (!items.length) return null; // operator 2026-07-23: no empty cards — when there's no open tournament the card disappears entirely
+  if (!items.length) return null; // operator 2026-07-23: no empty cards — when there's no open challenge the card disappears entirely
   return (
     <RailCard title="Challenges" more={{ href: "/challenges", label: "Show all challenges" }}>
       {items.length ? items.slice(0, 3).map((c) => <ChallengeRow key={c.id} c={c} />) : (
-        <p className="px-4 py-3 text-[13px] text-ink-3">No open tournament right now — found the next one.</p>
+        <p className="px-4 py-3 text-[13px] text-ink-3">No open challenge right now — found the next one.</p>
       )}
     </RailCard>
   );
@@ -675,7 +675,7 @@ function RailLinks() {
   );
 }
 
-/** Phones only: open tournaments as a swipeable strip under the composer (the rail is lg+). */
+/** Phones only: open challenges as a swipeable strip under the composer (the rail is lg+). */
 function ChallengesStrip({ items }: { items: Challenge[] | null }) {
   if (!items || !items.length) return null;
   return (
@@ -955,7 +955,7 @@ export default function Feed({ initialKind, embedded = false }: { initialKind?: 
           </div>
         )}
 
-        {/* Phones: the open tournaments ride as a swipe strip up top (the rail carries them on lg+) */}
+        {/* Phones: the open challenges ride as a swipe strip up top (the rail carries them on lg+) */}
         <ChallengesStrip items={rail.challenges} />
 
         {/* The timeline. On phones the rail modules interleave a few posts down, X-style. */}

@@ -137,7 +137,7 @@ export default function Reserve() {
       {/* 100% reserve proof */}
       <section>
         <h2 className="text-[20px] font-bold tracking-tight">Proof of reserve</h2>
-        <p className="mt-1 max-w-2xl text-[14px] leading-relaxed text-ink-2">Coins in circulation are matched, milligram for milligram, by gold in the vault. The reserve is public and current.</p>
+        <p className="mt-1 max-w-2xl text-[14px] leading-relaxed text-ink-2">Every coin in circulation is meant to be matched, milligram for milligram, by gold in the vault. Here is the live ratio, whatever it says.</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <TickerCard label="Coins in circulation" value={<Coins n={r.supply} />} sub="total Arta Coins minted" tone="ink" />
           <TickerCard label="Gold reserve" value={`${reserveG} g`} sub={`${r.reserve_mg.toLocaleString()} mg held`} tone="yang" />
@@ -158,11 +158,13 @@ export default function Reserve() {
       {/* the foundation's coin fund (optional, from finances) */}
       {fin && (
         <section>
-          <h2 className="text-[20px] font-bold tracking-tight">The learner fund</h2>
-          <p className="mt-1 max-w-2xl text-[14px] leading-relaxed text-ink-2">Donations are converted to gold-backed Arta Coins and held for learners, issued when a candidate needs them.</p>
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <TickerCard label="Fund on hand" value={<Coins n={fin.fund_balance} />} sub="held for learners" tone="yin" />
-            <TickerCard label="Issued to learners" value={<Coins n={fin.fund_issued} />} sub="bursaries granted" tone="yang" />
+          <h2 className="text-[20px] font-bold tracking-tight">The member fund</h2>           <p className="mt-1
+          max-w-2xl text-[14px] leading-relaxed text-ink-2">Donations are converted to gold-backed Arta
+          Coins and held for members, issued when someone needs them.</p>           <div className="mt-4
+          grid grid-cols-2 gap-3 sm:grid-cols-3">             <TickerCard label="Fund on hand"
+          value={<Coins n={fin.fund_balance} />} sub="held for members" tone="yin" />
+          <TickerCard label="Issued to members" value={<Coins n={fin.fund_issued} />} sub="bursaries
+          granted" tone="yang" />
             <TickerCard label="Donations received" value={formatFiat(fin.donations_fiat, fin.fiat)} sub={`${fin.donations_count} gift${fin.donations_count === 1 ? "" : "s"}`} tone="ink" />
           </div>
         </section>
@@ -173,17 +175,17 @@ export default function Reserve() {
         <div className="mx-auto max-w-2xl">
           <h2 className="text-[clamp(1.4rem,3vw,1.9rem)] font-bold leading-snug">How it works</h2>
           <p className="mt-4 text-[16px] leading-relaxed text-ink-2">
-            Every Arta Coin is backed 1-for-1 by a milligram of real gold. We mint coins only when gold enters our vault and burn them only when it leaves. Because the reserve always matches the supply, everyone can cash out at the same time — there is no fractional reserve and no promise we cannot keep.
+            Every Arta Coin is a claim on one milligram of real gold. We mint coins only when gold enters our vault and burn them only when it leaves, and the ratio of gold held to coins issued is published above, live — so if it ever slips below 1, you see it before we say anything.
           </p>
           <p className="mt-3 text-[15px] leading-relaxed text-ink-3">
-            You earn coins by posting the most-upvoted replies in a course — each course shares 80% of its revenue with its top questers, the main way coins flow into your wallet. You can also buy them with cash or cash them out at the published sell price. Prices move only with the price of gold — not with us.
+            You win coins by taking a challenge pool: every entrant’s fee goes into the pool, and at the full moon the most-hearted entry takes the whole thing (an exact tie splits it evenly). You can also buy them with cash or cash them out at the published sell price. Prices move only with the price of gold — not with us.
           </p>
           <p className="mt-3 text-[14px] leading-relaxed text-ink-3">
             Don't take our word for it — <a href={localePath("/data/?table=wp_aq_coin_ledger")} className="font-semibold text-yang hover:underline">browse the raw ledgers</a> to inspect every coin movement and the full gold-rate history.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <Button href="/wallet/" size="lg">Open your wallet</Button>
-            <Button href="/courses/" variant="outline" size="lg" className="text-ink hover:text-yin-light">Win coins by learning</Button>
+            <Button href="/challenges/" variant="outline" size="lg" className="text-ink hover:text-yin-light">Win coins in a challenge</Button>
           </div>
         </div>
       </section>

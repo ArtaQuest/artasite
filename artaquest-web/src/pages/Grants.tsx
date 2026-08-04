@@ -242,7 +242,7 @@ export default function Grants() {
       <PageHero
         eyebrow="Win funding" glyph={<DomainGlyph domain="grant" />}
         title="Sponsors"
-        lede={<>ArtaQuest is funded by sponsors. We research funding programmes and industry partners worldwide — for the open-education platform, for paying creators to produce learning content, and for learner bursaries — and post every deadline here. <strong className="text-ink">Claim a sponsor to help us apply</strong>, and earn <strong className="text-ink">points equal to the sponsorship amount</strong> on the <a href={localePath("/rankings/")} className="text-yang hover:underline">leaderboard</a>. Registered members are invited to <strong className="text-ink">group Google Meet sessions</strong> before each deadline.</>}
+        lede={<>ArtaQuest is funded by sponsors. We research funding programmes and industry partners worldwide — for the open-education platform, for paying creators to produce learning content, and for learner bursaries — and post every deadline here. <strong className="text-ink">Claim a sponsor to help us apply</strong>, and earn <strong className="text-ink">points equal to the sponsorship amount</strong> in the <a href={localePath("/rankings/")} className="text-yang hover:underline">rankings</a>. Registered members are invited to <strong className="text-ink">group Google Meet sessions</strong> before each deadline.</>}
       />
 
       <div className="grid gap-3 rounded-card border border-line bg-space-2 p-4 text-[13.5px] leading-relaxed text-ink-2 sm:grid-cols-3">
@@ -309,7 +309,7 @@ export default function Grants() {
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-1.5">
                               <span className="font-semibold leading-tight text-ink">{g.title}</span>
-                              {g.is_sponsor && <span className="rounded-full bg-yang/15 px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-yang" title="An industry partner, not a charitable sponsor">Sponsor</span>}
+                              {g.is_sponsor && <span className="rounded-full bg-yang/15 px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-yang" title="An industry partner, not a charitable grant">Industry partner</span>}
                             </div>
                             <div className="text-[12.5px] text-ink-3">{g.funder}{g.country ? ` · ${g.country}` : ""}</div>
                           </div>

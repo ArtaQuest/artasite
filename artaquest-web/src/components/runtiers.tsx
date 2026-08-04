@@ -91,7 +91,7 @@ export function RunTiers({ id, slug, kaggleUrl, colabUrl, className }: Props) {
             </p>
             <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-3">
               {colab !== ""
-                ? "For the heavy work — a GPU, large installs. Opens straight in Colab from the gist we mirror every submission to."
+                ? "For the heavy work — a GPU, large installs. Opens straight in Colab from the copy of the notebook we keep on GitHub."
                 : "For the heavy work — a GPU, large installs. This saves the notebook and opens Colab; drop the file in there (Colab opens notebooks from Drive, GitHub or an upload, so there is no one-click link we can honestly give you)."}
             </p>
           </div>

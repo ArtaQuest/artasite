@@ -54,11 +54,7 @@ function fileExt(item: LibraryItem): string {
 
 // Category labels are SINGULAR, matching every other shelf on the platform.
 const CLASS_LABEL: Record<LibraryItem["class"], string> = {
-  scene: "Scene",
-  audio: "Audio",
-  image: "Image",
-  video: "Video",
-  model3d: "3D scene",
+  scene: "Drawing",   audio: "Audio",   image: "Image",   video: "Video",   model3d: "3D model",
   data: "Data",
   weights: "Weights",
   doc: "Document",

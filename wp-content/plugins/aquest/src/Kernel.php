@@ -613,14 +613,14 @@ class Kernel {
 		$pinned_env = false !== strpos( $facts['docker'], '@sha256:' );
 		$items[] = self::item( 'env_pinned', 'rigour', self::WARN, 'The environment image is pinned',
 			$pinned_env,
-			$pinned_env ? 'Kaggle recorded an exact image digest for this run.' : 'Kaggle recorded no pinned image digest for this run.',
+			$pinned_env ? 'Kaggle recorded the exact software environment this run used.' : 'Kaggle recorded no exact version of the software environment for this run.',
 			'Nothing to fix on your side — Kaggle pins this.',
 			$facts['docker'] );
 
 		if ( $selection && $files ) {
 			$ratio    = count( $selection ) / max( 1, count( $files ) );
 			$focused  = count( $files ) <= 50 || $ratio >= 0.02;
-			$items[] = self::item( 'output_focused', 'rigour', self::WARN, 'The output is the work, not a checkout',
+			$items[] = self::item( 'output_focused', 'rigour', self::WARN, 'The output is the work, not everything the notebook downloaded',
 				$focused,
 				$focused ? 'The run output is focused on its result.'
 					: 'The run wrote ' . number_format_i18n( count( $files ) ) . ' files — usually a cloned repository or a cache landing in /kaggle/working alongside the real result.',

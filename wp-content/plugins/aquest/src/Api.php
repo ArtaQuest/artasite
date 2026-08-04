@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *     route — is impossible with a token BY CONSTRUCTION (a route not on the list never accepts
  *     one). Token sessions also drop `manage_options`, so an operator's token can never act as
  *     an operator.
- *   · PUBLISHING IS THE ONE HARD LIMIT: the API can create, edit, run, score and REQUEST
+ *   · PUBLISHING IS THE ONE HARD LIMIT: the API can create, edit, check and REQUEST
  *     publication, but a work goes public (and its DOI mints) only when the CONTENT CREATOR
  *     opens the single-use confirm link emailed to their own registered address AND their
  *     device passkey signs the exact source (WebAuthn; the private key never exists on the
@@ -41,7 +41,7 @@ final class Api {
 	const MAX_TOKENS = 10;
 
 	const SCOPES = [
-		'read'    => 'read your own studio: drafts, runs, scores, wallet, notifications, feed',
+		'read'    => 'read your own studio: drafts, checklists, wallet, notifications, feed',
 		'write'   => 'attach a Kaggle notebook, run the checklist, choose its output files, request publication, post, comment, heart, follow',
 		'economy' => 'move real value: found/enter challenges (fee debits), buy/sell coins, payout status + connect, bursary applications',
 	];

@@ -1,5 +1,5 @@
 /**
- * Challenges (member-created tournaments, 2026-07-14) — found one, grow the pool, take it all.
+ * Challenges (member-founded challenges, 2026-07-14) — found one, grow the pool, take it all.
  * Category + sitewide topic + a full-moon deadline + your entry fee + your own notebook. Every
  * entrant pays the fee into the pool; at the moon the most-hearted entry wins everything (ties split).
  */
@@ -44,7 +44,7 @@ function CreateTournament({ onCreated }: { onCreated: () => void }) {
   };
   return (
     <details className="rounded-2xl border border-line bg-space-2">
-      <summary className="cursor-pointer list-none px-5 py-4 text-[15px] font-bold text-yang">＋ Found a tournament</summary>
+      <summary className="cursor-pointer list-none px-5 py-4 text-[15px] font-bold text-yang">＋ Found a challenge</summary>
       <div className="flex flex-col gap-3 border-t border-line px-5 py-4">
         <div className="flex flex-wrap gap-1.5">
           {(Object.keys(NB_KIND_META) as NbKind[]).map((k) => (
@@ -66,10 +66,10 @@ function CreateTournament({ onCreated }: { onCreated: () => void }) {
           </label>
         </div>
         <input value={title} onChange={(e) => setTitle(e.currentTarget.value)} maxLength={160}
-          placeholder="Tournament title — what should people make?"
+          placeholder="Challenge title — what should people make?"
           className="w-full rounded-field border border-line bg-space-1 px-3 py-2 text-sm text-ink outline-none focus:border-yin-ink" />
         <div className="grid gap-2 sm:grid-cols-2">
-          <label className="text-[13px] text-ink-3">Entry fee (₳) — you pay it too
+          <label className="text-[13px] text-ink-3">Entry fee in Arta Coin (₳) — you pay it too
             <input type="number" min={1} max={1000} value={fee} onChange={(e) => setFee(Math.max(1, Math.min(1000, Number(e.currentTarget.value) || 1)))}
               className="mt-1 w-full rounded-field border border-line bg-space-1 px-3 py-2 text-sm text-ink" />
           </label>
@@ -184,12 +184,12 @@ export default function ChallengesPage() {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 py-6">
       <PageHero
         title="Challenges"
-        lede="Member-made tournaments: pick a topic, a full-moon deadline and an entry fee, open with your own notebook. Every entry grows the pool; most hearts takes it all (ties split)."
+        lede="Member-made challenges: pick a topic, a full-moon deadline and an entry fee, open with your own notebook. Every entry grows the pool; most hearts takes it all (ties split)."
         aside={isLoggedIn() ? <Button onClick={() => nav("/studio")}>Prepare an entry</Button> : <Button href="/login/">Join to compete</Button>}
       />
       <CreateTournament onCreated={load} />
       <section className="flex flex-col gap-3">
-        <SectionHeader title="Open tournaments" />
+        <SectionHeader title="Open challenges" />
         {current === null ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-hidden>
             {Array.from({ length: 3 }, (_, i) => <div key={i} className="h-40 animate-pulse rounded-2xl bg-veil/[0.06]" />)}
@@ -204,13 +204,13 @@ export default function ChallengesPage() {
             {openId ? <Board id={openId} /> : null}
           </>
         ) : (
-          <EmptyState title="No open tournaments" body="Found the first one — your fee starts the pool, and every entrant grows it." />
+          <EmptyState title="No open challenges" body="Found the first one — your fee starts the pool, and every entrant grows it." />
         )}
       </section>
       <section className="flex flex-col gap-3">
         <SectionHeader title="What a pool is worth" />
         <p className="max-w-2xl text-[14px] leading-relaxed text-ink-2">
-          Pools are held in ArtaCoin, which is gold-backed — one coin is one milligram. These are the
+          Pools are held in Arta Coin, which is gold-backed — one coin is one milligram. These are the
           fuels that set what a coin buys, all on one scale, so you can see what a prize is actually
           worth rather than just how large the number is.
         </p>

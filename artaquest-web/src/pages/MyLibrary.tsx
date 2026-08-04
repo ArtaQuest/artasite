@@ -135,7 +135,7 @@ export default function MyLibrary() {
 
   const buyCapacity = useCallback(async () => {
     const per = quota ? Math.round(quota.bytes_per_coin / 1e6) : 100;
-    const raw = window.prompt(`How many ArtaCoin would you like to spend?\n\nEach coin adds ${per} MB of permanent shelf space. You have ₳${quota?.balance ?? 0}.`, "1");
+    const raw = window.prompt(`How many Arta Coin would you like to spend?\n\nEach coin adds ${per} MB of permanent shelf space. You have ₳${quota?.balance ?? 0}.`, "1");
     const coins = Number(raw);
     if (!raw || !Number.isFinite(coins) || coins < 1) return;
     try { const r = await cloudBuy(Math.floor(coins)); setNote(`Added ${fmtSize(r.bytes)}. Balance ₳${r.balance}.`); await refreshCloud(); }

@@ -906,7 +906,7 @@ final class Extra {
 				$key  = preg_replace( '/^' . preg_quote( $wpdb->prefix, '/' ) . '/', '', $name ); // unprefixed dictionary key
 				$tables[] = [ 'name' => $name, 'label' => self::humanize( $name ), 'desc' => $dict[ $key ]['desc'] ?? '', 'rows' => $rows ];
 			}
-			return [ 'tables' => $tables, 'note' => 'Fully public. Every table, row, and value is shown exactly as stored. Secrets never touch the database (they live in the environment). The only masked values are credentials-in-flight: active sign-in session tokens and sign-in code transients. Row counts are engine estimates for very large tables.' ];
+			return [ 'tables' => $tables, 'note' => 'Fully public. Every table, row, and value is shown exactly as stored. Secrets never touch the database (they live in the environment). Five values are masked, all of them credentials-in-flight: active sign-in session tokens, sign-in code transients, password-reset keys, the verifier for a live publication confirm link, and API token hashes. Two tables are withheld whole: a member\'s private book source files and a shop order\'s delivery address. Row counts are engine estimates for very large tables.' ];
 		}
 
 		// Validate the requested table against the real list (prevents arbitrary identifiers).
@@ -942,7 +942,8 @@ final class Extra {
 			$next   = ( $has_id && $rows ) ? (int) end( $rows )['id'] : null;
 		}
 		$cols = $rows ? array_keys( $rows[0] ) : [];
-		// Mask only the two credential-bearing cells (session tokens, sign-in codes) — see redact_row.
+		// Mask the five credential-bearing cells (session tokens, sign-in codes, password-reset keys,
+		// publication confirm verifier, API token hash) — see redact_row.
 		$rows = array_map( fn( $r ) => self::redact_row( $table, $r ), $rows );
 		// Data-dictionary annotations so the explorer is self-describing for research: a one-line table
 		// blurb + the plain-language meaning of each documented column (see Schema::dictionary).

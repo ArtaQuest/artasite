@@ -138,7 +138,7 @@ final class Rest {
 		// Challenges (social-feed pivot 2026-07-13): one pool per kind per month; PUBLISHING a post
 		// pays the size fee into the pool and is the entry; hearts podium 50/30/20 at month close.
 		// Members earn ONLY here; the Foundation earns ONLY from ArtaDev iterations.
-		[ 'GET',  'challenges',                    'Notebook::challenges',     'public' ], // member-created tournaments (?id= for one board)
+		[ 'GET',  'challenges',                    'Notebook::challenges',     'public' ], // member-founded challenges (?id= for one board)
 		[ 'GET',  'challenges/options',            'Notebook::ch_options',     'public' ], // topics + the next full moons + kinds
 		[ 'POST', 'challenges',                    'Notebook::ch_create',      'user'   ], // found one with your own notebook (pays the fee)
 		[ 'POST', 'challenges/(?P<id>[0-9]+)/enter', 'Notebook::ch_enter',     'user'   ], // pay the fee, enter your own published work

@@ -1122,7 +1122,7 @@ final class Notebook {
 		if ( ! $r || $r['status'] !== 'published' ) { return Rest::err( 'not_found', 'No such notebook', 404 ); }
 		// NO SELF-HEARTS. The retired Challenges::heart refused these outright; this path only ever
 		// skipped the notification, so the vote itself counted — and a challenge pool is awarded to
-		// whoever leads on exactly this number. In a young tournament where entries sit at 0-1
+		// whoever leads on exactly this number. In a young challenge where entries sit at 0-1
 		// hearts, one self-heart takes every other entrant's burned fee. It also silently inflated
 		// the feed's `sort=top` and the who-to-follow rail.
 		if ( (int) $r['author_id'] === $uid ) {
@@ -2479,12 +2479,14 @@ final class Notebook {
 			'updated' => Data::now(),
 		], [ 'id' => (int) $run['id'] ] );
 		if ( $nb ) {
-			$cur   = self::row( $run['nb_id'] );
-			$panel = self::panel( (int) $cur['id'], self::sig( $cur['ipynb'] ), (string) $cur['kind'] );
+			// This message described the retired model in three ways at once: an AI review panel (gone
+			// 2026-07-28), a score out of 100 read from `$cur['score']` — a column aq_notebooks does
+			// not have, so it was an undefined index that always printed 0 — and "admin approval",
+			// which is the opposite of how publishing works. Nobody can approve a member's work but
+			// the member: the emailed single-use secret is the only thing that publishes.
 			Notify::push( (int) $run['author_id'], 'artadev',
 				$ok
-					? 'Run complete — the review panel scored "' . $nb['title'] . '" ' . (int) $cur['score'] . '/100'
-						. ( $panel['pass'] ? ' — panel passed; publish to request admin approval' : ( $panel['low'] ? ' — below the floor: ' . implode( ', ', array_slice( $panel['low'], 0, 4 ) ) : '' ) )
+					? 'Run complete for "' . $nb['title'] . '" — open it to read the checklist and request publication'
 					: 'Your run of "' . $nb['title'] . '" failed',
 				'', '/studio/nb/' . $run['nb_id'] . '/', 'nbrun' . $run['id'] );
 		}
@@ -2555,7 +2557,7 @@ final class Notebook {
 	}
 
 	// ── Challenges (MEMBER-CREATED, 2026-07-14 pivot) ───────────────────────
-	// A challenge is a member's tournament: they pick the category + a sitewide topic + a FULL-MOON
+	// A challenge is a member's challenge: they pick the category + a sitewide topic + a FULL-MOON
 	// deadline, set the entry fee, and open it with their OWN notebook (paying the fee like everyone
 	// else). Every entrant pays the fee into the pool; at the deadline the most-hearted entry takes
 	// the WHOLE pool (an exact tie splits it). The Foundation never touches a pool.
@@ -2621,7 +2623,7 @@ final class Notebook {
 		return $out;
 	}
 
-	/** GET challenges — open tournaments (soonest deadline first) + recently settled. ?id= for one. */
+	/** GET challenges — open challenges (soonest deadline first) + recently settled. ?id= for one. */
 	public static function challenges( $req = null ) {
 		self::ensure_tables();
 		self::settle_due();
@@ -2639,7 +2641,7 @@ final class Notebook {
 		];
 	}
 
-	/** POST challenges {kind, topic, title, deadline, fee, nb_id} — found a tournament with your own
+	/** POST challenges {kind, topic, title, deadline, fee, nb_id} — found a challenge with your own
 	 *  notebook. The founder pays the fee like everyone else; pool starts at fee. */
 	public static function ch_create( $req ) {
 		self::ensure_tables();
@@ -2683,7 +2685,7 @@ final class Notebook {
 		if ( ! $nb || (int) $nb['author_id'] !== $uid ) { return Rest::err( 'not_yours', 'Enter with your own notebook', 403 ); }
 		if ( (string) $nb['kind'] !== (string) $c['kind'] ) { return Rest::err( 'wrong_kind', 'This challenge is for ' . $c['kind'] . ' notebooks', 409 ); }
 		if ( (string) $nb['status'] !== 'published' ) {
-			return Rest::err( 'not_published', 'Only published works can enter — pass the review panel and admin approval first', 409 );
+			return Rest::err( 'not_published', 'Only published works can enter — clear the reproducibility checklist and confirm publication from your own inbox first', 409 );
 		}
 		$fee = (int) $c['fee'];
 		// Serialise this member's wallet debits on the SAME atomic per-user lock every other spend path

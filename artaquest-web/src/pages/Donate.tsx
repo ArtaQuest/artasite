@@ -81,7 +81,7 @@ function TargetPicker({ targets, activeSystem, setActiveSystem, selKeys, setSelK
   if (targets.systems.length === 0) {
     return (
       <Card className="px-6 py-7 text-[14px] leading-relaxed text-ink-2">
-        <p className="font-semibold text-ink">Your gift goes to the general learner fund.</p>
+        <p className="font-semibold text-ink">Your gift goes to the general member fund.</p>
         <p className="mt-1.5 text-ink-3">As members self-identify on the <a href={localePath("/topics/")} className="text-yang hover:underline">Topics page</a>, the communities they belong to — by gender, heritage, nationality, faith, neurodivergence, and more — will appear here so you can direct your gift to any of them.</p>
       </Card>
     );
@@ -107,7 +107,7 @@ function TargetPicker({ targets, activeSystem, setActiveSystem, selKeys, setSelK
             <option key={s.key} value={s.key}>{s.name}</option>
           ))}
         </select>
-        {!sys && <p className="mt-3 text-[13px] leading-relaxed text-ink-3">Your gift goes to the <span className="font-semibold text-ink">general learner fund</span> — directed wherever the need is greatest. Pick a framework to support a specific community.</p>}
+        {!sys && <p className="mt-3 text-[13px] leading-relaxed text-ink-3">Your gift goes to the <span className="font-semibold text-ink">general member fund</span> — directed wherever the need is greatest. Pick a framework to support a specific community.</p>}
       </Card>
 
       {sys && (
@@ -151,13 +151,13 @@ function SponsorTopicPicker({ topics, sel, setSel }: { topics: SponsorableTopic[
   const cur = topics.find((t) => t.key === sel);
   return (
     <Card className="p-5">
-      <label htmlFor="sponsor-topic" className="text-[13px] font-semibold text-ink-2">Pick a topic to sponsor — your gift funds its course’s competition prize pool.</label>
+      <label htmlFor="sponsor-topic" className="text-[13px] font-semibold text-ink-2">Pick a topic to sponsor — your gift becomes gold-backed coins earmarked to that topic.</label>
       <select id="sponsor-topic" value={sel} onChange={(e) => setSel(e.target.value)}
         className="mt-2 h-11 w-full rounded-field border border-line bg-space-1 px-3 text-[15px] text-ink outline-none focus:border-yin-light">
         <option value="">Choose a topic…</option>
         {topics.map((t) => <option key={t.key} value={t.key}>{t.name}</option>)}
       </select>
-      {cur && <p className="mt-3 text-[13px] leading-relaxed text-ink-3">Sponsoring <span className="font-semibold text-ink">{cur.name}</span> — your gift becomes gold-backed coins added to its course’s prize pool, distributed each season 80% to the top questers and the rest to the course’s creator by tier.</p>}
+      {cur && <p className="mt-3 text-[13px] leading-relaxed text-ink-3">Sponsoring <span className="font-semibold text-ink">{cur.name}</span> — your gift becomes gold-backed coins earmarked to this topic, held in the public ledgers until the members working in it are funded.</p>}
     </Card>
   );
 }
@@ -218,7 +218,7 @@ export default function Donate() {
   const sys = targets?.systems.find((s) => s.key === activeSystem);
   const directed = sys && selKeys.size > 0;
   const directedShorts = sys ? sys.types.filter((t) => selKeys.has(t.key)).map((t) => t.short) : [];
-  const directedLabel = directed ? `${sys!.name}: ${directedShorts.join(", ")}` : "the general learner fund";
+  const directedLabel = directed ? `${sys!.name}: ${directedShorts.join(", ")}` : "the general member fund";
   const sponsorName = sponsorTopics.find((t) => t.key === sponsorKey)?.name || "";
   const isTopic = giftMode === "topic" && sponsorKey !== "";
 
@@ -259,7 +259,7 @@ export default function Donate() {
       <PageHero
         eyebrow="Donations" glyph={<DomainGlyph domain="cause" />}
         title="Where your donation goes"
-        lede={<>Your donation is minted into gold-backed Arta Coins and held in the learner fund, issued when a candidate needs it. You also earn one donor point for every coin you give — a lifetime score that raises your rank on the <a href={localePath("/rankings/")} className="text-yang hover:underline">leaderboard</a>. Give to the general fund, or direct it to any community members belong to — chosen from the frameworks on the <a href={localePath("/topics/")} className="text-yang hover:underline">Topics page</a>.</>}
+        lede={<>Your donation is minted into gold-backed Arta Coins and held in the member fund, issued when someone needs it. You also earn one donor point for every coin you give — a lifetime score that raises your rank in the <a href={localePath("/rankings/")} className="text-yang hover:underline">rankings</a>. Give to the general fund, or direct it to any community members belong to — chosen from the frameworks on the <a href={localePath("/topics/")} className="text-yang hover:underline">Topics page</a>.</>}
       />
 
       {/* Step 1 — who your gift supports: a community (bursaries) OR a topic's prize pool (sponsorship) */}
@@ -276,7 +276,7 @@ export default function Donate() {
           </>
         ) : (
           <>
-            <p className="mb-3 text-[13.5px] text-ink-3">Fund a topic’s competition prize pool — split each season among its top questers, the rest to the course’s creator.</p>
+            <p className="mb-3 text-[13.5px] text-ink-3">Sponsor a topic — your gift becomes gold-backed coins earmarked to that topic, and every one of them is traceable in the public ledgers.</p>
             <SponsorTopicPicker topics={sponsorTopics} sel={sponsorKey} setSel={setSponsorKey} />
           </>
         )}
