@@ -115,6 +115,36 @@ jobs:
           [ $miss -eq 0 ] && echo "all $(wc -l < /tmp/handlers.txt) handlers resolve to a class and a method"
           exit $miss
 
+      # Mirrors main.yml — see the long note there. Prod's integrity cron reads "PHP changed, version
+      # did not" as a tamper, and /version is the only way to confirm a deploy landed. The bump used to
+      # be automatic inside `studio push`; that path is gone, so it is now a human step with a gate.
+      # This must stay in step with main.yml or "green on your branch predicts green on main" is false.
+      - name: Changed PHP carries a version bump
+        if: steps.range.outputs.root == '0'
+        run: |
+          before='${{ github.event.before }}'
+          base=$(git rev-parse "${before}" 2>/dev/null || git rev-parse HEAD~1)
+          changed=$(git diff --name-only "$base" HEAD)
+          bad=0
+          check() {
+            hashed=$(echo "$changed" | grep -E "$2" || true)
+            [ -n "$hashed" ] || return 0
+            was=$(git show "$base:$3" 2>/dev/null | grep -iE "$4" | head -1 || true)
+            now=$(grep -iE "$4" "$3" | head -1 || true)
+            if [ "$was" = "$now" ]; then
+              echo "::error::$1 PHP changed but its version did not move"
+              echo "$hashed" | sed 's/^/    /'
+              bad=1
+            else
+              echo "$1: version moved"
+            fi
+          }
+          check "plugin" '^wp-content/plugins/aquest/([^/]+\.php|src/[^/]+\.php)$' \
+                wp-content/plugins/aquest/aquest.php 'define\( *.AQ_VERSION'
+          check "theme"  '^wp-content/themes/artaquest-theme/([^/]+\.php|includes/[^/]+\.php)$' \
+                wp-content/themes/artaquest-theme/style.css '^ \* Version:'
+          exit $bad
+
       - name: PHP syntax
         run: |
           shopt -s globstar nullglob
