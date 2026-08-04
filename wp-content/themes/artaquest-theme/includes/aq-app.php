@@ -1437,6 +1437,9 @@ add_action( 'parse_request', function () {
 		// Transactional renames + retired verification surfaces.
 		'enroll'           => '/wallet/',
 		'cart'             => '/wallet/',
+		// 'checkout' was reaching /wallet/ as a 302 from elsewhere while every other retired slug
+		// here is a 301. A retired path is permanently retired: a 302 tells a crawler to keep asking.
+		'checkout'         => '/wallet/',
 		'verify'           => '/',
 		'certificate'      => '/',
 	);
