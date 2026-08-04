@@ -446,7 +446,7 @@ export default function Issues() {
       <PageHero
         eyebrow="Contributions"
         title="Help shape ArtaQuest"
-        lede="Report a bug, request a feature, improve a course, or share an idea. ArtaBot triages it with you and the best contributions ship automatically — and every contribution is public, just like the discussion boards."
+        lede="Report a bug, request a feature, suggest an improvement, or share an idea. ArtaBot triages it with you and the best contributions ship automatically — and every contribution is public, just like the discussion boards."
       />
 
       {/* grid-cols-1 (not the implicit `auto` track) so the single mobile column is minmax(0,1fr) —
@@ -510,7 +510,9 @@ export default function Issues() {
               </Field>
 
               <Field label="Where?" optional>
-                <Input value={where} onChange={(e) => setWhere(e.target.value)} maxLength={300} placeholder="/courses/… or a full URL" className="w-full" />
+                {/* /courses/ was the example here until the courses economy was purged 2026-07-13 —
+                    a placeholder that teaches the reporter a dead path. /works/ is the live feed. */}
+                <Input value={where} onChange={(e) => setWhere(e.target.value)} maxLength={300} placeholder="/works/… or a full URL" className="w-full" />
               </Field>
 
               <Field label="Details">

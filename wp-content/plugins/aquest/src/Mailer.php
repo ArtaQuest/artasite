@@ -118,11 +118,16 @@ class Mailer {
 			'vars'     => [ 'id', 'title', 'kind', 'plan', 'approve_url', 'decline_url', 'url' ],
 			'sample'   => [ 'id' => '42', 'title' => 'Example ticket', 'kind' => 'feature', 'plan' => 'A sample plan.', 'approve_url' => '/', 'decline_url' => '/', 'url' => '/issues/?ticket=42' ],
 		],
+		// The gate is the SUBMITTING MEMBER's inbox, not the Kaggle author's: any member may submit any
+		// public kernel (operator 2026-07-28), author_id is that member, and nothing links an account to
+		// a Kaggle handle — so "the author IS the publisher" claimed a binding the code cannot make.
+		// What IS true, and what this email now says: only the member who brought the notebook here can
+		// publish it, from their own inbox, and the citation credits the notebook's Kaggle author.
 		'nb_confirm' => [
-			'label'     => 'Publish your work? (the author IS the publisher)',
+			'label'     => 'Publish your work? (only the member who brought it here can)',
 			'audience'  => 'member',
 			'subject'   => 'Confirm to publish? — {{title}}',
-			'body'      => "Your work “{{title}}” cleared every reproducibility check. One question remains, and it is yours alone:\n\nDo you want to publish it?\n\nConfirming publishes it IMMEDIATELY: the work is listed publicly, its files enter the Library, and a PERMANENT DOI mints — a DOI is forever and cannot be quietly undone, so look it over first. Nothing publishes until you confirm here, whoever (or whatever) requested it — not even an app or AI agent using your own API token.\n\nWhat we checked, read back from Kaggle:\n\n{{checks_html}}\n\nYour notebook on Kaggle:\n{{kernel}}\n\nRead your draft (the work page):\n{{draft}}\n\nThe button opens a review page that embeds your working deliverable and shows exactly what publishing means (nothing happens on the click itself). Publish there, or withdraw and the work stays a private draft. The link is single-use and bound to this exact version; any edit on Kaggle voids it. If you did not request publication, simply do nothing — or withdraw.",
+			'body'      => "The work you brought here, “{{title}}”, cleared every reproducibility check. One question remains, and it is yours alone:\n\nDo you want to publish it?\n\nConfirming publishes it IMMEDIATELY: the work is listed publicly, its files enter the Library, and a PERMANENT DOI mints — crediting the notebook's Kaggle author, with you recorded as the member who brought it here. A DOI is forever and cannot be quietly undone, so look it over first. Nothing publishes until you confirm here, whoever (or whatever) requested it — not even an app or AI agent using your own API token.\n\nWhat we checked, read back from Kaggle:\n\n{{checks_html}}\n\nThe notebook on Kaggle:\n{{kernel}}\n\nRead the draft (the work page):\n{{draft}}\n\nThe button opens a review page that embeds your working deliverable and shows exactly what publishing means (nothing happens on the click itself). Publish there, or withdraw and the work stays a private draft. The link is single-use and bound to this exact version; any edit on Kaggle voids it. If you did not request publication, simply do nothing — or withdraw.",
 			'cta'       => [ 'Review & publish (mints the DOI)', '{{url}}' ],
 			'vars'      => [ 'id', 'title', 'kind', 'checks_html', 'kernel', 'url', 'draft' ],
 			'html_vars' => [ 'checks_html' ],
@@ -158,7 +163,7 @@ class Mailer {
 			'label'    => 'SECURITY: work published without the author\'s verified confirmation',
 			'audience' => 'operator',
 			'subject'  => 'ArtaQuest SECURITY: unauthorised publication reverted (nb {{ids}})',
-			'body'     => "The integrity watchdog found published work(s) with NO matching author-confirmation record — meaning something flipped them live without the creator's emailed approval.\n\nReverted to draft: notebook(s) {{ids}}.\n\nNo action is needed to contain it (the demotion already happened and they are no longer publicly listed), but this indicates something on the server attempted to bypass the publication gate — worth investigating how.",
+			'body'     => "The integrity watchdog found published work(s) with NO matching author-confirmation record — meaning something flipped them live without the emailed approval of the member who brought them here.\n\nReverted to draft: notebook(s) {{ids}}.\n\nNo action is needed to contain it (the demotion already happened and they are no longer publicly listed), but this indicates something on the server attempted to bypass the publication gate — worth investigating how.",
 			'vars'     => [ 'ids' ],
 			'sample'   => [ 'ids' => '45' ],
 		],
@@ -302,7 +307,7 @@ class Mailer {
 		$html = esc_html( self::fill( $tpl['body'], $work ) );
 		$html = preg_replace_callback(
 			'#https?://[^\s<]+#',
-			fn( $m ) => '<a href="' . esc_url( html_entity_decode( $m[0] ) ) . '" style="color:#2352E8;word-break:break-all">' . $m[0] . '</a>',
+			fn( $m ) => '<a href="' . esc_url( html_entity_decode( $m[0] ) ) . '" style="color:#1746DC;word-break:break-all">' . $m[0] . '</a>',
 			$html
 		);
 		$out = '';
@@ -325,7 +330,7 @@ class Mailer {
 			$url = self::fill( (string) $tpl['cta'][1], $vars );
 			if ( $url !== '' && $url[0] === '/' ) { $url = home_url( $url ); }
 			$out .= '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 14px"><tr>'
-				. '<td bgcolor="#2352E8" style="border-radius:8px"><a href="' . esc_url( $url ) . '" '
+				. '<td bgcolor="#1746DC" style="border-radius:8px"><a href="' . esc_url( $url ) . '" '
 				. 'style="display:inline-block;padding:11px 22px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none">'
 				. esc_html( (string) $tpl['cta'][0] ) . '</a></td></tr></table>';
 		}
@@ -436,11 +441,11 @@ class Mailer {
 		return '<style>
 		.aq-mail{max-width:880px}
 		.aq-mail .aq-hero{display:flex;align-items:center;gap:16px;background:linear-gradient(120deg,#010C17,#0C1E32);border:1px solid #16324f;border-radius:12px;padding:18px 22px;margin:14px 0 20px;color:#eaf1f9}
-		.aq-mail .aq-mark{width:40px;height:40px;border-radius:50%;border:2px solid #2352E8;color:#E8B923;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center}
+		.aq-mail .aq-mark{width:40px;height:40px;border-radius:50%;border:2px solid #1746DC;color:#E8B923;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center}
 		.aq-mail .aq-title{font-size:18px;font-weight:700}
 		.aq-mail .aq-tag{color:#9fb1c5;font-size:12.5px}
 		.aq-mail .aq-health{margin-left:auto;font-size:12.5px;padding:6px 12px;border-radius:999px;white-space:nowrap}
-		.aq-mail .aq-health.ok{background:rgba(35,82,232,.18);color:#9db8ff}
+		.aq-mail .aq-health.ok{background:rgba(23,70,220,.18);color:#9db8ff}
 		.aq-mail .aq-health.warn{background:rgba(232,185,35,.15);color:#E8B923}
 		.aq-mail .aq-lead{max-width:72em}
 		.aq-mail .aq-card{background:#fff;border:1px solid #dcdfe5;border-radius:10px;padding:16px 18px;margin:0 0 16px}
@@ -448,7 +453,7 @@ class Mailer {
 		.aq-mail .aq-name{font-weight:600;font-size:14px;margin-right:8px}
 		.aq-mail .aq-key{color:#6b7682;font-size:12px}
 		.aq-mail .aq-pill{font-size:11px;padding:2px 9px;border-radius:999px;margin-right:6px;vertical-align:1px}
-		.aq-mail .aq-pill.mem{background:rgba(35,82,232,.12);color:#2352E8}
+		.aq-mail .aq-pill.mem{background:rgba(23,70,220,.12);color:#1746DC}
 		.aq-mail .aq-pill.op{background:#0C1E32;color:#E8B923}
 		.aq-mail .aq-pill.cust{background:rgba(232,185,35,.18);color:#8a6d00}
 		.aq-mail label{display:block;font-weight:600;font-size:12.5px;margin:8px 0}

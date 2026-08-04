@@ -97,11 +97,14 @@ curl -s https://artaquest.com/wp-json/aq/v1/version
 # {"plugin":"1.20.567","theme":"1.8.10"}
 ```
 
-Compare against `main`:
+Compare against the branch that actually deploys — `main` on **`ArtaQuest/artasite`**, which is the
+`artasite` remote here. Fetch first: a stale local ref happily agrees with production while both are
+behind, which reads exactly like success.
 
 ```bash
-git show origin/main:wp-content/plugins/aquest/aquest.php | grep AQ_VERSION
-git show origin/main:wp-content/themes/artaquest-theme/style.css | grep -i '^ \* Version:'
+git fetch artasite
+git show artasite/main:wp-content/plugins/aquest/aquest.php | grep AQ_VERSION
+git show artasite/main:wp-content/themes/artaquest-theme/style.css | grep -i '^ \* Version:'
 ```
 
 If they disagree, the deploy did not take effect — whatever the panel says.
@@ -113,11 +116,32 @@ Our own code cannot call `opcache_reset()`, and PHP copied in over SSH **never e
 deploy reports success while the site keeps serving old bytecode. Only WordPress.com's own pipeline
 invalidates that cache.
 
-So the local deploy tooling is **gone**, not merely discouraged: the local deployer script is
-deleted, `tools/ticket-agent/aq-deploy` refuses with exit 69, and the WordPress.com credential is
-logged out — which removes the capability from the machine entirely, whoever runs whatever. Two
-deploy paths racing WordPress.com's sync lock is what caused every outage this project has had, and
-a retired-but-present tool is an invitation to recreate that.
+So the local deploy tooling is **removed**, not merely discouraged. Two deploy paths racing
+WordPress.com's sync lock is what caused every outage this project has had, and a retired-but-present
+tool is an invitation to recreate that.
+
+"No machine can deploy" is only ever as true as the shortest path still open, so it is a list of
+capabilities and every one of them has to be gone:
+
+| Capability | State it must be in |
+|------------|---------------------|
+| the standalone local deployer script | deleted |
+| `tools/ticket-agent/aq-deploy` | refuses with exit 69 unless `AQ_BREAK_GLASS=1` (the autopilot toolchain lives on the operator's machine, not in this repository) |
+| the WordPress.com credential | logged out — `studio auth status` answers *invalid or expired* |
+| the autopilot's tar-over-SSH writer | **deleted** — it copied a build straight into `/srv/htdocs` and never touched `studio auth`, so logging that credential out did nothing to it |
+| `~/.ssh/artaquest_atomic` and its `.pub` | **deleted locally and revoked on the host** — a key left in place *is* the capability, whatever the code around it says |
+
+The SSH path is what made an earlier version of this paragraph untrue. It cannot deploy PHP, for the
+opcache reason above — but it can overwrite the live SPA bundle, leaving production serving a
+frontend from one commit against a backend from another. That is worse than a failed deploy, because
+every signal reports success.
+
+Revoking that key costs something, and the cost belongs in the same paragraph as the benefit: the
+runbook's `ssh artaquest …` commands — the production database export, the pipeline-state query —
+ride on the very same credential, so they go with it. That is the trade. A read path that can also
+untar into the web root is a write path. If an operator key is kept anyway for diagnostics, then the
+honest claim weakens from *no machine can deploy* to *no code on this machine deploys*, and this
+document has to say the weaker thing.
 
 **Break glass**, only when GitHub itself is unreachable — loud, logged, and overwritten by the next
 deployment:

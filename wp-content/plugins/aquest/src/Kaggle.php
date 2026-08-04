@@ -204,9 +204,60 @@ class Kaggle {
 		return -1;
 	}
 
-	/** Download a signed output URL into a string, refusing anything over $max. '' on failure. */
-	public static function fetch( $url, $max = Kernel::MAX_FILE_BYTES ) {
-		$r = wp_remote_get( $url, [ 'timeout' => 300, 'headers' => [ 'Range' => 'bytes=0-' . ( (int) $max ) ] ] );
+	/**
+	 * Download a signed output URL to a TEMP FILE, refusing anything over $max.
+	 * Returns the path — which the CALLER must unlink — or '' on failure.
+	 *
+	 * STREAMED, and that is the whole point. A published artifact may be up to
+	 * Kernel::MAX_FILE_BYTES (512 MB), and the buffering version of this call read one of those into
+	 * a PHP string before a single byte was stored: the request died on memory_limit or on the
+	 * gateway's ~60 s clock long before it delivered the ceiling we advertise. `stream => true`
+	 * hands the body straight to disk in fixed-size chunks, so the caller can size, hash and store
+	 * from the file instead — see Kernel::mirror.
+	 */
+	public static function fetch_to_file( $url, $max = Kernel::MAX_FILE_BYTES ) {
+		// wp_tempnam() lives in wp-admin/includes/file.php, which a REST request has NOT loaded —
+		// calling it unguarded from a frontend route is a fatal, and this project has already been
+		// bitten by exactly that (see the same guard in Media::put_public).
+		if ( ! function_exists( 'wp_tempnam' ) ) { require_once ABSPATH . 'wp-admin/includes/file.php'; }
+		$tmp = wp_tempnam( 'aq-kaggle' );
+		if ( ! $tmp ) { return ''; }
+		$r = wp_remote_get( $url, [
+			'timeout'  => 300,   // half a gigabyte over a signed URL needs room; bounded, never infinite
+			'stream'   => true,
+			'filename' => $tmp,
+			'headers'  => [ 'Range' => 'bytes=0-' . ( (int) $max ) ],
+		] );
+		if ( is_wp_error( $r ) ) { @unlink( $tmp ); return ''; }
+		$code = (int) wp_remote_retrieve_response_code( $r );
+		// A non-2xx STILL WRITES in stream mode — Kaggle's 403 body lands in the temp file just as
+		// happily as the artifact would. Deleting it here is what stops an error page being hashed,
+		// content-addressed and published under the author's name.
+		if ( 200 !== $code && 206 !== $code ) { @unlink( $tmp ); return ''; }
+		// wp_tempnam() creates the file EMPTY and stats it on the way (wp_unique_filename), so a
+		// size-0 entry is already in PHP's stat cache by the time the transport fills it. This build
+		// invalidates that entry on its own writes and production may not, and the caller's very
+		// first act is filesize() — a stale 0 there would read as "could not download" on every
+		// artifact we publish. One cheap line rather than a difference between two PHP builds.
+		clearstatcache( true, $tmp );
+		return $tmp;
+	}
+
+	/**
+	 * Download a signed output URL INTO MEMORY, refusing anything over $max. '' on failure.
+	 *
+	 * The opt-in half of fetch_to_file(), and opt-in is the point: $max is not advisory here, because
+	 * whatever comes back is held whole in this process. Use it ONLY where the bytes themselves are
+	 * the deliverable rather than the file — today that is the SVG rebuild alone (Svg::clean, capped
+	 * at 2 MB), which has to hand a string to the sanitiser and store the SANITISER'S output rather
+	 * than what arrived. Everything else streams. There is deliberately no default for $max: a caller
+	 * that cannot name the ceiling it is willing to hold in memory wants fetch_to_file().
+	 */
+	public static function fetch_bytes( $url, $max ) {
+		$r = wp_remote_get( $url, [
+			'timeout' => 60,     // small by construction — see the cap above; bounded, never infinite
+			'headers' => [ 'Range' => 'bytes=0-' . ( (int) $max ) ],
+		] );
 		if ( is_wp_error( $r ) ) { return ''; }
 		$code = (int) wp_remote_retrieve_response_code( $r );
 		if ( 200 !== $code && 206 !== $code ) { return ''; }

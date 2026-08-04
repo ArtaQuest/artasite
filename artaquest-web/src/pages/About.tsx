@@ -43,6 +43,19 @@ import founderAvatar from "../assets/founder-avatar.jpg";
  * take part".
  * • "The full record on his profile →" — Profile.tsx renders a bio, counts and a post grid. There
  * is no career record there to link to.
+ * • "Only the person who wrote the notebook can publish it here" — `author_confirm_email()` mails
+ * the single-use secret to `get_userdata( $r['author_id'] )->user_email`, i.e. the MEMBER who
+ * submitted it. `kaggle.author` is a name read back off Kaggle, and nothing anywhere links a
+ * member account to a Kaggle handle, so we could not check that claim even if we made it. The
+ * gate is exactly as strong as it says — one human, one inbox, one device signature — it is just
+ * a different human. Say "the member who brought it here", and credit the Kaggle author in the
+ * citation, which is where the credit was always going.
+ * • "it is checked" (the hate/fear line, read as happening at post time) — `Social::comment` and
+ * `Notebook::comment` both store the comment with `modq = 1` and return; the reading happens later,
+ * when `Fearometer::process_queue` drains the queue through the subscription relay. Since the paid
+ * API was removed (2026-06-13) there is nothing left that could read a comment inline, and posting
+ * has never waited on it. Say it is QUEUED and read — a promise about what happens to a comment,
+ * never about what has already happened to it.
  */
 
 /** A section heading + its anchor. `scroll-mt-24` clears the 60px sticky topbar plus air, so a jump
@@ -135,11 +148,11 @@ const RULES: { rule: string; body: string }[] = [
   },
   {
     rule: "No hate, no fear — my choice, not something the equation proves",
-    body: "When you post a comment, it is checked for language built to make people hate a group, or built to frighten them. A comment over the limit is marked. It is never deleted.",
+    body: "When you post a comment, it is queued and read for language built to make people hate a group, or built to frighten them. A comment over the limit is marked. It is never deleted, and the check never holds up your post.",
   },
   {
-    rule: "Only the author can publish — again my choice, not the equation",
-    body: "We send a one-time link to the author's own registered email address. Their click, together with a signature from their own device, is what publishes the work. No operator, no access key and no AI agent can do it instead. Counting futures on its own would happily publish a stranger's work. Consent is a limit I place on the aim, not something the aim produced.",
+    rule: "Only the member who brought it here can publish it — again my choice, not the equation",
+    body: "We send a one-time link to that member's own registered email address. Their click, together with a signature from their own device, is what publishes the work. No operator, no access key and no AI agent can do it instead. The citation credits the person who wrote the notebook on Kaggle, who is often someone else — we can read a Kaggle handle, but we cannot prove a member is the human behind it, so we do not pretend to. Counting futures on its own would happily publish without asking anyone. Consent is a limit I place on the aim, not something the aim produced.",
   },
   {
     rule: "Hearts, never downvotes — my choice as well",
@@ -254,7 +267,7 @@ export default function About() {
           <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-ink">
             A not-for-profit social feed for science and education. Every post here is a public notebook on Kaggle:
             writing and code that Kaggle has already run on its own computers. Kaggle keeps a public
-            record of that run. We read that record and show you what it says. Only the person who wrote the notebook can publish it here. It stays free to read, and anyone can run it
+            record of that run. We read that record and show you what it says. Only the member who brought a notebook here can publish it, from their own inbox; the citation credits the notebook's Kaggle author. It stays free to read, and anyone can run it
             again on Kaggle for as long as its author keeps it there — which is why publishing also
             mints a permanent citation link that outlives the notebook.
           </p>

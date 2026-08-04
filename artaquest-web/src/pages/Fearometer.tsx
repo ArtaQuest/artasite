@@ -88,7 +88,7 @@ const PAIRS: { topic: string; stays: string; aside: string }[] = [
 
 // The plain-English steps. No jargon.
 const STEPS = [
-  { n: "1", t: "Every reply is read", d: "When you post a reply in a course competition, an AI reads it once and rates it from 0 to 100 for one thing only: how far it trades in hate or fear." },
+  { n: "1", t: "Every reply is read, just after you post", d: "Your reply goes up straight away and joins a queue. Shortly after, an AI reads it once and rates it from 0 to 100 for one thing only: how far it trades in hate or fear." },
   { n: "2", t: "Almost everything passes", d: "Curiosity, criticism, dissent, hard questions, your own worries — all score low and stay exactly as you wrote them. Nothing about the topic is off-limits." },
   { n: "3", t: "Only the far end is set aside", d: "If a reply crosses the line into dehumanising people or frightening them, it’s set aside from the competition — its upvotes stop counting. It is never deleted, and you’re never charged." },
   { n: "4", t: "ArtaBot leaves a kind note", d: "Instead of a cold rejection, ArtaBot replies gently — a reminder not to be afraid, and to keep a little more faith in people. Reword from a calmer place and your reply counts again." },
@@ -114,6 +114,11 @@ export default function Fearometer() {
   const acc = t?.calibration.accuracy ?? 100;
   const updated = t?.calibration.updated ?? "2026-06-08";
   const datasetUrl = "/wp-json/aq/v1/fearometer/dataset";
+  // Comments posted but not yet read (aq_comments.modq = 1). Screening is asynchronous, so this is
+  // half of the live picture and never a rounding error: until the relay drains the queue for the
+  // first time, `replies_screened` is legitimately 0 while this is not. `?? 0` because an older
+  // deployed plugin returns `live` without it, and an undefined here would render as a blank tile.
+  const queued = t?.live?.queued ?? 0;
 
   return (
     <div className="flex flex-col gap-16 pb-12 sm:gap-20">
@@ -222,7 +227,7 @@ export default function Fearometer() {
           <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-ink-3">How it works</p>
           <h2 className="mt-3 text-[clamp(1.7rem,3.5vw,2.4rem)] font-extrabold leading-tight">Gentle, automatic, the same for everyone</h2>
           <p className="mt-5 text-[16px] leading-relaxed text-ink-2">
-            No moderator decides what you’re allowed to question. Drawing that line by hand would mean trusting someone’s politics. Instead, the same calm check runs on every competition reply, automatically.
+            No moderator decides what you’re allowed to question. Drawing that line by hand would mean trusting someone’s politics. Instead, the same calm check runs on every reply, automatically.
           </p>
         </div>
         <ol className="mt-8 grid list-none gap-4 sm:grid-cols-2">
@@ -237,7 +242,7 @@ export default function Fearometer() {
           ))}
         </ol>
         <p className="mt-6 max-w-3xl text-[15px] leading-relaxed text-ink-3">
-          And if the check is ever offline, your reply simply posts as normal — the system is built to free speech by default, never to silence it by accident.
+          And if the check is ever offline, your reply simply posts as normal and waits in the queue — the system is built to free speech by default, never to silence it by accident.
         </p>
       </section>
 
@@ -277,19 +282,50 @@ export default function Fearometer() {
             <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-ink-3">Live receipts</p>
             <h2 className="mt-3 text-[clamp(1.7rem,3.5vw,2.4rem)] font-extrabold leading-tight">What ArtaMod has actually done</h2>
           </div>
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[
-              { n: t.live.replies_screened.toLocaleString("en"), l: "replies screened" },
-              { n: t.live.flagged.toLocaleString("en"), l: `set aside (${t.live.flag_rate}%)` },
-              { n: t.live.appeals.toLocaleString("en"), l: "appeals filed" },
-              { n: t.live.appeals_granted.toLocaleString("en"), l: "appeals granted" },
-            ].map((s) => (
-              <div key={s.l} className="rounded-card border border-line bg-space-2 p-4">
-                <p className="text-[26px] font-extrabold tabular-nums text-ink">{s.n}</p>
-                <p className="mt-1 text-[12.5px] text-ink-3">{s.l}</p>
+          {/* NOTHING SCREENED YET is its own state, not a row of zeros. A grid reading
+              "0 screened · 0 set aside (0%)" beside the 100% figure further down reads as a screen
+              with a perfect record, which is the one impression this page must never leave: a rate
+              over no replies is not 0% and not 100%, it is nothing, so we print no rate at all and
+              say what is actually true. `flag_rate` is only ever shown with a real denominator.
+              Because screening is asynchronous, this state is the NORMAL one until the relay drains
+              the queue the first time — screened 0 beside a queue that is not empty is not a fault,
+              so the waiting count is shown here too rather than being held back with the rest. */}
+          {t.live.replies_screened === 0 ? (
+            <>
+              <p className="mt-6 max-w-3xl text-[15px] leading-relaxed text-ink-2">
+                Nothing has come back from the screen on the live platform yet, so there is no record to show here — and
+                a share of no replies would be a number about nothing. The only live figure there is right now is how
+                many comments are waiting. The figures further down are from our own study set, which we wrote and
+                labelled ourselves; they say how the screen behaves on that set, not what it has done to anything anyone
+                has posted here. As replies come back through the screen, they will be counted in this spot, mistakes
+                and all.
+              </p>
+              <div className="mt-5 inline-block rounded-card border border-line bg-space-2 p-4">
+                <p className="text-[26px] font-extrabold tabular-nums text-ink">{queued.toLocaleString("en")}</p>
+                <p className="mt-1 text-[12.5px] text-ink-3">waiting to be screened</p>
               </div>
-            ))}
-          </div>
+            </>
+          ) : (
+            <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              {[
+                { n: t.live.replies_screened.toLocaleString("en"), l: "replies screened" },
+                { n: queued.toLocaleString("en"), l: "waiting to be screened" },
+                { n: t.live.flagged.toLocaleString("en"), l: `set aside (${t.live.flag_rate}%)` },
+                { n: t.live.appeals.toLocaleString("en"), l: "appeals filed" },
+                { n: t.live.appeals_granted.toLocaleString("en"), l: "appeals granted" },
+              ].map((s) => (
+                <div key={s.l} className="rounded-card border border-line bg-space-2 p-4">
+                  <p className="text-[26px] font-extrabold tabular-nums text-ink">{s.n}</p>
+                  <p className="mt-1 text-[12.5px] text-ink-3">{s.l}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="mt-4 max-w-3xl text-[13.5px] leading-relaxed text-ink-3">
+            Screening runs shortly after you post, not while you type — a comment is visible straight away and read a
+            few minutes later. Anything still waiting is counted separately, which is why the screened total can read
+            zero while the queue is not empty.
+          </p>
           {t.live.most_flagged_courses.length > 0 && (
             <p className="mt-4 max-w-3xl text-[13.5px] leading-relaxed text-ink-3">
               Most flags: {t.live.most_flagged_courses.map((c, i) => (
@@ -314,7 +350,10 @@ export default function Fearometer() {
           <Stat value={String(cases)} label="hand-labelled example comments in the study set" />
           <Stat value={String(langs)} label="languages — hate hides in every tongue, so we test in many" />
           <Stat value={String(cats)} label="kinds of tricky case, from coded hate to dark humour" />
-          <Stat value={acc >= 100 ? "100%" : acc + "%"} label={`correct on the study set at our last check (${updated})`} />
+          {/* The denominator belongs IN the label. On its own, "100%" beside three live-looking
+              counters reads as a claim about the platform; it is a result from one dated run over
+              the hand-labelled set above, and nothing else. */}
+          <Stat value={acc >= 100 ? "100%" : acc + "%"} label={`correct on the ${cases} study-set examples at our last check (${updated})`} />
         </div>
 
         <div className="mt-8 grid gap-5 lg:grid-cols-2">

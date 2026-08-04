@@ -59,12 +59,14 @@ final class Artaai {
 		],
 		'moderation' => [
 			'label' => 'ArtaMod moderation', 'group' => 'chat',
-			'blurb' => 'Scores every section-board comment 0-100 for hate/fear; at/over the threshold its upvotes leave the competition.',
+			'blurb' => 'Scores every comment on the feed and the discussion boards 0-100 for hate/fear; at/over the threshold its upvotes leave the competition.',
 			'beat' => 'aq_relay_beat', 'launch' => 'org.artaquest.artabot-relay',
 			'model' => Fearometer::MODEL, 'effort' => 'max', 'engine' => '', 'pausable' => true, 'poll' => '',
 			'table' => 'aq_comments', 'ts_col' => 'created', 'title_col' => 'body',
-			'pending_where' => "modq = 1 AND context_type = 'section'", 'busy_where' => '',
-			'done_where' => "flagged = 1 AND context_type = 'section'", 'done_label' => 'flagged',
+			// Scoped by Fearometer::SURFACES, not 'section' alone: the drainer and this dashboard
+			// must read the same platform, or the operator sees an empty queue while it fills.
+			'pending_where' => 'modq = 1 AND context_type IN (' . Fearometer::SURFACES . ')', 'busy_where' => '',
+			'done_where' => 'flagged = 1 AND context_type IN (' . Fearometer::SURFACES . ')', 'done_label' => 'flagged',
 			'failed_where' => '', 'requeue' => null, 'rounds' => null,
 		],
 		'science' => [
@@ -294,10 +296,12 @@ final class Artaai {
 			'moderation' => [
 				'threshold' => Fearometer::limit(),
 				'default'   => Fearometer::LIMIT,
-				'queue'     => self::count( 'aq_comments', "modq = 1 AND context_type = 'section'" ),
-				'flagged'   => self::count( 'aq_comments', "flagged = 1 AND context_type = 'section'" ),
-				'flagged_24h' => self::count( 'aq_comments', "flagged = 1 AND context_type = 'section' AND created > " . ( $now - DAY_IN_SECONDS ) ),
-				'processed' => self::count( 'aq_comments', "context_type = 'section' AND modq = 0" ),
+				// Every screened surface (Fearometer::SURFACES) — the feed and the discussion boards,
+				// not just the retired course board — so these counters track the queue the relay drains.
+				'queue'     => self::count( 'aq_comments', 'modq = 1 AND context_type IN (' . Fearometer::SURFACES . ')' ),
+				'flagged'   => self::count( 'aq_comments', 'flagged = 1 AND context_type IN (' . Fearometer::SURFACES . ')' ),
+				'flagged_24h' => self::count( 'aq_comments', 'flagged = 1 AND context_type IN (' . Fearometer::SURFACES . ') AND created > ' . ( $now - DAY_IN_SECONDS ) ),
+				'processed' => self::count( 'aq_comments', 'context_type IN (' . Fearometer::SURFACES . ') AND modq = 0' ),
 			],
 			'surfaces' => $surfaces,
 			'system'   => [ 'schema' => Schema::VERSION, 'aq_version' => defined( 'AQ_VERSION' ) ? AQ_VERSION : '' ],

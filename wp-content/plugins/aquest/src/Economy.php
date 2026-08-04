@@ -782,6 +782,19 @@ final class Economy {
 		return [ 'items' => $out, 'track' => $track ];
 	}
 
+	const SPOT_FLOOR_CAD = 0.20; // CAD per mg — last-resort price floor when the oracle has never run
+
+	/** ONE resolution of the gold spot (USD per troy ounce) for the WHOLE platform: reserve(),
+	 *  coin_price(), Extra::coin_world and Shop::try_per_coin all price off this. Written by the
+	 *  daily aq_gold_rate oracle below (bounded + sanity-gated); 0 only when that has never run, and
+	 *  every caller floors a 0 rather than serving a free/zero price.
+	 *  Each surface used to resolve it its own way, and /coin-world read the long-dead
+	 *  aq_gold_rate_history table instead — so /pricing rendered "Gold spot (USD/oz) $0" while
+	 *  /reserve showed the real 4,056.9 at the same instant. One reader, one answer. */
+	public static function gold_oz_usd() {
+		return (float) get_option( 'aq_gold_spot_oz_usd', 0 );
+	}
+
 	/** GET /reserve — public full-reserve proof (coins issued vs gold backing) + the live coin price.
 	 *  1 ₳ = 1 mg gold, so spot = (gold $/oz ÷ mg-per-troy-oz) × USD→CAD; buy/sell apply the spread.
 	 *  Sourced from the surviving aq_gold_spot_oz_usd / aq_coin_spread / aq_fx_rates options (the
@@ -792,27 +805,17 @@ final class Economy {
 		// TRUE (possibly under-collateralized) ratio, never a falsely-perfect 1.0; buy/sell + add_backing
 		// maintain it in lockstep via atomic increments (was a lossy option read-modify-write).
 		$backing = self::backing_mg();
-		$oz_usd  = (float) get_option( 'aq_gold_spot_oz_usd', 0 );
+		$oz_usd  = self::gold_oz_usd();
 		$spread  = (float) get_option( 'aq_coin_spread', 0.05 );
 		$fx      = get_option( 'aq_fx_rates', array() );
 		$cad     = ( is_array( $fx ) && ! empty( $fx['CAD'] ) ) ? (float) $fx['CAD'] : 1.0;
 		$spot    = $oz_usd > 0 ? ( $oz_usd / 31103.477 ) * $cad : 0.0; // CAD per coin (1 coin = 1 mg)
-		// Price-over-time series for the Reserve page chart. aq_gold_rate_history.mg_base is already the
-		// CAD-per-coin spot (1 ₳ = 1 mg); we apply the SAME spread as the live buy/sell above so the chart
-		// and the ticker agree. Most-recent points, reversed to oldest→newest so the SVG polyline reads
-		// left-to-right. Read-only over an already-public table — no economy state is touched, and a
-		// missing/empty table just yields an empty series (the chart shows its placeholder, no error).
-		$rows    = Data::all( 'SELECT ts, mg_base FROM ' . Data::t( 'aq_gold_rate_history' ) . ' WHERE mg_base > 0 ORDER BY id DESC LIMIT %d', [ 120 ] );
+		// Price-over-time series for the Reserve page chart — EMPTY, and honestly so. It used to read
+		// aq_gold_rate_history, a table with four readers and (in this codebase) never a single writer:
+		// the query returned nothing on every call, so the chart has always drawn its "history will
+		// appear" placeholder. Nothing records a price series today, so we say so by serving [] rather
+		// than by querying a table that cannot answer. Restore the key's contents the day a writer exists.
 		$history = [];
-		foreach ( array_reverse( $rows ) as $row ) {
-			$s = (float) $row['mg_base'];
-			$history[] = [
-				'ts'   => (int) $row['ts'],
-				'spot' => round( $s, 4 ),
-				'buy'  => round( $s * ( 1 + $spread ), 4 ),
-				'sell' => round( $s * ( 1 - $spread ), 4 ),
-			];
-		}
 		return [
 			'issued_coins' => $issued,
 			'backing_mg'   => $backing,
@@ -833,20 +836,19 @@ final class Economy {
 	}
 
 	/**
-	 * Live coin price in CAD: spot = 1 mg gold. Prefers the same option sources as reserve(),
-	 * falling back to the latest aq_gold_rate_history row (mg_base is already CAD per mg) so the
-	 * figure is never 0. Returns [fiat, spot, buy, sell, spread].
+	 * Live coin price in CAD: spot = 1 mg gold. Reads the same option sources as reserve() through
+	 * gold_oz_usd(), then floors at SPOT_FLOOR_CAD so the figure is never 0 (a 0 spot would divide by
+	 * zero in every buy/sell). The aq_gold_rate_history fallback that used to sit between the two was
+	 * dead weight — that table has never had a writer, so it always answered 0 and the floor did the
+	 * work. Returns [fiat, spot, buy, sell, spread].
 	 */
 	public static function coin_price() {
 		$spread = (float) get_option( 'aq_coin_spread', 0.05 );
-		$oz_usd = (float) get_option( 'aq_gold_spot_oz_usd', 0 );
+		$oz_usd = self::gold_oz_usd();
 		$fx     = get_option( 'aq_fx_rates', [] );
 		$cad    = ( is_array( $fx ) && ! empty( $fx['CAD'] ) ) ? (float) $fx['CAD'] : 1.0;
 		$spot   = $oz_usd > 0 ? ( $oz_usd / 31103.477 ) * $cad : 0.0;
-		if ( $spot <= 0 ) {
-			$spot = (float) Data::col( 'SELECT mg_base FROM ' . Data::t( 'aq_gold_rate_history' ) . ' ORDER BY id DESC LIMIT 1' );
-		}
-		if ( $spot <= 0 ) { $spot = 0.20; } // last-resort floor so buy/sell never divide by 0
+		if ( $spot <= 0 ) { $spot = self::SPOT_FLOOR_CAD; } // last-resort floor so buy/sell never divide by 0
 		return [
 			'fiat'   => 'CAD',
 			'spot'   => round( $spot, 4 ),
@@ -908,6 +910,34 @@ final class Economy {
 		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'buy' AND ref = %s LIMIT 1", [ $ref ] ) ) { return 0; }
 		self::credit_coins( $uid, $coins, 'buy', $ref );
 		self::counter_add( 'backing_mg', $coins ); // atomic — full-reserve backing rises in lockstep with the mint
+		return $coins;
+	}
+
+	/**
+	 * Un-mint a coin purchase whose fiat payment came BACK (a Stripe refund — Extra::stripe_webhook).
+	 * The money left, so the coins must too, or the platform has minted gold-backed coins for nothing.
+	 *
+	 * APPEND-ONLY, like every path here: the original 'buy' row is never touched or deleted; we append
+	 * the mirrored negative (reason 'refund') and release the same milligrams of backing, so the
+	 * full-reserve invariant holds after the reversal exactly as it did before. Idempotent by
+	 * $rev_ref — a webhook redelivery finds its own row and no-ops, so nothing is ever reversed twice.
+	 * $fraction (0-1] reverses a PARTIAL refund proportionally, floored: we claw back only whole coins
+	 * we are certain of and never more than the refund justifies.
+	 *
+	 * A wallet that has already SPENT the coins goes negative. That is the honest record — the money
+	 * went back, the coins did not — and credit_coins' overdraft canary pages an operator to chase it.
+	 * Returns the coins clawed back (0 when there is nothing to reverse, or it was already done).
+	 */
+	public static function reverse_coin_purchase( $ref, $rev_ref, $fraction = 1.0 ) {
+		$ref = (string) $ref; $rev_ref = (string) $rev_ref;
+		if ( $ref === '' || $rev_ref === '' ) { return 0; }
+		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . ' WHERE ref = %s LIMIT 1', [ $rev_ref ] ) ) { return 0; }
+		$row = Data::one( 'SELECT user_id, delta FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'buy' AND ref = %s LIMIT 1", [ $ref ] );
+		if ( ! $row || (int) $row['delta'] < 1 ) { return 0; } // nothing was minted for this payment
+		$coins = (int) floor( (int) $row['delta'] * max( 0.0, min( 1.0, (float) $fraction ) ) );
+		if ( $coins < 1 ) { return 0; }
+		self::credit_coins( (int) $row['user_id'], -$coins, 'refund', $rev_ref );
+		self::counter_add( 'backing_mg', -$coins ); // the mint is undone, so its gold is released with it
 		return $coins;
 	}
 

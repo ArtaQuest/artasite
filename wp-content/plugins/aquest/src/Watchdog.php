@@ -27,7 +27,9 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *   4. LEDGER IMMUTABILITY — the money/points/fund ledgers are append-only; per-table
  *      checkpoints (max id, COUNT, SUM) prove historical rows were never edited or deleted.
  *   5. SECRET-LEAK SCAN — the public DB must never contain a real credential; wp_options is
- *      swept for key-shaped values (sk_live_, sk-ant-, whsec_, AKIA, PEM blocks, …).
+ *      swept for key-shaped values (sk_live_, sk-ant-, whsec_, AKIA, PEM blocks, …) AND for
+ *      credential-shaped NAMES holding a long high-entropy value, which is the only half that can
+ *      see an issuer we never listed (the host's own integration token is exactly that shape).
  *   6. ROTATION ALARMS — vault keys past their policy age, keys flagged compromised, and the
  *      AQ_ALLOW_PASSWORD_LOGIN escape hatch being set all raise alarms (see Vault).
  *   7. PASSWORD-PROBE TRAP — password logins are disabled (Auth::harden); anyone *attempting*
@@ -377,9 +379,33 @@ final class Watchdog {
 		self::$state['baselines']['vault'] = $fp;
 	}
 
+	/** How many wp_options rows ONE leak query examines. The old sweep took the first `LIMIT 10` and
+	 *  said nothing about the rest, so an eleventh candidate row read as "clean". The cap is explicit
+	 *  now and a sweep that reaches it SAYS the report is incomplete. */
+	const LEAK_SCAN_LIMIT = 2000;
+
+	/** Bytes of an option value the sweep reads. A credential is short; an hourly alarm must not pull
+	 *  a multi-megabyte cached blob into memory to look at it. */
+	const LEAK_VALUE_BYTES = 4096;
+
+	/** Option NAMES that read as credential-bearing (matched anywhere in the name, case-insensitively
+	 *  — MySQL and SQLite both fold case on LIKE). The vendor-prefix list below can only catch issuers
+	 *  we thought of, and the one that actually sat in our public options table — the host's own
+	 *  integration token — matches NONE of them. Name shape + value entropy is the vendor-agnostic half. */
+	const LEAK_NAME_PARTS = [ 'token', 'secret', 'key', 'salt', 'pass', 'credential', 'private', 'auth' ];
+
+	/** Bits per character above which a long token reads as random rather than typed. Hex sits near
+	 *  3.9, base64 near 5.5; slugs, versions, paths and prose sit below. */
+	const LEAK_MIN_ENTROPY = 3.4;
+
 	/** The public DB must hold NOTHING credential-shaped. Sweep wp_options for key-like values. */
 	private static function scan_leaks() {
 		global $wpdb;
+		$why       = []; // option_name => why it reads as a credential (shown in the alert)
+		$vals      = []; // option_name => the (clipped) value, for the decoy-echo test below
+		$truncated = false;
+
+		// ── 1. Vendor-prefixed credentials (high confidence) ──────────────────────────────────
 		// Match credential VALUE prefixes (not field NAMES — a serialized `client_secret` key whose value
 		// is empty is not a leak), so the scan flags real keys without drowning in plugin-settings noise.
 		$like = fn( $p ) => $wpdb->prepare( 'option_value LIKE %s', '%' . $wpdb->esc_like( $p ) . '%' );
@@ -388,8 +414,9 @@ final class Watchdog {
 		// transient, which is a wp_options row wherever no persistent object cache exists, i.e. a live
 		// credential in the table we publish. The caller was fixed (it is a per-request static now);
 		// this pattern is so the NEXT one is caught by the alarm rather than by a code review.
-		$where = implode( ' OR ', array_map( $like, [ 'sk_live_', 'sk-ant-', 'whsec_', 'AKIA', '-----BEGIN ', 'rk_live_', 'GOCSPX-', 'ya29.', 'hf_', 'ghp_', 'github_pat_' ] ) );
-		$rows = $wpdb->get_results( "SELECT option_name, option_value FROM {$wpdb->options} WHERE {$where} LIMIT 10", ARRAY_A );
+		[ $rows, $hit_cap ] = self::leak_rows( implode( ' OR ', array_map( $like,
+			[ 'sk_live_', 'sk-ant-', 'whsec_', 'AKIA', '-----BEGIN ', 'rk_live_', 'GOCSPX-', 'ya29.', 'hf_', 'ghp_', 'github_pat_' ] ) ) );
+		$truncated = $truncated || $hit_cap;
 		// CONFIRM each LIKE hit against the full credential shape before alarming. The bare substrings
 		// false-positive on ordinary data: 'AKIA' occurs in random base64 (any cached blob), and
 		// '-----BEGIN ' also matches PUBLIC keys / certificates, which are not secrets. A real AWS key is
@@ -401,18 +428,40 @@ final class Watchdog {
 			'/\bGOCSPX-[0-9A-Za-z_\-]{10,}/', '/\bya29\.[0-9A-Za-z_\-]{20,}/',
 			'/\bhf_[0-9A-Za-z]{20,}/', '/\bghp_[0-9A-Za-z]{30,}/', '/\bgithub_pat_[0-9A-Za-z_]{30,}/',
 		];
-		$names = [];
-		$vals  = [];
-		foreach ( (array) $rows as $r ) {
+		foreach ( $rows as $r ) {
 			foreach ( $shapes as $re ) {
 				if ( preg_match( $re, (string) $r['option_value'] ) ) {
-					$names[] = $r['option_name'];
-					$vals[ $r['option_name'] ] = (string) $r['option_value'];
+					$n          = (string) $r['option_name'];
+					$why[ $n ]  = 'a known vendor credential prefix';
+					$vals[ $n ] = (string) $r['option_value'];
 					break;
 				}
 			}
 		}
-		$names = array_diff( $names, self::TRAPS );
+
+		// ── 2. Credential-shaped NAME + a high-entropy value (any issuer, including ours) ──────
+		// This half exists because the vendor list above reported all-clear for the whole time a live
+		// WordPress.com/Jetpack `blog_token` sat in the public options table: it carries no vendor
+		// prefix at all, and it lives INSIDE a serialized array, so only the name and the randomness
+		// of the value give it away.
+		$nlike = fn( $p ) => $wpdb->prepare( 'option_name LIKE %s', '%' . $wpdb->esc_like( $p ) . '%' );
+		[ $rows, $hit_cap ] = self::leak_rows( implode( ' OR ', array_map( $nlike, self::LEAK_NAME_PARTS ) ) );
+		$truncated = $truncated || $hit_cap;
+		foreach ( $rows as $r ) {
+			$n = (string) $r['option_name'];
+			if ( isset( $why[ $n ] ) ) { continue; } // already reported by its vendor prefix
+			$tok = self::opaque_token( (string) $r['option_value'] );
+			if ( $tok !== '' ) {
+				$why[ $n ]  = 'a credential-shaped name holding a ' . strlen( $tok ) . '-char high-entropy value';
+				$vals[ $n ] = (string) $r['option_value'];
+			}
+		}
+
+		// THE DECOYS ARE NOT LEAKS. Watchdog::TRAPS are deliberately planted juicy-but-worthless
+		// values whose whole job is to be scraped from the public DB and then alarm on USE
+		// (trap_probe). They must stay visible and must never be reported here — an alarm about our
+		// own bait would train the operator to ignore the one alarm that means a live intrusion.
+		foreach ( self::TRAPS as $decoy_name ) { unset( $why[ $decoy_name ] ); }
 		// A transient holding a TRAP's value is our own decoy echoing around — fine. A transient
 		// holding anything ELSE credential-shaped is a leak like any other, and the most likely one:
 		// caching is exactly how a live token ends up in wp_options by accident. The old rule skipped
@@ -420,18 +469,95 @@ final class Watchdog {
 		// the alarm could not see. Compare against the planted trap VALUES, not the name prefix.
 		$traps = self::state()['traps'] ?? [];
 		$decoy = array_filter( array_map( 'strval', is_array( $traps ) ? $traps : [] ) );
-		$names = array_filter( $names, function ( $n ) use ( $vals, $decoy ) {
-			if ( strpos( $n, '_transient' ) !== 0 ) { return true; }
+		foreach ( array_keys( $why ) as $n ) {
+			if ( strpos( $n, '_transient' ) !== 0 ) { continue; }
 			$v = $vals[ $n ] ?? '';
-			foreach ( $decoy as $d ) { if ( $d !== '' && strpos( $v, $d ) !== false ) { return false; } }
-			return true;
-		} );
-		if ( $names ) {
-			self::alert( 'leak_' . md5( implode( ',', $names ) ), 'Possible SECRET stored in the public database',
-				"These wp_options rows contain credential-shaped values: " . implode( ', ', $names ) . ".\n"
+			foreach ( $decoy as $d ) { if ( $d !== '' && strpos( $v, $d ) !== false ) { unset( $why[ $n ] ); break; } }
+		}
+		$names = array_keys( $why );
+
+		// SEED, DON'T SHOUT. This database already contains the findings we know about, and an alarm
+		// that fires on everything from its first run is an alarm that gets muted and then ignored.
+		// The FIRST sweep records what is already there as acknowledged — in the state FILE, never the
+		// DB, so a DB attacker cannot pre-fill it — and stays silent; anything appearing AFTER that is
+		// new and alarms until it is gone. "Rebuild baselines" in wp-admin re-seeds the same way.
+		// Acknowledged by NAME only: a known-and-accepted option rotating its value must not page us.
+		$known = self::state()['baselines']['leaks'] ?? null;
+		if ( $known === null ) {
+			self::$state['baselines']['leaks'] = $names;
+			self::note( 'Leak scan baselined: ' . count( $names ) . ' credential-shaped option(s) acknowledged'
+				. ( $names ? ' — ' . implode( ', ', array_slice( $names, 0, 20 ) ) : '' ) );
+			$known = $names;
+		}
+		$new = array_values( array_diff( $names, (array) $known ) );
+
+		if ( $new ) {
+			self::alert( 'leak_' . md5( implode( ',', $new ) ), 'Possible SECRET stored in the public database',
+				"These wp_options rows contain credential-shaped values:\n - "
+				. implode( "\n - ", array_map( fn( $n ) => $n . ' — ' . $why[ $n ], $new ) ) . "\n"
+				. ( $truncated ? 'The sweep also hit its ' . self::LEAK_SCAN_LIMIT . "-row cap, so this list is INCOMPLETE.\n" : '' )
 				. 'The entire database is PUBLIC — if any of these is a real secret it is already exposed. '
 				. 'Move it to the vault (wp-admin → AQ Security), delete the option, and rotate the credential.', true );
+		} elseif ( $truncated ) {
+			// Say the scan was cut short rather than let a truncated sweep read as a clean one.
+			self::alert( 'leak_truncated', 'Secret-leak scan could not read the whole options table',
+				'The sweep stopped at its ' . self::LEAK_SCAN_LIMIT . '-row cap, so "nothing new" covers only what it read. '
+				. 'Raise Watchdog::LEAK_SCAN_LIMIT, or find out why so many options look credential-shaped.' );
 		}
+	}
+
+	/** One bounded read of wp_options for the leak sweep → [ rows, hit_the_cap ]. The value is clipped
+	 *  in SQL (a credential is short, and an hourly alarm must never pull a multi-megabyte cached blob
+	 *  into memory); if an engine refuses SUBSTR we re-read unclipped rather than let the sweep go
+	 *  silently blind — a leak scan that quietly reads nothing is worse than no leak scan at all.
+	 *  $where is already prepared by the caller, so this string is NEVER re-prepared: it contains
+	 *  LIKE literals full of `%`, which a second prepare() pass would eat as placeholders. */
+	private static function leak_rows( $where ) {
+		global $wpdb;
+		$lim  = (int) self::LEAK_SCAN_LIMIT;
+		$clip = (int) self::LEAK_VALUE_BYTES;
+		$prev = $wpdb->suppress_errors( true ); // the clip is a probe; its failure is handled, not reported
+		$rows = $wpdb->get_results( "SELECT option_name, SUBSTR(option_value, 1, {$clip}) AS option_value FROM {$wpdb->options} WHERE {$where} LIMIT {$lim}", ARRAY_A );
+		$err  = $wpdb->last_error;
+		$wpdb->suppress_errors( $prev );
+		if ( $err ) {
+			$rows = $wpdb->get_results( "SELECT option_name, option_value FROM {$wpdb->options} WHERE {$where} LIMIT {$lim}", ARRAY_A );
+		}
+		$rows = (array) $rows;
+		return [ $rows, count( $rows ) >= $lim ];
+	}
+
+	/**
+	 * The first substring of $value that reads as an opaque credential: a long run of token characters
+	 * carrying BOTH letters and digits, with high per-character entropy. Extracted from within the
+	 * value rather than matched against the whole of it, because that is how a real one sits there —
+	 * a Jetpack blog_token lives inside a serialized array, and testing the blob as a whole finds
+	 * nothing. Returns '' when nothing in the value looks like a key.
+	 */
+	private static function opaque_token( $value ) {
+		$value = substr( (string) $value, 0, self::LEAK_VALUE_BYTES );
+		foreach ( preg_split( '/[^A-Za-z0-9_\-]+/', $value ) ?: [] as $tok ) {
+			$len = strlen( $tok );
+			// Short → not a key. Very long → a blob (base64 payload, cached document), not a key.
+			if ( $len < 24 || $len > 256 ) { continue; }
+			// Both classes present: excludes prose and identifiers (letters only) and ids, timestamps
+			// and serialized lengths (digits only), which are the bulk of what options actually hold.
+			if ( ! preg_match( '/[0-9]/', $tok ) || ! preg_match( '/[A-Za-z]/', $tok ) ) { continue; }
+			if ( self::entropy( $tok ) >= self::LEAK_MIN_ENTROPY ) { return $tok; }
+		}
+		return '';
+	}
+
+	/** Shannon entropy of a string, in bits per character. */
+	private static function entropy( $s ) {
+		$len = strlen( $s );
+		if ( $len < 1 ) { return 0.0; }
+		$h = 0.0;
+		foreach ( count_chars( $s, 1 ) as $n ) {
+			$p  = $n / $len;
+			$h -= $p * log( $p, 2 );
+		}
+		return $h;
 	}
 
 	/** Rotation alarms from the vault metadata + the password-login escape hatch. */

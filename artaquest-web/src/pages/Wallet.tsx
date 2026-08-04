@@ -155,7 +155,7 @@ function SellPanel({ balance, sellPrice, fiat, cashout, onSold }: { balance: num
     );
   }
 
-  // Nothing to sell yet — point the learner at the only way to mint coins, rather than a dead form.
+  // Nothing to sell yet — point the member at the only way to mint coins, rather than a dead form.
   if (balance <= 0) {
     return (
       <Card className="flex flex-col gap-4 p-6">
@@ -221,9 +221,10 @@ export default function Wallet() {
     refreshWallet();
   }, [logged]);
 
-  // Returning from Stripe Checkout (coin top-up): verify the session, then refresh the wallet so the
-  // minted coins show. Fulfilment is idempotent server-side (and also covered by the webhook), so a
-  // refresh never double-credits. Strip the query afterwards so a reload doesn't re-show the banner.
+  // Returning from Stripe Checkout — a coin top-up OR a donation, since /donate now returns the giver
+  // here too. Verify the session, then refresh the wallet so any minted coins show. Fulfilment is
+  // idempotent server-side (and also covered by the webhook), so a refresh never double-credits.
+  // Strip the query afterwards so a reload doesn't re-show the banner.
   useEffect(() => {
     if (!logged) return;
     const sp = new URLSearchParams(window.location.search);
@@ -243,7 +244,20 @@ export default function Wallet() {
     if (st === "success") {
       const session = sp.get("session") || "";
       if (session) getStripeVerify(session).then((v) => {
-        if (v?.paid) { refreshWallet(); setNotice({ ok: true, text: "Payment received — your coins are in your wallet." }); }
+        if (v?.paid) {
+          refreshWallet();
+          // `course` is the server's name for what was bought (Extra::stripe_verify): 'Your gift' for a
+          // donation, 'Arta Coins' for a top-up. A donation mints NO coins, so the single top-up message
+          // told every donor their gift had landed in a wallet it never touched — thank them instead.
+          // The COINS claim is the one that can be false, so only the exact 'Arta Coins' literal earns
+          // it; an unrecognised kind (or a future rename on the server) falls back to a plain receipt
+          // rather than promising coins that were never minted.
+          setNotice({ ok: true, text: v.course === "Arta Coins"
+            ? "Payment received — your coins are in your wallet."
+            : v.course === "Your gift"
+              ? "Thank you — your gift has been received. Every donation is on the public ledger."
+              : "Payment received — thank you." });
+        }
         else setNotice({ ok: false, text: "We couldn't confirm your card payment yet. If you were charged, it'll appear shortly." });
       });
     } else if (st === "cancel") {

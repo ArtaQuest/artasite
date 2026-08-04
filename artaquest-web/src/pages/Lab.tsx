@@ -297,8 +297,16 @@ export default function Lab() {
   // ── load ──
   useEffect(() => {
     document.title = `ArtaQuest Lab — ${name}`;
-    // the old standalone runner's service workers may still hold this scope — clear them out
-    navigator.serviceWorker?.getRegistrations().then((rs) => rs.forEach((r) => void r.unregister())).catch(() => {});
+    // The retired standalone runner (/wp-content/lite/run.html) registered its own service worker
+    // under that sub-scope; clear out only THAT one. Unregistering every registration on the origin
+    // — which is what this did — also killed the site's own root worker (main.tsx registers it at
+    // scope "/"), so a single visit to /lab left the next cold launch with no connection facing a
+    // blank page instead of the app the member had downloaded.
+    navigator.serviceWorker?.getRegistrations()
+      .then((rs) => rs.forEach((r) => {
+        if (r.scope.startsWith(`${location.origin}/wp-content/lite/`)) void r.unregister();
+      }))
+      .catch(() => {});
     (async () => {
       let fetched: string | null = null;
       let fetchErr = "";

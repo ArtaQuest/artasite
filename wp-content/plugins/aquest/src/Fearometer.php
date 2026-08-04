@@ -16,10 +16,11 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * ArtaMod measures whether a piece of writing is built to dehumanise or to scare, not whether
  * it is about a dark or divisive thing.
  *
- * Every competition (section-board) comment is scored on post (Learn::post_comment). A comment that
- * scores at/over LIMIT is flagged: its upvotes are excluded from the course competition
- * (Economy::podium) and ArtaBot leaves a consoling reply (Assistant::console_fear). Nothing is
- * deleted, no coin is charged — moderation is platform-borne and best-effort.
+ * Every comment on every commentable surface (SURFACES) is QUEUED on post and scored here. A comment
+ * that scores at/over LIMIT is flagged: its upvotes are excluded from the course competition
+ * (Economy::podium) and, on the section board, ArtaBot leaves a consoling reply
+ * (Assistant::console_fear). Nothing is deleted, no coin is charged — moderation is platform-borne
+ * and best-effort.
  *
  * Calibrated by prompt engineering against a labelled corpus (tools/fearometer-calibrate.php). The
  * verdict is computed against a few-shot anchor set baked into the prompt so the score means the
@@ -41,8 +42,22 @@ final class Fearometer {
 	const MAXTOK   = 320;
 	const LIMIT    = 70;   // score 0-100; at/over this a comment is "over the line" → flagged
 	const MAX_CHARS = 8000; // cap the text sent to the model (a comment is short; guards a pasted wall)
-	const QUEUE_BATCH = 12;  // section comments scored per relay job
+	const QUEUE_BATCH = 12;  // comments scored per relay job
 	const QUEUE_RUNS  = 5;   // batches drained per cron tick (≤60 comments) before yielding the relay
+
+	/** The comment surfaces ArtaMod screens, as a SQL literal list (constants only — never input).
+	 *  'section' is the competition board, empty since the July course purge but kept so a restored
+	 *  board is screened without a code change; 'thread' is the seven public discussion boards;
+	 *  'notebook' is the feed. Binding the queue to 'section' alone is what left every live surface
+	 *  unscreened while /fearometer published a screen — one list, read by the drainer and by the
+	 *  public count, so the two can never describe different platforms again. */
+	const SURFACES = "'section','thread','notebook'";
+
+	/** When the queue actually began covering the surfaces above. Comments older than this were
+	 *  posted before ArtaMod reached their board, so counting them as "screened" would publish a
+	 *  check that never ran on them. There is no per-row screened marker, so this date is the seam;
+	 *  it undercounts (the section board was queued from 1.32.0) and never overclaims. */
+	const SCREEN_SINCE = 1785801600; // 2026-08-04 00:00 UTC
 
 	/**
 	 * Score a piece of text for hate/fear. Returns [ 'fear' => 0-100, 'flagged' => bool,
@@ -229,22 +244,38 @@ final class Fearometer {
 			// LIVE receipts (2026-06-12): what ArtaMod has actually done on the real platform —
 			// totals, the flag rate, appeals, and the courses with the most flags. All from the same
 			// public tables /data/ serves, summarised so the policy's footprint is one glance.
+			//
+			// SCREENED means "went through the queue", and it is counted that way rather than as
+			// "every comment on a screened surface". Two filters do it: modq = 0 excludes what is
+			// still waiting (a queued comment has not been read by anything), and SCREEN_SINCE
+			// excludes what was posted before the queue reached these boards. Publishing a number
+			// that counts either as screened would be exactly the overclaim this page exists to
+			// prevent. `queued` is published beside it, so a stalled relay is visible rather than
+			// silently deflating the total — read the pair, never the total alone.
 			'live'        => ( function () {
-				$T = Data::t( 'aq_comments' );
-				$tot = (int) Data::col( "SELECT COUNT(*) FROM $T WHERE context_type = 'section'" );
-				$fl  = (int) Data::col( "SELECT COUNT(*) FROM $T WHERE context_type = 'section' AND flagged = 1" );
-				$ap  = (int) Data::col( "SELECT COUNT(*) FROM $T WHERE context_type = 'section' AND appealed = 1" );
-				$apg = (int) Data::col( "SELECT COUNT(*) FROM $T WHERE context_type = 'section' AND appealed = 1 AND flagged = 0" );
-				$top = Data::all( "SELECT c.course_id, COUNT(*) n FROM $T c WHERE c.context_type = 'section' AND c.flagged = 1 GROUP BY c.course_id ORDER BY n DESC LIMIT 5" );
+				$T   = Data::t( 'aq_comments' );
+				$ctx = 'context_type IN (' . self::SURFACES . ')';
+				$done = "$ctx AND modq = 0 AND created >= " . (int) self::SCREEN_SINCE;
+				$tot = (int) Data::col( "SELECT COUNT(*) FROM $T WHERE $done" );
+				$fl  = (int) Data::col( "SELECT COUNT(*) FROM $T WHERE $done AND flagged = 1" );
+				$q   = (int) Data::col( "SELECT COUNT(*) FROM $T WHERE $ctx AND modq = 1" );
+				$ap  = (int) Data::col( "SELECT COUNT(*) FROM $T WHERE $ctx AND appealed = 1" );
+				$apg = (int) Data::col( "SELECT COUNT(*) FROM $T WHERE $ctx AND appealed = 1 AND flagged = 0" );
+				// Course-scoped by definition, so this one stays on the section board — a thread or
+				// feed comment carries course_id 0 and would group into a course that isn't there.
+				$top = Data::all( "SELECT c.course_id, COUNT(*) n FROM $T c WHERE c.context_type = 'section' AND c.course_id > 0 AND c.flagged = 1 GROUP BY c.course_id ORDER BY n DESC LIMIT 5" );
 				$rows = [];
 				foreach ( $top as $t ) {
 					$co = Data::one( 'SELECT slug, title FROM ' . Data::t( 'aq_courses' ) . ' WHERE id = %d', [ (int) $t['course_id'] ] );
 					if ( $co ) { $rows[] = [ 'slug' => $co['slug'], 'title' => $co['title'], 'flagged' => (int) $t['n'] ]; }
 				}
 				return [ 'replies_screened' => $tot, 'flagged' => $fl, 'flag_rate' => $tot ? round( $fl / $tot * 100, 2 ) : 0,
-					'appeals' => $ap, 'appeals_granted' => $apg, 'most_flagged_courses' => $rows ];
+					'queued' => $q, 'appeals' => $ap, 'appeals_granted' => $apg, 'most_flagged_courses' => $rows ];
 			} )(),
-			'consequence' => 'A flagged comment is never deleted and no coin is charged. Its upvotes simply do not count toward the competition (we demonetise, we do not remove), and ArtaBot leaves a kind note. You can reword and post again.',
+			// Accurate on EVERY screened surface: the flag and the "set aside" mark apply everywhere,
+			// ArtaBot's consoling reply only where a competition board exists to reply on (see
+			// apply_verdict) — so the sentence no longer promises a note the feed cannot leave.
+			'consequence' => 'A flagged comment is never deleted and no coin is charged. It is marked "set aside" where it stands and its upvotes stop counting toward any competition (we demonetise, we do not remove); on a competition board ArtaBot also leaves a kind note. You can reword and post again.',
 			'promise'     => 'We support free speech and never censor: your words are never deleted and you are never banned for crossing the line. We know we can be wrong, so the most we ever do is take a reply out of the prize competition when we sense it could cause harm. We are open to criticism and we encourage you to challenge any moderation flag — a real person reviews every challenge.',
 		];
 	}
@@ -320,13 +351,14 @@ final class Fearometer {
 
 	// ── Moderation queue (subscription-only, no API) ─────────────────────────────
 	/**
-	 * Drain the moderation queue: section comments are posted with aq_comments.modq = 1 and scored
-	 * HERE, asynchronously, on the Claude Max SUBSCRIPTION via the relay (the paid API was removed,
-	 * 2026-06-13). Runs on the aq_moderate cron. Each pass handles up to QUEUE_RUNS batches of
-	 * QUEUE_BATCH comments; a batch is scored in ONE relay job (a JSON object of id→verdict). A
-	 * verdict at/over LIMIT flags the comment (its upvotes leave the competition — Economy::podium
-	 * filters flagged=0) and ArtaBot leaves a consoling reply. If the relay is unavailable the queue
-	 * is simply left for the next tick — comments stay visible, just un-moderated (fail-open, no API).
+	 * Drain the moderation queue: comments on every screened surface (SURFACES) are posted with
+	 * aq_comments.modq = 1 and scored HERE, asynchronously, on the Claude Max SUBSCRIPTION via the
+	 * relay (the paid API was removed, 2026-06-13). Runs on the aq_moderate cron. Each pass handles
+	 * up to QUEUE_RUNS batches of QUEUE_BATCH comments; a batch is scored in ONE relay job (a JSON
+	 * object of id→verdict). A verdict at/over LIMIT flags the comment (its upvotes leave the
+	 * competition — Economy::podium filters flagged=0) and, on the section board, ArtaBot leaves a
+	 * consoling reply. If the relay is unavailable the queue is simply left for the next tick —
+	 * comments stay visible, just un-moderated (fail-open, no API).
 	 * Returns the number of comments resolved (modq cleared) this pass.
 	 */
 	public static function process_queue() {
@@ -344,9 +376,9 @@ final class Fearometer {
 		try {
 			for ( $run = 0; $run < self::QUEUE_RUNS; $run++ ) {
 				$rows = Data::all(
-					'SELECT id, body, course_id, context_id AS lid, parent_id, author_id FROM ' . Data::t( 'aq_comments' )
-					. ' WHERE modq = 1 AND context_type = %s ORDER BY id ASC LIMIT %d',
-					[ 'section', self::QUEUE_BATCH ] );
+					'SELECT id, body, course_id, context_type AS ctx, context_id AS lid, parent_id, author_id FROM ' . Data::t( 'aq_comments' )
+					. ' WHERE modq = 1 AND context_type IN (' . self::SURFACES . ') ORDER BY id ASC LIMIT %d',
+					[ self::QUEUE_BATCH ] );
 				if ( ! $rows ) { break; }
 
 				// Test-seam / pre-scored pass: any comment the harness mocks is resolved inline (no relay).
@@ -377,13 +409,23 @@ final class Fearometer {
 		return $done;
 	}
 
-	/** Write a comment's verdict, clear it from the queue, and — when flagged — console + re-touch the
-	 *  author's per-season bucket so the projection reflects the now-excluded comment. */
+	/** Write a comment's verdict, clear it from the queue, and — when flagged on the section board —
+	 *  console + re-touch the author's per-season bucket so the projection reflects the now-excluded
+	 *  comment. */
 	private static function apply_verdict( $r, $v ) {
 		Data::update( 'aq_comments',
 			[ 'fear' => (int) $v['fear'], 'flagged' => ! empty( $v['flagged'] ) ? 1 : 0, 'modq' => 0 ],
 			[ 'id' => (int) $r['id'] ] );
-		if ( ! empty( $v['flagged'] ) ) {
+		if ( empty( $v['flagged'] ) ) { return; }
+		// The queue now covers the feed and the discussion boards as well as the section board, and
+		// NEITHER of those has a course: course_id is 0 and context_id is a thread / notebook id,
+		// not a lesson. Assistant::console_fear writes its reply as a SECTION comment against that
+		// id and bumps aq_lessons.comment_count — so on those surfaces it would file ArtaBot's note
+		// where the member will never see it AND increment an unrelated lesson's counter. Console
+		// only where the bot can actually reply. The FLAG itself is what sets the comment aside, and
+		// that has already been written above for every surface. quester_touch is per-course too and
+		// no-ops on course_id 0, but the guard says so out loud rather than relying on it.
+		if ( 'section' === (string) ( $r['ctx'] ?? 'section' ) && (int) $r['course_id'] > 0 ) {
 			Assistant::console_fear( (int) $r['id'], (int) $r['course_id'], (int) $r['lid'], (int) $r['parent_id'], (int) $r['author_id'] );
 			Economy::quester_touch( (int) $r['course_id'], (int) $r['author_id'] );
 		}

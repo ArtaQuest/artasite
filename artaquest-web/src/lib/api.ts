@@ -12,11 +12,75 @@ import { aqFetch } from "./offline/fetch";
 
 const BASE = "/wp-json/aq/v1";
 
-/** REST nonce WordPress injects on app routes (prod cookie auth). Empty in dev. */
-const NONCE =
+/**
+ * REST nonce WordPress injects on app routes (prod cookie auth). Empty in dev.
+ *
+ * MUTABLE, and read at SEND time — never captured into a header once at module load. A nonce lives
+ * nonce_life (WP default 86400s) and this one is baked into a shell served from WP.com's edge
+ * cache, so it ages with the cache entry rather than with the person: any tab left open past the
+ * tick is holding a DEAD value. Core's rest_cookie_check_errors then refuses the request BEFORE
+ * dispatch, for ANY route — even a public GET answers 403 {"code":"rest_cookie_invalid_nonce"}
+ * (reproduced on prod 2026-07-31) — so the whole app goes read-AND-write dead until a hard reload.
+ * send() below repairs that in place, once, and every later call uses the fresh value.
+ */
+let nonce =
   (typeof window !== "undefined" &&
     (window as unknown as { AQ_WP_NONCE?: string }).AQ_WP_NONCE) ||
   "";
+
+/** The live REST nonce. Shared with lib/auth.ts's signOut() so the app holds exactly one. */
+export const restNonce = (): string => nonce;
+
+/** The in-flight refresh, shared so a burst of stale calls mints ONE new nonce, not one each. */
+let refreshing: Promise<string> | null = null;
+
+/**
+ * Fetch a live REST nonce (core's admin-ajax `rest-nonce` — the same refresh wp-auth-check uses)
+ * and adopt it for every later call. Returns '' when the refresh fails or answers something that
+ * is not a nonce, so a caller gives up instead of retrying with a value that cannot work.
+ * Time-bounded: a hung network must not strand the request waiting on it.
+ */
+export function refreshNonce(): Promise<string> {
+  if (refreshing) return refreshing;
+  refreshing = (async () => {
+    try {
+      const r = await fetch("/wp-admin/admin-ajax.php?action=rest-nonce", {
+        credentials: "include",
+        signal: AbortSignal.timeout(8000),
+      });
+      const v = (await r.text()).trim();
+      if (!r.ok || !/^[a-f0-9]{10}$/i.test(v)) return "";
+      nonce = v;
+      return v;
+    } catch {
+      return "";
+    } finally {
+      refreshing = null;
+    }
+  })();
+  return refreshing;
+}
+
+/**
+ * One API request, carrying the live nonce, with a SINGLE refresh-and-retry.
+ *
+ * The replay fires only on core's pre-dispatch nonce refusal — 403 whose body carries core's own
+ * `code` (not our `error`) as rest_cookie_invalid_nonce. That is the one failure a replay can fix
+ * and the one where replaying is provably harmless: the route handler never ran, so even a
+ * non-idempotent POST has done nothing yet. Every other 403 (a real permission refusal, ours or
+ * core's) is handed back untouched. Once only — never a loop.
+ */
+async function send(url: string, init: RequestInit = {}, headers: Record<string, string> = {}): Promise<Response> {
+  const attempt = (n: string) =>
+    aqFetch(url, { ...init, credentials: "include", headers: n ? { ...headers, "X-WP-Nonce": n } : headers });
+  const r = await attempt(nonce);
+  if (r.status !== 403 || !nonce) return r;
+  // clone() — the caller still has to read this body when the refusal turns out not to be the nonce.
+  const j = (await r.clone().json().catch(() => null)) as { code?: string } | null;
+  if (j?.code !== "rest_cookie_invalid_nonce") return r;
+  const fresh = await refreshNonce();
+  return fresh ? attempt(fresh) : r;
+}
 
 type Json = Record<string, unknown>;
 
@@ -24,21 +88,13 @@ async function get<T>(path: string, params?: Record<string, string | number>): P
   const qs = params
     ? "?" + new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString()
     : "";
-  const r = await aqFetch(`${BASE}${path}${qs}`, {
-    credentials: "include",
-    headers: NONCE ? { "X-WP-Nonce": NONCE } : {},
-  });
+  const r = await send(`${BASE}${path}${qs}`);
   if (!r.ok) throw new ApiError(path, r.status);
   return r.json();
 }
 
 async function post<T>(path: string, body: Json): Promise<T> {
-  const r = await aqFetch(`${BASE}${path}`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...(NONCE ? { "X-WP-Nonce": NONCE } : {}) },
-    body: JSON.stringify(body),
-  });
+  const r = await send(`${BASE}${path}`, { method: "POST", body: JSON.stringify(body) }, { "Content-Type": "application/json" });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw apiError(path, r.status, j);
   return j as T;
@@ -46,11 +102,7 @@ async function post<T>(path: string, body: Json): Promise<T> {
 
 /** DELETE — same auth + error handling as post(). */
 async function del<T>(path: string): Promise<T> {
-  const r = await aqFetch(`${BASE}${path}`, {
-    method: "DELETE",
-    credentials: "include",
-    headers: NONCE ? { "X-WP-Nonce": NONCE } : {},
-  });
+  const r = await send(`${BASE}${path}`, { method: "DELETE" });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw apiError(path, r.status, j);
   return j as T;
@@ -59,12 +111,7 @@ async function del<T>(path: string): Promise<T> {
 /** POST multipart form-data (file uploads). No Content-Type header — the browser sets the
  *  multipart boundary itself. Mirrors `post()` for error handling. */
 async function postForm<T>(path: string, fd: FormData): Promise<T> {
-  const r = await aqFetch(`${BASE}${path}`, {
-    method: "POST",
-    credentials: "include",
-    headers: NONCE ? { "X-WP-Nonce": NONCE } : {},
-    body: fd,
-  });
+  const r = await send(`${BASE}${path}`, { method: "POST", body: fd });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw apiError(path, r.status, j);
   return j as T;
@@ -98,8 +145,11 @@ export const BIRTHDAY_REQUIRED_EVENT = "aq:birthday-required";
 
 /** Build the error for a failed call and, when the reason is the missing birthday, announce it. */
 function apiError(path: string, status: number, j: unknown): ApiError {
-  const body = (j ?? {}) as { message?: string; error?: string };
-  const code = body.error || "";
+  const body = (j ?? {}) as { message?: string; error?: string; code?: string };
+  // `error` is OUR code (Rest::err); `code` is WP core's, on anything refused before dispatch
+  // (rest_cookie_invalid_nonce, rest_no_route…). Reading only the first left those with an EMPTY
+  // code, so a caller could branch on nothing and the member got the bare "Cookie check failed".
+  const code = body.error || body.code || "";
   if (code === "birthday_required" && typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(BIRTHDAY_REQUIRED_EVENT));
   }
@@ -606,12 +656,17 @@ export const Social = {
   follow: (target_id: number, on = 1) => post<{ ok: true; following: boolean }>("/follow", { target_id, on }),
 };
 
-// ── Creative Challenges (the unified challenge frame; generalized to ALL kinds 2026-07-11) ──
+// ── Creative Challenges (the unified frame, 2026-07-11) — LEGACY, pre-feed. DO NOT BUILD ON IT ──
+// Re-checked against Rest::ROUTES 2026-08-04. `detail`, `create` and `enterWork` were DELETED that
+// day: they called GET /challenges/<key>, POST /challenges/create and POST /challenges/enter, none
+// of which exist (the live ones are GET /challenges?id=, POST /challenges, POST
+// /challenges/<id>/enter), and their only caller was the unrouted pages/Challenges.tsx — deleted
+// with them. What is left below is live: heart / workHearts / certs / shelf all map to real routes.
+// `list` still declares the retired {items, season, …} body where Notebook::challenges now answers
+// {current, past, rule} — which is why ChallengeStrip's `r.items.find` throws into its own catch and
+// that chrome silently never renders; components/studio.tsx is its last caller.
+// The frame the app actually uses is listChallenges()/getChallenge()/chCreate()/chEnter() below.
 export type ChallengeKind = "book" | "music" | "audiobook" | "animation" | "film" | "illustration" | "paper" | "dataset" | "model";
-export type ChallengeEntry = {
-  work_id: number; title: string; media: string; url: string;
-  author: { id: number; name: string; slug: string }; hearts: number; rank: number; prize: number;
-};
 export type ChallengeSeason = { key: number; label: string; ends: number; closes_in: number; ends_label: string };
 /** One row on the board index: a seasonal (system) challenge or a member-started one. */
 export type ChallengeCard = {
@@ -619,22 +674,10 @@ export type ChallengeCard = {
   owner: { id: number; name: string; slug: string } | null;
   pool: number; entries: number; thread_id: number;
 };
-export type ChallengeDetail = ChallengeCard & {
-  brief: string; season: ChallengeSeason | number; frozen?: boolean; carried?: number;
-  board: ChallengeEntry[]; entered?: boolean; payouts_live?: boolean; enter_fee?: number;
-  gate?: { min_authors: number; min_hearters: number }; seasons: { key: number; label: string }[];
-  my_works?: { work_id: number; title: string }[];
-};
 export type ChallengeCert = { kind: string; season: number; label: string; status: "in_progress" | "certified"; place: number; medal: "" | "gold" | "silver" | "bronze" };
 export const Challenges = {
   // The board index: every open challenge this season (the seasonal six pinned, then member pots).
   list: () => get<{ items: ChallengeCard[]; season: ChallengeSeason; payouts_live: boolean; create_fee: number; enter_fee: number; pool_share: number; podium: number[]; min_authors: number; min_hearters: number }>("/challenges"),
-  // One challenge by numeric id or kind name (→ the kind's seasonal challenge). ?season= = frozen past.
-  detail: (key: string | number, season?: number) => get<ChallengeDetail>(`/challenges/${key}`, season ? { season } : undefined),
-  // Start a member challenge (₳1 seeds the pot; closes at the new moon with everyone else's).
-  create: (b: { kind: ChallengeKind; title: string; brief?: string }) => post<{ ok: true; id: number }>("/challenges/create", b),
-  // Enter one of your this-season works into a member challenge (₳1 → the pot).
-  enterWork: (id: number, work_id: number) => post<{ ok: true }>("/challenges/enter", { id, work_id }),
   // Heart (or un-heart) a published Library work — one heart per member per work, never your own.
   heart: (kind: ChallengeKind, id: number, val: 1 | 0) => post<{ ok: true; my_vote: 1 | 0; hearts: number }>("/work/heart", { kind, id, val }),
   workHearts: (kind: ChallengeKind, id: number) => get<{ hearts: number; my_vote: number }>("/work/hearts", { kind, id }),
@@ -655,6 +698,22 @@ export const Models = {
 
 // ── Unified search (the Explore hub; GET /search) ─────────────────────────────
 export type SearchGroup<T> = { items: T[]; next: number | null };
+/** A published work as a search hit (Search::notebook_card) — the headline fields only, no assets
+ *  and no checklist state. Every key it shares with NotebookCard is spelled the same, so one
+ *  component renders a search hit and a feed card alike. */
+export type SearchNotebook = {
+  id: number; kind: NbKind; slug: string; title: string; abstract: string; thumb: string;
+  hearts: number; comments: number; views: number;
+  /** The citation of record, member-facing: only the /d/n<id> short link, '' before first publish. */
+  doi_link: string;
+  /** Who WROTE the notebook, as Kaggle reports it — the work is credited to them; `author` below
+   *  is the member who brought it here, and on a re-published work the two differ. */
+  kaggle: { owner: string; author: string; url: string };
+  author: { id: number; name: string; slug: string; avatar: string };
+  published_at: number;
+};
+/** The retired platform's shape. The server still returns a `courses` key and it is ALWAYS empty
+ *  (the table was purged 2026-07-13) — the key survives so no existing client breaks. */
 export type SearchCourse = {
   id: number; slug: string; title: string; image: string; channel: string;
   lessons: number; duration: number; comments_per_day: number; comments_total: number; price: number; rating: number; enrolled: number;
@@ -675,6 +734,7 @@ export type SearchCause = { key: string; name: string; sub: string; members: num
 export type SearchResults = {
   q: string;
   results: {
+    notebooks: SearchGroup<SearchNotebook>;
     courses: SearchGroup<SearchCourse>;
     topics: SearchGroup<SearchTopic>;
     groups: SearchGroup<SearchGroupHit>;
@@ -684,7 +744,10 @@ export type SearchResults = {
   };
 };
 export const Search = {
-  all: (q: string, p?: { limit?: number; domains?: string; cursor_courses?: number; cursor_discussions?: number; cursor_grants?: number }) =>
+  // Server-side domains are notebooks · discussions · grants (Search::SERVER_DOMAINS); page each one
+  // independently by passing its `next` back as that domain's cursor. There is no `cursor_courses`:
+  // the courses bucket is never queried, so its cursor is always null.
+  all: (q: string, p?: { limit?: number; domains?: string; cursor_notebooks?: number; cursor_discussions?: number; cursor_grants?: number }) =>
     get<SearchResults>("/search", { q, ...(p as Record<string, string | number>) }),
 };
 
@@ -885,6 +948,12 @@ export type FearLive = {
   replies_screened: number;
   flagged: number;
   flag_rate: number;
+  /** Comments posted but not yet read by the screening relay. Screening is ASYNCHRONOUS — a
+   *  comment is queued on post and read shortly after, and it never holds up posting — so
+   *  `replies_screened` counts only what actually went through the queue. Required, not
+   *  optional: the pair is the honest reading. A stalled relay shows up here instead of
+   *  silently deflating the total, so render it beside the total, never the total alone. */
+  queued: number;
   appeals: number;
   appeals_granted: number;
   most_flagged_courses: { slug: string; title: string; flagged: number }[];
@@ -1017,12 +1086,8 @@ export function getArtefact(id: number, which: "data" | "code") {
 export async function uploadResearchFile(file: File): Promise<{ url: string; name: string; size: number }> {
   const fd = new FormData();
   fd.append("file", file, file.name);
-  const r = await aqFetch(`${BASE}/research/upload`, {
-    method: "POST",
-    credentials: "include",
-    headers: NONCE ? { "X-WP-Nonce": NONCE } : {}, // no Content-Type — the browser sets the multipart boundary
-    body: fd,
-  });
+  // No Content-Type — the browser sets the multipart boundary itself.
+  const r = await send(`${BASE}/research/upload`, { method: "POST", body: fd });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new ApiError("/research/upload", r.status, (j as { message?: string }).message);
   return j as { url: string; name: string; size: number };
@@ -2120,13 +2185,11 @@ export async function cloudUpload(
   while (sent < file.size) {
     if (signal?.aborted) throw new Error("cancelled");
     const end = Math.min(sent + size, file.size);
-    const r = await aqFetch(`${BASE}/media/${begun.id}/part?offset=${sent}`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/octet-stream", ...(NONCE ? { "X-WP-Nonce": NONCE } : {}) },
-      body: file.slice(sent, end),
-      signal,
-    });
+    const r = await send(
+      `${BASE}/media/${begun.id}/part?offset=${sent}`,
+      { method: "POST", body: file.slice(sent, end), signal },
+      { "Content-Type": "application/octet-stream" },
+    );
     const j = (await r.json().catch(() => ({}))) as { received?: number; message?: string };
     if (!r.ok) {
       // The server tells us where it actually is; trust that over our own count and resume there.

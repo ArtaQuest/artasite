@@ -19,6 +19,16 @@
  *     can see in one place and not the other.
  *   - **The full public database** — radical transparency, readable on a plane.
  *
+ * What is NOT offline, and what this page must therefore never promise: the API RESPONSE cache
+ * (`STORES.responses` in `lib/offline/store.ts`, the store `lib/offline/fetch` reads on a GET) has no
+ * live writer. Its only two `idb.put` calls sit inside `downloadCourse()`, and nothing has called
+ * that since the courses were purged. So every data-backed surface — the feed, a work, the Library,
+ * a profile, the Studio — still needs a connection, and the copy says exactly that instead of the
+ * old "everything works offline except posting, hearting and publishing", which a member could
+ * disprove by turning off the wifi and opening the feed. The course machinery stays where it is: an
+ * offline FEED is the same shape (bundle the endpoints, write them to this store), so deleting it
+ * would only mean writing it again.
+ *
  * Music keeps playing with the screen off because `components/player.tsx` publishes MediaSession
  * metadata and the `PlayerProvider` is mounted at the app root, so the audio element outlives
  * navigation. Nothing on this page is needed for that — it is worth saying so plainly here,
@@ -95,7 +105,7 @@ export default function Offline() {
   const getAppFiles = () =>
     run("app", async () => {
       await downloadAppFiles((p) => setProgress(p));
-      setMsg("The whole app is now available offline — every page works with no internet.");
+      setMsg("The whole app is saved on this device — it opens and runs with no internet. Pages that read live data, like the feed, still need a connection.");
     });
 
   useEffect(() => {
@@ -137,7 +147,7 @@ export default function Offline() {
       <PageHero
         eyebrow="Offline"
         title="Use ArtaQuest with no internet"
-        lede="Save the app, your language and any media onto this device, then keep reading and listening with no connection — made for places where the internet is slow, costly, or blocked. Everything works offline except posting, hearting and publishing."
+        lede="Save the app, your language, your media and the public database onto this device — made for places where the internet is slow, costly, or blocked. Those four work with no connection at all. The feed and everything else that reads live data still needs one."
       />
 
       {/* Connectivity + install + storage */}
@@ -178,10 +188,10 @@ export default function Offline() {
           <div className="min-w-0">
             <p className="flex items-center gap-2 text-[15px] font-semibold">
               <span className={`h-2.5 w-2.5 rounded-full ${appStatus.complete ? "bg-yang" : "bg-ink-3"}`} aria-hidden />
-              {appStatus.complete ? "App ready for offline — every page works with no internet" : "Make the whole app work offline"}
+              {appStatus.complete ? "App saved — it opens and runs with no internet" : "Save the whole app onto this device"}
             </p>
             <p className="mt-1 text-[13px] text-ink-3">
-              Downloads the entire app — every page, math fonts and maps — into this device (~{fmtBytes(appStatus.bytes || 4_000_000)}), so it’s fully self-sufficient with no connection. Works on Android, iPhone/iPad, Mac and Windows.
+              Saves the entire app — every page, math fonts and maps — onto this device (~{fmtBytes(appStatus.bytes || 4_000_000)}), so it opens straight away with no connection instead of a blank screen. What each page then shows you depends on what else you have saved: your language, your media and the public database below. Live pages, like the feed, wait for a connection. Works on Android, iPhone/iPad, Mac and Windows.
               {appStatus.total > 0 && !appStatus.complete ? ` (${appStatus.have}/${appStatus.total} files cached)` : ""}
             </p>
           </div>

@@ -225,7 +225,11 @@ final class Offline {
 	// ───────────────────────────────────────────────────────────────────────────
 	// GET offline/db/{table}?cursor= — bulk export of one public table (radical transparency),
 	// keyset-paginated in large chunks (the explorer's 25-row pages are too small for a snapshot).
-	// Same redaction as the live explorer: only credentials-in-flight are masked.
+	//
+	// THE SAME redaction as the live explorer, by CALLING it (Extra::redact_row) rather than
+	// re-implementing it. This route is public and returns thousands of rows at a time, so it is the
+	// widest pipe out of the database we have: any credential the explorer masks and this one does
+	// not is simply downloadable. One decision point, or the two drift and the gap is a leak.
 	// ───────────────────────────────────────────────────────────────────────────
 	public static function db_table( $req ) {
 		global $wpdb;
@@ -255,8 +259,11 @@ final class Offline {
 			), ARRAY_A ) ?: [];
 			$next = count( $rows ) >= $limit ? $cursor + $limit : null;
 		}
-		$cols = $rows ? array_keys( $rows[0] ) : [];
 		$rows = array_map( fn( $r ) => Extra::redact_row( $table, $r ), $rows );
+		// Columns come from the REDACTED row, never the raw one: a redaction rule that drops a cell
+		// instead of masking it would otherwise leave `columns` advertising a field the rows no
+		// longer carry, and a consumer zipping the two together would mis-align every value.
+		$cols = $rows ? array_keys( reset( $rows ) ) : [];
 		return [ 'table' => $table, 'columns' => $cols, 'rows' => $rows, 'next' => $next ];
 	}
 

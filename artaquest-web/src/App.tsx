@@ -108,6 +108,9 @@ const ROUTE_TITLES: Record<string, string> = {
   "/login": "Sign in", "/sponsors": "Sponsors",
   "/fearometer": "ArtaMod",
   "/works": "Home", "/challenges": "Challenges", "/rankings": "Rankings", "/studio": "Your Studio", "/console": "Operator console",
+  // /topics is titled here because pages/Fields.tsx sets no title of its own; /lab is deliberately
+  // absent — pages/Lab.tsx names the open notebook, and this would clobber it.
+  "/topics": "Topics",
   "/surveys": "Surveys", "/datasets": "Datasets", "/models": "Models", "/articles": "Articles",
   "/2d-illustrations": "2D Illustrations", "/3d-illustrations": "3D Illustrations",
   "/2d-animations": "2D Animations", "/3d-animations": "3D Animations",
@@ -138,10 +141,11 @@ function stripLang(pathname: string): string {
 // here — the WP-served lesson player /courses/<slug>/<id>, /my-account, /wishlist, /wp-*,
 // WC order endpoints, externals — is intentionally excluded so it FULL-LOADS as before. An
 // allow-list is fail-safe: an unrecognised internal link keeps today's behaviour, never breaks.
-// MUST mirror the <Route> table below — every entry here has a real React page. The renamed
-// surfaces /topics + /grants (was /typology + /outreach) and the new /explore hub are SPA routes;
-// the OLD /typology + /outreach paths are intentionally EXCLUDED so a bookmarked/legacy link
-// full-loads and the server 301s it to the new slug (the SPA also has a <Navigate> fallback).
+// MUST mirror the <Route> table below — every entry here has a real React page. /topics (the
+// restored topic atlas, a real WP page carrying [aq_app]) and /lab (a private soft path the app
+// template serves 200) are SPA-routed; the RETIRED slugs — /typology, /outreach, /explore,
+// /typologies … — are intentionally EXCLUDED so a bookmarked/legacy link full-loads and the server
+// 301s it to its replacement (the SPA also has a <Navigate> fallback).
 // Other WP-served content pages (/reserve, /data, /careers, /issues, /pricing, /enroll, /cart)
 // stay excluded so their links full-load and the server renders the right page.
 const STATIC_ROUTES = new Set([
@@ -149,7 +153,7 @@ const STATIC_ROUTES = new Set([
   "/my-library", "/library", "/ceo",
   "/user-account", "/login", "/donate", "/messages",
   "/sponsors", "/offline", "/studio", "/console", "/fearometer",
-  "/works", "/challenges", "/rankings",
+  "/works", "/challenges", "/rankings", "/topics", "/lab",
   "/surveys", "/datasets", "/models", "/articles",
   "/2d-illustrations", "/3d-illustrations", "/2d-animations", "/3d-animations", "/2d-games", "/3d-games",
   "/music",
@@ -159,8 +163,11 @@ const STATIC_ROUTES = new Set([
 function isReactRoute(pathname: string): boolean {
   const p = pathname.replace(/\/+$/, "") || "/";
   if (STATIC_ROUTES.has(p)) return true;
-  if (/^\/u\/[^/]+$/.test(p)) return true;              // profile
-  if (/^\/nb\/\d+(\/[^/]+)?$/.test(p)) return true;     // a feed notebook (id + optional slug)
+  if (/^\/u\/[^/]+$/.test(p)) return true;                    // profile
+  // A feed notebook: id + optional slug, and either read as the page or as the JupyterBook
+  // (/nb/12/book AND /nb/12/some-slug/book — the slug form was missing, so "Read the notebook as
+  // a book" full-reloaded the whole SPA on every click).
+  if (/^\/nb\/\d+(\/[^/]+)?(\/book)?$/.test(p)) return true;
   if (/^\/studio\/nb\/\d+(\/edit)?$/.test(p)) return true;       // the Studio editor for one notebook
   return false;
 }

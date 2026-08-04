@@ -69,7 +69,7 @@ readable table. Then `ARCHITECTURE.md` for the why.
 Runs on [WordPress Studio](https://developer.wordpress.com/studio/) (PHP-WASM + SQLite).
 
 ```bash
-studio site start --skip-browser          # run WordPress
+studio start --skip-browser                # run WordPress
 studio wp plugin activate aquest           # installs the schema
 cd artaquest-web && npm install && npm run dev   # SPA at :5173, proxies /wp-json
 ```

@@ -2,8 +2,10 @@
  * Self-contained passwordless-auth client for the sign-in page.
  *
  * Talks to the backend /auth/* routes directly (own fetch; deliberately NO nonce — see postAuth) so
- * it has NO dependency on modules that other work may be refactoring — the login page keeps working
- * regardless.
+ * the SIGN-IN path has no dependency on modules that other work may be refactoring — the login page
+ * keeps working regardless. signOut() is the one exception: it is a real authenticated mutation, so
+ * it borrows the API client's nonce (lib/api.ts) rather than keeping a second copy that could go
+ * stale on its own — one nonce, one refresh, for the whole app.
  *
  * NO CAPTCHA, by decision (operator, 2026-07-31): "we are bot friendly. just ensure rate limiting is
  * implemented." Abuse is bounded on the server, where it can actually be counted — per-address and
@@ -12,9 +14,9 @@
  * interaction slower and, on a filtered network, impossible.
  */
 
+import { refreshNonce, restNonce } from "./api";
+
 const BASE = "/wp-json/aq/v1";
-const NONCE =
-  (typeof window !== "undefined" && (window as unknown as { AQ_WP_NONCE?: string }).AQ_WP_NONCE) || "";
 
 export type AuthResult = {
   ok?: boolean; error?: string; message?: string;
@@ -31,18 +33,18 @@ export type AuthResult = {
  * All three sign-in routes are declared 'public' (Rest::ROUTES), so the nonce buys nothing. But WP
  * core's rest_cookie_check_errors refuses a request whose nonce is PRESENT AND INVALID before
  * dispatch, for any route, while a request with NO nonce is simply treated as logged-out and runs
- * normally. NONCE is a module-level const read once from the shell's baked window.AQ_WP_NONCE and
- * never refreshed, and /login/ is served from WP.com's edge cache — so the value is shared between
- * visitors and ages with the cache entry, not with the person. Past a tick (nonce_life is 86400, so
- * 12-24h) every sign-in became 403 "Cookie check failed", shown raw, with resend reusing the same
- * dead nonce; only a hard reload recovered. Any long-lived tab could reach that state, since
- * client-side routing to /login/ never re-reads the shell.
+ * normally. The nonce is baked into the shell's window.AQ_WP_NONCE and /login/ is served from
+ * WP.com's edge cache — so the value is shared between visitors and ages with the cache entry, not
+ * with the person. Past a tick (nonce_life is 86400, so 12-24h) every sign-in became 403 "Cookie
+ * check failed", shown raw, with resend reusing the same dead nonce; only a hard reload recovered.
+ * Any long-lived tab could reach that state, since client-side routing to /login/ never re-reads
+ * the shell. Sending none at all is immune to the whole class, refresh or no refresh.
  *
  * Reproduced on prod 2026-07-31: the same POST answers 403 rest_cookie_invalid_nonce with a bogus
  * nonce header and 400 bad_email without it.
  *
- * signOut() below keeps its nonce — /auth/logout is a real authenticated mutation, and it already
- * refetches a fresh nonce and retries when the first one is stale.
+ * signOut() below keeps its nonce — /auth/logout is a real authenticated mutation — and repairs a
+ * stale one through the API client's shared refresh.
  */
 async function postAuth(path: string, body: Record<string, unknown>): Promise<AuthResult> {
   try {
@@ -99,10 +101,11 @@ function logoutUrl(): string {
  * shell HTML — that baked nonce goes stale (the PWA service worker caches the shell, and
  * nonces only live 12–24h), which is what made wp-login.php?action=logout stop at the
  * "Do you really want to log out?" confirmation page (ticket #42). If the page's REST nonce
- * is itself stale, fetch a fresh one (core's admin-ajax `rest-nonce` — the same refresh
- * wp-auth-check uses) and retry once. Only when the API is truly unreachable fall back to
- * navigating the classic logout URL — worst case WP asks to confirm, never a dead end.
- * Every request is time-bounded so a hung network can't strand the click.
+ * is itself stale, fetch a fresh one and retry once — through refreshNonce() (core's admin-ajax
+ * `rest-nonce`, the same refresh wp-auth-check uses), which lives in lib/api.ts so there is ONE
+ * implementation and the whole app adopts the new value. Only when the API is truly unreachable
+ * fall back to navigating the classic logout URL — worst case WP asks to confirm, never a dead
+ * end. Every request is time-bounded so a hung network can't strand the click.
  */
 export async function signOut(): Promise<void> {
   const logout = (nonce: string) =>
@@ -114,15 +117,11 @@ export async function signOut(): Promise<void> {
       signal: AbortSignal.timeout(8000),
     });
   try {
-    let r = await logout(NONCE);
+    let r = await logout(restNonce());
     if (!r.ok) {
-      const fresh = await fetch("/wp-admin/admin-ajax.php?action=rest-nonce", {
-        credentials: "include",
-        signal: AbortSignal.timeout(8000),
-      });
-      const nonce = (await fresh.text()).trim();
-      if (!fresh.ok || !/^[a-f0-9]{10}$/i.test(nonce)) throw new Error("nonce");
-      r = await logout(nonce);
+      const fresh = await refreshNonce();
+      if (!fresh) throw new Error("nonce");
+      r = await logout(fresh);
       // With a definitely-fresh nonce, 401/403 means this device holds no live session
       // (signed out in another tab / expired) — already the desired end state: go home.
       if (!r.ok && r.status !== 401 && r.status !== 403) throw new Error(String(r.status));

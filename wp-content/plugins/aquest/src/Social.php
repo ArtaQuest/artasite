@@ -155,19 +155,25 @@ final class Social {
 		// wrote a moderation flag was the section board, whose courses were purged in July, so every
 		// live discussion board was unscreened while the page promised otherwise.
 		//
-		// Same shape as Notebook::comment: read the verdict's own `flagged`, which score() computes
-		// against the operator-settable limit(). score() returns an ARRAY or NULL, so the emptiness
-		// check covers both. Fail-open by design — ArtaMod never blocks posting, it only sets aside.
+		// Calling score() is NOT screening. There is no server-side scorer: the paid API was removed
+		// (2026-06-13) and the subscription relay scores in batches, so score() answers NULL for
+		// every real post and only the test seam ever returns a verdict inline. Reading that null as
+		// "clean" is what stored flagged=0 unconditionally on this surface. A null verdict means NOT
+		// SCREENED YET, so the comment goes into the moderation queue (modq = 1) and
+		// Fearometer::process_queue scores it on the relay — the same path Learn::post_comment uses.
+		// Fail-open by design: the comment is visible instantly, and if the relay never comes back it
+		// simply stays queued. ArtaMod never blocks posting, it only sets aside.
 		$flagged = 0;
+		$modq    = 1;
 		try {
 			if ( class_exists( '\\AQ\\Fearometer' ) && method_exists( '\\AQ\\Fearometer', 'score' ) ) {
 				$verdict = Fearometer::score( $body );
-				$flagged = ( is_array( $verdict ) && ! empty( $verdict['flagged'] ) ) ? 1 : 0;
+				if ( is_array( $verdict ) ) { $flagged = empty( $verdict['flagged'] ) ? 0 : 1; $modq = 0; }
 			}
-		} catch ( \Throwable $e ) { $flagged = 0; }
+		} catch ( \Throwable $e ) { $flagged = 0; $modq = 1; } // the queue retries; posting never fails
 		$id  = Data::insert( 'aq_comments', [
 			'context_type' => 'thread', 'context_id' => $tid, 'parent_id' => $parent, 'author_id' => $uid, 'body' => $body,
-			'flagged' => $flagged,
+			'flagged' => $flagged, 'modq' => $modq,
 			'lang' => self::lang( $req ), 'created' => Data::now(),
 		] );
 		if ( $parent ) { Data::bump( 'aq_comments', [ 'id' => $parent ], 'reply_count', 1 ); } // pages "show N more replies"

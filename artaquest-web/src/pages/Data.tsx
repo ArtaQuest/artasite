@@ -29,7 +29,7 @@ const UC = {
 } as const;
 
 const USE_CASES: { icon: keyof typeof UC; title: string; body: string }[] = [
-  { icon: "audit", title: "Audit the economy", body: "Reconcile the Arta Coin ledger against the gold-rate history and work out the gold backing behind every coin in circulation for yourself — the same ratio the Reserve page publishes." },
+  { icon: "audit", title: "Audit the economy", body: "Add up the Arta Coin ledger row by row and work out the gold backing behind every coin in circulation for yourself — the same ratio the Reserve page publishes." },
   { icon: "money", title: "Follow the money", body: "Trace donations, fund balances, and bursary grants — amounts, dates, and status — from the moment they arrive to where they are spent." },
   { icon: "book", title: "See what is published", body: "Browse every published work, the Kaggle notebook behind it, the checklist it cleared and the files it put in the Library." },
   { icon: "chat", title: "See which replies rise", body: "Read every reply members post and the hearts that rank them — the raw signal behind every challenge board." },
@@ -104,11 +104,14 @@ export default function Data() {
       setTables(d.tables);
       setNote(d.note);
       // Honour a ?table=<name> deep-link (e.g. the Reserve/Wallet "browse the ledgers" links) when it
-      // names a real table; otherwise lead with the money records — the Arta Coin ledger, then the
-      // gold-rate history — falling back to a populated _posts table, then anything non-empty.
+      // names a real table; otherwise lead with the money record — the Arta Coin ledger — falling back
+      // to a populated _posts table, then anything non-empty. Every fallback must be a table that HAS
+      // rows: landing a first-time visitor on an empty grid says the database is empty, which is the
+      // opposite of what this page exists to show. (The gold-rate history used to sit second here; it
+      // has never had a writer, so it always opened on "This table is empty".)
       const want = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("table") : null;
       const fromUrl = want ? d.tables.find((t) => t.name === want) : null;
-      const pref = fromUrl || d.tables.find((t) => t.name === "wp_aq_coin_ledger") || d.tables.find((t) => t.name === "wp_aq_gold_rate_history") || d.tables.find((t) => t.name.endsWith("_posts")) || d.tables.find((t) => t.rows > 0) || d.tables[0];
+      const pref = fromUrl || d.tables.find((t) => t.name === "wp_aq_coin_ledger" && t.rows > 0) || d.tables.find((t) => t.name.endsWith("_posts") && t.rows > 0) || d.tables.find((t) => t.rows > 0) || d.tables[0];
       if (pref) setSel(pref.name);
     }).catch(() => setTables([]));
   }, []);
@@ -298,11 +301,14 @@ export default function Data() {
               </div>
               <div className="flex gap-3">
                 <dt className="w-12 shrink-0 font-mono text-yang">page</dt>
-                <dd className="text-ink-2">Page number. Rows come 50 at a time; the response also returns <span className="font-mono text-ink" data-ay-skip="1">total</span> and <span className="font-mono text-ink" data-ay-skip="1">pages</span>.</dd>
+                {/* 25 mirrors Extra::DB_PER, the size the endpoint actually serves — and the size
+                    the explorer above prints live beside its row count. Two numbers for one fact is
+                    how this line came to advertise 50 while the page showed 25 three sections up. */}
+                <dd className="text-ink-2">Page number. Rows come 25 at a time; the response also returns <span className="font-mono text-ink" data-ay-skip="1">total</span> and <span className="font-mono text-ink" data-ay-skip="1">pages</span>.</dd>
               </div>
             </dl>
             <CodeBlock title="curl" code={`# List every table\ncurl "${endpoint}"\n\n# Read the Arta Coin ledger, first page\ncurl "${endpoint}?table=wp_aq_coin_ledger&page=1"`} />
-            <CodeBlock title="JavaScript" code={`const res = await fetch(\n  "${endpoint}?table=wp_aq_gold_rate_history"\n);\nconst { rows, total, pages } = await res.json();`} />
+            <CodeBlock title="JavaScript" code={`const res = await fetch(\n  "${endpoint}?table=wp_aq_coin_ledger&page=1"\n);\nconst { rows, total, pages } = await res.json();`} />
           </Card>
 
           {/* Cite it */}

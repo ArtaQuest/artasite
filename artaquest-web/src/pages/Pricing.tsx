@@ -59,7 +59,11 @@ export default function Pricing() {
         <div className="relative max-w-2xl">
           <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-ink-3">Pricing</p>
           <h1 className="mt-4 text-[clamp(2rem,5vw,3.1rem)] font-extrabold leading-[1.1]">The same price <span className="aq-grad">everywhere</span></h1>
-          <p className="mt-5 max-w-xl text-[16px] leading-relaxed text-ink-2">One Arta Coin is one milligram of real gold, so it is worth exactly the same to a learner in Lagos, Manila, or Toronto — no purchasing-power adjustment, no regional mark-up. A course costs the same number of coins for everyone; here is what a single coin is worth in money you recognise.</p>
+          <p className="mt-5 max-w-xl text-[16px] leading-relaxed text-ink-2">One Arta Coin is one milligram of real gold, so it is worth exactly the same to a member in Lagos, Manila, or Toronto — no purchasing-power adjustment, no regional mark-up. A challenge’s entry fee is the same number of coins for everyone who enters it; here is what a single coin is worth in money you recognise.</p>
+          {/* What coins are actually FOR, since the courses-and-enrolment economy they used to buy was
+              purged 2026-07-13. Reading, submitting and publishing cost nothing; the entry fee is the
+              only place a member spends coins, and every one of them goes into the pool. */}
+          <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-ink-2">Reading is free, and so is submitting a notebook, running the reproducibility checklist and publishing the work. Coins change hands in one place: a member founds a challenge — a kind, a topic, a full-moon deadline and an entry fee — every entrant pays that fee into the pool, and at the deadline the most-hearted entry takes the whole pool.</p>
           <p className="mt-3 text-[14px] text-ink-3"><bdi dir="ltr" data-ay-skip="1">{w.peg}</bdi></p>
         </div>
       </section>
@@ -67,7 +71,11 @@ export default function Pricing() {
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card className="p-5"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Buy 1 coin ({w.base_fiat})</p><p className="mt-1.5 text-[24px] font-extrabold text-yang tabular-nums">{local(w.buy_base, w.base_fiat)}</p></Card>
         <Card className="p-5"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Sell 1 coin ({w.base_fiat})</p><p className="mt-1.5 text-[24px] font-extrabold text-yin-light tabular-nums">{local(w.sell_base, w.base_fiat)}</p></Card>
-        <Card className="p-5"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Gold spot (USD/oz)</p><p className="mt-1.5 text-[24px] font-extrabold text-ink tabular-nums">${Math.round(w.gold_oz_usd).toLocaleString()}</p></Card>
+        {/* A missing or zero spot price renders as "$0", which on a money page reads as a real
+            quote — gold at nothing. There is no honest way to show a price we do not have, so we
+            say we do not have it. Guard the VALUE, not just `undefined`: the field is typed number
+            and arrives as 0 whenever the rate could not be resolved. */}
+        <Card className="p-5"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Gold spot (USD/oz)</p><p className="mt-1.5 text-[24px] font-extrabold text-ink tabular-nums">{w.gold_oz_usd > 0 ? `$${Math.round(w.gold_oz_usd).toLocaleString()}` : <span className="text-[16px] font-semibold text-ink-3">Unavailable</span>}</p></Card>
         <Card className="p-5"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Spread</p><p className="mt-1.5 text-[24px] font-extrabold text-ink tabular-nums">{totalSpread}%</p><p className="text-[12px] text-ink-3">{Math.round(w.spread * 100)}% each way</p></Card>
       </section>
 

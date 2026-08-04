@@ -1,7 +1,7 @@
-import { type FormEvent, useEffect, useState } from "react";
-import { getCreatorLadder, getCreatorStatus, isLoggedIn, localePath, submitPlaylist, type CreatorTier, type CreatorStatus } from "../lib/wp";
+import { useEffect, useState } from "react";
+import { getCreatorLadder, getCreatorStatus, isLoggedIn, localePath, type CreatorTier, type CreatorStatus } from "../lib/wp";
 import { Points, formatPoints } from "../lib/currency";
-import { Button, Card, Field, Input, OrbitRings } from "../components/ui";
+import { Button, Card, OrbitRings } from "../components/ui";
 
 // What we welcome — questioning is the whole point, so the door is wide. The only thing we
 // ask in return is honest labelling: a theory presented as a theory, a belief as a belief.
@@ -19,51 +19,14 @@ const LINE = [
   "Coercion and propaganda — material built to force a belief on you, including covert advertising and pure partisan recruitment.",
 ];
 
-// Submit a YouTube playlist as a course candidate — shown when the creator's tier unlocks it
-// (caps.can_create). Expert+ playlists may publish without per-playlist review.
-function PlaylistForm({ status }: { status: CreatorStatus }) {
-  const [url, setUrl] = useState("");
-  const [channel, setChannel] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
-  // Track success explicitly — a server-provided r.message need not start with "Thanks"/"Submitted",
-  // so string-matching the copy mis-coloured a successful submit as an error.
-  const [ok, setOk] = useState(false);
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    if (!url.trim() || busy) return;
-    setBusy(true); setMsg("");
-    try {
-      const r = await submitPlaylist(url.trim(), channel.trim());
-      setOk(true);
-      setMsg(r.message || (r.status === "approved" ? "Submitted — your playlist is queued to publish." : "Thanks — your playlist is in review."));
-      setUrl(""); setChannel("");
-    } catch (err) { setOk(false); setMsg(err instanceof Error ? err.message : "Could not submit your playlist."); }
-    finally { setBusy(false); }
-  }
-  return (
-    <Card as="form" onSubmit={submit} className="flex flex-col gap-3 p-5">
-      <h3 className="text-[16px] font-bold">Submit a playlist</h3>
-      <p className="text-[13px] leading-relaxed text-ink-2">
-        Propose a YouTube playlist as a course. {status.caps.needs_playlist_approval ? "Our content team reviews each submission." : "At your tier, approved playlists publish without per-playlist review."}
-      </p>
-      <Field label="YouTube playlist URL">
-        <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.youtube.com/playlist?list=…" inputMode="url" className="bg-space-1 px-3.5" />
-      </Field>
-      <Field label="Channel" optional>
-        <Input value={channel} onChange={(e) => setChannel(e.target.value)} placeholder="Channel name or URL" className="bg-space-1 px-3.5" />
-      </Field>
-      <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" disabled={!url.trim() || busy} className="h-10 px-6 text-[14px] disabled:opacity-40">{busy ? "Submitting…" : "Submit playlist"}</Button>
-        {msg && <span role="status" className={`text-[13px] ${ok ? "text-yang" : "text-rose-300"}`}>{msg}</span>}
-      </div>
-    </Card>
-  );
-}
+// (The "submit a playlist" form that used to live here is gone. Courses from YouTube playlists went
+// with the rest of the legacy platform, purged 2026-07-13, and POST /creator/submit-playlist now
+// answers 410 — so the form rendered for every can_create member and handed each one an error. A
+// submission is a public Kaggle notebook now, and the Studio is where it is pasted.)
 
-// Live standing toward teaching — sourced from the creator-status BFF. Tier is set by TOTAL
+// Live standing on the ladder — sourced from the creator-status BFF. Tier is set by TOTAL
 // lifetime points (learn + donate + volunteer + grant-winner), shown with the per-track breakdown and
-// progress to the next rung; unlocks the playlist form at the right tier. The coin wallet is separate.
+// progress to the next rung; can_create is what opens the Studio. The coin wallet is separate.
 function ProgressPanel() {
   const loggedIn = isLoggedIn();
   const [s, setS] = useState<CreatorStatus | null>(null);
@@ -74,7 +37,7 @@ function ProgressPanel() {
     return (
       <Card className="flex flex-col items-start gap-3 p-6">
         <h3 className="text-[16px] font-bold">See how close you are</h3>
-        <p className="text-[14px] leading-relaxed text-ink-2">Sign in to track your points toward teaching on ArtaQuest.</p>
+        <p className="text-[14px] leading-relaxed text-ink-2">Sign in to track your points up the ladder.</p>
         <Button href="/login/" size="md">Sign in</Button>
       </Card>
     );
@@ -91,7 +54,9 @@ function ProgressPanel() {
       <Card className="p-6">
         <div className="flex items-center justify-between gap-4">
           <span className="flex items-center gap-2 text-[16px] font-bold text-yang"><Points n={s.points} withLabel /></span>
-          <span className="text-[13px] text-ink-3">{s.tier} · {s.share}% share{!atTop && s.next_tier ? ` · next: ${s.next_tier}` : ""}</span>
+          {/* The API still returns `share` — the retired courses economy's cut of an enrolment's
+              revenue. Nothing pays it out any more, so it is no longer shown anywhere on this page. */}
+          <span className="text-[13px] text-ink-3">{s.tier}{!atTop && s.next_tier ? ` · next: ${s.next_tier}` : ""}</span>
         </div>
         <p className="mt-2 text-[12.5px] text-ink-3">Learner {bd.learn.toLocaleString()} · Donor {bd.donate.toLocaleString()} · Volunteer {bd.volunteer.toLocaleString()} · Grant-winner {bd.outreach.toLocaleString()}</p>
         {!atTop && (
@@ -101,12 +66,18 @@ function ProgressPanel() {
         )}
         <p className="mt-3 text-[14px] leading-relaxed text-ink-2">
           {atTop
-            ? `You’re at the top rung — ${s.share}% of every enrolment’s revenue on your courses is yours.`
-            : <>Earn <span className="font-semibold text-ink">{formatPoints(remaining)}</span> more to reach <span className="font-semibold text-ink">{s.next_tier}</span> and a higher share. Any track counts — learn, donate, volunteer, or win sponsors.</>}
+            ? "You’re at the top rung — the Studio is fully open, and your shelf has no limit."
+            : <>Earn <span className="font-semibold text-ink">{formatPoints(remaining)}</span> more to reach <span className="font-semibold text-ink">{s.next_tier}</span> and what it opens up. Any track counts — learn, donate, volunteer, or win sponsors.</>}
         </p>
         <Button href="/" variant="subtle" size="md" className="mt-4">Go to your dashboard</Button>
       </Card>
-      {s.caps.can_create && <PlaylistForm status={s} />}
+      {s.caps.can_create && (
+        <Card className="flex flex-col items-start gap-3 p-5">
+          <h3 className="text-[16px] font-bold">The Studio is open to you</h3>
+          <p className="text-[13px] leading-relaxed text-ink-2">Your rung unlocks the Studio: author a grant application, or propose a sitewide topic. Submitting a Kaggle notebook is open to every member, and starts there too.</p>
+          <Button href="/studio/" size="md">Open the Studio</Button>
+        </Card>
+      )}
     </div>
   );
 }
@@ -134,8 +105,9 @@ function FearMeter() {
   );
 }
 
-// The full creator ladder (5 tiers) — sourced from the canonical aq_creator_tiers() via the BFF
-// so it never drifts from the dashboard/profile tier data. Revenue share grows at every rung.
+// The full creator ladder (5 tiers) — sourced from the canonical Extra::TIERS via the BFF so it
+// never drifts from the dashboard/profile tier data. Each rung's own blurb says what it opens
+// (the Studio, then more room on your shelf); the tier's `share` is a retired field, not rendered.
 function CreatorLadder() {
   const [tiers, setTiers] = useState<CreatorTier[]>([]);
   useEffect(() => { getCreatorLadder().then(setTiers); }, []);
@@ -143,9 +115,9 @@ function CreatorLadder() {
   return (
     <section>
       <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-ink-3">The creator ladder</p>
-      <h2 className="mt-3 text-[clamp(1.5rem,3vw,2rem)] font-bold leading-tight">Your share grows as you climb</h2>
+      <h2 className="mt-3 text-[clamp(1.5rem,3vw,2rem)] font-bold leading-tight">More opens up as you climb</h2>
       <p className="mt-4 max-w-2xl text-[16px] leading-relaxed text-ink-2">
-        Every member starts at <strong className="font-semibold text-ink">Quester</strong> and rises by earning points — by learning, donating, volunteering, or winning grants. Your share of each enrolment’s revenue increases at every rung — up to <strong className="font-semibold text-ink">100%</strong> at Legend.
+        Every member starts at <strong className="font-semibold text-ink">Quester</strong> and rises by earning points — by learning, donating, volunteering, or winning grants. Each rung opens the Studio wider and makes room for more published work on your shelf, until at <strong className="font-semibold text-ink">Legend</strong> there is no limit at all. A rung is standing, never a claim on anyone’s money: challenge pools are won, not shared out by rank.
       </p>
       <ol className="mt-8 flex list-none flex-col gap-3">
         {tiers.map((t, i) => (
@@ -154,8 +126,7 @@ function CreatorLadder() {
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <span className="text-[17px] font-bold text-ink">{t.label}</span>
-                <span className="text-[15px] font-extrabold tabular-nums text-yang">{t.share}% revenue share</span>
-                <span className="text-[13px] tabular-nums text-ink-3">{(t.points ?? 0) > 0 ? formatPoints(t.points ?? 0) : "from day one"}</span>
+                <span className="text-[15px] font-extrabold tabular-nums text-yang">{(t.points ?? 0) > 0 ? formatPoints(t.points ?? 0) : "from day one"}</span>
               </div>
               <p className="mt-1 text-[14px] leading-relaxed text-ink-2">{t.blurb}</p>
             </div>
@@ -169,18 +140,18 @@ function CreatorLadder() {
 export default function Careers() {
   return (
     <div className="flex flex-col gap-16 pb-12 sm:gap-20">
-      {/* Hero — philosophy first: we teach people to think, not what to think */}
+      {/* Hero — philosophy first: we help people think, not tell them what to think */}
       <section className="relative overflow-hidden rounded-card border border-line bg-space-2 px-6 py-16 sm:px-12 sm:py-20">
         <div className="pointer-events-none absolute -right-24 -top-28 h-80 w-80 rounded-full bg-yang/10 blur-3xl" aria-hidden />
         <div className="pointer-events-none absolute -bottom-28 -left-24 h-80 w-80 rounded-full bg-yin/15 blur-3xl" aria-hidden />
         <OrbitRings className="absolute -right-20 top-1/2 hidden h-[440px] w-[440px] -translate-y-1/2 text-ink lg:block" />
         <div className="relative max-w-2xl">
-          <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-ink-3">Teaching on ArtaQuest</p>
+          <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-ink-3">Creating on ArtaQuest</p>
           <h1 className="mt-4 text-[clamp(2.1rem,5vw,3.3rem)] font-extrabold leading-[1.1]">
-            Teach people to <span className="aq-grad">think for themselves</span>
+            Help people <span className="aq-grad">think for themselves</span>
           </h1>
           <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-ink-2">
-            We want instructors and curators who teach with real depth and real honesty — no agenda, no propaganda. Bring the hard questions. Our job is to keep the space safe and free, so every learner can question what they are taught and reach their own conclusions.
+            We want members who bring work with real depth and real honesty — no agenda, no propaganda. Bring the hard questions. Our job is to keep the space safe and free, so anyone can check what they are shown and reach their own conclusions.
           </p>
           <div className="mt-8"><Button href="#how-to-qualify" size="xl">How to qualify</Button></div>
         </div>
@@ -243,7 +214,7 @@ export default function Careers() {
               Moderated by <span className="aq-grad">ArtaMod</span>, not by opinion
             </h2>
             <p className="mt-4 text-[16px] leading-relaxed text-ink-2">
-              Drawing that line by hand would mean trusting someone’s politics to decide what you are allowed to question. We do not. Instead, every course, comment, and submitted request is screened automatically by <strong className="font-semibold text-ink">ArtaMod</strong> — our own AI, built to measure one thing: how far a piece of content trades in hate or fear.
+              Drawing that line by hand would mean trusting someone’s politics to decide what you are allowed to question. We do not. Instead, every comment and submitted request is screened automatically by <strong className="font-semibold text-ink">ArtaMod</strong> — our own AI, built to measure one thing: how far a piece of content trades in hate or fear. It reads shortly after you post, never before: nothing is held up, and nothing is ever deleted.
             </p>
             <p className="mt-3 text-[16px] leading-relaxed text-ink-2">
               It does not care who is speaking or which side they are on. It reads only for language meant to dehumanise or to frighten. The same measure is applied to every request, objectively and automatically, so the standard stays identical for everyone — mainstream or fringe, one side or the other. Question everything; just never by attacking people or spreading fear.
@@ -262,7 +233,7 @@ export default function Careers() {
         </div>
       </section>
 
-      {/* The deal — revenue share (no competitor comparison) */}
+      {/* The deal — the challenge pool (no competitor comparison) */}
       <section>
         <div className="grid gap-8 lg:grid-cols-[1.2fr_1fr] lg:items-center">
           <div>
@@ -284,7 +255,7 @@ export default function Careers() {
         </div>
       </section>
 
-      {/* The creator ladder — 5 tiers, share grows with rank */}
+      {/* The creator ladder — 5 tiers; what each rung unlocks grows with rank */}
       <CreatorLadder />
 
       {/* One requirement — earn enough points */}
@@ -294,10 +265,10 @@ export default function Careers() {
             <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-ink-3">One requirement</p>
             <h2 className="mt-3 text-[clamp(1.5rem,3vw,2rem)] font-bold leading-tight">Earn enough points</h2>
             <p className="mt-4 text-[16px] leading-relaxed text-ink-2">
-              Instead of weighing credentials or filtering applicants through a gate-keeper, we have one rule: earn enough points and you climb the creator ladder, unlocking the ability to publish — first a curated playlist, then your own content. Points are a lifetime score of what you contribute — they are never spent and never fall, so they reward real, lasting participation before we ask you to teach others. It is a deliberate choice.
+              Instead of weighing credentials or filtering applicants through a gate-keeper, we have one rule: earn enough points and you climb the ladder. Submitting a public Kaggle notebook is open to everyone from day one; what the rungs open is the <strong className="font-semibold text-ink">Studio</strong> — authoring grant applications and sitewide topics — and room to keep more of your published work live at once. Points are a lifetime score of what you contribute — never spent, never falling — so they reward real, lasting participation. It is a deliberate choice.
             </p>
             <p className="mt-3 text-[16px] leading-relaxed text-ink-2">
-              There are four ways to earn them, and any of them moves you up: <strong className="font-semibold text-ink">learn</strong> — a point for every reply you post, and one each time a peer upvotes it; <strong className="font-semibold text-ink">donate</strong> — a point for every Arta Coin you give to the learner fund; <strong className="font-semibold text-ink">volunteer</strong> — points for resolved contributions, course shares, and referrals; <strong className="font-semibold text-ink">win sponsors</strong> — points equal to the funding you help the foundation win on the Sponsors page. It is a path up the ladder, not a shortcut around our content standards — every playlist is still screened by ArtaMod. Once you reach the teaching rung, the option to <strong className="font-semibold text-ink">submit a playlist</strong> appears here and on your dashboard.
+              There are four ways to earn them, and any of them moves you up: <strong className="font-semibold text-ink">learn</strong> — a point for every comment you post on a published work; <strong className="font-semibold text-ink">donate</strong> — a point for every whole unit of currency you give to the Foundation’s funds; <strong className="font-semibold text-ink">volunteer</strong> — a point for starting a discussion, and one for each contribution of yours that gets resolved; <strong className="font-semibold text-ink">win sponsors</strong> — points equal to the funding you help the foundation win on the Sponsors page. It is a path up the ladder, not a shortcut around our content standards — everything posted is still read by ArtaMod.
             </p>
           </div>
           <ProgressPanel />
@@ -306,7 +277,7 @@ export default function Careers() {
 
       {/* Questions / contact */}
       <section className="rounded-card border border-line bg-gradient-to-br from-space-2 to-space-3 px-6 py-12 text-center sm:px-12">
-        <h2 className="text-[clamp(1.4rem,3vw,1.9rem)] font-bold leading-snug">Have a course idea?</h2>
+        <h2 className="text-[clamp(1.4rem,3vw,1.9rem)] font-bold leading-snug">Have work in mind?</h2>
         <p className="mx-auto mt-3 max-w-xl text-[15px] text-ink-2">If you are not yet sure it fits, write to us with a one-paragraph summary. We read every message and reply within 3–5 business days.</p>
         <div className="mt-7 flex flex-wrap justify-center gap-3">
           <Button href="mailto:support@artaquest.org" size="xl">Email support@artaquest.org</Button>

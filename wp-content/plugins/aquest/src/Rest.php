@@ -147,7 +147,7 @@ final class Rest {
 		[ 'GET',  'challenge-certs',               'Challenges::certificates', 'public' ], // ?user= : derived participation certificates (+ podium medals)
 		[ 'GET',  'shelf',                         'Challenges::shelf',        'user'   ], // the caller's shelf meter (published works vs tier quota)
 
-		// ── Unified search (the Explore hub: courses + discussions + grants) ──
+		// ── Unified search (the Explore hub: notebooks + discussions + grants) ──
 		[ 'GET',  'search',                        'Search::all',       'public' ],
 
 		// ── Bursary (Outreach-funded: covers the course entry fee for eligible groups) ──
@@ -534,12 +534,12 @@ final class Rest {
 		[ 'GET',  'studio/notebooks/(?P<id>[0-9]+)/outputs', 'Kernel::outputs',          'user'   ], // the run's output files, for the picker
 		[ 'POST', 'studio/notebooks/(?P<id>[0-9]+)/select',  'Kernel::select',           'user'   ], // {files[]} → choose, derive the kind, re-check
 		[ 'GET',  'library',                                 'Kernel::library',          'public' ], // every published file, attachable by anyone
-		[ 'POST', 'relay/nb/poll',                           'Notebook::relay_poll',     'worker' ],
-		[ 'POST', 'relay/nb/beat',                           'Notebook::relay_beat',     'worker' ],
-		[ 'POST', 'relay/nb/review',                         'Notebook::relay_review',   'worker' ],
-		[ 'POST', 'relay/nb/update',                         'Notebook::relay_update',   'worker' ],
-		[ 'POST', 'relay/nb/complete',                       'Notebook::relay_complete', 'worker' ],
-		[ 'POST', 'relay/nb/release',                        'Notebook::relay_release',  'worker' ],
+		// The six relay/nb/* worker routes (poll · beat · review · update · complete · release) drove
+		// the local offline executor + AI review panel, retired 2026-07-28. Nothing enqueues a run any
+		// more (the studio run route went with it), no client in the tree calls them, and relay/nb/update
+		// wrote `ipynb` with NO published-status guard — the one write CLAUDE.md forbids outright,
+		// because sig(ipynb) is what the author's confirmation ledger row, the DB publish-guard and
+		// integrity_sweep() are all keyed on. Removed with their handlers.
 	];
 
 	public static function register() {

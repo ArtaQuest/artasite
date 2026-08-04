@@ -136,14 +136,17 @@ final class Shop {
 	/** Live TL per coin from gold spot × USD→TRY. Falls back through the same chain
 	 *  coin_price() uses so the figure is never 0 (a 0 would make shipping free). */
 	public static function try_per_coin() {
-		$oz_usd = (float) get_option( 'aq_gold_spot_oz_usd', 0 );
+		$oz_usd = Economy::gold_oz_usd();
 		$fx     = get_option( 'aq_fx_rates', [] );
 		$try    = ( is_array( $fx ) && ! empty( $fx['TRY'] ) ) ? (float) $fx['TRY'] : 42.0;
 		$usd_mg = $oz_usd > 0 ? $oz_usd / 31103.477 : 0.0;
-		if ( $usd_mg <= 0 ) { // same last-resort chain as Economy::coin_price (CAD → USD)
+		if ( $usd_mg <= 0 ) {
+			// Oracle has never run: borrow coin_price()'s floored CAD-per-coin and convert back to USD,
+			// so there is ONE floor on the platform instead of a second copy of the number here. (This
+			// branch used to read aq_gold_rate_history first — a table with no writer, so it always
+			// answered 0 and the floor did all the work anyway.) A 0 here would make shipping free.
 			$cad    = ( is_array( $fx ) && ! empty( $fx['CAD'] ) ) ? (float) $fx['CAD'] : 1.37;
-			$spot   = (float) Data::col( 'SELECT mg_base FROM ' . Data::t( 'aq_gold_rate_history' ) . ' ORDER BY id DESC LIMIT 1' );
-			$usd_mg = ( $spot > 0 ? $spot : 0.20 ) / $cad;
+			$usd_mg = (float) Economy::coin_price()['spot'] / $cad;
 		}
 		return $usd_mg * $try;
 	}

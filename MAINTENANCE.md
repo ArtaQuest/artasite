@@ -10,7 +10,11 @@ Nothing deploys from a laptop, and the instructions that used to be here could n
 production runs `opcache.validate_timestamps = 0` with `opcache.restrict_api` pointed outside our
 tree, so PHP copied in over SSH **never executes** — the copy reports success while the site keeps
 serving the old bytecode. `touch`-ing the files does not help; only WordPress.com's own pipeline
-invalidates that cache. The local deploy script is deleted and `aq-deploy` refuses with exit 69.
+invalidates that cache. The local deploy script is deleted, `aq-deploy` refuses with exit 69, and the
+autopilot's tar-over-SSH writer is deleted with them — it needed no `studio auth`, so logging that
+credential out never disarmed it. For the claim to hold, `~/.ssh/artaquest_atomic` must be deleted
+and revoked on the host too; the `ssh artaquest …` commands below are the same credential and go with
+it. Full capability list: [DEPLOYING.md](DEPLOYING.md).
 
 The SPA is not committed either: `wp-content/themes/artaquest-theme/app/` is build output, gitignored,
 and built in CI. Committing it makes every working copy fight over the same manifest.

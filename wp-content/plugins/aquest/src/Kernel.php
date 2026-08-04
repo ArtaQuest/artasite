@@ -149,24 +149,42 @@ class Kernel {
 	/**
 	 * Did the run finish? Read from the run log, which is the authoritative record.
 	 *
-	 * `kernels/status` is 401 for every credential we hold, so this is the only way — and it turns
-	 * out to be a better one, because the log carries a DECISIVE positive marker. Kaggle's runner
-	 * always finishes a successful notebook by converting it and writing the rendered result:
+	 * `kernels/status` is 401 for every credential we hold, so this is the only way — and the log
+	 * carries a positive marker. Kaggle's runner finishes a notebook by converting it and writing
+	 * the rendered result:
 	 *
 	 *     [NbConvertApp] Writing 305664 bytes to __results__.html
 	 *
-	 * Present ⇒ the notebook ran to the end and Kaggle rendered it. Absent ⇒ it did not get there.
-	 * Verified against both cases: the operator's own ACE-Step kernel has no such line and instead
-	 * ends at `nbformat.reader.NotJSONError`, and it lists 1,322 "output" files that are just a
-	 * `git clone` checkout — which is precisely why "it produced files" can never be the gate.
+	 * This verdict is written into a permanent DOI, so it is worth saying exactly what that line does
+	 * NOT mean. Two things, both found by attacking the check rather than reading it:
 	 *
-	 * A NAIVE TRACEBACK SCAN IS WRONG, and this was caught by testing rather than reasoning:
+	 * 1. IT IS NOT PROOF THE NOTEBOOK SUCCEEDED. Kaggle runs nbconvert even after papermill has
+	 *    declared the notebook dead, so a CRASHED run's log can still END with the marker — no
+	 *    forgery required. `yassineghouzam/titanic-top-4-with-ensemble-modeling` is the live case
+	 *    (re-checkable with no credential): it dies at `Exception encountered at "In [13]"`, and its
+	 *    final log event is nonetheless `[NbConvertApp] Writing 450831 bytes to __results__.html`.
+	 *    Matching the marker anywhere — or even only at the end — certifies that crash. So
+	 *    papermill's own verdict is read first, and it is decisive.
+	 *
+	 * 2. STDERR IS NOT AUTHOR-FREE. The note that used to sit here claimed a notebook's output goes
+	 *    to stdout, so stderr could be trusted. That is false: Kaggle labels `tqdm` progress bars,
+	 *    `warnings.warn()` and any `print(file=sys.stderr)` as stderr, so an author can write
+	 *    whatever they like into the stream this check reads. Splitting the streams only removes the
+	 *    laziest forgery. What costs something is POSITION — the marker must be in the LAST stderr
+	 *    event, which a notebook cannot reach, because whatever it writes the runner writes after
+	 *    it. Verified against fourteen public kernels (thirteen healthy, one crashed): in every one
+	 *    the marker sits in the final stderr event with nothing after it, and in two of them that
+	 *    event is several lines long with the marker as its last line — so it is matched WITHIN the
+	 *    final event, not required to be the whole of it.
+	 *
+	 * A NAIVE TRACEBACK SCAN IS ALSO WRONG, and this was caught by testing rather than reasoning:
 	 * `alexisbcook/titanic-tutorial` is a healthy, completed run whose log nevertheless contains a
 	 * full traceback — Kaggle's own interpreter teardown emitting
 	 * `Error in atexit._run_exitfuncs: … AttributeError: 'NoneType' object has no attribute
 	 * 'thread'` — and every event in that log, including the success marker, is on stderr. Blocking
-	 * on "a traceback with no later stdout" failed that notebook. So: the marker decides, teardown
-	 * noise is discounted, and an ambiguous log warns rather than blocks.
+	 * on "a traceback with no later stdout" failed that notebook. So: papermill decides first, then
+	 * the marker's POSITION decides, teardown noise is discounted, and an ambiguous log warns
+	 * rather than blocks.
 	 *
 	 * Returns [ 'done' => true|false|null (null = cannot tell), 'tracebacks' => int (author's, not
 	 * Kaggle's), 'msg' => string ].
@@ -180,15 +198,35 @@ class Kernel {
 			if ( ! is_array( $e ) ) { continue; }
 			$d = (string) ( $e['data'] ?? '' );
 			$lines[] = $d;
-			// Kaggle's own runner writes on STDERR. A notebook's print() goes to stdout, so keeping
-			// the two apart is what stops an author forging the completion marker below.
+			// Kaggle's runner writes on stderr — but so can the notebook (tqdm, warnings.warn,
+			// print(file=sys.stderr)). Keeping the streams apart narrows the forgery surface; it does
+			// not close it, which is why neither test below is a plain "does this string appear".
 			if ( 'stderr' === (string) ( $e['stream_name'] ?? '' ) ) { $err[] = $d; }
 		}
-		// The positive marker: Kaggle converts the finished notebook and writes the rendered result
-		// as the last act of a successful run. Matched ONLY against stderr — a notebook that prints
-		// "[NbConvertApp] Writing 1 bytes to __results__.html" itself would otherwise certify its
-		// own crashed run, which is exactly the check this is.
-		$done = (bool) preg_match( '/\[NbConvertApp\]\s+Writing\s+\d+\s+bytes\s+to\s+__results__/', implode( '', $err ) );
+		$mark = '/\[NbConvertApp\]\s+Writing\s+\d+\s+bytes\s+to\s+__results__/';
+		// THE MARKER, AND ITS POSITION. Kaggle writes the rendered result as the last thing it puts
+		// on stderr, so the marker is required in the FINAL stderr event rather than anywhere in the
+		// stream. A notebook can write the line — it cannot write it last.
+		$done = (bool) preg_match( $mark, $err ? (string) $err[ count( $err ) - 1 ] : '' );
+
+		// PAPERMILL IS DECISIVE, and it is read before the marker is worth anything: nbconvert runs
+		// on a notebook papermill has already failed, so the marker survives a crash (see 1. above).
+		// The window is everything on stderr UP TO the marker — deliberately not "up to the first
+		// [NbConvertApp] line", because on the older image nbconvert IS the executor and announces
+		// itself before the notebook has run at all, which would put the whole crash outside the
+		// window. Imploded on newlines so the anchors below hold at every event boundary.
+		$stderr = implode( "\n", $err );
+		$window = $stderr;
+		if ( preg_match_all( $mark, $stderr, $mm, PREG_OFFSET_CAPTURE ) ) {
+			$at     = end( $mm[0] );
+			$window = substr( $stderr, 0, (int) $at[1] );
+		}
+		// Line-anchored on purpose: these are the runner's words at the start of its own lines, and a
+		// notebook whose PROSE mentions papermill must never be read as a crash. There is no forgery
+		// risk in the other direction — writing these would only refuse your own work.
+		$crash = '';
+		if ( preg_match( '/^Exception encountered at "In \[\d+\]"/m', $window, $cm ) ) { $crash = trim( $cm[0] ); }
+		elseif ( preg_match( '/^papermill\.exceptions\.PapermillExecutionError/m', $window ) ) { $crash = 'papermill.exceptions.PapermillExecutionError'; }
 
 		// Count only tracebacks that are the AUTHOR's. Kaggle's atexit teardown emits one on
 		// perfectly healthy runs; counting it would warn on almost every submission.
@@ -209,6 +247,11 @@ class Kernel {
 				$msg = mb_substr( trim( $t ), 0, 300 );
 				break;
 			}
+		}
+		// Papermill first: its verdict outranks the marker, and its own line is the evidence a reader
+		// can go and check — it names the cell that died.
+		if ( '' !== $crash ) {
+			return [ 'done' => false, 'tracebacks' => $tb, 'msg' => '' !== $msg ? $crash . ' — ' . $msg : $crash ];
 		}
 		if ( $done ) { return [ 'done' => true, 'tracebacks' => $tb, 'msg' => $msg ]; }
 		// Not completed. If there is a traceback at all, that is why. If there is not, we genuinely
@@ -396,7 +439,10 @@ class Kernel {
 				$items[] = self::item( 'run_completed', 'run', self::BLOCK, 'The run finished',
 					true === $v['done'],
 					true === $v['done'] ? 'Kaggle rendered the finished notebook, so it ran to the end.'
-						: 'The run ended in an unhandled exception, so Kaggle never rendered it.',
+						// NOT "so Kaggle never rendered it" — Kaggle converts a dead notebook too, and
+						// saying otherwise here would be a plain untruth on the very case this check
+						// was rewritten to catch. A rendered page is not a finished run.
+						: 'The run ended in an unhandled exception, so it never reached the end of the notebook. Kaggle may still have rendered a page for it — a rendered page is not a finished run.',
 					'Fix the error on Kaggle and Save Version → Save & Run All again. Files left behind by a crashed run are not a result.',
 					$v['msg'] );
 			}
@@ -515,7 +561,7 @@ class Kernel {
 						$svg_unread[] = $name . ' — its size could not be established, so it was not read';
 						continue;
 					}
-					$raw = Kaggle::fetch( $by_name[ $name ], Svg::MAX_BYTES );
+					$raw = Kaggle::fetch_bytes( $by_name[ $name ], Svg::MAX_BYTES );
 					// NEVER render "we could not look" as a pass. A fetch that fails — timeout, an
 					// expired signed URL, a Kaggle 5xx — leaves this check with no evidence at all,
 					// and a green tick on no evidence is the exact failure this checklist exists to
@@ -953,28 +999,63 @@ class Kernel {
 		if ( 200 !== $code ) { return [ 0, 'Kaggle would not list the run output (HTTP ' . $code . ')' ]; }
 		$by = [];
 		foreach ( $files as $f ) { $by[ $f['name'] ] = $f['url']; }
-		$n = 0;
+		$n     = 0;
+		$total = 0;
 		foreach ( $sel as $name ) {
 			if ( ! isset( $by[ $name ] ) ) { return [ $n, 'the file "' . $name . '" is no longer in the run output' ]; }
 			$cls = self::class_of( $name );
 			if ( '' === $cls ) { return [ $n, 'the file "' . $name . '" is not a type we can serve' ]; }
-			// SIZE FIRST. Kaggle::fetch asks for `Range: bytes=0-<max>`, so a file over the cap comes
+			// AN SVG IS THE ONE CLASS WE HOLD IN MEMORY, because it is the one class whose BYTES are
+			// the deliverable: Svg::clean rebuilds the document and we store the rebuild. It has its
+			// own, far smaller ceiling — and every check below compares against the cap ACTUALLY
+			// APPLIED, which is what keeps "your drawing is too big" from being reported as "the
+			// download was incomplete".
+			$is_svg = ( 'svg' === self::ext( $name ) );
+			$cap    = $is_svg ? Svg::MAX_BYTES : self::MAX_FILE_BYTES;
+			// SIZE FIRST. Both fetches ask for `Range: bytes=0-<cap>`, so a file over the cap comes
 			// back TRUNCATED with a perfectly successful 206 — and storing that would publish a
 			// half-written artifact, content-addressed and hashed, as though it were the whole thing.
 			$size = Kaggle::size_of( $by[ $name ] );
-			if ( $size > self::MAX_FILE_BYTES ) {
-				return [ $n, 'the file "' . $name . '" is ' . size_format( $size ) . ', over the ' . size_format( self::MAX_FILE_BYTES ) . ' limit' ];
+			if ( $size > $cap ) {
+				return [ $n, 'the file "' . $name . '" is ' . size_format( $size ) . ', over the ' . size_format( $cap ) . ' limit' ];
 			}
-			$bytes = Kaggle::fetch( $by[ $name ], self::MAX_FILE_BYTES );
-			if ( '' === $bytes ) { return [ $n, 'could not download "' . $name . '" from Kaggle' ]; }
+			// Everything but an SVG STREAMS to disk. Reading a 512 MB artifact into a PHP string was
+			// how the advertised ceiling stayed un-deliverable: the request ran out of memory (or ran
+			// out the gateway's clock) before a byte reached the Library.
+			$tmp   = '';
+			$bytes = '';
+			if ( $is_svg ) {
+				$bytes = Kaggle::fetch_bytes( $by[ $name ], $cap );
+				$len   = strlen( $bytes );
+			} else {
+				$tmp = Kaggle::fetch_to_file( $by[ $name ], $cap );
+				$len = '' === $tmp ? 0 : (int) filesize( $tmp );
+			}
+			// A zero-length result is a failed download, not an empty artifact: an output file with
+			// nothing in it is not a result either, and refusing both is what the string version did.
+			if ( $len <= 0 ) {
+				if ( '' !== $tmp ) { @unlink( $tmp ); }
+				return [ $n, 'could not download "' . $name . '" from Kaggle' ];
+			}
 			// With no size to compare against we cannot prove completeness — and a body that comes
 			// back exactly at the ceiling is far more likely a truncated ranged read than a file
 			// that happens to be 512 MB to the byte. Refuse rather than store a half-file as whole.
-			if ( $size < 0 && strlen( $bytes ) >= self::MAX_FILE_BYTES ) {
+			if ( $size < 0 && $len >= $cap ) {
+				if ( '' !== $tmp ) { @unlink( $tmp ); }
 				return [ $n, 'could not confirm the size of "' . $name . '", and it came back at the limit — try again' ];
 			}
-			if ( $size >= 0 && strlen( $bytes ) !== $size ) {
-				return [ $n, 'the download of "' . $name . '" was incomplete (' . size_format( strlen( $bytes ) ) . ' of ' . size_format( $size ) . ') — try again' ];
+			if ( $size >= 0 && $len !== $size ) {
+				if ( '' !== $tmp ) { @unlink( $tmp ); }
+				return [ $n, 'the download of "' . $name . '" was incomplete (' . size_format( $len ) . ' of ' . size_format( $size ) . ') — try again' ];
+			}
+			// THE RUNNING TOTAL, and it is enforced HERE rather than only against the checklist's
+			// snapshot. `size_limit` summed the sizes read when the author last checked; a re-run on
+			// Kaggle between that moment and publication can grow every file, and MAX_TOTAL_BYTES is
+			// a promise about what we STORE, not about what we once measured.
+			$total += $len;
+			if ( $total > self::MAX_TOTAL_BYTES ) {
+				if ( '' !== $tmp ) { @unlink( $tmp ); }
+				return [ $n, 'this selection now totals ' . size_format( $total ) . ' on Kaggle, over the ' . size_format( self::MAX_TOTAL_BYTES ) . ' limit — publish fewer or smaller files' ];
 			}
 			// AN SVG IS REBUILT, NOT MERELY INSPECTED — and this happens BEFORE the digest, so the
 			// sha256 in aq_library is the digest of the bytes we actually serve. That matters twice
@@ -990,19 +1071,35 @@ class Kernel {
 			// The checklist already ran this exact call (svg_safe), so a refusal at this point means
 			// the file changed on Kaggle since it was checked. Refusing is right either way: this is
 			// the last moment before bytes become durable, public and DOI'd.
-			if ( 'svg' === self::ext( $name ) ) {
+			if ( $is_svg ) {
 				$c = Svg::clean( $bytes );
 				if ( empty( $c['ok'] ) ) {
 					return [ $n, 'the drawing "' . $name . '" cannot be published — ' . $c['why'] ];
 				}
 				$bytes = (string) $c['svg'];
+				$len   = strlen( $bytes );
 			}
-			$sha = hash( 'sha256', $bytes );
+			// Hashed from the FILE for a streamed download — hash_file reads it in chunks, so the one
+			// artifact we were careful not to buffer is not buffered here either.
+			$sha = $is_svg ? hash( 'sha256', $bytes ) : (string) hash_file( 'sha256', $tmp );
+			if ( '' === $sha ) {
+				if ( '' !== $tmp ) { @unlink( $tmp ); }
+				return [ $n, 'could not read back the download of "' . $name . '"' ];
+			}
 			// Content-addressed by the FULL digest: the same artifact published twice is the same
 			// object, a changed artifact can never reuse a CDN name cached for a year, and no member
 			// can land on someone else's stored bytes by grinding a short prefix.
 			$key = 'aq-library/' . substr( $sha, 0, 2 ) . '/' . $sha . '.' . self::ext( $name );
-			$ok  = Media::put_public( $key, $bytes, self::mime_of( $name ) );
+			// STORED THE WAY IT ARRIVED: the SVG as the string Svg::clean rebuilt, everything else as
+			// the file it was streamed into. put_public_file() gives that path to curl and to copy()
+			// without reading it into memory, so no leg of this loop ever holds a whole artifact —
+			// which is what makes the advertised 512 MB ceiling something one request can deliver.
+			$ok = $is_svg
+				? Media::put_public( $key, $bytes, self::mime_of( $name ) )
+				: Media::put_public_file( $key, $tmp, self::mime_of( $name ) );
+			// Ours to remove, and only now: put_public_file() deliberately leaves the caller's file
+			// alone, and the store has finished reading it by the time it answers.
+			if ( '' !== $tmp ) { @unlink( $tmp ); }
 			if ( ! $ok ) { return [ $n, 'could not store "' . $name . '"' ]; }
 			Data::upsert( 'aq_library',
 				[ 'nb_id' => (int) $r['id'], 'name_key' => sha1( $name ) ],
@@ -1012,7 +1109,9 @@ class Kernel {
 					'label'     => mb_substr( basename( $name ), 0, 200 ),
 					'class'     => $cls,
 					'mime'      => self::mime_of( $name ),
-					'bytes'     => strlen( $bytes ),
+					// $len, never strlen($bytes): a streamed file never enters $bytes at all, so the
+					// string that used to be measured here is now empty for everything but an SVG.
+					'bytes'     => $len,
 					'sha256'    => $sha,
 					'cdn_key'   => $key,
 					'created'   => Data::now(),

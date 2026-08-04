@@ -20,6 +20,12 @@ import { normalizeNbKind, type NotebookFull } from "../lib/api";
 function bibtex(nb: NotebookFull) {
   const year = new Date((nb.published_at || nb.created) * 1000).getUTCFullYear();
   const key = `${(nb.author.slug || "artaquest").replace(/[^a-z0-9]/gi, "")}${year}nb${nb.id}`;
+  // The offline sentence is emitted ONLY when Kaggle's own record says the internet was off for this
+  // run. We read that flag; we do not enforce the condition, and a work whose facts we could not read
+  // has `internet` undefined — which is not the same as false. This note used to read "Fully
+  // reproducible offline notebook" on every export, i.e. a claim about the run pasted into a
+  // stranger's bibliography by a work that may well have had the internet on.
+  const offline = (nb.kernel?.facts ?? nb.checks?.facts)?.internet === false;
   return [
     `@misc{${key},`,
     `  author = {${nb.kaggle?.author || nb.author.name}},`,
@@ -27,7 +33,7 @@ function bibtex(nb: NotebookFull) {
     `  year   = {${year}},`,
     `  howpublished = {ArtaQuest ${NB_KIND_META[normalizeNbKind(nb.kind)]?.label || nb.kind}},`,
     `  url    = {${nb.doi_link || `https://artaquest.com/nb/${nb.id}/${nb.slug}`}},`,
-    `  note   = {Public Kaggle notebook, checked against Kaggle's public record on ArtaQuest}`,
+    `  note   = {Public Kaggle notebook, checked against Kaggle's public record on ArtaQuest${offline ? "; that run had the internet switched off, on Kaggle's own record" : ""}}`,
     `}`,
   ].join("\n");
 }

@@ -716,12 +716,20 @@ final class Extra {
 	}
 
 	// ── Creator ladder ──────────────────────────────────────────────────────
+	// What the rungs GATE today, which is what the blurbs must say: `can_create` opens the Studio —
+	// authoring grants (grant_can_create) and sitewide topics (Typology::can_create) — and every rung
+	// carries a bigger SHELF QUOTA, the number of published works a member may keep live at once
+	// (Economy::TIER_QUOTA, enforced at publish by Challenges::shelf_gate). The blurbs restate those
+	// quotas, so they are kept identical to TIER_QUOTA by hand — the same discipline as Economy's
+	// TIER_SHARE mirroring this ladder. The old blurbs described the courses economy (playlists,
+	// enrolment revenue share) that was purged 2026-07-13; the `share` field they quoted still feeds
+	// the careers page and is left alone here.
 	const TIERS = [
-		[ 'key' => 'quester',  'label' => 'Quester',  'share' => 0,   'points' => 0,       'caps' => [ 'can_create' => false ], 'blurb' => 'Learn, discuss, and earn points.' ],
-		[ 'key' => 'explorer', 'label' => 'Creator', 'share' => 50,  'points' => 1000,    'caps' => [ 'can_create' => true, 'needs_playlist_approval' => true ], 'blurb' => 'Propose courses from YouTube playlists.' ],
-		[ 'key' => 'voyager',  'label' => 'Expert',   'share' => 70,  'points' => 10000,   'caps' => [ 'can_create' => true, 'can_edit_content' => true ], 'blurb' => 'Edit your course content directly.' ],
-		[ 'key' => 'pioneer',  'label' => 'Pioneer',  'share' => 90,  'points' => 100000,  'caps' => [ 'can_create' => true, 'can_edit_content' => true, 'can_upload_any' => true ], 'blurb' => 'Upload any content; 90% revenue share.' ],
-		[ 'key' => 'legend',   'label' => 'Legend',   'share' => 100, 'points' => 1000000, 'caps' => [ 'can_create' => true, 'can_edit_content' => true, 'can_upload_any' => true ], 'blurb' => 'Full autonomy; 100% revenue share.' ],
+		[ 'key' => 'quester',  'label' => 'Quester',  'share' => 0,   'points' => 0,       'caps' => [ 'can_create' => false ], 'blurb' => 'Every member starts here: submit work, join challenges, earn points — and keep up to 3 published works live.' ],
+		[ 'key' => 'explorer', 'label' => 'Creator', 'share' => 50,  'points' => 1000,    'caps' => [ 'can_create' => true, 'needs_playlist_approval' => true ], 'blurb' => 'Opens the Studio: author grants and sitewide topics, and keep up to 10 published works live.' ],
+		[ 'key' => 'voyager',  'label' => 'Expert',   'share' => 70,  'points' => 10000,   'caps' => [ 'can_create' => true, 'can_edit_content' => true ], 'blurb' => 'Everything a Creator can do, with room for 25 published works on your shelf.' ],
+		[ 'key' => 'pioneer',  'label' => 'Pioneer',  'share' => 90,  'points' => 100000,  'caps' => [ 'can_create' => true, 'can_edit_content' => true, 'can_upload_any' => true ], 'blurb' => 'Room for 60 published works — keep far more of your catalogue live at once.' ],
+		[ 'key' => 'legend',   'label' => 'Legend',   'share' => 100, 'points' => 1000000, 'caps' => [ 'can_create' => true, 'can_edit_content' => true, 'can_upload_any' => true ], 'blurb' => 'No shelf limit at all: every work you publish can stay live for good.' ],
 	];
 
 	public static function creator_ladder( $req ) {
@@ -795,63 +803,134 @@ final class Extra {
 		];
 	}
 
+	/**
+	 * POST /creator/submit-playlist — RETIRED, and now it says so instead of pretending.
+	 *
+	 * Courses from YouTube playlists went with the rest of the legacy platform (purged 2026-07-13);
+	 * a submission is a public Kaggle notebook now. The handler nevertheless kept answering
+	 * "Submitted for review." while filing the playlist into aq_bug_findings — a table nothing reads
+	 * as a submission, and whose one live reader COUNTS its rows toward a bug-hunter award
+	 * (Awards.php). So every hopeful playlist was dropped on the floor AND miscounted as a bug report.
+	 * A dead endpoint that reports success is worse than one that reports the truth: 410, and no write.
+	 * The route stays so an old client gets a real answer rather than a 404 it can't explain.
+	 */
 	public static function submit_playlist( $req ) {
-		$uid = Rest::uid();
-		$url = esc_url_raw( (string) Rest::p( $req, 'url', '' ) );
-		if ( ! $url ) { return Rest::err( 'bad_input', 'Paste a YouTube playlist URL.' ); }
-		$id = Data::insert( 'aq_bug_findings', [ // reuse the submissions store loosely — recorded as a pending creator submission
-			'user_id' => $uid, 'severity' => 'nit', 'category' => 'submission', 'title' => 'Playlist: ' . $url,
-			'body' => sanitize_text_field( (string) Rest::p( $req, 'channel', '' ) ), 'status' => 'pending', 'hash' => md5( $url ), 'created_at' => Data::now(),
-		] );
-		$points = Economy::points_balance( $uid );
-		return [ 'ok' => true, 'id' => $id, 'status' => 'pending', 'needs_playlist_approval' => true, 'needs_channel_approval' => $points < 1000, 'message' => 'Submitted for review.' ];
+		return Rest::err(
+			'retired',
+			'Playlist submissions are retired — courses from YouTube ended in 2026. A submission is now a public Kaggle notebook that has been run: paste its URL in the Studio.',
+			410
+		);
 	}
 
 	// ── Public database explorer — FULL TRANSPARENCY ───────────────────────
-	// Every table, every row, every column is served exactly as stored — with TWO security
-	// exceptions (see redact_row): active sign-in session tokens (usermeta `session_tokens`) and
-	// sign-in code transients. These are the directive's named security exceptions to full
-	// transparency — they are credentials-in-flight, not user data. Everything else is open: safe
-	// because the DB holds nothing else that enables takeover — app secrets live only in the
-	// environment (see Secrets.php), the WordPress salts + signing keys are wp-config constants
-	// (never in wp_options), and password material is INERT — password + application-password
-	// logins are disabled platform-wide (Auth::harden), so a read hash is useless. Assume the
-	// whole world reads this; that is the design.
+	// Every table, every row, every column is served exactly as stored — except for cells that carry
+	// a CREDENTIAL, whose value (only the value) is masked; see redact_row. Everything else is open:
+	// safe because the DB holds nothing else that enables takeover — our own app secrets live only in
+	// the environment (see Secrets.php) and password material is INERT — password + application-password
+	// logins are disabled platform-wide (Auth::harden), so a read hash is useless. Assume the whole
+	// world reads this; that is the design.
+	//
+	// Masking is DEFAULT-DENY, and it is default-deny because the allow-list version FAILED. Until
+	// 2026-08-04 redact_row was a short list of cells we had thought of ourselves, so it covered our
+	// code and nothing else: Jetpack — a platform plugin we do not control and never reviewed — kept
+	// its `blog_token` and `user_tokens` in the wp_options row `jetpack_private_options`, and
+	// GET /offline/db/wp_options published them, unauthenticated, to anyone who asked. A credential
+	// nobody remembered to name must now be masked ANYWAY, by the shape of its key, so the next plugin
+	// to store one is covered before anyone notices it exists.
+
+	/** Per-table, per-column masks: the cells we know by name (prefix-relative table => column => why). */
+	const REDACT_COLUMNS = [
+		// A public reset key is inert while password login is disabled, but it would become a takeover
+		// vector the moment the AQ_ALLOW_PASSWORD_LOGIN escape hatch were set — so it stays masked.
+		'users'         => [ 'user_activation_key' => 'password-reset key' ],
+		// The verifier for a LIVE publication secret. The raw secret is 20 random bytes and
+		// unrecoverable from sha256, so publication was never forgeable from this cell; masking keeps a
+		// standing credential's verifier out of the public record on principle, and stops the row
+		// advertising that a member has an unconfirmed publication sitting in their inbox right now.
+		// `author_nonce` stays visible: it IS the passkey challenge, and its value is unpredictability
+		// plus one-time use, not secrecy.
+		'aq_notebooks'  => [ 'author_token' => 'publication confirm verifier' ],
+		// Same doctrine: the hash of a live personal API token (the row + label + usage stay visible).
+		'aq_api_tokens' => [ 'token_hash' => 'API token hash' ],
+	];
+
+	/** The key/value stores a credential actually lands in — table => [ key column, value column ].
+	 *  These are the only columns the default-deny name sweep below reads, because they are the only
+	 *  places where a name we have never seen chooses what a value means. */
+	const REDACT_KEYED = [
+		'options'     => [ 'option_name', 'option_value' ],
+		'sitemeta'    => [ 'meta_key', 'meta_value' ], // multisite network options
+		'usermeta'    => [ 'meta_key', 'meta_value' ],
+		'postmeta'    => [ 'meta_key', 'meta_value' ],
+		'termmeta'    => [ 'meta_key', 'meta_value' ],
+		'commentmeta' => [ 'meta_key', 'meta_value' ],
+	];
+
+	/** DEFAULT-DENY key shape: a name segment that says "this value is a credential". Segment-anchored
+	 *  (`_word_`), never a bare substring, so `aq_passkey_table_version` and `aq_grants_authored` stay
+	 *  fully public while `jetpack_private_options`, `session_tokens`, `recovery_keys`, `auth_key` and
+	 *  `nonce_salt` do not. */
+	const REDACT_NAME_RE = '/(^|_)(tokens?|secrets?|keys?|salt|passwords?|private|credentials?|auth)(_|$)/i';
+
+	/** Credential-SHAPED names that hold nothing secret, so default-deny must not withhold them.
+	 *  `disallowed_keys` and `moderation_keys` are WordPress's comment word-lists — publishing what is
+	 *  auto-moderated is exactly the kind of thing this explorer exists to show. A reCAPTCHA *site* key
+	 *  is public by definition: it is rendered into the page HTML for every visitor (the secret half is
+	 *  `secret_key`, which is not here and would stay masked). Each entry earned its place by being
+	 *  checked; do not add one on the strength of its name alone. */
+	const REDACT_PUBLIC = [ 'disallowed_keys', 'moderation_keys', 'aq_recaptcha_site_key' ];
+
+	/** Second net: a VALUE that is unmistakably a credential is withheld whatever its key is called —
+	 *  the same shapes Watchdog's hourly secret-leak scan alarms on, so a plugin that writes a token
+	 *  under a boring name is masked here and paged for there. Deliberately narrow (vendor prefix +
+	 *  a long random tail, or a PRIVATE KEY PEM block): a bare substring false-positives on ordinary
+	 *  cached data. The honeytrap values are `aqk_<hex>` and match none of these — see below. */
+	const REDACT_VALUE_RE = '/\b(sk_live_|rk_live_|whsec_)[0-9a-zA-Z]{10,}|sk-ant-[0-9a-zA-Z_\-]{10,}|\bAKIA[0-9A-Z]{16}\b|-----BEGIN [A-Z ]*PRIVATE KEY-----|\bGOCSPX-[0-9A-Za-z_\-]{10,}|\bya29\.[0-9A-Za-z_\-]{20,}|\bhf_[0-9A-Za-z]{20,}|\bghp_[0-9A-Za-z]{30,}|\bgithub_pat_[0-9A-Za-z_]{30,}/';
 
 	/**
-	 * Mask the credential-bearing cells the transparency directive exempts ("credentials-in-flight",
-	 * not user data). Only those values are replaced — the row's existence and every other column stay
-	 * fully visible, so transparency holds; we just never publish a live session verifier, a sign-in
-	 * code hash, or a password-reset key. (The last is inert while password login is disabled, but a
-	 * public reset key would become a takeover vector if the AQ_ALLOW_PASSWORD_LOGIN escape hatch were
-	 * ever set — so it stays masked regardless.)
+	 * Mask the credential-bearing cells of one row. ONLY values are replaced — the row's existence,
+	 * its key and every other column stay fully visible, so the transparency promise ("every row is
+	 * public") holds exactly; what is withheld is a credential's value and nothing else.
 	 */
 	public static function redact_row( $table, $row ) {
 		global $wpdb;
-		$msg = '••• protected — not exposed for account security';
-		if ( $table === $wpdb->prefix . 'usermeta' && ( $row['meta_key'] ?? '' ) === 'session_tokens' ) {
-			$row['meta_value'] = $msg . ' (active sign-in sessions)';
-		} elseif ( $table === $wpdb->prefix . 'options' && isset( $row['option_name'] )
-			&& preg_match( '/^_(site_)?transient(_timeout)?_aq_code(try)?_/', (string) $row['option_name'] ) ) {
-			$row['option_value'] = $msg . ' (sign-in code)';
-		} elseif ( $table === $wpdb->prefix . 'users' && ! empty( $row['user_activation_key'] ) ) {
-			$row['user_activation_key'] = $msg . ' (password-reset key)';
-		} elseif ( $table === $wpdb->prefix . 'aq_notebooks' && ! empty( $row['author_token'] ) ) {
-			// The verifier for a LIVE publication secret — the same doctrine as the API token hash
-			// below. The raw secret is 20 random bytes and unrecoverable from sha256, so publication
-			// was never forgeable from this cell; masking keeps a standing credential's verifier out
-			// of the public record on principle, and stops the row advertising that a given member
-			// has an unconfirmed publication sitting in their inbox right now. `author_nonce` stays
-			// visible: it IS the passkey challenge, and its value is unpredictability plus one-time
-			// use, not secrecy.
-			$row['author_token'] = $msg . ' (publication confirm verifier)';
-		} elseif ( $table === $wpdb->prefix . 'aq_api_tokens' && ! empty( $row['token_hash'] ) ) {
-			// Credentials-in-flight, same doctrine: the hash of a live personal API token. The raw
-			// token is unrecoverable from sha256 anyway; masking keeps the standing credential's
-			// verifier out of the public record entirely (the row + label + usage stay visible).
-			$row['token_hash'] = $msg . ' (API token hash)';
+		$msg  = '••• protected — not exposed for account security';
+		$name = strpos( (string) $table, $wpdb->prefix ) === 0 ? substr( (string) $table, strlen( $wpdb->prefix ) ) : (string) $table;
+
+		foreach ( self::REDACT_COLUMNS[ $name ] ?? [] as $col => $why ) {
+			if ( ! empty( $row[ $col ] ) ) { $row[ $col ] = $msg . ' (' . $why . ')'; }
+		}
+
+		if ( isset( self::REDACT_KEYED[ $name ] ) ) {
+			[ $kc, $vc ] = self::REDACT_KEYED[ $name ];
+			if ( isset( $row[ $kc ] ) && array_key_exists( $vc, $row ) ) {
+				$why = self::redact_reason( (string) $row[ $kc ], (string) $row[ $vc ] );
+				if ( $why !== '' ) { $row[ $vc ] = $msg . ' (' . $why . ')'; }
+			}
 		}
 		return $row;
+	}
+
+	/** Why this option/meta value must not be published — '' when it may be. */
+	private static function redact_reason( $key, $value ) {
+		// The honeytraps are DECOYS, planted in the public options table on purpose (Watchdog::TRAPS):
+		// their whole job is to be scraped and then to alarm the instant anyone presents one back to
+		// us. Masking them would disarm the trap silently, so they are exempted BY NAME, ahead of every
+		// rule below — including any future one. They are worthless strings; nothing they protect exists.
+		if ( in_array( $key, Watchdog::TRAPS, true ) ) { return ''; }
+		// Names that LOOK credential-shaped and provably are not. Default-deny is the right posture, but
+		// this database being readable is the product, not a concession — so where a value has been
+		// positively established as public, withholding it costs transparency and buys nothing. Checked
+		// against every option on production: these are the only false positives among 1,728 rows.
+		// This is an allow-list of KNOWN-PUBLIC names, which is the opposite of the allow-list of
+		// known-secrets that failed against Jetpack: anything not named here is still masked by default,
+		// so a new credential can never be published by omission. Add to it only with evidence.
+		if ( in_array( $key, self::REDACT_PUBLIC, true ) ) { return ''; }
+		if ( preg_match( '/^_(site_)?transient(_timeout)?_aq_code(try)?_/', $key ) ) { return 'sign-in code'; }
+		if ( 'session_tokens' === $key ) { return 'active sign-in sessions'; }
+		if ( preg_match( self::REDACT_NAME_RE, $key ) ) { return 'credential-shaped key — masked by default'; }
+		if ( preg_match( self::REDACT_VALUE_RE, $value ) ) { return 'credential-shaped value — masked by default'; }
+		return '';
 	}
 
 	/** Every table in the database (SQLite dev + MySQL prod), with row counts.
@@ -906,7 +985,11 @@ final class Extra {
 				$key  = preg_replace( '/^' . preg_quote( $wpdb->prefix, '/' ) . '/', '', $name ); // unprefixed dictionary key
 				$tables[] = [ 'name' => $name, 'label' => self::humanize( $name ), 'desc' => $dict[ $key ]['desc'] ?? '', 'rows' => $rows ];
 			}
-			return [ 'tables' => $tables, 'note' => 'Fully public. Every table, row, and value is shown exactly as stored. Secrets never touch the database (they live in the environment). Five values are masked, all of them credentials-in-flight: active sign-in session tokens, sign-in code transients, password-reset keys, the verifier for a live publication confirm link, and API token hashes. Two tables are withheld whole: a member\'s private book source files and a shop order\'s delivery address. Row counts are engine estimates for very large tables.' ];
+			// The note is the promise, so it has to describe redact_row as it actually behaves: since
+			// 2026-08-04 masking is default-deny by the SHAPE of a key or value, not a list of cells we
+			// remembered. Naming a count ("five values are masked") would understate it and imply we
+			// know every credential any plugin stores — which is the assumption that failed.
+			return [ 'tables' => $tables, 'note' => 'Fully public. Every table and every row is listed, and every value is shown exactly as stored — except a credential\'s value, which is withheld. Secrets never touch the database (they live in the environment), and to keep that true whoever writes them, masking is default-deny: a key or a value shaped like a credential is withheld automatically, from any plugin, not only the cases we thought to name. The known ones: active sign-in session tokens, sign-in code transients, password-reset keys, the verifier for a live publication confirm link, and API token hashes. Only the value goes — the row, its key and every other column stay visible. Two tables are withheld whole: a member\'s private book source files and a shop order\'s delivery address. Row counts are engine estimates for very large tables.' ];
 		}
 
 		// Validate the requested table against the real list (prevents arbitrary identifiers).
@@ -942,8 +1025,9 @@ final class Extra {
 			$next   = ( $has_id && $rows ) ? (int) end( $rows )['id'] : null;
 		}
 		$cols = $rows ? array_keys( $rows[0] ) : [];
-		// Mask the five credential-bearing cells (session tokens, sign-in codes, password-reset keys,
-		// publication confirm verifier, API token hash) — see redact_row.
+		// Mask credential-bearing cells: the named ones (session tokens, sign-in codes, password-reset
+		// keys, publication confirm verifier, API token hash) plus anything whose key or value is
+		// credential-SHAPED, whoever wrote it — default-deny, see redact_row.
 		$rows = array_map( fn( $r ) => self::redact_row( $table, $r ), $rows );
 		// Data-dictionary annotations so the explorer is self-describing for research: a one-line table
 		// blurb + the plain-language meaning of each documented column (see Schema::dictionary).
@@ -1024,8 +1108,10 @@ final class Extra {
 	];
 
 	public static function coin_world( $req ) {
-		$p    = Economy::coin_price(); // CAD per coin (buy/sell/spot)
-		$oz   = (float) ( Data::col( 'SELECT oz_usd FROM ' . Data::t( 'aq_gold_rate_history' ) . ' ORDER BY id DESC LIMIT 1' ) ?: 0 );
+		$p    = Economy::coin_price();   // CAD per coin (buy/sell/spot)
+		$oz   = Economy::gold_oz_usd(); // the SAME spot coin_price() just derived from — /pricing read
+		                                // aq_gold_rate_history here (no writer, always empty), so it
+		                                // rendered "Gold spot (USD/oz) $0" while /reserve showed 4,056.9
 		$countries = array_map( fn( $c ) => [
 			'code' => $c['code'], 'iso3' => $c['iso3'], 'name' => $c['name'], 'currency' => $c['cur'],
 			'buy' => round( $p['buy'] * $c['rate'], 4 ), 'sell' => round( $p['sell'] * $c['rate'], 4 ),
@@ -3066,7 +3152,12 @@ final class Extra {
 			if ( strlen( $donations_json ) > 450 ) { $donations_json = wp_json_encode( [ [ 'c' => $total_cents, 'g' => [], 'y' => [] ] ] ); }
 
 			if ( Stripe::enabled() ) {
-				$return = home_url( '/enroll/' );
+				// Return to /wallet/ DIRECTLY — the surface that reads ?stripe= (Wallet.tsx) and the same
+				// one Economy::buy() returns to. /enroll/ looks equivalent and is not: the theme 301s it to
+				// /wallet/ at parse_request priority 1 and wp_safe_redirect carries no query string, so
+				// ?stripe=success&session=… was dropped in the hop and no donor was ever told their payment
+				// had arrived. A redirect between Stripe and the confirmation is a broken confirmation.
+				$return = home_url( '/wallet/' );
 				$sess = Stripe::create_session(
 					$total_cents,
 					'Donation to the ArtaQuest Foundation',
@@ -3110,6 +3201,7 @@ final class Extra {
 		$kind  = (string) ( $meta['aq_kind'] ?? '' );
 		if ( $sid === '' ) { return [ $kind, $total ]; }
 		$ref = 'stripe:' . $sid;
+		self::remember_payment( $session ); // so a refund months from now can find these rows again
 
 		// Atomic single-fulfilment claim. The returning browser (stripe_verify) and Stripe's webhook can both
 		// call this for the same paid session at the same instant; without a gate, both pass the per-ledger
@@ -3143,6 +3235,144 @@ final class Extra {
 			Economy::fulfil_coin_purchase( (int) ( $meta['aq_uid'] ?? 0 ), (int) ( $meta['aq_coins'] ?? 0 ), $ref ); // idempotent
 		}
 		return [ $kind, $total ];
+	}
+
+	/**
+	 * Remember which Checkout Session a PaymentIntent paid for, so a refund weeks later can find the
+	 * exact ledger rows to reverse. Stripe's charge + dispute events carry the payment_intent and
+	 * NEVER the session id, and a session's metadata is not copied onto its charge — so without this
+	 * map a refund cannot be tied back to the gift it undoes. Both values are Stripe object ids and
+	 * the session id is already public in the ledgers' `ref` column, so the open database exposes
+	 * nothing new. autoload=false: read on the rare refund, never on a page load.
+	 */
+	private static function remember_payment( $session ) {
+		$sid = (string) ( $session['id'] ?? '' );
+		$pi  = $session['payment_intent'] ?? '';
+		$pi  = is_array( $pi ) ? (string) ( $pi['id'] ?? '' ) : (string) $pi; // string id, or expanded object
+		if ( $sid === '' || $pi === '' ) { return; }
+		update_option( 'aq_stripe_pi_' . $pi, $sid, false );
+	}
+
+	/**
+	 * A payment came BACK — a refund (charge.refunded) or a chargeback (charge.dispute.*). The live
+	 * Refund Policy promises "the Arta Coins credited for that donation are reversed at the same
+	 * time"; until now nothing could keep that promise, because the webhook subscribed to exactly two
+	 * events and neither was this one, so a refunded donor kept both the money and the coins.
+	 *
+	 * APPEND-ONLY, like every money path here: not one original row is edited or deleted. We append
+	 * the mirrored negatives — coins via Economy::reverse_coin_purchase, the fund ledger row for row,
+	 * the donate points that the gift bought — all under ONE deterministic ref, 'srev:<charge id>'.
+	 * Stripe retries a webhook for days, so idempotency is not optional: each writer checks for its
+	 * own ref first, and a redelivery finds the work done and no-ops.
+	 *
+	 * A dispute is RECORDED, not reversed, until it is closed as lost: while it is open the money is
+	 * held, not gone, and reversing on `created` would double up against the close (or claw back coins
+	 * from a member who then wins). Both a lost dispute and a refund resolve to the same 'srev:' ref,
+	 * so a charge can never be reversed twice by two different events.
+	 */
+	private static function reverse_charge( $type, $event ) {
+		$obj     = is_array( $event['data']['object'] ?? null ) ? $event['data']['object'] : [];
+		$dispute = strpos( (string) $type, 'charge.dispute' ) === 0;
+		// charge.refunded's object IS the charge; a dispute's object POINTS at it.
+		$charge  = (string) ( $dispute ? ( $obj['charge'] ?? '' ) : ( $obj['id'] ?? '' ) );
+		$status  = (string) ( $obj['status'] ?? '' );
+		if ( $charge === '' ) { return; }
+
+		if ( $dispute && $status !== 'lost' ) {
+			Watchdog::alert( 'stripe_dispute_' . $charge, 'Stripe DISPUTE ' . ( $status ?: 'opened' ) . ' on charge ' . $charge,
+				'A cardholder disputed a payment (' . $type . ', status ' . ( $status ?: 'unknown' ) . ', amount '
+				. number_format( (int) ( $obj['amount'] ?? 0 ) / 100, 2 ) . " CAD).\nNothing has been reversed. Coins and fund entries "
+				. 'are reversed ONLY when a dispute closes as LOST — if we win it, the money stays and nothing changes. '
+				. 'Respond with evidence in the Stripe dashboard while the window is open.' );
+			return;
+		}
+
+		// How much of the payment came back. A refund states both figures; a lost dispute states only
+		// the disputed amount, and a dispute is for the whole charge in practice — so treat it as full
+		// and say so in the alert rather than guess a fraction we cannot compute.
+		$paid = (int) ( $obj['amount'] ?? 0 );
+		$back = $dispute ? $paid : (int) ( $obj['amount_refunded'] ?? 0 );
+		$frac = ( $dispute || $paid < 1 ) ? 1.0 : min( 1.0, $back / $paid );
+		if ( $back < 1 ) { return; } // a $0 refund event (Stripe emits these on some updates) undoes nothing
+
+		$pi  = (string) ( $obj['payment_intent'] ?? '' );
+		$sid = $pi === '' ? '' : (string) get_option( 'aq_stripe_pi_' . $pi, '' );
+		if ( $sid === '' ) {
+			// Payments captured before this map existed (and any we somehow never recorded) cannot be
+			// traced back to their ledger rows automatically. Refuse to guess with real money — page an
+			// operator with everything they need to reverse it by hand.
+			Watchdog::alert( 'stripe_refund_unmapped_' . $charge, 'Stripe refund could NOT be matched to a ledger entry',
+				'Charge ' . $charge . ' (payment_intent ' . ( $pi ?: 'unknown' ) . ') was refunded '
+				. number_format( $back / 100, 2 ) . " CAD, but no Checkout Session is recorded for it, so nothing was reversed.\n"
+				. 'Find the session in the Stripe dashboard, then reverse its coin/fund entries by hand with a compensating '
+				. 'ledger row (append-only — never edit the original).', true );
+			return;
+		}
+		$ref = 'stripe:' . $sid;
+		$rev = 'srev:' . $charge; // deterministic: one reversal per charge, whichever event delivers it
+
+		$coins = Economy::reverse_coin_purchase( $ref, $rev, $frac );
+		[ $cents, $buckets ] = self::reverse_fund_gift( $ref, $rev, $frac, $charge );
+
+		Watchdog::note( sprintf( 'Stripe %s reversed: charge %s, %.2f CAD, %d coins, %d fund cents', $type, $charge, $back / 100, $coins, $cents ) );
+		// Two cases a human must actually look at: a sponsorship whose money has already been spent
+		// into a live prize pool (it cannot come back out — the pool is nobody's to claw), and a
+		// partial refund, where the split between what stays and what returns is a judgement call.
+		$sponsored = (bool) array_filter( $buckets, static fn( $b ) => strpos( (string) $b, 'typ_' ) === 0 );
+		if ( $sponsored || $frac < 1.0 ) {
+			Watchdog::alert( 'stripe_refund_' . $charge, 'Refund reversed — please check it by hand',
+				'Charge ' . $charge . ' returned ' . number_format( $back / 100, 2 ) . ' CAD ('
+				. ( $frac < 1.0 ? 'PARTIAL, ' . round( $frac * 100 ) . '% of the payment' : 'in full' ) . ").\n"
+				. 'Reversed: ' . $coins . ' coins and ' . $cents . " fund cents, appended as ref {$rev}.\n"
+				. ( $sponsored ? "This gift included a TOPIC SPONSORSHIP whose coins may already have been minted into a live prize\npool — that money cannot be recalled, so the earmark bucket may now read negative until it is settled.\n" : '' )
+				. 'The originals are untouched; every reversal is a new row.' );
+		}
+	}
+
+	/**
+	 * Mirror a gift's fund-ledger rows as negatives, and take back the donate points it bought.
+	 * Returns [ cents reversed, buckets touched ].
+	 *
+	 * The fund ledger's append is private to Funds (its one write choke point, which moves the bucket
+	 * counter in lockstep), and Funds.php is not ours to edit in this pass — so this mirrors that
+	 * invariant exactly: the row lands FIRST and the counter moves only if it did, because a counter
+	 * that moves without a row desyncs the public finances permanently. Fold it into a
+	 * Funds::reverse_gift the next time that file is open.
+	 */
+	private static function reverse_fund_gift( $ref, $rev, $frac, $charge ) {
+		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_fund_ledger' ) . ' WHERE ref = %s LIMIT 1', [ $rev ] ) ) { return [ 0, [] ]; }
+		// Only the POSITIVE rows: a sponsorship also writes a negative row of its own (the CAD it spent
+		// on a prize pool), and mirroring that would hand the fund money back that it never had.
+		$rows = Data::all( 'SELECT id, bucket, cents FROM ' . Data::t( 'aq_fund_ledger' ) . ' WHERE ref = %s AND cents > 0 ORDER BY id ASC', [ (string) $ref ] );
+		$cents = 0; $awarded = 0; $uid = 0; $buckets = [];
+		foreach ( $rows as $r ) {
+			$part = (int) round( (int) $r['cents'] * (float) $frac );
+			if ( $part < 1 ) { continue; }
+			$id = Data::insert( 'aq_fund_ledger', [
+				'bucket'  => (string) $r['bucket'],
+				'cents'   => -$part,
+				'ref'     => (string) $rev,
+				'note'    => 'Refunded: ' . $charge,
+				'created' => Data::now(),
+			] );
+			if ( ! $id ) {
+				error_log( 'AQ reverse_fund_gift: ledger INSERT FAILED bucket=' . $r['bucket'] . " {$part}c ref={$rev} — nothing reversed" );
+				continue;
+			}
+			Economy::counter_add( 'fund_' . (string) $r['bucket'], -$part );
+			$cents    += $part;
+			$buckets[] = (string) $r['bucket'];
+			// The donor + the points this part bought: the fund ledger records no user_id, but
+			// record_donation awarded the points against ref 'fund<row id>', which does.
+			$p = Data::one( 'SELECT user_id, delta FROM ' . Data::t( 'aq_points_ledger' ) . " WHERE track = 'donate' AND ref = %s LIMIT 1", [ 'fund' . (int) $r['id'] ] );
+			if ( $p ) { $uid = (int) $p['user_id']; $awarded += (int) $p['delta']; }
+		}
+		// Standing bought by money that went back is standing nobody earned — and it buys real things
+		// here (group-tag slots, the creator rung). Take back only what the refund covers, never more
+		// than was awarded, and never below zero. award_points is itself idempotent per (user, track, ref).
+		$giveback = min( $awarded, (int) floor( $cents / 100 ) );
+		if ( $uid > 0 && $giveback > 0 ) { Economy::award_points( $uid, -$giveback, 'donate', (string) $rev ); }
+		return [ $cents, $buckets ];
 	}
 
 	/**
@@ -3182,6 +3412,9 @@ final class Extra {
 		if ( $type === 'checkout.session.completed' ) {
 			$session = $event['data']['object'] ?? null;
 			if ( is_array( $session ) && ( $session['payment_status'] ?? '' ) === 'paid' ) { self::fulfil_session( $session ); }
+		} elseif ( $type === 'charge.refunded' || $type === 'charge.dispute.created' || $type === 'charge.dispute.closed' ) {
+			// Money going BACK is as much a fulfilment as money coming in — see reverse_charge.
+			self::reverse_charge( $type, $event );
 		} elseif ( $type === 'account.updated' ) {
 			// A connected account finished (or changed) onboarding — refresh the cached cash-out readiness
 			// so the member can withdraw the moment Stripe enables their payouts, without a stale wait.
@@ -3229,8 +3462,10 @@ final class Extra {
 			// Cash-out (outbound payouts via Connect transfers): live when Stripe is on and not frozen.
 			'cashout_enabled'    => Economy::cashout_enabled(),
 			'cashout_frozen'     => Secrets::has( 'AQ_CASHOUT_FROZEN' ),
-			// Webhook events to subscribe to at the Stripe endpoint, so ops can confirm coverage.
-			'webhook_events'     => [ 'checkout.session.completed', 'account.updated' ],
+			// Webhook events to subscribe to at the Stripe endpoint, so ops can confirm coverage. This
+			// list is the handler's own switch, verbatim: an endpoint missing charge.refunded silently
+			// breaks the Refund Policy's promise, and the health check is where that has to be visible.
+			'webhook_events'     => [ 'checkout.session.completed', 'charge.refunded', 'charge.dispute.created', 'charge.dispute.closed', 'account.updated' ],
 		];
 	}
 

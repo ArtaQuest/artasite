@@ -35,6 +35,10 @@ Kaggle author**, always.
 - The exported BibTeX names the Kaggle author.
 - Where the submitter and the author differ, the work's page says so in plain words, and links the
   Kaggle profile.
+- The publication request, though, goes to the **submitting member's** inbox — not the Kaggle
+  author's. We hold no verified address for a stranger on another platform, and a passkey we cannot
+  check is not consent. Credit and consent are deliberately separate roles: the citation names the
+  author, the confirmation belongs to the member who brought the work here.
 
 Silent re-attribution would be the single most dishonest thing this platform could do, and a DOI is
 permanent — so this is enforced in the deposit itself, not only in the interface.
@@ -44,7 +48,31 @@ permanent — so this is enforced in the deposit itself, not only in the interfa
 | # | Key | Who holds it | What it takes |
 |---|-----|--------------|---------------|
 | 1 | **The reproducibility checklist** | Kaggle's public API, read back item by item | ~20 deterministic checks in four groups. Every blocking check must pass. Warnings are shown loudly and never block. Every check names the exact evidence it read. |
-| 2 | **The author** | the creator's own registered email + their device passkey | Publication is REQUESTED, never taken. A single-use secret goes to the author's own registered email; their click, plus their device passkey signature over the work, is what publishes it and mints the permanent DOI. No token, agent, relay or operator can publish. Ever — not via the API, not via wp-cli, not via SQL. |
+| 2 | **The author** — the member who submitted it | their own registered email + their device passkey | Publication is REQUESTED, never taken. A single-use secret goes to the address that member registered with; their click, plus their device passkey signature over the work, is what publishes it and mints the permanent DOI. No token, agent, relay or operator can stand in for that. |
+
+The secret goes to **the member who brought the notebook here** — they are the one with an inbox we
+can reach and a passkey we can verify. The **citation** still names the Kaggle author, as above: the
+person who consents to publication and the person credited for the work are two different roles, and
+the platform keeps them apart on purpose.
+
+**Precisely what key two guarantees.** Exactly one code path sets a work's status to
+`published`: `Notebook::author_confirm()`, reached only by an explicit `POST` carrying the raw
+secret. That secret is 160 random bits, it exists nowhere but the member's inbox — the database
+stores only `sha256(secret|sig(ipynb))`, and the database is public — and it is spent atomically with
+the flip, so a race loses and a replay finds nothing. The confirmation is appended to the
+append-only ledger **before** the flip, and where the database allows it a publish-guard trigger
+refuses any `INSERT` or `UPDATE` into `published` that is not already preceded by that sig-bound row,
+from any client at all. Whether that trigger layer is installed is recorded publicly in the
+`aq_publish_guard` option, because an absent guard must be known-absent rather than imagined present.
+
+What we do **not** claim is that the database is unwritable. Anyone with direct SQL access to the
+server can write rows there; nothing in a doc changes that. What they cannot do is make the result
+stand. `integrity_sweep()` re-derives the proof for every published row from public data: the ledger
+row must be bound to the `sha1` of the exact source being served, its passkey assertion must
+re-verify against the author's enrolled public key, and its challenge nonce must appear in no other
+row. Anything that fails is demoted to a draft and the operator is alerted. The private key that
+signs a confirmation is on the member's own device and has never been on our server, so a forged
+publication cannot be made to verify — it can only be made to appear, briefly, until the sweep runs.
 
 ## The flow, in the author's words
 
@@ -199,6 +227,11 @@ can be edited, made private or deleted by its owner; a citation must not rot.
   from public inputs, and get this. That is weaker than the retired promise that the same bytes came
   out of a repeated run on our own machine, and stronger than "trust our laptop". Both halves are
   true; neither may be overclaimed.
+- **A confirmation is bound to this hostname.** The passkey assertion the sweep re-verifies covers
+  the site's own domain, so a work signed under an old hostname stops verifying after a domain move
+  and is demoted to a draft until its author confirms again. The gate is behaving correctly — it will
+  not serve a publication whose proof it cannot check — but the cost of that lands on the author, and
+  it is ours to have caused.
 - **Warnings are warnings.** An unseeded run, a GPU requirement or an unpinned install is disclosed
   and published. Readers decide what that is worth.
 - **The accepted trade-off, stated plainly.** A mechanical checklist cannot catch work that is hollow

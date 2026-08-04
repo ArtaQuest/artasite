@@ -167,7 +167,6 @@ final class Notebook {
 	const MAX_MODEL_FILES = 8;        // weight files provisioned per RUN, across every declared model
 	                                  //   — the relay's own shelf cap (notebook-relay.mjs); a
 	                                  //   declaration it could never provision is refused at save time
-	const RECLAIM_S       = 10800;    // a claimed run abandoned 3h is re-queued
 	const PAGE            = 24;
 
 	/** kind => the offline deliverable the executed notebook must produce (measured + veto-enforced).
@@ -687,8 +686,8 @@ final class Notebook {
 	 * offline execution and a traversal would escape it.
 	 *
 	 * Returns [ $models, $error ] — the same two-value shape as clean_requirements, so the call
-	 * sites read alike; the normalised list is what claim_one() hands the runner, so the SERVER is
-	 * authoritative about the shape and the runner never re-implements these rules. ("repo" is
+	 * sites read alike. The SERVER owns the normalised shape, so no runner ever re-implemented these
+	 * rules and none can drift from them now. ("repo" is
 	 * canonical; "hf" is still read, the spelling the field shipped with.)
 	 */
 	public static function declared_models( $ipynb ) {
@@ -757,8 +756,8 @@ final class Notebook {
 
 	/** The environment the CURRENT source's binding measurement was produced under, or null when
 	 *  nothing has measured this source yet (panel() refuses that case on its own, with its own
-	 *  message). Read off the RUN that posted the measured seat — claim_one() stamps every run with
-	 *  the exact pins it handed the runner, so this is the durable answer to "what was this measured
+	 *  message). Read off the RUN that posted the measured seat — the executor stamped every run with
+	 *  the exact pins it was handed, so this is the durable answer to "what was this measured
 	 *  under?". A run claimed before req_sig existed recorded nothing: read that as the BASE
 	 *  environment, so the ten kinds that declare nothing keep their pass and only a work that
 	 *  actually declared pins pays for one free re-run.
@@ -1016,9 +1015,13 @@ final class Notebook {
 		self::ensure_tables();
 		// The integrity watchdog rides the feed (max once per 10 min): an illegitimately
 		// "published" row is demoted before it is ever listed. No cron registration needed.
+		// The stranded-request sweep rides the same tick — it is the mirror image of the same
+		// invariant (a request that never finished must not sit as though it had), it only ever
+		// moves a row BACKWARDS to draft, and it is one indexed read when it finds nothing.
 		if ( ! get_transient( 'aq_nb_integrity_ran' ) ) {
 			set_transient( 'aq_nb_integrity_ran', 1, 10 * MINUTE_IN_SECONDS );
 			self::integrity_sweep();
+			self::sweep_stranded_pending();
 		}
 		$kind   = sanitize_key( (string) Rest::p( $req, 'kind', '' ) );
 		$q      = trim( (string) Rest::p( $req, 'q', '' ) );
@@ -1181,8 +1184,8 @@ final class Notebook {
 		return [ 'items' => $items, 'next' => $next, 'mine' => $mine ];
 	}
 
-	/** POST notebooks/{id}/comments {body, parent_id?} — reply to a post. ArtaMod-scored (fail-open),
-	 *  notifies the post author and the parent commenter. */
+	/** POST notebooks/{id}/comments {body, parent_id?} — reply to a post. Queued for ArtaMod
+	 *  (fail-open), notifies the post author and the parent commenter. */
 	public static function comment( $req ) {
 		self::ensure_tables();
 		if ( Rest::throttle( 'aq_nb_comment', 20, 300 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
@@ -1199,23 +1202,26 @@ final class Notebook {
 			if ( ! $pc ) { return Rest::err( 'bad_parent', 'No such comment' ); }
 		}
 		$flagged = 0;
+		$modq    = 1;
 		try {
 			if ( class_exists( '\\AQ\\Fearometer' ) && method_exists( '\\AQ\\Fearometer', 'score' ) ) {
-				// score() returns an ARRAY — [ fear, flagged, reason, categories ]. This cast it to
-				// int, and (int) on a non-empty array is 1, so the test was always `1 >= 70` and
-				// every comment was recorded unflagged no matter what it said. ArtaMod has been
-				// running and discarding its own verdict; the /about page meanwhile promises members
-				// that comments ARE checked.
+				// score() returns an ARRAY — [ fear, flagged, reason, categories ] — or NULL, and
+				// NULL is the normal answer: there is no server-side scorer (the paid API was removed
+				// 2026-06-13) and the subscription relay scores in batches, so only the test seam
+				// resolves inline. Treating null as a clean verdict is why every comment on the feed
+				// was stored flagged=0 no matter what it said, while /about promised members their
+				// comments ARE checked.
 				//
-				// Read the verdict's own `flagged`, which score() computes against limit() — the
-				// operator-settable threshold — rather than re-deriving it from the constant here.
+				// So: an array verdict is a real screen (read its own `flagged`, computed against the
+				// operator-settable limit()); NULL means NOT SCREENED YET → queue it (modq = 1) for
+				// Fearometer::process_queue to score on the relay.
 				$verdict = Fearometer::score( $body );
-				$flagged = ( is_array( $verdict ) && ! empty( $verdict['flagged'] ) ) ? 1 : 0;
+				if ( is_array( $verdict ) ) { $flagged = empty( $verdict['flagged'] ) ? 0 : 1; $modq = 0; }
 			}
-		} catch ( \Throwable $e ) { $flagged = 0; } // ArtaMod never blocks posting
+		} catch ( \Throwable $e ) { $flagged = 0; $modq = 1; } // ArtaMod never blocks posting; the queue retries
 		$cid = Data::insert( 'aq_comments', [
 			'context_type' => 'notebook', 'context_id' => (int) $r['id'], 'parent_id' => $parent,
-			'author_id' => $uid, 'body' => $body, 'flagged' => $flagged, 'created' => Data::now(),
+			'author_id' => $uid, 'body' => $body, 'flagged' => $flagged, 'modq' => $modq, 'created' => Data::now(),
 		] );
 		if ( ! $cid ) { return Rest::err( 'server_error', 'Could not post', 500 ); }
 		Data::bump( 'aq_notebooks', [ 'id' => (int) $r['id'] ], 'comments' );
@@ -1612,9 +1618,11 @@ final class Notebook {
 		return self::enqueue( $req, 'run', 0 );
 	}
 
-	// ArtaDev (the paid critic+dev loop) was RETIRED by the ArtaCritic pivot (2026-07-16):
-	// scoring is free and automatic on every clean run. The route is gone; legacy queued 'dev'
-	// rows still complete (and auto-refund) through the unchanged relay_complete path.
+	// ArtaDev (the paid critic+dev loop) was RETIRED by the ArtaCritic pivot (2026-07-16), and the
+	// whole local-execution pipeline with it (2026-07-28). Neither route is registered any more, so
+	// nothing below can be reached; the relay endpoints that used to settle a queued run are gone
+	// too. Any 'dev' row still sitting in aq_nb_runs will never complete — reconcile those by hand
+	// (append a compensating ledger row), never by re-registering an executor.
 
 	private static function enqueue( $req, $type, $iters ) {
 		$uid = Rest::uid();
@@ -1704,10 +1712,14 @@ final class Notebook {
 		if ( ! in_array( $r['status'], [ 'draft', 'pending', 'published' ], true ) ) { return Rest::err( 'gone', 'Removed', 410 ); }
 		$why = self::gate_reason( $r );
 		if ( $why !== '' ) { return Rest::err( 'gate', $why, 409 ); }
+		// Did THIS request create the pending state? The rollback below is scoped to that, and
+		// nothing else — see the note there.
+		$made_pending = false;
 		if ( $r['status'] === 'draft' ) {
 			$won = Data::update( 'aq_notebooks', [ 'status' => 'pending', 'decision_note' => '', 'updated' => Data::now() ],
 				[ 'id' => (int) $r['id'], 'status' => 'draft' ] );
 			if ( ! $won ) { return Rest::err( 'busy', 'Already submitted', 409 ); }
+			$made_pending = true;
 		}
 		// MIRROR ON REQUEST, not on confirm. The confirm page's whole purpose is that the author
 		// reviews the WORKING deliverable — plays the audio, opens the image — before an
@@ -1718,8 +1730,18 @@ final class Notebook {
 		$r = self::row( $r['id'] );
 		[ $stored, $mirr ] = Kernel::mirror( $r );
 		if ( '' !== $mirr ) {
-			Data::update( 'aq_notebooks', [ 'status' => 'draft', 'decision_note' => mb_substr( $mirr, 0, 600 ), 'updated' => Data::now() ],
-				[ 'id' => (int) $r['id'], 'status' => 'pending' ] );
+			// UNDO ONLY WHAT THIS REQUEST DID. A re-request of an ALREADY-pending work must not be
+			// demoted on a mirror failure: the author may be holding a live, unspent confirm link for
+			// this exact source, and dropping to 'draft' would leave that link dead in their inbox
+			// with no explanation, for a Kaggle hiccup that cost nothing. The `author_token = ''`
+			// condition says the same thing a second way, against a CONCURRENT request: if another
+			// call has already mirrored successfully and emailed a secret while this one was still
+			// downloading, the row now holds that secret and this failure must not spend it. Both
+			// guards are cheap; the state they protect is a one-way email the author cannot re-open.
+			if ( $made_pending ) {
+				Data::update( 'aq_notebooks', [ 'status' => 'draft', 'decision_note' => mb_substr( $mirr, 0, 600 ), 'updated' => Data::now() ],
+					[ 'id' => (int) $r['id'], 'status' => 'pending', 'author_token' => '' ] );
+			}
 			return Rest::err( 'mirror', 'Could not fetch your files from Kaggle — ' . $mirr, 409 );
 		}
 		// A pending work re-sends the author's confirm email (throttled to one per hour per work) —
@@ -2013,11 +2035,11 @@ final class Notebook {
 					. 'style="width:100%;height:24rem;border:1px solid #24425f;border-radius:.6rem;background:#06121E;margin:.4rem 0" '
 					. 'sandbox="allow-scripts allow-pointer-lock"></iframe>';
 			}
-			$preview .= '<div style="margin:.2rem 0 .6rem;font-size:.85rem"><a href="' . esc_url( $url ) . '" target="_blank" rel="noopener" style="color:#2352E8;text-decoration:none">'
+			$preview .= '<div style="margin:.2rem 0 .6rem;font-size:.85rem"><a href="' . esc_url( $url ) . '" target="_blank" rel="noopener" style="color:#1746DC;text-decoration:none">'
 				. esc_html( (string) $f['label'] ) . '</a> <span style="color:#8fa3b8">' . esc_html( size_format( (int) $f['bytes'] ) ) . '</span></div>';
 		}
 		if ( '' !== (string) ( $r['kg_url'] ?? '' ) ) {
-			$preview .= '<div style="margin:.3rem 0 .8rem;font-size:.85rem"><a href="' . esc_url( (string) $r['kg_url'] ) . '" target="_blank" rel="noopener" style="color:#2352E8;text-decoration:none">Open the notebook on Kaggle &#8599;</a></div>';
+			$preview .= '<div style="margin:.3rem 0 .8rem;font-size:.85rem"><a href="' . esc_url( (string) $r['kg_url'] ) . '" target="_blank" rel="noopener" style="color:#1746DC;text-decoration:none">Open the notebook on Kaggle &#8599;</a></div>';
 		}
 		// Enrolled authors co-sign with their DEVICE: the Publish button runs the WebAuthn
 		// ceremony with the work's source sig as the challenge, so the passkey literally signs
@@ -2054,8 +2076,8 @@ final class Notebook {
 			. ( $need_key ? '<div style="margin:.8rem 0;padding:.7rem .9rem;border:1px solid #54471d;border-radius:.5rem;background:#1a1710;color:#e8d9a8;font-size:.9rem">To publish, first add a <b>passkey</b> in Settings → Publication signing key. That device signature is what makes your publication impossible for anyone else — even us — to forge. Add one, then open this link again.</div>' : '' )
 			. $sliders
 			. $preview
-			. '<div style="margin:.2rem 0 .6rem;font-size:.9rem"><a href="' . $draft . '" target="_blank" rel="noopener" style="color:#2352E8;text-decoration:none">Read the full draft ↗</a></div>'
-			. '<div style="margin:.2rem 0 .6rem;font-size:.9rem"><a href="' . $book . '" target="_blank" rel="noopener" style="color:#2352E8;text-decoration:none">Read it as a book &#8599;</a></div>'
+			. '<div style="margin:.2rem 0 .6rem;font-size:.9rem"><a href="' . $draft . '" target="_blank" rel="noopener" style="color:#1746DC;text-decoration:none">Read the full draft ↗</a></div>'
+			. '<div style="margin:.2rem 0 .6rem;font-size:.9rem"><a href="' . $book . '" target="_blank" rel="noopener" style="color:#1746DC;text-decoration:none">Read it as a book &#8599;</a></div>'
 			. '<form method="post" action="' . $post . '" style="margin-top:1rem" id="aq-confirm-form">'
 			. '<input type="hidden" name="pk_cred" id="pk_cred"><input type="hidden" name="pk_cdj" id="pk_cdj">'
 			. '<input type="hidden" name="pk_auth" id="pk_auth"><input type="hidden" name="pk_sig" id="pk_sig">'
@@ -2097,6 +2119,73 @@ final class Notebook {
 		}
 		$out .= '<div style="font-size:11px;color:' . $muted . ';margin-top:6px">'
 			. 'Every check is read back from the public Kaggle API and published with the work.</div></div>';
+		return $out;
+	}
+
+	/** How long a publication REQUEST may sit half-finished before sweep_stranded_pending() rescues
+	 *  it. Comfortably longer than any request can live (a gateway kills one long before this) and
+	 *  short enough that an author who hit a 504 is not shut out of their own work for the day. */
+	const PENDING_STRANDED = 1800; // 30 minutes
+
+	/**
+	 * Put back a publication request that never finished.
+	 *
+	 * publish() flips draft → pending BEFORE it mirrors the chosen files, and the mirror is the slow,
+	 * network-bound half. Its rollback runs only if PHP is still alive to run it: a gateway 504 or an
+	 * out-of-memory inside Kernel::mirror takes the process with it, and the row is left saying
+	 * 'pending' with no confirm email ever sent. The same shape exists at the other end —
+	 * author_confirm() spends the single-use secret a few statements before it flips to 'published',
+	 * so a process that dies between those two writes leaves a pending row whose emailed link is
+	 * already dead.
+	 *
+	 * NOT A DEAD END, AND WORTH SAYING SO PLAINLY: the Studio's pending card offers "Send the link
+	 * again", which re-runs publish() and recovers the row the moment the mirror succeeds. What that
+	 * button cannot do is make the state honest in the meantime — the card tells the author a link is
+	 * in their inbox when nothing was sent, the public DB shows a request outstanding when there is
+	 * none, and an author who does not come back to that page is never told anything at all. This
+	 * sweep is the backstop for those three, not a substitute for the button.
+	 *
+	 * THE SIGNAL IS AN EMPTY author_token ON A PENDING ROW. The token is minted with the confirm
+	 * email and is the ONLY thing that can publish, so a pending row without one has nothing
+	 * outstanding in anybody's inbox: returning it to draft throws away no live secret and no
+	 * decision. The age test covers the one honest moment where both are briefly true — author_confirm()
+	 * spends the secret a few statements before it flips to 'published', and that write refreshes
+	 * `updated`, leaving an in-flight confirmation half an hour clear of this cut-off.
+	 *
+	 * THIS ONLY EVER MOVES A ROW BACKWARDS, to draft. It cannot publish anything and it touches no
+	 * part of the gate; the author still requests publication and still confirms it from their inbox.
+	 * Rides the feed on the same lazy trigger as integrity_sweep(), so it needs no cron registration.
+	 */
+	public static function sweep_stranded_pending() {
+		$rows = Data::all(
+			'SELECT id, author_id, title, slug FROM ' . Data::t( 'aq_notebooks' )
+			. " WHERE status = 'pending' AND author_token = '' AND updated < %d ORDER BY id LIMIT 50",
+			[ Data::now() - self::PENDING_STRANDED ] );
+		$out = [];
+		foreach ( (array) $rows as $b ) {
+			// Conditional on the same two facts we selected on, so a confirmation that lands in the
+			// gap between the read and this write wins and is left alone. One winner per rescue, which
+			// is also why the notice below needs no dedupe ref.
+			$won = Data::update( 'aq_notebooks', [
+				'status'        => 'draft',
+				'decision_note' => 'the publication request did not finish, so this is a draft again — nothing was emailed and nothing was published',
+				'updated'       => Data::now(),
+			], [ 'id' => (int) $b['id'], 'status' => 'pending', 'author_token' => '' ] );
+			if ( ! $won ) { continue; }
+			// Release the once-an-hour confirm-email throttle for the reason Kernel::void_pending
+			// releases it: it exists to stop a flood of emails, not to punish a request the platform
+			// itself dropped — without this the author's retry is refused its email for the rest of
+			// the hour, which is the same lock-out in a different costume.
+			delete_transient( 'aq_nb_aucnf_' . (int) $b['id'] );
+			// A silent rescue is half a rescue: the author is looking at "check your inbox" for an
+			// email that was never sent, and only they can start the request again.
+			Notify::push( (int) $b['author_id'], 'artadev',
+				'Your publication request for "' . mb_substr( (string) $b['title'], 0, 80 ) . '" did not finish',
+				'Nothing was published and nothing was emailed. It is a draft again — open it and request publication when you are ready.',
+				'/nb/' . (int) $b['id'] . '/' . (string) $b['slug'] . '/' );
+			$out[] = (int) $b['id'];
+			error_log( 'AQ sweep_stranded_pending: returned nb ' . (int) $b['id'] . ' to draft (request never finished)' );
+		}
 		return $out;
 	}
 
@@ -2232,283 +2321,15 @@ final class Notebook {
 		return [ 'ok' => true ];
 	}
 
-	// ── Relay (worker auth) — the offline executor + ArtaDev loop ────────────
-
-	/** POST relay/nb/poll {wait?} — claim the oldest queued run (or reclaim one abandoned 3h+). */
-	public static function relay_poll( $req ) {
-		self::ensure_tables();
-		set_transient( 'aq_nb_beat', 1, 90 );
-		$wait  = min( 20, max( 0, Rest::pint( $req, 'wait', 0 ) ) );
-		$until = time() + $wait;
-		do {
-			$job = self::claim_one();
-			if ( $job ) { return [ 'job' => $job ]; }
-			if ( time() < $until ) { usleep( 500000 ); }
-		} while ( time() < $until );
-		return [ 'job' => null ];
-	}
-
-	private static function claim_one() {
-		$now = Data::now();
-		$row = Data::one(
-			'SELECT * FROM ' . Data::t( 'aq_nb_runs' )
-			. " WHERE state = 'queued' OR (state = 'claimed' AND claimed_at < %d) ORDER BY id ASC LIMIT 1",
-			[ $now - self::RECLAIM_S ] );
-		if ( ! $row ) { return null; }
-		$claim = substr( md5( wp_rand() . microtime() ), 0, 20 );
-		$won   = Data::update( 'aq_nb_runs',
-			[ 'state' => 'claimed', 'claim' => $claim, 'claimed_at' => $now, 'updated' => $now ],
-			[ 'id' => (int) $row['id'], 'state' => (string) $row['state'], 'claim' => (string) $row['claim'] ] );
-		if ( ! $won ) { return null; }
-		$nb = self::row( $row['nb_id'] );
-		if ( ! $nb || $nb['status'] === 'removed' ) {
-			Data::update( 'aq_nb_runs', [ 'state' => 'error', 'error' => 'notebook gone' ], [ 'id' => (int) $row['id'] ] );
-			return null;
-		}
-		// THE SUBMISSION'S OWN ENVIRONMENT (2026-07-26): the runner PROVISIONS `requirements` (empty
-		// = the base venv, nothing to do) and fetches every `models` entry at its pinned commit
-		// BEFORE it drops into the offline sandbox — provisioning is the one step allowed a network,
-		// execution never is. Re-parsed from the stored source rather than trusted from anywhere, so
-		// the rules live in exactly one place (declared_models).
-		[ $models ] = self::declared_models( $nb['ipynb'] );
-		// STAMP THE RUN with the environment it is being handed — the CURRENT pins, exactly as the
-		// payload below carries the CURRENT source rather than the one queued minutes ago. This is
-		// the durable record gate_reason() and the mid-run env fences both read, and stamping it here
-		// (not at enqueue) means a save between queue and claim costs nobody a false failure: the
-		// runner genuinely ran what this row now says it ran.
-		$req_sig = self::req_sig( $nb['requirements'] ?? '' );
-		Data::update( 'aq_nb_runs', [ 'req_sig' => $req_sig ], [ 'id' => (int) $row['id'] ] );
-		// DOUBLE-BLIND by construction: the payload carries NO author identity and NO previous
-		// review — each panel member starts from nothing but the notebook itself.
-		return [
-			'run_id' => (int) $row['id'], 'nb_id' => (int) $nb['id'], 'type' => (string) $row['type'],
-			'iters'  => (int) $row['iters'], 'kind' => (string) $nb['kind'], 'deliverable' => self::KINDS[ $nb['kind'] ] ?? '',
-			'title'  => (string) $nb['title'], 'abstract' => (string) $nb['abstract'],
-			'ipynb'  => (string) $nb['ipynb'], 'sig' => self::sig( $nb['ipynb'] ),
-			'requirements' => (string) ( $nb['requirements'] ?? '' ), 'req_sig' => $req_sig, 'models' => $models,
-			'claim'  => $claim, 'pass_score' => self::PASS_SCORE,
-			'safe_lo' => self::SAFE_LO, 'safe_hi' => self::SAFE_HI, 'panel' => self::PANEL_SIZE,
-			'rubric' => self::rubric( (string) $nb['kind'] ), // the kind's own scorecard — server-authoritative
-		];
-	}
-
-	private static function fenced_run( $req ) {
-		$run = Data::one( 'SELECT * FROM ' . Data::t( 'aq_nb_runs' ) . ' WHERE id = %d', [ Rest::pint( $req, 'run_id' ) ] );
-		if ( ! $run || $run['state'] !== 'claimed' ) { return null; }
-		if ( ! hash_equals( (string) $run['claim'], (string) Rest::p( $req, 'claim', '' ) ) ) { return null; }
-		return $run;
-	}
-
-	/** THE ENVIRONMENT FENCE — src_changed's counterpart (2026-07-26). src_changed stops an author
-	 *  mutating the SOURCE while a review is in flight; nothing stopped them swapping the
-	 *  ENVIRONMENT, so a run measured against numpy 2.1 could be completed — out_sig and all —
-	 *  against numpy 2.3, and the work would publish under a stack no seat ever saw. Two
-	 *  comparisons, and the first needs NO cooperation from the relay: the run row carries what
-	 *  claim_one() handed it, so the server sees the swap by itself. The relay's own posted req_sig
-	 *  is checked too, exactly as src_changed trusts its posted `sig`; both tolerate an empty value,
-	 *  so a run claimed before this binding existed still completes. */
-	private static function env_changed( $run, $nb, $req ) {
-		$now = self::req_sig( $nb['requirements'] ?? '' );
-		foreach ( [ (string) ( $run['req_sig'] ?? '' ), (string) Rest::p( $req, 'req_sig', '' ) ] as $claimed ) {
-			if ( $claimed !== '' && ! hash_equals( $now, $claimed ) ) { return true; }
-		}
-		return false;
-	}
-
-	/** POST relay/nb/beat {run_id, claim} — heartbeat + claim fencing for long dev loops. */
-	public static function relay_beat( $req ) {
-		self::ensure_tables();
-		set_transient( 'aq_nb_beat', 1, 90 );
-		$run = self::fenced_run( $req );
-		if ( ! $run ) { return [ 'stale' => true ]; }
-		Data::update( 'aq_nb_runs', [ 'claimed_at' => Data::now(), 'updated' => Data::now() ], [ 'id' => (int) $run['id'] ] );
-		return [ 'ok' => true ];
-	}
-
-	/** POST relay/nb/review {run_id, claim, iter, score, scores, verdict, report, model} — ONE panel
-	 *  member's verdict (iter = 1..PANEL_SIZE identifies the seat, never the reviewer). The sig is
-	 *  computed SERVER-SIDE from the notebook's current stored source — the relay must post every
-	 *  critique BEFORE any source-modifying step, so the binding is honest. */
-	public static function relay_review( $req ) {
-		self::ensure_tables();
-		$run = self::fenced_run( $req );
-		if ( ! $run ) { return Rest::err( 'stale_claim', 'Claim lost', 409 ); }
-		$nb = self::row( $run['nb_id'] );
-		if ( ! $nb ) { return Rest::err( 'not_found', 'Notebook gone', 404 ); }
-		// The critic scored a specific source. If the author saved mid-run, refuse — a review must
-		// never bind to content the critic did not see.
-		$base = (string) Rest::p( $req, 'sig', '' );
-		if ( $base !== '' && ! hash_equals( self::sig( $nb['ipynb'] ), $base ) ) {
-			return Rest::err( 'src_changed', 'Source changed during the run', 409 );
-		}
-		// Same fence for the ENVIRONMENT the critic scored in: a scorecard measured against one
-		// pinned stack must never bind to a work that now installs another.
-		if ( self::env_changed( $run, $nb, $req ) ) {
-			return Rest::err( 'env_changed', 'Requirements changed during the run', 409 );
-		}
-		// Per-category scorecard: the FULL rubric, 0-100 each; the review's TOTAL is their plain
-		// average. v2: a review without a complete scorecard can never open the gate (panel()
-		// refuses it) — the flat-score fallback survives only as an honest historical record.
-		$cats = Rest::p( $req, 'scores', '' );
-		if ( is_string( $cats ) && $cats !== '' ) { $cats = json_decode( $cats, true ); }
-		$clean = [];
-		if ( is_array( $cats ) ) {
-			foreach ( self::rubric( (string) $nb['kind'] ) as $c ) {
-				if ( ! isset( $cats[ $c ] ) || ! is_numeric( $cats[ $c ] ) ) { $clean = []; break; }
-				// v3: scores are CONTINUOUS POSITIONS (50.0 = ideal) — keep one decimal, never int-cast
-				$clean[ $c ] = max( 0.0, min( 100.0, round( (float) $cats[ $c ], 1 ) ) );
-			}
-		}
-		// The headline is BALANCE = 100 − 2·mean(|position − 50|), recomputed server-side.
-		$score = 0;
-		if ( $clean ) {
-			$dev = 0.0;
-			foreach ( $clean as $v ) { $dev += abs( $v - 50.0 ); }
-			$score = (int) round( 100.0 - 2.0 * $dev / count( $clean ) );
-			$score = max( 0, min( 100, $score ) );
-		} else {
-			$score = max( 0, min( 100, Rest::pint( $req, 'score', 0 ) ) );
-		}
-		$verdict = Rest::p( $req, 'verdict', '' ) === 'pass' ? 'pass' : 'fix';
-		Data::insert( 'aq_nb_reviews', [
-			'nb_id'  => (int) $nb['id'], 'run_id' => (int) $run['id'], 'iter' => Rest::pint( $req, 'iter', 0 ),
-			'score'  => $score, 'verdict' => $verdict, 'scores' => $clean ? Data::enc( $clean ) : '',
-			'report' => mb_substr( (string) Rest::p( $req, 'report', '' ), 0, 60000 ),
-			'model'  => sanitize_text_field( (string) Rest::p( $req, 'model', '' ) ),
-			'sig'    => self::sig( $nb['ipynb'] ), 'created' => Data::now(),
-		] );
-		// The displayed score IS the measurement: seat 0 (nb-metrics) when this run has one,
-		// otherwise the mean of whatever seats have posted (server-computed either way).
-		$sig      = self::sig( $nb['ipynb'] );
-		$measured = Data::col(
-			'SELECT score FROM ' . Data::t( 'aq_nb_reviews' )
-			. ' WHERE nb_id = %d AND run_id = %d AND sig = %s AND iter = 0 AND model LIKE %s ORDER BY id DESC LIMIT 1',
-			[ (int) $nb['id'], (int) $run['id'], $sig, self::METRICS_MODEL . '%' ] );
-		$shown = $measured !== null && $measured !== ''
-			? (int) $measured
-			: (int) round( (float) Data::col(
-				'SELECT AVG(score) FROM ' . Data::t( 'aq_nb_reviews' ) . ' WHERE nb_id = %d AND run_id = %d AND sig = %s',
-				[ (int) $nb['id'], (int) $run['id'], $sig ] ) );
-		Data::update( 'aq_nb_runs', [ 'score' => $shown, 'iters_done' => Rest::pint( $req, 'iter', 0 ), 'claimed_at' => Data::now(), 'updated' => Data::now() ], [ 'id' => (int) $run['id'] ] );
-		Data::update( 'aq_notebooks', [ 'score' => $shown, 'updated' => Data::now() ], [ 'id' => (int) $nb['id'] ] );
-		return [ 'ok' => true, 'sig' => $sig ];
-	}
-
-	/** POST relay/nb/update {run_id, claim, ipynb} — the dev step's improved source replaces the draft. */
-	public static function relay_update( $req ) {
-		self::ensure_tables();
-		$run = self::fenced_run( $req );
-		if ( ! $run ) { return Rest::err( 'stale_claim', 'Claim lost', 409 ); }
-		if ( (string) $run['type'] !== 'dev' ) { return Rest::err( 'bad_type', 'Only dev runs may modify the source' ); }
-		$nb = self::row( $run['nb_id'] );
-		if ( ! $nb ) { return Rest::err( 'not_found', 'Notebook gone', 404 ); }
-		// Fenced on the source the dev step started from — never clobber an author's mid-run edit.
-		$base = (string) Rest::p( $req, 'base_sig', '' );
-		if ( $base !== '' && ! hash_equals( self::sig( $nb['ipynb'] ), $base ) ) {
-			return Rest::err( 'src_changed', 'Source changed during the run', 409 );
-		}
-		$clean = self::clean_ipynb( (string) Rest::p( $req, 'ipynb', '' ) );
-		if ( $clean === '' ) { return Rest::err( 'bad_ipynb', 'Not a valid notebook' ); }
-		$blob = self::blob_guard( $clean );
-		if ( $blob !== '' ) { return Rest::err( 'not_reproducible', $blob, 422 ); }
-		Data::update( 'aq_notebooks', [ 'ipynb' => $clean, 'size_bytes' => strlen( $clean ), 'updated' => Data::now() ], [ 'id' => (int) $run['nb_id'] ] );
-		Data::update( 'aq_nb_runs', [ 'claimed_at' => Data::now(), 'updated' => Data::now() ], [ 'id' => (int) $run['id'] ] );
-		return [ 'ok' => true, 'sig' => self::sig( $clean ) ];
-	}
-
-	/** POST relay/nb/complete {run_id, claim, ok, ipynb_out?, assets?, thumb_b64?|thumb?, iters_done?, error?}
-	 *  Stores the executed notebook; out_sig binds it to the source it was executed from. */
-	public static function relay_complete( $req ) {
-		self::ensure_tables();
-		$run = self::fenced_run( $req );
-		if ( ! $run ) { return Rest::err( 'stale_claim', 'Claim lost', 409 ); }
-		$nb = self::row( $run['nb_id'] );
-		// The environment fence's LAST and most important stop: this method is what RESTORES out_sig,
-		// the freshness half of the publication gate, so a completion whose pins moved mid-flight
-		// would hand a draft a clean bill of health for a stack nothing measured — and nothing later
-		// in the gate would notice. Refuse, and store NOTHING (outputs produced under the old stack
-		// are not this work's outputs). The run is settled as failed BEFORE the 409 because a bare
-		// refusal would leave it 'claimed' for RECLAIM_S, and enqueue() would then answer the author's
-		// perfectly correct "run it again" with "a run is already queued" for three hours.
-		if ( $nb && self::env_changed( $run, $nb, $req ) ) {
-			Data::update( 'aq_nb_runs', [
-				'state' => 'error', 'updated' => Data::now(),
-				'error' => 'the requirements file changed during this run — nothing was bound; run it again (free) to measure the environment you now declare',
-			], [ 'id' => (int) $run['id'] ] );
-			return Rest::err( 'env_changed', 'Requirements changed during the run', 409 );
-		}
-		$ok = (bool) Rest::pint( $req, 'ok', 0 );
-		$iters_done = min( (int) $run['iters'], max( (int) $run['iters_done'], Rest::pint( $req, 'iters_done', 0 ) ) );
-		if ( $nb ) {
-			$out = (string) Rest::p( $req, 'ipynb_out', '' );
-			$upd = [ 'updated' => Data::now() ];
-			if ( $out !== '' && strlen( $out ) < 24 * 1024 * 1024 && json_decode( $out ) !== null ) {
-				// A failed execution still stores its output (the author needs the traceback) — but
-				// only a CLEAN run earns out_sig, the freshness half of the publication gate.
-				$upd['ipynb_out'] = $out;
-				$upd['out_sig']   = $ok ? self::sig( $nb['ipynb'] ) : '';
-			}
-			$assets = Rest::p( $req, 'assets', '' );
-			if ( is_string( $assets ) && $assets !== '' ) { $assets = json_decode( $assets, true ); }
-			if ( is_array( $assets ) ) {
-				$keep = [];
-				foreach ( array_slice( $assets, 0, 24 ) as $a ) {
-					$url = esc_url_raw( (string) ( $a['url'] ?? '' ) );
-					if ( $url === '' || strpos( $url, home_url( '/' ) ) !== 0 ) { continue; }
-					$keep[] = [ 'name' => sanitize_text_field( (string) ( $a['name'] ?? '' ) ), 'url' => $url,
-						'bytes' => (int) ( $a['bytes'] ?? 0 ), 'mime' => sanitize_text_field( (string) ( $a['mime'] ?? '' ) ) ];
-				}
-				$upd['assets'] = Data::enc( $keep );
-			}
-			$thumb = esc_url_raw( (string) Rest::p( $req, 'thumb', '' ) );
-			if ( $thumb !== '' && strpos( $thumb, home_url( '/' ) ) === 0 ) { $upd['thumb'] = $thumb; }
-			$teaser = esc_url_raw( (string) Rest::p( $req, 'teaser', '' ) );
-			if ( $teaser !== '' && strpos( $teaser, home_url( '/' ) ) === 0 && substr( $teaser, -5 ) === '.webm' ) { $upd['teaser'] = $teaser; }
-			$teaser_light = esc_url_raw( (string) Rest::p( $req, 'teaser_light', '' ) );
-			if ( $teaser_light !== '' && strpos( $teaser_light, home_url( '/' ) ) === 0 && substr( $teaser_light, -5 ) === '.webm' ) { $upd['teaser_light'] = $teaser_light; }
-			$calm = Rest::p( $req, 'calm', null );
-			if ( $calm !== null && is_numeric( $calm ) ) {
-				$upd['calm'] = max( 0, min( 100, (int) $calm ) );
-				$upd['calm_measured'] = Rest::pint( $req, 'calm_measured', 0 ) ? 1 : 0;
-			}
-			Data::update( 'aq_notebooks', $upd, [ 'id' => (int) $nb['id'] ] );
-		}
-		Data::update( 'aq_nb_runs', [
-			'state' => $ok ? 'done' : 'error', 'iters_done' => $iters_done,
-			'error' => $ok ? '' : mb_substr( (string) Rest::p( $req, 'error', '' ), 0, 4000 ),
-			'updated' => Data::now(),
-		], [ 'id' => (int) $run['id'] ] );
-		if ( $nb ) {
-			// This message described the retired model in three ways at once: an AI review panel (gone
-			// 2026-07-28), a score out of 100 read from `$cur['score']` — a column aq_notebooks does
-			// not have, so it was an undefined index that always printed 0 — and "admin approval",
-			// which is the opposite of how publishing works. Nobody can approve a member's work but
-			// the member: the emailed single-use secret is the only thing that publishes.
-			Notify::push( (int) $run['author_id'], 'artadev',
-				$ok
-					? 'Run complete for "' . $nb['title'] . '" — open it to read the checklist and request publication'
-					: 'Your run of "' . $nb['title'] . '" failed',
-				'', '/studio/nb/' . $run['nb_id'] . '/', 'nbrun' . $run['id'] );
-		}
-		// A failed/short dev run refunds the unused iterations — APPEND a compensating row, never delete.
-		if ( (string) $run['type'] === 'dev' && (int) $run['cost'] > 0 && $iters_done < (int) $run['iters'] ) {
-			$per    = (int) floor( (int) $run['cost'] / max( 1, (int) $run['iters'] ) );
-			$refund = $per * ( (int) $run['iters'] - $iters_done );
-			$ref    = 'nbdev:' . $run['nb_id'] . ':' . $run['id'];
-			$done   = Data::col( 'SELECT id FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'nbdev-refund' AND ref = %s LIMIT 1", [ $ref ] );
-			if ( $refund > 0 && ! $done ) { Economy::credit_coins( (int) $run['author_id'], $refund, 'nbdev-refund', $ref ); }
-		}
-		return [ 'ok' => true ];
-	}
-
-	/** POST relay/nb/release {run_id, claim} — graceful shutdown: hand the run back to the queue. */
-	public static function relay_release( $req ) {
-		self::ensure_tables();
-		$run = self::fenced_run( $req );
-		if ( ! $run ) { return [ 'ok' => true ]; }
-		Data::update( 'aq_nb_runs', [ 'state' => 'queued', 'claim' => '', 'claimed_at' => 0, 'updated' => Data::now() ], [ 'id' => (int) $run['id'] ] );
-		return [ 'ok' => true ];
-	}
+	// ── Relay (worker auth) — REMOVED with the local-execution pipeline (2026-07-28) ──────
+	// relay/nb/{poll,beat,review,update,complete,release} and their claim/fence helpers ran the
+	// offline executor and the blind AI review panel. The Kaggle reset replaced all of it: the run
+	// happens on Kaggle, and Kernel.php reads the result back. Nothing enqueues an aq_nb_runs row
+	// any more, no client in this tree ever called these paths — and relay/nb/update wrote `ipynb`
+	// on ANY row with no published-status guard, the one write the publish gate cannot survive:
+	// sig(ipynb) is what the author's confirmation ledger row, the DB publish-guard and
+	// integrity_sweep() are all keyed on, so a single call would have silently voided a published
+	// work's proof of authorship. A retired route that can do that is not left registered.
 
 	/** The 5-stop Motion-calm thresholds, DERIVED from the platform's own measured distribution
 	 *  (operator 2026-07-17): stop k flags the fraction [90%, 70%, 50%, 25%, 0%] of measured
@@ -2550,8 +2371,13 @@ final class Notebook {
 			'pass'      => self::PASS_SCORE, // minimum BALANCE (100 = perfectly centred)
 			'safe'      => [ self::SAFE_LO, self::SAFE_HI ], // the middle-20 safe zone (v3 trade-off gate)
 			'panel'     => self::PANEL_SIZE, // independent double-blind reviewers per run (v2, 2026-07-22)
-			'approval'  => 'admin', // publication needs an explicit admin approval before any DOI mints
-			'fee'       => 'free — a blind panel scores every clean run',
+			// `approval => 'admin'` used to be published here. There is no operator leg and there has
+			// not been one since 2026-07-23: publication is REQUESTED, and the single-use secret
+			// emailed to the author's own address, plus their device passkey signature, is the only
+			// thing that publishes a work or mints its DOI. A public endpoint saying an admin
+			// approves publications describes a gate that does not exist, so it is gone rather than
+			// re-worded. Same for the fee line, which advertised the retired blind review panel.
+			'fee'       => 'free — every submission runs the reproducibility checklist against Kaggle',
 			'calm_thresholds' => self::calm_thresholds(), // stop k flags calm < value; Standard flags half
 		];
 	}
@@ -2637,7 +2463,10 @@ final class Notebook {
 		return [
 			'current' => array_map( [ self::class, 'ch_out' ], $open ),
 			'past'    => array_map( [ self::class, 'ch_out' ], $past ),
-			'rule'    => 'Winner takes the whole pool; an exact tie splits it evenly.',
+			// The rule says exactly what settle_due() does, to the coin — including the remainder a
+			// pool that will not divide leaves behind. A published rule a member can check against
+			// the ledger is the whole point of the pool being member-funded.
+			'rule'    => 'Winner takes the whole pool; an exact tie splits it evenly, and any coins that will not divide go one each to the earliest entries.',
 		];
 	}
 
@@ -2718,23 +2547,58 @@ final class Notebook {
 		return [ 'ok' => true, 'pool' => (int) $c['pool'] + $fee ];
 	}
 
-	/** Winner takes all at the full moon (exact tie splits evenly). Lock + refs = idempotent. */
+	/** Winner takes all at the full moon; an exact tie splits evenly, odd coins one each to the
+	 *  earliest entries. A deadline nobody can win refunds instead. Lock + refs = idempotent. */
 	private static function settle_due() {
 		if ( ! Data::col( 'SELECT id FROM ' . Data::t( 'aq_nb_challenges' ) . " WHERE state = 'open' AND deadline <= %d LIMIT 1", [ time() ] ) ) { return; }
 		if ( ! Economy::acquire_lock( 'nbsettle', 120 ) ) { return; }
 		try {
 			$due = Data::all( 'SELECT * FROM ' . Data::t( 'aq_nb_challenges' ) . " WHERE state = 'open' AND deadline <= %d LIMIT 12", [ time() ] );
 			foreach ( $due as $c ) {
-				$full = self::ch_out( $c, true );
+				$full  = self::ch_out( $c, true );
 				$board = $full['board'];
-				$top = $board ? $board[0]['hearts'] : -1;
+				$pool  = (int) $c['pool'];
+				// NOBODY CAN WIN. ch_out's board is PUBLISHED-only, so every entry can be gone by the
+				// deadline — an integrity_sweep demotion, a soft delete, or simply every entrant
+				// removing their work. The fees are already burned and the ledger is append-only, so
+				// stamping 'settled' here closed the challenge with the whole pool unpaid and NO WAY
+				// BACK: real coins destroyed, nobody to claim them. Refund instead — one compensating
+				// credit per entrant who actually paid, keyed on its own ref so a retried settlement
+				// (this runs on every /challenges read) can never pay twice. Leaving it open was the
+				// other option and it is worse: the deadline has passed, so ch_enter refuses every
+				// new entry, and the challenge becomes a zombie re-settled on every read forever with
+				// the pool frozen inside it. A refund ends it honestly.
+				// This also covers the degenerate deadlines: zero entries (nothing was staked, so
+				// nothing is refunded) and every entry flagged/demoted (all of it comes back).
+				if ( ! $board ) {
+					$back = self::ch_refund_all( $c );
+					Data::update( 'aq_nb_challenges', [
+						'state'   => 'settled',
+						'pool'    => 0, // the challenge holds nothing now; `staked` keeps the record
+						'results' => Data::enc( [
+							'podium' => [], 'paid' => 0, 'staked' => $pool, 'refunded' => $back,
+							'note'   => $back > 0
+								? 'No published entry stood at the full moon, so nobody could win — every entry fee was refunded in full.'
+								: 'The full moon passed with nothing entered.',
+						] ),
+					], [ 'id' => (int) $c['id'] ] );
+					continue;
+				}
+				$top = $board[0]['hearts'];
 				$winners = array_values( array_filter( $board, static function ( $b ) use ( $top ) { return $b['hearts'] === $top; } ) );
-				$pool = (int) $c['pool'];
 				$paid = 0;
 				$results = [];
+				// EVENLY, exactly as the published rule says. A coin is indivisible, so a pool that
+				// does not divide by the number of tied winners leaves a remainder of at most n−1
+				// coins: give those ONE EACH to the earliest entries. The board is already ordered
+				// hearts DESC, entry id ASC, so "earliest" is deterministic and needs no tiebreak of
+				// its own. The old line handed the entire remainder to the first winner — a pool of
+				// 15 split four ways paid 6/3/3/3, which is not the even split members were promised.
+				$n    = count( $winners );
+				$each = intdiv( $pool, $n );
+				$odd  = $pool - $each * $n;
 				foreach ( $winners as $i => $w ) {
-					$share = (int) floor( $pool / max( 1, count( $winners ) ) );
-					if ( $i === 0 ) { $share = $pool - $share * ( count( $winners ) - 1 ); }
+					$share = $each + ( $i < $odd ? 1 : 0 );
 					$ref = 'chprize:' . $c['id'] . ':' . $w['author']['id'];
 					if ( $share > 0 && ! Data::col( 'SELECT id FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'chprize' AND ref = %s LIMIT 1", [ $ref ] ) ) {
 						Economy::credit_coins( (int) $w['author']['id'], $share, 'chprize', $ref );
@@ -2748,6 +2612,40 @@ final class Notebook {
 		} finally {
 			Economy::release_lock( 'nbsettle' );
 		}
+	}
+
+	/**
+	 * Give every entry fee back on a challenge nobody can win. APPEND-ONLY: the 'chfee' debit is
+	 * never touched — a compensating credit is written beside it, under its own `chrefund:<ch>:<uid>`
+	 * ref, and that ref is probed first so a second settlement pass pays nobody twice.
+	 *
+	 * The amount is read back from the LEDGER, not from the challenge's `fee`: the ledger is what
+	 * actually left the member's wallet, so an entrant whose debit never landed (credit_coins bails
+	 * on a failed INSERT) is skipped rather than paid coins they never spent. Returns the coins
+	 * returned by THIS pass. Called only from settle_due(), inside the nbsettle lock.
+	 */
+	private static function ch_refund_all( $c ) {
+		$back = 0;
+		// NO LIMIT, deliberately: a bound here would silently leave the entrants past it out of
+		// pocket while settle_due() stamped the challenge closed. One id per entrant is cheap, and
+		// if a pass dies half way the per-entrant refs mean the next one resumes exactly where it
+		// stopped (the state flip only happens after this returns).
+		$rows = Data::all( 'SELECT user_id FROM ' . Data::t( 'aq_nb_entries' ) . ' WHERE ch_id = %d ORDER BY id ASC', [ (int) $c['id'] ] );
+		foreach ( $rows as $e ) {
+			$uid  = (int) $e['user_id'];
+			$paid = (int) Data::col( 'SELECT COALESCE(SUM(delta),0) FROM ' . Data::t( 'aq_coin_ledger' )
+				. " WHERE user_id = %d AND reason = 'chfee' AND ref = %s", [ $uid, 'chfee:' . (int) $c['id'] . ':' . $uid ] );
+			$amount = -$paid; // the entry fee is a NEGATIVE delta; give back exactly its magnitude
+			if ( $amount <= 0 ) { continue; }
+			$ref = 'chrefund:' . (int) $c['id'] . ':' . $uid;
+			if ( Data::col( 'SELECT id FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'refund' AND ref = %s LIMIT 1", [ $ref ] ) ) { continue; }
+			Economy::credit_coins( $uid, $amount, 'refund', $ref );
+			Notify::push( $uid, 'challenge', 'Refunded ₳' . $amount . ' — "' . $c['title'] . '"',
+				'No published entry stood at the full moon, so nobody could win the pool. Your entry fee has been returned in full.',
+				'/challenges/', $ref );
+			$back += $amount;
+		}
+		return $back;
 	}
 
 	// ── The permanent DOI (Zenodo; Vault tokens only) ──

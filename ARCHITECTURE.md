@@ -109,6 +109,17 @@ machine-readably (table → purpose, columns, approximate row count). Because th
 the `CREATE TABLE` definitions, it stays in sync on every schema change. Bulk access for analysis is the
 `/offline` full-DB export; large tables page by keyset cursor, never deep `OFFSET`.
 
+The design rests on exactly one premise — **no secret is ever in the database** — and that premise binds
+our code (`Secrets::get()` reads an environment variable or a `wp-config.php` constant, never an option)
+but not the platform underneath it. A WordPress.com plugin nobody here reviewed (Jetpack, in
+`jetpack_private_options`) put a live API token in `wp_options`, and the explorer served it — see
+[SECURITY.md](SECURITY.md). So redaction is **default-deny by the shape of a key**
+(`Extra::redact_row`) across every key/value store, rather than an allow-list of columns we thought to
+name: a list only ever covers code we wrote, and the next plugin to stash a credential will not ask
+first. Only the *value* is withheld — the row, its key and every other column stay public, so the
+promise holds exactly. And masking is never the fix by itself: what was downloadable has been
+downloaded, so the remedy is rotation, and redaction only buys the time to do it.
+
 ## 3. The notebook + publication model
 
 This is the whole content model. Everything a member publishes, in every category, is a

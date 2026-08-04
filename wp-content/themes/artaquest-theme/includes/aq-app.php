@@ -32,7 +32,7 @@ function aq_serve_llms_txt() {
 	$L    = array();
 	$L[]  = '# ArtaQuest';
 	$L[]  = '';
-	$L[]  = '> ArtaQuest is a social feed of citable, reproducible work: surveys, datasets, models, articles, 2D and 3D illustrations, 2D and 3D animations, 2D and 3D games, and music — each one a public Kaggle notebook that has been run. The author pastes the URL of their notebook\'s output page, picks which of its output files to publish, and an exhaustive reproducibility checklist runs against Kaggle\'s public API. Nothing publishes until the author confirms it from their own inbox, and every published work carries a permanent DOI short link. Published files land in the Library, where any member can attach them to their posts. Members found challenges with entry-fee pools; the most-hearted entry takes all at each full moon.';
+	$L[]  = '> ArtaQuest is a social feed of citable, reproducible work: surveys, datasets, models, articles, 2D and 3D illustrations, 2D and 3D animations, 2D and 3D games, and music — each one a public Kaggle notebook that has been run. A member pastes the URL of the notebook\'s output page, picks which of its output files to publish, and an exhaustive reproducibility checklist runs against Kaggle\'s public API. Nothing publishes until that member confirms it from their own inbox, and every published work carries a permanent DOI short link crediting the notebook\'s Kaggle author. Published files land in the Library, where any member can attach them to their posts. Members found challenges with entry-fee pools; the most-hearted entry takes all at each full moon.';
 	$L[]  = '';
 	$L[]  = 'ArtaQuest is run by the ArtaQuest Foundation, a registered Canadian non-profit. There is no tracking, and no fear-mongering or propaganda. The entire database is public by design (radical transparency): every table and row is browsable at ' . $home . 'data/.';
 	$L[]  = '';
@@ -42,7 +42,7 @@ function aq_serve_llms_txt() {
 	$L[]  = '- The checklist makes four claims about a work, each one checkable by a stranger: the notebook is public on Kaggle; every one of its inputs is public (datasets, models, notebooks); the run finished and produced these exact files; and it ran with the internet switched off, on Kaggle\'s own record — or, if it did not, we say so plainly.';
 	$L[]  = '- Those claims are readable by anyone: Kaggle\'s kernels/pull and kernels/output endpoints answer with NO credential at all, so our checklist is a public assertion anyone can re-run and contradict. Kaggle runs the notebook and enforces the internet switch; we read and report what its record says.';
 	$L[]  = '- The checklist is about twenty deterministic checks in four groups — can anyone open it, can anyone re-run it, did that run produce these files, how repeatable is the result. Blocking checks must all pass; warnings are shown loudly and never block. Nothing is scored, ranked, graded or judged, and every check names the exact evidence it read.';
-	$L[]  = '- Publication is REQUESTED, never taken: a single-use secret goes to the author\'s own registered email, and their click plus their device passkey signature is what publishes the work and mints its permanent DOI short link (artaquest.com/d/n<id>). No token, agent or relay can publish. Ever.';
+	$L[]  = '- Publication is REQUESTED, never taken: a single-use secret goes to the registered email of the member who brought the notebook here, and their click plus their device passkey signature is what publishes the work and mints its permanent DOI short link (artaquest.com/d/n<id>). No token, agent or relay can publish. Ever. The citation itself credits the notebook\'s Kaggle author, who need not be that member.';
 	$L[]  = '- Reproducible here means anyone can hit Copy & Edit then Run All on Kaggle, from public inputs, and get this. That is weaker than a byte-for-byte guarantee and stronger than trusting one machine, and we say both.';
 	$L[]  = '- The Kaggle kernel is the provenance; the DOI short link is the citation of record, because a kernel is owner-editable and deletable and a DOI is not.';
 	$L[]  = '- Submitting, checking and publishing are all free. The Foundation runs on donations.';
@@ -84,7 +84,10 @@ function aq_serve_llms_txt() {
 	$L[] = '- [3D Games](' . $home . '3d-games/): playable worlds with real depth';
 	$L[] = '- [Music](' . $home . 'music/): tracks rendered by generative models the notebook trains in its own cells, weights published beside the audio';
 	$L[] = '- [About](' . $home . 'about/): what ArtaQuest is and why it exists';
-	$L[] = '- [Discussions](' . $home . 'discussions/): the global, open conversation';
+	// (No /discussions/ line: the standalone forum was retired 2026-07-14 and the slug 301s to
+	// /works/ — every post carries its own board. Pointing a crawler at a redirect is a dead link.)
+	$L[] = '- [Library](' . $home . 'library/): every published output file, attachable to any member\'s post';
+	$L[] = '- [Challenges](' . $home . 'challenges/): member-founded challenges — every entrant\'s fee goes into the pool, and the most-hearted entry takes it at the full moon';
 	$L[] = '- [Donate](' . $home . 'donate/): fund creators\' iterations (open, live, public finances)';
 	$L[] = '- [Reserve](' . $home . 'reserve/): the gold reserve backing every coin, live';
 	$L[] = '- [ArtaMod](' . $home . 'fearometer/): the one rule — no hate, no fear — and exactly how it is enforced';
@@ -96,8 +99,10 @@ function aq_serve_llms_txt() {
 	$L[] = '## The API (for developers and AI agents)';
 	$L[] = '';
 	$L[] = '- Human docs: ' . $home . 'developers/ · machine contract: ' . $home . 'wp-json/aq/v1/api/docs · OpenAPI 3.1: ' . $home . 'wp-json/aq/v1/api/openapi';
-	$L[] = '- Auth: `Authorization: Bearer aq_…` — members mint personal access tokens at ' . $home . 'account/ (scoped read/write/economy, revocable, shown once).';
-	$L[] = '- You can submit Kaggle notebooks, pick their output files and read the reproducibility checklist over the API for free. PUBLISHING is the one hard limit: it takes a single-use secret sent to the author\'s own registered email plus their device passkey signature. No API call, token or AI agent can publish or mint a DOI — publication is requested, never taken.';
+	// The token page is /user-account/ — the bare /account/ slug is a 404 (the React account route
+	// was renamed in the cutover), so an agent sent there could never mint a token at all.
+	$L[] = '- Auth: `Authorization: Bearer aq_…` — members mint personal access tokens at ' . $home . 'user-account/ (scoped read/write/economy, revocable, shown once).';
+	$L[] = '- You can submit Kaggle notebooks, pick their output files and read the reproducibility checklist over the API for free. PUBLISHING is the one hard limit: it takes a single-use secret sent to the registered email of the member who brought the notebook here, plus their device passkey signature. No API call, token or AI agent can publish or mint a DOI — publication is requested, never taken.';
 	$L[] = '';
 	$L[] = '## Notes for AI assistants';
 	$L[] = '';
@@ -323,8 +328,13 @@ function aq_app_current_notebook() {
 			global $wpdb;
 			$t = $wpdb->prefix . 'aq_notebooks';
 			if ( (string) $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $t ) ) === $t ) {
+				// kg_facts + kg_owner are NOT optional here: aq_seo_work_author() (aq-seo-schema.php)
+				// reads them to name the notebook's KAGGLE author, and falls back to the ArtaQuest
+				// member only when both are absent. Omitting them from this SELECT made that fallback
+				// unconditional, so every /nb/ page told Google the SUBMITTER wrote the notebook —
+				// exactly the permanent, at-scale misattribution that helper exists to prevent.
 				$cache = $wpdb->get_row( $wpdb->prepare(
-					"SELECT id, kind, slug, title, abstract, thumb, status, doi, published_at, author_id, kg_url FROM {$t} WHERE id = %d AND status = 'published'",
+					"SELECT id, kind, slug, title, abstract, thumb, status, doi, published_at, author_id, kg_url, kg_owner, kg_facts FROM {$t} WHERE id = %d AND status = 'published'",
 					$nid
 				) );
 			}
@@ -519,7 +529,25 @@ function aq_app_seo_html() {
 		$hub  = aq_feed_hub_for_kind( (string) $nb->kind );
 		$hubs = aq_feed_hubs();
 		$html = '<h1>' . esc_html( (string) $nb->title ) . '</h1>';
-		if ( $au ) {
+		// THE BYLINE IS WHOEVER WROTE THE NOTEBOOK. Any member may submit any PUBLIC kernel
+		// (operator 2026-07-28), so author_id is the SUBMITTER — printing them after "By" is the same
+		// misattribution the JSON-LD guards against in aq_seo_work_author(), only in the one line a
+		// crawler reads as the byline. Credit Kaggle's own author (falling back to the kernel owner
+		// handle, then to the member when Kaggle reports neither) and record the submitter separately.
+		$kg_facts  = json_decode( (string) ( $nb->kg_facts ?? '' ), true );
+		$kg_owner  = trim( (string) ( $nb->kg_owner ?? '' ) );
+		$kg_author = is_array( $kg_facts ) ? trim( (string) ( $kg_facts['author'] ?? '' ) ) : '';
+		if ( '' === $kg_author ) {
+			$kg_author = $kg_owner;
+		}
+		if ( '' !== $kg_author ) {
+			$html .= '<p>By ' . ( '' !== $kg_owner
+				? '<a href="' . esc_url( 'https://www.kaggle.com/' . rawurlencode( $kg_owner ) ) . '">' . esc_html( $kg_author ) . '</a>'
+				: esc_html( $kg_author ) ) . ' on Kaggle</p>';
+			if ( $au ) {
+				$html .= '<p>Brought to ArtaQuest by <a href="' . esc_url( home_url( '/u/' . $au->user_nicename . '/' ) ) . '">' . esc_html( $au->display_name ) . '</a></p>';
+			}
+		} elseif ( $au ) {
 			$html .= '<p>By <a href="' . esc_url( home_url( '/u/' . $au->user_nicename . '/' ) ) . '">' . esc_html( $au->display_name ) . '</a></p>';
 		}
 		$abs = trim( wp_strip_all_tags( (string) $nb->abstract ) );
@@ -533,7 +561,7 @@ function aq_app_seo_html() {
 			$durl  = home_url( '/d/n' . (int) $nb->id );
 			$html .= '<p>Permanent DOI short link: <a href="' . esc_url( $durl ) . '">' . esc_html( $durl ) . '</a></p>';
 		}
-		$html .= '<p>' . esc_html( 'This ' . ( isset( $hubs[ $hub ] ) ? strtolower( $hubs[ $hub ][1] ) : 'work' ) . ' is a public Kaggle notebook that has been run. Before it published, a reproducibility checklist read Kaggle\'s public API and recorded four things anyone can check for themselves: the notebook is public, every one of its inputs is public, the run finished and produced these exact files, and whether it ran with the internet switched off on Kaggle\'s own record. Its author then requested publication and confirmed it from their own inbox.' ) . '</p>';
+		$html .= '<p>' . esc_html( 'This ' . ( isset( $hubs[ $hub ] ) ? strtolower( $hubs[ $hub ][1] ) : 'work' ) . ' is a public Kaggle notebook that has been run. Before it published, a reproducibility checklist read Kaggle\'s public API and recorded four things anyone can check for themselves: the notebook is public, every one of its inputs is public, the run finished and produced these exact files, and whether it ran with the internet switched off on Kaggle\'s own record. The member who brought it here then requested publication and confirmed it from their own inbox.' ) . '</p>';
 		if ( isset( $hubs[ $hub ] ) ) {
 			$html .= '<p><a href="' . esc_url( home_url( '/' . $hub . '/' ) ) . '">More ' . esc_html( strtolower( $hubs[ $hub ][0] ) ) . ' on ArtaQuest</a> · <a href="' . esc_url( home_url( '/works/' ) ) . '">The Feed</a></p>';
 		} else {
@@ -671,7 +699,10 @@ function aq_app_seo_html() {
 				'/2d-games/'         => __( '2D Games', 'artaquest' ),
 				'/3d-games/'         => __( '3D Games', 'artaquest' ),
 				'/music/'            => __( 'Music', 'artaquest' ),
-				'/discussions/'      => __( 'Discussions', 'artaquest' ),
+				// Was /discussions/ — retired 2026-07-14 and 301'd to /works/, so the home page's one
+				// crawl seed for it pointed at a redirect. /library/ is the live surface it should have
+				// been sending crawlers to (every published file, attachable to any member's post).
+				'/library/'          => __( 'Library', 'artaquest' ),
 				'/about/'            => __( 'About', 'artaquest' ),
 				'/data/'             => __( 'Data', 'artaquest' ),
 				'/faq-contact/'      => __( 'FAQ & contact', 'artaquest' ),
@@ -813,7 +844,7 @@ function aq_app_head_meta() {
 	if ( $nb ) {
 		$desc = trim( wp_strip_all_tags( (string) $nb->abstract ) );
 		if ( '' === $desc ) {
-			$desc = 'A published work on the ArtaQuest feed — a public Kaggle notebook that has been run, checked against Kaggle\'s public record and published by its own author with a permanent DOI short link.';
+			$desc = 'A published work on the ArtaQuest feed — a public Kaggle notebook that has been run, checked against Kaggle\'s public record, credited to its Kaggle author and carrying a permanent DOI short link.';
 		}
 		$type = 'article';
 	} elseif ( $det ) {
@@ -1104,14 +1135,19 @@ function aq_app_route_seo( $slug ) {
 		'about'       => array(
 			'Work you can check for yourself',
 			array(
-				$b . ' is a not-for-profit social media for science and education. Every post is a public Kaggle notebook that has been run, checked in the open against Kaggle\'s own public record. Nothing is scored or judged, and only the author can publish — a single-use secret goes to their own inbox, and their click plus their device passkey mints the permanent citation link.',
-				'Free to read and re-run, forever. The Foundation runs on donations, and every number behind that — every coin, heart and donation — is public.',
+				$b . ' is a not-for-profit social media for science and education. Every post is a public Kaggle notebook that has been run, checked in the open against Kaggle\'s own public record. Nothing is scored or judged, and only the member who brought a notebook here can publish it, from their own inbox — their click plus their device passkey mints the permanent citation link, which credits the notebook\'s Kaggle author.',
+				'It stays free to read, and anyone can run it again on Kaggle for as long as its author keeps it there — which is exactly why that citation link exists: a kernel is owner-editable and deletable, and the link outlives it. The Foundation runs on donations, and every number behind that — every coin, heart and donation — is public.',
 			),
 		),
+		// The courses economy this entry used to describe (enrolments, the creator ladder's revenue
+		// share, the 80% prize pool) was purged 2026-07-13, but the page stayed indexed and unnoindexed
+		// — so the only thing a crawler or an LLM could read about working here was a product that no
+		// longer exists. It now states the live deal, which the React page's own "The deal" section
+		// already tells a human.
 		'careers'     => array(
-			'Teach on ' . $b,
+			'Create on ' . $b,
 			array(
-				'Curate a course from the best free lectures online and earn a share of every enrolment — a share that grows as you climb the creator ladder, from 50% up to 100% of what remains after learners take their 80% prize pool.',
+				'Reading, submitting, checking and publishing are all free on ' . $b . ', and the Foundation never takes a cut of a prize pool. Members earn by winning member-founded challenges: every entrant pays the entry fee into the pool, and at the full-moon deadline the most-hearted entry takes the whole pool — an exact tie splits it evenly.',
 				$b . ' welcomes the whole spectrum of honest thought, honestly labelled. The only things we filter out are hate and fear.',
 			),
 		),
@@ -1125,21 +1161,18 @@ function aq_app_route_seo( $slug ) {
 		'pricing'     => array(
 			'The same price everywhere',
 			array(
-				'One Arta Coin is one milligram of real gold — worth exactly the same in every country, with no purchasing-power adjustment and no regional mark-up. Watching is free; joining a course\'s competition costs 1 coin per video, and the top three questers win the pool back and more.',
-				'No subscriptions, no hidden charges — and the certificate comes with the competition, at no extra cost.',
+				'One Arta Coin is one milligram of real gold — worth exactly the same in every country, with no purchasing-power adjustment and no regional mark-up. Reading is free, and so is submitting a notebook, running the reproducibility checklist and publishing the work.',
+				'No subscriptions and no hidden charges. The only coins that change hands are challenge entry fees, and every one of them goes into the pool the most-hearted entry takes at the full moon — the Foundation never takes a cut, because it runs on donations.',
 			),
 		),
-		'discussions' => array(
-			'Discussions',
-			array(
-				'Join the global conversation on ' . $b . ' — start topics, post replies, and follow every course\'s competition boards. Threads are open to everyone and translated into your language.',
-			),
-		),
+		// (No 'discussions' entry: the standalone forum was retired 2026-07-14 and /discussions/ 301s
+		// to /works/, so the only copy it could still serve described course competition boards that
+		// no longer exist. Every post now carries its own board.)
 		'developers'  => array(
 			'The ' . $b . ' API',
 			array(
 				'Drive ' . $b . ' programmatically — or hand your AI agent the keys. Personal access tokens let any member submit a Kaggle notebook, pick which of its output files to publish, read the full reproducibility checklist with the evidence behind every check, post, comment and enter challenges over a clean REST API, free.',
-				'Publication is the one hard limit: a work goes public and mints its permanent DOI only when the author clicks the single-use secret sent to their own registered email and signs with their device passkey. No API call, token or AI agent can publish on its own — publication is requested, never taken. Machine-readable contract at /wp-json/aq/v1/api/docs; OpenAPI 3.1 at /wp-json/aq/v1/api/openapi.',
+				'Publication is the one hard limit: a work goes public and mints its permanent DOI only when the member who brought the notebook here clicks the single-use secret sent to their own registered email and signs with their device passkey. No API call, token or AI agent can publish on its own — publication is requested, never taken. Machine-readable contract at /wp-json/aq/v1/api/docs; OpenAPI 3.1 at /wp-json/aq/v1/api/openapi.',
 			),
 		),
 		'rankings'    => array(
@@ -1194,7 +1227,7 @@ function aq_app_route_seo( $slug ) {
 		'issues'      => array(
 			'Help shape ' . $b,
 			array(
-				'Report a bug, request a feature, improve a course, or share an idea. ArtaBot triages it with you in the open, the best contributions ship automatically, and resolving your own contribution earns you a point on its leaderboard.',
+				'Report a bug, request a feature, suggest an improvement, or share an idea. ArtaBot triages it with you in the open, the best contributions ship automatically, and resolving your own contribution earns you a point on its leaderboard.',
 			),
 		),
 		'reserve'     => array(
@@ -1206,13 +1239,13 @@ function aq_app_route_seo( $slug ) {
 		'wallet'      => array(
 			'Your wallet',
 			array(
-				'Your gold-backed Arta Coins: win them in course competitions, buy more at the live gold rate, and cash out whenever you like. Every movement is on the public ledger.',
+				'Your gold-backed Arta Coins: win them by taking a challenge pool, buy more at the live gold rate, and cash out whenever you like. Every movement is on the public ledger.',
 			),
 		),
 		'data'        => array(
 			'Open data',
 			array(
-				$b . ' publishes its entire database — courses, coins, votes, donations, rankings, every table and row. Browse it, query it, build on it: transparency you can inspect for yourself.',
+				$b . ' publishes its entire database — works, coins, hearts, challenges, donations, every table and row. Browse it, query it, build on it: transparency you can inspect for yourself.',
 			),
 		),
 		'2d-illustrations' => array(
@@ -1380,10 +1413,10 @@ function aq_faq_items() {
  * no-ops for 404-resolved paths under local PHP-WASM (see the iter-364 note in
  * mu-plugins/aq-legacy-redirects.php). The i18n Router has already stripped any /xx/ prefix from
  * REQUEST_URI by now (belt-and-braces strip below), and home_url() re-adds the active locale, so
- * the hops stay locale-correct. Still-live routes (/, /discussions, /about, /wallet, /donate,
- * /sponsors, /reserve, /data, /careers, /issues, /faq-contact, /login, /user-account, /u/<slug>,
+ * the hops stay locale-correct. Still-live routes (/, /about, /wallet, /donate, /sponsors, /reserve,
+ * /data, /careers, /issues, /faq-contact, /login, /user-account, /u/<slug>, /library, /challenges,
  * /offline, /fearometer, /pricing, /d/<code>, /works + the eleven kind hubs, /nb, /studio, /console)
- * never match this map.
+ * never match this map. (/discussions is NOT one of them — it is in the map below.)
  */
 add_action( 'parse_request', function () {
 	$path = trim( (string) wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ?? '' ), PHP_URL_PATH ), '/' );

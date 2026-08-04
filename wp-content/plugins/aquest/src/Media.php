@@ -218,9 +218,11 @@ final class Media {
 	/**
 	 * Store a string of bytes at an exact public key, and answer whether it is live.
 	 *
-	 * The Library's mirror step needs this (AQ\Kernel::mirror): bytes arrive from Kaggle in memory
-	 * under a content-addressed key we choose, with no member upload, no quota and no aq_media row
-	 * — a published artifact belongs to the work that produced it, not to anyone's shelf.
+	 * The Library's mirror step needs this (AQ\Kernel::mirror) for the ONE class of artifact it
+	 * holds in memory — a sanitised SVG, whose bytes are our own rebuild rather than the author's
+	 * file. Everything else arrives streamed to disk and goes through put_public_file() below.
+	 * Either way the key is content-addressed and ours, with no member upload, no quota and no
+	 * aq_media row — a published artifact belongs to the work that produced it, not to anyone's shelf.
 	 *
 	 * Content-addressed keys are never rewritten, so the CDN's year-long cache is safe by
 	 * construction: different bytes always mean a different key. When R2 is not configured the file
@@ -239,6 +241,41 @@ final class Media {
 		if ( ! $tmp ) { return false; }
 		$wrote = file_put_contents( $tmp, $bytes );
 		if ( false === $wrote || $wrote !== strlen( $bytes ) ) { @unlink( $tmp ); return false; }
+		$ok = self::store_public( $key, $tmp, $mime );
+		@unlink( $tmp );   // this temp file is OURS, so ours to remove — contrast put_public_file()
+		return $ok;
+	}
+
+	/**
+	 * put_public() for bytes that are already ON DISK. Same store, same gates, no string.
+	 *
+	 * Kernel::mirror streams a Kaggle output file straight into a temp file precisely so that a
+	 * 512 MB artifact never becomes a PHP string; handing that path to put_public() would read the
+	 * whole thing back in and undo it. r2() already uploads from a file handle (CURLOPT_INFILE), so
+	 * with the string gone the entire store leg streams, and the advertised ceiling is deliverable
+	 * inside one request's memory limit.
+	 *
+	 * THE FILE'S LIFETIME BELONGS TO THE CALLER — it is never unlinked here. Kernel::mirror hashes
+	 * and measures the same file and removes it itself, and a store that deleted its caller's input
+	 * would make the retry that failure message invites impossible.
+	 */
+	public static function put_public_file( $key, $path, $mime = 'application/octet-stream' ) {
+		$key  = ltrim( (string) $key, '/' );
+		$path = (string) $path;
+		// A missing or empty file is a FAILED store, never an empty object — put_public() refuses ''
+		// for the same reason. Under a content-addressed key an empty object would be cached as the
+		// artifact for a year, and no later retry could replace it.
+		if ( '' === $key || '' === $path || ! is_file( $path ) || (int) filesize( $path ) <= 0 ) { return false; }
+		return self::store_public( $key, $path, $mime );
+	}
+
+	/**
+	 * The store itself: R2 for durability, an origin copy for reachability, from a path.
+	 *
+	 * Both public entry points land here, so there is exactly ONE place that decides what may be
+	 * written into the web root — the property the note below depends on.
+	 */
+	private static function store_public( $key, $tmp, $mime ) {
 		$ok = false;
 		if ( self::r2_ready() ) { $ok = self::to_cdn( $key, $tmp, $mime ); }
 		// An inert file ALSO gets a copy on this origin, and that copy is the address url() hands
@@ -266,17 +303,15 @@ final class Media {
 		// runtime failure, and it cannot arise on production.
 		// A sanitised SVG is script-capable BY EXTENSION and inert BY CONTENT, so risky_inline() alone
 		// would refuse it here on a machine with no CDN — leaving the only store in existence with no
-		// copy of the file. origin_servable() has the bytes and is the authority; risky_inline() is
-		// only the shortcut for the types nobody validates.
-		if ( ! self::r2_ready() && ( ! self::risky_inline( $key ) || self::origin_servable( $key, $bytes ) ) ) {
+		// copy of the file. origin_servable_file() reads the bytes and is the authority; risky_inline()
+		// is only the shortcut for the types nobody validates.
+		if ( ! self::r2_ready() && ( ! self::risky_inline( $key ) || self::origin_servable_file( $key, $tmp ) ) ) {
 			[ $dir ] = self::dir();
 			$dest = trailingslashit( $dir ) . $key;
 			wp_mkdir_p( dirname( $dest ) );
-			$ok = (bool) @copy( $tmp, $dest );
-			@unlink( $tmp );
-			return $ok;
+			return (bool) @copy( $tmp, $dest );
 		}
-		if ( self::origin_servable( $key, $bytes ) ) {
+		if ( self::origin_servable_file( $key, $tmp ) ) {
 			[ $dir ] = self::dir();
 			$dest = trailingslashit( $dir ) . $key;
 			wp_mkdir_p( dirname( $dest ) );
@@ -290,7 +325,6 @@ final class Media {
 				$ok = true;
 			}
 		}
-		@unlink( $tmp );
 		return $ok;
 	}
 
@@ -419,6 +453,31 @@ final class Media {
 			return Svg::is_clean( (string) $bytes );
 		}
 		return false;
+	}
+
+	/**
+	 * origin_servable(), answered from a FILE ON DISK rather than a string of bytes.
+	 *
+	 * The split matters for exactly one reason: the plain inert list is decided by the EXTENSION and
+	 * needs no content at all, and it is precisely the big types (a 512 MB video is origin-servable).
+	 * Reading one back to answer a question its extension already answers would put the whole file in
+	 * memory and undo the streaming it arrived by.
+	 *
+	 * The sanitised list is the only branch that must see the bytes — and it is the one branch with a
+	 * small, hard ceiling of its own (Svg::MAX_BYTES, 2 MB), so reading there costs nothing and
+	 * anything larger is refused BEFORE it is read. Everything unrecognised falls through to
+	 * origin_servable()'s own fail-closed default, exactly as it does for a string.
+	 */
+	private static function origin_servable_file( $key, $path ) {
+		$ext = strtolower( (string) pathinfo( (string) $key, PATHINFO_EXTENSION ) );
+		if ( ! in_array( $ext, self::ORIGIN_SERVABLE_SANITISED, true ) ) {
+			// No bytes offered on purpose: origin_servable() ignores them for every other extension,
+			// and omitting them is what keeps an unknown type refused rather than guessed at.
+			return self::origin_servable( $key );
+		}
+		$size = (int) @filesize( $path );
+		if ( $size <= 0 || $size > Svg::MAX_BYTES ) { return false; }
+		return self::origin_servable( $key, (string) @file_get_contents( $path ) );
 	}
 
 	/**
