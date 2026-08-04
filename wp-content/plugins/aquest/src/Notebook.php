@@ -2589,6 +2589,11 @@ final class Notebook {
 		if ( $credited ) {
 			$donor = Credits::donor_name( $credited );
 			$out['credited'] = [ 'donor' => $donor !== '' ? $donor : 'A friend of ArtaQuest', 'named' => $donor !== '', 'fee' => $fee ];
+			// Tell the DONOR their gift just did something. Without this the whole flow is one-way: a
+			// donor gives and then never learns whether anyone was actually helped, which is both the
+			// least motivating possible design and, on a platform whose books are public, a strange
+			// silence. The ref makes it idempotent per (challenge, entrant) exactly like the founder's.
+			Credits::notify_donor( $credited, $uid, $c, $fee );
 		}
 		return $out;
 	}

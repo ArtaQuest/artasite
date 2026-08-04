@@ -1918,6 +1918,10 @@ export type CreditOptions = {
 export type CreditReach = { bucket: string; words: string; exact: boolean; members: number; floor: number };
 export type CreditGift = {
   id: number; words: string; cents: number; entries: number; used: number; held: number; name: string; date: number;
+  /** Already released to the general slice. */
+  widened: boolean;
+  /** Targeted, unspent and not yet released — the donor may open it to any member. */
+  can_widen: boolean;
 };
 
 export function creditOptions() { return get<CreditOptions>("/credits/options"); }
@@ -1925,6 +1929,11 @@ export function creditReach(country: string, gender: string, band: string) {
   return get<CreditReach>("/credits/reach", { country, gender, band });
 }
 export function myCredits() { return get<{ items: CreditGift[] }>("/credits/mine"); }
+/** Release an unspent, targeted gift to the general slice, where every member is eligible. The only
+ *  way money aimed at a slice nobody matches can move — donor-only, and never toward another slice. */
+export function widenCredit(id: number) {
+  return post<{ ok: boolean; moved_cents: number; entries: number; message: string }>("/credits/widen", { id });
+}
 /** State, change, or clear ("clear") your gender. Opt-in, revocable, never inferred. */
 export function setGender(gender: string) { return post<{ ok: boolean; gender: string }>("/identity/gender", { gender }); }
 

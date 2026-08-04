@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.64.0';
+	const VERSION = '1.64.1';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -518,8 +518,13 @@ final class Schema {
 				PRIMARY KEY  (session_id)",
 
 			// ── ArtaCredits (2026-08-03, Credits.php) ─────────────────────────
-			// One row per DONOR GIFT earmarked to a slice of the membership. IMMUTABLE: nothing ever
-			// UPDATEs this table. `bucket` is the crd_<cty>_<gender>_<band> fund earmark the money sits
+			// One row per DONOR GIFT earmarked to a slice of the membership. Write-once with ONE
+			// exception, stated plainly because the whole point of a public database is that its claims
+			// are true: `widened` is stamped if the donor later releases an unspent gift to the general
+			// slice (Credits::widen), which is the only way money aimed at a slice nobody matches can
+			// ever move. The money itself is never rewritten — the release is a zero-sum PAIR of fund
+			// appends plus a successor gift row, exactly as Funds::rename_topic_earmark does it.
+			// `bucket` is the crd_<cty>_<gender>_<band> fund earmark the money sits
 			// in; `entries` and `unit_cents` FREEZE what the donor was actually promised, at the gold
 			// rate quoted on the page they paid from — the coin price moves, and a promise re-derived
 			// at redemption would silently become a different promise. Remaining entries on a gift =
@@ -537,6 +542,7 @@ final class Schema {
 				fee_cap INT NOT NULL DEFAULT 5,
 				donor_name VARCHAR(80) NOT NULL DEFAULT '',
 				ref VARCHAR(64) NOT NULL DEFAULT '',
+				widened INT UNSIGNED NOT NULL DEFAULT 0,
 				created INT UNSIGNED NOT NULL DEFAULT 0,
 				PRIMARY KEY  (id),
 				KEY bucket_id (bucket, id),

@@ -3,7 +3,7 @@ import {
   getDonateOptions, getFoundationFinances, getStripeVerify, postCourseCheckout, isLoggedIn,
   localePath, currentUser, type DonateOptions, type FoundationFinances,
 } from "../lib/wp";
-import { creditOptions, creditReach, myCredits, sampleCert, type CreditOptions, type CreditReach, type CreditGift } from "../lib/api";
+import { creditOptions, creditReach, myCredits, sampleCert, widenCredit, type CreditOptions, type CreditReach, type CreditGift } from "../lib/api";
 import { Coins, formatFiat, sanitizeDecimal } from "../lib/currency";
 import { Button, Card, Chip, PageHero, StatusNote, cx } from "../components/ui";
 import { DomainGlyph } from "../components/catalogue";
@@ -134,6 +134,7 @@ export default function Donate() {
   const [donorName, setDonorName] = useState("");
   const [anon, setAnon] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [widening, setWidening] = useState(0);
   const [err, setErr] = useState("");
   const [thanks, setThanks] = useState("");
 
@@ -270,7 +271,10 @@ export default function Donate() {
               </Picker>
             </Card>
             {/* Honest about reach, including zero — a donor is entitled to know their gift would wait. */}
-            <p role="status" aria-live="polite" className={cx("text-[13.5px] leading-relaxed", reach && reach.members === 0 ? "text-ink-2" : "text-ink-3")}>
+            {/* The zero-reach case is the one line on this page that changes what a donor should do,
+                so it is full-strength ink rather than the muted hint tone the rest of the step uses —
+                at the default contrast level ink-3 lands around 3.3:1, under the 4.5:1 floor. */}
+            <p role="status" aria-live="polite" className={cx("text-[13.5px] leading-relaxed", reach && reach.members === 0 ? "font-medium text-ink" : "text-ink-2")}>
               {!reach ? "Counting who this reaches…" : reach.members === 0 ? (
                 <>No member matches this yet. Your gift would be held in the open books, under your chosen slice, until someone does — it is never spent on anyone else.</>
               ) : (
@@ -375,14 +379,32 @@ export default function Donate() {
                 <li key={g.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
                   <div className="min-w-0">
                     <p className="truncate text-[14.5px] text-ink">For {g.words}</p>
-                    <p className="text-[12.5px] text-ink-3">
+                    <p className="text-[12.5px] text-ink-2">
                       {new Date(g.date * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
-                      {g.name ? <> · printed as <span className="text-ink-2" data-ay-skip="1">{g.name}</span></> : <> · anonymous</>}
+                      {g.name ? <> · printed as <span data-ay-skip="1">{g.name}</span></> : <> · anonymous</>}
+                      {g.widened ? <> · released to any member</> : null}
                     </p>
                   </div>
-                  <p className="shrink-0 text-[14px] font-semibold tabular-nums text-yang">
-                    {g.used} of {g.entries} {g.entries === 1 ? "entry" : "entries"} used
-                  </p>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <p className="text-[14px] font-semibold tabular-nums text-yang">
+                      {g.used} of {g.entries} {g.entries === 1 ? "entry" : "entries"} used
+                    </p>
+                    {/* A gift aimed at a slice nobody matches would otherwise sit in the books for
+                        ever. This is the only way its money can move — and only its own donor, and
+                        only outward to "any member", never at some other group of people. */}
+                    {g.can_widen && g.used === 0 && (
+                      <Button variant="outline" className="h-8 px-3 text-[12.5px]" disabled={widening === g.id}
+                        onClick={() => {
+                          setWidening(g.id);
+                          widenCredit(g.id)
+                            .then((r) => { setThanks(r.message); return myCredits().then((x) => setGifts(x.items)); })
+                            .catch((e) => setErr(e instanceof Error ? e.message : "Couldn’t release that gift."))
+                            .finally(() => setWidening(0));
+                        }}>
+                        {widening === g.id ? "Releasing…" : "Open to any member"}
+                      </Button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>

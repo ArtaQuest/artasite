@@ -125,6 +125,7 @@ function FounderSignature() {
  * marks the document so a reader can never mistake a preview for an issued certificate. */
 export function ParticipationDoc({ cert, sample = false }: { cert: PartCert; sample?: boolean }) {
   const placed = cert.settled && cert.place > 0;
+  const Name = sample ? "h3" : "h1";
   return (
     <article className={cx("aq-cert relative mx-auto w-full max-w-5xl overflow-hidden rounded-card bg-space-2 p-2.5", sample && "select-none")}>
       {/* inverted frame: fine BLUE outside, gold within — the diploma is the other way round.
@@ -161,9 +162,13 @@ export function ParticipationDoc({ cert, sample = false }: { cert: PartCert; sam
               </div>
 
               <p className="mt-6 text-[12.5px] italic leading-none text-ink-3">This records that</p>
-              <h1 data-ay-skip="1" className="mt-3 font-display text-[clamp(1.7rem,4.2vw,2.6rem)] font-extrabold leading-[1.05] tracking-[-0.025em] text-ink">
+              {/* On its own page the holder's name IS the document's heading, so it is the h1 that
+                  ClientNav focuses on navigation. Embedded as a specimen on /donate it must NOT be a
+                  second h1 competing with the page's own — it sits under that page's "What they
+                  receive" h2, so it drops to h3. */}
+              <Name data-ay-skip="1" className="mt-3 font-display text-[clamp(1.7rem,4.2vw,2.6rem)] font-extrabold leading-[1.05] tracking-[-0.025em] text-ink">
                 {cert.member}
-              </h1>
+              </Name>
               <div className="mt-3.5 h-px w-full max-w-sm bg-gradient-to-r from-yang/55 to-transparent" aria-hidden />
 
               <p className="mt-5 max-w-xl text-[13.5px] leading-relaxed text-ink-2">

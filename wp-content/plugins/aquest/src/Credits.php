@@ -233,7 +233,7 @@ final class Credits {
 		$rows = Data::all(
 			"SELECT g.* FROM $G g
 			 LEFT JOIN ( SELECT gift_id, COUNT(*) AS used FROM $R GROUP BY gift_id ) u ON u.gift_id = g.id
-			 WHERE g.bucket IN ($in) AND g.fee_cap >= %d AND COALESCE(u.used,0) < g.entries
+			 WHERE g.bucket IN ($in) AND g.fee_cap >= %d AND g.widened = 0 AND COALESCE(u.used,0) < g.entries
 			 ORDER BY g.id ASC LIMIT 60",
 			array_merge( $buckets, [ $fee ] ) );
 		if ( ! $rows ) { return null; }
@@ -360,6 +360,24 @@ final class Credits {
 		return $n;
 	}
 
+	/**
+	 * Tell the donor their gift was just spent. Names the entrant and the challenge — both already
+	 * public, and the whole point of the gift — but never anything about WHY this member matched:
+	 * the donor chose a slice, and which facts a particular person holds is theirs to publish, not
+	 * ours to report back. Idempotent per (challenge, entrant) via the ref, like every other push.
+	 */
+	public static function notify_donor( $gift, $entrant_id, $ch, $fee ) {
+		$donor = (int) ( $gift['donor_id'] ?? 0 );
+		if ( $donor < 1 || $donor === (int) $entrant_id ) { return; }
+		$u    = get_userdata( (int) $entrant_id );
+		$who  = $u ? $u->display_name : 'A member';
+		Notify::push(
+			$donor, 'donate',
+			'Your ArtaCredit opened a door — ' . $who . ' entered "' . (string) $ch['title'] . '" with the ₳' . (int) $fee . ' you gave',
+			'', '/donate/', 'crdspent:' . (int) $ch['id'] . ':' . (int) $entrant_id
+		);
+	}
+
 	// ── routes ──────────────────────────────────────────────────────────────
 
 	/** GET credits/options — the donor's picker vocabulary. Deliberately carries NO member counts:
@@ -458,6 +476,60 @@ final class Credits {
 		];
 	}
 
+	/**
+	 * POST credits/widen {id} — the DONOR releases their own unspent gift to the general slice, where
+	 * every member is eligible. This is the only way money aimed at a slice nobody matches can ever
+	 * move: the reach meter warns before payment, but a slice can also empty afterwards, and without
+	 * this the gift would sit in the open books for ever with no recourse and no refund path.
+	 *
+	 * Only the donor may do it, only to their own gift, only while it has entries left, and only
+	 * toward the general bucket — never toward another slice, because re-aiming someone else's money
+	 * at a different group of people is not a release, it is a new gift.
+	 *
+	 * The money moves as a ZERO-SUM PAIR of fund appends (Funds::move_credit_earmark), never a
+	 * rewrite; the released amount is this gift's own unspent share, clamped to what the source
+	 * earmark actually still holds — the bucket is shared with every other donor who chose the same
+	 * slice, so a gift's book value and the bucket's balance are not the same number.
+	 */
+	public static function widen( $req ) {
+		if ( Rest::throttle( 'credits_widen', 10, 3600 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
+		$uid = Rest::uid();
+		$id  = Rest::pint( $req, 'id', 0 );
+		$g   = Data::one( 'SELECT * FROM ' . Data::t( 'aq_credit_gifts' ) . ' WHERE id = %d', [ $id ] );
+		if ( ! $g || (int) $g['donor_id'] !== $uid ) { return Rest::err( 'not_yours', 'That is not one of your gifts', 403 ); }
+		if ( (int) $g['widened'] > 0 ) { return Rest::err( 'already', 'You have already released this gift', 409 ); }
+		$general = self::bucket( self::ANY, self::ANY, self::ANY );
+		if ( (string) $g['bucket'] === $general ) { return Rest::err( 'already_general', 'This gift is already open to any member', 409 ); }
+
+		$lock = 'crdbucket_' . (string) $g['bucket'];
+		if ( ! Economy::acquire_lock( $lock, 15 ) ) { return Rest::err( 'busy', 'Try again in a moment', 429 ); }
+		try {
+			$used  = (int) Data::col( 'SELECT COUNT(*) FROM ' . Data::t( 'aq_credit_grants' ) . ' WHERE gift_id = %d', [ $id ] );
+			$left  = (int) $g['entries'] - $used;
+			if ( $left < 1 ) { return Rest::err( 'spent', 'This gift has already been used in full', 409 ); }
+			$spent = (int) Data::col( 'SELECT COALESCE(SUM(cents),0) FROM ' . Data::t( 'aq_credit_grants' ) . ' WHERE gift_id = %d', [ $id ] );
+			$move  = min( max( 0, (int) $g['cents'] - $spent ), max( 0, Economy::counter( 'fund_' . $g['bucket'] ) ) );
+			if ( $move < 1 ) { return Rest::err( 'empty', 'There is nothing left in this gift to release', 409 ); }
+
+			$ref  = 'widen:' . $id;
+			$note = 'Released to any member: ' . self::bucket_words( $g['bucket'] );
+			if ( ! Funds::move_credit_earmark( $g['bucket'], $general, $move, $ref, $note ) ) {
+				return Rest::err( 'server_error', 'Could not release the gift', 500 );
+			}
+			// The successor carries the remaining promise; the original is stamped so it stops matching.
+			$new = Data::insert( 'aq_credit_gifts', [
+				'donor_id' => $uid, 'bucket' => $general, 'cents' => $move, 'entries' => $left,
+				'unit_cents' => (int) $g['unit_cents'], 'fee_cap' => (int) $g['fee_cap'],
+				'donor_name' => (string) $g['donor_name'], 'ref' => $ref, 'widened' => 0, 'created' => Data::now(),
+			] );
+			Data::update( 'aq_credit_gifts', [ 'widened' => Data::now() ], [ 'id' => $id ] );
+			return [ 'ok' => true, 'moved_cents' => $move, 'entries' => $left, 'gift' => (int) $new,
+				'message' => 'Released — your gift is now open to any member of ArtaQuest.' ];
+		} finally {
+			Economy::release_lock( $lock );
+		}
+	}
+
 	/** GET credits/mine — the signed-in donor's own gifts, and what became of each. */
 	public static function mine( $req ) {
 		$uid  = Rest::uid();
@@ -466,16 +538,22 @@ final class Credits {
 		$rows = Data::all(
 			"SELECT g.*, ( SELECT COUNT(*) FROM $R r WHERE r.gift_id = g.id ) AS used
 			 FROM $G g WHERE g.donor_id = %d ORDER BY g.id DESC LIMIT 50", [ $uid ] );
-		return [ 'items' => array_map( static function ( $g ) {
+		$general = self::bucket( self::ANY, self::ANY, self::ANY );
+		return [ 'items' => array_map( static function ( $g ) use ( $general ) {
+			$left = (int) $g['entries'] - (int) $g['used'];
 			return [
-				'id'      => (int) $g['id'],
-				'words'   => self::bucket_words( $g['bucket'] ),
-				'cents'   => (int) $g['cents'],
-				'entries' => (int) $g['entries'],
-				'used'    => (int) $g['used'],
-				'held'    => Economy::counter( 'fund_' . $g['bucket'] ),
-				'name'    => self::donor_name( $g ),
-				'date'    => (int) $g['created'],
+				'id'       => (int) $g['id'],
+				'words'    => self::bucket_words( $g['bucket'] ),
+				'cents'    => (int) $g['cents'],
+				'entries'  => (int) $g['entries'],
+				'used'     => (int) $g['used'],
+				'held'     => Economy::counter( 'fund_' . $g['bucket'] ),
+				'name'     => self::donor_name( $g ),
+				'date'     => (int) $g['created'],
+				'widened'  => (int) $g['widened'] > 0,
+				// Can the donor release what is left to the general slice? Only a targeted, unspent,
+				// not-yet-released gift — the UI shows the control on exactly these.
+				'can_widen' => (int) $g['widened'] === 0 && $left > 0 && (string) $g['bucket'] !== $general,
 			];
 		}, $rows ) ];
 	}
@@ -590,7 +668,12 @@ final class Credits {
 	 *   2. No crd_ bucket is NEGATIVE. Equality alone can NEVER catch an over-spend: a racing debit
 	 *      moves the counter and the ledger together, so both go negative in lockstep and check 1
 	 *      still passes. This is the check that would have caught it.
-	 *   3. Every grant's spend appears exactly once in the fund ledger.
+	 *   3. Every grant's spend appears exactly once in the fund ledger. Counted over `credit:` refs
+	 *      ONLY: a donor's release (Credits::widen) also writes a negative crd_ row, and counting
+	 *      that as a spend would make this check fail permanently the first time anyone released a
+	 *      gift — a proof that cries wolf is worse than no proof.
+	 *   4. Every release is zero-sum. Its −from/+to pair shares one `widen:<gift>` ref, so the pair
+	 *      must sum to exactly 0; a non-zero sum means money was created or destroyed by a move.
 	 */
 	public static function verify_credits() {
 		global $wpdb;
@@ -606,8 +689,16 @@ final class Credits {
 			$checks[] = [ 'check' => "credit:$b>=0", 'projected' => $proj, 'ledger' => 0, 'ok' => $proj >= 0 ];
 		}
 		$grants = (int) Data::col( 'SELECT COUNT(*) FROM ' . Data::t( 'aq_credit_grants' ) );
-		$spends = (int) Data::col( "SELECT COUNT(*) FROM $L WHERE bucket LIKE %s AND cents < 0", [ $wpdb->esc_like( 'crd_' ) . '%' ] );
+		$spends = (int) Data::col( "SELECT COUNT(*) FROM $L WHERE bucket LIKE %s AND cents < 0 AND ref LIKE %s",
+			[ $wpdb->esc_like( 'crd_' ) . '%', $wpdb->esc_like( 'credit:' ) . '%' ] );
 		$checks[] = [ 'check' => 'credit:grants=spends', 'projected' => $grants, 'ledger' => $spends, 'ok' => $grants === $spends ];
+
+		// Every release must be exactly zero-sum across its own ref.
+		foreach ( Data::all( "SELECT ref, COALESCE(SUM(cents),0) net FROM $L WHERE ref LIKE %s GROUP BY ref",
+			[ $wpdb->esc_like( 'widen:' ) . '%' ] ) as $r ) {
+			$checks[] = [ 'check' => 'credit:' . (string) $r['ref'] . ':zero-sum', 'projected' => 0,
+				'ledger' => (int) $r['net'], 'ok' => (int) $r['net'] === 0 ];
+		}
 		return $checks;
 	}
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DobWheel } from "../components/DobWheel";
 import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, postProfileUpdate, type CourseCard, type Dashboard, type UsernameCheck } from "../lib/wp";
-import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, Passkeys, setGender as setGender_, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type SessionItem, type BursaryResult, type BursaryStatus, type ShareKit } from "../lib/api";
+import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, Passkeys, myParticipation, setGender as setGender_, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type SessionItem, type BursaryResult, type BursaryStatus, type ShareKit } from "../lib/api";
 import { signOut } from "../lib/auth";
 import { VerifyApi, fileToImage, type VerifyStatus } from "../lib/verify";
 import { countryName, countryOptions, flagEmoji } from "../lib/flags";
@@ -883,6 +883,36 @@ function BursaryApply() {
   );
 }
 
+/** Every challenge this member has entered, and the Certificate of Participation each one carries.
+ *  Without this the certificate was reachable only from the transient note shown the moment you
+ *  entered — a permanent, verifiable document with no way back to it. */
+function ParticipationCerts() {
+  const [items, setItems] = useState<Awaited<ReturnType<typeof myParticipation>>["items"]>([]);
+  useEffect(() => { myParticipation().then((r) => setItems(r.items)).catch(() => {}); }, []);
+  if (!items.length) return null;
+  return (
+    <section>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-[20px] font-bold tracking-tight">Your certificates</h2>
+        <span className="text-[13px] text-ink-2">{items.length} challenge{items.length === 1 ? "" : "s"} entered</span>
+      </div>
+      <ul className="mt-4 grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-2">
+        {items.map((c) => (
+          <li key={c.challenge_id}>
+            <Card as="a" href={localePath(c.url)} className="group block w-full px-4 py-3 hover:border-yin-light/40">
+              <span className="block truncate text-[15px] font-semibold transition-colors group-hover:text-yang" data-ay-skip="1">{c.challenge}</span>
+              <span className="mt-0.5 block text-[12px] text-ink-2">
+                <span data-ay-skip="1">{c.kind} · {c.topic}</span> ·{" "}
+                {c.settled ? "settled at its full moon" : "open until its full moon"}
+              </span>
+            </Card>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export default function Account() {
   // `acct` (not the legacy `ay_acct` — the i18n layer strips `ay_*` query params).
   const acct = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("acct") : null;
@@ -997,6 +1027,8 @@ export default function Account() {
           </ul>
         )}
       </section>
+
+      <ParticipationCerts />
 
       <PalmBackPhoto user={d.user} onChange={(palm) => setD((prev) => (prev ? { ...prev, user: { ...prev.user, palm } } : prev))} />
 

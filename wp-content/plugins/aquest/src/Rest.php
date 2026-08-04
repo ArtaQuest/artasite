@@ -233,6 +233,7 @@ final class Rest {
 		[ 'GET',  'credits/options',              'Credits::options',      'public' ], // picker vocabulary — carries NO member counts
 		[ 'GET',  'credits/reach',                'Credits::reach',        'public' ], // how many members one slice reaches, floored to REACH_MIN
 		[ 'GET',  'credits/mine',                 'Credits::mine',         'user'   ], // the donor's own gifts and what became of each
+		[ 'POST', 'credits/widen',               'Credits::widen',        'user'   ], // release an unspent gift to the general slice (donor-only)
 		[ 'POST', 'identity/gender',              'Verify::set_gender',    'user'   ], // opt-in, revocable ('clear'), never inferred
 
 		// ── Certificate of Participation (every challenge entrant holds one) ──

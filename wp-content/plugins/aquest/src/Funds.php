@@ -283,6 +283,28 @@ final class Funds {
 		return self::fund_append( (string) $bucket, (int) $cents, sanitize_text_field( (string) $ref ), sanitize_text_field( (string) $note ) );
 	}
 
+	/**
+	 * Carry credit money from one slice earmark to another when a donor RELEASES an unspent gift
+	 * (Credits::widen). The fund ledger is append-only, so the move is a ZERO-SUM PAIR of appends
+	 * (−from, +to) — precisely the pattern rename_topic_earmark already uses. That conserves the fund
+	 * total, keeps both buckets' audit history intact, and mints nothing.
+	 *
+	 * It deliberately does NOT go through record_donation: that awards donate-track points, and this
+	 * money never re-entered the fund — it only changed bucket. Routing a carry through it would pay
+	 * the donor standing a second time for the same gift.
+	 */
+	public static function move_credit_earmark( $from, $to, $cents, $ref = '', $note = '' ) {
+		$cents = (int) $cents;
+		if ( $cents < 1 ) { return false; }
+		if ( ! preg_match( '/^crd_[a-z0-9_]+$/', (string) $from ) || ! preg_match( '/^crd_[a-z0-9_]+$/', (string) $to ) ) { return false; }
+		if ( (string) $from === (string) $to ) { return false; }
+		$ref  = substr( sanitize_text_field( (string) $ref ), 0, 64 );
+		$note = substr( sanitize_text_field( (string) $note ), 0, 191 );
+		self::fund_append( (string) $from, -$cents, $ref, $note );
+		self::fund_append( (string) $to, $cents, $ref, $note );
+		return true;
+	}
+
 	/** Bursary money available to cover a grant: the general `bursary` bucket plus, when a group is
 	 *  given, that group's earmark (`grp_<group>`); with no group, every group earmark too. Integer
 	 *  cents, read from the fund-counter projection — never a SUM over the donation ledger. */
