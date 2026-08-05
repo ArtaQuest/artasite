@@ -6,11 +6,37 @@ import { SEASONS, type Season, currentSeason, seasonByN, seasonForDate, seasonFo
 import { mySeason } from "../components/seasons";
 import { Card } from "../components/ui";
 import researchData from "../data/research.json";
+// date → "trending next year?" per topic: a balanced binary classifier on publication counts
+// (github.com/ArtaQuest/artatopics, trend_binary.py). Its controls matter more than its accuracy:
+// fast planets alone score at CHANCE and a bare calendar year beats the whole sky, so the page
+// presents this as what it is — an era read, not a planetary one.
+import trendingData from "../data/trending.json";
 import { localePath, isLoggedIn } from "../lib/wp";
 import { resonanceTitle } from "../lib/resonance";
+import { SKILLS_CFG, type AxisCfg } from "./fields-cfg";
+
+// The atlas rows and aggregate, typed once at the boundary — research.json is a generated artifact,
+// so the cast goes through `unknown` here and every consumer below is typed (the artasite lint gate
+// treats a bare `any` as an error, and it is the honest rule: `any` at the boundary spreads).
+type ResearchTopic = {
+  key: string; label: string; sign: string; ref?: number; domain?: string; fieldGroup?: string;
+  r2?: number; rep?: number; popularity?: number; period?: number;
+  shares?: { slug: string; pct: number }[]; trend?: boolean; trendDir?: string; annualFrac?: number;
+  season?: { month: number | null; peak: number }; phaseEst?: number; phaseSign?: string;
+  domSignShare?: number; peakMonth?: string | null; dominantPlanet?: string; domShare?: number;
+  topAspect?: string; r2Full?: number; r2Ins?: number; r2Oos?: number; worldEvent?: boolean;
+};
+type Aggregate = {
+  skillCurve: number[]; auc: number; skillMedian: number; pctPositive: number; topics: number;
+  skill2?: number | null; auc2?: number | null; skill4?: number | null; auc4?: number | null;
+  persistence?: number | null; paramsPerTopic?: number | null;
+};
+const TOPICS = researchData.topics as unknown as ResearchTopic[];
+const AGG = (researchData as unknown as { aggregate?: Aggregate }).aggregate;
+const TRENDING = trendingData as unknown as Record<string, { p: number; acc: number } | string>;
 
 // The full topic-500-winner analysis for a field, keyed identically to the disciplines registry.
-const ANALYSIS: Record<string, any> = Object.fromEntries((researchData.topics as any[]).map((t) => [t.key, t]));
+const ANALYSIS: Record<string, ResearchTopic> = Object.fromEntries(TOPICS.map((t) => [t.key, t]));
 // The shared yearly time axis (per-field: its own start … 2055, one point per calendar year) for the
 // fit+forecast plot; each chunk's actual+forecast align to it.
 // A topic's SEASON: from its fitted peak phase in research.json, falling back to the backend
@@ -24,18 +50,14 @@ const HOUSE_TO_N: Record<string, number> = Object.fromEntries(CATEGORY_GROUPS.ma
 const topicSeason = (key: string, fallbackHouse: string): Season =>
   seasonForPhase(ANALYSIS[key]?.sign) || seasonByN(HOUSE_TO_N[fallbackHouse]) || SEASONS[0];
 // A topic's fit quality (R², 0…1) — the cycle ranks every season's topics by it.
-const r2Of = (d: Discipline): number => (typeof ANALYSIS[d.key]?.r2 === "number" ? ANALYSIS[d.key].r2 : (d.score || 0) / 100);
+const r2Of = (d: Discipline): number => ANALYSIS[d.key]?.r2 ?? (d.score || 0) / 100;
 
 // CITATIONS PIVOT (operator 2026-07-23): the atlas IS the list — every OpenAlex subfield fitted on
 // its per-year share of all citations RECEIVED (mid-year sky sampling). No backend registry.
-const ALL_FIELDS: Discipline[] = (researchData.topics as any[])
+const ALL_FIELDS: Discipline[] = TOPICS
   .map((t) => ({ key: t.key, house: "", label: t.label, sign: t.sign, score: (t.r2 ?? 0) * 100, central: 0 }));
 
-type AxisCfg = { axis: "house" | "topic"; title: string; noun: string; blurb: string; base: string };
-export const SKILLS_CFG: AxisCfg = {
-  axis: "topic", title: "Topics", noun: "topic", base: "/topics",
-  blurb: "Every OpenAlex research subfield, measured as its share of the citations the whole scholarly record received each year, the sky sampled at each year's mid-point — each field modelled on its own, over its own history since it emerged — placed in the sidereal sign its Pluto tuning falls in (Lahiri dates), ranked by model fit. Follow one sign: its topics are what we recommend you.",
-};
+
 
 /* ── The cycle ──────────────────────────────────────────────────────────────────────────────
    The year drawn as a SINUSOID (operator 2026-07-10 — never a wheel): one full cosine period
@@ -131,7 +153,7 @@ function SeasonCycle({ bySeason, sel, onSel, mineN, nowN }: {
 const PLANETS = ["mars", "jupiter", "saturn", "uranus", "neptune", "pluto", "node"];  // 7 bodies (mars in; sun/mercury/venus + chiron excluded)
 
 function PlanetView({ planet, cfg }: { planet: string; cfg: AxisCfg }) {
-  const rows = (researchData.topics as any[])
+  const rows = TOPICS
     .filter((t) => t.dominantPlanet === planet)
     .sort((x, y) => (y.domShare || 0) - (x.domShare || 0));
   return (
@@ -255,10 +277,8 @@ function TrendView({ cfg, initial }: { cfg: AxisCfg; initial: string }) {
 function MethodCard() {
   // Every number quoted below is read from the exported atlas, never typed in — a figure written into
   // prose is a figure the model can quietly drift away from, and this page has done that before.
-  const g = (researchData as any).aggregate as {
-    auc: number; skillMedian: number; pctPositive: number; topics: number;
-    persistence: number | null; paramsPerTopic: number | null;
-  };
+  const g = AGG;
+  if (!g) return null;
   const par = g.paramsPerTopic ?? 9;
   return (
         <Card className="mt-5 p-4 sm:p-6">
@@ -412,9 +432,9 @@ export default function Fields({ cfg = SKILLS_CFG }: { cfg?: AxisCfg } = {}) {
             Every {cfg.noun} peaks on its own natural rhythm — <a href={localePath("/cycles/")} className="font-semibold text-yin-light hover:underline">explore the cycles →</a>
           </p>
 
-          {(researchData as any).aggregate && (() => {
+          {AGG && (() => {
 
-            const g = (researchData as any).aggregate as { skillCurve: number[]; auc: number; skillMedian: number; pctPositive: number; topics: number };
+            const g = AGG;
 
             const c = g.skillCurve || [];
 
@@ -474,9 +494,9 @@ export default function Fields({ cfg = SKILLS_CFG }: { cfg?: AxisCfg } = {}) {
 
                   <span>topics beating the baseline <b className="text-ink-2">{g.pctPositive.toFixed(0)}%</b></span>
 
-                  {typeof (g as any).auc2 === "number" && <span>four years out, AUC <b className="text-ink-2">{(g as any).auc2.toFixed(2)}</b></span>}
+                  {typeof g.auc2 === "number" && <span>four years out, AUC <b className="text-ink-2">{g.auc2.toFixed(2)}</b></span>}
 
-                  {typeof (g as any).auc4 === "number" && <span>twelve years out, AUC <b className="text-ink-2">{(g as any).auc4.toFixed(2)}</b></span>}
+                  {typeof g.auc4 === "number" && <span>twelve years out, AUC <b className="text-ink-2">{g.auc4.toFixed(2)}</b></span>}
 
                 </div>
 
@@ -578,6 +598,12 @@ function FieldView({ d, loading, cfg }: { d: Discipline | null; loading: boolean
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     {a.popularity != null && <Fact label="Citation share" value={`${a.popularity}%`} hint="its mean share of each year's citations received" />}
                     {typeof a.r2Oos === "number" && <Fact label="30-yr forecast skill" value={a.r2Oos.toFixed(2)} hint="held-out thirty-year skill vs carrying its mean forward" />}
+                    {(() => {
+                      const tr = TRENDING[d.key];
+                      if (!tr || typeof tr === "string") return null;
+                      return <Fact label="Trending next year?" value={`${tr.p >= 0.5 ? "Yes" : "No"} (${Math.round(tr.p * 100)}%)`}
+                        hint={`publication rise vs its own median · accuracy ${Math.round(tr.acc * 100)}% — an era read, not a planetary one`} />;
+                    })()}
                   </div>
                 </Card>
 

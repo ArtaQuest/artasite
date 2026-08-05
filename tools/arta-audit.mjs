@@ -1,3 +1,8 @@
+/* GENERATED — DO NOT EDIT HERE.
+ * Vendored from artalife tools/arta-audit.mjs @ e37c551.
+ * Source of truth: https://github.com/ArtaQuest/artalife.git
+ * Re-run: node tools/arta-sync.mjs
+ */
 /**
  * ArtaAudit — the mascot's motion invariants, measured in a real browser.
  *
@@ -112,8 +117,12 @@ async function tab(media, fn) {
   await audiTab();
   const S = auditSession;
   const ev = async (x) => {
-    const r = await send("Runtime.evaluate",
-      { expression: x, awaitPromise: true, returnByValue: true }, S);
+    // Never wait for ever: a hung in-page promise must surface as a failure, not
+    // as a run that simply never ends.
+    const r = await Promise.race([
+      send("Runtime.evaluate", { expression: x, awaitPromise: true, returnByValue: true }, S),
+      new Promise((res) => setTimeout(() => res({ __e: "evaluate timed out after 90s" }), 90000)),
+    ]);
     if (r.__e) return null;
     if (r.exceptionDetails) throw new Error(r.exceptionDetails.text);
     return r.result?.value;
@@ -123,6 +132,18 @@ async function tab(media, fn) {
     read: () => ev(`JSON.stringify(window.__aq)`).then(JSON.parse) };
   try {
     await send("Page.enable", {}, S);
+    // Keep the renderer running WITHOUT stealing focus. The probes below await
+    // requestAnimationFrame, and a genuinely backgrounded tab throttles it to a
+    // stop — the evaluate then never resolves and the audit hangs for ever.
+    // setWebLifecycleState('active') tells Chrome to treat the page as active;
+    // Target.activateTarget would also work and is BANNED, because it yanks the
+    // user into the testing window (see feedback_persistent_chrome_only).
+    await send("Page.setWebLifecycleState", { state: "active" }, S);
+    // ...and that alone is NOT enough: a background tab still throttles rAF to a
+    // stop, and the evaluate below times out. Screencasting forces the
+    // compositor to keep producing frames, which keeps rAF alive — the only
+    // lever that works here without focusing the window.
+    await send("Page.startScreencast", { format: "jpeg", quality: 5, everyNthFrame: 4 }, S);
     await send("Emulation.setDeviceMetricsOverride",
       { width: VW, height: VH, deviceScaleFactor: MOBILE ? 3 : 1, mobile: MOBILE }, S);
     // The tab is reused, so a previous run's prefers-reduced-motion leaks
@@ -207,8 +228,10 @@ const normal = await tab([], async (a) => {
       if (/(auto|scroll)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 40) el.scrollTop = ${y};
     } return 1; })()`);
   await scrollAll(6000); await a.wait(1000);
-  r.rect = await a.ev(`(() => { const h=document.querySelector('[data-arta]').getBoundingClientRect();
-    return { top: Math.round(h.top), bottom: Math.round(h.bottom), vh: innerHeight }; })()`);
+  r.rect = await a.ev(`(() => { const h=document.querySelector('[data-arta]');
+    const b=h.getBoundingClientRect();
+    return { top: Math.round(b.top), bottom: Math.round(b.bottom), vh: innerHeight,
+             fixed: getComputedStyle(h).position === 'fixed' }; })()`);
   r.reallyOffscreen = r.rect.bottom < -80 || r.rect.top > r.rect.vh + 80;
   await a.reset(); await a.wait(1800);
   r.offScreen = per(await a.read(), 1800);
@@ -224,9 +247,21 @@ const normal = await tab([], async (a) => {
 
 check("cost · runs on screen", normal.onScreen.raf > 30,
   `${normal.onScreen.raf} rAF/s, ${normal.onScreen.attrs} attr/s`);
-check("cost · stops off screen",
-  !normal.reallyOffscreen || normal.offScreen.raf <= LIMIT.offscreenRafPerSec,
-  normal.reallyOffscreen ? `${normal.offScreen.raf} rAF/s` : "SKIPPED — could not scroll it out of view");
+// Three outcomes, not two. A fixed companion layer genuinely cannot leave the
+// viewport, so this law does not apply to it and the tab-hidden check below is
+// what covers the cost concern — say so, and count it as skipped rather than
+// passed. But a host that CAN scroll and did not is a broken probe, and a broken
+// probe reporting PASS is exactly the hollow green this suite exists to catch.
+if (normal.rect.fixed && !normal.reallyOffscreen) {
+  results.push({ name: "cost · stops off screen", ok: true, skipped: true,
+    detail: "N/A — fixed companion layer never leaves the viewport; 'stops when tab hidden' covers this" });
+} else if (!normal.reallyOffscreen) {
+  check("cost · stops off screen", false,
+    `PROBE FAILED — host is scrollable but stayed on screen (top ${normal.rect.top}, vh ${normal.rect.vh})`);
+} else {
+  check("cost · stops off screen", normal.offScreen.raf <= LIMIT.offscreenRafPerSec,
+    `${normal.offScreen.raf} rAF/s`);
+}
 check("cost · stops when tab hidden", normal.hidden.raf === 0, `${normal.hidden.raf} rAF/s`);
 
 // ── steady state: the shake check ───────────────────────────────────────────
@@ -257,10 +292,11 @@ const calm = await tab([], async (a) => a.ev(`(async () => {
            overspeed: host.getAttribute('data-overspeed') };
 })()`));
 
-check("calm · settles into an act", calm.changes <= LIMIT.idleActChangesPer5s,
-  `act=${calm.act}, ${calm.changes} changes in 5s`);
-check("calm · head oscillates at breath rate only", calm.hz <= LIMIT.idleHeadHz,
-  `${calm.hz} Hz (breath is 0.42)`);
+if (!calm) { check("calm · probe completed", false, "the calm probe timed out — frames are not being produced"); }
+check("calm · settles into an act", !!calm && calm.changes <= LIMIT.idleActChangesPer5s,
+  calm ? `act=${calm.act}, ${calm.changes} changes in 5s` : "no data");
+check("calm · head oscillates at breath rate only", !!calm && calm.hz <= LIMIT.idleHeadHz,
+  calm ? `${calm.hz} Hz (breath is 0.42)` : "no data");
 
 // ── head, under four pointer conditions ─────────────────────────────────────
 const head = await tab([], async (a) => a.ev(`(async () => {
@@ -367,11 +403,28 @@ const reduced = await tab([{ name: "prefers-reduced-motion", value: "reduce" }],
   const fired = await a.ev(`(() => { const b = [...document.querySelectorAll('button')]
     .find(x => /^Aim/.test(x.textContent||'')); if (!b) return false; b.click(); return true; })()`);
   await a.wait(500);
-  // NOTE: `svg > path` is the arrow; `svg g path` are the limbs. Asking the
-  // wrong one produced a false failure the first three times this was written.
-  const arrow = await a.ev(`+(document.querySelector('[data-arta] svg > path')
-    ?.getAttribute('opacity') || 0)`);
-  return { cost, limbs, fired, arrow, raf: (await a.read()).raf };
+  // Ask for the arrow BY NAME. This was `svg > path` — "the first bare path is
+  // the arrow" — which was true until the rope was added as an earlier sibling,
+  // and then the check read the rope's permanent opacity 0 and called a working
+  // arrow broken. A positional selector is a claim about a layout that nobody
+  // promised to keep. `marker` proves we found the element we meant, so this
+  // cannot quietly go back to measuring the wrong thing.
+  //
+  // Visible means three things, and opacity is only one of them. An arrow can
+  // be fully opaque, correctly drawn, and outside the viewBox — which is what a
+  // target below the fold produced. Assert it lands ON the stage.
+  const arrowEl = await a.ev(`(() => {
+    const p = document.querySelector('[data-arta] [data-arta-arrow]');
+    if (!p) return { marker: false };
+    const vb = p.ownerSVGElement.viewBox.baseVal, b = p.getBBox();
+    return { marker: true, opacity: +(p.getAttribute('opacity') || 0),
+             drawn: (p.getAttribute('d') || '').length > 4,
+             onStage: b.width + b.height > 0 && b.x < vb.x + vb.width && b.x + b.width > vb.x
+                      && b.y < vb.y + vb.height && b.y + b.height > vb.y,
+             box: [b.x, b.y, b.width, b.height].map(Math.round).join(","),
+             stage: [vb.width, vb.height].map(Math.round).join("x") };
+  })()`);
+  return { cost, limbs, fired, arrowEl, raf: (await a.read()).raf };
 });
 
 check("reduced · schedules no frames", reduced.cost.raf === 0, `${reduced.cost.raf} rAF/s`);
@@ -380,21 +433,31 @@ check("reduced · Arta is still drawn", reduced.limbs === 5, `${reduced.limbs}/5
 // Aim button, so `!fired || arrow > 0` passed vacuously while testing nothing —
 // the same hollow green this suite already exists to catch.
 if (!reduced.fired) {
-  results.push({ name: "reduced · can still aim", ok: true,
+  results.push({ name: "reduced · can still aim", ok: true, skipped: true,
     detail: "SKIPPED — no Aim control on this page; run against /arta to test it" });
+} else if (!reduced.arrowEl.marker) {
+  check("reduced · can still aim", false, "no [data-arta-arrow] element — the renderer changed shape");
 } else {
-  check("reduced · can still aim", reduced.arrow > 0, `arrow opacity ${reduced.arrow}`);
+  const ar = reduced.arrowEl;
+  check("reduced · can still aim", ar.opacity > 0 && ar.drawn && ar.onStage,
+    `opacity ${ar.opacity}, path ${ar.drawn ? "drawn" : "EMPTY"}, ` +
+    `${ar.onStage ? "on stage" : `OFF STAGE box ${ar.box} vs ${ar.stage}`}`);
 }
 
 ws.close();
 
 // ── report ──────────────────────────────────────────────────────────────────
 const failed = results.filter((r) => !r.ok);
+const skipped = results.filter((r) => r.skipped);
 const pad = Math.max(...results.map((r) => r.name.length));
 console.log(`\nArtaAudit — ${URL_}  @ ${VW}x${VH}${MOBILE ? " (mobile, dpr3)" : ""}\n`);
 for (const r of results)
-  console.log(`  ${r.ok ? "PASS" : "FAIL"}  ${r.name.padEnd(pad)}  ${r.detail}`);
+  console.log(`  ${!r.ok ? "FAIL" : r.skipped ? "SKIP" : "PASS"}  ${r.name.padEnd(pad)}  ${r.detail}`);
 console.log(`\n  (reported, not asserted) head · ${shaken.label}: ${shaken.x}/${shaken.y} reversals/s`);
-console.log(`\n  ${results.length - failed.length}/${results.length} passed\n`);
+// A skip is not a pass. Rolling them together is how "15/15" came to describe
+// a run in which two of the fifteen measured nothing.
+const asserted = results.length - skipped.length;
+console.log(`\n  ${asserted - failed.length}/${asserted} asserted checks passed` +
+  (skipped.length ? `, ${skipped.length} skipped (${skipped.map((r) => r.name).join("; ")})` : "") + `\n`);
 if (OUT) writeFileSync(OUT, JSON.stringify({ url: URL_, results, shaken, speed, calm }, null, 1));
 process.exit(failed.length);

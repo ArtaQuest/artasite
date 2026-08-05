@@ -43,6 +43,7 @@ const Grants = lazy(() => import("./pages/Grants"));
 const Reserve = lazy(() => import("./pages/Reserve"));
 const Issues = lazy(() => import("./pages/Issues"));
 const Careers = lazy(() => import("./pages/Careers"));
+const ArtaMic = lazy(() => import("./pages/ArtaMic"));
 // The CEO posting (operator 2026-07-30) — its own URL so it can be linked and shared.
 const CeoRole = lazy(() => import("./pages/CeoRole"));
 const Fearometer = lazy(() => import("./pages/Fearometer"));
@@ -336,6 +337,8 @@ export default function App() {
               slug is real and prod cannot guess-redirect the family away. */}
           <Route path="/news" element={<Navigate to="/" replace />} />
           <Route path="/news/" element={<Navigate to="/" replace />} />
+          <Route path="/artamic" element={<ArtaMic />} />
+          <Route path="/artamic/" element={<ArtaMic />} />
           <Route path="/news/:slug" element={<NewsDetection />} />
           <Route path="/news/:slug/" element={<NewsDetection />} />
           <Route path="/articles" element={<Feed initialKind="article" />} />
