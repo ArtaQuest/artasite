@@ -40,7 +40,17 @@ const SOCIALS: { label: string; href: string; path: string; viewBox?: string }[]
   // heavy data — the model weights and dataset files this site serves. The mark is drawn on a 512
   // grid rather than the 24 the others use, so it carries its own viewBox instead of being
   // hand-rescaled (rescaling a path by eye is how a logo ends up subtly wrong forever).
-  { label: "Kaggle", href: "https://www.kaggle.com/artafather", viewBox: "0 0 512 512", path: "M304.2 501.5L158.4 320.3 298.2 185c2.6-2.3 3.6-5.6 2.6-8.9-1-3.3-4.3-5.6-7.9-5.6h-56.9c-4.3 0-8.6 1.7-11.9 4.9L96.8 297.5V6.9c0-4.3-3.6-6.9-6.9-6.9H50.5c-4.3 0-6.9 2.6-6.9 6.9v498.2c0 4.3 2.6 6.9 6.9 6.9h39.4c3.3 0 6.9-2.6 6.9-6.9V354.8l131.1 156.4c3.3 3.3 6.9 4.9 11.9 4.9h58.2c3.6 0 6.6-2.3 7.6-5.6.7-2.9 0-6.2-1.4-9z" },
+  //
+  // The viewBox is NOT the artwork's declared 0 0 512 512, and that is the point. Measured, the
+  // glyph occupies x 43.6..306.3 and y 0..516.1 — so on a 512 grid it sits 81 units left of
+  // centre (16% of the width) and overhangs the bottom by four. In a round social button that
+  // reads as a letter shoved into the corner, which is what it looked like.
+  //
+  // So the box is a SQUARE of the glyph's own height, centred on the glyph's own centre
+  // (175.0, 258.1): the mark keeps exactly the size it renders at today, stops being clipped, and
+  // sits in the middle. Derived, not nudged — a magic offset chosen by eye is how the next person
+  // ends up nudging it again.
+  { label: "Kaggle", href: "https://www.kaggle.com/artafather", viewBox: "-83 0 516 516", path: "M304.2 501.5L158.4 320.3 298.2 185c2.6-2.3 3.6-5.6 2.6-8.9-1-3.3-4.3-5.6-7.9-5.6h-56.9c-4.3 0-8.6 1.7-11.9 4.9L96.8 297.5V6.9c0-4.3-3.6-6.9-6.9-6.9H50.5c-4.3 0-6.9 2.6-6.9 6.9v498.2c0 4.3 2.6 6.9 6.9 6.9h39.4c3.3 0 6.9-2.6 6.9-6.9V354.8l131.1 156.4c3.3 3.3 6.9 4.9 11.9 4.9h58.2c3.6 0 6.6-2.3 7.6-5.6.7-2.9 0-6.2-1.4-9z" },
 ];
 
 export function Footer() {

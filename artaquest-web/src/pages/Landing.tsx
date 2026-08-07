@@ -52,54 +52,63 @@ export default function Landing() {
   }, []);
 
   return (
-    <div className="flex flex-col gap-10 pb-12">
+    <div className="flex flex-col gap-6 pb-12 sm:gap-8">
       {/*
-        Hero. The words take the left; the right used to hold the orbit motif and now holds Arta,
-        who stands on the same hairline the whole page is built on. A mascot that shares the
-        visitor's ground line reads as being in the room; one floating in a decorative box does not.
+        Hero. It used to reserve 150-178px of bottom padding for Arta, who stood on the hairline at
+        the foot of this section — and Arta now lives on the message dock as one page-level
+        companion, so that space had become a wide empty band above the fold on every visit. On a
+        phone it cost most of a screen before anything else could be seen.
       */}
-      <section className="relative overflow-hidden rounded-card border border-line bg-space-2 px-4 pb-[150px] pt-12 text-center sm:px-6 sm:pt-16 sm:pb-[178px] lg:px-12 lg:text-start">
+      <section className="relative overflow-hidden rounded-card border border-line bg-space-2 px-5 py-12 text-center sm:px-6 sm:py-16">
         <div className="pointer-events-none absolute -right-24 -top-28 h-80 w-80 rounded-full bg-yang/10 blur-3xl" aria-hidden />
         <div className="pointer-events-none absolute -bottom-28 -left-24 h-80 w-80 rounded-full bg-yin/15 blur-3xl" aria-hidden />
-        <div className="relative mx-auto max-w-2xl lg:mx-0 lg:max-w-[36rem]">
+        <div className="relative mx-auto max-w-2xl">
           {/* One text node — see the file header. Deliberately NOT .aq-grad: that gradient runs
               through --color-yang, which is 1.84:1 on the light canvas anonymous visitors get by
-              default. The most important line on the site has to be readable before it is pretty;
-              the brand still carries the section through the gold/blue glow and the CTA. */}
-          <h1 className="text-[clamp(2.1rem,5.5vw,3.4rem)] font-extrabold leading-[1.07] text-ink">
+              default. The most important line on the site has to be readable before it is pretty. */}
+          <h1 className="text-[clamp(2rem,6vw,3.4rem)] font-extrabold leading-[1.07] text-ink">
             Post stuff that actually works
           </h1>
-          <p className="mx-auto mt-4 max-w-xl text-[16.5px] leading-relaxed text-ink-2 lg:mx-0">
-            Say something in 280 characters, or publish work anyone can run again for themselves —
-            games, art, animations, datasets, models, papers. Every published file comes from a
-            public Kaggle notebook that has already been run, and we check that in the open. Hearts
-            decide who wins the prize pools.
+          <p className="mx-auto mt-4 max-w-[34ch] text-[17px] leading-relaxed text-ink-2">
+            Publish work anyone can run again for themselves. Hearts decide who takes the prize pool.
           </p>
-          <div ref={cta} className="mt-7 inline-flex flex-wrap justify-center gap-3 lg:justify-start">
+          <div ref={cta} className="mt-7 inline-flex flex-wrap justify-center gap-3">
             <Button href={join} size="xl">Join in — it's free</Button>
           </div>
-          <p className="mt-3 text-[13px] text-ink-3">No password, no spam — just your email or Google.</p>
+          <p className="mt-3 text-[13px] text-ink-3">No password, no spam — your email or Google.</p>
         </div>
       </section>
 
-      {/* ArtaBot — the free chatbot is a real reason to sign up, so the landing page SELLS it. The
-          widget itself is members-only (App.tsx gates the launcher; the artabot routes are user-auth),
-          which is exactly why a visitor sees this pitch here instead of the chat. */}
-      <section className="rounded-card border border-line bg-space-2 px-6 py-8 text-center">
-        <p className="text-[12px] font-bold uppercase tracking-wider text-ink-3">Free with every account</p>
-        <h2 className="mt-2 text-[22px] font-extrabold text-yang-ink sm:text-[26px]">
-          Chat with a state-of-the-art AI — free, forever
-        </h2>
-        <p className="mx-auto mt-3 max-w-[60ch] text-[14.5px] leading-relaxed text-ink-2">
-          ArtaBot runs on Claude Opus 5, one of the most capable models there is. Ask it anything, think
-          out loud, get help making something — it remembers your conversation and it costs nothing.
-          Members can spend Arta Coin for deeper thinking when a question deserves it, but the everyday
-          chat is simply free.
-        </p>
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-          <Button href={join} size="lg">Sign up free to chat</Button>
+      {/*
+        The moat, in three lines a stranger can go and check without us. This was TWO sections of
+        three cards each — the claims, then the same ground again as "how it works" — about 120 words
+        of prose that nobody scrolling a landing page was going to read. Each claim is now one
+        sentence, because a claim you can verify does not need a paragraph defending it.
+      */}
+      <section className="grid gap-4 sm:grid-cols-3">
+        {[
+          ["Public, all the way down", "The notebook and everything it was built from are open on Kaggle. No account needed."],
+          ["It ran, and these are the files", "Kaggle's own record says the run finished and made exactly these files. We quote it back to you."],
+          ["Internet off, or we say so", "Kaggle enforces the offline switch, not us. The checklist reports whichever it finds."],
+        ].map(([h, b]) => (
+          /* yang-ink, not yang: the fill token is 1.84:1 on the light canvas an anonymous visitor
+             gets by default — unreadable. yang-ink is the text half of the same pair. */
+          <div key={h} className="rounded-card border border-line bg-space-2 p-5">
+            <h2 className="text-[15px] font-extrabold text-yang-ink">{h}</h2>
+            <p className="mt-1.5 text-[14px] leading-relaxed text-ink-2">{b}</p>
+          </div>
+        ))}
+      </section>
+
+      {/* ArtaBot is a real reason to sign up, so it stays — but as one line, not the full-height
+          section it was. The widget is members-only (App.tsx gates the launcher), which is why a
+          visitor sees this instead of the chat. */}
+      <section className="flex flex-col items-center gap-3 rounded-card border border-line bg-space-2 px-5 py-6 text-center sm:flex-row sm:justify-between sm:text-start">
+        <div>
+          <h2 className="text-[17px] font-extrabold text-yang-ink">Chat with a state-of-the-art AI, free</h2>
+          <p className="mt-1 text-[14px] text-ink-2">ArtaBot runs on Claude Opus 5. No card, no limit.</p>
         </div>
-        <p className="mt-3 text-[12.5px] text-ink-3">No card, no trial, no monthly quota — just an hourly pace limit</p>
+        <Button href={join} size="lg">Sign up free</Button>
       </section>
 
       {/* The live feed IS the pitch. Embedded: no second <h1>, no nested <main>, no rail calls. */}
@@ -113,14 +122,13 @@ export default function Landing() {
       </section>
 
       {/* A visitor who read the whole page used to arrive at the footer with nothing to do. */}
-      <section className="rounded-card border border-line bg-space-2 px-6 py-10 text-center">
-        <h2 className="text-[22px] font-extrabold">Make the next one</h2>
-        <p className="mx-auto mt-2 max-w-[52ch] text-[14.5px] leading-relaxed text-ink-2">
-          Submitting, checking and publishing are all free — always, because the Foundation runs on
-          donations. The only fee to take part is a challenge entry, and every coin of that fee goes
-          straight into its prize pool, where the most-hearted entry takes it all.
+      <section className="rounded-card border border-line bg-space-2 px-5 py-8 text-center">
+        <h2 className="text-[21px] font-extrabold">Make the next one</h2>
+        <p className="mx-auto mt-2 max-w-[44ch] text-[14.5px] leading-relaxed text-ink-2">
+          Publishing is always free. You only pay to enter a tournament, and every coin of it goes
+          into the prize pool.
         </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-3">
+        <div className="mt-5 flex flex-wrap justify-center gap-3">
           <Button href={join} size="lg">Create your free account</Button>
         </div>
       </section>

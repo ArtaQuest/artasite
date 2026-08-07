@@ -6,7 +6,9 @@
  * — because generation and integration are different pipelines. That one makes
  * the character; this one shows it. Nothing under artaquest-web/src/generated/arta
  * is edited here: a change made in the vendored copy is lost the next time
- * anyone syncs, and worse, it silently forks the mascot. Fix it upstream.
+ * anyone syncs, and worse, it silently forks the mascot. Fix it upstream. Each
+ * file's destination is spelled out in FILES; the banner names where it came
+ * from and at which commit.
  *
  *   node tools/arta-sync.mjs              # sync from ../artalife, or a clone
  *   node tools/arta-sync.mjs --check      # fail if the copy has drifted (CI)
@@ -23,7 +25,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const DEST = path.join(ROOT, "artaquest-web/src/generated/arta");
 const SCENES = path.join(ROOT, "artaquest-web/public/scenes");
 const REMOTE = "https://github.com/ArtaQuest/artalife.git";
 
@@ -37,7 +38,21 @@ const withScenes = process.argv.includes("--scenes");
  * directory. Flattened, those two differ only in case, which resolves on Linux
  * and fails on macOS: a CI-green, laptop-broken build.
  */
-const FILES = ["src/rig/arta.ts", "src/render/Arta.tsx"];
+const FILES = [
+  { from: "src/rig/arta.ts", to: "artaquest-web/src/generated/arta/rig/arta.ts" },
+  { from: "src/render/Arta.tsx", to: "artaquest-web/src/generated/arta/render/Arta.tsx" },
+  /*
+   * The audit comes down too, rather than being kept by hand on both sides.
+   *
+   * It only runs against a site, and this is the site — so it has to exist here.
+   * But it measures the CHARACTER (per-frame travel against the speed ceiling,
+   * head oscillation, what reduced motion is left with), and those laws are
+   * upstream's. Two hand-maintained copies of one test is the drift this whole
+   * arrangement exists to prevent, so it is generated like everything else and
+   * `--check` covers it.
+   */
+  { from: "tools/arta-audit.mjs", to: "tools/arta-audit.mjs" },
+];
 
 function resolveSource() {
   const env = process.env.ARTALIFE_DIR;
@@ -77,13 +92,13 @@ const banner = (rel) =>
   ` * Re-run: node tools/arta-sync.mjs\n` +
   ` */\n`;
 
-mkdirSync(DEST, { recursive: true });
 let drift = 0;
-for (const rel of FILES) {
+for (const f of FILES) {
+  const rel = f.from;
   const from = path.join(src.dir, rel);
   if (!existsSync(from)) die(`missing upstream artifact: ${rel}`);
   const want = banner(rel) + readFileSync(from, "utf8");
-  const to = path.join(DEST, rel.replace(/^src\//, ""));
+  const to = path.join(ROOT, f.to);
   mkdirSync(path.dirname(to), { recursive: true });
   const have = existsSync(to) ? readFileSync(to, "utf8") : null;
   // the banner carries the sha, so compare the BODY — a re-sync of identical
