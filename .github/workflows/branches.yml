@@ -122,8 +122,22 @@ jobs:
       - name: Changed PHP carries a version bump
         if: steps.range.outputs.root == '0'
         run: |
+          # `git rev-parse <40-char sha>` SUCCEEDS for a sha the clone does not
+          # have — it echoes it back rather than resolving it — so the `||`
+          # fallback never fires and the failure lands on the next line as
+          # "fatal: bad object". Every force-push hits this, because
+          # github.event.before is then an orphan the runner never fetched, and
+          # the gate dies with exit 128 having checked nothing. `-q --verify`
+          # is the form that actually asks whether the object exists; the
+          # "Resolve what this push added" step above already uses it.
           before='${{ github.event.before }}'
-          base=$(git rev-parse "${before}" 2>/dev/null || git rev-parse HEAD~1)
+          if git rev-parse -q --verify "${before}^{commit}" >/dev/null 2>&1; then
+            base="${before}"
+          elif git rev-parse -q --verify 'HEAD~1' >/dev/null 2>&1; then
+            base='HEAD~1'
+          else
+            echo "no usable baseline — nothing to compare"; exit 0
+          fi
           changed=$(git diff --name-only "$base" HEAD)
           bad=0
           check() {
