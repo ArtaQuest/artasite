@@ -926,8 +926,14 @@ export type AskResult =
 /** One slice of a live answer. `phase` is "thinking" until the first token, then "writing"; `think` is
  *  Claude's own estimated reasoning-token count. There is no reasoning TEXT to show — Claude Code
  *  streams thinking deltas with an empty string and a signature — so the UI reports progress, never
- *  invented words. `done` means the transcript now has the authoritative reply. */
-export type ArtabotLive = { seq: number; text: string; think: number; phase: "" | "thinking" | "writing"; done: number; idle?: number };
+ *  invented words. `done` means the transcript now has the authoritative reply.
+ *
+ *  `step` is the TOOL the sandboxed turn is running right now — "Bash: pip install pillow",
+ *  "WebSearch: kaggle reproducibility". On a tool turn it is the only thing that moves for minutes at
+ *  a time (the thinking-token count stops climbing the moment Claude starts using tools instead of
+ *  thinking), so it is what the meter shows. It is the worker's own report of a call it actually made:
+ *  never synthesise one, for the same reason the reasoning text is not invented. */
+export type ArtabotLive = { seq: number; text: string; think: number; phase: "" | "thinking" | "writing"; step?: string; done: number; idle?: number };
 // Anonymous visitors carry a stable client id so the server can keep their own conversation
 // across turns (kept in localStorage; logged-in users ignore it).
 function anonId(): string {

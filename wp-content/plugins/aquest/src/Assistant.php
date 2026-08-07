@@ -70,6 +70,27 @@ final class Assistant {
 	];
 	const FREE_TIER = 'low';
 
+	/** THE SANDBOXED EXECUTOR (operator directive, reaffirmed: "ArtaBot should be able to do anything a
+	 *  user could do in the server, with a GUI, full access to everything, maximum flexibility,
+	 *  especially optimised for web searches"). A chat turn runs inside a throwaway Linux sandbox on the
+	 *  relay VM with a shell, a browser and the internet — see tools/ticket-agent/artabot-tools.mjs for
+	 *  what that sandbox is and, more to the point, what it is NOT allowed to reach.
+	 *
+	 *  It is a SERVER-SIDE decision, deliberately: the client sends no flag and cannot ask for it, so a
+	 *  crafted request buys no capability the platform did not already choose to grant. Set to false to
+	 *  turn the whole capability off platform-wide in one line; the worker has its own independent kill
+	 *  switch (AQ_ARTABOT_TOOLS=0) for turning it off without a deploy. */
+	const TOOLS = true;
+
+	/** Which turns get it. Chat is already members-only (see ask()), so this is attributable compute,
+	 *  never anonymous. Image turns are excluded because the screenshots are decrypted to the worker's
+	 *  own disk and the sandbox has no host paths bound in — the two are mutually exclusive by
+	 *  construction, and the screenshot the member is asking about wins. Triage, ArtaMod and @mentions
+	 *  never pass true: they are classification turns that would spend a sandbox each for no gain. */
+	private static function tools_for( $uid, $has_image ) {
+		return self::TOOLS && $uid > 0 && ! $has_image;
+	}
+
 	/** Normalise a requested tier to one we actually offer (unknown/absent ⇒ the free tier). */
 	public static function tier( $want ) {
 		$k = strtolower( trim( (string) $want ) );
@@ -167,7 +188,7 @@ final class Assistant {
 	 */
 	public static function live( $req ) {
 		$key = self::live_key( $req );
-		if ( ! $key ) { return [ 'seq' => 0, 'text' => '', 'think' => 0, 'phase' => '', 'done' => 1 ]; }
+		if ( ! $key ) { return [ 'seq' => 0, 'text' => '', 'think' => 0, 'phase' => '', 'step' => '', 'done' => 1 ]; }
 		$seen     = max( 0, (int) Rest::p( $req, 'seen', 0 ) );
 		$deadline = microtime( true ) + Relay::POLL_WAIT;
 		$gather   = 0.0;
@@ -196,12 +217,16 @@ final class Assistant {
 				'text'  => (string) $buf['text'],
 				'think' => (int) $buf['think'],
 				'phase' => (string) $buf['phase'],
+				// The tool the sandbox is running right now ("Bash: pip install pillow"), or ''. On a
+				// TOOL turn this is the only thing moving for minutes at a time — the thinking meter's
+				// token count stops climbing the moment Claude starts using tools instead of thinking.
+				'step'  => (string) ( $buf['step'] ?? '' ),
 				'done'  => (int) ( $buf['done'] ?? 0 ),
 			];
 		}
 		// Nothing new within the hold — the client re-polls. `seq` echoes what it already has so a
 		// timeout is indistinguishable from "no change", and never rewinds the rendered text.
-		return [ 'seq' => $seen, 'text' => '', 'think' => 0, 'phase' => '', 'done' => 0, 'idle' => 1 ];
+		return [ 'seq' => $seen, 'text' => '', 'think' => 0, 'phase' => '', 'step' => '', 'done' => 0, 'idle' => 1 ];
 	}
 
 	/** " — you were not charged", but only when there was something to charge. */
@@ -374,7 +399,7 @@ final class Assistant {
 	}
 
 	// ── global ArtaBot chat (persistent per-user memory) ─────────────────────────
-	private static function artabot_prompt( $uid ) {
+	private static function artabot_prompt( $uid, $tools = false ) {
 		$who = '';
 		if ( $uid ) {
 			$u = get_userdata( $uid );
@@ -392,7 +417,13 @@ final class Assistant {
 			// the FACTS are ours to state and they are already public (the whole database is). Withholding
 			// them read as evasive about our own infrastructure on a platform whose premise is that a
 			// stranger can check everything. Say what is true; do not speculate beyond it.
-			'How you run, if anyone asks — this is public, so answer plainly rather than saying you cannot see it: you are Claude Opus 5, reached through headless Claude Code running on the operator\'s Claude Max SUBSCRIPTION (never a metered API key), by a small Node relay on an always-on Ubuntu 24.04 VM in Microsoft Azure\'s Sweden Central region. The relay long-polls ArtaQuest for queued turns and streams your answer back token by token as you write it, which is why members watch the words appear. You run with NO tools — no shell, no file access, no web browsing — so you can only write chat messages and open a contribution on someone\'s behalf. You do not know anything about the machine beyond this paragraph, and you must not guess at hostnames, addresses, credentials or internals; say you were not told.',
+			'How you run, if anyone asks — this is public, so answer plainly rather than saying you cannot see it: you are Claude Opus 5, reached through headless Claude Code running on the operator\'s Claude Max SUBSCRIPTION (never a metered API key), by a small Node relay on an always-on Ubuntu 24.04 VM in Microsoft Azure\'s Sweden Central region. The relay long-polls ArtaQuest for queued turns and streams your answer back token by token as you write it, which is why members watch the words appear. '
+				. ( $tools
+					// The honest version of the boundary, because a member WILL ask what you can reach —
+					// and the answer being checkable is the whole premise of the platform.
+					? 'This turn runs in a throwaway Linux sandbox on that VM with real tools: a shell, a writable scratch home, Python, Node and the open internet, plus `browse <url>` for a real browser. The sandbox is destroyed when the turn ends. It holds NO ArtaQuest credentials and cannot reach the database, production or the private network — every member-facing action still goes through the platform, and publication still needs the author\'s own emailed confirmation and passkey, which nothing you can run will ever substitute for.'
+					: 'This turn runs with NO tools — no shell, no file access, no web browsing — so you can only write chat messages and open a contribution on someone\'s behalf.' )
+				. ' You do not know anything about the machine beyond this paragraph, and you must not guess at hostnames, addresses, credentials or internals; say you were not told.',
 			'Brand voice: plain accessible English, BRITISH spelling, no trailing full stops on headings, warm. Be VERY CONCISE — give the SHORTEST genuinely-helpful answer, ideally one sentence, at most two or three; never restate the question, never pad with pleasantries, preambles or sign-offs, never list things the member did not ask for. Expand only when they truly need the detail. Never invent features that do not exist.' . $who,
 		];
 		// EVERYONE — member or signed-out visitor — can have ArtaBot file contributions, instead of
@@ -531,7 +562,8 @@ final class Assistant {
 		// state rather than an empty 404-ish gap and can show that ArtaBot has begun.
 		if ( $skey ) { set_transient( $skey, [ 'seq' => 1, 'text' => '', 'think' => 0, 'phase' => 'thinking', 'done' => 0 ], Relay::LIVE_TTL ); }
 		$dlv  = [ 'kind' => 'artabot', 'uid' => $uid, 'amid' => (int) $amid, 'tier' => $tier, 'ref' => $tref, 'prompt' => $stored, 'stream' => $skey ];
-		$out  = self::chat( $turns, self::artabot_prompt( $uid ), null, self::TIERS[ $tier ]['maxtok'], $tier, $dlv, $skey );
+		$tools = self::tools_for( $uid, (bool) $img );
+		$out  = self::chat( $turns, self::artabot_prompt( $uid, $tools ), null, self::TIERS[ $tier ]['maxtok'], $tier, $dlv, $skey, $tools );
 		if ( $out === Relay::PENDING ) {
 			return [ 'pending' => true, 'id' => (int) $amid, 'tier' => $tier, 'live' => (bool) $skey,
 			         'message' => self::NAME . ' is working on this one — the answer will appear here when it lands' ];
@@ -694,14 +726,14 @@ final class Assistant {
 	 *  (relay offline → caller shows ArtaBot's default "offline" message). Defaults are the CHAT
 	 *  profile (latest Opus, low effort, tight ceiling — fast); triage keeps the model and effort and
 	 *  overrides only the output ceiling (TRIAGE_MAXTOK protects the trailing aqmeta block). */
-	private static function chat( $messages, $system, $model = null, $max_tokens = null, $effort = 'low', $deliver = null, $stream_key = '' ) {
+	private static function chat( $messages, $system, $model = null, $max_tokens = null, $effort = 'low', $deliver = null, $stream_key = '', $tools = false ) {
 		// SUBSCRIPTION-ONLY (operator rule 2026-06-13): every turn runs on the Claude Max subscription
 		// via the laptop relay (headless `claude -p`, src/Relay.php) — the paid Anthropic API has been
 		// removed from the platform entirely. Relay::ask returns the answer; self::BUSY (relay alive but
 		// slower than its wait budget) → the caller degrades gracefully (asks the member to resend); or
 		// null → the relay is genuinely unavailable (laptop away/asleep/usage-limited), and the caller
 		// shows ArtaBot's default "offline" message. There is no API fallback.
-		$via = Relay::ask( $messages, $system, $model ?: self::MODEL, $max_tokens ?: self::MAXTOK, $effort, $deliver, $stream_key );
+		$via = Relay::ask( $messages, $system, $model ?: self::MODEL, $max_tokens ?: self::MAXTOK, $effort, $deliver, $stream_key, $tools );
 		if ( $via === Relay::PENDING ) { return Relay::PENDING; } // async: the worker keeps going, deliver() lands it
 		if ( $via === Relay::BUSY ) { return self::BUSY; }
 		return $via; // a [text,usage] array, or null when the subscription relay is unavailable

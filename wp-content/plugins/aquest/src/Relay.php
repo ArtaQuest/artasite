@@ -95,7 +95,7 @@ final class Relay {
 	 * heartbeat lapses mid-wait (the laptop slept/crashed). A live, working relay is ALWAYS waited
 	 * for — even a slow claimed answer is the subscription doing its job, never the paid API. Never throws.
 	 */
-	public static function ask( $messages, $system, $model, $max_tokens, $effort = 'low', $deliver = null, $stream_key = '' ) {
+	public static function ask( $messages, $system, $model, $max_tokens, $effort = 'low', $deliver = null, $stream_key = '', $tools = false ) {
 		if ( ! self::available() ) { return null; } // no fresh heartbeat or usage-limited → API is the backup
 
 		// Pull any attached screenshots out of the transcript so the turn (incl. ticket-triage with a
@@ -122,8 +122,14 @@ final class Relay {
 			$flat[] = [ 'role' => $m['role'], 'content' => $text ];
 		}
 
-		$sys = $system . "\n\nYou are running headless with NO tools — reply with plain Markdown text only."
-			. ( $images ? " EXCEPTION: this turn has " . count( $images ) . " attached screenshot(s) saved as local image file(s); Read each one to see it, then reply. Use ONLY the Read tool, nothing else." : '' );
+		// TOOLS. An image turn NEVER gets them: the screenshots are decrypted to a path on the worker's
+		// disk, and the tool sandbox has no host paths bound in — so the two capabilities are mutually
+		// exclusive by construction, and the image (which the member is asking about) wins.
+		$tools = $tools && ! $images;
+		$sys = $system . ( $tools
+			? "\n\nYou are running in a PRIVATE LINUX SANDBOX on ArtaQuest's own server, with full tool access: a shell, a writable home directory, Python, Node, git, ffmpeg, ImageMagick, and the open internet. Use them whenever they would make the answer better rather than answering from memory — search the web and read the actual pages before you state anything factual, current or checkable. `browse <url>` renders a page in a real browser (JavaScript included) and prints what a person would see; `browse <url> --shot /home/agent/x.png` also saves a screenshot you can then Read. You can install things for the turn (`pip install --user`, `npm install`), write and run programs, and inspect what they produce. LIMITS, and state them plainly rather than guessing: the sandbox is destroyed when this turn ends, so nothing you write persists into the next message; you have NO access to ArtaQuest's database, production, member data, credentials, or anything else on the machine outside your own scratch directory, and private networks are blocked; and you are working on the member's behalf in public, so never do anything you would not want published. Finish by REPLYING to the member in plain Markdown — the tools are how you find out, the reply is the deliverable."
+			: "\n\nYou are running headless with NO tools — reply with plain Markdown text only."
+			  . ( $images ? " EXCEPTION: this turn has " . count( $images ) . " attached screenshot(s) saved as local image file(s); Read each one to see it, then reply. Use ONLY the Read tool, nothing else." : '' ) );
 		$id = Data::insert( 'aq_relay_jobs', [
 			'status'  => 'pending',
 			'payload' => Data::enc( array_filter( [
@@ -135,6 +141,10 @@ final class Relay {
 				'images'     => $images ?: null, // encrypted; the daemon decrypts → temp files → Read
 				'deliver'    => $deliver, // opaque: who to hand the finished answer to (see complete())
 				'stream'     => $stream_key ?: null, // opaque: where to post live deltas (see stream_chunk())
+				// The worker still gets the LAST word: prod cannot see whether the host it is talking to has a
+				// tool sandbox installed, and a "yes" the worker cannot honour must degrade to a text turn
+				// rather than become an unsandboxed shell. See artabot-relay.mjs toolsFor().
+				'tools'      => $tools ?: null,
 			], static function ( $v ) { return $v !== null; } ) ),
 			'created' => Data::now(),
 		] );
@@ -325,7 +335,7 @@ final class Relay {
 		$key = (string) Rest::p( $req, 'key', '' );
 		if ( ! preg_match( '/^aqlive_[a-f0-9]{16,64}$/', $key ) ) { return [ 'ok' => false ]; }
 		$buf = get_transient( $key );
-		if ( ! is_array( $buf ) ) { $buf = [ 'seq' => 0, 'text' => '', 'think' => 0, 'phase' => 'thinking', 'done' => 0 ]; }
+		if ( ! is_array( $buf ) ) { $buf = [ 'seq' => 0, 'text' => '', 'think' => 0, 'phase' => 'thinking', 'step' => '', 'done' => 0 ]; }
 
 		$add = (string) Rest::p( $req, 'text', '' );
 		if ( $add !== '' ) {
@@ -337,6 +347,12 @@ final class Relay {
 		if ( $think > (int) $buf['think'] ) { $buf['think'] = $think; }
 		$phase = (string) Rest::p( $req, 'phase', '' );
 		if ( in_array( $phase, [ 'thinking', 'writing' ], true ) ) { $buf['phase'] = $phase; }
+		// The current TOOL STEP on a sandboxed turn ("Bash: pip install pillow"). It is the only window
+		// a member gets onto a turn that can run for minutes with no text at all, so it is carried here
+		// rather than left to the thinking meter's token count. Sanitised and short-capped because it is
+		// worker-supplied text that will be RENDERED: strip control characters, cap the length.
+		$step = trim( preg_replace( '/[\x00-\x1F\x7F]+/u', ' ', (string) Rest::p( $req, 'step', '' ) ) );
+		if ( $step !== '' ) { $buf['step'] = mb_substr( $step, 0, 160 ); }
 		$buf['seq'] = (int) $buf['seq'] + 1;
 
 		set_transient( $key, $buf, self::LIVE_TTL );

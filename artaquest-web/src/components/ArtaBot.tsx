@@ -129,7 +129,7 @@ function TypeOut({ body, onTick, onDone, streaming }: { body: string; onTick: ()
 // nothing else. Do NOT "enrich" it with invented reasoning: a plausible chain of thought the member
 // cannot check is worse than an honest meter.
 // data-ay-skip keeps the live numbers out of the i18n mesh (they'd be collected as translations).
-function Thinking({ tokens, since }: { tokens: number; since: number }) {
+function Thinking({ tokens, since, step }: { tokens: number; since: number; step?: string }) {
   // The elapsed count is STATE advanced by the interval, not Date.now() read during render: a clock
   // read while rendering is impure (it changes on any incidental re-render), which the lint rule
   // rightly refuses. `since` is the fixed baseline the parent captured when the turn started.
@@ -143,7 +143,12 @@ function Thinking({ tokens, since }: { tokens: number; since: number }) {
   return (
     <div data-ay-skip="1" className="flex items-center gap-2 text-sm opacity-70">
       <span className="aq-think-dots" aria-hidden="true"><i /><i /><i /></span>
-      <span>Thinking{tokens > 0 ? ` · ~${tokens.toLocaleString()} tokens` : ""}{secs >= 2 ? ` · ${secs}s` : ""}</span>
+      {/* A TOOL turn replaces the token count with the tool it is actually running, because that is
+          the true thing to say: once Claude starts using tools it stops thinking, the estimate stops
+          climbing, and a frozen "~4,200 tokens" for two minutes reads as a hang. */}
+      <span className="truncate">{step
+        ? `${step}${secs >= 2 ? ` · ${secs}s` : ""}`
+        : `Thinking${tokens > 0 ? ` · ~${tokens.toLocaleString()} tokens` : ""}${secs >= 2 ? ` · ${secs}s` : ""}`}</span>
     </div>
   );
 }
@@ -168,7 +173,7 @@ export function BotChat() {
   const [loaded, setLoaded] = useState(false);
   const [animId, setAnimId] = useState<number | null>(null); // the one reply currently typing itself out
   // The turn being written RIGHT NOW, streamed from the relay. Null when nothing is in flight.
-  const [live, setLive] = useState<{ text: string; think: number; phase: string; since: number } | null>(null);
+  const [live, setLive] = useState<{ text: string; think: number; phase: string; step: string; since: number } | null>(null);
   // Remembered across sessions: a member who wants deep answers should not re-pick every time. Read
   // lazily so the clock/storage is never touched during render, and defaulted to the free tier.
   const [effort, setEffort] = useState<string>(() => {
@@ -218,7 +223,10 @@ export function BotChat() {
             seen = s.seq;
             // `text` is the whole answer so far — adopt it, never append, so a repeated or dropped
             // response cannot duplicate or lose what the member is reading.
-            setLive((p) => ({ text: s.text, think: s.think, phase: s.phase || "thinking", since: p?.since ?? Date.now() }));
+            // `step` is STICKY: the buffer only ever carries the latest tool, and an empty one means
+            // "nothing new to report", not "the tool finished" — so keep the last one rather than
+            // flickering the line away between calls.
+            setLive((p) => ({ text: s.text, think: s.think, phase: s.phase || "thinking", step: s.step || p?.step || "", since: p?.since ?? Date.now() }));
           }
           if (s.done) break;
         } catch {
@@ -240,7 +248,7 @@ export function BotChat() {
     setDraft(""); setImage(null); setErr("");
     setMsgs((m) => [...m, { id: -Date.now(), role: "user", body: text, at: Date.now() / 1000, image: img ?? undefined }]);
     setBusy(true);
-    setLive({ text: "", think: 0, phase: "thinking", since: Date.now() });
+    setLive({ text: "", think: 0, phase: "thinking", step: "", since: Date.now() });
     // The live reader starts BEFORE the answer is asked for. The buffer is keyed on the session, so
     // there is nothing to wait for — and starting here means the thinking meter is already ticking
     // while the request is still in flight.
@@ -387,7 +395,15 @@ export function BotChat() {
             <div data-ay-skip="1" className="max-w-[80%] rounded-card border border-line bg-space-2 px-3.5 py-2.5 text-[14px] leading-relaxed text-ink-2">
               {live.text
                 ? <TypeOut body={live.text} onTick={followTyping} onDone={() => {}} streaming />
-                : <Thinking tokens={live.think} since={live.since} />}
+                : <Thinking tokens={live.think} since={live.since} step={live.step} />}
+              {/* On a TOOL turn Claude narrates as it works, so there IS text — and the step line has
+                  to sit under it or the member watches a paragraph go still for two minutes with
+                  nothing saying why. */}
+              {live.text && live.step && (
+                <div className="mt-2 border-t border-line pt-2">
+                  <Thinking tokens={live.think} since={live.since} step={live.step} />
+                </div>
+              )}
             </div>
           </div>
         )}
