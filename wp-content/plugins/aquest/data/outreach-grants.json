@@ -1,7 +1,7 @@
 {
  "_source": {
   "repo": "https://github.com/ArtaQuest/artagrants",
-  "commit": "9d9486a68fd90779dce84c8748205e0315a1ac8e",
+  "commit": "a8536693a50571ab822b11abd0176fbf7ebb8b30",
   "file": "catalogue/outreach-grants.json",
   "note": "Researched and maintained upstream. Do not edit this copy — run tools/grants-sync.mjs."
  },
@@ -145,7 +145,7 @@
    "red_flags": "ArtaQuest CANNOT apply alone — every Horizon Europe RIA needs a multi-partner, EU-anchored consortium (≥3 entities from ≥3 EU/associated countries, ≥1 EU member state), so ArtaQuest must join or build one and be one of several beneficiaries, not the sole grantee. It is a RESEARCH & INNOVATION ACTION: the deliverables emphasise documented good practice, rigorous policy-relevant evidence and recommendations on multilingualism, so the consortium typically needs research/academic partners and ArtaQuest would contribute as the technology/platform/community partner rather than lead the science. EU funds cover the project's budgeted activities, not ArtaQuest's general operations and not learner bursaries/regranting (no cascade-funding is foreseen for this topic). The €5–5.75M figure is the EU contribution PER PROJECT shared across all partners — not an amount any single partner receives. The 23 Sep 2026 deadline is a single fixed date within the 2026–2027 Work Programme; the identical topic may not recur in later programmes. Canada's funded participation depends on the Pillar II association staying in force (confirmed active — 2nd EU–Canada Joint Association Committee met in Brussels 26 March 2026), and association covers Pillar II (Cluster 2 sits in Pillar II); Pillar I/III rules differ."
   },
   {
-   "slug": "european-commission-horizon-europe-the-eu-s-research-innovation--2",
+   "slug": "european-commission-horizon-europe-the-eu-s-research-innovation-2",
    "title": "Digital and media literacy as drivers for democratic and civic resilience — Horizon Europe Cluster 2 Research & Innovation Action (RIA); call topic HORIZON-CL2-2026-01-DEMOCRACY-10 (single-stage; opens 12 May 2026, deadline 23 Sep 2026)",
    "funder": "European Commission — Horizon Europe, the EU's research & innovation framework programme 2021–2027; Pillar II, Cluster 2 'Culture, Creativity and Inclusive Society', Destination 'Democracy and Governance'…",
    "url": "https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-details/horizon-cl2-2026-01-democracy-10",
