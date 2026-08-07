@@ -30,6 +30,17 @@ function friendlyError(e: unknown): string {
   return "ArtaBot hit a snag. Please try again in a moment.";
 }
 
+// The effort tiers a member can buy for one turn. EVERY tier runs the same model (Claude Opus 5) —
+// what changes is thinking depth and reply length, never a better brain. `low` is free for everyone,
+// signed in or not, forever. The ids must match Assistant::TIERS server-side; the server prices and
+// authorises the choice, so this list is a menu, not a permission.
+const EFFORTS = [
+  { id: "low", label: "Quick" },
+  { id: "medium", label: "Considered" },
+  { id: "high", label: "Deep" },
+  { id: "xhigh", label: "Deepest" },
+] as const;
+
 // Image types ArtaBot (Claude) can read — mirror the server's allow-list so the file picker only
 // offers compatible files and the error copy is accurate. Screenshots are PNG/JPEG on every platform.
 const OK_IMAGE = ["image/png", "image/jpeg", "image/webp", "image/gif"];
@@ -158,6 +169,12 @@ export function BotChat() {
   const [animId, setAnimId] = useState<number | null>(null); // the one reply currently typing itself out
   // The turn being written RIGHT NOW, streamed from the relay. Null when nothing is in flight.
   const [live, setLive] = useState<{ text: string; think: number; phase: string; since: number } | null>(null);
+  // Remembered across sessions: a member who wants deep answers should not re-pick every time. Read
+  // lazily so the clock/storage is never touched during render, and defaulted to the free tier.
+  const [effort, setEffort] = useState<string>(() => {
+    try { const v = localStorage.getItem("aq_bot_effort"); return EFFORTS.some((t) => t.id === v) ? (v as string) : "low"; }
+    catch { return "low"; }
+  });
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const pickSeq = useRef(0); // bumps per attachment so a slow downscale can't overwrite a newer pick
@@ -229,7 +246,7 @@ export function BotChat() {
     // while the request is still in flight.
     const stream = followLive();
     try {
-      const r = await Api.ask(text, img ?? undefined);
+      const r = await Api.ask(text, img ?? undefined, effort);
       if ("reply" in r && r.reply) {
         // Synchronous answer (the relay finished inside the request). Nothing to stream.
         stream.stop();
@@ -385,11 +402,25 @@ export function BotChat() {
       </div>
 
       <div className="border-t border-line p-3">
-        {msgs.length > 0 && (
-          <div className="mb-2 flex justify-end text-[11px] text-ink-2">
-            <button onClick={clear} className="hover:text-yin-light">Clear</button>
-          </div>
-        )}
+        <div className="mb-2 flex items-center justify-between gap-3 text-[11px] text-ink-2">
+          {/* HOW HARD TO THINK, not which model — every tier runs Opus 5; what changes is thinking
+              depth and reply length. `low` is free for everyone, forever. The server re-reads this
+              against Assistant::TIERS and decides what the member may actually spend, so this is a
+              request rather than an entitlement. data-ay-skip: the tier names are identifiers the
+              server matches on, so the i18n mesh must not translate them out from under it. */}
+          <label data-ay-skip="1" className="flex items-center gap-1.5">
+            <span className="text-ink-3">Effort</span>
+            <select
+              value={effort}
+              onChange={(e) => { setEffort(e.target.value); try { localStorage.setItem("aq_bot_effort", e.target.value); } catch { /* private window */ } }}
+              className="rounded-pill border border-line bg-space-2 px-2 py-0.5 text-[11px] text-ink-2 hover:border-yin-light focus:border-yin-light focus:outline-none"
+              aria-label="How deeply ArtaBot should think about this turn"
+            >
+              {EFFORTS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+            </select>
+          </label>
+          {msgs.length > 0 && <button onClick={clear} className="hover:text-yin-light">Clear</button>}
+        </div>
         {image ? (
           <div className="relative mb-2 w-fit">
             <img src={image} alt="Attached screenshot" className="max-h-24 rounded-lg border border-line object-contain" />

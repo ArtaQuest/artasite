@@ -942,7 +942,10 @@ export const ArtaBot = {
   history: () => get<{ items: ArtabotMsg[]; anon?: boolean }>("/artabot", { anon: anonId() }),
   // `image` (optional) is a data URL of a screenshot to attach to this turn — sent inline to Claude,
   // never stored. JSON.stringify drops it when undefined, so text-only turns are unchanged.
-  ask: (message: string, image?: string) => post<AskResult>("/artabot", { message, image, anon: anonId() }),
+  /** `effort` is how much THINKING to buy for this turn, not a better model — every tier runs Opus 5.
+   *  The server re-reads it from Assistant::TIERS and decides what this member may actually spend, so
+   *  the picker is a request, never an entitlement. */
+  ask: (message: string, image?: string, effort?: string) => post<AskResult>("/artabot", { message, image, effort, anon: anonId() }),
   clear: () => post<{ ok: boolean }>("/artabot/clear", { anon: anonId() }),
   /** The in-flight answer as it is written. LONG-POLL: the server holds this open (~20s) and answers
    *  the moment there is something new, so a streaming turn costs ~1 request/s rather than one per
