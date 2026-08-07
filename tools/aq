@@ -146,17 +146,19 @@ cmd_sync() {
   # nothing private. The reverse is what `ship` refuses.
   local dir="$WT/sync"
   [ -e "$dir" ] && git worktree remove --force "$dir" 2>/dev/null
-  git worktree add -q "$dir" main || die "could not create the sync worktree"
+  # DETACHED, deliberately. `main` is usually checked out somewhere — the operator's own tree sits on
+  # it — and git refuses to hand the same branch to two worktrees. Detaching at origin/main lets the
+  # merge happen without disturbing whoever is working, and the push below names the branch.
+  git worktree add -q --detach "$dir" origin/main || die "could not create the sync worktree"
   ( cd "$dir" \
-    && git merge --ff-only origin/main 2>/dev/null; \
-    git merge artasite/main -m "Bring the deployed truth back into the monorepo
+    && git merge artasite/main -m "Bring the deployed truth back into the monorepo
 
 $n commit(s) that reached production before they reached here. Where the two
 disagree on anything the platform runs, artasite wins: it is what production is
 executing. Research files go the other way — analysis/ lives in ArtaQuest/artatopics
 now, and this repository keeps platform things." ) \
     || { warn "conflicts — resolve in $dir, then: git -C $dir commit && git -C $dir push origin main"; return 1; }
-  ( cd "$dir" && git push origin main ) || { warn "push failed; the merge is committed in $dir"; return 1; }
+  ( cd "$dir" && git push origin HEAD:main ) || { warn "push failed; the merge is committed in $dir"; return 1; }
   git worktree remove --force "$dir" 2>/dev/null
   ok "monorepo main now contains every deployed commit"
 }
