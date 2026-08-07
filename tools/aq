@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+#
+# aq — the whole dev cycle, in commands that are hard to use wrongly.
+#
+#   tools/aq status            where am I, what has drifted, what is production running
+#   tools/aq start <name>      an isolated worktree branched from what production is built from
+#   tools/aq check [--fast]    run every gate CI runs, here, before pushing
+#   tools/aq ship              refuse-or-push to artasite main, then confirm prod is EXECUTING it
+#   tools/aq sync              bring the deploy branch back into this monorepo's main
+#   tools/aq done <name>       remove a finished worktree and its merged branch
+#
+# WHY. Two repositories have to agree: this monorepo, and ArtaQuest/artasite, which is PUBLIC, is a
+# SUBSET, and is the only thing that reaches production. Nearly every way to get hurt here is a
+# variation on one of four mistakes, and each command below exists to make one of them impossible:
+#
+#   · editing from a stale base — the shared checkout sat 17 commits behind the deploy branch, and a
+#     change made there does not conflict, it silently REVERTS live code. `start` always branches
+#     from artasite/main.
+#   · working in the shared checkout — it carries other agents' uncommitted work, so `git add -A`
+#     or a branch switch absorbs or disturbs it. `start` gives you your own worktree.
+#   · pushing the wrong direction — a plain outbound merge would publish tools/ticket-agent/,
+#     CLAUDE.md and ~10,300 analysis files to a public repository. `ship` counts what would become
+#     public and refuses.
+#   · believing a green check — WordPress.com deploying is a different system from GitHub going
+#     green, and a cacheable endpoint can answer from the edge with a pre-deploy body. `ship` asks
+#     the origin what it is EXECUTING.
+
+set -uo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+B=$'\033[1m'; R=$'\033[31m'; G=$'\033[32m'; Y=$'\033[33m'; D=$'\033[2m'; OFF=$'\033[0m'
+say()  { printf "%s%s%s\n" "$B" "$1" "$OFF"; }
+ok()   { printf "%s  ✓ %s%s\n" "$G" "$1" "$OFF"; }
+warn() { printf "%s  ! %s%s\n" "$Y" "$1" "$OFF"; }
+die()  { printf "%s  ✗ %s%s\n" "$R" "$1" "$OFF"; exit 1; }
+API=https://artaquest.com/wp-json/aq/v1
+WT=/private/tmp/aq-work
+
+# `timeout` does not exist on macOS — every network call is bounded with curl -m instead.
+prod_version() { curl -s -m 25 "$API/version?nc=$(date +%s)" 2>/dev/null; }
+
+cmd_status() {
+  git fetch -q artasite 2>/dev/null; git fetch -q origin 2>/dev/null
+  say "Where you are"
+  printf "  branch      %s\n  worktree    %s\n" "$(git branch --show-current)" "$PWD"
+  local dirty; dirty=$(git status --porcelain | wc -l | tr -d ' ')
+  [ "$dirty" = "0" ] && ok "tree clean" || warn "$dirty uncommitted path(s) — some may be another agent's"
+  say "Drift"
+  local behind ahead
+  behind=$(git rev-list --count HEAD..artasite/main 2>/dev/null || echo '?')
+  ahead=$(git rev-list --count artasite/main..HEAD 2>/dev/null || echo '?')
+  if [ "$behind" != "0" ]; then
+    warn "$behind commit(s) BEHIND artasite/main — editing here can silently revert live code"
+    printf "%s      fix: tools/aq start <name>   (or: git merge artasite/main)%s\n" "$D" "$OFF"
+  else ok "level with artasite/main"; fi
+  printf "  %s ahead of the deploy branch\n" "$ahead"
+  local mbehind; mbehind=$(git rev-list --count origin/main..artasite/main 2>/dev/null || echo '?')
+  [ "$mbehind" = "0" ] && ok "monorepo main has the deployed truth" \
+    || warn "$mbehind deployed commit(s) missing from origin/main — run: tools/aq sync"
+  say "Production"
+  printf "  executing   %s\n" "$(prod_version)"
+  printf "  repo says   plugin %s  theme %s\n" \
+    "$(git show artasite/main:wp-content/plugins/aquest/aquest.php 2>/dev/null | grep -oE "AQ_VERSION', '[0-9.]+'" | grep -oE '[0-9.]+' | head -1)" \
+    "$(git show artasite/main:wp-content/themes/artaquest-theme/style.css 2>/dev/null | grep -iE '^ \* Version:' | grep -oE '[0-9.]+' | head -1)"
+  printf "  health      %s\n" "$(curl -s -m 25 "$API/health/pulse" 2>/dev/null)"
+}
+
+cmd_start() {
+  local name="${1:-}"; [ -n "$name" ] || die "usage: tools/aq start <name>"
+  git fetch -q artasite || die "cannot reach artasite"
+  local dir="$WT/$name" br="work/$name"
+  [ -e "$dir" ] && die "$dir already exists — tools/aq done $name, or pick another name"
+  # ALWAYS from artasite/main. Branching from the shared checkout is how a change ends up reverting
+  # production: this tree can be behind, and an outbound copy overwrites rather than conflicting.
+  git worktree add -q -b "$br" "$dir" artasite/main || die "could not create the worktree"
+  ok "worktree $dir on $br, branched from artasite/main ($(git log --oneline -1 artasite/main | cut -c1-60))"
+  printf "\n  cd %s\n  tools/aq check --fast\n  tools/aq ship\n\n" "$dir"
+}
+
+cmd_check() { bash tools/preflight.sh "$@"; }
+
+cmd_ship() {
+  git fetch -q artasite || die "cannot reach artasite"
+  local br; br=$(git branch --show-current)
+  [ -n "$br" ] || die "detached HEAD — check out a branch first"
+  [ "$br" = "main" ] && die "do not ship from a local main; use tools/aq start <name>"
+  [ -z "$(git status --porcelain)" ] || die "commit or stash your changes first"
+
+  # ── The outbound guard. artasite is PUBLIC and a SUBSET. ────────────────────────────────────
+  # A branch made with `aq start` adds only its own files, so this list is tiny. A branch made from
+  # the monorepo would add ~12,000 — ArtaDev and its relays, CLAUDE.md, and every analysis output.
+  # .gitignore does not help: it governs UNTRACKED files, and a merge carries tracked content past it.
+  say "What this would make public"
+  local extra; extra=$(comm -23 <(git ls-tree -r HEAD --name-only | sort) <(git ls-tree -r artasite/main --name-only | sort))
+  local n; n=$(echo "$extra" | grep -c . || true)
+  local priv; priv=$(echo "$extra" | grep -E '^(tools/ticket-agent/|CLAUDE\.md|AGENTS\.md|\.claude/|analysis/)' || true)
+  if [ -n "$priv" ]; then
+    printf "%s\n" "$priv" | head -10 | sed 's/^/    /'
+    die "REFUSING: this branch would publish private paths to a public repository. Branch from artasite/main (tools/aq start <name>) and copy only the files you mean to ship."
+  fi
+  if [ "$n" -gt 200 ]; then
+    die "REFUSING: $n new files would become public — that is not a feature branch, that is the monorepo. Use tools/aq start <name>."
+  fi
+  [ "$n" = "0" ] && ok "no new files" || { ok "$n new file(s), none private"; echo "$extra" | sed 's/^/    /' | head -10; }
+
+  bash tools/preflight.sh || die "preflight failed — nothing pushed"
+
+  say "Pushing $br → artasite main"
+  # The branch is a disposable ref that exists only so CI verifies this exact tree before main sees
+  # it, and it is deleted below. Amending or rebasing before shipping is normal, so force-with-lease
+  # here rather than failing on a non-fast-forward — with-lease, so it still refuses if someone else
+  # has pushed to that ref. `main` below is a PLAIN push and must stay one: it is the deploy
+  # authority, and forcing it would discard a deploy.
+  git push -q --force-with-lease artasite "HEAD:refs/heads/$br" || die "branch push failed"
+  git push artasite HEAD:main || die "push to main refused — someone else pushed; git fetch artasite && git rebase artasite/main, then retry"
+
+  # ── A green run is NOT a deploy. Ask production what it is EXECUTING. ───────────────────────
+  # Only meaningful when the version actually moved. A change that touches no hashed PHP — tooling,
+  # workflows, docs, or SPA source alone — ships under the same version by design, and waiting for a
+  # number that was never going to change would report a timeout on a perfectly good deploy.
+  local want prev
+  want=$(grep -oE "AQ_VERSION', '[0-9.]+'" wp-content/plugins/aquest/aquest.php | grep -oE '[0-9.]+')
+  prev=$(git show artasite/main:wp-content/plugins/aquest/aquest.php 2>/dev/null | grep -oE "AQ_VERSION', '[0-9.]+'" | grep -oE '[0-9.]+')
+  if [ "$want" = "$prev" ]; then
+    warn "no version change — nothing to confirm by /version (this push changed no hashed PHP)"
+    printf "  %s\n" "$(curl -s -m 25 "$API/health/pulse" 2>/dev/null)"
+    git push -q artasite --delete "$br" 2>/dev/null; return 0
+  fi
+  say "Waiting for production to execute $want"
+  local i
+  for i in $(seq 1 60); do
+    case "$(prod_version)" in *"\"$want\""*) ok "production is executing $want"; git push -q artasite --delete "$br" 2>/dev/null; return 0;; esac
+    sleep 30
+  done
+  warn "not executing $want yet after 30 min — CI may still be running, or WordPress.com's 'deploy on workflow completion' is off"
+  printf "  %s\n" "$(prod_version)"
+  return 1
+}
+
+cmd_sync() {
+  git fetch -q artasite && git fetch -q origin || die "cannot reach the remotes"
+  local n; n=$(git rev-list --count origin/main..artasite/main)
+  [ "$n" = "0" ] && { ok "monorepo main already has every deployed commit"; return 0; }
+  say "$n deployed commit(s) missing from the monorepo's main"
+  # INBOUND ONLY, and this direction is the safe one: artasite is a subset, so merging it in adds
+  # nothing private. The reverse is what `ship` refuses.
+  local dir="$WT/sync"
+  [ -e "$dir" ] && git worktree remove --force "$dir" 2>/dev/null
+  git worktree add -q "$dir" main || die "could not create the sync worktree"
+  ( cd "$dir" \
+    && git merge --ff-only origin/main 2>/dev/null; \
+    git merge artasite/main -m "Bring the deployed truth back into the monorepo
+
+$n commit(s) that reached production before they reached here. Where the two
+disagree on anything the platform runs, artasite wins: it is what production is
+executing. Research files go the other way — analysis/ lives in ArtaQuest/artatopics
+now, and this repository keeps platform things." ) \
+    || { warn "conflicts — resolve in $dir, then: git -C $dir commit && git -C $dir push origin main"; return 1; }
+  ( cd "$dir" && git push origin main ) || { warn "push failed; the merge is committed in $dir"; return 1; }
+  git worktree remove --force "$dir" 2>/dev/null
+  ok "monorepo main now contains every deployed commit"
+}
+
+cmd_done() {
+  local name="${1:-}"; [ -n "$name" ] || die "usage: tools/aq done <name>"
+  local dir="$WT/$name" br="work/$name"
+  [ -d "$dir" ] && { git worktree remove --force "$dir" && ok "removed $dir"; }
+  # -d, never -D: git refuses to delete a branch holding work that is not merged anywhere, which is
+  # exactly the check worth keeping.
+  git branch -d "$br" 2>/dev/null && ok "deleted $br" \
+    || warn "$br kept — it holds commits not merged anywhere (git branch -D $br to force)"
+}
+
+case "${1:-status}" in
+  status) shift; cmd_status "$@" ;;
+  start)  shift; cmd_start  "$@" ;;
+  check)  shift; cmd_check  "$@" ;;
+  ship)   shift; cmd_ship   "$@" ;;
+  sync)   shift; cmd_sync   "$@" ;;
+  done)   shift; cmd_done   "$@" ;;
+  *) sed -n '3,12p' "$0" | sed 's/^# \{0,1\}//' ; exit 1 ;;
+esac

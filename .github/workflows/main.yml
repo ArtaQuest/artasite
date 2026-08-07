@@ -56,238 +56,39 @@ jobs:
 
       # ONE place computes the range, and everything downstream reads it. It was derived twice
       # before — two chances to disagree about what "this push" means.
-      - name: Resolve what this push added
-        id: range
-        run: |
-          before='${{ github.event.before }}'
-          if [ -n "$before" ] && [ "$before" != "0000000000000000000000000000000000000000" ] \
-             && git cat-file -e "${before}^{commit}" 2>/dev/null; then
-            echo "range=${before}..${{ github.sha }}" >> "$GITHUB_OUTPUT"; echo "root=0" >> "$GITHUB_OUTPUT"
-          elif git rev-parse -q --verify 'HEAD~1' >/dev/null; then
-            echo "range=HEAD~1..HEAD" >> "$GITHUB_OUTPUT"; echo "root=0" >> "$GITHUB_OUTPUT"
-          else
-            # HEAD is a ROOT commit: HEAD~1 does not exist, and asking git for it is a FATAL error,
-            # not an empty range. That is the state a freshly created repository is in on its first
-            # push — the moment the gates matter most — and it took every one of them down with
-            # exit 128 before a single check had run.
-            echo "range=HEAD" >> "$GITHUB_OUTPUT"; echo "root=1" >> "$GITHUB_OUTPUT"
-          fi
-
-      # Keys and attribution together: both answer "is this fit to be public", both cost a second,
-      # and both should fail before anything slower runs.
-      - name: Hygiene
-        run: |
-          # Widened after a Google API key sat in tracked source through every previous run: the old
-          # pattern list had no Google, Slack, JWT or SendGrid shape, so a real one would have
-          # deployed unchallenged. That particular literal turned out to be YouTube's PUBLIC
-          # InnerTube Android-client key — a constant in every copy of the YouTube app, not ours and
-          # not rotatable — so it is allowed BY EXACT VALUE rather than by weakening the pattern.
-          # Any other AIza… is a finding. Add to this allowance only with a comment saying why.
-          ALLOW='AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w'
-          hits=$(grep -rIlE '(sk-ant-[A-Za-z0-9_-]{20,})|(ghp_[A-Za-z0-9]{30,})|(gho_[A-Za-z0-9]{30,})|(github_pat_[A-Za-z0-9_]{30,})|(AKIA[0-9A-Z]{16})|(ASIA[0-9A-Z]{16})|(sk_live_[A-Za-z0-9]{20,})|(rk_live_[A-Za-z0-9]{20,})|(hf_[A-Za-z0-9]{30,})|(xox[baprs]-[A-Za-z0-9-]{10,})|(AIza[0-9A-Za-z_-]{35})|(ya29\.[0-9A-Za-z_-]{20,})|(SG\.[A-Za-z0-9_-]{20,})|(eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.)|(-----BEGIN [A-Z ]*PRIVATE KEY)' \
-               --exclude-dir=.git --exclude-dir=node_modules . || true)
-          bad=0
-          # `for f in $hits` word-splits on spaces: a file named "my key.php" became two
-          # nonexistent paths, both greps failed, and the step printed clean and exited 0.
-          # Reproduced: a planted Google key in "my key.php" passed the gate untouched.
-          # read -r takes the whole line, so a filename with a space is still one filename.
-          while IFS= read -r f; do
-            [ -n "$f" ] || continue
-            # A file counts only if it holds a key-shaped value that is NOT the allowed constant.
-            if grep -oIE '(sk-ant-[A-Za-z0-9_-]{20,})|(ghp_[A-Za-z0-9]{30,})|(gho_[A-Za-z0-9]{30,})|(github_pat_[A-Za-z0-9_]{30,})|(AKIA[0-9A-Z]{16})|(ASIA[0-9A-Z]{16})|(sk_live_[A-Za-z0-9]{20,})|(rk_live_[A-Za-z0-9]{20,})|(hf_[A-Za-z0-9]{30,})|(xox[baprs]-[A-Za-z0-9-]{10,})|(AIza[0-9A-Za-z_-]{35})|(ya29\.[0-9A-Za-z_-]{20,})|(SG\.[A-Za-z0-9_-]{20,})|(eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.)|(-----BEGIN [A-Z ]*PRIVATE KEY)' "$f" \
-                 | grep -qv "$ALLOW"; then
-              echo "::error::$f holds a key-shaped value"; bad=1
-            fi
-          done <<< "$hits"
-          [ $bad -eq 0 ] || exit 1
-          # A TRAILER, not a phrase. GitHub parses `Co-authored-by:` only at the start of a line in
-          # the trailer block — so anchoring there is both what actually creates a contributor and
-          # what stops this rejecting honest work. Unanchored, it failed two commits whose messages
-          # merely EXPLAINED this rule, and taught the next author to reword prose to appease a
-          # grep. A check that punishes writing about itself is a check people route around.
-          # Ask GIT'S OWN trailer parser, not a grep. Git only honours Co-authored-by: as a trailer
-          # in the final paragraph, so a line-anchored grep also rejects an indented quotation or a
-          # mid-body mention — it rejected the very commits that documented this rule. Matching the
-          # mechanism rather than the phrasing is the entire point of the gate.
-          bad=$(git log --format='%(trailers:key=Co-authored-by,valueonly)' '${{ steps.range.outputs.range }}' | tr -d '[:space:]')
-          if [ -n "$bad" ]; then
-            echo "::error::a commit in this push carries machine attribution as a git trailer"
-            git log --format='%h %(trailers:key=Co-authored-by)' '${{ steps.range.outputs.range }}' | sed 's/^/  /'
-            exit 1
-          fi
-          echo "clean"
-
-      - name: Route handlers resolve
-        run: |
-          # Rest::ROUTES names handlers as STRINGS ('Health::pulse'), resolved at dispatch, so a
-          # missing class OR a missing method is invisible to php -l and to the bundler. Both raise
-          # the same Error, both are caught by Rest::dispatch, and both answer 500 on whatever route
-          # names them — once, for a public endpoint, while every other gate reported success.
-          #
-          # The pattern reads the ROW'S STRUCTURE — [ 'METHOD', 'path', 'Class::method' — instead of
-          # scanning the line. The previous version used [^]]* for the middle field, a negated class
-          # that cannot cross a ']', so every route carrying a regex param like (?P<id>[0-9]+) was
-          # skipped: 279 of 398 rows checked, and it reported success on the 30% it never read.
-          # Anchoring on the structure also keeps the doc comment atop Rest.php, which names
-          # 'Domain::method' as an example, from being mistaken for a route.
-          pat="^[[:space:]]*\[[[:space:]]*'(GET|POST|PUT|PATCH|DELETE)'[[:space:]]*,[[:space:]]*'[^']*'[[:space:]]*,[[:space:]]*'([A-Z][A-Za-z0-9_]+::[a-z0-9_]+)'"
-          src=wp-content/plugins/aquest/src
-          echo "route rows read: $(grep -cE "$pat" $src/Rest.php)"
-          grep -oE "$pat" $src/Rest.php | grep -oE "'[A-Z][A-Za-z0-9_]+::[a-z0-9_]+'$" | tr -d "'" | sort -u > /tmp/handlers.txt
-          miss=0
-          while IFS= read -r h; do
-            c="${h%%::*}"; m="${h##*::}"
-            if [ ! -f "$src/$c.php" ]; then
-              echo "::error::Rest::ROUTES names $h but $src/$c.php does not exist"; miss=1; continue
-            fi
-            grep -qE "function[[:space:]]+$m[[:space:]]*\(" "$src/$c.php" || {
-              echo "::error::Rest::ROUTES names $h but $c.php defines no $m()"; miss=1; }
-          done < /tmp/handlers.txt
-          [ $miss -eq 0 ] && echo "all $(wc -l < /tmp/handlers.txt) handlers resolve to a class and a method"
-          exit $miss
-
-      # Integrity.php hashes every plugin/theme PHP file on the PROD cron each hour and alerts when the
-      # hash moved but the version marker did not — its signal for "PHP was edited in place on the
-      # server", i.e. a backdoor. A deploy that ships changed PHP under an unchanged version therefore
-      # raises a CRITICAL that is a lie, and lies in that channel are how a real one gets ignored.
-      #
-      # This used to be automatic: deploy-lock.mjs called markDeployVersion() on its way through
-      # `studio push`. That path is deliberately gone — production is reached only by pushing this
-      # branch — and the auto-bump went with it, silently. The version is now a thing a human moves,
-      # so it needs a gate, or the first forgotten bump is a false tamper alarm nobody can explain.
-      #
-      # There is a second reason, just as important: /version is the ONLY way to confirm a deploy
-      # actually took effect. WordPress.com deploying is a separate system from GitHub going green,
-      # and a version that does not move makes a landed deploy and a silently-skipped one look
-      # identical from outside.
-      #
-      # Plugin and theme are gated SEPARATELY because they ship separately and Integrity checks theme
-      # PHP against style.css's own header — a themes-only deploy cannot move AQ_VERSION on prod.
-      # Both are compared against the push's predecessor, so a push touching no PHP is unaffected.
-      - name: Changed PHP carries a version bump
-        if: steps.range.outputs.root == '0'
-        run: |
-          before='${{ github.event.before }}'
-          base=$(git rev-parse "${before}" 2>/dev/null || git rev-parse HEAD~1)
-          changed=$(git diff --name-only "$base" HEAD)
-          bad=0
-          check() {  # $1=label  $2=file-regex  $3=version file  $4=version grep
-            hashed=$(echo "$changed" | grep -E "$2" || true)
-            [ -n "$hashed" ] || return 0
-            was=$(git show "$base:$3" 2>/dev/null | grep -iE "$4" | head -1 || true)
-            now=$(grep -iE "$4" "$3" | head -1 || true)
-            if [ "$was" = "$now" ]; then
-              echo "::error::$1 PHP changed but its version did not move — prod's integrity cron will read this as a tamper, and /version cannot confirm the deploy"
-              echo "$hashed" | sed 's/^/    /'
-              bad=1
-            else
-              echo "$1: version moved ($(echo "$was" | tr -s ' ') -> $(echo "$now" | tr -s ' '))"
-            fi
-          }
-          check "plugin" '^wp-content/plugins/aquest/([^/]+\.php|src/[^/]+\.php)$' \
-                wp-content/plugins/aquest/aquest.php 'define\( *.AQ_VERSION'
-          check "theme"  '^wp-content/themes/artaquest-theme/([^/]+\.php|includes/[^/]+\.php)$' \
-                wp-content/themes/artaquest-theme/style.css '^ \* Version:'
-          exit $bad
-
-      - name: PHP syntax
-        run: |
-          shopt -s globstar nullglob
-          fail=0
-          for f in wp-content/plugins/aquest/**/*.php wp-content/themes/artaquest-theme/**/*.php; do
-            php -l "$f" >/dev/null || { echo "::error file=$f::PHP syntax error"; fail=1; }
-          done
-          exit $fail
-
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: artaquest-web/package-lock.json
 
-      # Part of what this site serves is RESEARCHED in its own repository and vendored in here: the
-      # funder catalogue from ArtaQuest/artagrants, and Arta herself from ArtaQuest/artalife. Those
-      # repositories are the source of record; a sync tool writes the copy that ships
-      # (tools/grants-sync.mjs, tools/arta-sync.mjs).
-      #
-      # WHY THIS GATE EXISTS. When the catalogue moved out to artagrants, the copy and its sync tool
-      # were added to the OTHER repository and never reached this one. Extra::import_grants() returns
-      # silently when the file is not readable, so production served an EMPTY grants programme — 166
-      # researched funders, not one of them reachable — and no signal anywhere said so. A missing
-      # vendored file is invisible: no route 500s, no build fails, the page simply renders nothing.
-      #
-      # It checks PRESENCE AND USABILITY, never freshness. Comparing against upstream's HEAD would
-      # turn a push here red the moment an unrelated repository moved ahead, and a gate that cannot
-      # go green is a gate that gets deleted. Re-syncing is a local step, and drift is what those
-      # tools' own `--check` reports.
-      - name: Vendored satellite content is present
+      # ONE place computes what "this push" means, and preflight reads it. It was derived twice
+      # before — two chances to disagree about the same question.
+      - name: Resolve what this push added
+        id: range
         run: |
-          bad=0
-          g=wp-content/plugins/aquest/data/outreach-grants.json
-          if [ ! -s "$g" ]; then
-            echo "::error::$g is missing or empty — run: node tools/grants-sync.mjs"; bad=1
-          elif n=$(node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const r=Array.isArray(d)?d:(d.grants||[]);if(!r.length)throw new Error('no grants');console.log(r.length)" "$g" 2>/dev/null); then
-            echo "grant catalogue: $n funders"
+          before='${{ github.event.before }}'
+          if [ -n "$before" ] && [ "$before" != "0000000000000000000000000000000000000000" ] \
+             && git cat-file -e "${before}^{commit}" 2>/dev/null; then
+            echo "base=${before}" >> "$GITHUB_OUTPUT"
+          elif git rev-parse -q --verify 'HEAD~1' >/dev/null; then
+            echo "base=HEAD~1" >> "$GITHUB_OUTPUT"
           else
-            echo "::error::$g does not parse, or holds no grants — run: node tools/grants-sync.mjs"; bad=1
-          fi
-          for f in artaquest-web/src/generated/arta/rig/arta.ts artaquest-web/src/generated/arta/render/Arta.tsx; do
-            if [ ! -s "$f" ]; then
-              echo "::error::$f is missing or empty — run: node tools/arta-sync.mjs"; bad=1
-            elif ! grep -q 'GENERATED' "$f"; then
-              # The banner names the upstream commit it came from. Losing it means the copy was
-              # hand-edited here — which the next sync silently overwrites, and forks the mascot
-              # in the meantime.
-              echo "::error::$f has lost its GENERATED banner — edit it upstream in artalife, not here"; bad=1
-            fi
-          done
-          exit $bad
-
-      - name: Typecheck, lint, build
-        working-directory: artaquest-web
-        run: |
-          npm ci --no-audit --fund=false
-          ./node_modules/.bin/tsc --noEmit -p tsconfig.app.json
-
-          # NB: the extension filter is '\.tsx?$' with ONE backslash. A YAML block scalar (run: |)
-          # passes text through verbatim, so a second backslash reaches grep as a LITERAL backslash
-          # and the filter matches nothing — lint then prints "nothing to lint" and passes, on the
-          # workflow that deploys. It was in that state. Do not escape it again.
-          # `**` is NOT magic in a git pathspec — it acts as a single `*` and still requires a
-          # `/` after src/, so depth-1 files (src/App.tsx, src/main.tsx) were never linted at all.
-          # A root commit has no baseline to diff against, so there is no "what this push
-          # changed". Linting the whole tree instead would gate a fresh repository on every
-          # pre-existing warning in it, and a check that cannot go green blocks every deploy
-          # and gets deleted. tsc and the bundler below still cover the entire tree.
-          if [ "${{ steps.range.outputs.root }}" = "1" ]; then
-            files=""
-            echo "root commit — no diff baseline; tsc and the build still cover the whole tree"
-          else
-            files=$(cd .. && git diff --name-only --diff-filter=ACMR '${{ steps.range.outputs.range }}' \
-                      -- artaquest-web/src | grep -E '\.tsx?$' | sed 's|^artaquest-web/||' || true)
-          fi
-          if [ -n "$files" ]; then
-            echo "linting:"; echo "$files" | sed 's/^/  /'
-            # shellcheck disable=SC2086
-            # --no-warn-ignored: a changed file under an ignore pattern (src/generated) is
-            # reported as a warning per file, which is pure noise on any sync that touches them.
-            ./node_modules/.bin/eslint --no-warn-ignored $files
-          else
-            echo "no TS/TSX changed — nothing to lint"
+            # HEAD is a ROOT commit: HEAD~1 does not exist, and asking git for it is a FATAL error,
+            # not an empty range. That is the state a freshly created repository is in on its first
+            # push — the moment the gates matter most — and it took every one of them down with
+            # exit 128 before a single check had run. Empty base = preflight skips the diff gates.
+            echo "base=" >> "$GITHUB_OUTPUT"
           fi
 
-          npm run build
-
-      # A zero exit from the bundler is not proof the output is usable, and the deploy REPLACES the
-      # live bundle — a hollow build would take the site down. Refuse before the artifact is made.
-      - name: The build produced something shippable
-        run: |
-          app=wp-content/themes/artaquest-theme/app
-          files=$(find "$app" -type f | wc -l)
-          entry=$(ls "$app"/assets/index-*.js 2>/dev/null | wc -l)
-          echo "$files files, $entry entry chunk(s)"
-          [ -f "$app/index.html" ] && [ "$entry" -ge 1 ] && [ "$files" -ge 50 ] \
-            || { echo "::error::build output looks hollow"; exit 1; }
+      - name: Preflight
+        env:
+          AQ_PHP_BIN: php
+        # The SAME script a developer runs before pushing (tools/preflight.sh), so "green locally"
+        # and "green here" are one statement. It ends with `npm run build`, which is also what the
+        # artifact below ships — the build that gates the branch is the build that deploys, with no
+        # second pipeline to drift from it.
+        run: bash tools/preflight.sh ${{ steps.range.outputs.base }}
 
       # ── WHAT WORDPRESS.COM DEPLOYS ────────────────────────────────────────────────────────────
       # Advanced deployments take an artifact from THIS workflow, so the build that gates the branch

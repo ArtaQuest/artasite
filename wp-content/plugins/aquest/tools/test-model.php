@@ -4,7 +4,9 @@
  *
  * Exercises EVERY aspect of the learning surface against the real REST handlers (with a real
  * session + WP_REST_Request), asserts the outcome, and self-cleans. Idempotent. Prints
- * "PASS n / FAIL n" and the marker the dev-cycle runner greps for.
+ * "PASS n / FAIL n" and a machine-readable marker. NOTE: this harness is built on the course model
+ * purged 2026-07-13 and asserts nothing about the notebook feed. The live money harness is
+ * verify-credits.php; the shippability gates are tools/preflight.sh.
  *
  *   studio wp eval 'require WP_PLUGIN_DIR . "/aquest/tools/test-model.php";'
  *

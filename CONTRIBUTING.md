@@ -42,13 +42,37 @@ The short version of the conventions:
   time. Note this applies to AI assistants whose default is to add such a trailer:
   that default is wrong here, and the rule is not about hiding how the work was done —
   say that in the message body if it matters.
-  - **The gate greps the whole message, not just its trailers.** So a commit that
-    merely *mentions* the forbidden trailer by name — say, one documenting this rule —
-    fails too. Describe it, don't quote it. (Both failure modes were hit in a row while
-    writing this entry, which is why it says so.)
+  - **The check asks git's trailer parser, not a grep.** Only a real trailer — that
+    key at the start of a line in the final paragraph — creates a GitHub contributor,
+    so only that is refused. Writing *about* the rule in a commit message is fine, and
+    deliberately so: an earlier version grepped the whole message, rejected the very
+    commits that documented it, and taught people to reword honest prose to appease a
+    pattern. A check that punishes writing about itself is one people route around.
 
-Verify before you ship: `cd artaquest-web && npx tsc -b --force && npm run build`,
-and the plugin test harness under `wp-content/plugins/aquest/tools/`.
+## Before you push
+
+One command runs every gate CI runs — the same script, so green here means green there:
+
+```bash
+tools/preflight.sh          # secrets, route handlers, version bump, vendored content,
+                            # php -l, tsc, lint (changed files), build, hollow-build
+tools/preflight.sh --fast   # skip the build while you iterate
+```
+
+If you are working on the platform rather than reading it, `tools/aq` is the whole
+cycle and is harder to use wrongly:
+
+```bash
+tools/aq status         # what has drifted, and what production is executing
+tools/aq start <name>   # an isolated worktree branched from what production is built from
+tools/aq check          # preflight, above
+tools/aq ship           # refuse-or-push, then confirm production is EXECUTING it
+```
+
+`start` matters more than it looks. Branching from a checkout that has fallen behind
+the deploy branch does not produce a conflict — it produces a silent revert of live
+code, because the outbound direction copies rather than merges. `start` always branches
+from `artasite/main`, and `ship` refuses a push that would make private paths public.
 
 ## License
 
