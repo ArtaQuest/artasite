@@ -105,6 +105,12 @@ cmd_ship() {
 
   bash tools/preflight.sh || die "preflight failed — nothing pushed"
 
+  # READ THE OLD VERSION BEFORE PUSHING. `git push` fast-forwards the local artasite/main tracking
+  # ref, so asking it afterwards returns the version we just shipped — it compares equal to itself,
+  # and ship reports "no version change" for the one case the check exists for.
+  local prev
+  prev=$(git show artasite/main:wp-content/plugins/aquest/aquest.php 2>/dev/null | grep -oE "AQ_VERSION', '[0-9.]+'" | grep -oE '[0-9.]+')
+
   say "Pushing $br → artasite main"
   # The branch is a disposable ref that exists only so CI verifies this exact tree before main sees
   # it, and it is deleted below. Amending or rebasing before shipping is normal, so force-with-lease
@@ -118,9 +124,8 @@ cmd_ship() {
   # Only meaningful when the version actually moved. A change that touches no hashed PHP — tooling,
   # workflows, docs, or SPA source alone — ships under the same version by design, and waiting for a
   # number that was never going to change would report a timeout on a perfectly good deploy.
-  local want prev
+  local want
   want=$(grep -oE "AQ_VERSION', '[0-9.]+'" wp-content/plugins/aquest/aquest.php | grep -oE '[0-9.]+')
-  prev=$(git show artasite/main:wp-content/plugins/aquest/aquest.php 2>/dev/null | grep -oE "AQ_VERSION', '[0-9.]+'" | grep -oE '[0-9.]+')
   if [ "$want" = "$prev" ]; then
     warn "no version change — nothing to confirm by /version (this push changed no hashed PHP)"
     printf "  %s\n" "$(curl -s -m 25 "$API/health/pulse" 2>/dev/null)"
