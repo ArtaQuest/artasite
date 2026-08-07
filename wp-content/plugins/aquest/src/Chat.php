@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Chat {
 
-	const TABLE_VERSION = '2';
+	const TABLE_VERSION = '3';
 
 	/** Uncompressed P-256 point (0x04 ‖ X ‖ Y = 65 bytes) as base64 — the only accepted pub format. */
 	const PUB_B64_LEN = 88;
@@ -46,6 +46,22 @@ final class Chat {
 	 *  ~3 KB plaintext — far more than a preview shows, and it keeps a 50-conversation list from
 	 *  putting a megabyte of body text on the wire every 15 seconds. */
 	const PREVIEW_CT_MAX = 4000;
+	/** How many messages a member may send into a conversation the other side has NOT accepted.
+	 *  A message request is an ask, not a channel: it says who you are and why, and then it waits.
+	 *  Without this cap "requests" would be a folder that still receives an unbounded stream. */
+	const REQUEST_MAX = 3;
+	/** How long an unanswered call beacon rings before the callee's client stops showing it.
+	 *  Longer than the badge poll interval (30 s) BY CONSTRUCTION: a ring shorter than the poll can
+	 *  begin and end between two requests, and a call that never rings is worse than no calling. */
+	const RING_S = 75;
+	/** The video-call host. Rooms are created on demand by the first participant and named with 160
+	 *  bits of entropy that ONLY ever travels inside a sealed message — the server never learns it,
+	 *  so nothing here (or in the public DB) can be used to walk into somebody's call. */
+	const CALL_HOST = 'meet.jit.si';
+	/** Remote-media fetch (the "paste a GIF link" path) — ceiling, and the only content types we
+	 *  will pull from a stranger's host on a member's behalf. */
+	const FETCH_MAX  = 5000000;
+	const FETCH_MIME = [ 'image/gif', 'image/png', 'image/jpeg', 'image/webp', 'video/mp4' ];
 
 	public static function ensure_tables() {
 		if ( get_option( 'aq_chat_table_version' ) === self::TABLE_VERSION ) { return; }
@@ -66,6 +82,16 @@ final class Chat {
 		// One row per 1:1 conversation; the pair is stored ordered (a < b) so it's unique.
 		// a_read/b_read are read watermarks (last message id each side has seen); `ttl` is the
 		// disappearing-message timer both parties see (0 = keep; else seconds a row lives).
+		//
+		// v3 adds the two things a 1:1 conversation needs beyond its messages:
+		//  • WHO ASKED (`starter`) and WHETHER THE OTHER SIDE SAID YES (`accepted`). A conversation
+		//    a stranger opens is a message REQUEST until the recipient accepts it: it sits in its own
+		//    box, it rings the bell exactly once, and the sender may add at most REQUEST_MAX messages
+		//    to it. Replying accepts, because there is no way to reply by accident.
+		//  • PER-SIDE state — block / mute / pin / archive. Deliberately one column per side rather
+		//    than a shared flag: muting is MY choice about MY inbox and must never be visible as a
+		//    change to the other person's conversation. (It is visible in the public DB, like all
+		//    ArtaChat metadata — that is the standing trade, and the reason nothing here is a secret.)
 		dbDelta( "CREATE TABLE {$p}aq_chats (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			a_uid BIGINT UNSIGNED NOT NULL DEFAULT 0,
@@ -75,6 +101,16 @@ final class Chat {
 			a_read BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			b_read BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			ttl INT UNSIGNED NOT NULL DEFAULT 0,
+			starter BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			accepted TINYINT UNSIGNED NOT NULL DEFAULT 1,
+			a_block TINYINT UNSIGNED NOT NULL DEFAULT 0,
+			b_block TINYINT UNSIGNED NOT NULL DEFAULT 0,
+			a_mute TINYINT UNSIGNED NOT NULL DEFAULT 0,
+			b_mute TINYINT UNSIGNED NOT NULL DEFAULT 0,
+			a_pin TINYINT UNSIGNED NOT NULL DEFAULT 0,
+			b_pin TINYINT UNSIGNED NOT NULL DEFAULT 0,
+			a_arch TINYINT UNSIGNED NOT NULL DEFAULT 0,
+			b_arch TINYINT UNSIGNED NOT NULL DEFAULT 0,
 			created INT UNSIGNED NOT NULL DEFAULT 0,
 			PRIMARY KEY  (id),
 			UNIQUE KEY pair (a_uid, b_uid),
@@ -103,8 +139,18 @@ final class Chat {
 			KEY chat_id_id (chat_id, id)
 		) {$charset};" );
 		// dbDelta adds new columns on MySQL, but the SQLite dev integration can skip ALTERs on an
-		// existing table — add the v2 columns explicitly when absent (a no-op where dbDelta did it).
+		// existing table — add the v2/v3 columns explicitly when absent (a no-op where dbDelta did
+		// it). `accepted` defaults to 1 on purpose: every conversation that existed before message
+		// requests was, by definition, already accepted, and a default of 0 would have quietly
+		// swept the whole site's history into the Requests box on deploy.
+		$flag = 'TINYINT UNSIGNED NOT NULL DEFAULT 0';
 		foreach ( [ [ 'aq_chats', 'ttl', 'INT UNSIGNED NOT NULL DEFAULT 0' ],
+					[ 'aq_chats', 'starter', 'BIGINT UNSIGNED NOT NULL DEFAULT 0' ],
+					[ 'aq_chats', 'accepted', 'TINYINT UNSIGNED NOT NULL DEFAULT 1' ],
+					[ 'aq_chats', 'a_block', $flag ], [ 'aq_chats', 'b_block', $flag ],
+					[ 'aq_chats', 'a_mute',  $flag ], [ 'aq_chats', 'b_mute',  $flag ],
+					[ 'aq_chats', 'a_pin',   $flag ], [ 'aq_chats', 'b_pin',   $flag ],
+					[ 'aq_chats', 'a_arch',  $flag ], [ 'aq_chats', 'b_arch',  $flag ],
 					[ 'aq_chat_msgs', 'blob', "VARCHAR(191) NOT NULL DEFAULT ''" ] ] as [ $t, $col, $def ] ) {
 			$cols = $wpdb->get_col( "SHOW COLUMNS FROM {$p}{$t}" );
 			if ( $cols && ! in_array( $col, $cols, true ) ) {
@@ -124,6 +170,30 @@ final class Chat {
 	private static function chat_row( $u1, $u2 ) {
 		[ $a, $b ] = self::pair( $u1, $u2 );
 		return Data::one( 'SELECT * FROM ' . Data::t( 'aq_chats' ) . ' WHERE a_uid = %d AND b_uid = %d', [ $a, $b ] );
+	}
+
+	/**
+	 * The conversation between these two, created if it does not exist yet — THE ONLY PLACE a row in
+	 * aq_chats is minted.
+	 *
+	 * That exclusivity is the point, and it was a real hole before this existed. `accepted` defaults
+	 * to 1 in the schema (so that every conversation predating message requests stays accepted), so
+	 * any creation path that forgets to say otherwise silently produces an ACCEPTED conversation.
+	 * chat/ttl had exactly that shape: a stranger could set a disappearing-message timer on a
+	 * conversation that did not exist, which minted an accepted row, and then write to that member
+	 * without ever passing through the request gate at all. Deciding it here, once, means a new
+	 * creation path cannot reintroduce the bypass by omission.
+	 */
+	private static function ensure_chat( $uid, $peer ) {
+		$chat = self::chat_row( $uid, $peer );
+		if ( $chat ) { return $chat; }
+		[ $low, $high ] = self::pair( $uid, $peer );
+		Data::upsert( 'aq_chats', [ 'a_uid' => $low, 'b_uid' => $high ], [
+			'created'  => Data::now(),
+			'starter'  => (int) $uid,
+			'accepted' => self::pre_accepted( $uid, $peer ) ? 1 : 0,
+		] );
+		return self::chat_row( $uid, $peer );
 	}
 
 	/** A member's ACTIVE (latest) public key row, or null when they never enabled chat. */
@@ -151,6 +221,55 @@ final class Chat {
 			'fp'      => (string) $row['fp'],
 			'created' => (int) $row['created'],
 		] : null;
+	}
+
+	// ── Per-side conversation state (requests · block · mute · pin · archive) ──
+	//
+	// Every one of these is stored twice, once per side, in a column prefixed a_/b_ by the pair's
+	// low/high uid. `side()` turns "me" into that prefix so nothing downstream has to remember
+	// which of us is `a`, and `flag()` reads one of my own flags off a chat row.
+
+	/** 'a' or 'b' — which half of this ordered pair the given member is. */
+	private static function side( $chat, $uid ) {
+		return (int) $chat['a_uid'] === (int) $uid ? 'a' : 'b';
+	}
+
+	/** One of $uid's own per-side flags on this conversation (block|mute|pin|arch). */
+	private static function flag( $chat, $uid, $name ) {
+		return (int) ( $chat[ self::side( $chat, $uid ) . '_' . $name ] ?? 0 ) === 1;
+	}
+
+	/** …and the OTHER side's. */
+	private static function peer_flag( $chat, $uid, $name ) {
+		return (int) ( $chat[ ( self::side( $chat, $uid ) === 'a' ? 'b' : 'a' ) . '_' . $name ] ?? 0 ) === 1;
+	}
+
+	/**
+	 * Is this conversation still an unanswered REQUEST sitting in $uid's request box?
+	 *
+	 * True only for the RECIPIENT of an un-accepted conversation. To the person who opened it, their
+	 * own outgoing request is just a conversation they started — showing them a "request" box
+	 * containing their own message would say nothing they don't know and hide the thread they are
+	 * waiting on.
+	 */
+	private static function is_request( $chat, $uid ) {
+		return ! (int) $chat['accepted'] && (int) $chat['starter'] !== (int) $uid;
+	}
+
+	/**
+	 * Does the recipient already know the sender well enough to skip the request box?
+	 *
+	 * Following someone is a public, deliberate act that says "I want to hear from this account", so
+	 * a message from someone the RECIPIENT follows goes straight to their inbox. The reverse (the
+	 * sender following the recipient) is deliberately NOT enough — anyone can follow anyone, so it
+	 * would be a one-click bypass of the whole mechanism.
+	 */
+	private static function pre_accepted( $sender, $peer ) {
+		if ( (int) $sender === (int) $peer ) { return true; } // notes to yourself
+		return (bool) Data::col(
+			'SELECT 1 FROM ' . Data::t( 'aq_follows' ) . ' WHERE follower_id = %d AND target_id = %d LIMIT 1',
+			[ (int) $peer, (int) $sender ]
+		);
 	}
 
 	// ── Liveness (typing + presence) — pure transients, nothing rests in the DB ──
@@ -188,36 +307,118 @@ final class Chat {
 	}
 
 	/**
-	 * GET chat/unread — the caller's total unread count, and nothing else.
+	 * GET chat/unread — the caller's badge state, and nothing else: unread messages, waiting
+	 * requests, and whether somebody is ringing them right now.
 	 *
 	 * Deliberately does NOT mark presence: this is what the always-present chat dock polls from
 	 * every page, and a badge refresh must never be mistaken for the member sitting in a
 	 * conversation (see mark_presence). One indexed COUNT over the conversations they're in.
+	 *
+	 * MUTED, ARCHIVED, BLOCKED and un-accepted conversations are all excluded from the count. A
+	 * badge is a claim that something needs attention: a muted thread by definition does not, and a
+	 * stranger's request is counted separately so accepting it is a decision rather than a chore
+	 * that arrives pre-attached to the same number as your friends' messages.
 	 */
 	public static function unread( $req ) {
 		self::ensure_tables();
 		$uid = Rest::uid();
 		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+		$mine = ' ( CASE WHEN c.a_uid = %d THEN c.a_read ELSE c.b_read END )';
 		$n = (int) Data::col(
 			'SELECT COUNT(*) FROM ' . Data::t( 'aq_chat_msgs' ) . ' m JOIN ' . Data::t( 'aq_chats' ) . ' c ON c.id = m.chat_id'
 			. ' WHERE ( c.a_uid = %d OR c.b_uid = %d ) AND m.sender_id != %d'
+			// Only conversations that are actually in the inbox: accepted (or my own outgoing ask),
+			// not muted by me, not archived by me, not blocked by me.
+			. ' AND ( c.accepted = 1 OR c.starter = %d )'
+			. ' AND ( CASE WHEN c.a_uid = %d THEN c.a_mute + c.a_arch + c.a_block ELSE c.b_mute + c.b_arch + c.b_block END ) = 0'
 			// Skip conversations with nothing unread BEFORE touching the message table — last_id is
 			// the cheap denormalised watermark the list already keeps, and it keeps this badge poll
 			// off aq_chat_msgs entirely for every conversation the member is caught up on.
-			. ' AND c.last_id > ( CASE WHEN c.a_uid = %d THEN c.a_read ELSE c.b_read END )'
-			. ' AND m.id > ( CASE WHEN c.a_uid = %d THEN c.a_read ELSE c.b_read END )'
+			. ' AND c.last_id >' . $mine
+			. ' AND m.id >' . $mine
 			// Never count a message the disappearing-message timer has already retired. Rows are
 			// purged lazily (on the next read of that chat), so between expiry and purge they still
 			// exist — and a badge that counts messages the member can never open is just a lie that
 			// cannot be cleared by reading.
 			. ' AND ( c.ttl = 0 OR m.created >= %d - c.ttl )',
-			[ $uid, $uid, $uid, $uid, $uid, Data::now() ]
+			[ $uid, $uid, $uid, $uid, $uid, $uid, $uid, Data::now() ]
 		);
-		return [ 'unread' => $n ];
+		return [ 'unread' => $n, 'requests' => self::request_count( $uid ), 'ring' => self::ring_state( $uid ) ];
+	}
+
+	/** How many un-accepted conversations are waiting on this member's yes-or-no (never their own). */
+	private static function request_count( $uid ) {
+		return (int) Data::col(
+			'SELECT COUNT(*) FROM ' . Data::t( 'aq_chats' )
+			. ' WHERE ( a_uid = %d OR b_uid = %d ) AND accepted = 0 AND starter != %d AND last_id > 0'
+			. ' AND ( CASE WHEN a_uid = %d THEN a_block ELSE b_block END ) = 0',
+			[ (int) $uid, (int) $uid, (int) $uid, (int) $uid ]
+		);
 	}
 
 	private static function online( $uid ) {
 		return (bool) get_transient( 'aq_chat_on_' . (int) $uid );
+	}
+
+	// ── Video calls (Jitsi) ─────────────────────────────────────────────────
+	//
+	// THE SERVER NEVER LEARNS THE ROOM. A call is proposed as an ordinary sealed message — the room
+	// name (160 bits of client-side entropy) lives inside the ciphertext with everything else, so
+	// the public database says only "these two people had a call at 14:05", exactly as much as it
+	// already says about a photo. What the server DOES hold is a 45-second beacon saying somebody is
+	// ringing, because a ring has to reach a member who is reading a different page — and a beacon
+	// that named the room would hand a walk-in key to every visitor of /data/.
+
+	/** POST chat/call {with, action:ring|end} — start or stop ringing the other side. */
+	public static function call( $req ) {
+		self::ensure_tables();
+		if ( Rest::throttle( 'aq_chat_call', 20, 60 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
+		$uid  = Rest::uid();
+		$peer = Rest::pint( $req, 'with', 0 );
+		if ( ! $peer || ! get_userdata( $peer ) ) { return Rest::err( 'bad_peer', 'No such member', 404 ); }
+		$chat = self::chat_row( $uid, $peer );
+		if ( ! $chat ) { return Rest::err( 'no_chat', 'Open the conversation first.', 400 ); }
+		$act = (string) Rest::p( $req, 'action', 'ring' );
+		if ( $act === 'end' ) {
+			// `end` is BOTH sides of hanging up, and it has to clear whichever beacon belongs to the
+			// caller. Hanging up as the CALLER clears the ring sitting on the callee; declining as the
+			// CALLEE clears the one sitting on me. Only the first case existed at first, so declining
+			// a call in the thread left the dock's banner ringing for the rest of the 75 seconds —
+			// the one moment a member is most certain they have already answered.
+			//
+			// Each branch verifies the beacon actually belongs to this pair, so neither side can
+			// silence a call they are not part of.
+			foreach ( [ $peer => $uid, $uid => $peer ] as $holder => $from ) {
+				$r = get_transient( 'aq_chat_ring_' . $holder );
+				if ( is_array( $r ) && (int) ( $r['from'] ?? 0 ) === (int) $from ) {
+					delete_transient( 'aq_chat_ring_' . $holder );
+				}
+			}
+			return [ 'ok' => true ];
+		}
+		// Ringing is a message, so it obeys the same gates one does: no calling somebody who blocked
+		// you, and no calling out of a request the other side has not accepted.
+		if ( self::peer_flag( $chat, $uid, 'block' ) ) { return Rest::err( 'blocked', 'You can’t call this member.', 403 ); }
+		if ( self::is_request( $chat, $peer ) ) { return Rest::err( 'pending', 'They haven’t accepted your message request yet.', 403 ); }
+		$me   = get_userdata( $uid );
+		$name = $me ? $me->display_name : 'A member';
+		set_transient( 'aq_chat_ring_' . $peer, [ 'from' => $uid, 'chat' => (int) $chat['id'], 'at' => Data::now() ], self::RING_S );
+		if ( ! self::flag( $chat, $peer, 'mute' ) ) {
+			Notify::push( $peer, 'call', self::safe_sender_name( $name ) . ' is calling you', '', '/messages/?with=' . rawurlencode( $me ? $me->user_nicename : '' ), 'ring' . $chat['id'] . '-' . intdiv( Data::now(), 60 ) );
+		}
+		return [ 'ok' => true, 'ringing' => true ];
+	}
+
+	/** The live inbound ring for this member, or null — carried on the badge poll so a call reaches
+	 *  them wherever they are on the site. Never carries the room (see above). */
+	private static function ring_state( $uid ) {
+		$r = get_transient( 'aq_chat_ring_' . (int) $uid );
+		if ( ! is_array( $r ) || empty( $r['from'] ) ) { return null; }
+		return [
+			'from' => self::user_card( (int) $r['from'] ),
+			'chat' => (int) ( $r['chat'] ?? 0 ),
+			'at'   => (int) ( $r['at'] ?? 0 ),
+		];
 	}
 
 	/**
@@ -280,6 +481,27 @@ final class Chat {
 		if ( ! $dead ) { return; }
 		foreach ( $dead as $d ) { self::unlink_blob( (string) $d['blob'] ); }
 		$wpdb->query( $wpdb->prepare( "DELETE FROM $t WHERE chat_id = %d AND created < %d", (int) $chat['id'], $cutoff ) );
+		self::resync_last( (int) $chat['id'] );
+	}
+
+	/**
+	 * Re-point a conversation's denormalised last_id/last_at at the newest row that still exists.
+	 *
+	 * Rows leave by two doors — the disappearing-message purge and unsend — and neither used to
+	 * touch this. A conversation whose last message was removed kept a last_id naming a row that is
+	 * gone, which is the cheap watermark the unread badge and the request box both test against:
+	 * a request whose only message was unsent stayed in the recipient's Requests list forever,
+	 * pointing at nothing.
+	 */
+	private static function resync_last( $chat_id ) {
+		$row = Data::one(
+			'SELECT id, created FROM ' . Data::t( 'aq_chat_msgs' ) . ' WHERE chat_id = %d ORDER BY id DESC LIMIT 1',
+			[ (int) $chat_id ]
+		);
+		Data::update( 'aq_chats', [
+			'last_id' => $row ? (int) $row['id'] : 0,
+			'last_at' => $row ? (int) $row['created'] : 0,
+		], [ 'id' => (int) $chat_id ] );
 	}
 
 	// ── Keys ────────────────────────────────────────────────────────────────
@@ -342,18 +564,54 @@ final class Chat {
 	 * sealed for (`keys`), so the client can decrypt a one-line preview on-device — the thing every
 	 * messenger's list is actually made of. The server still learns nothing: it hands over the same
 	 * opaque ciphertext the public DB already publishes, and only a participant's device key opens it.
+	 *
+	 * ?box= picks WHICH list: `chats` (the inbox), `requests` (strangers waiting on a yes),
+	 * `archived`, or `blocked`. One route, because they are one query with a different filter, and
+	 * because a conversation moves between them — a request that gets accepted must not need a
+	 * different endpoint to appear.
 	 */
 	public static function list_chats( $req ) {
 		self::ensure_tables();
 		$uid = Rest::uid();
 		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+		$box = (string) Rest::p( $req, 'box', 'chats' );
+		if ( ! in_array( $box, [ 'chats', 'requests', 'archived', 'blocked' ], true ) ) { $box = 'chats'; }
 		// No mark_presence here — see mark_presence(). Listing conversations is browsing, not being
 		// in one, and marking presence on this poll silently suppressed every bell and away-email
 		// for as long as a Messages tab stayed open.
-		$rows = Data::all(
-			'SELECT * FROM ' . Data::t( 'aq_chats' ) . ' WHERE a_uid = %d OR b_uid = %d ORDER BY last_id DESC LIMIT 50',
-			[ $uid, $uid ]
-		);
+		//
+		// The per-side flags are selected as `mine_*` so the filters below read the same whichever
+		// half of the pair the caller is.
+		$mine = fn( $col ) => "( CASE WHEN c.a_uid = %d THEN c.a_$col ELSE c.b_$col END )";
+		$sel  = 'SELECT c.*, ' . $mine( 'block' ) . ' AS mine_block, ' . $mine( 'mute' ) . ' AS mine_mute, '
+			. $mine( 'pin' ) . ' AS mine_pin, ' . $mine( 'arch' ) . ' AS mine_arch';
+		$args = [ $uid, $uid, $uid, $uid ];       // the four CASE expressions above
+		$where = ' FROM ' . Data::t( 'aq_chats' ) . ' c WHERE ( c.a_uid = %d OR c.b_uid = %d )';
+		array_push( $args, $uid, $uid );
+		if ( $box === 'blocked' ) {
+			$where .= ' AND ' . $mine( 'block' ) . ' = 1';
+			$args[] = $uid;
+		} else {
+			$where .= ' AND ' . $mine( 'block' ) . ' = 0';
+			$args[] = $uid;
+			if ( $box === 'requests' ) {
+				// Somebody else's ask, not yet answered — and never an empty shell (a conversation row
+				// is created by set_ttl too, and an empty one is not a request).
+				$where .= ' AND c.accepted = 0 AND c.starter != %d AND c.last_id > 0';
+				$args[] = $uid;
+			} elseif ( $box === 'archived' ) {
+				$where .= ' AND ' . $mine( 'arch' ) . ' = 1';
+				$args[] = $uid;
+			} else {
+				$where .= ' AND ' . $mine( 'arch' ) . ' = 0 AND ( c.accepted = 1 OR c.starter = %d )';
+				array_push( $args, $uid, $uid );
+			}
+		}
+		// Pinned conversations first, then most recent — the one ordering every messenger has, and
+		// the reason `pin` exists at all.
+		$order = ' ORDER BY ' . $mine( 'pin' ) . ' DESC, c.last_id DESC LIMIT 60';
+		$args[] = $uid;
+		$rows = Data::all( $sel . $where . $order, $args );
 		$items = [];
 		$kids  = [];
 		foreach ( $rows as $r ) {
@@ -388,6 +646,15 @@ final class Chat {
 				'unread'  => $unread,
 				'online'  => self::online( $peer ),
 				'low_uid' => min( $uid, $peer ),
+				// Per-side state, from the caller's point of view only. `pending` = they asked and I
+				// have not answered; `asked` = I asked and they have not — two different rows in the
+				// UI, and the second is the reason an outgoing request stays in my own inbox.
+				'pending' => self::is_request( $r, $uid ),
+				'asked'   => ! (int) $r['accepted'] && (int) $r['starter'] === $uid,
+				'muted'   => (int) ( $r['mine_mute'] ?? 0 ) === 1,
+				'pinned'  => (int) ( $r['mine_pin'] ?? 0 ) === 1,
+				'archived' => (int) ( $r['mine_arch'] ?? 0 ) === 1,
+				'blocked' => (int) ( $r['mine_block'] ?? 0 ) === 1,
 				'last'    => $last ? [
 					'id'     => (int) $last['id'],
 					'sender' => (int) $last['sender_id'],
@@ -406,7 +673,86 @@ final class Chat {
 			$k = self::key_by_id( $kid );
 			if ( $k ) { $keys[ $kid ] = [ 'user_id' => (int) $k['user_id'], 'pub' => (string) $k['pub'], 'fp' => (string) $k['fp'] ]; }
 		}
-		return [ 'items' => $items, 'me' => $uid, 'keys' => $keys, 'my_key' => self::key_payload( self::active_key( $uid ) ) ];
+		return [
+			'items'    => $items,
+			'me'       => $uid,
+			'keys'     => $keys,
+			'my_key'   => self::key_payload( self::active_key( $uid ) ),
+			'box'      => $box,
+			// Always shipped, whichever box was asked for, so the tab that is NOT on screen can still
+			// carry its badge without a second request.
+			'requests' => self::request_count( $uid ),
+			// …and the inbound ring, for the same reason: while a surface is showing the list, the
+			// badge poll is switched OFF (chat-store), so this is the only thing still asking.
+			'ring'     => self::ring_state( $uid ),
+		];
+	}
+
+	/**
+	 * POST chat/relation {with, action} — every per-side decision about one conversation in one
+	 * route: accept · decline · block · unblock · mute · unmute · pin · unpin · archive · unarchive.
+	 *
+	 * They are one route because they are one row and one shape of authorisation — "this is MY side
+	 * of MY conversation" — and because the alternative is ten near-identical handlers that drift.
+	 *
+	 * ACCEPT and DECLINE are the two ends of a message request. Accepting is permanent and mutual:
+	 * the conversation becomes an ordinary one for both of us. Declining sets my block flag, which
+	 * is honest about what declining actually does — it stops them writing — and, unlike deleting
+	 * the thread, does not reach into the other person's copy of a conversation they can still see.
+	 * It is reversible from the Blocked list; nothing here destroys a message.
+	 */
+	public static function relation( $req ) {
+		self::ensure_tables();
+		if ( Rest::throttle( 'aq_chat_rel', 40, 60 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
+		$uid  = Rest::uid();
+		$peer = Rest::pint( $req, 'with', 0 );
+		if ( ! $peer || ! get_userdata( $peer ) ) { return Rest::err( 'bad_peer', 'No such member', 404 ); }
+		$act  = (string) Rest::p( $req, 'action', '' );
+		$chat = self::chat_row( $uid, $peer );
+		if ( ! $chat ) { return Rest::err( 'no_chat', 'No conversation with that member.', 404 ); }
+		$s = self::side( $chat, $uid );
+		// action → the column it sets and the value it sets. `accept` is the one that is not a
+		// per-side flag: it clears the request for BOTH sides, which is the whole point of accepting.
+		$map = [
+			'accept'    => [ 'accepted', 1 ],
+			'decline'   => [ $s . '_block', 1 ],
+			'block'     => [ $s . '_block', 1 ],
+			'unblock'   => [ $s . '_block', 0 ],
+			'mute'      => [ $s . '_mute', 1 ],
+			'unmute'    => [ $s . '_mute', 0 ],
+			'pin'       => [ $s . '_pin', 1 ],
+			'unpin'     => [ $s . '_pin', 0 ],
+			'archive'   => [ $s . '_arch', 1 ],
+			'unarchive' => [ $s . '_arch', 0 ],
+		];
+		if ( ! isset( $map[ $act ] ) ) { return Rest::err( 'bad_action', 'Unknown action.', 400 ); }
+		// ONLY THE RECIPIENT MAY ACCEPT. Every other action here is per-side and therefore
+		// self-authorising — but `accept` is the one that clears the request for BOTH of us, so
+		// without this the person who opened the conversation could accept their own request and
+		// walk straight past the gate. The cap on messages would still hold; the request box, the
+		// one-notification rule and the recipient's actual consent would not.
+		if ( $act === 'accept' && (int) $chat['starter'] === $uid && (int) $chat['accepted'] !== 1 ) {
+			return Rest::err( 'not_yours', 'Only the person you wrote to can accept a message request.', 403 );
+		}
+		[ $col, $val ] = $map[ $act ];
+		$patch = [ $col => $val ];
+		// Accepting also un-blocks and un-archives: saying yes to someone can't leave the thread in
+		// a box where the yes has no visible effect.
+		if ( $act === 'accept' ) { $patch[ $s . '_block' ] = 0; $patch[ $s . '_arch' ] = 0; }
+		// Un-blocking a conversation you never accepted returns it to the request box rather than
+		// silently letting them back into your inbox.
+		Data::update( 'aq_chats', $patch, [ 'id' => (int) $chat['id'] ] );
+		$fresh = self::chat_row( $uid, $peer );
+		return [
+			'ok'       => true,
+			'action'   => $act,
+			'pending'  => self::is_request( $fresh, $uid ),
+			'blocked'  => self::flag( $fresh, $uid, 'block' ),
+			'muted'    => self::flag( $fresh, $uid, 'mute' ),
+			'pinned'   => self::flag( $fresh, $uid, 'pin' ),
+			'archived' => self::flag( $fresh, $uid, 'arch' ),
+			'requests' => self::request_count( $uid ),
+		];
 	}
 
 	/**
@@ -598,10 +944,32 @@ final class Chat {
 		if ( $chat ) {
 			$peer_read = (int) ( (int) $chat['a_uid'] === $peer ? $chat['a_read'] : $chat['b_read'] );
 		}
+		// How many more messages this member may add to a request the other side has not answered —
+		// shown in the composer, so the cap is a visible rule rather than a refusal that arrives
+		// without warning at the fourth message.
+		$left = self::REQUEST_MAX;
+		if ( $chat && ! (int) $chat['accepted'] && (int) $chat['starter'] === $uid ) {
+			$left = max( 0, self::REQUEST_MAX - (int) Data::col(
+				'SELECT COUNT(*) FROM ' . Data::t( 'aq_chat_msgs' ) . ' WHERE chat_id = %d AND sender_id = %d',
+				[ (int) $chat['id'], $uid ]
+			) );
+		}
 		return [
 			'chat_id'     => $chat ? (int) $chat['id'] : 0,
 			'me'          => $uid,
 			'peer'        => self::user_card( $peer ),
+			// The caller's side of this conversation — what the thread header and composer need to
+			// know before showing a send box: is this an unanswered request (mine or theirs), have
+			// either of us blocked the other, is it muted/pinned/archived.
+			'pending'      => $chat ? self::is_request( $chat, $uid ) : false,
+			'asked'        => $chat ? ( ! (int) $chat['accepted'] && (int) $chat['starter'] === $uid ) : false,
+			'request_left' => $left,
+			'blocked'      => $chat ? self::flag( $chat, $uid, 'block' ) : false,
+			'blocked_by'   => $chat ? self::peer_flag( $chat, $uid, 'block' ) : false,
+			'muted'        => $chat ? self::flag( $chat, $uid, 'mute' ) : false,
+			'pinned'       => $chat ? self::flag( $chat, $uid, 'pin' ) : false,
+			'archived'     => $chat ? self::flag( $chat, $uid, 'arch' ) : false,
+			'call_host'    => self::CALL_HOST,
 			'peer_key'    => self::key_payload( self::active_key( $peer ) ),
 			'my_key'      => self::key_payload( self::active_key( $uid ) ),
 			'low_uid'     => min( $uid, $peer ),
@@ -662,11 +1030,33 @@ final class Chat {
 			[ $bdir ] = self::blob_dir();
 			if ( ! is_file( $bdir . '/' . $blob ) ) { return Rest::err( 'bad_blob', 'No such attachment.', 400 ); }
 		}
-		$chat = self::chat_row( $uid, $peer );
-		if ( ! $chat ) {
-			Data::upsert( 'aq_chats', [ 'a_uid' => $low, 'b_uid' => $high ], [ 'created' => Data::now() ] );
-			$chat = self::chat_row( $uid, $peer );
-			if ( ! $chat ) { return Rest::err( 'server_error', 'Could not open the conversation.', 500 ); }
+		// First contact mints the row, and ensure_chat() is where "conversation or REQUEST" is decided.
+		$chat = self::ensure_chat( $uid, $peer );
+		if ( ! $chat ) { return Rest::err( 'server_error', 'Could not open the conversation.', 500 ); }
+		// ── The two gates a message has to pass before it is stored ──
+		// Blocked: silence, stated plainly to the sender. Telling them is the honest option — a
+		// message that vanishes without a word is worse for everyone, and blocking is public
+		// metadata in this database anyway, so pretending otherwise would fool nobody.
+		if ( self::peer_flag( $chat, $uid, 'block' ) ) {
+			return Rest::err( 'blocked', 'This member isn’t accepting messages from you.', 403 );
+		}
+		// Request: the sender gets REQUEST_MAX messages to say who they are, and then it waits.
+		if ( ! (int) $chat['accepted'] ) {
+			if ( (int) $chat['starter'] === $uid ) {
+				$sent = (int) Data::col(
+					'SELECT COUNT(*) FROM ' . Data::t( 'aq_chat_msgs' ) . ' WHERE chat_id = %d AND sender_id = %d',
+					[ (int) $chat['id'], $uid ]
+				);
+				if ( $sent >= self::REQUEST_MAX ) {
+					return Rest::err( 'pending', 'They haven’t accepted your message request yet — you can write again once they do.', 403 );
+				}
+			} else {
+				// Replying IS accepting. There is no way to answer a request by accident, so asking
+				// the recipient to press a button they have already effectively pressed is friction
+				// with nothing on the other side of it.
+				Data::update( 'aq_chats', [ 'accepted' => 1 ], [ 'id' => (int) $chat['id'] ] );
+				$chat['accepted'] = 1;
+			}
 		}
 		self::purge_expired( $chat );
 		delete_transient( 'aq_chat_typing_' . (int) $chat['id'] . '_' . $uid ); // sending ends "typing…"
@@ -694,17 +1084,42 @@ final class Chat {
 		// the cooldown below bounds the repeat. Absent (older clients) = notify, so nothing regresses.
 		// The gate is "are they in THIS conversation", not "are they anywhere in chat" — otherwise one
 		// thread left open in the dock would silence every OTHER sender for as long as it stayed open.
-		if ( (int) Rest::p( $req, 'notify', 1 ) === 1 && ! self::in_chat( $peer, (int) $chat['id'] ) ) {
+		//
+		// A MUTED conversation and an already-announced REQUEST are both silent. A request rings
+		// once — the first message — and then the other two the sender is allowed say nothing more
+		// than the first did: the recipient has been told somebody is asking, and repeating it is
+		// how a request box becomes the thing it was built to prevent.
+		$is_request = ! (int) $chat['accepted'] && (int) $chat['starter'] === $uid;
+		$first_ask  = $is_request && (int) Data::col(
+			'SELECT COUNT(*) FROM ' . Data::t( 'aq_chat_msgs' ) . ' WHERE chat_id = %d AND sender_id = %d',
+			[ (int) $chat['id'], $uid ]
+		) === 1;
+		if ( (int) Rest::p( $req, 'notify', 1 ) === 1
+			&& ! self::in_chat( $peer, (int) $chat['id'] )
+			&& ! self::flag( $chat, $peer, 'mute' )
+			&& ( ! $is_request || $first_ask ) ) {
 			$me   = get_userdata( $uid );
 			$name = $me ? $me->display_name : 'A member';
-			Notify::push( $peer, 'dm', $name . ' sent you an encrypted message', '', '/messages/', 'dm' . $id );
-			self::email_dm( $peer, $uid, $name );
+			Notify::push(
+				$peer, 'dm',
+				$name . ( $is_request ? ' wants to message you' : ' sent you an encrypted message' ),
+				'', '/messages/', 'dm' . $id
+			);
+			self::email_dm( $peer, $uid, $name, (int) $chat['id'], $id, $is_request );
 		}
-		return [ 'ok' => true, 'id' => $id, 'chat_id' => (int) $chat['id'], 'at' => $now ];
+		return [ 'ok' => true, 'id' => $id, 'chat_id' => (int) $chat['id'], 'at' => $now, 'request' => $is_request ];
 	}
 
 	/**
 	 * Email the recipient that a message is waiting, while they are away.
+	 *
+	 * NOT IMMEDIATELY — after QUIET_S. An email about an unread message is only worth sending if the
+	 * message is still unread when it arrives, and the overwhelmingly common case is that it is not:
+	 * someone is mid-conversation, steps away for ninety seconds, comes back. Sending on the instant
+	 * the presence beacon goes dark turned every such pause into an inbox item about a message the
+	 * member had already read by the time they saw the notification. So the send is scheduled a few
+	 * minutes out and RE-CHECKED at the last moment against the read watermark: read it in the
+	 * meantime — on any device, in the dock, anywhere — and the email is simply never sent.
 	 *
 	 * This is a stranger-triggered email sent from ArtaQuest's ONE signing identity — the same one
 	 * sign-in codes go out on — so it is treated as an abuse surface first and a feature second:
@@ -727,6 +1142,10 @@ final class Chat {
 	const EMAIL_RCPT_WINDOW = 3600;
 	const EMAIL_SENDER_MAX = 20;      // …per sender, across ALL recipients
 	const EMAIL_SENDER_WINDOW = 86400;
+	/** How long a message must sit UNREAD before we email about it. Long enough that stepping away
+	 *  from an open conversation costs nobody an inbox item; short enough to still be a notification
+	 *  rather than a digest. */
+	const EMAIL_QUIET_S = 300;
 
 	/** A member-controlled name made safe for a subject header and an auto-linking HTML body. */
 	private static function safe_sender_name( $name ) {
@@ -739,7 +1158,7 @@ final class Chat {
 		return $n !== '' ? $n : 'A member';
 	}
 
-	private static function email_dm( $peer, $from, $sender_name ) {
+	private static function email_dm( $peer, $from, $sender_name, $chat_id = 0, $msg_id = 0, $is_request = false ) {
 		$peer = (int) $peer;
 		$from = (int) $from;
 		if ( get_user_meta( $peer, 'aq_dm_email_off', true ) ) { return; }
@@ -755,23 +1174,51 @@ final class Chat {
 		$u = get_userdata( $peer );
 		if ( ! $u || ! is_email( $u->user_email ) ) { return; }
 
+		// The cooldown is claimed NOW rather than at send time, so a burst of ten messages schedules
+		// one email, not ten that each discover the others at the last moment.
 		set_transient( $pair, 1, self::EMAIL_COOLDOWN );
 		set_transient( $rk, (int) get_transient( $rk ) + 1, self::EMAIL_RCPT_WINDOW );
 		set_transient( $sk, (int) get_transient( $sk ) + 1, self::EMAIL_SENDER_WINDOW );
 
-		// Off the request path — the sender's message is already stored and must not wait on SMTP.
-		wp_schedule_single_event( time(), 'aq_dm_email', [ $peer, self::safe_sender_name( $sender_name ) ] );
+		// Off the request path — the sender's message is already stored and must not wait on SMTP —
+		// and QUIET_S out, so a member who reads it in the meantime is never emailed at all.
+		wp_schedule_single_event(
+			time() + self::EMAIL_QUIET_S, 'aq_dm_email',
+			[ $peer, self::safe_sender_name( $sender_name ), (int) $chat_id, (int) $msg_id, $is_request ? 1 : 0 ]
+		);
 	}
 
-	/** Cron target for the deferred DM email. Fail-soft: a bounce never costs anyone their message,
-	 *  and a failed send releases the pair cooldown so the next message can still be announced. */
-	public static function send_dm_email( $peer, $sender_name ) {
+	/**
+	 * Cron target for the deferred DM email. Fail-soft: a bounce never costs anyone their message,
+	 * and a failed send releases the pair cooldown so the next message can still be announced.
+	 *
+	 * The LAST-MOMENT CHECK lives here: an email about an unread message is only true while the
+	 * message is unread. `$msg_id` is compared with the recipient's own read watermark, so anything
+	 * they caught up on during the quiet window is silently dropped.
+	 */
+	public static function send_dm_email( $peer, $sender_name, $chat_id = 0, $msg_id = 0, $is_request = 0 ) {
 		$u = get_userdata( (int) $peer );
 		if ( ! $u || ! is_email( $u->user_email ) || ! class_exists( '\\AQ\\Mailer' ) ) { return; }
 		if ( get_user_meta( (int) $peer, 'aq_dm_email_off', true ) ) { return; } // opted out since
+		// Still unread? (Older scheduled events carry no ids — those send, as they always did.)
+		if ( $chat_id && $msg_id ) {
+			$c = Data::one( 'SELECT a_uid, b_uid, a_read, b_read FROM ' . Data::t( 'aq_chats' ) . ' WHERE id = %d', [ (int) $chat_id ] );
+			if ( ! $c ) { return; } // conversation gone (declined, purged) — nothing to announce
+			$is_a = (int) $c['a_uid'] === (int) $peer;
+			$read = (int) ( $is_a ? $c['a_read'] : $c['b_read'] );
+			if ( $read >= (int) $msg_id ) {
+				// They read it. Release the pair cooldown so the NEXT message that lands while they
+				// are away is announced normally instead of inheriting this one's silence.
+				self::clear_dm_mail_cooldown( (int) $peer, (int) ( $is_a ? $c['b_uid'] : $c['a_uid'] ) );
+				return;
+			}
+		}
 		$ok = false;
 		try {
-			$ok = (bool) Mailer::send( 'dm_received', $u->user_email, [ 'sender' => (string) $sender_name ] );
+			$ok = (bool) Mailer::send(
+				(int) $is_request ? 'dm_request' : 'dm_received',
+				$u->user_email, [ 'sender' => (string) $sender_name ]
+			);
 		} catch ( \Throwable $e ) { $ok = false; }
 		if ( ! $ok ) {
 			// Don't hold a 30-minute silence for an email that never left.
@@ -841,12 +1288,14 @@ final class Chat {
 		if ( ! $peer || ! get_userdata( $peer ) ) { return Rest::err( 'bad_peer', 'No such member', 404 ); }
 		$ttl = Rest::pint( $req, 'ttl', 0 );
 		if ( ! in_array( $ttl, self::TTLS, true ) ) { return Rest::err( 'bad_ttl', 'Unsupported timer.', 400 ); }
-		[ $low, $high ] = self::pair( $uid, $peer );
-		$chat = self::chat_row( $uid, $peer );
-		if ( ! $chat ) {
-			Data::upsert( 'aq_chats', [ 'a_uid' => $low, 'b_uid' => $high ], [ 'created' => Data::now() ] );
-			$chat = self::chat_row( $uid, $peer );
-			if ( ! $chat ) { return Rest::err( 'server_error', 'Could not open the conversation.', 500 ); }
+		// Through ensure_chat, so setting a timer on a conversation that does not exist yet cannot
+		// mint an ACCEPTED one and walk past the request gate (see that method).
+		$chat = self::ensure_chat( $uid, $peer );
+		if ( ! $chat ) { return Rest::err( 'server_error', 'Could not open the conversation.', 500 ); }
+		// A disappearing-message timer is a shared setting, so it is not something a stranger gets to
+		// impose while their request is still unanswered.
+		if ( self::is_request( $chat, $peer ) || self::peer_flag( $chat, $uid, 'block' ) ) {
+			return Rest::err( 'pending', 'You can set a timer once they’ve accepted your message request.', 403 );
 		}
 		Data::update( 'aq_chats', [ 'ttl' => $ttl ], [ 'id' => (int) $chat['id'] ] );
 		$chat['ttl'] = $ttl;
@@ -869,7 +1318,112 @@ final class Chat {
 		if ( ! $row || (int) $row['sender_id'] !== $uid ) { return Rest::err( 'not_found', 'No such message of yours.', 404 ); }
 		self::unlink_blob( (string) ( $row['blob'] ?? '' ) );
 		$wpdb->delete( Data::t( 'aq_chat_msgs' ), [ 'id' => $id, 'sender_id' => $uid ] );
+		self::resync_last( (int) $row['chat_id'] ); // the list's watermark must not name a deleted row
 		return [ 'ok' => true ];
+	}
+
+	/**
+	 * POST chat/fetch {url} — pull a remote image/GIF on the member's behalf and hand back the raw
+	 * bytes (base64) for the browser to SEAL and upload like any other attachment.
+	 *
+	 * This exists so "paste a GIF link" can work without the recipient's browser ever touching the
+	 * source host: by the time the message is sent, the GIF is ciphertext in our own blob store, and
+	 * opening it reveals nothing to anyone. Fetching client-side was not an option either way — our
+	 * CSP `connect-src` is 'self', deliberately.
+	 *
+	 * Fetching an arbitrary URL from the server is an SSRF primitive, so it is fenced accordingly:
+	 * https only; no redirects followed (a 302 to 169.254.169.254 is the classic bypass, and
+	 * validating hop one proves nothing about hop two); every resolved address checked against the
+	 * private/loopback/link-local ranges; a media content type from a fixed list; and a hard byte
+	 * ceiling enforced on the response we actually received, not on the Content-Length it claimed.
+	 */
+	public static function fetch_url( $req ) {
+		self::ensure_tables();
+		if ( Rest::throttle( 'aq_chat_fetch', 12, 60 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
+		$url  = trim( (string) Rest::p( $req, 'url', '' ) );
+		$bits = wp_parse_url( $url );
+		if ( ! $bits || strtolower( $bits['scheme'] ?? '' ) !== 'https' || empty( $bits['host'] ) ) {
+			return Rest::err( 'bad_url', 'Paste an https:// link to an image or GIF.', 400 );
+		}
+		$host = $bits['host'];
+		// Every address the host resolves to must be public. gethostbyname returns the input string
+		// unchanged when it cannot resolve, which is not an address — and therefore not allowed.
+		$ips = [];
+		if ( filter_var( $host, FILTER_VALIDATE_IP ) ) {
+			$ips = [ $host ];
+		} else {
+			$recs = @dns_get_record( $host, DNS_A | DNS_AAAA ) ?: [];
+			foreach ( $recs as $r ) {
+				if ( ! empty( $r['ip'] ) )   { $ips[] = $r['ip']; }
+				if ( ! empty( $r['ipv6'] ) ) { $ips[] = $r['ipv6']; }
+			}
+		}
+		if ( ! $ips ) { return Rest::err( 'bad_url', 'That host doesn’t resolve.', 400 ); }
+		foreach ( $ips as $ip ) {
+			if ( ! filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) ) {
+				return Rest::err( 'bad_url', 'That address isn’t reachable from here.', 400 );
+			}
+		}
+		// wp_SAFE_remote_get, not wp_remote_get: WP's own SSRF guard (wp_http_validate_url) runs on
+		// the request AND on every redirect the transport would follow, which is the one thing the
+		// check above genuinely cannot do — DNS can answer differently between our resolution and
+		// curl's. Two independent guards, and the belt is the one that sees the second hop.
+		$resp = wp_safe_remote_get( $url, [
+			'timeout'     => 12,
+			'redirection' => 0,   // see the docblock: a followed redirect is an unvalidated second request
+			'headers'     => [ 'Accept' => implode( ',', self::FETCH_MIME ) ],
+		] );
+		if ( is_wp_error( $resp ) ) { return Rest::err( 'fetch_failed', 'Couldn’t download that link.', 502 ); }
+		if ( (int) wp_remote_retrieve_response_code( $resp ) !== 200 ) {
+			return Rest::err( 'fetch_failed', 'That link didn’t return an image.', 502 );
+		}
+		$mime = strtolower( trim( explode( ';', (string) wp_remote_retrieve_header( $resp, 'content-type' ) )[0] ) );
+		if ( ! in_array( $mime, self::FETCH_MIME, true ) ) {
+			return Rest::err( 'bad_type', 'That link isn’t an image, GIF or MP4.', 400 );
+		}
+		$body = (string) wp_remote_retrieve_body( $resp );
+		if ( $body === '' || strlen( $body ) > self::FETCH_MAX ) {
+			return Rest::err( 'too_big', 'That file is empty or larger than 5 MB.', 400 );
+		}
+		return [ 'ok' => true, 'mime' => $mime, 'size' => strlen( $body ), 'data' => base64_encode( $body ) ];
+	}
+
+	/**
+	 * Cron: unlink sealed attachments no message points at.
+	 *
+	 * chat/blob stores the bytes BEFORE chat/send names them, so every abandoned composer — a failed
+	 * send, a closed tab, a member who changed their mind — leaves an orphan on disk that nothing
+	 * will ever read or delete. One a day is invisible; the daily budget allows 200 MB per member,
+	 * so at the ceiling this is the difference between a bounded store and an unbounded one.
+	 *
+	 * The 24-hour floor matters: a file younger than that may be an upload whose chat/send has not
+	 * arrived yet, and deleting it would break a message as it was being written.
+	 */
+	public static function gc_blobs() {
+		self::ensure_tables();
+		[ $dir ] = self::blob_dir();
+		if ( ! is_dir( $dir ) ) { return 0; }
+		$files = glob( $dir . '/*.bin' ) ?: [];
+		if ( ! $files ) { return 0; }
+		$cutoff = time() - DAY_IN_SECONDS;
+		$stale  = [];
+		foreach ( $files as $f ) {
+			if ( @filemtime( $f ) < $cutoff ) { $stale[ basename( $f ) ] = $f; }
+		}
+		if ( ! $stale ) { return 0; }
+		global $wpdb;
+		$n = 0;
+		// Ask the DB about the stale names only, in chunks — never load every referenced blob name.
+		foreach ( array_chunk( array_keys( $stale ), 200 ) as $chunk ) {
+			$ph   = implode( ',', array_fill( 0, count( $chunk ), '%s' ) );
+			$live = (array) $wpdb->get_col( $wpdb->prepare(
+				'SELECT `blob` FROM ' . Data::t( 'aq_chat_msgs' ) . " WHERE `blob` IN ($ph)", $chunk
+			) );
+			foreach ( array_diff( $chunk, $live ) as $name ) {
+				if ( @unlink( $stale[ $name ] ) ) { $n++; }
+			}
+		}
+		return $n;
 	}
 
 	/**

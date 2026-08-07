@@ -3,7 +3,7 @@
  * Plugin Name: ArtaQuest
  * Description: The entire ArtaQuest platform — LMS, economy, social, i18n, funds — in one
  *              lean, dependency-free plugin. Replaces MasterStudy LMS + WooCommerce.
- * Version:     1.20.593
+ * Version:     1.20.594
  * Author:      ArtaQuest Foundation
  * License:     GNU AGPLv3
  * License URI: https://www.gnu.org/licenses/agpl-3.0.html
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 // disagree will send the next person chasing a production divergence that is not there: the
 // header is what get_plugin_data() reads, AQ_VERSION is what /version reports and what the
 // integrity sweep keys on. Bump them together, always.
-define( 'AQ_VERSION', '1.20.593' );
+define( 'AQ_VERSION', '1.20.594' );
 define( 'AQ_DIR', __DIR__ );
 define( 'AQ_URL', plugins_url( '', __FILE__ ) );
 
@@ -46,8 +46,20 @@ foreach ( [ 'Data', 'Schema', 'Cron', 'Secrets', 'Vault', 'Watchdog', 'Integrity
 add_action( 'user_register', [ 'AQ\\Economy', 'grant_signup_allowance' ] );
 
 /** The "you have a message" email, sent OFF the chat/send request (see AQ\Chat::email_dm): an
- *  authenticated SMTP socket must never sit between a member and their message being delivered. */
-add_action( 'aq_dm_email', [ 'AQ\\Chat', 'send_dm_email' ], 10, 2 );
+ *  authenticated SMTP socket must never sit between a member and their message being delivered.
+ *  Scheduled EMAIL_QUIET_S out and re-checked against the read watermark when it fires, so a
+ *  message the member has since read is never emailed about. Five args (older queued events carry
+ *  two — the extra ones default). */
+add_action( 'aq_dm_email', [ 'AQ\\Chat', 'send_dm_email' ], 10, 5 );
+
+/** Daily sweep of sealed chat attachments no message references — every abandoned composer (a failed
+ *  send, a closed tab, a change of mind) leaves one on disk, and nothing else would ever unlink them
+ *  (AQ\Chat::gc_blobs). Registered the way every other recurring job here is: scheduled on
+ *  `plugins_loaded`, and the handler behind Cron::guard so two overlapping runs cannot both sweep. */
+add_action( 'plugins_loaded', function () {
+	if ( ! wp_next_scheduled( 'aq_chat_blob_gc' ) ) { wp_schedule_event( time() + 3600, 'daily', 'aq_chat_blob_gc' ); }
+} );
+aq_cron_on( 'aq_chat_blob_gc', 'aq_chat_blob_gc', [ 'AQ\\Chat', 'gc_blobs' ], 3600 );
 
 /**
  * ONE way to join ArtaQuest: the passwordless flow in AQ\Auth (email one-time code or Google),

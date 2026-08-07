@@ -18,7 +18,7 @@
  */
 import {
   chatList, chatRegisterKey, chatUnread,
-  type ChatKey, type ChatListPage,
+  type ChatBox, type ChatKey, type ChatListPage, type ChatRing,
 } from "./api";
 import {
   decodePayload, deriveChatKey, e2eeSupported, ensureIdentity, importPeerPub, openMessage,
@@ -28,9 +28,13 @@ import { isLoggedIn } from "./wp";
 
 /** How often the conversation LIST refreshes while a surface is actually showing it. */
 const POLL_MS = 15000;
-/** How often the collapsed dock refreshes just its unread badge. Slower, and via a route that
- *  touches no presence — see the note on `watchList` below. */
-const BADGE_MS = 60000;
+/** How often the collapsed dock refreshes just its unread badge. Slower than the list, and via a
+ *  route that touches no presence — see the note on `watchList` below.
+ *
+ *  It is also the only thing listening for an inbound CALL, which is why it is 30s rather than the
+ *  60s a badge alone would want: a ring nobody hears is not a call. Chat::RING_S is set longer than
+ *  this on purpose, so no ring can start and expire between two polls. */
+const BADGE_MS = 30000;
 
 export type ChatState = {
   identity: Identity | null;
@@ -38,8 +42,16 @@ export type ChatState = {
   page: ChatListPage | null;
   /** chat id → decrypted one-line preview ("You: …" when it was ours). */
   previews: Record<number, string>;
-  /** Total unread across every conversation — what the dock's badge shows. */
+  /** Total unread across every conversation — what the dock's badge shows. Excludes muted,
+   *  archived and un-accepted conversations: see Chat::unread for why a badge must not count them. */
   unread: number;
+  /** Message requests waiting on this member's yes-or-no. Counted separately from `unread` on
+   *  purpose — accepting a stranger is a decision, not an unread message. */
+  requests: number;
+  /** Somebody ringing right now, from the badge poll, so a call reaches the member on any page. */
+  ring: ChatRing | null;
+  /** Which list `page` currently holds. Boxes share one poller, so switching box re-fetches. */
+  box: ChatBox;
   /** A hard failure that leaves messaging unusable (no WebCrypto, boot failed). */
   fatal: string | null;
   /** True once a conversation list has actually arrived — not merely once the key was registered. */
@@ -49,7 +61,8 @@ export type ChatState = {
 };
 
 let state: ChatState = {
-  identity: null, myKey: null, page: null, previews: {}, unread: 0, fatal: null, ready: false, listError: false,
+  identity: null, myKey: null, page: null, previews: {}, unread: 0, requests: 0, ring: null,
+  box: "chats", fatal: null, ready: false, listError: false,
 };
 
 const subs = new Set<() => void>();
@@ -119,20 +132,36 @@ let lastRefresh = 0;
  *  and a thread would otherwise re-fetch (and re-mark presence) on every switch. */
 const FRESH_MS = 5000;
 
+/**
+ * Show a different list (inbox / requests / archived / blocked).
+ *
+ * The box is store state rather than a component's, because the poller is shared: if the page held
+ * it locally, the 15-second tick would keep overwriting the member's chosen list with the inbox.
+ */
+export function setBox(box: ChatBox): void {
+  if (state.box === box) return;
+  set({ box, page: null, ready: false });   // `page` belongs to the old box — showing it under the new tab's heading would be a lie
+  void refresh(true);
+}
+
 /** Pull the conversation list and decrypt any preview that actually changed. */
 export async function refresh(force = false): Promise<void> {
   if (refreshing || !state.myKey) return;
   if (!force && state.page && Date.now() - lastRefresh < FRESH_MS) return;
   refreshing = true;
   lastRefresh = Date.now();
+  const box = state.box;
   try {
     // A deadline, because the latch above is single-flight: without one, a request that never
     // settles (a dead socket, a proxy holding the connection) would leave `refreshing` true and
     // the conversation list frozen for the rest of the visit, with nothing on screen saying so.
     const page = await Promise.race([
-      chatList(),
+      chatList(box),
       new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000)),
     ]);
+    // The member switched tabs while this was in flight — its rows belong to a list nobody is
+    // looking at any more, and the newer request will land shortly.
+    if (state.box !== box) return;
     const previews: Record<number, string> = {};
     const identity = state.identity;
     const myKid = state.myKey?.kid;
@@ -167,15 +196,29 @@ export async function refresh(force = false): Promise<void> {
         }
       } catch { /* unopenable row — the list just shows its timestamp */ }
     }
-    const unread = page.items.reduce((n, c) => n + (c.unread || 0), 0);
+    // Only the INBOX carries the badge. Summing whichever list happens to be open would make the
+    // badge read 0 the moment somebody looked at their archive, and jump when they looked back.
+    const unread = box === "chats"
+      ? page.items.reduce((n, c) => n + (c.muted ? 0 : c.unread || 0), 0)
+      : state.unread;
     // `ready` only becomes true once a list has actually arrived — flipping it at boot meant a
     // failed first load rendered as a confident "no conversations yet".
-    set({ page, previews, unread, ready: true, listError: false });
+    set({
+      page, previews, unread, ready: true, listError: false,
+      requests: page.requests ?? state.requests,
+      ring: acceptRing(page.ring ?? null),
+    });
   } catch {
     // Keep the last good list, but say so when there has never been one.
     if (!state.page) set({ listError: true });
   }
-  finally { refreshing = false; }
+  finally {
+    refreshing = false;
+    // The member switched tabs while this request was in flight. `refresh` is single-flight, so the
+    // setBox() call that followed found the latch closed and returned immediately — leaving the new
+    // tab empty until the 15-second poll came round. Chase it now instead.
+    if (state.box !== box) { void refresh(true); }
+  }
 }
 
 /** One line describing a decrypted payload — the summary every messenger's list is made of. */
@@ -191,8 +234,58 @@ export function previewOf(p: ChatPayload): string {
     case "react": return `Reacted ${p.emoji}`;
     case "edit": return p.body;
     case "del": return "Message removed";
+    case "stick": return "🩵 Sticker";
+    case "call": return p.act === "start" ? "📹 Video call" : "📹 Call ended";
     default: return "";
   }
+}
+
+/**
+ * Apply an accept/decline/mute/pin/archive locally, before the next poll agrees.
+ *
+ * Every one of these actions is about a list the member is looking at, so the row has to move (or
+ * change) on the same tick they press the button. Waiting up to 15 seconds for the poller reads as
+ * a dead button and invites a second press — which for `decline` means blocking somebody twice.
+ */
+export function applyRelation(peerId: number, patch: Partial<ChatListPage["items"][number]>, drop = false): void {
+  const page = state.page;
+  if (!page) return;
+  const items = drop
+    ? page.items.filter((c) => c.peer.id !== peerId)
+    : page.items.map((c) => (c.peer.id === peerId ? { ...c, ...patch } : c));
+  set({
+    page: { ...page, items },
+    unread: state.box === "chats" ? items.reduce((n, c) => n + (c.muted ? 0 : c.unread || 0), 0) : state.unread,
+  });
+}
+
+/** The store's own count, adjusted without a round-trip when a request is answered. */
+export function bumpRequests(delta: number): void {
+  set({ requests: Math.max(0, state.requests + delta) });
+}
+
+/**
+ * Stop showing an inbound ring — the member answered it, or dismissed it.
+ *
+ * The beacon lives on the SERVER for 75 seconds, so clearing local state alone is not enough: the
+ * next badge poll re-reads the same live ring and the banner reappears a few seconds after being
+ * dismissed, over and over until it expires. So a dismissal is remembered by identity — caller and
+ * start time — and suppressed on arrival. A genuinely NEW call from the same person has a different
+ * `at`, so it still rings.
+ */
+let dismissedRing = "";
+const ringKey = (r: ChatRing | null) => (r ? `${r.from.id}:${r.at}` : "");
+
+export function clearRing(): void {
+  if (state.ring) {
+    dismissedRing = ringKey(state.ring);
+    set({ ring: null });
+  }
+}
+
+/** Apply an incoming ring unless it is the one the member has already waved away. */
+function acceptRing(r: ChatRing | null): ChatRing | null {
+  return r && ringKey(r) === dismissedRing ? null : r;
 }
 
 /** Locally zero a conversation's unread count the moment it's opened, so the badge responds
@@ -224,12 +317,17 @@ let badgeTimer: ReturnType<typeof setInterval> | undefined;
 let subscribers = 0;   // anyone at all (drives the badge)
 let listWatchers = 0;  // surfaces actually rendering the conversation list
 
-/** Refresh only the unread badge — no presence, no ciphertext, no decryption. */
+/** Refresh the badge state — unread, waiting requests, and any inbound ring. No presence, no
+ *  ciphertext, no decryption: a server-side count and a 75-second beacon. */
 async function refreshBadge(): Promise<void> {
   if (!isLoggedIn()) return; // no identity needed: this is a server-side count, not a decryption
   try {
-    const { unread } = await chatUnread();
-    if (unread !== state.unread) set({ unread });
+    const r = await chatUnread();
+    const ring = acceptRing(r.ring);
+    if (r.unread !== state.unread || r.requests !== state.requests || !!ring !== !!state.ring
+      || ring?.at !== state.ring?.at) {
+      set({ unread: r.unread, requests: r.requests, ring });
+    }
   } catch { /* transient — keep the last count */ }
 }
 

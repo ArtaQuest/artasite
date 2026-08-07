@@ -1,19 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  chatEmailPrefs, chatGetKey, chatMembers, chatMessages, chatSend, chatSetTtl, chatTyping,
-  chatUnsend, chatUploadBlob,
-  type ChatDirectory, type ChatKey, type ChatListItem, type ChatMessages, type ChatUserCard,
+  chatCall, chatEmailPrefs, chatGetKey, chatMembers, chatMessages, chatRelation, chatSend,
+  chatSetTtl, chatTyping, chatUnsend, chatUploadBlob,
+  type ChatBox, type ChatDirectory, type ChatKey, type ChatListItem, type ChatMessages,
+  type ChatRelation, type ChatUserCard,
 } from "../lib/api";
 import { currentUser, isLoggedIn, localePath } from "../lib/wp";
-import { getChatState, markSeen, subscribeChat, watchList } from "../lib/chat-store";
+import {
+  applyRelation, bumpRequests, clearRing, getChatState, markSeen, setBox, subscribeChat, watchList,
+} from "../lib/chat-store";
 import { watchMath } from "../lib/math";
 import {
-  decodePayload, deriveChatKey, encodePayload, importPeerPub,
+  decodePayload, deriveChatKey, encodePayload, importPeerPub, newCallRoom,
   openAttachment, openMessage, safetyCode, sealAttachment, sealMessage,
   type ChatPayload, type Identity, type SealedAttachment,
 } from "../lib/e2ee";
 import { Avatar, Button, EmptyState, ErrorNote, Input, PageHero, StatusNote } from "../components/ui";
+import { Pickers, type PickerResult } from "../components/chat/Pickers";
+import { CallPanel } from "../components/chat/CallPanel";
+import { QUICK_REACTIONS } from "../components/chat/emoji";
+import { knownSticker, stickerLabel, stickerUrl } from "../components/chat/stickers";
 
 /**
  * Messages — end-to-end encrypted DMs. The best of every messenger, sealed on-device:
@@ -34,11 +41,10 @@ import { Avatar, Button, EmptyState, ErrorNote, Input, PageHero, StatusNote } fr
 
 const POLL_MS = 4000;
 const GROUP_S = 300; // bubbles from the same sender within 5 min group together
-const REACTIONS = ["❤️", "👍", "😂", "😮", "😢", "🔥"];
-const EMOJI = [
-  "😀", "😂", "🥲", "😍", "🤔", "😴", "🥳", "😭", "😅", "🙃", "😇", "🤯",
-  "👍", "👎", "👏", "🙏", "💪", "🤝", "👀", "✨", "🔥", "❤️", "💙", "🌓",
-];
+const REACTIONS = QUICK_REACTIONS;
+/** How long a call invite stays "live" on screen. A sealed invite is just a message and never
+ *  expires by itself, so without this every old call in the history would offer a Join button. */
+const CALL_LIVE_S = 120;
 const TTL_CHOICES = [
   { v: 0, label: "Keep forever" },
   { v: 3600, label: "1 hour" },
@@ -57,6 +63,31 @@ type Item = {
 /** Current unix seconds. Module-scoped so the optimistic-bubble timestamp is read outside any
  *  render path — the value is only ever needed while handling a send. */
 const nowSec = () => Math.floor(Date.now() / 1000);
+
+/**
+ * Current unix milliseconds, for the same reason and one more.
+ *
+ * `react-hooks/purity` rejects a bare `Date.now()` inside a function DECLARED in a component body,
+ * and it is right to: the typing-beacon throttle below reads the clock from `onDraft`, which is
+ * handed to a custom component as a prop — nothing at that call site proves the component only
+ * invokes it from an event rather than while rendering. Reading the clock through a module-scoped
+ * helper puts the impure call somewhere it demonstrably cannot run during a render.
+ */
+const nowMs = () => Date.now();
+
+/**
+ * Half-written messages, per conversation, for as long as the tab lives.
+ *
+ * Every messenger keeps these, and their absence was quietly costly here: the thread REMOUNTS on
+ * every peer switch, and the dock and the full page can each open a different conversation, so
+ * glancing at another chat — or answering the person who just messaged you — silently destroyed
+ * whatever you were in the middle of writing, with no warning and no undo.
+ *
+ * Module-scoped rather than component state (the component is what unmounts) and deliberately NOT
+ * persisted to disk: an unsent message is plaintext, and this app does not leave plaintext lying
+ * around after the tab closes. A refresh loses it; switching chats does not.
+ */
+const drafts = new Map<number, string>();
 
 function fmtTime(ts: number): string {
   return new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -97,6 +128,14 @@ const IC = {
   check1: <path d="M4.5 12.5l4 4L18 7" />,
   check2: <><path d="M3 12.5l4 4L16.5 7" /><path d="M10.5 15.5 12 17 21 7.5" /></>,
   clock: <><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2.5" /></>,
+  video: <><rect x="3" y="6" width="13" height="12" rx="2.5" /><path d="m16 10.5 5-3v9l-5-3Z" /></>,
+  more: <><circle cx="12" cy="5" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="12" cy="19" r="1.4" /></>,
+  plus: <path d="M12 5v14M5 12h14" />,
+  pin: <path d="M15 3 21 9l-4 1-3.5 3.5L14 18l-2 2-4.5-4.5L3 20l4.5-4.5L3 11l2-2 4.5.5L13 6Z" />,
+  mute: <><path d="M17 17H5l1.5-2.5V10a5.5 5.5 0 0 1 3-4.9M18 12v-2a5.5 5.5 0 0 0-5.5-5.5" /><path d="M3 3l18 18" /></>,
+  bell: <path d="M17 17H7l1.5-2.5V10a3.5 3.5 0 0 1 7 0v4.5ZM10 20h4" />,
+  archive: <><rect x="3" y="4" width="18" height="5" rx="1.5" /><path d="M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9M10 13h4" /></>,
+  block: <><circle cx="12" cy="12" r="9" /><path d="m6 6 12 12" /></>,
 };
 
 /**
@@ -196,9 +235,15 @@ function Media({ att, url, onZoom }: { att: SealedAttachment; url: string | null
   if (att.mime.startsWith("image/")) {
     const ratio = att.w && att.h ? att.w / att.h : undefined;
     return (
-      <button type="button" onClick={() => onZoom(url)} className="block overflow-hidden rounded-card" aria-label="View image full size">
+      <button type="button" onClick={() => onZoom(url)} className="relative block overflow-hidden rounded-card"
+        aria-label={att.gif ? "View GIF full size" : "View image full size"}>
+        {/* object-CONTAIN, not cover. A cropped photo is an annoyance; a cropped GIF is usually the
+            joke cut in half, and a portrait screenshot arrives with its content sliced out. */}
         <img src={url} alt="" loading="lazy" style={ratio ? { aspectRatio: String(ratio) } : undefined}
-          className="max-h-72 max-w-full object-cover" />
+          className="max-h-72 max-w-full object-contain" />
+        {att.gif && (
+          <span className="absolute bottom-1 start-1 rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white">GIF</span>
+        )}
       </button>
     );
   }
@@ -253,15 +298,47 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   // here. Read (the server watermark) always implies delivered; this covers the ✓✓-grey gap.
   const [deliveredTo, setDeliveredTo] = useState(0);
   const [older, setOlder] = useState<number | null>(null); // cursor for "show earlier"
-  const [draft, setDraft] = useState("");
+  // Seeded from (and written back to) the module-level draft store, so a half-written message
+  // survives switching conversations — see `drafts`.
+  const [draft, setDraft] = useState(() => drafts.get(peer.id) ?? "");
   const [replyTo, setReplyTo] = useState<Item | null>(null);
   const [editing, setEditing] = useState<Item | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [code, setCode] = useState<string | null>(null);
-  const [panel, setPanel] = useState<"" | "code" | "timer" | "search" | "emoji">("");
+  const [panel, setPanel] = useState<"" | "code" | "timer" | "search" | "menu" | "add">("");
   const [query, setQuery] = useState("");
+  /** My side of this conversation, as the server sees it: is it an unanswered request (theirs or
+   *  mine), has either of us blocked the other, is it muted/pinned/archived. Refreshed every poll,
+   *  because the OTHER side can change it — accepting my request has to unlock my composer without
+   *  a reload. */
+  const [rel, setRel] = useState({
+    pending: false, asked: false, request_left: 3, blocked: false, blocked_by: false,
+    muted: false, pinned: false, archived: false, call_host: "meet.jit.si",
+  });
+  /** The room this device has actually joined (null = not in a call). Never the same thing as "an
+   *  invite exists": joining is always the member's own act. */
+  const [call, setCall] = useState<string | null>(null);
+  const [acting, setActing] = useState(false); // a relation change is in flight
+  /**
+   * The two irreversible-ish buttons ask once before doing it.
+   *
+   * `Unsend` HARD-DELETES the row — from the public database, for both people, with no undo — and it
+   * sat one stray click away from Edit on every bubble. `Block` sits in a seven-item menu and closes
+   * the conversation. Neither is a thing to do by accident, and a second click is a much smaller
+   * cost than either mistake.
+   */
+  const [confirmUnsend, setConfirmUnsend] = useState(0);
+  const [confirmBlock, setConfirmBlock] = useState(false);
+  // …and the unsend question times out. On a desktop the bubble's actions are hover-revealed, so a
+  // half-asked "Delete?" would otherwise still be armed the next time the pointer passed over it,
+  // minutes later, with the member no longer expecting it.
+  useEffect(() => {
+    if (!confirmUnsend) return;
+    const t = setTimeout(() => setConfirmUnsend(0), 5000);
+    return () => clearTimeout(t);
+  }, [confirmUnsend]);
   const [zoom, setZoom] = useState<string | null>(null);
   const [media, setMedia] = useState<Record<number, string | null>>({});
   const [atBottom, setAtBottom] = useState(true);
@@ -345,6 +422,12 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
           return next ?? prev;
         });
         setLive({ read: page.peer_read, typing: page.peer_typing, online: page.peer_online, ttl: page.ttl });
+        setRel({
+          pending: page.pending, asked: page.asked, request_left: page.request_left,
+          blocked: page.blocked, blocked_by: page.blocked_by,
+          muted: page.muted, pinned: page.pinned, archived: page.archived,
+          call_host: page.call_host || "meet.jit.si",
+        });
         const plain = await decrypt(page);
         if (stop) return;
         if (plain.length) {
@@ -374,6 +457,9 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
     setItems([]); setMedia({}); setOlder(null); lastId.current = 0; keyCache.current.clear();
     setPeerKey(null); setCode(null); setPanel(""); setReplyTo(null); setEditing(null); setMissed(0);
     setDeliveredTo(0);
+    // Switching conversation LEAVES the call. Keeping the iframe alive across a peer change would
+    // hold an open camera and microphone for a conversation the member is no longer looking at.
+    setCall(null);
     document.addEventListener("visibilitychange", onVis);
     tick(true);
     return () => {
@@ -427,10 +513,63 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
       const p = m.payload;
       if (p && (p.t === "text" || p.t === "img" || p.t === "file") && (edits.get(m.id) ?? p.body)) textOf.set(m.id, edits.get(m.id) ?? p.body ?? "");
       if (p && p.t === "voice") textOf.set(m.id, "Voice message");
+      if (p && p.t === "img" && !textOf.has(m.id)) textOf.set(m.id, p.att.gif ? "GIF" : "Photo");
+      if (p && p.t === "stick") textOf.set(m.id, stickerLabel(p.id) + " sticker");
+      if (p && p.t === "call") textOf.set(m.id, p.act === "start" ? "Video call" : "Call ended");
       if (p && p.t === "file" && !textOf.has(m.id)) textOf.set(m.id, p.att.name || "File");
     }
     return { rows: render.filter((m) => !dels.has(m.id)), edits, reacts, textOf };
   }, [items]);
+
+  /**
+   * The live call invite, if there is one: the newest `call:start` that has not been closed by a
+   * later `call:end` and is younger than CALL_LIVE_S.
+   *
+   * Read off the message stream rather than tracked in state, because that stream is the ONLY place
+   * the room name exists — the server never has it (see components/chat/CallPanel). It also means
+   * both devices agree about what is happening without any call-state protocol: the sealed messages
+   * ARE the protocol.
+   *
+   * `ringTick` is what makes it EXPIRE. Memoising on the messages alone meant the freshness test ran
+   * only when a new message arrived — so a call nobody answered kept offering a Join button for a
+   * room the caller had long since left, indefinitely, on a quiet conversation.
+   */
+  const [ringTick, setRingTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setRingTick((n) => n + 1), 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  // The options dropdown closes the way every dropdown does: click anywhere else, or press Escape.
+  // Without this the only way out was pressing the same button again — so a member who opened it,
+  // decided against it and clicked back into the conversation was left with a menu covering their
+  // messages. Scoped to the dropdown; the inline panels (search/timer/safety code) are part of the
+  // conversation and stay until dismissed on purpose.
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (panel !== "menu") return;
+    const shut = () => { setPanel(""); setConfirmBlock(false); }; // never reopen mid-confirmation
+    const away = (e: MouseEvent) => { if (!menuRef.current?.contains(e.target as Node)) shut(); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); shut(); } };
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc, true); // capture: claim Escape before the dock closes
+    return () => {
+      document.removeEventListener("mousedown", away);
+      document.removeEventListener("keydown", esc, true);
+    };
+  }, [panel]);
+  const invite = useMemo(() => {
+    void ringTick;
+    const now = nowSec();
+    for (let i = view.rows.length - 1; i >= 0; i--) {
+      const p = view.rows[i].payload;
+      if (!p || p.t !== "call") continue;
+      if (p.act === "end") return null;                    // the most recent call event was a hangup
+      if (now - view.rows[i].at > CALL_LIVE_S) return null; // stale — an old invite is not a ringing phone
+      return { room: p.room, from: view.rows[i].sender, at: view.rows[i].at };
+    }
+    return null;
+  }, [view.rows, ringTick]);
 
   // In-chat search over the DECRYPTED texts (never leaves the device).
   const matches = useMemo(() => {
@@ -486,7 +625,11 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   }
 
   // ── Sending (everything goes through one sealed pipe) ──────────────────────
-  const canSend = !!peerKey;
+  //
+  // Four separate reasons the composer can be closed, and they are NOT the same message: no device
+  // key to seal to · they blocked me · I blocked them · my request is used up. Collapsing them into
+  // one "you can't send" would leave three of the four unexplainable and unfixable.
+  const canSend = !!peerKey && !rel.blocked && !rel.blocked_by && !(rel.asked && rel.request_left <= 0);
 
   async function sealAndSend(payload: ChatPayload, blobName?: string): Promise<boolean> {
     if (!peerKey) return false;
@@ -495,14 +638,18 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
     const key = await convKey(akid, bkid, peerKey.pub);
     const sealed = await sealMessage(key, encodePayload(payload), low, high, me);
     const temp = tempSeq.current--;
-    const isBubble = payload.t === "text" || payload.t === "img" || payload.t === "voice" || payload.t === "file";
+    const isBubble = payload.t === "text" || payload.t === "img" || payload.t === "voice"
+      || payload.t === "file" || payload.t === "stick" || payload.t === "call";
     if (isBubble) merge([{ id: temp, sender: me, at: nowSec(), payload, pending: true }]);
     try {
       // Only a real message rings the peer's bell and their inbox — a reaction, an edit or a
       // tombstone must not. The server can't distinguish them (identical ciphertext by design),
-      // so the sender's client is the one that knows.
+      // so the sender's client is the one that knows. A CALL is a bubble but still silent here:
+      // chat/call already pushes "X is calling you", and a second notification five minutes later
+      // saying they sent a message would be about a call that has long since stopped ringing.
       const r = await chatSend(peer.id, {
-        ...sealed, akid, bkid, ...(blobName ? { blob: blobName } : {}), notify: isBubble ? 1 : 0,
+        ...sealed, akid, bkid, ...(blobName ? { blob: blobName } : {}),
+        notify: isBubble && payload.t !== "call" ? 1 : 0,
       });
       lastId.current = Math.max(lastId.current, r.id);
       if (isBubble) {
@@ -548,42 +695,118 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
       ? { v: 2, t: "edit", ref: editing.id, body: text }
       : { v: 2, t: "text", body: text, ...(replyTo ? { ref: replyTo.id } : {}) };
     const ok = await sealAndSend(payload);
-    if (ok) { setDraft(""); setReplyTo(null); setEditing(null); }
+    if (ok) { clearDraft(); setReplyTo(null); setEditing(null); }
     setBusy(false);
   }
 
-  /** Seal + send any attachment: images → img, recorded notes → voice, everything else
+  /** Seal + send any attachment: images (and GIFs) → img, recorded notes → voice, everything else
    *  (video/audio/documents) → file, rendered by its mime. Name/mime travel INSIDE the seal. */
-  async function sendFile(file: File | Blob, mime: string, extra?: { dur?: number; voice?: boolean }) {
+  async function sendBytes(bytes: ArrayBuffer, mime: string, extra?: { dur?: number; voice?: boolean; gif?: boolean; name?: string }) {
     if (!canSend || busy) return;
     setNote(null);
     setBusy(true);
     try {
-      let w: number | undefined, h: number | undefined;
-      if (mime.startsWith("image/")) {
-        try { const bmp = await createImageBitmap(file); w = bmp.width; h = bmp.height; bmp.close(); } catch { /* layout hint only */ }
-      }
-      const bytes = await file.arrayBuffer();
       if (bytes.byteLength > 5500000) {
         setNote("That file is too big — encrypted attachments are capped at 6 MB.");
-        setBusy(false);
         return;
       }
-      const name = file instanceof File && file.name ? file.name : undefined;
+      let w: number | undefined, h: number | undefined;
+      if (mime.startsWith("image/")) {
+        // Layout hint only: without it the bubble has no aspect ratio until the decrypted bytes
+        // arrive, and the whole thread jumps when they do.
+        try {
+          const bmp = await createImageBitmap(new Blob([bytes], { type: mime }));
+          w = bmp.width; h = bmp.height; bmp.close();
+        } catch { /* a format createImageBitmap won't decode — the bubble just sizes itself later */ }
+      }
       const { sealed, k, iv } = await sealAttachment(bytes);
       const up = await chatUploadBlob(sealed);
-      const att: SealedAttachment = { blob: up.blob, url: up.url, k, iv, mime, size: bytes.byteLength, w, h, dur: extra?.dur };
+      const gif = extra?.gif || mime === "image/gif";
+      const att: SealedAttachment = {
+        blob: up.blob, url: up.url, k, iv, mime, size: bytes.byteLength, w, h, dur: extra?.dur,
+        ...(gif ? { gif: true } : {}),
+      };
+      const ref = replyTo ? { ref: replyTo.id } : {};
       const payload: ChatPayload = extra?.voice
-        ? { v: 2, t: "voice", att }
+        ? { v: 2, t: "voice", att, ...ref }
         : mime.startsWith("image/")
-          ? { v: 2, t: "img", att }
-          : { v: 2, t: "file", att: { ...att, name } };
-      await sealAndSend(payload, up.blob);
+          ? { v: 2, t: "img", att, ...ref }
+          : { v: 2, t: "file", att: { ...att, name: extra?.name }, ...ref };
+      const ok = await sealAndSend(payload, up.blob);
+      if (ok) setReplyTo(null);
     } catch {
       setFailed(true);
     } finally {
       setBusy(false);
     }
+  }
+
+  /** The File/Blob front door onto sendBytes — the file input, paste, drop and the voice recorder. */
+  async function sendFile(file: File | Blob, mime: string, extra?: { dur?: number; voice?: boolean }) {
+    const name = file instanceof File && file.name ? file.name : undefined;
+    await sendBytes(await file.arrayBuffer(), mime, { ...extra, name });
+  }
+
+  /** Everything the +/picker can produce, sent by the one route that fits it. */
+  async function pick(r: PickerResult) {
+    if (r.kind === "emoji") { onDraft(draft + r.char); return; }   // stays in the draft — an emoji is text
+    setPanel("");
+    if (r.kind === "sticker") {
+      // A sticker is an ID, not bytes: nothing is uploaded, and the row is the same size as a short
+      // sentence. See components/chat/stickers.ts for why that is a privacy property, not a saving.
+      await sealAndSend({ v: 2, t: "stick", id: r.id, ...(replyTo ? { ref: replyTo.id } : {}) });
+      setReplyTo(null);
+      return;
+    }
+    await sendBytes(r.bytes, r.mime, { gif: r.gif });
+  }
+
+  /**
+   * Start a call: mint a room, put it in the conversation SEALED, then ask the server to ring.
+   *
+   * Order matters. The invite has to be in the thread before the beacon fires, because the beacon
+   * carries no room — a peer who answers a ring finds the room by opening the conversation, and an
+   * answer that arrives before the invite has nothing to open.
+   */
+  async function startCall() {
+    if (!canSend || busy) return;
+    const room = newCallRoom();
+    setBusy(true);
+    const ok = await sealAndSend({ v: 2, t: "call", room, act: "start" });
+    setBusy(false);
+    if (!ok) { setNote("Couldn’t start the call — check your connection."); return; }
+    setCall(room);
+    chatCall(peer.id, "ring").catch(() => undefined); // they may still join from the thread
+  }
+
+  /** Leave, and say so: the tombstone closes the invite on the other screen and stops the ring.
+   *  This is also the DECLINE button, which is why the local banner is cleared too — the server
+   *  beacon is gone a moment later, but the member pressed a button and it must respond now. */
+  async function endCall() {
+    const room = call ?? invite?.room;
+    setCall(null);
+    clearRing();
+    chatCall(peer.id, "end").catch(() => undefined);
+    if (room) await sealAndSend({ v: 2, t: "call", room, act: "end" });
+  }
+
+  /** Accept / decline / block / mute / pin / archive — optimistic, because these are buttons whose
+   *  whole job is to change what is on screen. */
+  async function relate(action: ChatRelation) {
+    if (acting) return;
+    setActing(true);
+    try {
+      const r = await chatRelation(peer.id, action);
+      setRel((s) => ({ ...s, pending: r.pending, blocked: r.blocked, muted: r.muted, pinned: r.pinned, archived: r.archived }));
+      // Accepting/declining a request empties one row from the list behind this thread.
+      if (action === "accept" || action === "decline") bumpRequests(-1);
+      applyRelation(peer.id, { pending: r.pending, blocked: r.blocked, muted: r.muted, pinned: r.pinned, archived: r.archived },
+        action === "decline" || action === "block" || action === "archive");
+      if (action === "decline" || action === "block") onBack();
+    } catch {
+      setNote("Couldn’t save that — try again.");
+    }
+    setActing(false);
   }
 
   async function toggleReact(m: Item, emoji: string) {
@@ -598,8 +821,17 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
 
   function onDraft(v: string) {
     setDraft(v);
-    const now = Date.now();
+    // Kept per conversation, so switching away and back does not lose it. Cleared on send.
+    if (v) drafts.set(peer.id, v); else drafts.delete(peer.id);
+    const now = nowMs();
     if (now - typedAt.current > 3000) { typedAt.current = now; chatTyping(peer.id).catch(() => undefined); }
+  }
+
+  /** Clear the draft everywhere it lives — state AND the cross-conversation store. Anything that
+   *  empties the box must go through here, or the text reappears the next time you open the chat. */
+  function clearDraft() {
+    setDraft("");
+    drafts.delete(peer.id);
   }
 
   function onPaste(e: React.ClipboardEvent) {
@@ -639,20 +871,81 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
           </>
         )}
         <p className={`truncate text-[12px] text-ink-3 ${compact ? "min-w-0 flex-1" : ""}`} aria-live="polite">
-          {live.typing ? "typing…" : live.online ? "Active now" : "End-to-end encrypted"}
+          {live.typing ? "typing…" : live.online ? "Active now" : rel.muted ? "Muted" : "End-to-end encrypted"}
         </p>
-        {[
-          { k: "search" as const, icon: IC.search, label: "Search this conversation" },
-          { k: "timer" as const, icon: IC.timer, label: "Disappearing messages" },
-          { k: "code" as const, icon: IC.shield, label: "Safety code" },
-        ].map((b) => (
-          <button key={b.k} type="button" aria-label={b.label} aria-expanded={panel === b.k}
-            onClick={() => setPanel((p) => (p === b.k ? "" : b.k))}
-            className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition-colors hover:bg-veil/[0.07] ${panel === b.k ? "text-ink" : "text-ink-3 hover:text-ink"}`}>
-            <Ic d={b.icon} size={17} />
+        {/* TWO controls, not five. Call is the one action worth its own button; everything else
+            lives behind the menu, where it can carry a word instead of a glyph nobody can decode. */}
+        <button type="button" aria-label="Start a video call" title="Video call" disabled={!canSend || !!call}
+          onClick={() => void startCall()}
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-3 transition-colors hover:bg-veil/[0.07] hover:text-ink disabled:opacity-30">
+          <Ic d={IC.video} size={18} />
+        </button>
+        <div className="relative shrink-0" ref={menuRef}>
+          <button type="button" aria-label="Conversation options" aria-expanded={panel === "menu"}
+            onClick={() => setPanel((p) => (p === "menu" ? "" : "menu"))}
+            className={`grid h-9 w-9 place-items-center rounded-full transition-colors hover:bg-veil/[0.07] ${panel === "menu" ? "text-ink" : "text-ink-3 hover:text-ink"}`}>
+            <Ic d={IC.more} size={17} />
           </button>
-        ))}
+          {panel === "menu" && confirmBlock && (
+            /* Blocking closes the conversation and stops them writing. Worth one question. */
+            <div className="absolute end-0 top-10 z-30 w-64 rounded-card border border-line bg-space-2 p-3 shadow-card">
+              <p className="text-[12.5px] leading-relaxed text-ink-2">
+                <span>Block</span>{" "}
+                <span data-ay-skip="1" className="font-semibold text-ink">{peer.name}</span>
+                <span>? They won’t be able to message or call you. Nothing here is deleted, and you can undo this from the Blocked list.</span>
+              </p>
+              <div className="mt-2.5 flex justify-end gap-2">
+                <button type="button" onClick={() => setConfirmBlock(false)}
+                  className="rounded-pill border border-line px-3 py-1 text-[12px] font-semibold text-ink-2 hover:text-ink">Cancel</button>
+                <button type="button" disabled={acting}
+                  onClick={() => { setConfirmBlock(false); setPanel(""); void relate("block"); }}
+                  className="rounded-pill bg-yang px-3 py-1 text-[12px] font-bold text-on-accent hover:opacity-90 disabled:opacity-50">Block</button>
+              </div>
+            </div>
+          )}
+          {panel === "menu" && !confirmBlock && (
+            <ul className="absolute end-0 top-10 z-30 w-56 overflow-hidden rounded-card border border-line bg-space-2 py-1 shadow-card"
+              role="menu" aria-label="Conversation options">
+              {([
+                { k: "search", icon: IC.search, label: "Search this conversation", run: () => setPanel("search") },
+                { k: "timer", icon: IC.timer, label: "Disappearing messages", run: () => setPanel("timer") },
+                { k: "code", icon: IC.shield, label: "Safety code", run: () => setPanel("code") },
+                { k: "pin", icon: IC.pin, label: rel.pinned ? "Unpin" : "Pin to top", run: () => { setPanel(""); void relate(rel.pinned ? "unpin" : "pin"); } },
+                { k: "mute", icon: rel.muted ? IC.bell : IC.mute, label: rel.muted ? "Unmute" : "Mute notifications", run: () => { setPanel(""); void relate(rel.muted ? "unmute" : "mute"); } },
+                { k: "arch", icon: IC.archive, label: rel.archived ? "Move to inbox" : "Archive", run: () => { setPanel(""); void relate(rel.archived ? "unarchive" : "archive"); } },
+                // Unblocking is harmless and immediate; blocking asks first (see confirmBlock).
+                { k: "block", icon: IC.block, label: rel.blocked ? "Unblock" : "Block this member",
+                  run: () => { if (rel.blocked) { setPanel(""); void relate("unblock"); } else { setConfirmBlock(true); } } },
+              ] as const).map((it) => (
+                <li key={it.k} role="none">
+                  <button type="button" role="menuitem" onClick={it.run} disabled={acting}
+                    className={`flex w-full items-center gap-2.5 px-3 py-2 text-start text-[13px] hover:bg-veil/[0.07] disabled:opacity-50 ${
+                      it.k === "block" ? "text-yang" : "text-ink-2"
+                    }`}>
+                    <Ic d={it.icon} size={15} />{it.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </header>
+
+      {/* An accepted call, or one being offered. Above the stream, so it can't be scrolled past. */}
+      {call && <CallPanel room={call} host={rel.call_host} peerName={peer.name} onEnd={() => void endCall()} />}
+      {!call && invite && invite.from !== me && (
+        <div className="flex items-center gap-2.5 border-b border-line bg-yang/[0.07] px-3 py-2.5">
+          <span className="flex h-2 w-2 shrink-0 animate-pulse rounded-full bg-yang" aria-hidden />
+          <p className="min-w-0 flex-1 text-[13px] text-ink">
+            <span data-ay-skip="1" className="font-semibold">{peer.name}</span>{" "}
+            <span>started a video call</span>
+          </p>
+          <button type="button" onClick={() => void endCall()}
+            className="rounded-pill border border-line px-2.5 py-1 text-[12px] font-semibold text-ink-3 hover:text-ink">Decline</button>
+          <button type="button" onClick={() => { clearRing(); setCall(invite.room); }}
+            className="rounded-pill bg-yang px-3 py-1 text-[12px] font-bold text-on-accent hover:opacity-90">Join</button>
+        </div>
+      )}
 
       {/* header panels */}
       {panel === "code" && code && (
@@ -719,7 +1012,12 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
               const p = m.payload;
               const body = p && (p.t === "text" || p.t === "img" || p.t === "file") ? (view.edits.get(m.id) ?? p.body) : undefined;
               const reacts = view.reacts.get(m.id);
-              const replyRef = p && p.t === "text" && p.ref ? p.ref : undefined;
+              // Any payload kind can be a reply. It used to be text-only, so replying to a photo
+              // sent a bubble with no visible connection to the thing it answered.
+              const replyRef = p && "ref" in p && p.t !== "react" && p.t !== "edit" && p.t !== "del" ? p.ref : undefined;
+              // A sticker sits on the background like iMessage's — a bubble around a transparent
+              // drawing reads as a broken image, not as a sticker.
+              const bare = !!p && p.t === "stick";
               const hit = query.trim() && matches[matchIdx] === m.id;
               const read = m.id > 0 && m.id <= live.read;
               const delivered = read || (m.id > 0 && m.id <= deliveredTo);
@@ -742,11 +1040,21 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                            rather than hidden behind a gesture that never happens. */
                         compact ? "flex" : "hidden opacity-0 group-hover:opacity-100 md:flex"}`}>
                         {p.t === "text" && (
-                          <button type="button" aria-label="Edit" onClick={() => { setEditing(m); setReplyTo(null); setDraft(body || ""); }}
+                          <button type="button" aria-label="Edit" onClick={() => { setEditing(m); setReplyTo(null); onDraft(body || ""); }}
                             className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-ink-3 hover:bg-veil/[0.07] hover:text-ink">Edit</button>
                         )}
-                        <button type="button" aria-label="Unsend" onClick={() => unsend(m)}
-                          className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-ink-3 hover:bg-veil/[0.07] hover:text-ink">Unsend</button>
+                        {/* Two-step: "Unsend" → "Delete?" → gone. See confirmUnsend. */}
+                        {confirmUnsend === m.id ? (
+                          <>
+                            <button type="button" onClick={() => { setConfirmUnsend(0); unsend(m); }}
+                              className="rounded px-1.5 py-0.5 text-[11px] font-bold text-yang hover:bg-veil/[0.07]">Delete?</button>
+                            <button type="button" aria-label="Keep this message" onClick={() => setConfirmUnsend(0)}
+                              className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-ink-3 hover:text-ink">Keep</button>
+                          </>
+                        ) : (
+                          <button type="button" aria-label="Unsend" onClick={() => setConfirmUnsend(m.id)}
+                            className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-ink-3 hover:bg-veil/[0.07] hover:text-ink">Unsend</button>
+                        )}
                       </span>
                     )}
                     {/* data-ay-skip: everything below this point is decrypted plaintext — see the
@@ -754,10 +1062,10 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                     <div data-ay-skip="1" className={`relative ${compact ? "max-w-[82%]" : "max-w-[76%] md:max-w-[65%]"} ${hit ? "rounded-card ring-2 ring-yang" : ""}`}>
                       {/* WhatsApp-style bubble: sent = blue-tinted, received = neutral; the last
                           bubble of a group squares its outer-bottom corner into a tail. */}
-                      <div className={`rounded-card px-3 py-2 text-[14.5px] leading-relaxed ${
-                        mine ? "bg-yin/20 text-ink" : "bg-veil/[0.07] text-ink"
-                      } ${!groupWithNext ? (mine ? "rounded-ee-[6px]" : "rounded-es-[6px]") : ""} ${
-                        m.pending ? "opacity-70" : ""} ${m.failed ? "opacity-60 ring-1 ring-yang" : ""}`}>
+                      <div className={`text-[14.5px] leading-relaxed ${
+                        bare ? "" : `rounded-card px-3 py-2 ${mine ? "bg-yin/20 text-ink" : "bg-veil/[0.07] text-ink"} ${
+                          !groupWithNext ? (mine ? "rounded-ee-[6px]" : "rounded-es-[6px]") : ""}`
+                      } ${m.pending ? "opacity-70" : ""} ${m.failed ? "opacity-60 ring-1 ring-yang" : ""}`}>
                         {replyRef && (
                           <button type="button" onClick={() => rowRefs.current.get(replyRef)?.scrollIntoView({ block: "center" })}
                             className="mb-1.5 block w-full truncate rounded border-s-2 border-yin-light/70 bg-veil/[0.06] px-2 py-1 text-start text-[12px] text-ink-3">
@@ -771,6 +1079,17 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                             <Media att={p.att} url={media[m.id] ?? null} onZoom={setZoom} />
                             {(p.t === "img" || p.t === "file") && body && <p className="mt-1.5 whitespace-pre-wrap break-words" dir="auto">{body}</p>}
                           </>
+                        ) : p.t === "stick" ? (
+                          knownSticker(p.id)
+                            ? <img src={stickerUrl(p.id)} alt={stickerLabel(p.id)} className="h-24 w-24 object-contain" />
+                            /* A sticker id this build doesn't ship — a newer client, or one we
+                               retired. Say what it was rather than showing a broken image. */
+                            : <p className="italic text-ink-3">A sticker this version doesn’t have</p>
+                        ) : p.t === "call" ? (
+                          <p className="flex items-center gap-1.5 text-[13.5px]">
+                            <Ic d={IC.video} size={15} />
+                            {p.act === "start" ? (mine ? "You started a video call" : "Video call") : "Call ended"}
+                          </p>
                         ) : (
                           <p className="whitespace-pre-wrap break-words" dir="auto">{body}</p>
                         )}
@@ -856,51 +1175,96 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
               <span className="font-semibold text-ink-2">{editing ? "Editing your message" : `Replying to ${replyTo!.sender === me ? "yourself" : peer.name}`}</span>
               {!editing && <> — {view.textOf.get(replyTo!.id) || "message"}</>}
             </p>
-            <button type="button" aria-label="Cancel" onClick={() => { setReplyTo(null); setEditing(null); if (editing) setDraft(""); }}
+            <button type="button" aria-label="Cancel" onClick={() => { setReplyTo(null); setEditing(null); if (editing) clearDraft(); }}
               className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-ink-3 hover:bg-veil/[0.07] hover:text-ink"><Ic d={IC.x} size={13} /></button>
           </div>
         )}
-        {panel === "emoji" && (
-          <div className="mb-2 flex flex-wrap gap-1 rounded-field border border-line bg-space-1 p-2">
-            {EMOJI.map((e) => (
-              <button key={e} type="button" aria-label={`Insert ${e}`} onClick={() => setDraft((d) => d + e)}
-                className="rounded p-1 text-[18px] transition-transform hover:scale-110">{e}</button>
-            ))}
+        {panel === "add" && <Pickers onPick={(r) => void pick(r)} onClose={() => setPanel("")} />}
+        {/* THE REQUEST BAR. A conversation somebody opened with me is answered here, in the place a
+            reply would go, because accepting is the same decision as replying — and because a bar
+            that sits where the composer is cannot be missed the way a banner at the top can. */}
+        {rel.pending ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-field border border-line bg-veil/[0.04] px-3 py-2.5">
+            <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-ink-2">
+              <span data-ay-skip="1" className="font-semibold text-ink">{peer.name}</span>{" "}
+              <span>would like to message you. Accept and this becomes an ordinary conversation; decline and they can’t write again.</span>
+            </p>
+            <button type="button" onClick={() => void relate("decline")} disabled={acting}
+              className="rounded-pill border border-line px-3 py-1.5 text-[12.5px] font-semibold text-ink-2 hover:border-yang hover:text-ink disabled:opacity-50">Decline</button>
+            <button type="button" onClick={() => void relate("accept")} disabled={acting}
+              className="rounded-pill bg-yang px-4 py-1.5 text-[12.5px] font-bold text-on-accent hover:opacity-90 disabled:opacity-50">Accept</button>
           </div>
-        )}
-        {canSend ? (
-          <div className="flex items-end gap-1.5">
-            <button type="button" aria-label="Emoji" aria-expanded={panel === "emoji"} onClick={() => setPanel((s) => (s === "emoji" ? "" : "emoji"))}
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-3 transition-colors hover:bg-veil/[0.07] hover:text-ink"><Ic d={IC.smile} size={18} /></button>
-            <label aria-label="Send an encrypted photo, video or file" title="Photo, video or file"
-              className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-ink-3 transition-colors hover:bg-veil/[0.07] hover:text-ink">
-              <Ic d={IC.clip} size={18} />
-              <input type="file" className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) sendFile(f, f.type); e.target.value = ""; }} />
-            </label>
-            <GrowingTextarea value={draft} onChange={onDraft} placeholder={editing ? "Edit your message…" : "Write an encrypted message…"}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
-                if (e.key === "Escape" && (replyTo || editing)) {
-                  // Claim the key so the surrounding dock does not also close (which would
-                  // throw away the message being typed). An Escape with nothing to cancel
-                  // bubbles on, and closing is then the right thing.
-                  e.preventDefault();
-                  setReplyTo(null); setEditing(null);
-                } }}
-              onPaste={onPaste} disabled={busy && !draft} />
-            {draft.trim() ? (
-              <button type="button" aria-label={editing ? "Save edit" : "Send"} onClick={submit} disabled={busy}
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-yang text-on-accent transition-opacity hover:opacity-90 disabled:opacity-50"><Ic d={IC.send} size={18} /></button>
+        ) : canSend ? (
+          <>
+            {/* My own request, still waiting. Saying how many messages are left turns a refusal that
+                would otherwise arrive at the fourth message into a rule you can see. */}
+            {rel.asked && (
+              <p className="mb-2 px-1 text-[12px] text-ink-3">
+                Message request — {rel.request_left} of 3 messages left until they accept.
+              </p>
+            )}
+            <div className="flex items-end gap-1.5">
+              <button type="button" aria-label="Emoji, stickers and GIFs" title="Emoji, stickers, GIFs"
+                aria-expanded={panel === "add"} onClick={() => setPanel((s) => (s === "add" ? "" : "add"))}
+                className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition-colors hover:bg-veil/[0.07] hover:text-ink ${
+                  panel === "add" ? "bg-veil/[0.10] text-ink" : "text-ink-3"}`}><Ic d={IC.smile} size={18} /></button>
+              <label aria-label="Send an encrypted photo, video or file" title="Photo, video or file"
+                className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-ink-3 transition-colors hover:bg-veil/[0.07] hover:text-ink">
+                <Ic d={IC.clip} size={18} />
+                <input type="file" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) sendFile(f, f.type); e.target.value = ""; }} />
+              </label>
+              <GrowingTextarea value={draft} onChange={onDraft} placeholder={editing ? "Edit your message…" : "Write an encrypted message…"}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+                  if (e.key === "Escape" && (replyTo || editing || panel)) {
+                    // Claim the key so the surrounding dock does not also close (which would
+                    // throw away the message being typed). An Escape with nothing to cancel
+                    // bubbles on, and closing is then the right thing.
+                    e.preventDefault();
+                    if (panel) setPanel(""); else { setReplyTo(null); setEditing(null); }
+                  } }}
+                onPaste={onPaste} disabled={busy && !draft} />
+              {draft.trim() ? (
+                <button type="button" aria-label={editing ? "Save edit" : "Send"} onClick={submit} disabled={busy}
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-yang text-on-accent transition-opacity hover:opacity-90 disabled:opacity-50"><Ic d={IC.send} size={18} /></button>
+              ) : (
+                <VoiceButton disabled={busy} onDone={(b, mime, dur) => sendFile(b, mime, { dur, voice: true })} />
+              )}
+            </div>
+          </>
+        ) : (
+          /* Four different reasons the composer is closed, each said in its own words — and the one
+             the member can undo comes with the button that undoes it. The name is skipped; the
+             sentence beside it stays one whole translatable unit. */
+          <div className="flex flex-wrap items-center gap-2 px-1 text-[13px] leading-relaxed text-ink-3">
+            {rel.blocked ? (
+              <>
+                <p className="min-w-0 flex-1">
+                  <span>You blocked</span>{" "}
+                  <span data-ay-skip="1" className="font-semibold text-ink-2">{peer.name}</span>
+                  <span>, so neither of you can write here.</span>
+                </p>
+                <button type="button" onClick={() => void relate("unblock")} disabled={acting}
+                  className="rounded-pill border border-line px-3 py-1 text-[12.5px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink disabled:opacity-50">Unblock</button>
+              </>
+            ) : rel.blocked_by ? (
+              <p>
+                <span data-ay-skip="1" className="font-semibold text-ink-2">{peer.name}</span>{" "}
+                <span>isn’t accepting messages from you. Everything already here stays readable.</span>
+              </p>
+            ) : rel.asked ? (
+              <p>
+                <span>Your message request is waiting — you’ve used all three messages. </span>
+                <span data-ay-skip="1" className="font-semibold text-ink-2">{peer.name}</span>{" "}
+                <span>can accept it whenever they like, and then you can write again.</span>
+              </p>
             ) : (
-              <VoiceButton disabled={busy} onDone={(b, mime, dur) => sendFile(b, mime, { dur, voice: true })} />
+              <p>
+                <span data-ay-skip="1" className="font-semibold text-ink-2">{peer.name}</span>{" "}
+                <span>hasn’t opened Messages yet, so there is no device key to seal anything to. Once they open it once, you can write.</span>
+              </p>
             )}
           </div>
-        ) : (
-          // The name is skipped; the sentence beside it stays one whole translatable unit.
-          <p className="px-1 text-[13px] text-ink-3">
-            <span data-ay-skip="1" className="font-semibold text-ink-2">{peer.name}</span>{" "}
-            <span>hasn’t opened Messages yet, so there is no device key to seal anything to. Once they open it once, you can write.</span>
-          </p>
         )}
       </footer>
 
@@ -933,19 +1297,30 @@ export default function Messages() {
   const previews = store.previews;
   const me = page?.me ?? 0;
   const [peer, setPeer] = useState<ChatUserCard | null>(null);
-  const [to, setTo] = useState("");
   const [filter, setFilter] = useState("");
   const [note, setNote] = useState<string | null>(null);
+  const [acting, setActing] = useState(0); // peer id whose accept/decline is in flight
   const fatal = store.fatal;
-  // The member directory — everyone on ArtaQuest, online first.
-  const [side, setSide] = useState<"chats" | "people">("chats");
+  /**
+   * WHICH LIST the sidebar is showing. Four of the five are server-side boxes (inbox, requests,
+   * archived, blocked) and the fifth is the member directory.
+   *
+   * ONE search field drives all of them, and it is also how a new conversation starts: typing a
+   * handle that matches nobody in the current list still finds the member, so "message someone" is
+   * no longer a separate input with its own button next to a search box that looked identical.
+   */
+  type Side = ChatBox | "people";
+  const [side, setSide] = useState<Side>((sp.get("box") as Side) || "chats");
+  useEffect(() => { if (side !== "people") setBox(side); }, [side]);
+  // The box lives in the shared store (the poller owns it), which the always-mounted dock reads
+  // too — so leaving this page on Requests would have left the dock listing requests under its own
+  // "Messaging" heading. The page hands the store back the way it found it.
+  useEffect(() => () => setBox("chats"), []);
   const [dir, setDir] = useState<ChatDirectory | null>(null);
   // null until the server answers, so the toggle never flickers into the wrong position.
   const [emailOn, setEmailOn] = useState<boolean | null>(null);
   const chats = page?.items ?? null;
-
-
-
+  const requests = store.requests;
 
   // The directory. Refreshed on the same cadence and the same visibility rule as the conversation
   // list, because "who is online" is only useful while it's true — and only while someone is
@@ -981,22 +1356,38 @@ export default function Messages() {
     return chats.filter((c) => c.peer.name.toLowerCase().includes(q) || c.peer.slug.toLowerCase().includes(q));
   }, [chats, filter]);
 
-  // Takes the handle as an ARGUMENT. It used to read the `to` state, so "Notes to yourself" —
-  // which sets that state and then calls this on a timeout — always ran against the value from
+  // Takes the handle as an ARGUMENT. It used to read a `to` state, so "Notes to yourself" —
+  // which set that state and then called this on a timeout — always ran against the value from
   // before the click and silently did nothing the first time.
-  async function openNew(raw: string = to) {
+  async function openNew(raw: string) {
     const slug = raw.trim().replace(/^@/, "");
     if (!slug) return;
     setNote(null);
     try {
       const k = await chatGetKey(slug);
       setPeer(k.user);
-      setTo("");
+      setFilter("");
       setSp((cur) => { cur.set("with", k.user.slug); return cur; }, { replace: true });
       if (!k.key) setNote(`${k.user.name} hasn’t opened Messages yet, so they can’t receive encrypted messages until they do.`);
     } catch {
       setNote("No member found with that username.");
     }
+  }
+
+  /** Accept or decline straight from the list, without opening the thread — which is how requests
+   *  are actually triaged, and the reason declining does not require reading anything first. */
+  async function answer(c: ChatListItem, action: Extract<ChatRelation, "accept" | "decline">) {
+    if (acting) return;
+    setActing(c.peer.id);
+    try {
+      await chatRelation(c.peer.id, action);
+      bumpRequests(-1);
+      applyRelation(c.peer.id, {}, true); // it leaves the requests list either way
+      if (action === "accept") { setSide("chats"); setPeer(c.peer); }
+    } catch {
+      setNote("Couldn’t save that — try again.");
+    }
+    setActing(0);
   }
 
   // ?with=<slug> is the deep-link entry point (the profile "Message" button lands here). It used
@@ -1027,8 +1418,12 @@ export default function Messages() {
 
   return (
     <div className="flex flex-col gap-5 pb-12">
+      {/* ONE sentence. The old lede was four, and said three times over what this says once — on a
+          page whose job is to get you into a conversation, not to teach cryptography. The detail
+          still exists, moved to where it answers a question somebody is actually asking (the safety
+          code panel, and the note under the list). */}
       <PageHero eyebrow="Community" title="Messages"
-        lede="End-to-end encrypted. Your device holds the only key that can read your conversations — the ArtaQuest database is fully public, and even with every row of it, a message cannot be opened without your device. Reactions, replies, photos, videos, files and voice notes are all identical sealed rows." />
+        lede="Private conversations, sealed on your own device — nobody else can read them, not even us." />
       {fatal ? (
         <ErrorNote>{fatal}</ErrorNote>
       ) : !identity || !myKey ? (
@@ -1037,39 +1432,38 @@ export default function Messages() {
         <div className="flex flex-col gap-4 md:flex-row md:items-stretch">
           {/* conversation list — hidden on phones while a thread is open (single-pane) */}
           <aside className={`w-full flex-col gap-3 md:flex md:w-72 md:shrink-0 ${peer ? "hidden" : "flex"}`} aria-label="Conversations">
-            {/* Two panes over one sidebar: the conversations you have, and everyone you could
-                start one with. "People" is the answer to "who is even here?" — which used to
-                require knowing a member's exact @handle before you could type a word to them. */}
+            {/* THREE tabs, not two lists and a form. Chats · Requests · People covers everything
+                the sidebar is for, and the two rarely-wanted boxes (archived, blocked) hang off the
+                end where they don't compete for attention with the inbox. */}
             <div className="flex overflow-hidden rounded-pill border border-line" role="tablist" aria-label="Sidebar">
-              {([["chats", "Chats"], ["people", "People"]] as const).map(([k, label]) => (
+              {([["chats", "Chats"], ["requests", "Requests"], ["people", "People"]] as const).map(([k, label]) => (
                 <button key={k} type="button" role="tab" aria-selected={side === k}
                   onClick={() => setSide(k)}
                   className={`flex-1 px-3 py-1.5 text-[13px] font-semibold transition-colors ${
                     side === k ? "bg-veil/[0.10] text-ink" : "text-ink-3 hover:bg-veil/[0.05] hover:text-ink"
                   }`}>
                   {label}
+                  {k === "requests" && requests > 0 && (
+                    <span className="ms-1.5 rounded-pill bg-yang px-1.5 text-[10.5px] font-bold text-on-accent">{requests}</span>
+                  )}
                   {k === "people" && dir && dir.online > 0 && (
                     <span className="ms-1.5 text-[11px] font-bold text-yang">{dir.online}</span>
                   )}
                 </button>
               ))}
             </div>
-            <div className="flex gap-2">
-              <Input value={to} onChange={(e) => setTo(e.target.value)} placeholder="@username"
-                aria-label="Start a conversation with a member" onKeyDown={(e) => { if (e.key === "Enter") void openNew(); }} />
-              <Button onClick={() => void openNew()} size="sm" variant="outline">New</Button>
-            </div>
+            {/* ONE field. It filters what is on screen, and when nothing matches it offers to open a
+                conversation with that handle — so "search" and "start a new chat" stopped being two
+                identical-looking inputs stacked on top of each other. */}
+            <Input value={filter} onChange={(e) => setFilter(e.target.value)}
+              placeholder={side === "people" ? "Search members" : "Search or type a @username"}
+              aria-label={side === "people" ? "Search members" : "Search conversations, or type a username to start one"}
+              onKeyDown={(e) => { if (e.key === "Enter" && filter.trim()) void openNew(filter); }} />
             {currentUser()?.slug ? (
               <button type="button" onClick={() => void openNew(currentUser()!.slug!)}
                 className="self-start text-[12px] text-yin-ink hover:underline">Notes to yourself →</button>
             ) : null}
             {note && <p className="text-[13px] text-ink-3">{note}</p>}
-            {/* One search field drives both panes: your conversations, or every member. */}
-            {(side === "people" || (chats && chats.length > 5)) && (
-              <Input value={filter} onChange={(e) => setFilter(e.target.value)}
-                placeholder={side === "people" ? "Search members" : "Search conversations"}
-                aria-label={side === "people" ? "Search members" : "Search your conversations"} />
-            )}
 
             {side === "people" ? (
               <>
@@ -1112,42 +1506,101 @@ export default function Messages() {
                 )}
               </>
             ) : (
-            <nav className="flex flex-col overflow-hidden rounded-card border border-line bg-space-2 shadow-card">
+            <nav className="flex flex-col overflow-hidden rounded-card border border-line bg-space-2 shadow-card"
+              aria-label={side === "requests" ? "Message requests" : side === "archived" ? "Archived" : side === "blocked" ? "Blocked" : "Conversations"}>
               {chats === null ? (
                 <p className="px-4 py-6 text-center text-[13px] text-ink-3">Loading…</p>
-              ) : chats.length === 0 && !peer ? (
-                <p className="px-4 py-6 text-center text-[13px] text-ink-3">No conversations yet — find a member above.</p>
-              ) : shown.length === 0 ? (
-                <p className="px-4 py-6 text-center text-[13px] text-ink-3">No conversation matches that search.</p>
+              ) : shown.length === 0 && filter.trim() ? (
+                /* A SEARCH miss. Gated on there being a search — without that gate, an empty
+                   Requests box with a conversation open fell through to here and told the member
+                   their (nonexistent) query matched nothing. */
+                <p className="px-4 py-6 text-center text-[13px] text-ink-3">
+                  Nothing matches that. Press Enter to start a conversation with that username.
+                </p>
+              ) : chats.length === 0 ? (
+                /* …and each box says what IT is empty of. Suppressed while a brand-new conversation
+                   is open, since "no conversations yet" beside one you are looking at is a lie. */
+                peer && side === "chats" ? null : (
+                  <div className="px-4 py-7 text-center">
+                    <p className="text-[13px] leading-relaxed text-ink-3">{
+                      side === "requests" ? "No message requests waiting. Anyone you don’t follow reaches you here first, so you decide before they land in your inbox."
+                      : side === "archived" ? "Nothing archived. Archiving a conversation tucks it out of the inbox without losing it."
+                      : side === "blocked" ? "You haven’t blocked anyone."
+                      : "No conversations yet."
+                    }</p>
+                    {/* An empty inbox should hand you the way out of it, not just describe itself. */}
+                    {side === "chats" && (
+                      <button type="button" onClick={() => setSide("people")}
+                        className="mt-3 rounded-pill bg-yang px-4 py-1.5 text-[12.5px] font-bold text-on-accent transition-opacity hover:opacity-90">
+                        Find someone to message
+                      </button>
+                    )}
+                  </div>
+                )
               ) : (
                 shown.map((c) => (
-                  <button key={c.id} type="button" onClick={() => openChat(c)}
-                    className={`flex items-center gap-3 border-b border-line px-3 py-2.5 text-start last:border-b-0 hover:bg-veil/[0.05] ${peer?.id === c.peer.id ? "bg-veil/[0.08]" : ""}`}>
-                    <span className="relative shrink-0">
-                      <Avatar src={c.peer.avatar} name={c.peer.name} className="h-10 w-10" />
-                      {c.online && <span className="absolute -bottom-0.5 -end-0.5 h-3 w-3 rounded-full border-2 border-space-2 bg-yang" title="Active now" />}
-                    </span>
-                    {/* Member name + the decrypted preview — both must stay off the mesh. */}
-                    <span data-ay-skip="1" className="min-w-0 flex-1">
-                      <span className="flex items-baseline gap-2">
-                        <span className={`min-w-0 flex-1 truncate text-[14px] text-ink ${c.unread ? "font-bold" : "font-semibold"}`}>{c.peer.name}</span>
-                        {c.last_at > 0 && (
-                          <span className={`shrink-0 text-[11px] ${c.unread ? "font-semibold text-yang" : "text-ink-3"}`}>
-                            {fmtDay(c.last_at) === "Today" ? fmtTime(c.last_at) : fmtDay(c.last_at)}
-                          </span>
-                        )}
+                  <div key={c.id} className={`flex items-center gap-3 border-b border-line px-3 py-2.5 last:border-b-0 hover:bg-veil/[0.05] ${peer?.id === c.peer.id ? "bg-veil/[0.08]" : ""}`}>
+                    <button type="button" onClick={() => openChat(c)} className="flex min-w-0 flex-1 items-center gap-3 text-start">
+                      <span className="relative shrink-0">
+                        <Avatar src={c.peer.avatar} name={c.peer.name} className="h-10 w-10" />
+                        {c.online && <span className="absolute -bottom-0.5 -end-0.5 h-3 w-3 rounded-full border-2 border-space-2 bg-yang" title="Active now" />}
                       </span>
-                      {/* The last message, decrypted on THIS device — the server only ever held the
-                          ciphertext it hands every visitor of /data/. */}
-                      <span className={`block truncate text-[12px] ${c.unread ? "text-ink-2" : "text-ink-3"}`} dir="auto">
-                        {previews[c.id] ?? (c.last ? "Encrypted message" : "No messages yet")}
+                      {/* Member name + the decrypted preview — both must stay off the mesh. */}
+                      <span data-ay-skip="1" className="min-w-0 flex-1">
+                        <span className="flex items-baseline gap-2">
+                          <span className={`min-w-0 flex-1 truncate text-[14px] text-ink ${c.unread && !c.muted ? "font-bold" : "font-semibold"}`}>{c.peer.name}</span>
+                          {c.last_at > 0 && (
+                            <span className={`shrink-0 text-[11px] ${c.unread && !c.muted ? "font-semibold text-yang" : "text-ink-3"}`}>
+                              {fmtDay(c.last_at) === "Today" ? fmtTime(c.last_at) : fmtDay(c.last_at)}
+                            </span>
+                          )}
+                        </span>
+                        {/* The last message, decrypted on THIS device — the server only ever held the
+                            ciphertext it hands every visitor of /data/. */}
+                        {/* An unsent draft beats the last message as the useful thing to say about a
+                            conversation — it is the reason you are coming back to it. Shown only for
+                            chats that are NOT open, since the open one has the text right there. */}
+                        <span className={`block truncate text-[12px] ${c.unread && !c.muted ? "text-ink-2" : "text-ink-3"}`} dir="auto">
+                          {peer?.id !== c.peer.id && drafts.get(c.peer.id)
+                            ? <><span className="font-semibold text-yang">Draft: </span>{drafts.get(c.peer.id)}</>
+                            : c.asked ? "Request sent — waiting for them to accept"
+                            : previews[c.id] ?? (c.last ? "Encrypted message" : "No messages yet")}
+                        </span>
                       </span>
-                    </span>
-                    {c.unread > 0 && <span className="self-center rounded-pill bg-yang px-2 py-0.5 text-[11px] font-bold text-on-accent">{c.unread}</span>}
-                  </button>
+                    </button>
+                    {/* Requests are answered from the row: opening a stranger's message before
+                        deciding whether to hear from them is exactly the thing requests prevent. */}
+                    {side === "requests" ? (
+                      <span className="flex shrink-0 items-center gap-1.5">
+                        <button type="button" onClick={() => void answer(c, "decline")} disabled={acting === c.peer.id}
+                          className="rounded-pill border border-line px-2.5 py-1 text-[11.5px] font-semibold text-ink-3 hover:border-yang hover:text-ink disabled:opacity-50">Decline</button>
+                        <button type="button" onClick={() => void answer(c, "accept")} disabled={acting === c.peer.id}
+                          className="rounded-pill bg-yang px-3 py-1 text-[11.5px] font-bold text-on-accent hover:opacity-90 disabled:opacity-50">Accept</button>
+                      </span>
+                    ) : (
+                      <span className="flex shrink-0 items-center gap-1.5 self-center text-ink-3">
+                        {c.pinned && <span title="Pinned" aria-label="Pinned"><Ic d={IC.pin} size={13} /></span>}
+                        {c.muted && <span title="Muted" aria-label="Muted"><Ic d={IC.mute} size={13} /></span>}
+                        {c.unread > 0 && !c.muted && <span className="rounded-pill bg-yang px-2 py-0.5 text-[11px] font-bold text-on-accent">{c.unread}</span>}
+                        {c.unread > 0 && c.muted && <span className="h-2 w-2 rounded-full bg-ink-3" aria-label={`${c.unread} unread, muted`} />}
+                      </span>
+                    )}
+                  </div>
                 ))
               )}
             </nav>
+            )}
+            {/* The two boxes almost nobody wants, kept out of the tab strip and reachable in one
+                tap. They toggle back to the inbox rather than needing a second control to leave. */}
+            {side !== "people" && (
+              <div className="flex gap-3 px-1 text-[12px]">
+                {([["archived", "Archived"], ["blocked", "Blocked"]] as const).map(([k, label]) => (
+                  <button key={k} type="button" onClick={() => setSide(side === k ? "chats" : k)}
+                    className={side === k ? "font-semibold text-ink" : "text-ink-3 hover:text-ink"}>
+                    {side === k ? "← Back to inbox" : label}
+                  </button>
+                ))}
+              </div>
             )}
             {/* Email me when a message lands while I'm away. On by default — an unread message
                 nobody is told about is a broken inbox — and off with one tap. */}
@@ -1159,13 +1612,38 @@ export default function Messages() {
                     setEmailOn(on);
                     chatEmailPrefs(on).catch(() => setEmailOn(!on)); // revert if the server disagrees
                   }} />
-                <span>Email me when a message arrives while I'm away — at most once every 30 minutes per conversation, and never the message itself (we can't read it).</span>
+                {/* One line. The caveats are true and worth stating, but a six-line paragraph beside
+                    a tickbox is read as noise — they live in the fold below instead. */}
+                <span>Email me about messages I haven’t read</span>
               </label>
             )}
-            <p className="text-[12px] leading-relaxed text-ink-3">
-              Keys are bound to this browser. If you clear this site’s data or move devices, a new key is created and
-              earlier messages stay sealed to the old one — nobody, including ArtaQuest, can recover them.
-            </p>
+            {/* Folded away. It is important and it is TRUE, but it is a paragraph about key
+                management sitting permanently under a list of friends — read once, then in the way
+                forever. A summary line that opens is the same information without the weight. */}
+            <details className="text-[12px] leading-relaxed text-ink-3">
+              <summary className="cursor-pointer list-none text-yin-ink hover:underline">How this works ↓</summary>
+              <p className="mt-1.5">
+                <span className="font-semibold text-ink-2">Encryption.</span>{" "}
+                <span>Messages are sealed on this device before they leave it, and only the people in the conversation can
+                open them — the ArtaQuest database is public, and even with every row of it a message stays shut.</span>
+              </p>
+              <p className="mt-1.5">
+                <span className="font-semibold text-ink-2">Your key.</span>{" "}
+                <span>It belongs to this browser. Clear this site’s data or move device and a new one is made, so earlier
+                messages stay sealed to the old key — nobody, including us, can bring them back. That is the honest cost
+                of nobody holding a spare.</span>
+              </p>
+              <p className="mt-1.5">
+                <span className="font-semibold text-ink-2">Emails.</span>{" "}
+                <span>Only about messages still unread a few minutes later, at most one every half hour per conversation,
+                and never the message itself — we can’t read it.</span>
+              </p>
+              <p className="mt-1.5">
+                <span className="font-semibold text-ink-2">Requests.</span>{" "}
+                <span>Someone you don’t follow reaches your Requests box first, and gets three messages to say who they are.
+                Accept and it becomes an ordinary conversation; decline and they can’t write again.</span>
+              </p>
+            </details>
           </aside>
           {peer && me ? (
             <DmThread me={me} identity={identity} myKey={myKey} peer={peer}

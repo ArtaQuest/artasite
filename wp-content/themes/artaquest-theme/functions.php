@@ -734,9 +734,14 @@ add_action( 'send_headers', function () {
 	// records voice notes on-device (pages/Messages.tsx VoiceButton → getUserMedia). An empty
 	// allowlist `microphone=()` disables the feature for EVERY origin including our own, so
 	// getUserMedia rejected before the browser ever showed a permission prompt and the record button
-	// was a silent no-op in production. `(self)` restores it for this origin only — third-party
-	// frames still cannot reach it, and the member's own browser permission prompt still gates it.
-	header( 'Permissions-Policy: camera=(), microphone=(self), geolocation=(), payment=()' );
+	// was a silent no-op in production. `(self)` restores it for this origin only — the member's own
+	// browser permission prompt still gates it.
+	//
+	// CAMERA + the named Jitsi origin: ArtaChat video calls run in an iframe on meet.jit.si
+	// (components/chat/CallPanel.tsx). A permissions-policy allowlist is the OUTER of two gates —
+	// the iframe's own `allow=` attribute is the inner one, and BOTH must name the feature or the
+	// call joins with a dead camera and no error anyone can see. `display-capture` is screen sharing.
+	header( 'Permissions-Policy: camera=(self "https://meet.jit.si"), microphone=(self "https://meet.jit.si"), display-capture=(self "https://meet.jit.si"), geolocation=(), payment=()' );
 
 	// Content-Security-Policy — defence-in-depth vs XSS / injection / clickjacking / data exfil.
 	// Cache-safe by design: NO per-request nonce (cached public pages would carry a stale nonce and
@@ -811,7 +816,12 @@ add_action( 'send_headers', function () {
 		// allow-listing three third-party origins for a feature that was not there: straight
 		// attack-surface reduction, independent of the Kaggle move.
 		. "connect-src 'self' https://cdn.jsdelivr.net https://translate.googleapis.com https://accounts.google.com https://s0.wp.com https://stats.wp.com https://public-api.wordpress.com https://zenodo.org https://www.kaggle.com https://storage.googleapis.com" . $aq_cdn . "; "
-		. "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://accounts.google.com https://www.google.com" . $aq_cdn . "; "
+		// meet.jit.si: ArtaChat video calls are an iframe embed, deliberately WITHOUT Jitsi's
+		// external_api.js — an <iframe> costs one frame-src origin, whereas the JS API would run
+		// third-party script inside OUR origin for the sake of a hangup event we can do without.
+		// The room name never reaches this server (it rides inside the sealed message), so an origin
+		// grant here gives nobody a way in.
+		. "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://accounts.google.com https://www.google.com https://meet.jit.si" . $aq_cdn . "; "
 		. "upgrade-insecure-requests"
 	);
 

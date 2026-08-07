@@ -1,9 +1,10 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { ArtaBot as Api, ApiError, chatGetKey, chatMembers, type ArtabotMsg, type ChatMember, type ChatUserCard } from "../lib/api";
 import { currentUser, isLoggedIn, localePath, renderRich } from "../lib/wp";
-import { getChatState, markSeen, subscribeChat, watchList } from "../lib/chat-store";
+import { clearRing, getChatState, markSeen, subscribeChat, watchList } from "../lib/chat-store";
 import { useTypewriter } from "../lib/useTypewriter";
 import { Avatar, Button, LogoMark, RichText } from "./ui";
+import { IncomingCall } from "./chat/CallPanel";
 
 /** The DM thread lives in the Messages chunk (it carries the whole E2EE stack). Lazy, so the dock
  *  costs nothing until a member actually opens a conversation. */
@@ -450,6 +451,22 @@ function DockBody({ view, setView }: {
               </span>
             </button>
 
+            {/* Waiting message requests. One line, not a tab: the dock is 400px of a page somebody
+                is doing something else on, so it points at the full inbox rather than growing a
+                second list nobody asked to see. */}
+            {chat.requests > 0 && (
+              <a href={localePath("/messages/?box=requests")}
+                className="flex w-full items-center gap-3 border-b border-line bg-yang/[0.06] px-3 py-2.5 text-start transition-colors hover:bg-yang/[0.10]">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-yang text-[14px] font-bold text-on-accent">{chat.requests}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[14px] font-semibold text-ink">
+                    {chat.requests === 1 ? "1 message request" : `${chat.requests} message requests`}
+                  </span>
+                  <span className="block truncate text-[12px] text-ink-3">From members you don’t follow — accept or decline</span>
+                </span>
+              </a>
+            )}
+
             {chat.fatal ? (
               <p className="px-4 py-6 text-center text-[13px] text-ink-3">{chat.fatal}</p>
             ) : chat.listError ? (
@@ -523,7 +540,11 @@ export function ArtaBot() {
   // never touches presence, so it cannot suppress the member's own notifications.
   const [, bumpBadge] = useState(0);
   useEffect(() => subscribeChat(() => bumpBadge((n) => n + 1)), []);
-  const unread = getChatState().unread;
+  const badge = getChatState();
+  const unread = badge.unread;
+  // The same poll carries an inbound call, so the ring reaches the member on any page — the dock is
+  // the only chat surface that is always mounted, which makes it the right place for it.
+  const ring = badge.ring;
 
   // Escape closes the dock and returns focus to the launcher — neither existed before.
   useEffect(() => {
@@ -711,6 +732,17 @@ export function ArtaBot() {
          attribute follows the dock's own visibility. */
       {...(hideDock ? {} : { "data-floor": "top", "data-floor-home": "" })}
     >
+      {/* AN INBOUND CALL, wherever the member is on the site. It rides the badge poll (30s, and
+          Chat::RING_S is longer so no ring can fall between two polls), and "Answer" OPENS THE
+          CONVERSATION rather than dialling: the beacon deliberately carries no room name — that
+          exists only inside the sealed invite, which is what makes a public database safe here. */}
+      {ring && (
+        <div className="mb-2">
+          <IncomingCall name={ring.from.name} avatar={ring.from.avatar}
+            onDismiss={() => clearRing()}
+            onAnswer={() => { clearRing(); setOpen(true); setDockView({ k: "dm", peer: ring.from }); }} />
+        </div>
+      )}
       <div className="flex flex-col overflow-hidden rounded-t-2xl border border-b-0 border-line bg-space-1 shadow-2xl shadow-black/50">
         {/* The pinned bar. Hoisted out of DockBody so it survives collapse; its title still tracks
             the view, so opening a conversation renames the bar exactly as LinkedIn's does. */}

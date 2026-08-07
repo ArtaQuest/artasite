@@ -61,8 +61,23 @@ class Mailer {
 			'label'    => 'New direct message',
 			'audience' => 'member',
 			'subject'  => '{{sender}} sent you a message on ArtaQuest',
-			'body'     => "{{sender}} sent you a message.\n\nWe can't show it here — ArtaQuest messages are end-to-end encrypted, so only your own device holds the key that opens them. Open Messages to read it.\n\nWe only email you while you're away, and at most once every 30 minutes per conversation. To stop these, turn off \"Email me when a message arrives\" in Messages.",
+			'body'     => "{{sender}} sent you a message, and it's still unread.\n\nWe can't show it here — ArtaQuest messages are end-to-end encrypted, so only your own device holds the key that opens them. Open Messages to read it.\n\nWe only email you when a message has been sitting unread for a few minutes while you're away — read it first and this never arrives — and at most once every 30 minutes per conversation. To stop these, turn off \"Email me when a message arrives\" in Messages.",
 			'cta'      => [ 'Open Messages', '/messages/' ],
+			'vars'     => [ 'sender' ],
+			'sample'   => [ 'sender' => 'Arash' ],
+		],
+		/**
+		 * Somebody you don't know has asked to message you. Deliberately a SEPARATE template from
+		 * dm_received: a request is a decision to make, not a message to read, and it is the only
+		 * email a member can receive from an account they have no relationship with — so it says so
+		 * plainly, and says what happens if they do nothing (nothing).
+		 */
+		'dm_request' => [
+			'label'    => 'Message request from a member you don’t follow',
+			'audience' => 'member',
+			'subject'  => '{{sender}} would like to message you',
+			'body'     => "{{sender}} sent you a message request on ArtaQuest.\n\nThey can't reach your inbox until you accept: a request holds at most three messages and then waits. Accept it and the conversation becomes an ordinary one; decline and they can't write again. Doing nothing is also an answer — the request simply stays where it is.\n\nWe can't show you what they wrote. ArtaQuest messages are end-to-end encrypted, so only your own device holds the key.\n\nThis is the only email a member you don't follow can cause: one per request. To stop them, turn off \"Email me when a message arrives\" in Messages.",
+			'cta'      => [ 'See the request', '/messages/?box=requests' ],
 			'vars'     => [ 'sender' ],
 			'sample'   => [ 'sender' => 'Arash' ],
 		],

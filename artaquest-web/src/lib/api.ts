@@ -2031,6 +2031,10 @@ export type ChatLastMsg = { id: number; sender: number; akid: number; bkid: numb
 export type ChatListItem = {
   id: number; peer: ChatUserCard; last_at: number; unread: number; online: boolean;
   low_uid: number; last: ChatLastMsg | null;
+  /** My side of this conversation. `pending` = they asked and I haven't answered; `asked` = the
+   *  mirror, my own request still waiting on them. */
+  pending: boolean; asked: boolean;
+  muted: boolean; pinned: boolean; archived: boolean; blocked: boolean;
 };
 export type ChatCipherMsg = { id: number; sender: number; akid: number; bkid: number; iv: string; ct: string; blob: string; at: number };
 export type ChatMessages = {
@@ -2038,7 +2042,20 @@ export type ChatMessages = {
   low_uid: number; keys: Record<number, { user_id: number; pub: string; fp: string }>;
   ttl: number; peer_read: number; peer_online: boolean; peer_typing: boolean;
   items: ChatCipherMsg[]; next: number | null;
+  /** Relationship state for the header + composer. `blocked_by` = THEY blocked me (I can read the
+   *  history, I cannot write); `request_left` = how many more messages an unanswered request holds. */
+  pending: boolean; asked: boolean; request_left: number;
+  blocked: boolean; blocked_by: boolean; muted: boolean; pinned: boolean; archived: boolean;
+  /** Where a video call is hosted, from the server so it is one constant, not two. */
+  call_host: string;
 };
+/** Which list chatList() returns — the same query with a different filter (see Chat::list_chats). */
+export type ChatBox = "chats" | "requests" | "archived" | "blocked";
+/** Every per-side decision about one conversation, over one route. `decline` sets the same block
+ *  flag `block` does: declining is exactly "they can't write to me", said kindly. */
+export type ChatRelation =
+  | "accept" | "decline" | "block" | "unblock"
+  | "mute" | "unmute" | "pin" | "unpin" | "archive" | "unarchive";
 export function chatGetKey(user: string | number) {
   return get<{ user: ChatUserCard; key: ChatKey | null }>("/chat/keys", { user });
 }
@@ -2051,12 +2068,24 @@ export type ChatListPage = {
   /** Every device public key the previews reference, so one still opens after a key rotation. */
   keys: Record<number, { user_id: number; pub: string; fp: string }>;
   my_key: ChatKey | null;
+  box: ChatBox;
+  /** Requests waiting on an answer — shipped with every box so the tab that is off-screen can
+   *  still carry its badge without a second request. */
+  requests: number;
+  /** …and any inbound ring, because while the list is on screen the badge poll (the other place
+   *  this is carried) is switched off. */
+  ring: ChatRing | null;
 };
-export function chatList() { return get<ChatListPage>("/chat/list"); }
+export function chatList(box: ChatBox = "chats") { return get<ChatListPage>("/chat/list", { box }); }
+/** Somebody is ringing this member right now. Carries WHO and WHICH conversation — never the room,
+ *  which exists only inside the sealed invite message (see lib/e2ee newCallRoom). */
+export type ChatRing = { from: ChatUserCard; chat: number; at: number };
 /** Unread total for the dock's badge. A separate route from chatList on purpose: reading the LIST
  *  marks you "active in chat" server-side, which suppresses the peer's bell and away-email — so the
  *  thing polled from every page must be this one, which touches no presence. */
-export function chatUnread() { return get<{ unread: number }>("/chat/unread"); }
+export function chatUnread() {
+  return get<{ unread: number; requests: number; ring: ChatRing | null }>("/chat/unread");
+}
 /** One row of the member directory. `has_key` false = they have never opened Messages, so no
  *  device key exists to seal anything to them yet. */
 export type ChatMember = {
@@ -2081,7 +2110,29 @@ export function chatMessages(withUid: number, opts?: { cursor?: number; after?: 
  *  is away) or a reaction/edit/tombstone that should stay silent. The server cannot tell them apart
  *  — every row is shape-identical by design — so the sending client says so. */
 export function chatSend(to: number, b: { iv: string; ct: string; akid: number; bkid: number; blob?: string; notify?: 0 | 1 }) {
-  return post<{ ok: boolean; id: number; chat_id: number; at: number }>("/chat/send", { to, ...b });
+  return post<{ ok: boolean; id: number; chat_id: number; at: number; request: boolean }>("/chat/send", { to, ...b });
+}
+/** Accept / decline / block / mute / pin / archive one conversation (POST /chat/relation). */
+export function chatRelation(withUid: number, action: ChatRelation) {
+  return post<{
+    ok: boolean; action: ChatRelation;
+    pending: boolean; blocked: boolean; muted: boolean; pinned: boolean; archived: boolean;
+    requests: number;
+  }>("/chat/relation", { with: withUid, action });
+}
+/** Ring the other side (or stop). The room itself travels only inside the sealed invite. */
+export function chatCall(withUid: number, action: "ring" | "end") {
+  return post<{ ok: boolean; ringing?: boolean }>("/chat/call", { with: withUid, action });
+}
+/** Pull a remote image/GIF through the backend so the browser can seal it (POST /chat/fetch).
+ *  Client-side fetch is not an option: connect-src is 'self', and going direct would also tell the
+ *  source host who is looking. Returns the raw bytes. */
+export async function chatFetchMedia(url: string): Promise<{ bytes: ArrayBuffer; mime: string }> {
+  const r = await post<{ ok: boolean; mime: string; size: number; data: string }>("/chat/fetch", { url });
+  const bin = atob(r.data);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return { bytes: out.buffer, mime: r.mime };
 }
 /** Whether this member is emailed about messages that arrive while they are away (GET), and the
  *  switch to turn it off/on (POST). */

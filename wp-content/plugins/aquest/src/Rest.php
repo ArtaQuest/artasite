@@ -469,9 +469,12 @@ final class Rest {
 		//    private keys are non-extractable, device-bound, and never leave the member's browser). ──
 		[ 'GET',  'chat/keys',                     'Chat::get_key',    'public' ], // ?user=<slug|id> → their active public key (same bytes as the open DB)
 		[ 'POST', 'chat/keys',                     'Chat::set_key',    'user'   ], // register/rotate the caller's device public key
-		[ 'GET',  'chat/list',                     'Chat::list_chats', 'user'   ], // the caller's conversations + unread counts
+		[ 'GET',  'chat/list',                     'Chat::list_chats', 'user'   ], // ?box=chats|requests|archived|blocked → conversations + unread counts
 		[ 'GET',  'chat/members',                  'Chat::members',    'user'   ], // the member directory + live presence (online first)
-		[ 'GET',  'chat/unread',                   'Chat::unread',     'user'   ], // badge only — deliberately does NOT mark presence (see Chat::mark_presence)
+		[ 'GET',  'chat/unread',                   'Chat::unread',     'user'   ], // badge only (+waiting requests, +inbound call) — deliberately does NOT mark presence (see Chat::mark_presence)
+		[ 'POST', 'chat/relation',                 'Chat::relation',   'user'   ], // accept|decline|block|unblock|mute|unmute|pin|unpin|archive|unarchive one conversation
+		[ 'POST', 'chat/call',                     'Chat::call',       'user'   ], // ring/stop ringing a peer; the ROOM never reaches the server (it rides inside the sealed message)
+		[ 'POST', 'chat/fetch',                    'Chat::fetch_url',  'user'   ], // pull a remote GIF/image server-side so the browser can seal it — SSRF-fenced
 		[ 'GET',  'chat/email-prefs',             'Chat::email_prefs', 'user'  ], // is this member emailed about messages that arrive while away?
 		[ 'POST', 'chat/email-prefs',             'Chat::email_prefs', 'user'  ], // …and turn it off/on
 		[ 'GET',  'chat/messages',                 'Chat::messages',   'user'   ], // ?with=&cursor=|&after= → ciphertext rows + the key material to open them
@@ -638,6 +641,13 @@ final class Rest {
 		// rule can still be messaged (it already has a device key), so it can still be emailed —
 		// and blocking the opt-out would mean receiving mail you are not allowed to stop.
 		'Chat::email_prefs',
+		// Same asymmetry, and the sharper case: DECLINING or BLOCKING is withdrawal, not capability.
+		// A DOB-less account can still be MESSAGED — Chat::send is the sender's action, gated on the
+		// sender — so gating this route meant a member who had not finished onboarding could receive
+		// message requests from strangers and had no way whatsoever to stop them. That is the exact
+		// harm the opt-out exemption above was written for. Mute/pin/archive ride along because they
+		// are the same kind of act: arranging your own inbox, creating nothing.
+		'Chat::relation',
 	];
 
 	/**
