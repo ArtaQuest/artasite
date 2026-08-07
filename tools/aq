@@ -57,12 +57,59 @@ cmd_status() {
   local mbehind; mbehind=$(git rev-list --count origin/main..artasite/main 2>/dev/null || echo '?')
   [ "$mbehind" = "0" ] && ok "monorepo main has the deployed truth" \
     || warn "$mbehind deployed commit(s) missing from origin/main — run: tools/aq sync"
+  cmd_who
   say "Production"
   printf "  executing   %s\n" "$(prod_version)"
   printf "  repo says   plugin %s  theme %s\n" \
     "$(git show artasite/main:wp-content/plugins/aquest/aquest.php 2>/dev/null | grep -oE "AQ_VERSION', '[0-9.]+'" | grep -oE '[0-9.]+' | head -1)" \
     "$(git show artasite/main:wp-content/themes/artaquest-theme/style.css 2>/dev/null | grep -iE '^ \* Version:' | grep -oE '[0-9.]+' | head -1)"
   printf "  health      %s\n" "$(curl -s -m 25 "$API/health/pulse" 2>/dev/null)"
+}
+
+# Who else is working, DERIVED — never from a file anyone has to remember to update.
+#
+# WORKING.md is the documented board and it is genuinely used, but it is append-only: 614 entries,
+# 17 of them from this month. "What each agent is doing right now" cannot be read out of it, so in
+# practice you discover a colleague by colliding with them. This session found a second agent's
+# half-built chat feature by running `git status` for an unrelated reason, and found a third only
+# because their worktree appeared in `git worktree list`.
+#
+# Worktrees and file mtimes are the ground truth and cost nothing to keep accurate: a worktree exists
+# because somebody made it, and its files were touched when they were touched. Nobody can forget to
+# update this, and it cannot go stale.
+cmd_who() {
+  say "Other agents"
+  local self n=0
+  self="$(git rev-parse --show-toplevel 2>/dev/null)"
+  while IFS= read -r line; do
+    local dir br
+    dir="${line%% *}"
+    [ -d "$dir" ] || continue
+    [ "$dir" = "$self" ] && continue
+    br="$(git -C "$dir" branch --show-current 2>/dev/null)"; [ -n "$br" ] || br="(detached)"
+    local dirty touched
+    dirty="$(git -C "$dir" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+    # Most recent edit among the uncommitted files: the honest "is somebody in here right now".
+    touched="$(git -C "$dir" status --porcelain 2>/dev/null | sed 's/^...//' | sed 's/.* -> //' \
+      | while IFS= read -r f; do [ -f "$dir/$f" ] && stat -f '%Sm' -t '%H:%M' "$dir/$f"; done | sort -r | head -1)"
+    n=$((n+1))
+    if [ "$dirty" != "0" ]; then
+      warn "$(basename "$dir") [$br] — ${dirty} uncommitted, last edit ${touched:-?} — ACTIVE, do not touch"
+    else
+      printf "  %s [%s] — clean\n" "$(basename "$dir")" "$br"
+    fi
+  done <<< "$(git worktree list)"
+  [ "$n" = "0" ] && ok "no other worktrees — you are alone in this repository"
+  # ArtaDev logs in UTC; comparing its timestamps against local time reads as a three-hour outage
+  # that is not happening. Compare the LOG FILE's mtime instead, which is local either way.
+  local log=~/Library/Logs/artaquest-ticket-agent.out.log
+  if launchctl list 2>/dev/null | grep -q 'org.artaquest.ticket-agent'; then
+    if [ -f "$log" ]; then
+      local age=$(( $(date +%s) - $(stat -f %m "$log") ))
+      [ "$age" -lt 300 ] && ok "ArtaDev polling (last wrote ${age}s ago)" \
+        || warn "ArtaDev loaded but its log has not moved in $((age/60))m — it may be wedged"
+    else ok "ArtaDev loaded"; fi
+  else warn "ArtaDev is NOT loaded — queued member tickets are not being worked"; fi
 }
 
 cmd_start() {
@@ -118,7 +165,31 @@ cmd_ship() {
   # has pushed to that ref. `main` below is a PLAIN push and must stay one: it is the deploy
   # authority, and forcing it would discard a deploy.
   git push -q --force-with-lease artasite "HEAD:refs/heads/$br" || die "branch push failed"
-  git push artasite HEAD:main || die "push to main refused — someone else pushed; git fetch artasite && git rebase artasite/main, then retry"
+
+  # WHEN SOMEBODY ELSE SHIPPED WHILE YOU WORKED, REBASE — do not just refuse.
+  #
+  # With three or more agents on this repository it is normal, not exceptional: artasite/main moved
+  # three times during one session here. Refusing was correct — it is what stops a clobber — but it
+  # ended the command and left the human to fetch, rebase, re-run preflight and retry by hand, which
+  # is four steps to recover from something ordinary.
+  #
+  # A clean rebase is exactly those steps and nothing else, so do them. A CONFLICTING one is a real
+  # decision about two people's work and stays refused: the rebase is aborted so the tree is left
+  # exactly as it was, and the conflict is yours to resolve. Preflight then runs AGAIN, because after
+  # a rebase the thing being shipped is no longer the thing that was verified — most sharply for the
+  # version bump, which is a comparison against a base that just moved.
+  if ! git push -q artasite HEAD:main 2>/dev/null; then
+    warn "artasite/main moved while you worked — rebasing onto it"
+    git fetch -q artasite || die "cannot reach artasite"
+    if ! git rebase artasite/main >/dev/null 2>&1; then
+      git rebase --abort 2>/dev/null
+      die "rebase onto artasite/main CONFLICTS — resolve it yourself: git fetch artasite && git rebase artasite/main. Nothing was pushed and your branch is untouched."
+    fi
+    ok "rebased onto $(git log --oneline -1 artasite/main | cut -c1-50)"
+    bash tools/preflight.sh || die "preflight failed AFTER the rebase — the merge of the two changes is not shippable, even though each was. Nothing reached main."
+    git push -q --force-with-lease artasite "HEAD:refs/heads/$br" || die "branch push failed after rebase"
+    git push artasite HEAD:main || die "push to main still refused — someone pushed again mid-rebase; run tools/aq ship once more"
+  fi
 
   # ── A green run is NOT a deploy. Ask production what it is EXECUTING. ───────────────────────
   # Only meaningful when the version actually moved. A change that touches no hashed PHP — tooling,
