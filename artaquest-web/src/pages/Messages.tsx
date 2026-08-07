@@ -494,6 +494,11 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
    * the conversation. Neither is a thing to do by accident, and a second click is a much smaller
    * cost than either mistake.
    */
+  /** Which bubble is showing its actions. On a touch surface there is no hover to reveal them, and
+   *  the previous answer — show them on EVERY bubble, always — put a full reaction bar and an
+   *  Unsend button under every single message in the dock. Tapping a bubble opens its actions;
+   *  tapping it again, or anything else, closes them. */
+  const [openActions, setOpenActions] = useState(0);
   const [confirmUnsend, setConfirmUnsend] = useState(0);
   const [confirmBlock, setConfirmBlock] = useState(false);
   // …and the unsend question times out. On a desktop the bubble's actions are hover-revealed, so a
@@ -711,6 +716,18 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
       if (!byEmoji.has(emoji)) byEmoji.set(emoji, new Set());
       byEmoji.get(emoji)!.add(Number(sender));
     }
+    // ONE ROW PER CALL. Every call wrote two bubbles — "You started a call" then "Call ended" —
+    // so a few calls filled the whole conversation with machinery. The end is folded into the start
+    // (which is where the duration belongs), and only an orphan end — one whose start has scrolled
+    // out of the loaded page — is drawn on its own.
+    const callEnd = new Map<string, { at: number; why?: string }>();
+    const callStartSids = new Set<string>();
+    for (const m of render) {
+      const p = m.payload;
+      if (p?.t !== "call" || !p.sid) continue;
+      if (p.act === "end") callEnd.set(p.sid, { at: m.at, why: p.why });
+      else callStartSids.add(p.sid);
+    }
     const textOf = new Map<number, string>();
     for (const m of render) {
       const p = m.payload;
@@ -721,7 +738,12 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
       if (p && p.t === "call") textOf.set(m.id, p.act === "start" ? "Video call" : "Call ended");
       if (p && p.t === "file" && !textOf.has(m.id)) textOf.set(m.id, p.att.name || "File");
     }
-    return { rows: render.filter((m) => !dels.has(m.id)), edits, reacts, textOf };
+    const rows = render.filter((m) => {
+      if (dels.has(m.id)) return false;
+      const p = m.payload;
+      return !(p?.t === "call" && p.act === "end" && p.sid && callStartSids.has(p.sid));
+    });
+    return { rows, edits, reacts, textOf, callEnd };
   }, [items]);
 
   /**
@@ -1345,7 +1367,12 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
       )}
 
       {/* stream */}
-      <div ref={(el) => { scroller.current = el; if (el) watchMath(el, "auto"); }} onScroll={onScroll} className={`relative flex-1 overflow-y-auto py-3 ${compact ? "px-3" : "px-3 md:px-4"}`}>
+      <div ref={(el) => { scroller.current = el; if (el) watchMath(el, "auto"); }} onScroll={onScroll}
+        onPointerDown={(e) => {
+          // A tap on empty space dismisses an open action bar. Guarded on the target so the tap
+          // that OPENS one (handled on the bubble) is not immediately undone by this.
+          if (openActions && !(e.target as HTMLElement).closest("[data-actions],[data-bubble]")) setOpenActions(0);
+        }} className={`relative flex-1 overflow-y-auto py-3 ${compact ? "px-3" : "px-3 md:px-4"}`}>
         {older !== null && (
           <div className="pb-2 text-center">
             <button type="button" className="rounded-pill border border-line px-3.5 py-1 text-[12px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink"
@@ -1410,10 +1437,12 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                     )}
                     {/* hover actions */}
                     {mine && m.id > 0 && p && (
-                      <span className={`shrink-0 items-center gap-0.5 self-center transition-opacity ${
-                        /* No hover on the dock's touch surface, so these are always shown there
-                           rather than hidden behind a gesture that never happens. */
-                        compact ? "flex" : "hidden opacity-0 group-hover:opacity-100 md:flex"}`}>
+                      <span data-actions="" className={`shrink-0 items-center gap-0.5 self-center transition-opacity ${
+                        /* Touch has no hover, so these appear when the bubble is TAPPED — not on
+                           every bubble at once, which is what "always show them" produced. */
+                        compact
+                          ? (openActions === m.id ? "flex" : "hidden")
+                          : "hidden opacity-0 group-hover:opacity-100 md:flex"}`}>
                         {p.t === "text" && (
                           <button type="button" aria-label="Edit" onClick={() => { setEditing(m); setReplyTo(null); }}
                             className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-ink-3 hover:bg-veil/[0.07] hover:text-ink">Edit</button>
@@ -1434,7 +1463,16 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                     )}
                     {/* data-ay-skip: everything below this point is decrypted plaintext — see the
                         file header. Marked on the wrapper so no future child can escape it. */}
-                    <div data-ay-skip="1" className={`relative ${compact ? "max-w-[82%]" : "max-w-[76%] md:max-w-[65%]"} ${hit ? "rounded-card ring-2 ring-yang" : ""}`}>
+                    <div data-ay-skip="1"
+                      /* On touch, the bubble itself is what reveals its actions. Ignored when the
+                         member is selecting text, so tapping to copy does not open a toolbar. */
+                      data-bubble=""
+                      onClick={compact && m.id > 0 && p ? () => {
+                        if ((window.getSelection()?.toString() || "").length) return;
+                        setOpenActions((cur) => (cur === m.id ? 0 : m.id));
+                        setConfirmUnsend(0);
+                      } : undefined}
+                      className={`relative ${compact ? "max-w-[82%]" : "max-w-[76%] md:max-w-[65%]"} ${hit ? "rounded-card ring-2 ring-yang" : ""}`}>
                       {/* WhatsApp-style bubble: sent = blue-tinted, received = neutral; the last
                           bubble of a group squares its outer-bottom corner into a tail. */}
                       <div className={`text-[14.5px] leading-relaxed ${
@@ -1466,12 +1504,21 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                              that renders both as "Call ended" is quietly wrong about what happened. */
                           <p className="flex items-center gap-1.5 text-[13.5px]">
                             <Ic d={IC.video} size={15} />
-                            {p.act === "start"
-                              ? (mine ? "You started a call" : "Called you")
-                              : p.why === "declined" ? (mine ? "You declined" : "Call declined")
-                              : p.why === "missed" ? "Missed call"
-                              : p.why === "failed" ? "Call couldn’t connect"
-                              : "Call ended"}
+                            {(() => {
+                              const end = p.sid ? view.callEnd.get(p.sid) : undefined;
+                              const why = p.act === "end" ? p.why : end?.why;
+                              if (why === "declined") return mine ? "You declined" : "Call declined";
+                              if (why === "missed") return mine ? "No answer" : "Missed call";
+                              if (why === "failed") return "Call couldn’t connect";
+                              if (p.act === "end") return "Call ended";
+                              const secs = end ? Math.max(0, end.at - m.at) : 0;
+                              const len = secs >= 60
+                                ? `${Math.floor(secs / 60)}m ${secs % 60}s`
+                                : `${secs}s`;
+                              return end
+                                ? `${mine ? "Outgoing" : "Incoming"} call · ${len}`
+                                : (mine ? "You started a call" : "Called you");
+                            })()}
                           </p>
                         ) : (
                           <p className="whitespace-pre-wrap break-words" dir="auto">{body}</p>
@@ -1507,7 +1554,8 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                       )}
                       {/* hover reaction + reply bar */}
                       {m.id > 0 && p && (
-                        <div className={`z-10 items-center gap-0.5 rounded-pill border border-line bg-space-2 px-1.5 py-1 shadow-card ${compact ? "flex" : "hidden group-hover:flex"} ${
+                        <div data-actions="" className={`z-10 items-center gap-0.5 rounded-pill border border-line bg-space-2 px-1.5 py-1 shadow-card ${
+                          compact ? (openActions === m.id ? "flex" : "hidden") : "hidden group-hover:flex"} ${
                           /* In the dock the panel root is overflow-hidden, so a bar floated ABOVE the
                              bubble is clipped away entirely — under it, in normal flow, it survives. */
                           compact ? "mt-1 flex-wrap" : "absolute -top-8"} ${mine ? "end-0" : "start-0"}`}>
