@@ -199,6 +199,14 @@ final class Assistant {
 			// `idle` while the answer was being written beside it.
 			$buf   = Relay::fresh_transient( $key );
 			$fresh = is_array( $buf ) && (int) $buf['seq'] > $seen;
+			// A reader that has seen NOTHING and finds a FINISHED buffer is looking at a turn that ended
+			// before it started watching — the previous one, whose buffer lingers for a minute so its own
+			// last poll can collect the tail. Handing it over stops the new reader dead on its first
+			// request: it adopts the old answer, sees done, and closes, so the turn the member is
+			// actually waiting for streams nothing at all. The transcript already holds that old answer.
+			// (This is a race the client cannot avoid: it must start reading BEFORE it asks, or the first
+			// seconds of thinking are lost.)
+			if ( $fresh && $seen === 0 && (int) ( $buf['done'] ?? 0 ) ) { $fresh = false; $buf = null; }
 			if ( $fresh ) {
 				// GATHER before returning. The daemon flushes every ~400ms, so returning on the first
 				// new byte would make this a 2.5-req/s short-poll — exactly what long-polling is here to
