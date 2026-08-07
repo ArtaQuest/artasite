@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { CallState } from "../../lib/webrtc";
+import { Avatar } from "../ui";
 
 /**
  * The call surface — two video elements and four buttons.
@@ -42,12 +43,13 @@ function Video({ stream, muted, mirror, className, label }: {
 }
 
 export function CallPanel({
-  state, local, remote, peerName, micOn, camOn, onMic, onCam, onHangup,
+  state, local, remote, peerName, peerAvatar, micOn, camOn, onMic, onCam, onHangup,
 }: {
   state: CallState;
   local: MediaStream | null;
   remote: MediaStream | null;
   peerName: string;
+  peerAvatar?: string;
   micOn: boolean;
   camOn: boolean;
   onMic: () => void;
@@ -84,6 +86,9 @@ export function CallPanel({
         {!remote && (
           <div className="absolute inset-0 grid place-items-center px-6 text-center">
             <div>
+              <span className="mx-auto mb-3 block w-fit" data-ay-skip="1">
+                <Avatar src={peerAvatar} name={peerName} className="h-16 w-16" />
+              </span>
               <p className="text-[15px] font-semibold text-ink" data-ay-skip="1">{peerName}</p>
               <p className="mt-1 text-[13px] text-ink-3">{status || "Starting…"}</p>
               {state === "failed" && (
@@ -152,10 +157,11 @@ export function IncomingCall({ name, avatar, onAnswer, onDismiss }: {
   return (
     <div role="alert"
       className="pointer-events-auto flex items-center gap-3 rounded-card border border-yang/60 bg-space-2 px-3 py-2.5 shadow-card">
-      <span className="relative shrink-0">
-        {avatar
-          ? <img src={avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
-          : <span className="grid h-10 w-10 place-items-center rounded-full bg-veil/[0.10] text-[15px] font-bold text-ink-2" data-ay-skip="1">{name.slice(0, 1)}</span>}
+      <span className="relative shrink-0" data-ay-skip="1">
+        {/* The shared Avatar, not a bare <img>: it falls back to the member's initial when the URL
+            is missing or fails to load, which a raw tag renders as a broken-image icon — reported
+            from real use as "the profile picture of the person calling isn't showing". */}
+        <Avatar src={avatar} name={name} className="h-10 w-10" />
         <span className="absolute -inset-1 animate-ping rounded-full border border-yang/50" aria-hidden />
       </span>
       <span className="min-w-0 flex-1">

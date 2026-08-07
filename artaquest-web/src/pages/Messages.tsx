@@ -46,6 +46,10 @@ const POLL_MS = 4000;
  *  this poll (lib/webrtc.ts), so at 4s an offer and its answer would take up to eight seconds to
  *  cross — a phone that takes eight seconds to start ringing reads as broken. */
 const CALL_POLL_MS = 1200;
+/** A conversation whose other side is AWAY and that has been silent this long backs off to
+ *  IDLE_POLL_MS. Presence is the gate, not silence alone — see schedule(). */
+const QUIET_AFTER_MS = 120000;
+const IDLE_POLL_MS = 10000;
 const GROUP_S = 300; // bubbles from the same sender within 5 min group together
 const REACTIONS = QUICK_REACTIONS;
 /** How long an unanswered offer keeps ringing before it is treated as missed. A sealed message
@@ -286,6 +290,144 @@ function Media({ att, url, onZoom }: { att: SealedAttachment; url: string | null
   );
 }
 
+
+/**
+ * The composer — and it owns the draft.
+ *
+ * THAT IS THE WHOLE POINT OF IT BEING A COMPONENT. `draft` used to live in DmThread, so every
+ * keystroke re-rendered the entire message list: measured at 133ms median from keypress to paint on
+ * a 50-message conversation, which is felt as lag on every single letter. Nothing above this
+ * component needs to know what you have half-typed until you send it, so nothing above it re-renders
+ * while you type.
+ *
+ * Remounted by `key` when edit mode starts or stops (see the call site), which is how the box gets
+ * pre-filled with the message being edited and restored afterwards without the parent tracking it.
+ */
+function Composer({
+  peerId, peerName, compact, editing, replyTo, replyPreview, busy, asked, requestLeft,
+  initialText, onSend, onCancel, onPick, onFile,
+}: {
+  peerId: number; peerName: string; compact: boolean;
+  editing: boolean; replyTo: boolean; replyPreview: string; busy: boolean;
+  asked: boolean; requestLeft: number;
+  initialText: string;
+  onSend: (text: string) => void;
+  onCancel: () => void;
+  onPick: (r: PickerResult) => void;
+  onFile: (f: File | Blob, mime: string, extra?: { dur?: number; voice?: boolean }) => void;
+}) {
+  const [draft, setDraft] = useState(initialText);
+  const [panel, setPanel] = useState(false);
+  const typedAt = useRef(0);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+
+  // Put the cursor where the member is about to write.
+  //
+  // EDITING ALWAYS FOCUSES, AND ALWAYS AT THE END. This component remounts pre-filled when an edit
+  // starts, which leaves the caret at position 0 — so typing PREPENDED to the message being edited
+  // ("-EDITEDhello" instead of "hello-EDITED"). Editing is also a deliberate tap, so raising the
+  // keyboard is wanted there even on a phone.
+  //
+  // Otherwise focus only on desktop: on a phone, focusing on open raises the keyboard over the
+  // messages the member came to read.
+  useEffect(() => {
+    const ta = boxRef.current?.querySelector("textarea");
+    if (!ta) return;
+    if (editing) {
+      ta.focus();
+      const end = ta.value.length;
+      ta.setSelectionRange(end, end);
+      return;
+    }
+    if (compact || window.matchMedia("(max-width: 767px)").matches) return;
+    ta.focus();
+    // Same rule for a restored draft — you continue it, you do not type into the middle of it.
+    const end = ta.value.length;
+    ta.setSelectionRange(end, end);
+  }, [compact, peerId, editing]);
+
+  function change(v: string) {
+    setDraft(v);
+    if (!editing) { if (v) drafts.set(peerId, v); else drafts.delete(peerId); }
+    const now = nowMs();
+    if (now - typedAt.current > 3000) { typedAt.current = now; chatTyping(peerId).catch(() => undefined); }
+  }
+
+  function send() {
+    const text = draft.trim();
+    if (!text || busy) return;
+    onSend(text);
+    setDraft("");
+    drafts.delete(peerId);
+  }
+
+  return (
+    <div ref={boxRef}>
+      {(replyTo || editing) && (
+        /* Quotes the message being replied to / edited — decrypted plaintext. */
+        <div data-ay-skip="1" className="mb-2 flex items-center gap-2 rounded-field border-s-2 border-yin-light/70 bg-veil/[0.05] px-3 py-1.5">
+          <p className="min-w-0 flex-1 truncate text-[12px] text-ink-3">
+            <span className="font-semibold text-ink-2">{editing ? "Editing your message" : `Replying to ${replyPreview ? peerName : peerName}`}</span>
+            {!editing && replyPreview && <> — {replyPreview}</>}
+          </p>
+          <button type="button" aria-label="Cancel" onClick={onCancel}
+            className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-ink-3 hover:bg-veil/[0.07] hover:text-ink"><Ic d={IC.x} size={13} /></button>
+        </div>
+      )}
+      {panel && (
+        <Pickers
+          onClose={() => setPanel(false)}
+          onPick={(r) => {
+            // An emoji is text: it belongs in the draft, so it stays inside this component and the
+            // message list never hears about it.
+            if (r.kind === "emoji") { change(draft + r.char); return; }
+            setPanel(false);
+            onPick(r);
+          }} />
+      )}
+      {asked && (
+        <p className="mb-2 px-1 text-[12px] text-ink-3">
+          Message request — {requestLeft} of 3 messages left until they accept.
+        </p>
+      )}
+      <div className="flex items-end gap-1.5">
+        <button type="button" aria-label="Emoji, stickers and GIFs" title="Emoji, stickers, GIFs"
+          aria-expanded={panel} onClick={() => setPanel((v) => !v)}
+          className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition-colors hover:bg-veil/[0.07] hover:text-ink ${
+            panel ? "bg-veil/[0.10] text-ink" : "text-ink-3"}`}><Ic d={IC.smile} size={18} /></button>
+        <label aria-label="Send an encrypted photo, video or file" title="Photo, video or file"
+          className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-ink-3 transition-colors hover:bg-veil/[0.07] hover:text-ink">
+          <Ic d={IC.clip} size={18} />
+          <input type="file" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f, f.type); e.target.value = ""; }} />
+        </label>
+        <GrowingTextarea value={draft} onChange={change}
+          placeholder={editing ? "Edit your message…" : "Write an encrypted message…"}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+            if (e.key === "Escape" && (replyTo || editing || panel)) {
+              // Claim the key so the surrounding dock does not also close (which would throw away
+              // the message being typed). An Escape with nothing to cancel bubbles on.
+              e.preventDefault();
+              if (panel) setPanel(false); else onCancel();
+            }
+          }}
+          onPaste={(e) => {
+            const f = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith("image/"))?.getAsFile();
+            if (f) { e.preventDefault(); onFile(f, f.type); }
+          }}
+          disabled={busy && !draft} />
+        {draft.trim() ? (
+          <button type="button" aria-label={editing ? "Save edit" : "Send"} onClick={send} disabled={busy}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-yang text-on-accent transition-opacity hover:opacity-90 disabled:opacity-50"><Ic d={IC.send} size={18} /></button>
+        ) : (
+          <VoiceButton disabled={busy} onDone={(b, mime, dur) => onFile(b, mime, { dur, voice: true })} />
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** One conversation — list of sealed rows fully materialised on-device. */
 /**
  * One conversation, fully materialised on-device.
@@ -307,16 +449,13 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   // here. Read (the server watermark) always implies delivered; this covers the ✓✓-grey gap.
   const [deliveredTo, setDeliveredTo] = useState(0);
   const [older, setOlder] = useState<number | null>(null); // cursor for "show earlier"
-  // Seeded from (and written back to) the module-level draft store, so a half-written message
-  // survives switching conversations — see `drafts`.
-  const [draft, setDraft] = useState(() => drafts.get(peer.id) ?? "");
   const [replyTo, setReplyTo] = useState<Item | null>(null);
   const [editing, setEditing] = useState<Item | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [code, setCode] = useState<string | null>(null);
-  const [panel, setPanel] = useState<"" | "code" | "timer" | "search" | "menu" | "add">("");
+  const [panel, setPanel] = useState<"" | "code" | "timer" | "search" | "menu">("");
   const [query, setQuery] = useState("");
   /** My side of this conversation, as the server sees it: is it an unanswered request (theirs or
    *  mine), has either of us blocked the other, is it muted/pinned/archived. Refreshed every poll,
@@ -342,6 +481,10 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   /** Mirrors "a call is happening" for the poll scheduler, which reads it outside React's render
    *  cycle — see schedule(). Ringing counts: the offer needs its answer to cross quickly too. */
   const callActive = useRef(false);
+  /** When this conversation last carried anything, and whether the peer is present. Together they
+   *  drive the poll cadence — see schedule(). Refs, so the scheduler reads them without a render. */
+  const lastActivity = useRef(nowMs());
+  const peerHere = useRef(false);
   const [acting, setActing] = useState(false); // a relation change is in flight
   /**
    * The two irreversible-ish buttons ask once before doing it.
@@ -368,10 +511,11 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
 
   const lastId = useRef(0);
   const keyCache = useRef(new Map<string, CryptoKey>());
-  const objectUrls = useRef(new Set<string>()); // decrypted attachment URLs awaiting revocation
+  const objectUrls = useRef(new Set<string>());
+  /** Attachment ids already fetched, so the decrypt effect never re-scans on its own output. */
+  const asked = useRef(new Set<number>()); // decrypted attachment URLs awaiting revocation
   const scroller = useRef<HTMLDivElement | null>(null);
   const rowRefs = useRef(new Map<number, HTMLElement>());
-  const typedAt = useRef(0);
   const tempSeq = useRef(-1);
 
   const low = Math.min(me, peer.id);
@@ -440,18 +584,34 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
         // the derived conversation keys, so the cache is dropped with it.
         setPeerKey((prev) => {
           const next = page.peer_key;
-          if (prev && next && prev.kid !== next.kid) keyCache.current.clear();
-          return next ?? prev;
+          if (!next) return prev;
+          if (prev && prev.kid === next.kid) return prev; // same key — keep the identity, skip a render
+          if (prev) keyCache.current.clear();             // they rotated: derived keys are now wrong
+          return next;
         });
-        setLive({ read: page.peer_read, typing: page.peer_typing, online: page.peer_online, ttl: page.ttl });
-        setRel({
-          pending: page.pending, asked: page.asked, request_left: page.request_left,
-          blocked: page.blocked, blocked_by: page.blocked_by,
-          muted: page.muted, pinned: page.pinned, archived: page.archived,
-        });
+        // ONLY WHEN SOMETHING ACTUALLY CHANGED. These objects were rebuilt on every tick, and a new
+        // object identity is a state change as far as React is concerned — so a conversation nobody
+        // was touching re-rendered its entire message list every 4 seconds, for nothing. Measured on
+        // a 50-message thread: 1.46s of scripting per 24 idle seconds, 859ms of it blocking.
+        peerHere.current = page.peer_online || page.peer_typing;
+        setLive((cur) => (cur.read === page.peer_read && cur.typing === page.peer_typing
+          && cur.online === page.peer_online && cur.ttl === page.ttl
+          ? cur
+          : { read: page.peer_read, typing: page.peer_typing, online: page.peer_online, ttl: page.ttl }));
+        setRel((cur) => (cur.pending === page.pending && cur.asked === page.asked
+          && cur.request_left === page.request_left && cur.blocked === page.blocked
+          && cur.blocked_by === page.blocked_by && cur.muted === page.muted
+          && cur.pinned === page.pinned && cur.archived === page.archived
+          ? cur
+          : {
+            pending: page.pending, asked: page.asked, request_left: page.request_left,
+            blocked: page.blocked, blocked_by: page.blocked_by,
+            muted: page.muted, pinned: page.pinned, archived: page.archived,
+          }));
         const plain = await decrypt(page);
         if (stop) return;
         if (plain.length) {
+          lastActivity.current = nowMs();   // they said something — stay responsive
           const ordered = desc ? [...plain].reverse() : plain;
           lastId.current = Math.max(lastId.current, ...ordered.map((m) => m.id));
           merge(ordered);
@@ -469,7 +629,18 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
       // THE POLL IS THE SIGNALLING CHANNEL while a call is being set up (lib/webrtc.ts), so it runs
       // much faster then. Read from a ref rather than a dependency so speeding up does not tear
       // down and rebuild the whole polling effect mid-handshake.
-      timer = setTimeout(() => tick(false), callActive.current ? CALL_POLL_MS : POLL_MS);
+      //
+      // And a conversation nobody has spoken in for a while slows down. An open thread costs a
+      // request every four seconds forever, on a platform built to read-scale — but a thread that
+      // has been silent for two minutes does not need the same urgency as one mid-exchange, and any
+      // message (either direction) snaps it straight back. The member never waits longer for a
+      // reply to something they just said.
+      // Backing off on silence ALONE would have cost up to ten seconds on the first message after
+      // a lull, which is exactly the moment a chat must feel alive. Presence removes the tradeoff:
+      // slow down only when the other person is not even here — nothing is about to arrive — and
+      // stay at full speed whenever they are, however long the pause has been.
+      const dormant = !peerHere.current && nowMs() - lastActivity.current > QUIET_AFTER_MS;
+      timer = setTimeout(() => tick(false), callActive.current ? CALL_POLL_MS : dormant ? IDLE_POLL_MS : POLL_MS);
     }
     function onVis() {
       if (document.hidden) { clearTimeout(timer); timer = undefined; return; }
@@ -479,6 +650,9 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
     urls.forEach((u) => URL.revokeObjectURL(u));
     urls.clear();
     setItems([]); setMedia({}); setOlder(null); lastId.current = 0; keyCache.current.clear();
+    // …and forget which attachments were fetched, or coming back to this conversation would show
+    // empty bubbles: the media state is cleared above, so the guard must be cleared with it.
+    asked.current.clear();
     setPeerKey(null); setCode(null); setPanel(""); setReplyTo(null); setEditing(null); setMissed(0);
     setDeliveredTo(0);
     // Switching conversation ENDS the call — and `close()` is what actually stops the camera and
@@ -558,18 +732,11 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
    * server to ask. `ringTick` (below) is what makes it expire; memoising on the messages alone
    * meant an unanswered call rang forever on a quiet conversation.
    */
-  /** A slow clock, purely so time-based expiry re-evaluates. An unanswered offer has to STOP
-   *  ringing on its own, and a memo over the message list alone never re-runs on a quiet
-   *  conversation — so the phone would ring forever. */
-  const [ringTick, setRingTick] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setRingTick((n) => n + 1), 5000);
-    return () => clearInterval(t);
-  }, []);
-
-  const offer = useMemo(() => {
-    void ringTick;
-    const now = nowSec();
+  /**
+   * The newest offer that has not been cancelled — WITHOUT the freshness test, so this depends only
+   * on the messages and re-computes only when they change.
+   */
+  const offerRaw = useMemo(() => {
     let found: { sid: string; sdp: string; at: number; id: number } | null = null;
     const dead = new Set<string>();
     for (let i = items.length - 1; i >= 0; i--) {
@@ -579,14 +746,34 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
       if (p.t === "rtc" && p.kind === "bye") { dead.add(p.sid); continue; }
       if (p.t === "call" && p.act === "end" && p.sid) { dead.add(p.sid); continue; }
       if (p.t === "rtc" && p.kind === "offer" && m.sender !== me && p.sdp) {
-        if (dead.has(p.sid)) return null;            // that call is over
-        if (now - m.at > CALL_LIVE_S) return null;   // nobody is still holding the phone
+        if (dead.has(p.sid)) return null;
         found = { sid: p.sid, sdp: p.sdp, at: m.at, id: m.id };
         break;
       }
     }
     return found;
-  }, [items, me, ringTick]);
+  }, [items, me]);
+
+  /**
+   * A clock, purely so a ringing offer STOPS ringing on its own — a memo over the message list
+   * never re-runs on a quiet conversation, so the phone would ring forever.
+   *
+   * It only ticks WHILE there is something to expire. Running it unconditionally re-rendered the
+   * whole thread every five seconds for every member with a conversation open, forever, to check a
+   * condition that is almost always false.
+   */
+  const [ringTick, setRingTick] = useState(0);
+  useEffect(() => {
+    if (!offerRaw) return;
+    const t = setInterval(() => setRingTick((n) => n + 1), 5000);
+    return () => clearInterval(t);
+  }, [offerRaw]);
+
+  const offer = useMemo(() => {
+    void ringTick;
+    if (!offerRaw) return null;
+    return nowSec() - offerRaw.at > CALL_LIVE_S ? null : offerRaw; // nobody is still holding the phone
+  }, [offerRaw, ringTick]);
 
   /**
    * The signalling loop.
@@ -624,6 +811,20 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
     if (offer && callState === "idle" && takeAutoAnswer(peer.id)) void answerCall();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offer, callState, peer.id]);
+
+  /**
+   * A call nobody answers has to give up.
+   *
+   * The callee's ring expires on its own (CALL_LIVE_S), but the CALLER had nothing watching: place
+   * a call to someone who has closed their laptop and it sat on "Ringing…" indefinitely, holding
+   * the camera open, with no way to tell that it was never going to be answered.
+   */
+  useEffect(() => {
+    if (callState !== "calling") return;
+    const t = setTimeout(() => hangUp(true, "missed"), CALL_LIVE_S * 1000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [callState]);
 
   // Keep the poll scheduler's view of "busy" in step with the UI's.
   useEffect(() => { callActive.current = callState !== "idle" || !!offer; }, [callState, offer]);
@@ -680,15 +881,18 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   useEffect(() => {
     for (const m of view.rows) {
       const p = m.payload;
-      if (p && (p.t === "img" || p.t === "voice" || p.t === "file") && media[m.id] === undefined) {
-        setMedia((cur) => ({ ...cur, [m.id]: null }));
-        openAttachment(p.att).then((u) => {
-          if (u) objectUrls.current.add(u);
-          setMedia((cur) => ({ ...cur, [m.id]: u }));
-        });
-      }
+      if (!p || (p.t !== "img" && p.t !== "voice" && p.t !== "file")) continue;
+      // Guarded by a ref, not by `media`. Depending on the state this effect SETS meant it re-ran —
+      // and re-scanned every row in the conversation — once for each attachment that resolved.
+      if (asked.current.has(m.id)) continue;
+      asked.current.add(m.id);
+      setMedia((cur) => ({ ...cur, [m.id]: null }));
+      openAttachment(p.att).then((u) => {
+        if (u) objectUrls.current.add(u);
+        setMedia((cur) => ({ ...cur, [m.id]: u }));
+      });
     }
-  }, [view.rows, media]);
+  }, [view.rows]);
 
   // Stick to the bottom while the member is there; count missed messages otherwise.
   const rowCount = view.rows.length;
@@ -742,6 +946,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
         notify: isBubble && payload.t !== "call" ? 1 : 0,
       });
       lastId.current = Math.max(lastId.current, r.id);
+      lastActivity.current = nowMs();   // we said something — expect a reply soon
       if (isBubble) {
         // If a poll raced the ack and already delivered the real row, drop the optimistic twin
         // instead of renaming it onto the same id (a duplicate bubble with a duplicate key).
@@ -777,15 +982,14 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
     setBusy(false);
   }
 
-  async function submit() {
-    const text = draft.trim();
+  async function submit(text: string) {
     if (!text || busy || !canSend) return;
     setBusy(true);
     const payload: ChatPayload = editing
       ? { v: 2, t: "edit", ref: editing.id, body: text }
       : { v: 2, t: "text", body: text, ...(replyTo ? { ref: replyTo.id } : {}) };
     const ok = await sealAndSend(payload);
-    if (ok) { clearDraft(); setReplyTo(null); setEditing(null); }
+    if (ok) { setReplyTo(null); setEditing(null); }
     setBusy(false);
   }
 
@@ -838,9 +1042,8 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   }
 
   /** Everything the +/picker can produce, sent by the one route that fits it. */
-  async function pick(r: PickerResult) {
-    if (r.kind === "emoji") { onDraft(draft + r.char); return; }   // stays in the draft — an emoji is text
-    setPanel("");
+  async function pick(r: Exclude<PickerResult, { kind: "emoji" }>) {
+    // Emoji never arrive here: the Composer keeps them in its own draft (see its onPick).
     if (r.kind === "sticker") {
       // A sticker is an ID, not bytes: nothing is uploaded, and the row is the same size as a short
       // sentence. See components/chat/stickers.ts for why that is a privacy property, not a saving.
@@ -966,25 +1169,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
     setItems((cur) => cur.filter((x) => x.id !== m.id));
   }
 
-  function onDraft(v: string) {
-    setDraft(v);
-    // Kept per conversation, so switching away and back does not lose it. Cleared on send.
-    if (v) drafts.set(peer.id, v); else drafts.delete(peer.id);
-    const now = nowMs();
-    if (now - typedAt.current > 3000) { typedAt.current = now; chatTyping(peer.id).catch(() => undefined); }
-  }
 
-  /** Clear the draft everywhere it lives — state AND the cross-conversation store. Anything that
-   *  empties the box must go through here, or the text reappears the next time you open the chat. */
-  function clearDraft() {
-    setDraft("");
-    drafts.delete(peer.id);
-  }
-
-  function onPaste(e: React.ClipboardEvent) {
-    const f = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith("image/"))?.getAsFile();
-    if (f) { e.preventDefault(); sendFile(f, f.type); }
-  }
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
     const f = e.dataTransfer?.files?.[0];
@@ -994,7 +1179,16 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <section onDragOver={(e) => e.preventDefault()} onDrop={onDrop}
-      className={`flex min-h-0 flex-1 flex-col overflow-hidden bg-space-2 ${compact ? "" : "min-h-[480px] rounded-card border border-line shadow-card"}`}
+      /* A HEIGHT CAP IS WHAT MAKES THE MESSAGE LIST SCROLL. Without one this container simply grew
+         to fit every message — 4,800px for fifty of them — so the inner `overflow-y-auto` had
+         nothing to scroll, the whole PAGE became the scroller, and the composer sat thousands of
+         pixels below the fold. Stick-to-bottom silently did nothing too, because the element it
+         scrolls was never scrollable. `dvh` rather than `vh` so a phone's retracting address bar
+         does not leave the composer under the viewport edge. */
+      className={`flex min-h-0 flex-col overflow-hidden bg-space-2 ${
+        compact
+          ? "flex-1"
+          : "h-[calc(100dvh-10.5rem)] min-h-[380px] md:h-auto md:min-h-0 md:flex-1 rounded-card border border-line shadow-card"}`}
       /* aria-label carries no member name: the i18n mesh collects ATTRIBUTES too, and every
          string it collects is persisted into the public aq_translations table. The name is
          announced by the header link below, which is data-ay-skip'd. */
@@ -1093,7 +1287,8 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
       {/* A call in progress. Above the stream, so it can't be scrolled past. */}
       {callState !== "idle" && (
         <CallPanel
-          state={callState} local={localStream} remote={remoteStream} peerName={peer.name}
+          state={callState} local={localStream} remote={remoteStream}
+          peerName={peer.name} peerAvatar={peer.avatar}
           micOn={micOn} camOn={camOn}
           onMic={() => { const on = callRef.current?.toggleMic(); setMicOn(!!on); }}
           onCam={() => { const on = callRef.current?.toggleCam(); setCamOn(!!on); }}
@@ -1157,8 +1352,20 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
               onClick={async () => {
                 try {
                   const page = await chatMessages(peer.id, { cursor: older });
+                  const rows = (await decrypt(page)).reverse();
+                  // KEEP THE READER WHERE THEY ARE. Prepending content above the viewport moves
+                  // everything down by exactly the height that was added, so without this the
+                  // message you were reading jumps off the screen the instant the older ones load —
+                  // and you have to scroll back to find your place every single time.
+                  const el = scroller.current;
+                  const before = el ? el.scrollHeight - el.scrollTop : 0;
                   setOlder(page.next);
-                  merge((await decrypt(page)).reverse(), true);
+                  merge(rows, true);
+                  if (el) {
+                    // After paint, restore the distance from the BOTTOM, which is the thing that
+                    // did not change.
+                    requestAnimationFrame(() => { el.scrollTop = el.scrollHeight - before; });
+                  }
                 } catch { setFailed(true); }
               }}>Show earlier messages</button>
           </div>
@@ -1208,7 +1415,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                            rather than hidden behind a gesture that never happens. */
                         compact ? "flex" : "hidden opacity-0 group-hover:opacity-100 md:flex"}`}>
                         {p.t === "text" && (
-                          <button type="button" aria-label="Edit" onClick={() => { setEditing(m); setReplyTo(null); onDraft(body || ""); }}
+                          <button type="button" aria-label="Edit" onClick={() => { setEditing(m); setReplyTo(null); }}
                             className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-ink-3 hover:bg-veil/[0.07] hover:text-ink">Edit</button>
                         )}
                         {/* Two-step: "Unsend" → "Delete?" → gone. See confirmUnsend. */}
@@ -1344,18 +1551,6 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
       <footer className={`border-t border-line ${compact ? "p-2.5" : "p-2.5 md:p-3"}`}>
         {failed && <ErrorNote className="mb-2">Couldn’t reach the server — retrying.</ErrorNote>}
         {note && <ErrorNote className="mb-2">{note}</ErrorNote>}
-        {(replyTo || editing) && (
-          /* Quotes the message being replied to / edited — decrypted plaintext. */
-          <div data-ay-skip="1" className="mb-2 flex items-center gap-2 rounded-field border-s-2 border-yin-light/70 bg-veil/[0.05] px-3 py-1.5">
-            <p className="min-w-0 flex-1 truncate text-[12px] text-ink-3">
-              <span className="font-semibold text-ink-2">{editing ? "Editing your message" : `Replying to ${replyTo!.sender === me ? "yourself" : peer.name}`}</span>
-              {!editing && <> — {view.textOf.get(replyTo!.id) || "message"}</>}
-            </p>
-            <button type="button" aria-label="Cancel" onClick={() => { setReplyTo(null); setEditing(null); if (editing) clearDraft(); }}
-              className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-ink-3 hover:bg-veil/[0.07] hover:text-ink"><Ic d={IC.x} size={13} /></button>
-          </div>
-        )}
-        {panel === "add" && <Pickers onPick={(r) => void pick(r)} onClose={() => setPanel("")} />}
         {/* THE REQUEST BAR. A conversation somebody opened with me is answered here, in the place a
             reply would go, because accepting is the same decision as replying — and because a bar
             that sits where the composer is cannot be missed the way a banner at the top can. */}
@@ -1371,43 +1566,20 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
               className="rounded-pill bg-yang px-4 py-1.5 text-[12.5px] font-bold text-on-accent hover:opacity-90 disabled:opacity-50">Accept</button>
           </div>
         ) : canSend ? (
-          <>
-            {/* My own request, still waiting. Saying how many messages are left turns a refusal that
-                would otherwise arrive at the fourth message into a rule you can see. */}
-            {rel.asked && (
-              <p className="mb-2 px-1 text-[12px] text-ink-3">
-                Message request — {rel.request_left} of 3 messages left until they accept.
-              </p>
-            )}
-            <div className="flex items-end gap-1.5">
-              <button type="button" aria-label="Emoji, stickers and GIFs" title="Emoji, stickers, GIFs"
-                aria-expanded={panel === "add"} onClick={() => setPanel((s) => (s === "add" ? "" : "add"))}
-                className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition-colors hover:bg-veil/[0.07] hover:text-ink ${
-                  panel === "add" ? "bg-veil/[0.10] text-ink" : "text-ink-3"}`}><Ic d={IC.smile} size={18} /></button>
-              <label aria-label="Send an encrypted photo, video or file" title="Photo, video or file"
-                className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-ink-3 transition-colors hover:bg-veil/[0.07] hover:text-ink">
-                <Ic d={IC.clip} size={18} />
-                <input type="file" className="hidden"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) sendFile(f, f.type); e.target.value = ""; }} />
-              </label>
-              <GrowingTextarea value={draft} onChange={onDraft} placeholder={editing ? "Edit your message…" : "Write an encrypted message…"}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
-                  if (e.key === "Escape" && (replyTo || editing || panel)) {
-                    // Claim the key so the surrounding dock does not also close (which would
-                    // throw away the message being typed). An Escape with nothing to cancel
-                    // bubbles on, and closing is then the right thing.
-                    e.preventDefault();
-                    if (panel) setPanel(""); else { setReplyTo(null); setEditing(null); }
-                  } }}
-                onPaste={onPaste} disabled={busy && !draft} />
-              {draft.trim() ? (
-                <button type="button" aria-label={editing ? "Save edit" : "Send"} onClick={submit} disabled={busy}
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-yang text-on-accent transition-opacity hover:opacity-90 disabled:opacity-50"><Ic d={IC.send} size={18} /></button>
-              ) : (
-                <VoiceButton disabled={busy} onDone={(b, mime, dur) => sendFile(b, mime, { dur, voice: true })} />
-              )}
-            </div>
-          </>
+          /* `key` is what pre-fills the box when an edit starts and restores the draft when it is
+             cancelled — the composer owns its text, so remounting is how the parent hands it a
+             different starting value without tracking the text itself. */
+          <Composer
+            key={editing ? `edit-${editing.id}` : `chat-${peer.id}`}
+            peerId={peer.id} peerName={peer.name} compact={compact}
+            editing={!!editing} replyTo={!!replyTo}
+            replyPreview={replyTo ? (view.textOf.get(replyTo.id) || "message") : ""}
+            busy={busy} asked={rel.asked} requestLeft={rel.request_left}
+            initialText={editing ? (view.edits.get(editing.id) ?? (editing.payload && "body" in editing.payload ? editing.payload.body ?? "" : "")) : (drafts.get(peer.id) ?? "")}
+            onSend={(text) => void submit(text)}
+            onCancel={() => { setReplyTo(null); setEditing(null); }}
+            onPick={(r) => { if (r.kind !== "emoji") void pick(r); }}
+            onFile={(f, mime, extra) => void sendFile(f, mime, extra)} />
         ) : (
           /* Four different reasons the composer is closed, each said in its own words — and the one
              the member can undo comes with the button that undoes it. The name is skipped; the
@@ -1598,16 +1770,26 @@ export default function Messages() {
           page whose job is to get you into a conversation, not to teach cryptography. The detail
           still exists, moved to where it answers a question somebody is actually asking (the safety
           code panel, and the note under the list). */}
-      <PageHero eyebrow="Community" title="Messages"
-        lede="Private conversations, sealed on your own device — nobody else can read them, not even us." />
+      {/* ON A PHONE, AN OPEN CONVERSATION TAKES THE SCREEN. Keeping the hero above it pushed the
+          composer to 1036px in an 844px viewport — you landed in a chat and had to scroll past the
+          page title to reach the box you came to type in. The hero is orientation for the LIST; once
+          you are in a conversation it is just something in the way. Desktop keeps it: there is room. */}
+      <div className={peer ? "hidden md:block" : ""}>
+        <PageHero eyebrow="Community" title="Messages"
+          lede="Private conversations, sealed on your own device — nobody else can read them, not even us." />
+      </div>
       {fatal ? (
         <ErrorNote>{fatal}</ErrorNote>
       ) : !identity || !myKey ? (
         <StatusNote>Preparing this device’s encryption key…</StatusNote>
       ) : (
-        <div className="flex flex-col gap-4 md:flex-row md:items-stretch">
+        /* THE ROW owns the height on desktop. Putting it on the thread alone did not work: `flex-1`
+           sets `flex-basis: 0%`, which takes precedence over `height` on a flex item — so the cap
+           was ignored, and desktop only looked right because `items-stretch` happened to inherit
+           the sidebar's height. Sizing the container makes both panes deterministic. */
+        <div className="flex flex-col gap-4 md:h-[calc(100dvh-15rem)] md:max-h-[860px] md:min-h-[420px] md:flex-row md:items-stretch">
           {/* conversation list — hidden on phones while a thread is open (single-pane) */}
-          <aside className={`w-full flex-col gap-3 md:flex md:w-72 md:shrink-0 ${peer ? "hidden" : "flex"}`} aria-label="Conversations">
+          <aside className={`w-full flex-col gap-3 md:flex md:w-72 md:shrink-0 md:min-h-0 md:overflow-y-auto ${peer ? "hidden" : "flex"}`} aria-label="Conversations">
             {/* THREE tabs, not two lists and a form. Chats · Requests · People covers everything
                 the sidebar is for, and the two rarely-wanted boxes (archived, blocked) hang off the
                 end where they don't compete for attention with the inbox. */}
