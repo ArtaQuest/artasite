@@ -8,17 +8,19 @@ import {
 } from "../lib/api";
 import { currentUser, isLoggedIn, localePath } from "../lib/wp";
 import {
-  applyRelation, bumpRequests, clearRing, getChatState, markSeen, setBox, subscribeChat, watchList,
+  applyRelation, bumpRequests, clearRing, getChatState, markSeen, setBox, subscribeChat,
+  takeAutoAnswer, watchList,
 } from "../lib/chat-store";
 import { watchMath } from "../lib/math";
 import {
-  decodePayload, deriveChatKey, encodePayload, importPeerPub, newCallRoom,
+  decodePayload, deriveChatKey, encodePayload, importPeerPub,
   openAttachment, openMessage, safetyCode, sealAttachment, sealMessage,
   type ChatPayload, type Identity, type SealedAttachment,
 } from "../lib/e2ee";
 import { Avatar, Button, EmptyState, ErrorNote, Input, PageHero, StatusNote } from "../components/ui";
 import { Pickers, type PickerResult } from "../components/chat/Pickers";
-import { CallPanel } from "../components/chat/CallPanel";
+import { CallPanel, CallPrivacyNote } from "../components/chat/CallPanel";
+import { Call, callSupported, mediaErrorMessage, newCallSid, type CallState } from "../lib/webrtc";
 import { QUICK_REACTIONS } from "../components/chat/emoji";
 import { knownSticker, stickerLabel, stickerUrl } from "../components/chat/stickers";
 
@@ -40,11 +42,18 @@ import { knownSticker, stickerLabel, stickerUrl } from "../components/chat/stick
  */
 
 const POLL_MS = 4000;
+/** While a call is being set up or is live, the thread polls much faster. The signalling channel IS
+ *  this poll (lib/webrtc.ts), so at 4s an offer and its answer would take up to eight seconds to
+ *  cross — a phone that takes eight seconds to start ringing reads as broken. */
+const CALL_POLL_MS = 1200;
 const GROUP_S = 300; // bubbles from the same sender within 5 min group together
 const REACTIONS = QUICK_REACTIONS;
-/** How long a call invite stays "live" on screen. A sealed invite is just a message and never
- *  expires by itself, so without this every old call in the history would offer a Join button. */
-const CALL_LIVE_S = 120;
+/** How long an unanswered offer keeps ringing before it is treated as missed. A sealed message
+ *  never expires by itself, so without this every old call in the history would ring again. */
+const CALL_LIVE_S = 60;
+/** Remembers that this device has seen the "calls are direct, they'll see your IP" note. Device
+ *  local: it is a UI preference, not something the public database needs a row for. */
+const CALL_NOTE_KEY = "aq-call-note-seen";
 const TTL_CHOICES = [
   { v: 0, label: "Keep forever" },
   { v: 3600, label: "1 hour" },
@@ -315,11 +324,24 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
    *  a reload. */
   const [rel, setRel] = useState({
     pending: false, asked: false, request_left: 3, blocked: false, blocked_by: false,
-    muted: false, pinned: false, archived: false, call_host: "meet.jit.si",
+    muted: false, pinned: false, archived: false,
   });
-  /** The room this device has actually joined (null = not in a call). Never the same thing as "an
-   *  invite exists": joining is always the member's own act. */
-  const [call, setCall] = useState<string | null>(null);
+  // ── Calling ────────────────────────────────────────────────────────────────
+  // The call itself lives in a ref (it owns hardware and a peer connection, and must not be
+  // recreated by a re-render); everything the UI needs to draw is mirrored into state.
+  const callRef = useRef<Call | null>(null);
+  const [callState, setCallState] = useState<CallState>("idle");
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [micOn, setMicOn] = useState(true);
+  const [camOn, setCamOn] = useState(true);
+  const [askNote, setAskNote] = useState(false); // showing the one-time "this is direct" note
+  /** Signalling rows already applied, so a poll handing back the same sealed row twice — which it
+   *  legitimately does — cannot re-apply an offer or answer to a live peer connection. */
+  const seenRtc = useRef(new Set<number>());
+  /** Mirrors "a call is happening" for the poll scheduler, which reads it outside React's render
+   *  cycle — see schedule(). Ringing counts: the offer needs its answer to cross quickly too. */
+  const callActive = useRef(false);
   const [acting, setActing] = useState(false); // a relation change is in flight
   /**
    * The two irreversible-ish buttons ask once before doing it.
@@ -426,7 +448,6 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
           pending: page.pending, asked: page.asked, request_left: page.request_left,
           blocked: page.blocked, blocked_by: page.blocked_by,
           muted: page.muted, pinned: page.pinned, archived: page.archived,
-          call_host: page.call_host || "meet.jit.si",
         });
         const plain = await decrypt(page);
         if (stop) return;
@@ -445,7 +466,10 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
     }
     function schedule() {
       if (stop || timer || document.hidden) return;
-      timer = setTimeout(() => tick(false), POLL_MS);
+      // THE POLL IS THE SIGNALLING CHANNEL while a call is being set up (lib/webrtc.ts), so it runs
+      // much faster then. Read from a ref rather than a dependency so speeding up does not tear
+      // down and rebuild the whole polling effect mid-handshake.
+      timer = setTimeout(() => tick(false), callActive.current ? CALL_POLL_MS : POLL_MS);
     }
     function onVis() {
       if (document.hidden) { clearTimeout(timer); timer = undefined; return; }
@@ -457,9 +481,11 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
     setItems([]); setMedia({}); setOlder(null); lastId.current = 0; keyCache.current.clear();
     setPeerKey(null); setCode(null); setPanel(""); setReplyTo(null); setEditing(null); setMissed(0);
     setDeliveredTo(0);
-    // Switching conversation LEAVES the call. Keeping the iframe alive across a peer change would
-    // hold an open camera and microphone for a conversation the member is no longer looking at.
-    setCall(null);
+    // Switching conversation ENDS the call — and `close()` is what actually stops the camera and
+    // microphone. Without this the hardware would stay live for a conversation nobody is looking at.
+    callRef.current?.close();
+    callRef.current = null;
+    setCallState("idle"); setLocalStream(null); setRemoteStream(null); seenRtc.current.clear();
     document.addEventListener("visibilitychange", onVis);
     tick(true);
     return () => {
@@ -492,6 +518,9 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
       if (!p) { render.push(m); continue; }
       if (p.t === "edit") { if (senderOf.get(p.ref) === m.sender) edits.set(p.ref, p.body); continue; }
       if (p.t === "del") { if (senderOf.get(p.ref) === m.sender) dels.add(p.ref); continue; }
+      // The call handshake is machinery, not conversation: applied by the signalling effect and
+      // never drawn. Rendering an SDP offer as a bubble would be both unreadable and enormous.
+      if (p.t === "rtc") { continue; }
       if (p.t === "react") {
         const k = `${p.ref}|${p.emoji}|${m.sender}`;
         parity.set(k, (parity.get(k) || 0) + 1);
@@ -522,23 +551,95 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   }, [items]);
 
   /**
-   * The live call invite, if there is one: the newest `call:start` that has not been closed by a
-   * later `call:end` and is younger than CALL_LIVE_S.
+   * The incoming offer worth ringing about: the newest `rtc:offer` from the other side whose call
+   * has not since been ended, and which is young enough to still be somebody waiting on a screen.
    *
-   * Read off the message stream rather than tracked in state, because that stream is the ONLY place
-   * the room name exists — the server never has it (see components/chat/CallPanel). It also means
-   * both devices agree about what is happening without any call-state protocol: the sealed messages
-   * ARE the protocol.
-   *
-   * `ringTick` is what makes it EXPIRE. Memoising on the messages alone meant the freshness test ran
-   * only when a new message arrived — so a call nobody answered kept offering a Join button for a
-   * room the caller had long since left, indefinitely, on a quiet conversation.
+   * Read off the message stream because the stream IS the signalling channel — there is no call
+   * server to ask. `ringTick` (below) is what makes it expire; memoising on the messages alone
+   * meant an unanswered call rang forever on a quiet conversation.
    */
+  /** A slow clock, purely so time-based expiry re-evaluates. An unanswered offer has to STOP
+   *  ringing on its own, and a memo over the message list alone never re-runs on a quiet
+   *  conversation — so the phone would ring forever. */
   const [ringTick, setRingTick] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setRingTick((n) => n + 1), 5000);
     return () => clearInterval(t);
   }, []);
+
+  const offer = useMemo(() => {
+    void ringTick;
+    const now = nowSec();
+    let found: { sid: string; sdp: string; at: number; id: number } | null = null;
+    const dead = new Set<string>();
+    for (let i = items.length - 1; i >= 0; i--) {
+      const m = items[i];
+      const p = m.payload;
+      if (!p) continue;
+      if (p.t === "rtc" && p.kind === "bye") { dead.add(p.sid); continue; }
+      if (p.t === "call" && p.act === "end" && p.sid) { dead.add(p.sid); continue; }
+      if (p.t === "rtc" && p.kind === "offer" && m.sender !== me && p.sdp) {
+        if (dead.has(p.sid)) return null;            // that call is over
+        if (now - m.at > CALL_LIVE_S) return null;   // nobody is still holding the phone
+        found = { sid: p.sid, sdp: p.sdp, at: m.at, id: m.id };
+        break;
+      }
+    }
+    return found;
+  }, [items, me, ringTick]);
+
+  /**
+   * The signalling loop.
+   *
+   * Every sealed `rtc` row that arrives is applied to the peer connection exactly once: their
+   * ANSWER completes the call we started, their BYE ends it. Their OFFER is deliberately NOT
+   * auto-answered — answering opens a camera, and that is always the member's own act (see
+   * `answerCall`).
+   */
+  useEffect(() => {
+    for (const m of items) {
+      const p = m.payload;
+      if (!p || p.t !== "rtc" || m.id <= 0 || seenRtc.current.has(m.id)) continue;
+      seenRtc.current.add(m.id);
+      if (m.sender === me) continue;                 // our own signalling, echoed back by the poll
+      const call = callRef.current;
+      if (!call || call.closed || call.sid !== p.sid) continue;
+      if (p.kind === "answer" && p.sdp) {
+        call.accept(p.sdp).catch(() => setCallState("failed"));
+      } else if (p.kind === "bye") {
+        hangUp(false); // they hung up — tear down, but don't send a second bye back
+      }
+    }
+    // `hangUp` is stable enough for this purpose and re-creating the effect on every render would
+    // re-scan the whole list; the guard above makes re-entry harmless either way.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, me]);
+
+  /**
+   * The member pressed Answer on the ring banner somewhere else on the site, and this thread is the
+   * first thing that can act on it — the offer only exists here. Runs the moment the offer arrives,
+   * once, so "Answer" means answer instead of "open the conversation and press Answer again".
+   */
+  useEffect(() => {
+    if (offer && callState === "idle" && takeAutoAnswer(peer.id)) void answerCall();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offer, callState, peer.id]);
+
+  // Keep the poll scheduler's view of "busy" in step with the UI's.
+  useEffect(() => { callActive.current = callState !== "idle" || !!offer; }, [callState, offer]);
+
+  /** Wire a fresh Call to this component's state. */
+  function newCall(sid: string) {
+    const c = new Call(sid, {
+      onState: setCallState,
+      onLocal: setLocalStream,
+      onRemote: setRemoteStream,
+    });
+    callRef.current = c;
+    setMicOn(true);
+    setCamOn(true);
+    return c;
+  }
 
   // The options dropdown closes the way every dropdown does: click anywhere else, or press Escape.
   // Without this the only way out was pressing the same button again — so a member who opened it,
@@ -558,18 +659,6 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
       document.removeEventListener("keydown", esc, true);
     };
   }, [panel]);
-  const invite = useMemo(() => {
-    void ringTick;
-    const now = nowSec();
-    for (let i = view.rows.length - 1; i >= 0; i--) {
-      const p = view.rows[i].payload;
-      if (!p || p.t !== "call") continue;
-      if (p.act === "end") return null;                    // the most recent call event was a hangup
-      if (now - view.rows[i].at > CALL_LIVE_S) return null; // stale — an old invite is not a ringing phone
-      return { room: p.room, from: view.rows[i].sender, at: view.rows[i].at };
-    }
-    return null;
-  }, [view.rows, ringTick]);
 
   // In-chat search over the DECRYPTED texts (never leaves the device).
   const matches = useMemo(() => {
@@ -638,6 +727,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
     const key = await convKey(akid, bkid, peerKey.pub);
     const sealed = await sealMessage(key, encodePayload(payload), low, high, me);
     const temp = tempSeq.current--;
+    // `rtc` rows are the call handshake: no bubble, no optimistic echo, no notification.
     const isBubble = payload.t === "text" || payload.t === "img" || payload.t === "voice"
       || payload.t === "file" || payload.t === "stick" || payload.t === "call";
     if (isBubble) merge([{ id: temp, sender: me, at: nowSec(), payload, pending: true }]);
@@ -762,33 +852,90 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   }
 
   /**
-   * Start a call: mint a room, put it in the conversation SEALED, then ask the server to ring.
+   * PLACE A CALL. Open the camera, build an offer with its ICE candidates already in it, seal that
+   * into the conversation, and ring.
    *
-   * Order matters. The invite has to be in the thread before the beacon fires, because the beacon
-   * carries no room — a peer who answers a ring finds the room by opening the conversation, and an
-   * answer that arrives before the invite has nothing to open.
+   * Order matters, and it is the reverse of what it was. The offer must be IN the thread before the
+   * beacon fires: the beacon carries nothing but "somebody is calling", so a peer who answers finds
+   * the handshake by opening the conversation — and an answer that arrives before the offer has
+   * nothing to answer.
+   *
+   * The camera is opened BEFORE anything is sent, so a member who refuses the permission prompt has
+   * not already rung somebody they cannot now talk to.
    */
   async function startCall() {
-    if (!canSend || busy) return;
-    const room = newCallRoom();
-    setBusy(true);
-    const ok = await sealAndSend({ v: 2, t: "call", room, act: "start" });
-    setBusy(false);
-    if (!ok) { setNote("Couldn’t start the call — check your connection."); return; }
-    setCall(room);
-    chatCall(peer.id, "ring").catch(() => undefined); // they may still join from the thread
+    if (!canSend || busy || callRef.current) return;
+    if (!callSupported()) { setNote("This browser can’t make calls — try a current one over HTTPS."); return; }
+    // The one-time note about what "direct" costs. Asked once per device, before the first call.
+    try {
+      if (!localStorage.getItem(CALL_NOTE_KEY)) { setAskNote(true); return; }
+    } catch { /* private mode — just proceed */ }
+    const sid = newCallSid();
+    const call = newCall(sid);
+    let sdp: string;
+    try {
+      sdp = await call.offer();
+    } catch (e) {
+      call.close(); callRef.current = null; setCallState("idle");
+      setNote(mediaErrorMessage(e));
+      return;
+    }
+    // Two sealed rows: the handshake (silent) and the visible "a call happened" bubble.
+    const ok = await sealAndSend({ v: 2, t: "rtc", kind: "offer", sid, sdp });
+    if (!ok) {
+      call.close(); callRef.current = null; setCallState("idle");
+      setNote("Couldn’t start the call — check your connection.");
+      return;
+    }
+    void sealAndSend({ v: 2, t: "call", act: "start", sid });
+    chatCall(peer.id, "ring").catch(() => undefined);
   }
 
-  /** Leave, and say so: the tombstone closes the invite on the other screen and stops the ring.
-   *  This is also the DECLINE button, which is why the local banner is cleared too — the server
-   *  beacon is gone a moment later, but the member pressed a button and it must respond now. */
-  async function endCall() {
-    const room = call ?? invite?.room;
-    setCall(null);
+  /** ANSWER: build the answer to their offer and seal it back. Opens the camera first, same reason. */
+  async function answerCall() {
+    if (!offer || callRef.current) return;
     clearRing();
-    chatCall(peer.id, "end").catch(() => undefined);
-    if (room) await sealAndSend({ v: 2, t: "call", room, act: "end" });
+    const call = newCall(offer.sid);
+    let sdp: string;
+    try {
+      sdp = await call.answer(offer.sdp);
+    } catch (e) {
+      call.close(); callRef.current = null; setCallState("idle");
+      setNote(mediaErrorMessage(e));
+      return;
+    }
+    void sealAndSend({ v: 2, t: "rtc", kind: "answer", sid: offer.sid, sdp });
   }
+
+  /**
+   * HANG UP — the one exit for every way a call can end: leaving, declining, or the other side
+   * going away.
+   *
+   * `tell` is false only when THEY hung up, so the two sides don't bounce a goodbye back and forth.
+   * Closing the Call is what actually stops the camera and microphone (see Call.close), so it
+   * happens unconditionally and first — a failed network call must never leave the hardware live.
+   */
+  function hangUp(tell = true, why?: "declined" | "missed" | "failed") {
+    const call = callRef.current;
+    const sid = call?.sid ?? offer?.sid;
+    call?.close();
+    callRef.current = null;
+    setCallState("idle");
+    setLocalStream(null);
+    setRemoteStream(null);
+    clearRing();
+    if (tell) {
+      chatCall(peer.id, "end").catch(() => undefined);
+      if (sid) {
+        void sealAndSend({ v: 2, t: "rtc", kind: "bye", sid });
+        void sealAndSend({ v: 2, t: "call", act: "end", sid, ...(why ? { why } : {}) });
+      }
+    }
+  }
+
+  // Leaving the conversation, or the page, ends the call. Without this the peer connection and the
+  // camera would outlive the screen that was showing them.
+  useEffect(() => () => { callRef.current?.close(); callRef.current = null; }, []);
 
   /** Accept / decline / block / mute / pin / archive — optimistic, because these are buttons whose
    *  whole job is to change what is on screen. */
@@ -875,7 +1022,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
         </p>
         {/* TWO controls, not five. Call is the one action worth its own button; everything else
             lives behind the menu, where it can carry a word instead of a glyph nobody can decode. */}
-        <button type="button" aria-label="Start a video call" title="Video call" disabled={!canSend || !!call}
+        <button type="button" aria-label="Start a video call" title="Video call" disabled={!canSend || callState !== "idle" || !!offer}
           onClick={() => void startCall()}
           className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-3 transition-colors hover:bg-veil/[0.07] hover:text-ink disabled:opacity-30">
           <Ic d={IC.video} size={18} />
@@ -931,19 +1078,40 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
         </div>
       </header>
 
-      {/* An accepted call, or one being offered. Above the stream, so it can't be scrolled past. */}
-      {call && <CallPanel room={call} host={rel.call_host} peerName={peer.name} onEnd={() => void endCall()} />}
-      {!call && invite && invite.from !== me && (
+      {/* The one-time note about what a direct connection costs, before the first call ever placed
+          from this device. Answering does not show it: by then somebody is already waiting. */}
+      {askNote && (
+        <CallPrivacyNote peerName={peer.name}
+          onCancel={() => setAskNote(false)}
+          onAccept={() => {
+            try { localStorage.setItem(CALL_NOTE_KEY, "1"); } catch { /* private mode */ }
+            setAskNote(false);
+            void startCall();
+          }} />
+      )}
+
+      {/* A call in progress. Above the stream, so it can't be scrolled past. */}
+      {callState !== "idle" && (
+        <CallPanel
+          state={callState} local={localStream} remote={remoteStream} peerName={peer.name}
+          micOn={micOn} camOn={camOn}
+          onMic={() => { const on = callRef.current?.toggleMic(); setMicOn(!!on); }}
+          onCam={() => { const on = callRef.current?.toggleCam(); setCamOn(!!on); }}
+          onHangup={() => hangUp(true)} />
+      )}
+
+      {/* Their offer, still ringing. Answering is always the member's own act — it opens a camera. */}
+      {callState === "idle" && offer && (
         <div className="flex items-center gap-2.5 border-b border-line bg-yang/[0.07] px-3 py-2.5">
           <span className="flex h-2 w-2 shrink-0 animate-pulse rounded-full bg-yang" aria-hidden />
           <p className="min-w-0 flex-1 text-[13px] text-ink">
             <span data-ay-skip="1" className="font-semibold">{peer.name}</span>{" "}
-            <span>started a video call</span>
+            <span>is calling</span>
           </p>
-          <button type="button" onClick={() => void endCall()}
+          <button type="button" onClick={() => hangUp(true, "declined")}
             className="rounded-pill border border-line px-2.5 py-1 text-[12px] font-semibold text-ink-3 hover:text-ink">Decline</button>
-          <button type="button" onClick={() => { clearRing(); setCall(invite.room); }}
-            className="rounded-pill bg-yang px-3 py-1 text-[12px] font-bold text-on-accent hover:opacity-90">Join</button>
+          <button type="button" onClick={() => void answerCall()}
+            className="rounded-pill bg-yang px-3 py-1 text-[12px] font-bold text-on-accent hover:opacity-90">Answer</button>
         </div>
       )}
 
@@ -1086,9 +1254,17 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                                retired. Say what it was rather than showing a broken image. */
                             : <p className="italic text-ink-3">A sticker this version doesn’t have</p>
                         ) : p.t === "call" ? (
+                          /* The readable record of a call. `why` is what makes the history honest
+                             months later: "missed" and "declined" are different events, and a log
+                             that renders both as "Call ended" is quietly wrong about what happened. */
                           <p className="flex items-center gap-1.5 text-[13.5px]">
                             <Ic d={IC.video} size={15} />
-                            {p.act === "start" ? (mine ? "You started a video call" : "Video call") : "Call ended"}
+                            {p.act === "start"
+                              ? (mine ? "You started a call" : "Called you")
+                              : p.why === "declined" ? (mine ? "You declined" : "Call declined")
+                              : p.why === "missed" ? "Missed call"
+                              : p.why === "failed" ? "Call couldn’t connect"
+                              : "Call ended"}
                           </p>
                         ) : (
                           <p className="whitespace-pre-wrap break-words" dir="auto">{body}</p>

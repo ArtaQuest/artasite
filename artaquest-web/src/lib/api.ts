@@ -2046,8 +2046,6 @@ export type ChatMessages = {
    *  history, I cannot write); `request_left` = how many more messages an unanswered request holds. */
   pending: boolean; asked: boolean; request_left: number;
   blocked: boolean; blocked_by: boolean; muted: boolean; pinned: boolean; archived: boolean;
-  /** Where a video call is hosted, from the server so it is one constant, not two. */
-  call_host: string;
 };
 /** Which list chatList() returns — the same query with a different filter (see Chat::list_chats). */
 export type ChatBox = "chats" | "requests" | "archived" | "blocked";

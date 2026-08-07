@@ -188,7 +188,17 @@ export async function refresh(force = false): Promise<void> {
         }
         const plain = await openMessage(key, m.iv, m.ct, low, high, m.sender);
         if (plain !== null) {
-          const line = previewOf(decodePayload(plain));
+          const payload = decodePayload(plain);
+          // A CALL HANDSHAKE IS NOT A MESSAGE. `rtc` rows are the newest thing in the conversation
+          // for a moment after every call, and they describe nothing a person would want to read —
+          // so the list keeps whatever it was showing rather than replacing it with a blank (which
+          // then fell through to the generic "Encrypted message", making a chat you can read look
+          // like one you cannot).
+          if (payload.t === "rtc") {
+            if (state.previews[c.id] !== undefined) previews[c.id] = state.previews[c.id];
+            continue;
+          }
+          const line = previewOf(payload);
           if (line) {
             previews[c.id] = m.sender === page.me ? `You: ${line}` : line;
             previewFor.set(c.id, m.id);
@@ -235,7 +245,12 @@ export function previewOf(p: ChatPayload): string {
     case "edit": return p.body;
     case "del": return "Message removed";
     case "stick": return "🩵 Sticker";
-    case "call": return p.act === "start" ? "📹 Video call" : "📹 Call ended";
+    case "call":
+      return p.act === "start" ? "📹 Call"
+        : p.why === "missed" ? "📹 Missed call"
+        : p.why === "declined" ? "📹 Call declined"
+        : "📹 Call ended";
+    case "rtc": return ""; // machinery — the caller above keeps the previous line instead
     default: return "";
   }
 }
@@ -286,6 +301,32 @@ export function clearRing(): void {
 /** Apply an incoming ring unless it is the one the member has already waved away. */
 function acceptRing(r: ChatRing | null): ChatRing | null {
   return r && ringKey(r) === dismissedRing ? null : r;
+}
+
+// ── "Answer" has to mean answer ──────────────────────────────────────────────
+//
+// The ring banner can appear anywhere on the site, but the OFFER it belongs to lives inside the
+// conversation — that is the whole design: the server holds a beacon, never the handshake. So
+// pressing Answer necessarily opens the thread first, and it used to stop there: the member landed
+// in the conversation looking at a second Answer button, having already answered. A button that
+// does not do what it says is worse than no button.
+//
+// So the press ARMS the intent, and the thread consumes it the moment the offer is in front of it.
+// One-shot and peer-scoped, so it can never auto-answer a later, unrelated call.
+
+let armedFor = 0;
+
+/** Remember that the member pressed Answer for this peer, before the thread that can act on it
+ *  has even mounted. */
+export function armAutoAnswer(peerId: number): void {
+  armedFor = peerId;
+}
+
+/** Consume the intent, if it was for this peer. Returns true exactly once per press. */
+export function takeAutoAnswer(peerId: number): boolean {
+  if (armedFor !== peerId) return false;
+  armedFor = 0;
+  return true;
 }
 
 /** Locally zero a conversation's unread count the moment it's opened, so the badge responds

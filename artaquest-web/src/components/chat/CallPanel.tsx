@@ -1,91 +1,139 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { currentUser } from "../../lib/wp";
+import { useEffect, useRef, useState } from "react";
+import type { CallState } from "../../lib/webrtc";
 
 /**
- * ArtaChat video calls — a Jitsi room, embedded.
+ * The call surface — two video elements and four buttons.
  *
- * WHERE THE PRIVACY LINE IS, exactly, because it is not the same line as the messages:
+ * There is no iframe and no third-party script here any more. Media arrives on a direct
+ * peer-to-peer connection (see lib/webrtc.ts), so this component's whole job is to attach two
+ * MediaStreams to two <video> elements and offer the controls.
  *
- *  • The ROOM NAME never reaches ArtaQuest. It is 160 bits generated in the caller's browser
- *    (lib/e2ee newCallRoom) and sent only inside the sealed invite message, so our own database —
- *    which is public — cannot be used to find, join or even name anybody's call. The ring beacon
- *    the server does hold says "somebody is calling you", and nothing else.
- *  • The CALL MEDIA is not ours and is not end-to-end encrypted by our construction. It is carried
- *    by meet.jit.si under their terms, hop-by-hop encrypted, with Jitsi's own optional E2EE
- *    available inside the call UI. The panel says so in plain words, every time, because a member
- *    who has just been told their messages are sealed will otherwise reasonably assume the video is
- *    too. Overclaiming that would be worse than not having calls.
- *
- * Deliberately an <iframe> and not Jitsi's external_api.js: the JS API would run a third party's
- * script inside our origin (and needs a script-src grant) to buy us a hangup event we can live
- * without. One frame-src origin, no third-party JS. See the CSP note in theme functions.php.
- *
- * The iframe's `allow` is the INNER of two gates — the outer is the site's Permissions-Policy
- * header, which must name meet.jit.si too. Miss either and the call joins with a dead camera and
- * no error message anybody can see.
+ * ⚠️ `data-ay-skip="1"` on anything carrying the peer's name, for the same reason as every other
+ * member string in this surface: the i18n mesh publishes what it can reach into the PUBLIC
+ * aq_translations table (see the Messages.tsx header).
  */
 
-export function CallPanel({ room, host, peerName, onEnd }: {
-  room: string; host: string; peerName: string; onEnd: () => void;
+function Ic({ d, size = 18 }: { d: React.ReactNode; size?: number }) {
+  return <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor"
+    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{d}</svg>;
+}
+const MIC_ON = <><rect x="9.5" y="3" width="5" height="11" rx="2.5" /><path d="M6 11a6 6 0 0 0 12 0M12 17v4" /></>;
+const MIC_OFF = <><rect x="9.5" y="3" width="5" height="11" rx="2.5" /><path d="M6 11a6 6 0 0 0 12 0M12 17v4M3 3l18 18" /></>;
+const CAM_ON = <><rect x="3" y="6" width="13" height="12" rx="2.5" /><path d="m16 10.5 5-3v9l-5-3Z" /></>;
+const CAM_OFF = <><rect x="3" y="6" width="13" height="12" rx="2.5" /><path d="m16 10.5 5-3v9l-5-3ZM3 3l18 18" /></>;
+const HANG = <path d="M3 10.5c5-4 13-4 18 0v3l-4 1-1-3a12 12 0 0 0-8 0l-1 3-4-1Z" />;
+const EXPAND = <path d="M4 9V4h5M20 15v5h-5M20 9V4h-5M4 15v5h5" />;
+
+/** Attach a MediaStream to a <video> without React fighting it — srcObject is not an attribute. */
+function Video({ stream, muted, mirror, className, label }: {
+  stream: MediaStream | null; muted?: boolean; mirror?: boolean; className?: string; label: string;
+}) {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.srcObject = stream;
+    if (stream) el.play().catch(() => undefined); // autoplay can refuse; controls still work
+  }, [stream]);
+  return (
+    <video ref={ref} autoPlay playsInline muted={muted} aria-label={label}
+      className={`${className || ""} ${mirror ? "-scale-x-100" : ""} bg-black/60 object-cover`} />
+  );
+}
+
+export function CallPanel({
+  state, local, remote, peerName, micOn, camOn, onMic, onCam, onHangup,
+}: {
+  state: CallState;
+  local: MediaStream | null;
+  remote: MediaStream | null;
+  peerName: string;
+  micOn: boolean;
+  camOn: boolean;
+  onMic: () => void;
+  onCam: () => void;
+  onHangup: () => void;
 }) {
   const [full, setFull] = useState(false);
-  const [joined, setJoined] = useState(false);
-  const frame = useRef<HTMLIFrameElement | null>(null);
 
-  // Display name is a convenience for the other participant, not identity — Jitsi is told what to
-  // print above the tile and nothing else. No email, no member id, no avatar URL.
-  const src = useMemo(() => {
-    const me = currentUser();
-    const cfg = [
-      "config.prejoinPageEnabled=false",
-      "config.disableDeepLinking=true",
-      "config.startWithAudioMuted=false",
-      "config.startWithVideoMuted=false",
-      "interfaceConfig.MOBILE_APP_PROMO=false",
-      "interfaceConfig.SHOW_JITSI_WATERMARK=false",
-      "interfaceConfig.SHOW_CHROME_EXTENSION_BANNER=false",
-      me?.name ? `userInfo.displayName="${encodeURIComponent(me.name)}"` : "",
-    ].filter(Boolean);
-    return `https://${host}/${encodeURIComponent(room)}#${cfg.join("&")}`;
-  }, [room, host]);
+  // Escape leaves full screen before it does anything else — claimed here so it does not also close
+  // the surrounding dock and drop the member out of a live call.
+  useEffect(() => {
+    if (!full) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); e.preventDefault(); setFull(false); } };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [full]);
 
-  // Leaving the page mid-call should not leave a silent open microphone behind: dropping the
-  // iframe is what actually stops the tracks, so unmount is the hangup.
-  useEffect(() => () => { if (frame.current) frame.current.src = "about:blank"; }, []);
+  const status =
+    state === "calling" ? "Ringing…"
+    : state === "connecting" ? "Connecting…"
+    : state === "live" ? "Connected — direct, peer to peer"
+    : state === "failed" ? "Couldn’t connect"
+    : "";
 
   return (
     <section
       className={full
         ? "fixed inset-0 z-[90] flex flex-col bg-space-1"
         : "flex flex-col overflow-hidden border-b border-line bg-space-1"}
-      aria-label="Video call">
-      <header className="flex items-center gap-2 px-3 py-2">
-        <span className="flex h-2 w-2 shrink-0 animate-pulse rounded-full bg-yang" aria-hidden />
-        {/* The peer's name is member-controlled text — it must stay off the i18n mesh like every
-            other member string in this surface (see the Messages.tsx header). */}
-        <p className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink" data-ay-skip="1">{peerName}</p>
-        <button type="button" onClick={() => setFull((f) => !f)}
-          className="rounded-pill border border-line px-2.5 py-1 text-[11.5px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink">
-          {full ? "Exit full screen" : "Full screen"}
+      aria-label="Call">
+      <div className={`relative ${full ? "min-h-0 flex-1" : "h-[300px]"} w-full overflow-hidden bg-black/70`}>
+        <Video stream={remote} label="The other person" className="h-full w-full" />
+        {/* Nothing to show yet — say which stage it is at rather than a black rectangle. */}
+        {!remote && (
+          <div className="absolute inset-0 grid place-items-center px-6 text-center">
+            <div>
+              <p className="text-[15px] font-semibold text-ink" data-ay-skip="1">{peerName}</p>
+              <p className="mt-1 text-[13px] text-ink-3">{status || "Starting…"}</p>
+              {state === "failed" && (
+                <p className="mx-auto mt-3 max-w-xs text-[12px] leading-relaxed text-ink-3">
+                  A direct connection couldn’t be made — this usually means one of you is on a network that
+                  blocks peer-to-peer traffic. Messages are unaffected.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+        {/* Your own camera, small and mirrored — mirrored because everyone expects to see themselves
+            the way a mirror shows them, and muted because hearing yourself is unbearable. */}
+        {local && (
+          <div className="absolute bottom-3 end-3 h-[84px] w-[112px] overflow-hidden rounded-card border border-line shadow-card">
+            <Video stream={local} muted mirror label="Your camera" className="h-full w-full" />
+            {!camOn && (
+              <div className="absolute inset-0 grid place-items-center bg-space-2/90 text-[10.5px] font-semibold text-ink-3">
+                Camera off
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 px-3 py-2">
+        <p className="min-w-0 flex-1 truncate text-[12px] text-ink-3" aria-live="polite">
+          {state === "live" ? "Encrypted end-to-end · direct, no server in between" : status}
+        </p>
+        <button type="button" onClick={onMic} aria-label={micOn ? "Mute microphone" : "Unmute microphone"}
+          aria-pressed={!micOn} title={micOn ? "Mute" : "Unmute"}
+          className={`grid h-9 w-9 place-items-center rounded-full transition-colors ${
+            micOn ? "text-ink-2 hover:bg-veil/[0.07] hover:text-ink" : "bg-yang text-on-accent"}`}>
+          <Ic d={micOn ? MIC_ON : MIC_OFF} />
         </button>
-        <button type="button" onClick={onEnd}
-          className="rounded-pill bg-yang px-3 py-1 text-[11.5px] font-bold text-on-accent hover:opacity-90">
-          Leave
+        <button type="button" onClick={onCam} aria-label={camOn ? "Turn camera off" : "Turn camera on"}
+          aria-pressed={!camOn} title={camOn ? "Camera off" : "Camera on"}
+          className={`grid h-9 w-9 place-items-center rounded-full transition-colors ${
+            camOn ? "text-ink-2 hover:bg-veil/[0.07] hover:text-ink" : "bg-yang text-on-accent"}`}>
+          <Ic d={camOn ? CAM_ON : CAM_OFF} />
         </button>
-      </header>
-      <iframe
-        ref={frame}
-        title="Video call"
-        src={src}
-        onLoad={() => setJoined(true)}
-        allow="camera; microphone; display-capture; autoplay; fullscreen; speaker-selection"
-        className={full ? "min-h-0 w-full flex-1 border-0" : "h-[320px] w-full border-0"} />
-      <p className="px-3 py-1.5 text-[11px] leading-relaxed text-ink-3">
-        {joined ? "" : "Connecting… "}
-        This call runs on {host}, not on ArtaQuest — the video is encrypted in transit but it is not sealed
-        to your device the way your messages are. The room name is random and was sent only inside your
-        encrypted conversation, so nobody can find it from our public database.
-      </p>
+        <button type="button" onClick={() => setFull((f) => !f)} aria-label={full ? "Exit full screen" : "Full screen"}
+          className="grid h-9 w-9 place-items-center rounded-full text-ink-2 transition-colors hover:bg-veil/[0.07] hover:text-ink">
+          <Ic d={EXPAND} />
+        </button>
+        <button type="button" onClick={onHangup} aria-label="End call"
+          className="grid h-9 w-11 place-items-center rounded-pill bg-yang text-on-accent transition-opacity hover:opacity-90">
+          <Ic d={HANG} size={20} />
+        </button>
+      </div>
     </section>
   );
 }
@@ -93,10 +141,10 @@ export function CallPanel({ room, host, peerName, onEnd }: {
 /**
  * The incoming-call banner, shown wherever the member happens to be.
  *
- * The ring arrives on the badge poll, which carries WHO is calling but not the room — so "Answer"
- * cannot dial straight in. It opens the conversation, where the sealed invite (and therefore the
- * room) actually is. That indirection is not a limitation to work around; it is the reason the
- * server can be public.
+ * The server's ring beacon carries WHO is calling but nothing else — the offer itself is a sealed
+ * message in the conversation. So "Answer" opens the thread, where the handshake is; that
+ * indirection is not a limitation to route around, it is the reason a public database can hold
+ * the fact of a call without holding the means to join one.
  */
 export function IncomingCall({ name, avatar, onAnswer, onDismiss }: {
   name: string; avatar?: string; onAnswer: () => void; onDismiss: () => void;
@@ -118,6 +166,36 @@ export function IncomingCall({ name, avatar, onAnswer, onDismiss }: {
         className="rounded-pill border border-line px-2.5 py-1 text-[11.5px] font-semibold text-ink-3 hover:text-ink">Ignore</button>
       <button type="button" onClick={onAnswer}
         className="rounded-pill bg-yang px-3 py-1 text-[11.5px] font-bold text-on-accent hover:opacity-90">Answer</button>
+    </div>
+  );
+}
+
+/**
+ * Said once, before a member's first call, and never again.
+ *
+ * A direct connection means the other person's device learns your IP address — that is what
+ * "direct" is, not a defect in the implementation. A relay would hide it, and the relay is exactly
+ * what was removed to stop a third party seeing the video. Both halves of that trade belong in
+ * front of the person choosing, not in a source comment.
+ */
+export function CallPrivacyNote({ onAccept, onCancel, peerName }: {
+  onAccept: () => void; onCancel: () => void; peerName: string;
+}) {
+  return (
+    <div className="border-b border-line bg-veil/[0.04] px-4 py-3">
+      <p className="text-[13px] font-semibold text-ink">Calls connect your two devices directly</p>
+      <p className="mt-1 text-[12.5px] leading-relaxed text-ink-2">
+        Nothing passes through ArtaQuest or anyone else, so nobody can see or hear a call — the same promise your
+        messages carry. The cost of going direct is that{" "}
+        <span data-ay-skip="1" className="font-semibold">{peerName}</span>
+        <span>’s device will see your IP address, as yours will see theirs. Only call people you’re willing to share that with.</span>
+      </p>
+      <div className="mt-2.5 flex gap-2">
+        <button type="button" onClick={onCancel}
+          className="rounded-pill border border-line px-3 py-1 text-[12px] font-semibold text-ink-2 hover:text-ink">Not now</button>
+        <button type="button" onClick={onAccept}
+          className="rounded-pill bg-yang px-3.5 py-1 text-[12px] font-bold text-on-accent hover:opacity-90">Got it — call</button>
+      </div>
     </div>
   );
 }

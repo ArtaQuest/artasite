@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { ArtaBot as Api, ApiError, chatGetKey, chatMembers, type ArtabotMsg, type ChatMember, type ChatUserCard } from "../lib/api";
 import { currentUser, isLoggedIn, localePath, renderRich } from "../lib/wp";
-import { clearRing, getChatState, markSeen, subscribeChat, watchList } from "../lib/chat-store";
+import { armAutoAnswer, clearRing, getChatState, markSeen, subscribeChat, watchList } from "../lib/chat-store";
 import { useTypewriter } from "../lib/useTypewriter";
 import { Avatar, Button, LogoMark, RichText } from "./ui";
 import { IncomingCall } from "./chat/CallPanel";
@@ -740,7 +740,15 @@ export function ArtaBot() {
         <div className="mb-2">
           <IncomingCall name={ring.from.name} avatar={ring.from.avatar}
             onDismiss={() => clearRing()}
-            onAnswer={() => { clearRing(); setOpen(true); setDockView({ k: "dm", peer: ring.from }); }} />
+            /* Arm the intent BEFORE opening: the thread is what holds the offer, and it answers
+               the moment it sees one (see takeAutoAnswer). Otherwise "Answer" only navigated, and
+               the member arrived at a second Answer button having already answered. */
+            onAnswer={() => {
+              armAutoAnswer(ring.from.id);
+              clearRing();
+              setOpen(true);
+              setDockView({ k: "dm", peer: ring.from });
+            }} />
         </div>
       )}
       <div className="flex flex-col overflow-hidden rounded-t-2xl border border-b-0 border-line bg-space-1 shadow-2xl shadow-black/50">

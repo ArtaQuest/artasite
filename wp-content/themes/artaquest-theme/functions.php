@@ -737,11 +737,11 @@ add_action( 'send_headers', function () {
 	// was a silent no-op in production. `(self)` restores it for this origin only — the member's own
 	// browser permission prompt still gates it.
 	//
-	// CAMERA + the named Jitsi origin: ArtaChat video calls run in an iframe on meet.jit.si
-	// (components/chat/CallPanel.tsx). A permissions-policy allowlist is the OUTER of two gates —
-	// the iframe's own `allow=` attribute is the inner one, and BOTH must name the feature or the
-	// call joins with a dead camera and no error anyone can see. `display-capture` is screen sharing.
-	header( 'Permissions-Policy: camera=(self "https://meet.jit.si"), microphone=(self "https://meet.jit.si"), display-capture=(self "https://meet.jit.si"), geolocation=(), payment=()' );
+	// CAMERA is `(self)` and nothing more. Calls are peer-to-peer WebRTC running in OUR OWN page
+	// (components/chat/CallPanel.tsx + lib/webrtc.ts) rather than a third-party iframe, so no other
+	// origin needs the camera or the microphone — and the named Jitsi origin that used to be here
+	// went with the dependency. `getUserMedia` is still gated by the member's own browser prompt.
+	header( 'Permissions-Policy: camera=(self), microphone=(self), geolocation=(), payment=()' );
 
 	// Content-Security-Policy — defence-in-depth vs XSS / injection / clickjacking / data exfil.
 	// Cache-safe by design: NO per-request nonce (cached public pages would carry a stale nonce and
@@ -815,13 +815,19 @@ add_action( 'send_headers', function () {
 		// for `lib/tts-hf.ts`. THAT FILE DOES NOT EXIST and has no successor, so those three were
 		// allow-listing three third-party origins for a feature that was not there: straight
 		// attack-surface reduction, independent of the Kaggle move.
-		. "connect-src 'self' https://cdn.jsdelivr.net https://translate.googleapis.com https://accounts.google.com https://s0.wp.com https://stats.wp.com https://public-api.wordpress.com https://zenodo.org https://www.kaggle.com https://storage.googleapis.com" . $aq_cdn . "; "
-		// meet.jit.si: ArtaChat video calls are an iframe embed, deliberately WITHOUT Jitsi's
-		// external_api.js — an <iframe> costs one frame-src origin, whereas the JS API would run
-		// third-party script inside OUR origin for the sake of a hangup event we can do without.
-		// The room name never reaches this server (it rides inside the sealed message), so an origin
-		// grant here gives nobody a way in.
-		. "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://accounts.google.com https://www.google.com https://meet.jit.si" . $aq_cdn . "; "
+		// stun:: CSP3 governs an RTCPeerConnection's ICE server URLs under connect-src, and Firefox
+		// enforces it. A call cannot discover its own public address without STUN, so without this
+		// grant ICE would silently find only host candidates and every call outside a single LAN
+		// would fail to connect — with no error naming the cause. Scheme-source, not a host list:
+		// which STUN servers are used is a client concern (lib/webrtc.ts), and STUN carries no media,
+		// no identity and no conversation.
+		. "connect-src 'self' stun: https://cdn.jsdelivr.net https://translate.googleapis.com https://accounts.google.com https://s0.wp.com https://stats.wp.com https://public-api.wordpress.com https://zenodo.org https://www.kaggle.com https://storage.googleapis.com" . $aq_cdn . "; "
+		// NO CALL ORIGIN HERE ANY MORE. ArtaChat calls were briefly an embedded meet.jit.si room and
+		// are now peer-to-peer WebRTC (artaquest-web/src/lib/webrtc.ts): the two browsers connect
+		// directly, so there is no frame to allow and no third-party bridge that could see the media.
+		// The grant was removed with the dependency — an origin allow-listed for a feature that no
+		// longer uses it is pure attack surface.
+		. "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://accounts.google.com https://www.google.com" . $aq_cdn . "; "
 		. "upgrade-insecure-requests"
 	);
 

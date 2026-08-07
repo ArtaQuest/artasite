@@ -54,10 +54,6 @@ final class Chat {
 	 *  Longer than the badge poll interval (30 s) BY CONSTRUCTION: a ring shorter than the poll can
 	 *  begin and end between two requests, and a call that never rings is worse than no calling. */
 	const RING_S = 75;
-	/** The video-call host. Rooms are created on demand by the first participant and named with 160
-	 *  bits of entropy that ONLY ever travels inside a sealed message — the server never learns it,
-	 *  so nothing here (or in the public DB) can be used to walk into somebody's call. */
-	const CALL_HOST = 'meet.jit.si';
 	/** Remote-media fetch (the "paste a GIF link" path) — ceiling, and the only content types we
 	 *  will pull from a stranger's host on a member's behalf. */
 	const FETCH_MAX  = 5000000;
@@ -993,7 +989,6 @@ final class Chat {
 			'muted'        => $chat ? self::flag( $chat, $uid, 'mute' ) : false,
 			'pinned'       => $chat ? self::flag( $chat, $uid, 'pin' ) : false,
 			'archived'     => $chat ? self::flag( $chat, $uid, 'arch' ) : false,
-			'call_host'    => self::CALL_HOST,
 			'peer_key'    => self::key_payload( self::active_key( $peer ) ),
 			'my_key'      => self::key_payload( self::active_key( $uid ) ),
 			'low_uid'     => min( $uid, $peer ),
