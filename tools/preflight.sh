@@ -68,8 +68,22 @@ skip() { printf "%s  ↷ %s%s\n" "$D" "$1" "$OFF"; }
 BAD=0
 mark() { BAD=1; }
 
+# What this branch changes, for the gates that only apply to touched files.
+#
+# ON A LAPTOP THAT MUST INCLUDE UNCOMMITTED WORK. The whole point of running this before pushing is
+# to hear about a problem while it is still cheap, and you run it before committing at least as often
+# as after. Taking only the commit range meant the changed-file gates quietly examined nothing and
+# reported clean — which is worse than not running them, because it looks like an answer. Caught by
+# using it: two hashed PHP files edited, "no hashed PHP changed", and a missing version bump that CI
+# would have refused an hour later.
+#
+# In CI there is nothing uncommitted, and `git status` on a runner is noise, so the range alone is
+# the honest input there.
 CHANGED=""
 if [ -n "$BASE" ]; then CHANGED="$(git diff --name-only "$BASE"...HEAD 2>/dev/null || true)"; fi
+if [ -z "${GITHUB_ACTIONS:-}" ]; then
+  CHANGED="$(printf '%s\n%s\n' "$CHANGED" "$(git status --porcelain 2>/dev/null | sed 's/^...//' | sed 's/.* -> //')" | sort -u | sed '/^$/d')"
+fi
 changed_match() { [ -n "$CHANGED" ] && echo "$CHANGED" | grep -qE "$1"; }
 
 # ── 1. Nothing key-shaped, and no machine attribution ──────────────────────────────────────────

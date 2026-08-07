@@ -2011,14 +2011,18 @@ final class News {
 	 * claim the coordinates do not support, so beyond NEAR_KM the distance is stated instead of
 	 * hidden. Nothing here is inferred: the distance is computed from the same coordinates.
 	 */
-	private static function place_phrase( $place, $country, $km, $sep = ' ' ) {
+	// `$sep` defaults to the comma, because a town and a country are separated by one in every
+	// language this ships in, and the one caller that took a bare-space default printed
+	// "Terny Ukraine" into a rail of "…, Russia" and "…, Philippines". A default that is wrong for
+	// every caller is not a default, it is a trap; pass something else only for a genuine reason.
+	private static function place_phrase( $place, $country, $km, $sep = ', ' ) {
 		$town = trim( (string) $place );
 		$cty  = trim( (string) $country );
 		if ( '' === $town && '' === $cty ) { return ''; }
 		$km = (float) $km;
 		// Three tiers, because a nearest-town name stops carrying information as the distance grows:
-		//   ≤ NEAR_KM      the town IS the locality        → "Tehran Iran"
-		//   ≤ BEARING_KM   the town is a usable bearing    → "32 km from Redmond United States"
+		//   ≤ NEAR_KM      the town IS the locality        → "Tehran, Iran"
+		//   ≤ BEARING_KM   the town is a usable bearing    → "32 km from Redmond, United States"
 		//   beyond that    the town is noise; the country is the only honest unit → "United States"
 		// The middle tier was the whole fix at first, and it produced "168 km from Redmond" — true,
 		// and useless. Naming a settlement three hours' drive away is not locating anything.
@@ -2034,12 +2038,12 @@ final class News {
 	private static function place_prep( $place, $km ) {
 		$km = (float) $km;
 		if ( '' === trim( (string) $place ) ) { return 'in'; }   // country only
-		if ( $km <= self::NEAR_KM )    { return 'near'; }         // "near Tehran Iran"
+		if ( $km <= self::NEAR_KM )    { return 'near'; }         // "near Tehran, Iran"
 		if ( $km <= self::BEARING_KM ) { return ''; }             // the phrase carries its own "32 km from …"
 		return 'in';                                              // fell back to the country
 	}
 
-	/** "Explosions, Tehran Iran" — the operator's concise form: what, then where. */
+	/** "Explosions, Tehran, Iran" — the operator's concise form: what, then where. */
 	private static function headline( $detector, $r, $place ) {
 		$kind = (string) ( $r['kind'] ?? 'Event' );
 		$what = [
@@ -2062,7 +2066,13 @@ final class News {
 			$dir = ( (float) ( $r['dir'] ?? 0 ) < 0 ) ? ' price drop' : ' price jump';
 			return trim( (string) ( $m['Commodity'] ?? 'Commodity' ) . $dir );
 		}
-		$where = self::place_phrase( $place['place'], $place['country'], $place['km'] ?? 0 );
+		// ', ' — the same separator every other surface uses. The default is a bare space, and taking
+		// it produced "Major heat signature, Terny Ukraine" in the rail: a comma after the what, then
+		// a town and a country welded together, sitting directly under three siblings that all read
+		// "…, Russia" and "…, Philippines". It reads as a missing comma because it is one. The API's
+		// own `place_label` already passes ', ' at both call sites, so the headline and the subtitle
+		// were describing the same place two different ways.
+		$where = self::place_phrase( $place['place'], $place['country'], $place['km'] ?? 0, ', ' );
 		$head  = $where ? $what . ', ' . $where : $what;
 		// Two separate clusters near the same town would otherwise mint identical headlines, which
 		// reads as duplicate publishing. The measured intensity distinguishes them honestly.

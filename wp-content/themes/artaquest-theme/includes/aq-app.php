@@ -1759,6 +1759,35 @@ add_action( 'template_redirect', function () {
 		header_remove( 'Pragma' );
 		header_remove( 'Expires' );
 		header( 'Cache-Control: max-age=30, must-revalidate' );
+		return;
+	}
+
+	// AND EVERY OTHER SHELL RESPONSE MUST REVALIDATE TOO, because the document names the BUILD.
+	//
+	// The rule above deliberately covers the soft routes, which are is_404() to WP. `/`, `/about/`
+	// and the rest are REAL pages, so they were already edge-cacheable and were left alone — but
+	// "cacheable" here meant no Cache-Control header at all, so the edge applied its own TTL to a
+	// document that hard-codes this build's hashed asset filenames (aq_app_assets()).
+	//
+	// That is how a deploy stops arriving. Measured on production: the origin served
+	// `index-DwWLkZsg.js` while the bare URL served `index-D1_oWDYH.js` from a cached document, and
+	// a returning visitor booted the older SPA. It does not 404 and it never looks broken, because
+	// hashed chunks are immutable and every chunk this site has ever built is still on disk — so the
+	// stale document finds exactly the stale code it asks for and runs it. The symptom surfaces much
+	// later and somewhere else: a bug fixed weeks ago, still on screen, with the fix provably
+	// deployed. (It is also why the asset directory only ever grows.)
+	//
+	// So: still cacheable at the edge — these are the busiest public pages and re-executing
+	// WordPress for each view is what the rule above exists to avoid — but revalidated, so the
+	// window between a deploy and the document that points at it is a minute, not a TTL nobody set.
+	// Signed-out only, for the same reason as above: the shell injects window.AQ_USER and a nonce,
+	// so a member's response must never be shared.
+	if ( ! is_user_logged_in() && ! headers_sent() && ! is_admin() && ! is_feed()
+		&& ! is_robots() && ( $_SERVER['REQUEST_METHOD'] ?? 'GET' ) === 'GET' ) {
+		header_remove( 'Cache-Control' );
+		header_remove( 'Pragma' );
+		header_remove( 'Expires' );
+		header( 'Cache-Control: public, max-age=0, s-maxage=60, must-revalidate' );
 	}
 }, 6 );
 
