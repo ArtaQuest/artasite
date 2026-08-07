@@ -69,6 +69,10 @@ export class Call {
   readonly sid: string;
   private pc: RTCPeerConnection | null = null;
   private local: MediaStream | null = null;
+  /** False when the stream was handed in from outside (a mesh shares ONE camera across every peer
+   *  connection). Closing must then not stop tracks this call does not own, or leaving one peer
+   *  would blank everybody's video. */
+  private ownsMedia = true;
   private remote: MediaStream | null = null;
   private h: CallHandlers;
   private done = false;
@@ -118,6 +122,13 @@ export class Call {
     return s;
   }
 
+  /** Use a stream somebody else opened — a mesh call opens the camera ONCE and shares it. */
+  private adopt(s: MediaStream): MediaStream {
+    this.local = s;
+    this.ownsMedia = false;
+    return s;
+  }
+
   /** Resolve once ICE has gathered everything it is going to, or GATHER_MS passes. */
   private gathered(pc: RTCPeerConnection): Promise<void> {
     if (pc.iceGatheringState === "complete") return Promise.resolve();
@@ -130,9 +141,9 @@ export class Call {
   }
 
   /** CALLER: build the offer, candidates and all. The returned SDP is what gets sealed and sent. */
-  async offer(video = true): Promise<string> {
+  async offer(video = true, shared?: MediaStream): Promise<string> {
     const pc = this.setup();
-    const s = await this.media(video);
+    const s = shared ? this.adopt(shared) : await this.media(video);
     s.getTracks().forEach((t) => pc.addTrack(t, s));
     await pc.setLocalDescription(await pc.createOffer());
     await this.gathered(pc);
@@ -141,10 +152,10 @@ export class Call {
   }
 
   /** CALLEE: take their offer and produce an answer. */
-  async answer(offerSdp: string, video = true): Promise<string> {
+  async answer(offerSdp: string, video = true, shared?: MediaStream): Promise<string> {
     const pc = this.setup();
     await pc.setRemoteDescription(JSON.parse(offerSdp) as RTCSessionDescriptionInit);
-    const s = await this.media(video);
+    const s = shared ? this.adopt(shared) : await this.media(video);
     s.getTracks().forEach((t) => pc.addTrack(t, s));
     await pc.setLocalDescription(await pc.createAnswer());
     await this.gathered(pc);
@@ -170,6 +181,18 @@ export class Call {
     return t.enabled;
   }
 
+  /**
+   * Swap the outgoing video track — screen sharing, without renegotiating.
+   *
+   * `RTCRtpSender.replaceTrack` changes what is being sent on an ESTABLISHED connection with no new
+   * offer/answer, so a share starts instantly and cannot fail the way a fresh handshake can. The
+   * receiving side sees the picture change and nothing else.
+   */
+  replaceVideo(track: MediaStreamTrack): void {
+    const sender = this.pc?.getSenders().find((s) => s.track?.kind === "video");
+    sender?.replaceTrack(track).catch(() => undefined);
+  }
+
   /** Camera on/off. Returns the new enabled state. */
   toggleCam(): boolean {
     const t = this.local?.getVideoTracks()[0];
@@ -188,7 +211,7 @@ export class Call {
   close(): void {
     if (this.done) return;
     this.done = true;
-    this.local?.getTracks().forEach((t) => t.stop());
+    if (this.ownsMedia) this.local?.getTracks().forEach((t) => t.stop());
     this.remote?.getTracks().forEach((t) => t.stop());
     try { this.pc?.close(); } catch { /* already gone */ }
     this.pc = null;

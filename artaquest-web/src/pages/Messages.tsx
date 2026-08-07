@@ -19,6 +19,9 @@ import {
 } from "../lib/e2ee";
 import { Avatar, Button, EmptyState, ErrorNote, Input, PageHero, StatusNote } from "../components/ui";
 import { Pickers, type PickerResult } from "../components/chat/Pickers";
+import { RoomThread } from "../components/chat/RoomThread";
+import { RoomCall } from "../components/chat/RoomCall";
+import { roomsCreate, roomsList, type Room } from "../lib/api";
 import { CallPanel, CallPrivacyNote } from "../components/chat/CallPanel";
 import { Call, callSupported, mediaErrorMessage, newCallSid, type CallState } from "../lib/webrtc";
 import { QUICK_REACTIONS } from "../components/chat/emoji";
@@ -1705,14 +1708,20 @@ export default function Messages() {
    * handle that matches nobody in the current list still finds the member, so "message someone" is
    * no longer a separate input with its own button next to a search box that looked identical.
    */
-  type Side = ChatBox | "people";
+  type Side = ChatBox | "people" | "rooms";
   const [side, setSide] = useState<Side>((sp.get("box") as Side) || "chats");
-  useEffect(() => { if (side !== "people") setBox(side); }, [side]);
+  // Only the conversation BOXES drive the store's list; "people" and "rooms" are their own sources.
+  useEffect(() => { if (side !== "people" && side !== "rooms") setBox(side); }, [side]);
   // The box lives in the shared store (the poller owns it), which the always-mounted dock reads
   // too — so leaving this page on Requests would have left the dock listing requests under its own
   // "Messaging" heading. The page hands the store back the way it found it.
   useEffect(() => () => setBox("chats"), []);
   const [dir, setDir] = useState<ChatDirectory | null>(null);
+  /** Rooms — group conversations, and the place a call lives. A room with ONE member is that
+   *  member's own space, which is why "your room" is a room and not a separate concept. */
+  const [rooms, setRooms] = useState<Room[] | null>(null);
+  const [roomId, setRoomId] = useState<number>(() => Number(sp.get("room") || 0) || 0);
+  const [makingRoom, setMakingRoom] = useState(false);
   // null until the server answers, so the toggle never flickers into the wrong position.
   const [emailOn, setEmailOn] = useState<boolean | null>(null);
   const chats = page?.items ?? null;
@@ -1734,6 +1743,55 @@ export default function Messages() {
     document.addEventListener("visibilitychange", onVis);
     return () => { stop = true; clearTimeout(t0); clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
   }, [myKey, side, filter]);
+
+  // The room list, on the same cadence and visibility rule as everything else here.
+  useEffect(() => {
+    if (!myKey || (side !== "rooms" && !roomId)) return;
+    let stop = false;
+    const load = () => roomsList().then((r) => { if (!stop) setRooms(r.items); }).catch(() => undefined);
+    void load();
+    const t = setInterval(() => { if (!document.hidden) void load(); }, 15000);
+    return () => { stop = true; clearInterval(t); };
+  }, [myKey, side, roomId]);
+
+  /** Open (or create) this member's OWN room — somewhere to sit alone and invite people into. */
+  async function openMyRoom() {
+    if (makingRoom) return;
+    setMakingRoom(true);
+    try {
+      const r = await roomsCreate({ personal: true });
+      setRooms((cur) => (cur?.some((x) => x.id === r.room.id) ? cur : [r.room, ...(cur || [])]));
+      setPeer(null);
+      setRoomId(r.room.id);
+      setSp((cur) => { cur.delete("with"); cur.set("room", String(r.room.id)); return cur; }, { replace: true });
+    } catch { setNote("Couldn’t open your room."); }
+    setMakingRoom(false);
+  }
+
+  /** Start a new group. */
+  async function newRoom() {
+    if (makingRoom) return;
+    setMakingRoom(true);
+    try {
+      const r = await roomsCreate({ title: "" });
+      setRooms((cur) => [r.room, ...(cur || [])]);
+      setPeer(null);
+      setRoomId(r.room.id);
+      setSp((cur) => { cur.delete("with"); cur.set("room", String(r.room.id)); return cur; }, { replace: true });
+    } catch { setNote("Couldn’t create the room."); }
+    setMakingRoom(false);
+  }
+
+  function openRoom(id: number) {
+    setPeer(null);
+    setRoomId(id);
+    setSp((cur) => { cur.delete("with"); cur.set("room", String(id)); return cur; }, { replace: true });
+  }
+
+  function closeRoom() {
+    setRoomId(0);
+    setSp((cur) => { cur.delete("room"); return cur; }, { replace: true });
+  }
 
   // Read the away-email preference once, after the device key exists (so it rides the same
   // signed-in state as everything else here). A failure leaves the toggle hidden rather than
@@ -1842,13 +1900,16 @@ export default function Messages() {
                 the sidebar is for, and the two rarely-wanted boxes (archived, blocked) hang off the
                 end where they don't compete for attention with the inbox. */}
             <div className="flex overflow-hidden rounded-pill border border-line" role="tablist" aria-label="Sidebar">
-              {([["chats", "Chats"], ["requests", "Requests"], ["people", "People"]] as const).map(([k, label]) => (
+              {([["chats", "Chats"], ["requests", "Requests"], ["rooms", "Rooms"], ["people", "People"]] as const).map(([k, label]) => (
                 <button key={k} type="button" role="tab" aria-selected={side === k}
                   onClick={() => setSide(k)}
                   className={`flex-1 px-3 py-1.5 text-[13px] font-semibold transition-colors ${
                     side === k ? "bg-veil/[0.10] text-ink" : "text-ink-3 hover:bg-veil/[0.05] hover:text-ink"
                   }`}>
                   {label}
+                  {k === "rooms" && rooms && rooms.some((r) => r.unread > 0) && (
+                    <span className="ms-1 h-1.5 w-1.5 rounded-full bg-yang align-middle" aria-label="unread" />
+                  )}
                   {k === "requests" && requests > 0 && (
                     <span className="ms-1.5 rounded-pill bg-yang px-1.5 text-[10.5px] font-bold text-on-accent">{requests}</span>
                   )}
@@ -1871,7 +1932,55 @@ export default function Messages() {
             ) : null}
             {note && <p className="text-[13px] text-ink-3">{note}</p>}
 
-            {side === "people" ? (
+            {side === "rooms" ? (
+              <>
+                {/* YOUR OWN ROOM FIRST. It is the answer to "can I just hang out?" — a space that is
+                    already yours, that you can sit in alone with the camera on, and that becomes a
+                    group the moment you invite anybody. */}
+                <button type="button" onClick={() => void openMyRoom()} disabled={makingRoom}
+                  className="flex items-center gap-3 rounded-card border border-line bg-space-2 px-3 py-2.5 text-start shadow-card hover:border-yin-light disabled:opacity-50">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-yang/20 text-[17px]">🌓</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px] font-semibold text-ink">Your room</span>
+                    <span className="block truncate text-[12px] text-ink-3">Sit here alone, or invite people in</span>
+                  </span>
+                </button>
+                <nav className="flex flex-col overflow-hidden rounded-card border border-line bg-space-2 shadow-card" aria-label="Rooms">
+                  {rooms === null ? (
+                    <p className="px-4 py-6 text-center text-[13px] text-ink-3">Loading…</p>
+                  ) : rooms.filter((r) => !r.personal).length === 0 ? (
+                    <p className="px-4 py-6 text-center text-[13px] leading-relaxed text-ink-3">
+                      No group rooms yet. A room is a conversation with more than two people in it — and a place to call.
+                    </p>
+                  ) : rooms.filter((r) => !r.personal).map((r) => (
+                    <button key={r.id} type="button" onClick={() => openRoom(r.id)} data-ay-skip="1"
+                      className={`flex items-center gap-3 border-b border-line px-3 py-2.5 text-start last:border-b-0 hover:bg-veil/[0.05] ${roomId === r.id ? "bg-veil/[0.08]" : ""}`}>
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-veil/[0.10] text-[13px] font-bold text-ink-2">
+                        {r.count}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className={`block truncate text-[14px] text-ink ${r.unread ? "font-bold" : "font-semibold"}`}>{r.title}</span>
+                        <span className="block truncate text-[12px] text-ink-3">
+                          {r.in_call.length ? `${r.in_call.length} in the call now` : r.members.map((m) => m.name).join(", ")}
+                        </span>
+                      </span>
+                      {r.unread > 0 && !r.muted && (
+                        <span className="rounded-pill bg-yang px-2 py-0.5 text-[11px] font-bold text-on-accent">{r.unread}</span>
+                      )}
+                    </button>
+                  ))}
+                </nav>
+                <button type="button" onClick={() => void newRoom()} disabled={makingRoom}
+                  className="self-start rounded-pill bg-yang px-4 py-1.5 text-[12.5px] font-bold text-on-accent hover:opacity-90 disabled:opacity-50">
+                  {makingRoom ? "Opening…" : "New room"}
+                </button>
+                <p className="px-1 text-[11.5px] leading-relaxed text-ink-3">
+                  Rooms are sealed with one key shared between their members. Up to {rooms?.[0]?.max_members ?? 12} people,
+                  and up to {rooms?.[0]?.max_call ?? 5} on a call — calls go directly between everyone, so there is no
+                  server to carry more.
+                </p>
+              </>
+            ) : side === "people" ? (
               <>
                 <nav className="flex flex-col overflow-hidden rounded-card border border-line bg-space-2 shadow-card" aria-label="Members">
                   {dir === null ? (
@@ -2051,7 +2160,12 @@ export default function Messages() {
               </p>
             </details>
           </aside>
-          {peer && me ? (
+          {roomId && me ? (
+            <RoomThread roomId={roomId} me={me} onLeave={closeRoom}
+              renderCall={(room, key, meId, leaveCall) => (room.in_call.includes(meId)
+                ? <RoomCall room={room} roomKey={key} me={meId} onLeft={leaveCall} />
+                : null)} />
+          ) : peer && me ? (
             <DmThread me={me} identity={identity} myKey={myKey} peer={peer}
               onBack={() => { setPeer(null); setSp((cur) => { cur.delete("with"); return cur; }, { replace: true }); }} />
           ) : peer ? (

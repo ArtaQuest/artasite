@@ -2397,3 +2397,60 @@ export async function cloudUpload(
   }
   return post<CloudItem>(`/media/${begun.id}/commit`, meta as Json);
 }
+
+// ── ArtaRooms — group conversations and group calls (src/Rooms.php) ─────────
+// A room has ONE symmetric key, handed out by sealing it with the PAIRWISE key two members already
+// share (lib/e2ee sealRoomKey). The server therefore holds ciphertext and membership and never a
+// room key — the same bargain a DM makes. A room with one member is that member's own space.
+export type RoomMember = ChatUserCard & { role: string };
+export type Room = {
+  id: number; title: string; personal: boolean; owner: number; epoch: number;
+  members: RoomMember[]; count: number; unread: number; muted: boolean; last_at: number;
+  /** False until this epoch's room key has been sealed to me — I am in the room but cannot read it. */
+  has_key: boolean;
+  /** Who is in the room's call right now (presence beacons). */
+  in_call: number[];
+  max_call: number; max_members: number;
+};
+export type RoomCipherMsg = { id: number; sender: number; epoch: number; iv: string; ct: string; att: string; at: number };
+/** My sealed copy of the room key, plus the device pubs needed to unwrap it. */
+export type RoomKeyBlob = { epoch: number; from: number; akid: number; bkid: number; iv: string; ct: string };
+
+export function roomsList() { return get<{ items: Room[]; me: number }>("/rooms/list"); }
+export function roomsCreate(opts?: { title?: string; personal?: boolean }) {
+  return post<{ ok: boolean; room: Room; existing?: boolean }>("/rooms/create", {
+    ...(opts?.title ? { title: opts.title } : {}), ...(opts?.personal ? { personal: 1 } : {}),
+  });
+}
+export function roomsGet(id: number) { return get<{ room: Room; me: number }>("/rooms/get", { id }); }
+export function roomsInvite(id: number, user: string | number) {
+  return post<{ ok: boolean; room: Room; already?: boolean; invited?: ChatUserCard }>("/rooms/invite", { id, user });
+}
+export function roomsLeave(id: number, user?: number) {
+  return post<{ ok: boolean; deleted?: boolean; removed?: number }>("/rooms/leave", { id, ...(user ? { user } : {}) });
+}
+/** Store the room key sealed to ONE member. The server checks the envelope, never the contents. */
+export function roomsPutKey(id: number, b: { for: number; epoch: number; akid: number; bkid: number; iv: string; ct: string }) {
+  return post<{ ok: boolean }>("/rooms/key", { id, ...b });
+}
+export function roomsGetKey(id: number) {
+  return get<{ key: RoomKeyBlob | null; keys?: Record<number, { user_id: number; pub: string }>; epoch: number }>("/rooms/key", { id });
+}
+/** Members who do not yet hold this epoch's key, with the device pub to seal it to. */
+export function roomsPending(id: number) {
+  return get<{ items: { user: ChatUserCard; kid: number; pub: string }[]; epoch: number }>("/rooms/pending", { id });
+}
+export function roomsMessages(id: number, opts?: { after?: number; cursor?: number }) {
+  return get<{ room: Room; me: number; items: RoomCipherMsg[]; next: number | null }>("/rooms/messages", {
+    id, ...(opts?.after ? { after: opts.after } : {}), ...(opts?.cursor ? { cursor: opts.cursor } : {}),
+  });
+}
+export function roomsSend(id: number, b: { iv: string; ct: string; blob?: string; notify?: 0 | 1 }) {
+  return post<{ ok: boolean; id: number; at: number }>("/rooms/send", { id, ...b });
+}
+/** Join or leave the call roster. The WebRTC handshake itself rides the room's sealed messages. */
+export function roomsCall(id: number, action: "join" | "leave") {
+  return post<{ ok: boolean; in_call: number[] }>("/rooms/call", { id, action });
+}
+export function roomsMute(id: number, on: boolean) { return post<{ ok: boolean }>("/rooms/mute", { id, on: on ? 1 : 0 }); }
+

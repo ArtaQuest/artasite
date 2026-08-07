@@ -479,7 +479,23 @@ final class Rest {
 		[ 'GET',  'chat/unread',                   'Chat::unread',     'user'   ], // badge only (+waiting requests, +inbound call) — deliberately does NOT mark presence (see Chat::mark_presence)
 		[ 'POST', 'chat/relation',                 'Chat::relation',   'user'   ], // accept|decline|block|unblock|mute|unmute|pin|unpin|archive|unarchive one conversation
 		[ 'POST', 'chat/call',                     'Chat::call',       'user'   ], // ring/stop ringing a peer; the ROOM never reaches the server (it rides inside the sealed message)
-		[ 'POST', 'chat/fetch',                    'Chat::fetch_url',  'user'   ], // pull a remote GIF/image server-side so the browser can seal it — SSRF-fenced
+		[ 'POST', 'chat/fetch',                    'Chat::fetch_url',  'user'   ],
+
+		// ── ArtaRooms — group conversations and group calls (src/Rooms.php). Same bargain as a DM:
+		//    the server holds ciphertext and membership, never a room key. A room with one member is
+		//    a member's own space; the same routes serve one person or five. ──────────────────────
+		[ 'POST', 'rooms/create',                  'Rooms::create',       'user' ], // open a room (personal=1 → "your room", one per member)
+		[ 'GET',  'rooms/list',                    'Rooms::list_rooms',   'user' ], // every room the caller is in
+		[ 'GET',  'rooms/get',                     'Rooms::get',          'user' ], // ?id= → one room + its members
+		[ 'POST', 'rooms/invite',                  'Rooms::invite',       'user' ], // add a member (they still need the key sealed to them)
+		[ 'POST', 'rooms/leave',                   'Rooms::leave',        'user' ], // leave, or {user} to remove (owner only)
+		[ 'POST', 'rooms/key',                     'Rooms::put_key',      'user' ], // store the room key SEALED to one member
+		[ 'GET',  'rooms/key',                     'Rooms::get_key',      'user' ], // …and fetch my own sealed copy
+		[ 'GET',  'rooms/pending',                 'Rooms::pending_keys', 'user' ], // members still missing the current key, with their device pubs
+		[ 'GET',  'rooms/messages',                'Rooms::messages',     'user' ], // ?id=&after=|&cursor=
+		[ 'POST', 'rooms/send',                    'Rooms::send',         'user' ], // append one sealed row
+		[ 'POST', 'rooms/call',                    'Rooms::call',         'user' ], // join/leave the call roster (the handshake rides the room's own messages)
+		[ 'POST', 'rooms/mute',                    'Rooms::mute',         'user' ], // pull a remote GIF/image server-side so the browser can seal it — SSRF-fenced
 		[ 'GET',  'chat/email-prefs',             'Chat::email_prefs', 'user'  ], // is this member emailed about messages that arrive while away?
 		[ 'POST', 'chat/email-prefs',             'Chat::email_prefs', 'user'  ], // …and turn it off/on
 		[ 'GET',  'chat/messages',                 'Chat::messages',   'user'   ], // ?with=&cursor=|&after= → ciphertext rows + the key material to open them

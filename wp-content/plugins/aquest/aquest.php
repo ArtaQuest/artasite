@@ -3,7 +3,7 @@
  * Plugin Name: ArtaQuest
  * Description: The entire ArtaQuest platform — LMS, economy, social, i18n, funds — in one
  *              lean, dependency-free plugin. Replaces MasterStudy LMS + WooCommerce.
- * Version:     1.20.600
+ * Version:     1.20.601
  * Author:      ArtaQuest Foundation
  * License:     GNU AGPLv3
  * License URI: https://www.gnu.org/licenses/agpl-3.0.html
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 // disagree will send the next person chasing a production divergence that is not there: the
 // header is what get_plugin_data() reads, AQ_VERSION is what /version reports and what the
 // integrity sweep keys on. Bump them together, always.
-define( 'AQ_VERSION', '1.20.600' );
+define( 'AQ_VERSION', '1.20.601' );
 define( 'AQ_DIR', __DIR__ );
 define( 'AQ_URL', plugins_url( '', __FILE__ ) );
 
@@ -37,7 +37,7 @@ spl_autoload_register( function ( $class ) {
  * that worker, yielding "Class AQ\Db not found". Loading all classes up-front (each guarded
  * by class_exists) makes the backend deterministic regardless of autoload/opcache timing.
  */
-foreach ( [ 'Data', 'Schema', 'Cron', 'Secrets', 'Vault', 'Watchdog', 'Integrity', 'Health', 'Rest', 'Auth', 'Sessions', 'Account', 'Verify', 'Courses', 'Topics', 'Typology', 'Learn', 'Economy', 'Season', 'Social', 'Search', 'I18n', 'Funds', 'Extra', 'Offline', 'Notify', 'Meet', 'Assistant', 'Relay', 'Science', 'Library', 'Music', 'Motion', 'Narrate', 'Film', 'Illustration', 'Fearometer', 'Tickets', 'Stripe', 'YouTube', 'Console', 'Trends', 'Houses', 'Competitions', 'Translate', 'Artaai', 'Games', 'Challenges', 'Demo', 'Doi', 'Notebook', 'Chat', 'Api', 'Passkey', 'News', 'Kaggle', 'Kernel', 'Gist', 'Credits', 'KaggleId' ] as $aq_cls ) {
+foreach ( [ 'Data', 'Schema', 'Cron', 'Secrets', 'Vault', 'Watchdog', 'Integrity', 'Health', 'Rest', 'Auth', 'Sessions', 'Account', 'Verify', 'Courses', 'Topics', 'Typology', 'Learn', 'Economy', 'Season', 'Social', 'Search', 'I18n', 'Funds', 'Extra', 'Offline', 'Notify', 'Meet', 'Assistant', 'Relay', 'Science', 'Library', 'Music', 'Motion', 'Narrate', 'Film', 'Illustration', 'Fearometer', 'Tickets', 'Stripe', 'YouTube', 'Console', 'Trends', 'Houses', 'Competitions', 'Translate', 'Artaai', 'Games', 'Challenges', 'Demo', 'Doi', 'Notebook', 'Chat', 'Rooms', 'Api', 'Passkey', 'News', 'Kaggle', 'Kernel', 'Gist', 'Credits', 'KaggleId' ] as $aq_cls ) {
 	$aq_file = AQ_DIR . '/src/' . $aq_cls . '.php';
 	if ( ! class_exists( 'AQ\\' . $aq_cls, false ) && is_readable( $aq_file ) ) { require_once $aq_file; }
 }

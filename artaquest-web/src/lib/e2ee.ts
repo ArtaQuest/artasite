@@ -238,6 +238,7 @@ export async function safetyCode(pubLowB64: string, pubHighB64: string): Promise
 //   stick { v:2, t:"stick", id }                    one of OUR OWN hosted animated stickers
 //   call  { v:2, t:"call",  act }                   the VISIBLE record of a call in the history
 //   rtc   { v:2, t:"rtc",   kind, sid, sdp? }       the call handshake itself — never rendered
+//   draw  { v:2, t:"draw",  stroke|clear }          one whiteboard stroke — sealed like a sentence
 // A payload that fails to parse as JSON is treated as v1 plain text.
 //
 // STICKERS carry an id, not bytes. They are ours, they are already on every device that has the
@@ -285,7 +286,10 @@ export type ChatPayload =
   /** The visible record of a call. `why` distinguishes a normal hangup from one nobody answered. */
   | { v: 2; t: "call"; act: "start" | "end"; sid?: string; dur?: number; why?: "declined" | "missed" | "failed" }
   /** The handshake. Never rendered; see the note above. */
-  | { v: 2; t: "rtc"; kind: "offer" | "answer" | "bye"; sid: string; sdp?: string };
+  | { v: 2; t: "rtc"; kind: "offer" | "answer" | "bye"; sid: string; sdp?: string; to?: number }
+  /** One whiteboard stroke, or a clear. Points are normalised 0..1 so the drawing is the same
+   *  shape on a phone and a laptop — see components/chat/Whiteboard. */
+  | { v: 2; t: "draw"; stroke?: { pts: [number, number][]; color: string; w: number }; clear?: boolean };
 
 export function encodePayload(p: ChatPayload): string {
   return JSON.stringify(p);
@@ -325,6 +329,83 @@ export async function openAttachment(att: SealedAttachment): Promise<string | nu
     const key = await crypto.subtle.importKey("raw", b64decode(att.k).buffer as ArrayBuffer, "AES-GCM", false, ["decrypt"]);
     const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64decode(att.iv) as unknown as ArrayBuffer }, key, ct);
     return URL.createObjectURL(new Blob([pt], { type: att.mime }));
+  } catch {
+    return null;
+  }
+}
+
+// ── Group rooms ──────────────────────────────────────────────────────────────
+//
+// A room has ONE symmetric key. Messages are encrypted with it once, rather than once per member,
+// and the key itself is handed out by SEALING IT WITH THE PAIRWISE KEY that already exists between
+// two members — the same ECDH+HKDF above, unchanged. So a group needs no new key exchange and no new
+// trust: if you can DM somebody, you can hand them a room key, and the server sees an opaque blob
+// either way.
+//
+// The honest limits, which the UI states rather than hides:
+//  • Removing somebody does not un-know the key they already hold. Excluding them from FUTURE
+//    messages means rotating to a new epoch and re-sealing to everyone who remains.
+//  • No forward secrecy within an epoch: whoever holds the key can read that epoch's history. A DM
+//    has the same property per device-key epoch, so this is not a step down — but it is not a
+//    double ratchet either.
+
+/** A fresh room key. EXTRACTABLE on purpose: a member has to be able to re-seal it to somebody they
+ *  invite, which means their browser must be able to export the raw bytes. It never leaves the
+ *  device unsealed. */
+export async function newRoomKey(): Promise<CryptoKey> {
+  return crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
+}
+
+/** Wrap a room key for one member, using the pairwise key derived with them. */
+export async function sealRoomKey(roomKey: CryptoKey, pairKey: CryptoKey): Promise<{ iv: string; ct: string }> {
+  const raw = await crypto.subtle.exportKey("raw", roomKey);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, pairKey, raw);
+  return { iv: b64encode(iv.buffer), ct: b64encode(ct) };
+}
+
+/** …and unwrap it. Null when the pairwise key is the wrong epoch (their device key rotated). */
+export async function openRoomKey(ivB64: string, ctB64: string, pairKey: CryptoKey): Promise<CryptoKey | null> {
+  try {
+    const raw = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: b64decode(ivB64) as unknown as ArrayBuffer },
+      pairKey,
+      b64decode(ctB64) as unknown as ArrayBuffer,
+    );
+    return await crypto.subtle.importKey("raw", raw, "AES-GCM", true, ["encrypt", "decrypt"]);
+  } catch {
+    return null;
+  }
+}
+
+/** Room messages bind to the ROOM and the SENDER, so a row cannot be replayed into another room or
+ *  re-attributed to somebody else without failing authentication. */
+function roomAad(roomId: number, sender: number): Uint8Array {
+  return new TextEncoder().encode(`aq-room|${roomId}|from:${sender}`);
+}
+
+export async function sealRoomMessage(key: CryptoKey, text: string, roomId: number, sender: number): Promise<{ iv: string; ct: string }> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv, additionalData: roomAad(roomId, sender) as unknown as ArrayBuffer },
+    key,
+    new TextEncoder().encode(text),
+  );
+  return { iv: b64encode(iv.buffer), ct: b64encode(ct) };
+}
+
+export async function openRoomMessage(key: CryptoKey, ivB64: string, ctB64: string, roomId: number, sender: number): Promise<string | null> {
+  try {
+    const pt = await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv: b64decode(ivB64) as unknown as ArrayBuffer,
+        additionalData: roomAad(roomId, sender) as unknown as ArrayBuffer,
+      },
+      key,
+      b64decode(ctB64) as unknown as ArrayBuffer,
+    );
+    return new TextDecoder().decode(pt);
   } catch {
     return null;
   }
