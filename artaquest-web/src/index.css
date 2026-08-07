@@ -1569,3 +1569,23 @@ html[data-aq-player="1"] .aq-bot-panel { bottom: calc(4.25rem + var(--aq-safe-bo
 .aq-lib-cont-bar { display: block; margin-top: 0.35rem; height: 3px; border-radius: 2px;
   background: color-mix(in srgb, currentColor 18%, transparent); overflow: hidden; }
 .aq-lib-cont-bar > span { display: block; height: 100%; background: var(--color-yang); }
+
+/* ── ArtaBot live answer ─────────────────────────────────────────────────────────
+   The caret that follows the words while a reply is still being written, and the thinking dots shown
+   before the first token lands. Brand only (yang/yin) — no third accent. Both are decorative and
+   aria-hidden; a reader on prefers-reduced-motion gets the same information without the movement. */
+.aq-caret { display: inline-block; width: 2px; height: 1.05em; margin-left: 1px;
+  vertical-align: text-bottom; background: var(--color-yang); animation: aq-caret-blink 1.05s step-end infinite; }
+@keyframes aq-caret-blink { 0%, 100% { opacity: 1 } 50% { opacity: 0 } }
+
+.aq-think-dots { display: inline-flex; gap: 3px; align-items: center; }
+.aq-think-dots > i { width: 5px; height: 5px; border-radius: 50%; background: var(--color-yang);
+  opacity: .35; animation: aq-think-pulse 1.25s ease-in-out infinite; }
+.aq-think-dots > i:nth-child(2) { animation-delay: .18s }
+.aq-think-dots > i:nth-child(3) { animation-delay: .36s }
+@keyframes aq-think-pulse { 0%, 100% { opacity: .3; transform: translateY(0) } 45% { opacity: 1; transform: translateY(-2px) } }
+
+@media (prefers-reduced-motion: reduce) {
+  .aq-caret { animation: none; opacity: 1 }
+  .aq-think-dots > i { animation: none; opacity: .75 }
+}

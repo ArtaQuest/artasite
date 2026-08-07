@@ -47,6 +47,10 @@ final class Relay {
 	const STEP_US    = 250000; // 250ms between queue/result checks while waiting
 	const STALE_S    = 3600;  // jobs older than this are pruned — nobody is coming back for them
 
+	// ── the LIVE channel (streaming deltas, see stream_chunk) ─────────────────────────────────────
+	const LIVE_TTL       = 600;    // s a live buffer survives — comfortably longer than any single turn
+	const LIVE_MAX_CHARS = 65536;  // ceiling on one buffered answer; the transcript still carries the whole reply
+
 	/** Sentinel Relay::ask() returns when the relay is ALIVE and still working but slower than the
 	 *  member-wait budget — distinct from null (genuinely unavailable → API). The caller degrades
 	 *  gracefully (asks the member to resend) and NEVER spends an API credit. */
@@ -91,7 +95,7 @@ final class Relay {
 	 * heartbeat lapses mid-wait (the laptop slept/crashed). A live, working relay is ALWAYS waited
 	 * for — even a slow claimed answer is the subscription doing its job, never the paid API. Never throws.
 	 */
-	public static function ask( $messages, $system, $model, $max_tokens, $effort = 'low', $deliver = null ) {
+	public static function ask( $messages, $system, $model, $max_tokens, $effort = 'low', $deliver = null, $stream_key = '' ) {
 		if ( ! self::available() ) { return null; } // no fresh heartbeat or usage-limited → API is the backup
 
 		// Pull any attached screenshots out of the transcript so the turn (incl. ticket-triage with a
@@ -130,10 +134,16 @@ final class Relay {
 				'effort'     => in_array( $effort, [ 'low', 'medium', 'high', 'xhigh', 'max' ], true ) ? $effort : 'low', // ArtaBot chat = low (fast); ArtaMod/ArtaVerify pass 'max'
 				'images'     => $images ?: null, // encrypted; the daemon decrypts → temp files → Read
 				'deliver'    => $deliver, // opaque: who to hand the finished answer to (see complete())
+				'stream'     => $stream_key ?: null, // opaque: where to post live deltas (see stream_chunk())
 			], static function ( $v ) { return $v !== null; } ) ),
 			'created' => Data::now(),
 		] );
 		if ( ! $id ) { return null; }
+
+		// STREAMED TURNS DO NOT BLOCK. The member is already watching deltas arrive, so holding a PHP
+		// worker here would buy nothing and cost the request budget — and it is what made a >50s turn
+		// return a shape the SPA could not render. Hand back PENDING at once; complete() delivers.
+		if ( $stream_key && $deliver ) { return self::PENDING; }
 
 		$deadline = microtime( true ) + self::ASK_WAIT;
 		while ( microtime( true ) < $deadline ) {
@@ -296,6 +306,52 @@ final class Relay {
 			$wpdb->delete( Data::t( 'aq_relay_jobs' ), [ 'id' => $id ] );
 		}
 		return [ 'ok' => true ];
+	}
+
+	/**
+	 * POST /relay/stream {key, text, think_tokens, phase} — the daemon's LIVE channel.
+	 *
+	 * The member watches the answer being written instead of staring at a spinner. Deltas land in a
+	 * TRANSIENT, never a row: on Atomic that is the object cache, so a streaming turn costs zero MySQL
+	 * writes and the buffer expires by itself. The authoritative answer still arrives via complete() →
+	 * Assistant::deliver, so this channel is pure decoration — if every chunk failed, the turn would
+	 * still land in the transcript intact. That is deliberate: never let a cosmetic path cost a reply.
+	 *
+	 * The key is minted by Assistant::live_key from the SESSION (uid / anon key), never by the client,
+	 * so one member's buffer cannot be addressed by another. Shape is still validated here because a
+	 * key interpolated into a transient name is a name-injection seam.
+	 */
+	public static function stream_chunk( $req ) {
+		$key = (string) Rest::p( $req, 'key', '' );
+		if ( ! preg_match( '/^aqlive_[a-f0-9]{16,64}$/', $key ) ) { return [ 'ok' => false ]; }
+		$buf = get_transient( $key );
+		if ( ! is_array( $buf ) ) { $buf = [ 'seq' => 0, 'text' => '', 'think' => 0, 'phase' => 'thinking', 'done' => 0 ]; }
+
+		$add = (string) Rest::p( $req, 'text', '' );
+		if ( $add !== '' ) {
+			// Cap the live buffer. A runaway answer must not grow an unbounded transient; the member
+			// still gets the WHOLE reply from the transcript when the turn completes.
+			$buf['text'] = substr( $buf['text'] . $add, 0, self::LIVE_MAX_CHARS );
+		}
+		$think = (int) Rest::p( $req, 'think_tokens', 0 );
+		if ( $think > (int) $buf['think'] ) { $buf['think'] = $think; }
+		$phase = (string) Rest::p( $req, 'phase', '' );
+		if ( in_array( $phase, [ 'thinking', 'writing' ], true ) ) { $buf['phase'] = $phase; }
+		$buf['seq'] = (int) $buf['seq'] + 1;
+
+		set_transient( $key, $buf, self::LIVE_TTL );
+		return [ 'ok' => true, 'seq' => $buf['seq'] ];
+	}
+
+	/** Mark a live buffer finished so a reader stops holding and falls back to the transcript. Called
+	 *  from Assistant::deliver — the transcript row is the source of truth from that moment on. */
+	public static function stream_close( $key ) {
+		if ( ! is_string( $key ) || ! preg_match( '/^aqlive_[a-f0-9]{16,64}$/', $key ) ) { return; }
+		$buf = get_transient( $key );
+		if ( ! is_array( $buf ) ) { return; }
+		$buf['done'] = 1;
+		$buf['seq']  = (int) $buf['seq'] + 1;   // wake any held reader immediately
+		set_transient( $key, $buf, 60 );        // brief grace for the last poll, then gone
 	}
 
 	/** Drop rows nobody will read again. Cheap (status_id key + tiny table); throttled to ~1/min. */

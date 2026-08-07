@@ -915,6 +915,19 @@ export const Tickets = {
 // `image` is client-only — the data URL of a screenshot the member attached, shown live in their own
 // bubble. The server forwards it to Claude for that turn but never stores or returns it.
 export type ArtabotMsg = { id: number; role: "user" | "assistant"; body: string; tokens?: number; at: number; image?: string; ticket?: { id: number; kind: string; status: string } };
+
+/** `ask` answers one of TWO shapes and the difference is load-bearing: a streamed turn returns no
+ *  `reply` at all. Modelling it as a union is deliberate — the previous type claimed `reply` was always
+ *  there, so `r.reply.body` typechecked and then crashed the chat on every turn slower than 50s. */
+export type AskResult =
+  | { reply: ArtabotMsg; pending?: undefined }
+  | { pending: true; id: number; tier?: string; live?: boolean; message: string; reply?: undefined };
+
+/** One slice of a live answer. `phase` is "thinking" until the first token, then "writing"; `think` is
+ *  Claude's own estimated reasoning-token count. There is no reasoning TEXT to show — Claude Code
+ *  streams thinking deltas with an empty string and a signature — so the UI reports progress, never
+ *  invented words. `done` means the transcript now has the authoritative reply. */
+export type ArtabotLive = { seq: number; text: string; think: number; phase: "" | "thinking" | "writing"; done: number; idle?: number };
 // Anonymous visitors carry a stable client id so the server can keep their own conversation
 // across turns (kept in localStorage; logged-in users ignore it).
 function anonId(): string {
@@ -929,8 +942,14 @@ export const ArtaBot = {
   history: () => get<{ items: ArtabotMsg[]; anon?: boolean }>("/artabot", { anon: anonId() }),
   // `image` (optional) is a data URL of a screenshot to attach to this turn — sent inline to Claude,
   // never stored. JSON.stringify drops it when undefined, so text-only turns are unchanged.
-  ask: (message: string, image?: string) => post<{ reply: ArtabotMsg }>("/artabot", { message, image, anon: anonId() }),
+  ask: (message: string, image?: string) => post<AskResult>("/artabot", { message, image, anon: anonId() }),
   clear: () => post<{ ok: boolean }>("/artabot/clear", { anon: anonId() }),
+  /** The in-flight answer as it is written. LONG-POLL: the server holds this open (~20s) and answers
+   *  the moment there is something new, so a streaming turn costs ~1 request/s rather than one per
+   *  frame. `text` is the WHOLE answer so far — adopt it, never append it — so a dropped or repeated
+   *  response can't corrupt what the member is reading. */
+  live: (seen: number) =>
+    get<ArtabotLive>("/artabot/live", { seen, anon: anonId(), _: Date.now() }),
 };
 
 /** Server-injected first-paint identity (window.AQ_USER), present before any fetch. */

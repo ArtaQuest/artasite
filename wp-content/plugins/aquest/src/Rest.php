@@ -298,12 +298,17 @@ final class Rest {
 		// Claude Opus 5 — deeper thinking + a longer reply). Public so the SPA can price a turn upfront.
 		[ 'GET',  'artabot/tiers',                 'Assistant::tiers',       'public' ], // pricing is public so the LANDING page can advertise the free tier
 		[ 'POST', 'artabot',                       'Assistant::ask',         'user'   ],
+		// The in-flight answer as it is written (long-poll, ~20s hold — see Assistant::live). Public
+		// because signed-out visitors chat too; the buffer key is derived from the SESSION, never from
+		// input, so a caller can only ever read their own stream.
+		[ 'GET',  'artabot/live',                  'Assistant::live',        'public' ],
 		[ 'POST', 'artabot/clear',                 'Assistant::clear',       'user'   ],
 		// Subscription relay — the laptop daemon (tools/ticket-agent/artabot-relay.mjs) answers
 		// ArtaBot turns on the operator's Claude Max subscription when the laptop is awake; prod
 		// falls back to the API otherwise (src/Relay.php). Same shared secret as the worker.
 		[ 'POST', 'relay/poll',                    'Relay::poll',            'worker' ],
 		[ 'POST', 'relay/complete',                'Relay::complete',        'worker' ],
+		[ 'POST', 'relay/stream',                  'Relay::stream_chunk',    'worker' ], // …and streams the answer as it writes it (live deltas → a transient, no row writes)
 		// ArtaScience — the fully automated AI review pipeline (src/Science.php). Submissions MUST ship
 		// open data + code; the ArtaScience daemon (tools/ticket-agent/artascience-relay.mjs) runs the
 		// code, checks reproducibility at --effort max, and returns a multi-round verdict. Public record.

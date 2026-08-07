@@ -99,11 +99,40 @@ function downscaleToDataUrl(file: File, maxEdge: number, quality: number): Promi
 // thread, #76). While typing, the partial Markdown renders inside RichText WITHOUT srcLang — that sets
 // data-ay-skip, so the i18n mesh never sees (or worse, caches translations of) half-sentences; when the
 // reveal completes, the parent swaps in the normal translated RichText. A click/tap skips to the end.
-function TypeOut({ body, onTick, onDone }: { body: string; onTick: () => void; onDone: () => void }) {
-  const { text, finish } = useTypewriter(body, onTick, onDone);
+function TypeOut({ body, onTick, onDone, streaming }: { body: string; onTick: () => void; onDone: () => void; streaming?: boolean }) {
+  const { text, finish } = useTypewriter(body, onTick, onDone, streaming);
   return (
-    <div onClick={finish} className="cursor-text">
+    <div onClick={streaming ? undefined : finish} className="cursor-text">
       <RichText html={renderRich(text)} />
+      {/* A caret only while words are still arriving — "skip" is meaningless when there is no ending yet. */}
+      {streaming ? <span className="aq-caret" aria-hidden="true" /> : null}
+    </div>
+  );
+}
+
+// ── The thinking meter ─────────────────────────────────────────────────────────
+// WHAT THIS IS, AND WHAT IT DELIBERATELY IS NOT. Claude Code streams `thinking_delta` events whose
+// `thinking` field is an EMPTY STRING: the assembled block carries 0 characters of reasoning beside a
+// ~1KB signature. The reasoning is signed and withheld, and no flag exposes it. So this shows the two
+// things we genuinely have — Claude's own estimated reasoning-token count and elapsed time — and
+// nothing else. Do NOT "enrich" it with invented reasoning: a plausible chain of thought the member
+// cannot check is worse than an honest meter.
+// data-ay-skip keeps the live numbers out of the i18n mesh (they'd be collected as translations).
+function Thinking({ tokens, since }: { tokens: number; since: number }) {
+  // The elapsed count is STATE advanced by the interval, not Date.now() read during render: a clock
+  // read while rendering is impure (it changes on any incidental re-render), which the lint rule
+  // rightly refuses. `since` is the fixed baseline the parent captured when the turn started.
+  const [secs, setSecs] = useState(0);
+  useEffect(() => {
+    const tick = () => setSecs(Math.max(0, Math.round((Date.now() - since) / 1000)));
+    tick();
+    const t = setInterval(tick, 500);
+    return () => clearInterval(t);
+  }, [since]);
+  return (
+    <div data-ay-skip="1" className="flex items-center gap-2 text-sm opacity-70">
+      <span className="aq-think-dots" aria-hidden="true"><i /><i /><i /></span>
+      <span>Thinking{tokens > 0 ? ` · ~${tokens.toLocaleString()} tokens` : ""}{secs >= 2 ? ` · ${secs}s` : ""}</span>
     </div>
   );
 }
@@ -127,6 +156,8 @@ export function BotChat() {
   const [err, setErr] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [animId, setAnimId] = useState<number | null>(null); // the one reply currently typing itself out
+  // The turn being written RIGHT NOW, streamed from the relay. Null when nothing is in flight.
+  const [live, setLive] = useState<{ text: string; think: number; phase: string; since: number } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const pickSeq = useRef(0); // bumps per attachment so a slow downscale can't overwrite a newer pick
@@ -149,6 +180,42 @@ export function BotChat() {
     if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 80) el.scrollTop = el.scrollHeight;
   };
 
+  /** Follow the in-flight answer. One long-poll at a time: the server holds each request open (~20s)
+   *  and answers the moment there is a new slice, so this is ~1 request/s while an answer is being
+   *  written and ZERO when the chat is idle — the reason this is a long-poll and not a 300ms timer.
+   *  Returns a `finished` promise plus a `stop` for unmount/error, so no loop outlives its turn. */
+  function followLive() {
+    let stopped = false;
+    let seen = 0;
+    let resolveDone: () => void = () => {};
+    const finished = new Promise<void>((res) => { resolveDone = res; });
+    (async () => {
+      // A generous ceiling, not a latency budget: an xhigh turn legitimately runs for minutes. It
+      // exists only so a lost answer can never leave the reader polling forever.
+      const giveUpAt = Date.now() + 20 * 60 * 1000;
+      while (!stopped && Date.now() < giveUpAt) {
+        try {
+          const s = await Api.live(seen);
+          if (stopped) break;
+          if (s.seq > seen) {
+            seen = s.seq;
+            // `text` is the whole answer so far — adopt it, never append, so a repeated or dropped
+            // response cannot duplicate or lose what the member is reading.
+            setLive((p) => ({ text: s.text, think: s.think, phase: s.phase || "thinking", since: p?.since ?? Date.now() }));
+          }
+          if (s.done) break;
+        } catch {
+          if (stopped) break;
+          // A dropped poll (sleep, tab throttle, flaky mobile) is not fatal — pause briefly and
+          // resume from the same seq. The transcript is still the source of truth either way.
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
+      resolveDone();
+    })();
+    return { finished, stop() { stopped = true; resolveDone(); } };
+  }
+
   async function send() {
     const text = draft.trim();
     if ((!text && !image) || busy || preparing) return; // wait for an attachment still downscaling
@@ -156,11 +223,32 @@ export function BotChat() {
     setDraft(""); setImage(null); setErr("");
     setMsgs((m) => [...m, { id: -Date.now(), role: "user", body: text, at: Date.now() / 1000, image: img ?? undefined }]);
     setBusy(true);
+    setLive({ text: "", think: 0, phase: "thinking", since: Date.now() });
+    // The live reader starts BEFORE the answer is asked for. The buffer is keyed on the session, so
+    // there is nothing to wait for — and starting here means the thinking meter is already ticking
+    // while the request is still in flight.
+    const stream = followLive();
     try {
       const r = await Api.ask(text, img ?? undefined);
-      setMsgs((m) => [...m, r.reply]);
-      if (r.reply.body) setAnimId(r.reply.id); // type the fresh reply out (history never animates)
+      if ("reply" in r && r.reply) {
+        // Synchronous answer (the relay finished inside the request). Nothing to stream.
+        stream.stop();
+        setLive(null);
+        setMsgs((m) => [...m, r.reply as ArtabotMsg]);
+        if (r.reply.body) setAnimId(r.reply.id); // type the fresh reply out (history never animates)
+        return;
+      }
+      // Streamed turn: `ask` returned as soon as the job was queued and the answer is arriving on the
+      // live channel. Wait for it to land, then adopt the authoritative transcript row.
+      // THIS is the branch that used to crash: the old code read `r.reply.body` unconditionally, and a
+      // pending response has no `reply` at all, so every turn slower than 50s took the chat down.
+      await stream.finished;
+      const h = await Api.history().catch(() => null);
+      if (h) setMsgs(h.items);
+      setLive(null);
     } catch (e) {
+      stream.stop();
+      setLive(null);
       setErr(friendlyError(e));
     } finally { setBusy(false); }
   }
@@ -272,7 +360,22 @@ export function BotChat() {
             </div>
           </div>
         ))}
-        {busy && <div className="flex items-center gap-2 text-[13px] text-ink-3"><LogoMark className="h-6 w-6 animate-pulse" />ArtaBot is thinking…</div>}
+        {/* THE LIVE TURN. While an answer is being written it renders here as its own bubble, growing
+            word by word, and is replaced by the real transcript row the moment the turn completes.
+            data-ay-skip keeps half-written sentences out of the i18n mesh — the finished reply,
+            rendered above with srcLang="en", translates as usual. */}
+        {live && (
+          <div className="flex justify-start gap-2">
+            <LogoMark className="mt-0.5 h-6 w-6 shrink-0" />
+            <div data-ay-skip="1" className="max-w-[80%] rounded-card border border-line bg-space-2 px-3.5 py-2.5 text-[14px] leading-relaxed text-ink-2">
+              {live.text
+                ? <TypeOut body={live.text} onTick={followTyping} onDone={() => {}} streaming />
+                : <Thinking tokens={live.think} since={live.since} />}
+            </div>
+          </div>
+        )}
+        {/* Only when there is no live channel to show — otherwise the stream IS the progress. */}
+        {busy && !live && <div className="flex items-center gap-2 text-[13px] text-ink-3"><LogoMark className="h-6 w-6 animate-pulse" />ArtaBot is thinking…</div>}
         {err && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-card border border-yin/40 bg-yin/10 px-3 py-2 text-[13px] text-yin-light">
             <span>{err}</span>

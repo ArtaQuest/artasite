@@ -103,6 +103,10 @@ final class Assistant {
 	 *  `pending` so the UI can show a thinking state; it is never shown to the member as prose. */
 	const PENDING_BODY = '__AQ_PENDING__';
 
+	/** Seconds a live() reader keeps gathering once it has something new, before answering. Trades a
+	 *  little latency for far fewer requests — the client animates the slice while the next poll flies. */
+	const LIVE_GATHER = 1.2;
+
 	/**
 	 * Deliver an asynchronously-completed turn (Relay::complete → here). NO TIME LIMITS: the worker may
 	 * have spent minutes on a multi-agent workflow; whenever it finishes, the answer replaces the pending
@@ -130,6 +134,74 @@ final class Assistant {
 		[ $filed ] = self::file_from_meta( $uid, $meta, $src, false, '' );
 		if ( $filed ) { $reply .= "\n\n" . implode( "\n", $filed ); }
 		Data::update( 'aq_artabot_messages', [ 'body' => $reply ], [ 'id' => $amid ] );
+		// The transcript is now the source of truth — release any reader still holding on the live
+		// buffer so it switches over immediately instead of waiting out its hold.
+		Relay::stream_close( (string) ( $dlv['stream'] ?? '' ) );
+	}
+
+	// ── the LIVE channel (see Relay::stream_chunk) ────────────────────────────────────────────────
+	//
+	// WHAT THE MEMBER ACTUALLY SEES, and why it is not more. Claude Code streams `thinking_delta`
+	// events whose `thinking` field is an EMPTY STRING — the assembled block carries 0 characters of
+	// reasoning beside a ~1KB cryptographic signature. The words are signed and withheld, and no flag
+	// exposes them. So the thinking phase is reported as PROGRESS (estimated tokens, elapsed) and the
+	// answer is streamed verbatim. Nothing here may ever synthesise a plausible "chain of thought":
+	// that would be a transcript of something the member cannot check, presented as if they could.
+
+	/** The live buffer key for THIS caller, derived from the session — never from client input, so one
+	 *  member's stream cannot be addressed by another. Stable for the caller, opaque to the worker. */
+	public static function live_key( $req = null ) {
+		$uid = Rest::uid();
+		if ( $uid > 0 ) { return 'aqlive_' . hash( 'sha256', 'u' . $uid . '|' . wp_salt( 'nonce' ) ); }
+		$anon = $req ? self::anon_key( $req ) : '';
+		if ( ! $anon ) { return ''; }
+		return 'aqlive_' . hash( 'sha256', 'a' . $anon . '|' . wp_salt( 'nonce' ) );
+	}
+
+	/**
+	 * GET /artabot/live?seen=N — the member's in-flight answer as it is written.
+	 *
+	 * LONG-POLL, not short-poll, and that is the whole point of the design: it reuses Relay::poll's
+	 * usleep hold, so one held request covers ~20s of streaming instead of ~57 full WordPress
+	 * bootstraps. It returns the moment there is something new. Idle chats poll nothing at all.
+	 */
+	public static function live( $req ) {
+		$key = self::live_key( $req );
+		if ( ! $key ) { return [ 'seq' => 0, 'text' => '', 'think' => 0, 'phase' => '', 'done' => 1 ]; }
+		$seen     = max( 0, (int) Rest::p( $req, 'seen', 0 ) );
+		$deadline = microtime( true ) + Relay::POLL_WAIT;
+		$gather   = 0.0;
+		$buf      = null;
+		do {
+			$buf = get_transient( $key );
+			$fresh = is_array( $buf ) && (int) $buf['seq'] > $seen;
+			if ( $fresh ) {
+				// GATHER before returning. The daemon flushes every ~400ms, so returning on the first
+				// new byte would make this a 2.5-req/s short-poll — exactly what long-polling is here to
+				// avoid. Instead keep holding briefly and hand back a bigger slice; the client types it
+				// out over that same window, so the member sees continuous writing from ~1 request/s.
+				// A finished turn never waits: `done` returns at once.
+				if ( (int) ( $buf['done'] ?? 0 ) ) { break; }
+				if ( $gather === 0.0 ) { $gather = microtime( true ) + self::LIVE_GATHER; }
+				if ( microtime( true ) >= $gather ) { break; }
+			}
+			usleep( Relay::STEP_US );
+		} while ( microtime( true ) < $deadline );
+
+		if ( is_array( $buf ) && (int) $buf['seq'] > $seen ) {
+			// `text` is the WHOLE answer so far, not a delta: a dropped or duplicated response can then
+			// never corrupt what the member is reading — the client simply adopts the latest prefix.
+			return [
+				'seq'   => (int) $buf['seq'],
+				'text'  => (string) $buf['text'],
+				'think' => (int) $buf['think'],
+				'phase' => (string) $buf['phase'],
+				'done'  => (int) ( $buf['done'] ?? 0 ),
+			];
+		}
+		// Nothing new within the hold — the client re-polls. `seq` echoes what it already has so a
+		// timeout is indistinguishable from "no change", and never rewinds the rendered text.
+		return [ 'seq' => $seen, 'text' => '', 'think' => 0, 'phase' => '', 'done' => 0, 'idle' => 1 ];
 	}
 
 	/** " — you were not charged", but only when there was something to charge. */
@@ -449,10 +521,14 @@ final class Assistant {
 		// never told to "resend". A pending assistant row is created UP FRONT so the transcript shows the
 		// turn is in progress, and deliver() fills it in whenever the answer (or workflow) completes.
 		$amid = Data::insert( 'aq_artabot_messages', [ 'user_id' => $uid, 'role' => 'assistant', 'body' => self::PENDING_BODY, 'created' => Data::now() ] );
-		$dlv  = [ 'kind' => 'artabot', 'uid' => $uid, 'amid' => (int) $amid, 'tier' => $tier, 'ref' => $tref, 'prompt' => $stored ];
-		$out  = self::chat( $turns, self::artabot_prompt( $uid ), null, self::TIERS[ $tier ]['maxtok'], $tier, $dlv );
+		$skey = self::live_key( $req );
+		// Start the buffer BEFORE the worker can write to it, so the SPA's first poll finds a thinking
+		// state rather than an empty 404-ish gap and can show that ArtaBot has begun.
+		if ( $skey ) { set_transient( $skey, [ 'seq' => 1, 'text' => '', 'think' => 0, 'phase' => 'thinking', 'done' => 0 ], Relay::LIVE_TTL ); }
+		$dlv  = [ 'kind' => 'artabot', 'uid' => $uid, 'amid' => (int) $amid, 'tier' => $tier, 'ref' => $tref, 'prompt' => $stored, 'stream' => $skey ];
+		$out  = self::chat( $turns, self::artabot_prompt( $uid ), null, self::TIERS[ $tier ]['maxtok'], $tier, $dlv, $skey );
 		if ( $out === Relay::PENDING ) {
-			return [ 'pending' => true, 'id' => (int) $amid, 'tier' => $tier,
+			return [ 'pending' => true, 'id' => (int) $amid, 'tier' => $tier, 'live' => (bool) $skey,
 			         'message' => self::NAME . ' is working on this one — the answer will appear here when it lands' ];
 		}
 		// BUSY = the relay (subscription) is answering but slower than the budget; we never bill the
@@ -613,14 +689,14 @@ final class Assistant {
 	 *  (relay offline → caller shows ArtaBot's default "offline" message). Defaults are the CHAT
 	 *  profile (latest Opus, low effort, tight ceiling — fast); triage keeps the model and effort and
 	 *  overrides only the output ceiling (TRIAGE_MAXTOK protects the trailing aqmeta block). */
-	private static function chat( $messages, $system, $model = null, $max_tokens = null, $effort = 'low', $deliver = null ) {
+	private static function chat( $messages, $system, $model = null, $max_tokens = null, $effort = 'low', $deliver = null, $stream_key = '' ) {
 		// SUBSCRIPTION-ONLY (operator rule 2026-06-13): every turn runs on the Claude Max subscription
 		// via the laptop relay (headless `claude -p`, src/Relay.php) — the paid Anthropic API has been
 		// removed from the platform entirely. Relay::ask returns the answer; self::BUSY (relay alive but
 		// slower than its wait budget) → the caller degrades gracefully (asks the member to resend); or
 		// null → the relay is genuinely unavailable (laptop away/asleep/usage-limited), and the caller
 		// shows ArtaBot's default "offline" message. There is no API fallback.
-		$via = Relay::ask( $messages, $system, $model ?: self::MODEL, $max_tokens ?: self::MAXTOK, $effort, $deliver );
+		$via = Relay::ask( $messages, $system, $model ?: self::MODEL, $max_tokens ?: self::MAXTOK, $effort, $deliver, $stream_key );
 		if ( $via === Relay::PENDING ) { return Relay::PENDING; } // async: the worker keeps going, deliver() lands it
 		if ( $via === Relay::BUSY ) { return self::BUSY; }
 		return $via; // a [text,usage] array, or null when the subscription relay is unavailable
