@@ -194,7 +194,10 @@ final class Assistant {
 		$gather   = 0.0;
 		$buf      = null;
 		do {
-			$buf = get_transient( $key );
+			// Relay::fresh_transient, NOT get_transient — see the note there. Inside this hold a
+			// memoised read never moves, so the loop below would spin out its full 20s and answer
+			// `idle` while the answer was being written beside it.
+			$buf   = Relay::fresh_transient( $key );
 			$fresh = is_array( $buf ) && (int) $buf['seq'] > $seen;
 			if ( $fresh ) {
 				// GATHER before returning. The daemon flushes every ~400ms, so returning on the first

@@ -79,6 +79,33 @@ final class Relay {
 		update_option( 'aq_relay_table_version', self::TABLE_VERSION, true );
 	}
 
+	/**
+	 * Read a transient BYPASSING this request's memoized copy — the only safe way to watch one from
+	 * inside a long-poll.
+	 *
+	 * WHY THIS EXISTS, measured on production 2026-08-07. Every hold in this file (and in
+	 * Assistant::live) re-reads a transient in a loop while ANOTHER process writes it. With a
+	 * persistent object cache — which Atomic has — get_transient() goes through wp_cache_get(), and
+	 * wp_cache_get MEMOISES per request: the first read is fresh, and every read after it returns that
+	 * same value for as long as the request lives. So the hold was structurally blind. A live buffer
+	 * whose seq climbed 1 → 13 while a tool turn ran was read as "still 1" for the whole 20 s hold,
+	 * which then answered `idle`; the member only ever saw a slice when a NEW request began. It looked
+	 * like a working long-poll — it held, it returned 200 — and it could not see the thing it was
+	 * holding for.
+	 *
+	 * wp_cache_get's third argument is $force: go back to the cache server and ignore the local copy.
+	 * With no external cache, transients are options and the options group is memoised the same way,
+	 * but that cache is purely in-request, so dropping the two keys is free and forces a real read.
+	 */
+	public static function fresh_transient( $key ) {
+		if ( wp_using_ext_object_cache() ) {
+			return wp_cache_get( $key, 'transient', true );
+		}
+		wp_cache_delete( '_transient_' . $key, 'options' );
+		wp_cache_delete( '_transient_timeout_' . $key, 'options' );
+		return get_transient( $key );
+	}
+
 	/** Is the laptop relay able to take a job right now? Fresh heartbeat AND not usage-limited. */
 	public static function available() {
 		return get_transient( 'aq_relay_beat' ) && ! get_transient( 'aq_relay_limited' );
@@ -179,7 +206,9 @@ final class Relay {
 			// when the laptop is GENUINELY GONE — its heartbeat (refreshed on every poll, even while
 			// it's mid-answer) has lapsed. A live relay, whether queuing or actively answering, is
 			// waited for to the full budget; being slow or momentarily busy is NEVER a reason to bill.
-			$alive = (bool) get_transient( 'aq_relay_beat' ) && ! get_transient( 'aq_relay_bye' );
+			// fresh_transient, not get_transient: this runs inside a hold, and a memoised heartbeat
+			// would make "the relay is alive" whatever it was when this request started.
+			$alive = (bool) self::fresh_transient( 'aq_relay_beat' ) && ! self::fresh_transient( 'aq_relay_bye' );
 			if ( ! $alive ) {
 				// Heartbeat lapsed (sleep/crash) — the answer is never coming. Mark a still-pending job
 				// failed (a zombie late poll must not answer twice), then fall back to the API.
@@ -260,7 +289,10 @@ final class Relay {
 		$wait     = max( 0, min( (int) Rest::p( $req, 'wait', 10 ), self::POLL_WAIT ) );
 		$deadline = microtime( true ) + $wait;
 		do {
-			if ( get_transient( 'aq_relay_bye' ) ) { return [ 'job' => null ]; } // daemon said bye mid-hold
+			if ( self::fresh_transient( 'aq_relay_bye' ) ) { return [ 'job' => null ]; } // daemon said bye mid-hold
+			// ↑ fresh_transient is load-bearing here, not a tidy-up. This flag's whole job is to stop a
+			// poll that is STILL RUNNING when its client died from claiming a job it can never deliver —
+			// and a memoised read returns whatever was true when this hold began, i.e. before the bye.
 			$job = self::claim_one();
 			if ( $job ) { return [ 'job' => $job ]; }
 			usleep( self::STEP_US );
