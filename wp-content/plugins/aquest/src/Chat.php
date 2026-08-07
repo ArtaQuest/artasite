@@ -144,6 +144,7 @@ final class Chat {
 		// requests was, by definition, already accepted, and a default of 0 would have quietly
 		// swept the whole site's history into the Requests box on deploy.
 		$flag = 'TINYINT UNSIGNED NOT NULL DEFAULT 0';
+		$want = [];   // table → columns this version REQUIRES, checked for real below
 		foreach ( [ [ 'aq_chats', 'ttl', 'INT UNSIGNED NOT NULL DEFAULT 0' ],
 					[ 'aq_chats', 'starter', 'BIGINT UNSIGNED NOT NULL DEFAULT 0' ],
 					[ 'aq_chats', 'accepted', 'TINYINT UNSIGNED NOT NULL DEFAULT 1' ],
@@ -156,6 +157,29 @@ final class Chat {
 			if ( $cols && ! in_array( $col, $cols, true ) ) {
 				$wpdb->query( "ALTER TABLE {$p}{$t} ADD COLUMN `$col` $def" );
 			}
+			$want[ $t ][] = $col;
+		}
+		// VERIFY BEFORE CLAIMING. The version option is a "do not run this again" guard, so writing
+		// it is a promise that the columns are there — and every query below this line names them.
+		// Recorded unconditionally, one silently-failed ALTER would leave the guard saying "migrated"
+		// while every chat query referenced a column that does not exist: Messages broken for
+		// everyone, and the retry that would fix it suppressed by the very flag that lied.
+		//
+		// This is not hypothetical caution. dbDelta is already known in this codebase to emit nothing
+		// at all under the SQLite dev integration for shapes it dislikes, which is why the explicit
+		// ALTERs above exist; a migration that cannot tell whether it worked has the same shape.
+		// Re-read the live schema instead, and if anything is missing leave the option UNSET so the
+		// next request tries again rather than proceeding on a false promise.
+		$missing = [];
+		foreach ( $want as $t => $cols_wanted ) {
+			$have = (array) $wpdb->get_col( "SHOW COLUMNS FROM {$p}{$t}" );
+			foreach ( $cols_wanted as $c ) {
+				if ( ! in_array( $c, $have, true ) ) { $missing[] = "$t.$c"; }
+			}
+		}
+		if ( $missing ) {
+			error_log( 'AQ Chat: schema v' . self::TABLE_VERSION . ' incomplete, not recording the version — missing ' . implode( ', ', $missing ) );
+			return;
 		}
 		update_option( 'aq_chat_table_version', self::TABLE_VERSION, true );
 	}
