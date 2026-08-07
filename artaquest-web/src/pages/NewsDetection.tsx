@@ -51,12 +51,29 @@ export default function NewsDetectionPage() {
   if (failed) {
     return (
       <div className="mx-auto max-w-3xl py-16">
+        {/*
+          It does NOT say "superseded by a later reading", which is what this used to offer first.
+          Nothing supersedes a detection here: aq_news_events is never deleted from, and a repeat
+          reading of the same event UPDATES that row in place rather than replacing it, so an id that
+          existed once still resolves. The sentence described a mechanism the code does not have, and
+          it was the reassuring half — a reader who followed a link from elsewhere would conclude the
+          event had simply moved on, and stop looking.
+
+          What is actually true is narrower: this id has never been on record. A mistyped or truncated
+          link is the ordinary cause, and a link from a page cached before the detection existed is
+          the other.
+        */}
         <ErrorNote>
-          That detection is not on record. It may have been superseded by a later reading, or the
-          link may be mistyped.
+          No detection is on record under that link. Detections are not removed once recorded, so this
+          is a link that never pointed at one — most often a truncated or mistyped address.
         </ErrorNote>
         <p className="mt-4 text-[14px]">
-          <a className="text-yin-light hover:underline" href={localePath("/")}>Back to the feed</a>
+          {/* One link, and it says where it goes. There is no detections index to offer instead —
+              /news and /news/ are both <Navigate to="/">, so a second link would be the same
+              destination wearing a different label. The feed's rail IS the list, so say that. */}
+          <a className="text-yin-light hover:underline" href={localePath("/")}>
+            See what the instruments have detected
+          </a>
         </p>
       </div>
     );

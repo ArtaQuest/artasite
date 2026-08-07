@@ -545,6 +545,24 @@ export function AppShell({ children }: { children: ReactNode }) {
             where it reads as part of it. Every link in it also lives in the left rail. */}
         {onFeed ? null : <Footer />}
       <BottomTabs />
+      {/*
+        THE SPACE ARTA OCCUPIES, RESERVED BY THE PAGE.
+
+        Arta stands on the TOP edge of a fixed dock, so its body fills the ~128px directly above that
+        edge. Whatever the document ends with sits in that band once you scroll to the end — measured
+        on a short window, that was the footer's legal row, with a leg through "Privacy" and "Terms".
+        Covered links are the part that actually matters; the rest is only untidy.
+
+        The footer already reserves bottom clearance for the DOCK itself (see Footer.tsx, sized by
+        measurement). This is the same idea for the figure standing ON the dock, and it is deliberately
+        NOT more padding inside the footer: the feed has no footer at all and its last card met exactly
+        the same leg. A spacer after the page content covers both.
+
+        It exists only when Arta does. `signedIn` is the same condition the mount below uses to decide
+        whether a real ledge exists — both floors in this app are members-only — so a signed-out
+        visitor, who has no companion, is not given a band of empty space to scroll past.
+      */}
+      {signedIn ? <div aria-hidden className="h-32" /> : null}
       </div>
       {/* ONE Arta for the whole app: a fixed, click-through layer, so it stands
           on the real cards of the page and can travel between them. z-30 sits
