@@ -235,7 +235,7 @@ export type TrackPoints = {
 const ZERO_TRACKS: TrackPoints = { learn: 0, donate: 0, volunteer: 0, outreach: 0 };
 export type EnrolledCourse = { id?: number; value: string; url: string; resume?: string; image?: string; lessons?: number; pct?: number; cert?: boolean };
 export type Dashboard = {
-  user: { name: string; avatar: string; slug?: string; bio?: string; country?: string; palm?: string };
+  user: { name: string; avatar: string; slug?: string; bio?: string; country?: string; palm?: string; links?: Partial<Record<ProfileLinkKey, string>> };
   coins: number; points: number;
   tier: { label?: string; next: string | null; pct: number; remaining: number };
   stats: Stat[]; courses: EnrolledCourse[];
@@ -246,12 +246,12 @@ export async function getDashboard(): Promise<Dashboard | null> {
   try {
     const [d, me] = await Promise.all([
       get<{ courses: EnrolledCourse[]; points: number; coins: number }>(`${AQ}/dashboard`),
-      get<{ user: ({ name: string; slug: string; avatar: string; country?: string; palm?: string; tier: string; bio?: string; completed?: number; progress?: { label: string; next: string | null; pct: number; remaining: number } }) | null }>(`${AQ}/me`),
+      get<{ user: ({ name: string; slug: string; avatar: string; country?: string; palm?: string; tier: string; bio?: string; links?: Partial<Record<ProfileLinkKey, string>>; completed?: number; progress?: { label: string; next: string | null; pct: number; remaining: number } }) | null }>(`${AQ}/me`),
     ]);
     const u = me.user;
     const courses = d.courses || [];
     return {
-      user: { name: u?.name || "Quester", avatar: u?.avatar || "", slug: u?.slug, bio: u?.bio || "", country: u?.country || "", palm: u?.palm || "" },
+      user: { name: u?.name || "Quester", avatar: u?.avatar || "", slug: u?.slug, bio: u?.bio || "", country: u?.country || "", palm: u?.palm || "", links: u?.links },
       coins: d.coins, points: d.points,
       // Real rank-ring progress, computed server-side (Economy::tier_progress) — was hardcoded next:null/pct:0.
       tier: u?.progress ?? { label: u?.tier || "Quester", next: null, pct: 0, remaining: 0 },
@@ -268,12 +268,20 @@ export async function getDashboard(): Promise<Dashboard | null> {
   } catch { return null; }
 }
 
-export async function postProfileUpdate(name: string, bio: string, username?: string): Promise<{ ok: boolean; name: string; bio: string; slug?: string; message?: string }> {
+export async function postProfileUpdate(
+  name: string,
+  bio: string,
+  username?: string,
+  links?: Partial<Record<ProfileLinkKey, string>>,
+): Promise<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; message?: string }> {
   try {
     const body: Record<string, unknown> = { name, bio };
     if (username) body.username = username; // only sent when the member actually changed their handle
-    const r = await post<{ ok: boolean; name: string; bio: string; slug?: string }>(`${AQ}/profile-update`, body);
-    return { ok: !!r.ok, name: r.name ?? name, bio: r.bio ?? bio, slug: r.slug };
+    // OMITTED means "leave them alone"; {} means "clear them". A caller that does not edit links must
+    // not wipe them, so this is only sent when the caller actually has a value to state.
+    if (links) body.links = links;
+    const r = await post<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>> }>(`${AQ}/profile-update`, body);
+    return { ok: !!r.ok, name: r.name ?? name, bio: r.bio ?? bio, slug: r.slug, links: r.links };
   } catch (e) {
     // Surface the server's reason (taken / reserved / invalid / rate-limited) so the form can show it.
     return { ok: false, name, bio, message: e instanceof Error ? e.message : undefined };
@@ -821,11 +829,22 @@ export async function getVideoCommentStats(video: string, days = 90): Promise<Vi
 }
 
 // ── Profiles ──────────────────────────────────────────────────────────────────
+/** The networks a member may list, in the order a profile shows them. Mirrors AQ\Auth::LINKS —
+ *  add a key there first; anything unknown is dropped by the server rather than stored. */
+export const PROFILE_LINKS = [
+  ["website", "Website"], ["github", "GitHub"], ["scholar", "Google Scholar"], ["orcid", "ORCID"],
+  ["linkedin", "LinkedIn"], ["x", "X"], ["mastodon", "Mastodon"],
+] as const;
+export type ProfileLinkKey = (typeof PROFILE_LINKS)[number][0];
+
 export type ProfileStats = { threads: number; comments: number; reviews: number; enrolled: number; followers: number; following: number };
 export type ProfileThread = { id: number; title: string; comments: number; score: number; at: number; topic?: string; excerpt?: string };
 export type Profile = {
   id: number;
   name: string; slug: string; avatar: string; bio: string; email: string;
+  /** Where else this member is. Keys are AQ\Auth::LINKS; every value is an absolute https URL,
+   *  host-checked server-side at save time, so a renderer may link it without re-validating. */
+  links?: Partial<Record<ProfileLinkKey, string>>;
   country?: string; // verified nationality (ISO alpha-2) → avatar flag; '' until verified
   // Public identity facts (radical transparency — the same values the /data/ explorer serves, and
   // required of every member at signup). `birthday` is the EXACT date, `YYYY-MM-DD`; '' if unset.
@@ -880,6 +899,7 @@ export type ProfileTopic = { key: string; name: string; category: string; status
 type ProfileR = {
   id: number; name: string; slug: string; avatar: string; palm?: string; country?: string; nationality?: string; email?: string; points: number; tier: string;
   birthday?: string; full_name?: string; season?: number; verified?: boolean;
+  links?: Partial<Record<ProfileLinkKey, string>>;
   coins?: number; joined?: string; bio?: string; completed?: number; breakdown?: TrackPoints;
   typologies?: TypologyTag[]; endorsements?: Record<string, number>; stats?: ProfileStats; is_following?: boolean;
   recent_threads?: ProfileThread[];
@@ -925,7 +945,7 @@ export async function getProfile(slug: string): Promise<Profile | null> {
   try {
     const pr = await get<ProfileR>(`${AQ}/profile?slug=${encodeURIComponent(slug)}`);
     return {
-      id: pr.id, name: pr.name, slug: pr.slug, avatar: pr.avatar, palm: pr.palm || "", country: pr.country || "", nationality: pr.nationality || "", email: pr.email || "", bio: pr.bio || "",
+      id: pr.id, name: pr.name, slug: pr.slug, avatar: pr.avatar, palm: pr.palm || "", country: pr.country || "", nationality: pr.nationality || "", email: pr.email || "", bio: pr.bio || "", links: pr.links || undefined,
       // Public identity facts the endpoint has always emitted but the SPA used to drop on the floor.
       birthday: pr.birthday || "", fullName: pr.full_name || "", season: pr.season ?? 0, verified: !!pr.verified,
       coins: pr.coins ?? 0, points: pr.points, completed: pr.completed ?? 0,

@@ -1196,6 +1196,14 @@ function aq_app_head_meta() {
 		if ( '' !== $pbio ) { $person['description'] = $pbio; }
 		$avatar = get_avatar_url( $puser->ID, array( 'size' => 512 ) );
 		if ( $avatar ) { $person['image'] = $avatar; }
+		// sameAs — the member's own profiles elsewhere. This is the strongest thing a page can say
+		// about WHICH person it means: a name is ambiguous and a set of accounts is not, and it is
+		// how a search engine reconciles this page with the ones it already knows about. Their
+		// values are host-locked at save time (AQ\Auth::LINKS), so nothing arbitrary reaches here.
+		if ( class_exists( 'AQ\\Auth' ) ) {
+			$plinks = array_values( AQ\Auth::links( $puser->ID ) );
+			if ( $plinks ) { $person['sameAs'] = $plinks; }
+		}
 		if ( $pworks ) {
 			// What they are known FOR. Named works are the strongest thing tying a person to a subject,
 			// and each is a real indexable URL on this site rather than an assertion about them.

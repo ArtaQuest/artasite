@@ -13,7 +13,7 @@ import { NB_KIND_META, NbCard } from "../components/nbview";
 import { BlueCheck } from "../components/BlueCheck";
 import { Avatar, Button, EmptyState, HeartGlyph, LoadMoreButton, Pill, StatusNote, cx } from "../components/ui";
 import {
-  currentUser, fmtBirthday, followUser, getFollows, getProfile, isLoggedIn, localePath, relAgo,
+  currentUser, fmtBirthday, followUser, getFollows, getProfile, isLoggedIn, localePath, PROFILE_LINKS, relAgo,
   type FollowRow, type Profile as ProfileData,
 } from "../lib/wp";
 import { Points } from "../lib/currency";
@@ -219,10 +219,29 @@ export default function Profile() {
           <Avatar priority src={p.avatar} name={p.name} country={p.country} palm={p.palm || undefined}
             className="h-24 w-24 shrink-0 text-2xl ring-2 ring-line" />
           <div className="min-w-0 flex-1">
+            {/* THE REAL NAME IS THE HEADING. `p.name` is display_name — the handle a member is
+                addressed by, and on this platform frequently not a name at all ("Arash" for Arash
+                Ashrafnejad, "Eceergun10" for Ece Ergün). full_name is what the identity gate
+                collected and what the page's title, description and Person schema now say, so the
+                visible heading agreeing with them is both the honest label and the one a visitor
+                arriving from a name search expects to see. Falls back when a member has no full
+                name on record. */}
             <h1 className="flex items-center gap-2 text-[28px] font-extrabold leading-tight tracking-tight">
-              <span className="truncate">{p.name}</span>
+              <span className="truncate">{p.fullName?.trim() || p.name}</span>
               {p.verified && <BlueCheck size={20} className="shrink-0" />}
             </h1>
+            {/* THE HANDLE, which the profile never showed. It is how you are addressed here and the
+                only thing /messages/?with= accepts, so "what is this person's handle" was a question
+                their own profile could not answer. Shown whenever it adds something the heading has
+                not already said. */}
+            {(p.fullName?.trim() && p.fullName.trim() !== p.name ? p.name : p.slug) && (
+              <p className="mt-0.5 truncate text-[14px] text-ink-3">
+                @{p.slug}
+                {p.fullName?.trim() && p.fullName.trim() !== p.name && p.name !== p.slug && (
+                  <span className="text-ink-3"> · goes by {p.name}</span>
+                )}
+              </p>
+            )}
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-ink-3">
               {p.tier && <Pill className="px-3 py-0.5 text-[13px]">{p.tier}</Pill>}
               <span className="inline-flex items-center gap-1 rounded-pill bg-yang/15 px-3 py-0.5 font-semibold text-yang" title="Lifetime points">
@@ -268,6 +287,30 @@ export default function Profile() {
               </button>
             </div>
             {p.bio && <p className="mt-2.5 max-w-2xl text-[14.5px] leading-relaxed text-ink-2">{p.bio}</p>}
+            {/* WHERE ELSE THEY ARE. Text, not brand logos: seven third-party marks would be seven
+                trademarks to keep current and the only place on this site with colours outside the
+                two. Every href was host-checked server-side (AQ\Auth::LINKS) before it was stored.
+                rel: "me" states this is the same person — the claim the sameAs schema makes, in the
+                markup a human-readable indexer reads; "nofollow ugc" because these are member-supplied
+                and there must be no ranking to farm by putting a link here. */}
+            {p.links && Object.keys(p.links).length > 0 && (
+              <ul className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                {PROFILE_LINKS.filter(([k]) => p.links?.[k]).map(([k, label]) => (
+                  <li key={k}>
+                    <a href={p.links![k]} target="_blank" rel="me nofollow ugc noopener noreferrer"
+                      title={p.links![k]}
+                      className="inline-flex items-center gap-1 rounded-pill border border-line px-3 py-1 text-[13px] text-ink-2 transition-colors hover:border-yin-light hover:text-yin-light">
+                      {label}
+                      {/* external-link glyph, currentColor — no third accent */}
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor"
+                        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <path d="M7 17 17 7M9 7h8v8" />
+                      </svg>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           {isOwn ? (
             <a href={localePath("/user-account/?settings=1")} className="shrink-0 text-[13.5px] font-semibold text-ink-3 transition-colors hover:text-yang sm:ml-auto">

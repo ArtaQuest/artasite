@@ -252,6 +252,7 @@ final class Auth {
 			'breakdown' => Economy::points_by_track( $uid ), // {learn,donate,volunteer,outreach} for the profile
 			'completed' => Learn::completed_count( $uid ), // courses completed (cert threshold) for the profile stat
 			'bio'       => (string) get_user_meta( $uid, 'description', true ), // so the saved bio loads back (was never read)
+			'links'     => self::links( $uid ),                                  // so the settings form loads them back too
 			'joined'    => Verify::joined_label( $u->user_registered ), // clamped to the platform launch (ticket #103)
 			'verified'     => Verify::is_verified( $uid ),   // blue check
 			'has_identity' => Verify::has_identity( $uid ),  // name + birthday set (gates posting)
@@ -268,11 +269,121 @@ final class Auth {
 	 *  any time, subject to availability ([#28]). `user_login` is deliberately NEVER touched: auth is
 	 *  passwordless (email code / Google), so the login is an inert internal identifier and rewriting
 	 *  it would only risk the wp-admin operator path. */
+	/**
+	 * The places a member can say they also are, and how to recognise one.
+	 *
+	 *   key => [ label, host (or '' for any), handle → URL template ]
+	 *
+	 * HOST-LOCKED ON PURPOSE. A free-text URL on a public profile is a spam surface: it costs nothing
+	 * to create an account and drop a link, and this one would be rendered on an indexable page. A
+	 * value is accepted only if it lands on that network's own host, so the field cannot be pointed
+	 * anywhere else. The two that cannot be locked — a personal site and Mastodon, which is federated
+	 * and has no single host — take any https URL, and every rendered link carries rel="nofollow ugc"
+	 * so there is no ranking to farm.
+	 *
+	 * A member may type either a bare handle or a full URL; normalise_link() accepts both, because
+	 * telling somebody their perfectly good profile URL is invalid is a worse experience than
+	 * accepting it.
+	 */
+	const LINKS = array(
+		'website'  => array( 'Website',        '',                    '%s' ),
+		'github'   => array( 'GitHub',         'github.com',          'https://github.com/%s' ),
+		'scholar'  => array( 'Google Scholar', 'scholar.google.com',  'https://scholar.google.com/citations?user=%s' ),
+		'orcid'    => array( 'ORCID',          'orcid.org',           'https://orcid.org/%s' ),
+		'linkedin' => array( 'LinkedIn',       'linkedin.com',        'https://www.linkedin.com/in/%s' ),
+		// twitter.com is accepted too: it is the same service under its old name, and people paste
+		// the URL they have. Refusing it would be correct and useless.
+		'x'        => array( 'X',              'x.com|twitter.com',   'https://x.com/%s' ),
+		'mastodon' => array( 'Mastodon',       '',                    '%s' ),
+	);
+
+	/**
+	 * A member's public links: key => absolute https URL. Always an object, never a list, so a caller
+	 * can read `links.github` without searching. Unknown keys are dropped rather than trusted, so a
+	 * value written before a key was retired cannot resurface.
+	 */
+	public static function links( $uid ) {
+		$raw = get_user_meta( (int) $uid, 'aq_links', true );
+		$raw = is_array( $raw ) ? $raw : (array) json_decode( (string) $raw, true );
+		$out = array();
+		foreach ( self::LINKS as $k => $_ ) {
+			$v = isset( $raw[ $k ] ) ? trim( (string) $raw[ $k ] ) : '';
+			if ( '' !== $v ) { $out[ $k ] = $v; }
+		}
+		return $out;
+	}
+
+	/**
+	 * One submitted value → an absolute https URL on the expected host, or '' if it cannot be one.
+	 * Accepts a bare handle ("arash"), an @handle, or a full URL.
+	 */
+	private static function normalise_link( $key, $val ) {
+		$val = trim( (string) $val );
+		if ( '' === $val || ! isset( self::LINKS[ $key ] ) ) { return ''; }
+		list( , $host, $tpl ) = self::LINKS[ $key ];
+
+		if ( preg_match( '#^https?://#i', $val ) ) {
+			$url = esc_url_raw( $val );
+			if ( '' === $url ) { return ''; }
+			// http → https rather than refusing: the member is right about where they are, and a
+			// profile page must not link out over plaintext.
+			$url = preg_replace( '#^http://#i', 'https://', $url );
+			$h   = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+			if ( '' === $h ) { return ''; }
+			if ( '' !== $host ) {
+				// Suffix match, so www. and country subdomains pass while "github.com.evil.tld"
+				// does not — the check is on the END of the host, after a dot.
+				$okhost = false;
+				foreach ( explode( '|', $host ) as $cand ) {
+					if ( $h === $cand || substr( $h, -( strlen( $cand ) + 1 ) ) === '.' . $cand ) { $okhost = true; break; }
+				}
+				if ( ! $okhost ) { return ''; }
+			}
+			return $url;
+		}
+
+		// A bare handle. Anything that is not plausibly one is refused rather than pasted into a URL.
+		$handle = ltrim( $val, '@' );
+		if ( ! preg_match( '/^[A-Za-z0-9._-]{1,64}$/', $handle ) ) { return ''; }
+		if ( '' === $host ) { return ''; } // website/mastodon need a real URL — a handle says nothing
+		return esc_url_raw( sprintf( $tpl, rawurlencode( $handle ) ) );
+	}
+
 	public static function profile_update( $req ) {
 		$uid  = Rest::uid();
 		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
 		$name = sanitize_text_field( (string) Rest::p( $req, 'name', '' ) );
 		$bio  = sanitize_textarea_field( (string) Rest::p( $req, 'bio', '' ) );
+
+		// Links, when the client sends them. ABSENT means "unchanged" and an EMPTY OBJECT means
+		// "clear them" — a form that only edits the bio must not silently wipe somebody's links
+		// because it did not know about the field.
+		//
+		// VALIDATED HERE, BEFORE ANYTHING IS WRITTEN. It used to be checked after the name and bio
+		// had already been saved, so a request refused for a bad link had still applied half of
+		// itself: the member got an error and their name changed anyway. Same reason the username is
+		// settled first — a save either happens or it does not.
+		$links_clean = null;
+		$links_in    = Rest::p( $req, 'links', null );
+		if ( null !== $links_in ) {
+			$links_in    = is_array( $links_in ) ? $links_in : (array) json_decode( (string) $links_in, true );
+			$links_clean = array();
+			$bad         = array();
+			foreach ( self::LINKS as $k => $meta ) {
+				$raw = isset( $links_in[ $k ] ) ? trim( (string) $links_in[ $k ] ) : '';
+				if ( '' === $raw ) { continue; }
+				$url = self::normalise_link( $k, $raw );
+				// Name the one that failed. "Could not save" for a whole form because one field was
+				// wrong is the kind of error people give up on.
+				if ( '' === $url ) { $bad[] = $meta[0]; continue; }
+				$links_clean[ $k ] = $url;
+			}
+			if ( $bad ) {
+				return Rest::err( 'bad_link', count( $bad ) === 1
+					? sprintf( 'That %s link does not look right — paste the address of your profile there, or just your handle.', $bad[0] )
+					: sprintf( 'These do not look right: %s. Paste the address of each profile, or just the handle.', implode( ', ', $bad ) ) );
+			}
+		}
 
 		// Username (handle) change — validated + availability-checked, then applied FIRST so a
 		// rejected handle aborts the whole save with a clear error (the form keeps the user's input).
@@ -293,6 +404,8 @@ final class Auth {
 
 		if ( $name !== '' ) { wp_update_user( array( 'ID' => $uid, 'display_name' => $name ) ); }
 		update_user_meta( $uid, 'description', $bio );
+
+		if ( null !== $links_clean ) { update_user_meta( $uid, 'aq_links', wp_json_encode( $links_clean ) ); }
 		$u = get_userdata( $uid );
 		// Notify the member their profile changed (a paper trail in the account drawer's bell).
 		$note = $slug_changed && $u
@@ -301,7 +414,9 @@ final class Auth {
 		Notify::push( $uid, 'profile', 'Your profile was updated', $note, $u ? '/u/' . $u->user_nicename . '/' : '' );
 		// `slug` is re-read from the DB, not echoed: in the (rare) race where two members claim the same
 		// handle simultaneously, WP suffixes the loser (-2) — the client must learn what it actually got.
-		return array( 'ok' => true, 'name' => $u ? $u->display_name : $name, 'bio' => $bio, 'slug' => $u ? $u->user_nicename : '' );
+		// `links` comes back NORMALISED — a member who typed a bare handle sees the real URL that was
+		// stored, so the form shows what the profile will show rather than what they typed.
+		return array( 'ok' => true, 'name' => $u ? $u->display_name : $name, 'bio' => $bio, 'slug' => $u ? $u->user_nicename : '', 'links' => self::links( $uid ) );
 	}
 
 	/** GET /username/check?u= — live availability for the settings form. Public: every username is

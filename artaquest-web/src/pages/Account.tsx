@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DobWheel } from "../components/DobWheel";
-import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, postProfileUpdate, type CourseCard, type Dashboard, type UsernameCheck } from "../lib/wp";
+import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, postProfileUpdate, PROFILE_LINKS, type CourseCard, type Dashboard, type UsernameCheck } from "../lib/wp";
 import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, KaggleIds, Passkeys, ShellAccount, myParticipation, setGender as setGender_, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type KaggleIdItem, type SessionItem, type ShellInfo, type ShellKey, type BursaryResult, type BursaryStatus, type ShareKit } from "../lib/api";
 import { signOut } from "../lib/auth";
 import { VerifyApi, fileToImage, type VerifyStatus } from "../lib/verify";
@@ -23,12 +23,17 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (name: string, bio: string, slug?: string) => void }) {
   const [name, setName] = useState(user.name);
   const [bio, setBio] = useState(user.bio || "");
+  // Held as its own state per network, so a member editing one field cannot disturb another and a
+  // rejected value stays on screen to be corrected rather than being thrown away.
+  const [links, setLinks] = useState<Record<string, string>>(() =>
+    Object.fromEntries(PROFILE_LINKS.map(([k]) => [k, (user.links as Record<string, string> | undefined)?.[k] ?? ""])));
   const [username, setUsername] = useState(user.slug || "");
   const [check, setCheck] = useState<UsernameCheck | null>(null); // live availability of a NEW handle
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const usernameChanged = username !== (user.slug || "") && username !== "";
-  const dirty = name.trim() !== user.name || bio !== (user.bio || "") || usernameChanged;
+  const linksDirty = PROFILE_LINKS.some(([k]) => (links[k] || "") !== ((user.links as Record<string, string> | undefined)?.[k] ?? ""));
+  const dirty = name.trim() !== user.name || bio !== (user.bio || "") || usernameChanged || linksDirty;
 
   // Debounced live availability check — only while the handle differs from the current one.
   useEffect(() => {
@@ -45,8 +50,9 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
     setSaving(true);
     setMsg("");
     try {
-      const r = await postProfileUpdate(name.trim(), bio, usernameChanged ? username : undefined);
+      const r = await postProfileUpdate(name.trim(), bio, usernameChanged ? username : undefined, links);
       if (!r.ok) { setMsg(r.message || "Could not save — try again"); return; }
+      if (r.links) setLinks(Object.fromEntries(PROFILE_LINKS.map(([k]) => [k, (r.links as Record<string, string>)[k] ?? ""])));
       // Adopt what the server actually stored (a simultaneous claim can suffix the handle).
       if (r.slug) setUsername(r.slug);
       onSaved(r.name, r.bio, r.slug);
@@ -90,6 +96,27 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
         <Field label="Bio">
           <Textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={4} maxLength={600} placeholder="Tell the community what you are exploring." className="resize-y bg-space-1 px-3.5" />
           <span className="self-end text-[12px] font-normal text-ink-3">{bio.length}/600</span>
+        </Field>
+        {/* WHERE ELSE YOU ARE. Two fields per row on anything wider than a phone: seven stacked
+            inputs reads as a form to endure, and none of them is required. A bare handle is enough —
+            the server turns it into the real address and hands it back, which is why the value can
+            change under the cursor after a save. */}
+        <Field label="Where else you are">
+          <span className="text-[12.5px] font-normal text-ink-3">
+            Optional. Paste the address, or just your handle. These appear on your profile and tell search
+            engines that this page and your other accounts are the same person.
+          </span>
+          <div className="mt-1 grid gap-2 sm:grid-cols-2">
+            {PROFILE_LINKS.map(([k, label]) => (
+              <label key={k} className="flex flex-col gap-1">
+                <span className="text-[12.5px] font-normal text-ink-3">{label}</span>
+                <Input value={links[k] || ""} inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false}
+                  onChange={(e) => setLinks((l) => ({ ...l, [k]: e.target.value }))}
+                  placeholder={k === "website" || k === "mastodon" ? "https://…" : "your handle"}
+                  className="bg-space-1 px-3.5" />
+              </label>
+            ))}
+          </div>
         </Field>
         <div className="flex items-center gap-3">
           <Button type="button" onClick={save} disabled={!dirty || !name.trim() || saving || (usernameChanged && !!check && !check.available)} className="h-10 px-6 text-[14px] disabled:opacity-40">
