@@ -284,16 +284,34 @@ final class Relay {
 	 * A job nobody picks up is pruned by the existing STALE_S sweep, exactly as an unclaimed one was.
 	 */
 	private static function push( $id, $tier = '' ) {
-		$url = self::endpoint( $tier );
-		if ( $url === '' ) { return; }                       // no endpoint: a poller will claim it
 		$row = Data::one( 'SELECT payload FROM ' . Data::t( 'aq_relay_jobs' ) . ' WHERE id = %d', [ $id ] );
 		if ( ! $row ) { return; }
+		$payload = Data::dec( $row['payload'] );
+		$tools   = ! empty( $payload['tools'] );
+		$url     = $tools ? (string) Secrets::get( 'AQ_TURN_URL_TOOLS' ) : '';
+		if ( $url === '' ) { $url = self::endpoint( $tier ); $tools = false; }
+		if ( $url === '' ) { return; }                       // no endpoint: a poller will claim it
 		Data::update( 'aq_relay_jobs', [ 'status' => 'claimed', 'claimed' => Data::now() ], [ 'id' => (int) $id ] );
+
+		$body = [ 'id' => (int) $id, 'payload' => $payload ];
+		if ( $tools ) {
+			// A tool turn's container gives the member a ROOT SHELL, so anything in its environment is
+			// theirs to read. It therefore gets credentials worth only this one turn: a signed
+			// completion token, and a bearer it exchanges at the broker for the real subscription
+			// credential — on a machine it has no shell on. Stolen, either buys what the member already had.
+			$body['job_token']         = self::mint_token( $id );
+			$body['payload']['bearer'] = self::mint_token( $id );
+			$body['payload']['broker'] = rtrim( (string) Secrets::get( 'AQ_BROKER_URL' ), '/' );
+		}
 		wp_remote_post( $url, [
 			'blocking' => false,                             // ← the whole point
 			'timeout'  => 1,
-			'headers'  => [ 'Content-Type' => 'application/json', 'X-AQ-Worker' => (string) Secrets::get( 'AQ_WORKER_TOKEN' ) ],
-			'body'     => wp_json_encode( [ 'id' => (int) $id, 'payload' => Data::dec( $row['payload'] ) ] ),
+			'headers'  => array_filter( [
+				'Content-Type' => 'application/json',
+				// The tools container is never given the shared secret; it authenticates by signature.
+				'X-AQ-Worker'  => $tools ? null : (string) Secrets::get( 'AQ_WORKER_TOKEN' ),
+			] ),
+			'body'     => wp_json_encode( $body ),
 		] );
 	}
 
