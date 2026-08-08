@@ -611,7 +611,19 @@ function NewsCard({ items }: { items: NewsItem[] | null }) {
           <Row
             key={n.ekey || n.id}
             {...(n.url ? { href: localePath(n.url) } : {})}
-            className={`-mx-1 block rounded-field px-1 py-1.5${n.url ? " transition-colors hover:bg-space-3" : ""}`}
+            // px-4, like every other row in every other rail — NOT `-mx-1 px-1`.
+            //
+            // That pairing is the "let the hover background breathe past the text" trick, and it
+            // only works inside a container with padding to absorb the negative margin. This
+            // RailCard has none: its heading carries its own px-4 and `{children}` is flush. So each
+            // row was 336px wide in a 328px box, sitting 4px outside the card on both sides — and
+            // the card is overflow-hidden, so the overhang was CLIPPED rather than shown. Short
+            // headlines never reached the edge and looked fine; "Wildfire, 31 km from Pavlohrad,
+            // Ukraine (583 MW)" ran under the border with its measurement cut off.
+            //
+            // Matching the siblings also makes the hover band full-bleed, which is what the rows
+            // above and below it already do.
+            className={`block px-4 py-2${n.url ? " transition-colors hover:bg-space-3" : ""}`}
           >
             <p className="text-[13.5px] font-semibold leading-snug text-ink" data-ay-skip="1">{n.title}</p>
             <p className="mt-0.5 text-[12px] text-ink-3">
