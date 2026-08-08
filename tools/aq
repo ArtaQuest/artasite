@@ -155,8 +155,12 @@ cmd_ship() {
   # READ THE OLD VERSION BEFORE PUSHING. `git push` fast-forwards the local artasite/main tracking
   # ref, so asking it afterwards returns the version we just shipped — it compares equal to itself,
   # and ship reports "no version change" for the one case the check exists for.
-  local prev
-  prev=$(git show artasite/main:wp-content/plugins/aquest/aquest.php 2>/dev/null | grep -oE "AQ_VERSION', '[0-9.]+'" | grep -oE '[0-9.]+')
+  # Both markers, read BEFORE the push. A theme-only change ships with a theme bump and no plugin
+  # bump, and checking only the plugin made ship announce "nothing to confirm" on a deploy that was
+  # perfectly confirmable — /version reports both.
+  local prev_p prev_t
+  prev_p=$(git show artasite/main:wp-content/plugins/aquest/aquest.php 2>/dev/null | grep -oE "AQ_VERSION', '[0-9.]+'" | grep -oE '[0-9.]+')
+  prev_t=$(git show artasite/main:wp-content/themes/artaquest-theme/style.css 2>/dev/null | grep -iE '^ \* Version:' | grep -oE '[0-9.]+')
 
   say "Pushing $br → artasite main"
   # The branch is a disposable ref that exists only so CI verifies this exact tree before main sees
@@ -195,17 +199,22 @@ cmd_ship() {
   # Only meaningful when the version actually moved. A change that touches no hashed PHP — tooling,
   # workflows, docs, or SPA source alone — ships under the same version by design, and waiting for a
   # number that was never going to change would report a timeout on a perfectly good deploy.
-  local want
-  want=$(grep -oE "AQ_VERSION', '[0-9.]+'" wp-content/plugins/aquest/aquest.php | grep -oE '[0-9.]+')
-  if [ "$want" = "$prev" ]; then
+  local want_p want_t want label
+  want_p=$(grep -oE "AQ_VERSION', '[0-9.]+'" wp-content/plugins/aquest/aquest.php | grep -oE '[0-9.]+')
+  want_t=$(grep -iE '^ \* Version:' wp-content/themes/artaquest-theme/style.css | grep -oE '[0-9.]+' | head -1)
+  # Whichever one MOVED is the one production can be asked about. If both moved, the plugin is the
+  # stricter witness: it is the field the integrity sweep keys on.
+  if   [ "$want_p" != "$prev_p" ]; then want="$want_p"; label="plugin $want_p"
+  elif [ "$want_t" != "$prev_t" ]; then want="$want_t"; label="theme $want_t"
+  else
     warn "no version change — nothing to confirm by /version (this push changed no hashed PHP)"
     printf "  %s\n" "$(curl -s -m 25 "$API/health/pulse" 2>/dev/null)"
     git push -q artasite --delete "$br" 2>/dev/null; return 0
   fi
-  say "Waiting for production to execute $want"
+  say "Waiting for production to execute $label"
   local i
   for i in $(seq 1 60); do
-    case "$(prod_version)" in *"\"$want\""*) ok "production is executing $want"; git push -q artasite --delete "$br" 2>/dev/null; return 0;; esac
+    case "$(prod_version)" in *"\"$want\""*) ok "production is executing $label"; git push -q artasite --delete "$br" 2>/dev/null; return 0;; esac
     sleep 30
   done
   warn "not executing $want yet after 30 min — CI may still be running, or WordPress.com's 'deploy on workflow completion' is off"
