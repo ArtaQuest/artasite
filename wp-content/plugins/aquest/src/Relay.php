@@ -45,6 +45,7 @@ final class Relay {
 	                          // abandoned to the paid API just for being momentarily busy.
 	const POLL_WAIT  = 20;    // s — max long-poll hold (the daemon asks for less)
 	const STEP_US    = 250000; // 250ms between queue/result checks while waiting
+	const RETRY_AFTER = 90;   // s a claimed-but-unanswered turn waits before it is pushed again
 	const STALE_S    = 3600;  // jobs older than this are pruned — nobody is coming back for them
 
 	// ── the LIVE channel (streaming deltas, see stream_chunk) ─────────────────────────────────────
@@ -333,6 +334,13 @@ final class Relay {
 		if ( $url === '' ) { return; }                       // no endpoint: a poller will claim it
 		Data::update( 'aq_relay_jobs', [ 'status' => 'claimed', 'claimed' => Data::now() ], [ 'id' => (int) $id ] );
 
+		// WAKE FIRST. A non-blocking POST to an endpoint that is scaled to ZERO can be abandoned by the
+		// client before the connection is established, and then the turn is simply never delivered — the
+		// job sits `claimed` forever and the member watches a spinner. A throwaway GET starts the replica
+		// so the POST that follows lands on something already awake. Both are best-effort; retry() below
+		// is what actually guarantees delivery.
+		wp_remote_get( preg_replace( '#/turn$#', '/health', $url ), [ 'blocking' => false, 'timeout' => 5 ] );
+
 		$body = [ 'id' => (int) $id, 'payload' => $payload ];
 		if ( $tools ) {
 			// A tool turn's container gives the member a ROOT SHELL, so anything in its environment is
@@ -345,7 +353,7 @@ final class Relay {
 		}
 		wp_remote_post( $url, [
 			'blocking' => false,                             // ← the whole point
-			'timeout'  => 1,
+			'timeout'  => 5,                                 // long enough to connect and write, never to wait
 			'headers'  => array_filter( [
 				'Content-Type' => 'application/json',
 				// The tools container is never given the shared secret; it authenticates by signature.
@@ -528,10 +536,35 @@ final class Relay {
 		set_transient( $key, $buf, 60 );        // brief grace for the last poll, then gone
 	}
 
+	/**
+	 * Re-push turns that were handed over and never came back.
+	 *
+	 * Push is fire-and-forget over a network to a service that may have been asleep, so "the request
+	 * was sent" is not "the turn was delivered" — and the failure is invisible from here: the job sits
+	 * `claimed`, the member watches a spinner, and nothing ever times out. Under the old pull model an
+	 * undelivered job was simply claimed again by the next poll; push has to arrange that itself.
+	 *
+	 * Bounded by the row's age so a genuinely long turn is never restarted underneath itself, and by
+	 * STALE_S so a job cannot be retried forever.
+	 */
+	private static function retry_stuck() {
+		global $wpdb;
+		$t    = Data::t( 'aq_relay_jobs' );
+		$rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT id FROM {$t} WHERE status = 'claimed' AND claimed > 0 AND claimed < %d AND claimed > %d LIMIT 5",
+			time() - self::RETRY_AFTER, time() - self::STALE_S ), ARRAY_A );
+		foreach ( $rows as $r ) {
+			// Reset to pending first: push() re-claims it, so a second sweep cannot double-send.
+			Data::update( 'aq_relay_jobs', [ 'status' => 'pending' ], [ 'id' => (int) $r['id'], 'status' => 'claimed' ] );
+			self::push( (int) $r['id'] );
+		}
+	}
+
 	/** Drop rows nobody will read again. Cheap (status_id key + tiny table); throttled to ~1/min. */
 	private static function prune() {
 		if ( get_transient( 'aq_relay_pruned' ) ) { return; }
 		set_transient( 'aq_relay_pruned', 1, 60 );
+		self::retry_stuck();
 		global $wpdb;
 		$t = Data::t( 'aq_relay_jobs' );
 		$wpdb->query( $wpdb->prepare( "DELETE FROM {$t} WHERE created < %d", time() - self::STALE_S ) );
