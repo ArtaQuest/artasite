@@ -896,6 +896,16 @@ final class Notebook {
 	}
 
 	/** Public so the Library (AQ\Kernel) renders an author identically to a work card. */
+	/** How many works this member has published — the one number this platform is actually about.
+	 *  Credited by author_id, the member who brought the work here and confirmed it from their inbox. */
+	public static function published_count( $uid ) {
+		$uid = (int) $uid;
+		if ( $uid <= 0 ) { return 0; }
+		return (int) Data::col(
+			'SELECT COUNT(*) FROM ' . Data::t( 'aq_notebooks' ) . " WHERE author_id = %d AND status = 'published'",
+			[ $uid ] );
+	}
+
 	public static function author_card( $uid ) {
 		$u = get_userdata( (int) $uid );
 		return [

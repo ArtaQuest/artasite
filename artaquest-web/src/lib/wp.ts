@@ -274,7 +274,7 @@ export async function getDashboard(): Promise<Dashboard | null> {
   try {
     const [d, me] = await Promise.all([
       get<{ courses: EnrolledCourse[]; points: number; coins: number }>(`${AQ}/dashboard`),
-      get<{ user: ({ name: string; slug: string; avatar: string; country?: string; palm?: string; tier: string; bio?: string; links?: Partial<Record<ProfileLinkKey, string>>; completed?: number; progress?: { label: string; next: string | null; pct: number; remaining: number } }) | null }>(`${AQ}/me`),
+      get<{ user: ({ name: string; slug: string; avatar: string; country?: string; palm?: string; tier: string; bio?: string; links?: Partial<Record<ProfileLinkKey, string>>; completed?: number; works?: number; progress?: { label: string; next: string | null; pct: number; remaining: number } }) | null }>(`${AQ}/me`),
     ]);
     const u = me.user;
     const courses = d.courses || [];
@@ -283,11 +283,18 @@ export async function getDashboard(): Promise<Dashboard | null> {
       coins: d.coins, points: d.points,
       // Real rank-ring progress, computed server-side (Economy::tier_progress) — was hardcoded next:null/pct:0.
       tier: u?.progress ?? { label: u?.tier || "Quester", next: null, pct: 0, remaining: 0 },
-      // Real stat tiles from the new /dashboard payload. Labels match Home's STAT_ICON map +
-      // FALLBACK_STATS copy; without these the bridge sent stats:[] and the tile panel rendered empty.
+      // The dashboard's four numbers.
+      //
+      // "Courses enrolled" and "Completed — certificates earned" were the first two, and both had
+      // read a permanent 0 since the courses platform was purged in July: not an empty state a member
+      // could act on, but two tiles advertising a product that does not exist, on the page they land
+      // on. Unlike Home's course grid, which hides itself when there are none, these rendered
+      // unconditionally — so the zero was the only thing they ever said.
+      //
+      // Works replaces both, because it is the number this platform is actually about and the one a
+      // member can move. Points and Coins are unchanged.
       stats: [
-        { label: "Courses", value: String(courses.length), sub: "enrolled" },
-        { label: "Completed", value: String(u?.completed ?? 0), sub: "certificates earned" },
+        { label: "Works", value: String(u?.works ?? 0), sub: "published" },
         { label: "Points", value: String(d.points ?? 0), sub: "lifetime, all tracks" },
         { label: "Coins", value: String(d.coins ?? 0), sub: "in your wallet" },
       ],

@@ -1,12 +1,9 @@
 import { useEffect, useState } from "react";
-import { localePath, getDashboard, currentUser, type Dashboard } from "../lib/wp";
+import { getDashboard, currentUser, type Dashboard } from "../lib/wp";
 import { Coins, Points } from "../lib/currency";
-import { Button, Card, CertBadge } from "../components/ui";
+import { Button } from "../components/ui";
 import FollowFeed from "../components/FollowFeed";
 import SeasonNow from "../components/seasons";
-import { thumbSrc } from "../lib/img";
-
-const CARD_TINTS = ["from-yang/30", "from-yin/40", "from-yang/40"];
 
 // The kept progress ring: % toward the next rank. The arc + the % sweep the brand duality (gold → blue)
 // so the ring reads as the same blue+gold brand mark as the coin beside it — not a flat single-hue gold.
@@ -54,11 +51,6 @@ export default function Home() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const tier = dash?.tier;
-  // "Your courses" = the courses the user is actually enrolled in (with progress), NOT the
-  // public catalogue. "Continue learning" resumes the most-recent course straight into the lesson
-  // the learner left off at (resume), not its landing page; fall back to browsing when there are none.
-  const courses = dash?.courses ?? [];
-  const resumeUrl = courses[0]?.resume || courses[0]?.url || "/courses/";
 
   return (
     <div className="flex flex-col gap-10">
@@ -70,10 +62,19 @@ export default function Home() {
           <div>
             <p className="text-[13px] font-semibold uppercase tracking-[0.18em] text-ink-3">{greeting}</p>
             <h1 className="mt-1.5 text-[clamp(1.9rem,4vw,2.4rem)] font-extrabold leading-tight">{name}</h1>
-            <p className="mt-2 max-w-md text-[15px] leading-relaxed text-ink-2">Pick up where you left off, or start something new. Every video is a step on your quest for the truth.</p>
+            {/* Both buttons here used to lead somewhere retired. "Browse courses" pointed at
+                /courses/, which two-hops through /playlists/ to /articles/, and "Discussions" at
+                /discussions/, which 301s to /works/ — the standalone forum was retired 2026-07-14.
+                So the first thing a signed-in member saw offered two redirects and a sentence about
+                videos, on a platform whose unit is a published notebook.
+
+                The primary action is now the one the platform exists for and the one a member has to
+                be told about, since it starts on Kaggle: bring a notebook. The secondary is the feed
+                itself. Both are direct, 200, no hops. */}
+            <p className="mt-2 max-w-md text-[15px] leading-relaxed text-ink-2">Bring a notebook you have run on Kaggle, and let anyone check it for themselves. Every work here carries its own evidence.</p>
             <div className="mt-5 flex flex-wrap gap-3">
-              <Button href={resumeUrl}>{courses.length ? "Continue learning" : "Browse courses"}</Button>
-              <Button variant="outline" href="/discussions/" className="hover:text-yin-light">Discussions</Button>
+              <Button href="/studio/">Submit a notebook</Button>
+              <Button variant="outline" href="/works/" className="hover:text-yin-light">Browse the feed</Button>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-6">
@@ -94,41 +95,11 @@ export default function Home() {
       {/* What to study now — the daily study compass over the twelve cycles (Home only) */}
       <SeasonNow />
 
-      {/* Your courses — enrolled courses with their real thumbnail + progress toward completion. Shown
-          only when the learner actually has some; a member with none jumps straight to the feed (the
-          stat tiles + the empty "start your first course" placeholder were removed — operator
-          2026-07-03 — the wallet/points already sit in the welcome band, and the "Browse courses" CTA
-          lives there too). */}
-      {courses.length > 0 && (
-        <section>
-          <div className="mb-5 flex items-end justify-between">
-            <h2 className="text-[22px] font-bold tracking-tight">Your courses</h2>
-            <a href={localePath("/courses/")} className="text-[14px] font-semibold text-yang hover:underline">Browse all →</a>
-          </div>
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {courses.slice(0, 6).map((c, i) => (
-              <Card as="a" key={c.url} href={localePath(c.url)} className="group overflow-hidden transition-colors hover:border-yin-light/40">
-                {c.image ? (
-                  <div className="h-28 bg-cover bg-center" style={{ backgroundImage: `url("${thumbSrc(c.image)}")` }} />
-                ) : (
-                  <div className={`h-28 bg-gradient-to-br ${CARD_TINTS[i % CARD_TINTS.length]} to-space-3`} />
-                )}
-                <div className="p-4">
-                  <h3 className="line-clamp-2 text-[16px] font-bold transition-colors group-hover:text-yang">{c.value}</h3>
-                  <div className="mt-3 flex items-center justify-between text-[12px] text-ink-3">
-                    <span>{c.lessons ? `${c.lessons} video${c.lessons === 1 ? "" : "s"}` : "Interactive video course"}</span>
-                    <span className="tabular-nums">{c.pct ?? 0}% {(c.pct ?? 0) >= 100 ? "complete" : "done"}</span>
-                  </div>
-                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-line" role="progressbar" aria-valuenow={c.pct ?? 0} aria-valuemin={0} aria-valuemax={100} aria-label={`${c.value} progress`}>
-                    <div className="h-full rounded-full bg-yang transition-[width] duration-500" style={{ width: `${c.pct ?? 0}%` }} />
-                  </div>
-                  {c.cert && <CertBadge className="mt-2.5" />}
-                </div>
-              </Card>
-            ))}
-          </div>
-        </section>
-      )}
+      {/* (Your courses — the enrolled-course grid — removed 2026-08-08. The courses platform was
+          purged 2026-07-13, so `dash.courses` has been empty ever since and this section's own
+          `courses.length > 0` guard meant it could never render again. It was dead code that still
+          had to be read, typechecked and shipped in every bundle. The dashboard tiles that reported
+          the same purged data are gone with it — see getDashboard in lib/wp.ts.) */}
 
       {/* What the people you follow have been doing — replies, upvotes, discussions, enrolments */}
       <FollowFeed />

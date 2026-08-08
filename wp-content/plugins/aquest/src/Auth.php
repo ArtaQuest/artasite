@@ -253,6 +253,7 @@ final class Auth {
 			'completed' => Learn::completed_count( $uid ), // courses completed (cert threshold) for the profile stat
 			'bio'       => (string) get_user_meta( $uid, 'description', true ), // so the saved bio loads back (was never read)
 			'links'     => (object) self::links( $uid ),                          // (object): an empty set is {} not [] — see Social::profile
+			'works'     => Notebook::published_count( $uid ),                     // published works — the dashboard's headline tile
 			'joined'    => Verify::joined_label( $u->user_registered ), // clamped to the platform launch (ticket #103)
 			'verified'     => Verify::is_verified( $uid ),   // blue check
 			'has_identity' => Verify::has_identity( $uid ),  // name + birthday set (gates posting)
