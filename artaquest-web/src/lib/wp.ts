@@ -82,12 +82,31 @@ export function renderRich(raw: string): string {
   return s.replace(new RegExp(NUL + "B(\\d+)" + NUL, "g"), (_m, i: string) => stash[+i]);
 }
 
-/** Inline markdown on a single (already HTML-escaped) line: code, bold, italic, links. */
+/** Media embeds are allowed ONLY from our own uploads.
+ *
+ *  ArtaBot returns charts and animations it produced as `![alt](url)`, and those must render as
+ *  pictures rather than as the literal `!` and a link they were showing before. But inlineMd runs over
+ *  every member-authored string on the platform, and an unrestricted image rule would let anyone embed
+ *  a remote URL in a post — which loads on every reader's device and hands a third party their IP and
+ *  a view count. So the embed is scoped to the uploads path, where the bytes are ours; anything else
+ *  stays a link, which is what a link is for. */
+const OUR_MEDIA = /^https:\/\/(?:[a-z0-9-]+\.)?artaquest\.(?:com|org)\/wp-content\/uploads\/(?!.*\.\.)[\w./-]+$/i;
+
+/** Inline markdown on a single (already HTML-escaped) line: code, bold, italic, images, links. */
 function inlineMd(t: string): string {
   return t
     .replace(/`([^`]+)`/g, '<code class="aq-md-code">$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+    // Images and video BEFORE links, or the link rule consumes the `](` and leaves a stray `!`.
+    .replace(/!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g, (_m: string, alt: string, url: string) =>
+      OUR_MEDIA.test(url)
+        ? `<img src="${url}" alt="${alt}" loading="lazy" class="aq-md-img" />`
+        : `<a href="${url}" target="_blank" rel="noopener noreferrer">${alt || url}</a>`)
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+\.(?:mp4|webm))\)/g, (_m: string, label: string, url: string) =>
+      OUR_MEDIA.test(url)
+        ? `<video src="${url}" controls playsinline preload="metadata" class="aq-md-img"></video>`
+        : `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`)
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
 }
 
