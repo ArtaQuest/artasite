@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
-import { ArtaBot as Api, ApiError, chatGetKey, chatMembers, type ArtabotMsg, type ChatMember, type ChatUserCard } from "../lib/api";
+import { ArtaBot as Api, ApiError, BotSessions, chatGetKey, chatMembers, type ArtabotMsg, type BotSession, type ChatMember, type ChatUserCard, type UsageTier } from "../lib/api";
 import { currentUser, isLoggedIn, localePath, renderRich } from "../lib/wp";
 import { armAutoAnswer, clearRing, getChatState, markSeen, subscribeChat, watchList } from "../lib/chat-store";
 import { useTypewriter } from "../lib/useTypewriter";
@@ -129,6 +129,26 @@ function TypeOut({ body, onTick, onDone, streaming }: { body: string; onTick: ()
 // nothing else. Do NOT "enrich" it with invented reasoning: a plausible chain of thought the member
 // cannot check is worse than an honest meter.
 // data-ay-skip keeps the live numbers out of the i18n mesh (they'd be collected as translations).
+/** THE COST METER (operator: "each session they start should have a cost meter attached to it").
+ *
+ *  It shows what the COMPUTE has cost so far, because that is the part that can honestly be known
+ *  while a turn is still running: it is seconds × the tier's rate, and both are facts. The AI part —
+ *  which is most of the bill — is not knowable until the run reports it, so it is deliberately NOT
+ *  guessed at here. Showing a made-up total that then jumps when the real one lands would be worse
+ *  than showing the part we can stand behind and saying so. */
+function CostMeter({ secs, tier, tiers }: { secs: number; tier: string; tiers?: Record<string, UsageTier> }) {
+  const t = tiers?.[tier];
+  if (!t || !secs) return null;
+  // Azure Container Apps consumption, swedencentral (live retail, 2026-08-08). Mirrored from
+  // Usage::USD_PER_VCPU_SEC / USD_PER_GIB_SEC — the server is authoritative and bills from its own copy.
+  const usd = secs * (t.cpu * 0.000024 + t.ram * 0.000003);
+  return (
+    <span data-ay-skip="1" className="whitespace-nowrap text-[11px] text-ink-3">
+      {t.cpu} vCPU · {t.ram} GiB · ~${usd.toFixed(4)} compute
+    </span>
+  );
+}
+
 function Thinking({ tokens, since, step }: { tokens: number; since: number; step?: string }) {
   // The elapsed count is STATE advanced by the interval, not Date.now() read during render: a clock
   // read while rendering is impure (it changes on any incidental re-render), which the lint rule
@@ -173,7 +193,39 @@ export function BotChat() {
   const [loaded, setLoaded] = useState(false);
   const [animId, setAnimId] = useState<number | null>(null); // the one reply currently typing itself out
   // The turn being written RIGHT NOW, streamed from the relay. Null when nothing is in flight.
-  const [live, setLive] = useState<{ text: string; think: number; phase: string; step: string; since: number } | null>(null);
+  const [live, setLive] = useState<{ text: string; think: number; phase: string; step: string; secs: number; since: number } | null>(null);
+  // PARALLEL CONVERSATIONS. Each has its own transcript, its own tier (so its own CPU and RAM), its
+  // own live stream and its own bill — so the panel has to know which one it is showing before it
+  // reads history, opens a stream, or sends anything.
+  const [sessions, setSessions] = useState<BotSession[] | null>(null);
+  const [tiers, setTiers] = useState<Record<string, UsageTier> | undefined>(undefined);
+  const [sid, setSid] = useState<number>(0);
+  const sess = sessions?.find((x) => x.id === sid);
+
+  useEffect(() => {
+    // Asking for the list also PRE-WARMS the machines these sessions run on (the server does it as a
+    // side effect), which is what hides a ~24s wake-from-zero behind the member typing.
+    BotSessions.list().then((r) => {
+      setSessions(r.items); setTiers(r.tiers);
+      setSid((cur) => (cur || r.items[0]?.id || 0));
+    }).catch(() => setSessions([]));
+  }, []);
+
+  async function newSession(tier: string) {
+    try {
+      const r = await BotSessions.open(tier, "");
+      const l = await BotSessions.list();
+      setSessions(l.items); setSid(r.id); setMsgs([]);
+    } catch (e) { setErr(e instanceof ApiError ? e.message : "Could not open a conversation"); }
+  }
+  async function closeSession(id: number) {
+    try {
+      await BotSessions.close(id);
+      const l = await BotSessions.list();
+      setSessions(l.items);
+      if (sid === id) { setSid(l.items[0]?.id || 0); setMsgs([]); }
+    } catch { /* the list refresh below will correct it */ }
+  }
   // Remembered across sessions: a member who wants deep answers should not re-pick every time. Read
   // lazily so the clock/storage is never touched during render, and defaulted to the free tier.
   const [effort, setEffort] = useState<string>(() => {
@@ -185,12 +237,17 @@ export function BotChat() {
   const pickSeq = useRef(0); // bumps per attachment so a slow downscale can't overwrite a newer pick
 
   useEffect(() => {
-    // Every member is charged the same way: what the turn measurably cost, once it has replied.
-    Api.history()
-      .then((h) => { setMsgs(h.items); })
+    // Keyed on the SESSION, not run once. Switching conversations has to re-read the transcript, or
+    // the member sees the previous session's messages under the new one's title — the same shape of
+    // bug as a poll closure holding a stale room key.
+    let live = true;
+    setLoaded(false);
+    Api.history(sid || undefined)
+      .then((h) => { if (live) setMsgs(h.items); })
       .catch(() => { /* empty start */ })
-      .finally(() => setLoaded(true));
-  }, []);
+      .finally(() => { if (live) setLoaded(true); });
+    return () => { live = false; };
+  }, [sid]);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, busy]);
 
@@ -217,7 +274,7 @@ export function BotChat() {
       const giveUpAt = Date.now() + 20 * 60 * 1000;
       while (!stopped && Date.now() < giveUpAt) {
         try {
-          const s = await Api.live(seen);
+          const s = await Api.live(seen, sid);
           if (stopped) break;
           if (s.seq > seen) {
             seen = s.seq;
@@ -226,7 +283,7 @@ export function BotChat() {
             // `step` is STICKY: the buffer only ever carries the latest tool, and an empty one means
             // "nothing new to report", not "the tool finished" — so keep the last one rather than
             // flickering the line away between calls.
-            setLive((p) => ({ text: s.text, think: s.think, phase: s.phase || "thinking", step: s.step || p?.step || "", since: p?.since ?? Date.now() }));
+            setLive((p) => ({ text: s.text, think: s.think, phase: s.phase || "thinking", step: s.step || p?.step || "", secs: s.secs ?? p?.secs ?? 0, since: p?.since ?? Date.now() }));
           }
           if (s.done) break;
         } catch {
@@ -248,13 +305,13 @@ export function BotChat() {
     setDraft(""); setImage(null); setErr("");
     setMsgs((m) => [...m, { id: -Date.now(), role: "user", body: text, at: Date.now() / 1000, image: img ?? undefined }]);
     setBusy(true);
-    setLive({ text: "", think: 0, phase: "thinking", step: "", since: Date.now() });
+    setLive({ text: "", think: 0, phase: "thinking", step: "", secs: 0, since: Date.now() });
     // The live reader starts BEFORE the answer is asked for. The buffer is keyed on the session, so
     // there is nothing to wait for — and starting here means the thinking meter is already ticking
     // while the request is still in flight.
     const stream = followLive();
     try {
-      const r = await Api.ask(text, img ?? undefined, effort);
+      const r = await Api.ask(text, img ?? undefined, effort, sid || undefined);
       if ("reply" in r && r.reply) {
         // Synchronous answer (the relay finished inside the request). Nothing to stream.
         stream.stop();
@@ -268,7 +325,7 @@ export function BotChat() {
       // THIS is the branch that used to crash: the old code read `r.reply.body` unconditionally, and a
       // pending response has no `reply` at all, so every turn slower than 50s took the chat down.
       await stream.finished;
-      const h = await Api.history().catch(() => null);
+      const h = await Api.history(sid || undefined).catch(() => null);
       if (h) setMsgs(h.items);
       setLive(null);
     } catch (e) {
@@ -353,6 +410,47 @@ export function BotChat() {
           </span>
         </div>
       )}
+      {/* PARALLEL CONVERSATIONS. Each tab is its own transcript on its own size of machine, running and
+          billed independently — so the tab shows what that one has cost, not a total for everything.
+          data-ay-skip keeps the live numbers out of the i18n mesh. */}
+      {sessions && sessions.length > 0 && (
+        <div data-ay-skip="1" className="flex items-center gap-1 overflow-x-auto border-b border-line px-2 py-1.5">
+          {sessions.map((x) => (
+            <button key={x.id} type="button" onClick={() => setSid(x.id)}
+              title={`${tiers?.[x.tier]?.label ?? x.tier} · ${tiers?.[x.tier]?.cpu ?? "?"} vCPU · ${Number(x.coins).toFixed(3)} ₳ so far`}
+              className={"group flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] transition-colors "
+                + (x.id === sid ? "border-yang/50 bg-yang/10 text-ink" : "border-line text-ink-3 hover:text-ink")}>
+              <span className="max-w-[9rem] truncate">{x.title || `Chat ${x.id}`}</span>
+              <span className="text-[10px] uppercase tracking-wide opacity-70">{tiers?.[x.tier]?.label ?? x.tier}</span>
+              <span className="tabular-nums opacity-70">{Number(x.coins).toFixed(2)} ₳</span>
+              <span role="button" tabIndex={0} aria-label="Close this conversation"
+                onClick={(e) => { e.stopPropagation(); void closeSession(x.id); }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); void closeSession(x.id); } }}
+                className="opacity-0 transition-opacity hover:text-rose-300 group-hover:opacity-60">×</span>
+            </button>
+          ))}
+          <select aria-label="Start another conversation" value=""
+            onChange={(e) => { if (e.target.value) void newSession(e.target.value); }}
+            className="ml-1 shrink-0 rounded-full border border-line bg-space-2 px-2 py-1 text-[12px] text-ink-3">
+            <option value="">+ New</option>
+            {Object.entries(tiers ?? {}).map(([k, t]) => (
+              <option key={k} value={k}>{t.label} · {t.cpu} vCPU / {t.ram} GiB</option>
+            ))}
+          </select>
+        </div>
+      )}
+      {sessions && sessions.length === 0 && (
+        <div className="border-b border-line px-3 py-2 text-[12.5px] text-ink-3">
+          Start a conversation — pick how big a machine it runs on:{" "}
+          <select aria-label="Start a conversation" value="" onChange={(e) => { if (e.target.value) void newSession(e.target.value); }}
+            className="rounded-full border border-line bg-space-2 px-2 py-1 text-[12px] text-ink">
+            <option value="">Choose…</option>
+            {Object.entries(tiers ?? {}).map(([k, t]) => (
+              <option key={k} value={k}>{t.label} · {t.cpu} vCPU / {t.ram} GiB</option>
+            ))}
+          </select>
+        </div>
+      )}
       <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-4">
         {loaded && msgs.length === 0 && (
           <div className="rounded-card border border-line bg-space-2 p-4 text-[14px] leading-relaxed text-ink-2">
@@ -395,13 +493,17 @@ export function BotChat() {
             <div data-ay-skip="1" className="max-w-[80%] rounded-card border border-line bg-space-2 px-3.5 py-2.5 text-[14px] leading-relaxed text-ink-2">
               {live.text
                 ? <TypeOut body={live.text} onTick={followTyping} onDone={() => {}} streaming />
-                : <Thinking tokens={live.think} since={live.since} step={live.step} />}
+                : <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <Thinking tokens={live.think} since={live.since} step={live.step} />
+                    <CostMeter secs={live.secs} tier={sess?.tier || "low"} tiers={tiers} />
+                  </div>}
               {/* On a TOOL turn Claude narrates as it works, so there IS text — and the step line has
                   to sit under it or the member watches a paragraph go still for two minutes with
                   nothing saying why. */}
               {live.text && live.step && (
-                <div className="mt-2 border-t border-line pt-2">
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-2">
                   <Thinking tokens={live.think} since={live.since} step={live.step} />
+                  <CostMeter secs={live.secs} tier={sess?.tier || "low"} tiers={tiers} />
                 </div>
               )}
             </div>

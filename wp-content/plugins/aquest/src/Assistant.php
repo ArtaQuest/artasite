@@ -91,6 +91,19 @@ final class Assistant {
 		$rows = Data::all(
 			'SELECT id, title, tier, created, last, turns, coins FROM ' . Data::t( 'aq_artabot_sessions' )
 			. ' WHERE user_id = %d AND closed = 0 ORDER BY last DESC, id DESC LIMIT %d', [ $uid, self::MAX_SESSIONS ] );
+		// PRE-WARM, as a side effect of opening the chat. Scaling to zero has a price and it is paid on
+		// the first message after a quiet spell: a cold wake measured 24s against 0.2s warm. The member
+		// asks for their session list the moment they open the dock — seconds before they finish typing
+		// — so warming the machines their own sessions run on hides the whole cold start behind the
+		// typing. Non-blocking and best-effort: it is an optimisation, and it must never delay the list.
+		$warmed = [];
+		foreach ( $rows as $r ) {
+			$t = Usage::tier( $r['tier'] );
+			if ( isset( $warmed[ $t ] ) ) { continue; }
+			$warmed[ $t ] = 1;
+			$url = Relay::endpoint( $t );
+			if ( $url !== '' ) { wp_remote_get( preg_replace( '#/turn$#', '/health', $url ), [ 'blocking' => false, 'timeout' => 1 ] ); }
+		}
 		return [ 'items' => $rows, 'max' => self::MAX_SESSIONS, 'tiers' => Usage::TIERS ];
 	}
 

@@ -798,6 +798,28 @@ export type ApiTokenItem = {
  *  key must never reach this platform, whose whole database is published at /data/. */
 export type ShellKey = { id: number; label: string; fp: string; key: string; at: number };
 export type ShellInfo = { host: string; unix: string; blocked: string; command: string; max: number; keys: ShellKey[] };
+/** One of a member's parallel ArtaBot conversations. `tier` is the size of machine it runs on, and
+ *  `coins` is what this conversation has cost so far — each session is metered and billed on its own. */
+export type BotSession = { id: number; title: string; tier: string; created: number; last: number; turns: number; coins: number };
+export type UsageTier = { n: number; label: string; effort: string; cpu: number; ram: number; secs: number; maxtok: number };
+export const BotSessions = {
+  list: () => get<{ items: BotSession[]; max: number; tiers: Record<string, UsageTier> }>("/artabot/sessions", { _: Date.now() }),
+  open: (tier: string, title: string) => post<{ id: number; tier: string }>("/artabot/session", { tier, title }),
+  close: (session: number) => post<{ ok: true }>("/artabot/session/close", { session }),
+};
+
+/** What a member has spent, and on what. Charged only when a turn replies or a session ends. */
+export type UsageLine = { id: number; session_id: number; kind: string; tier: string; secs: number; tokens: number; ai_usd: string; azure_usd: string; total_usd: string; coins: string; note: string };
+export type UsageInfo = {
+  balance: number; floor: number; carry: number; spot: number; coin_usd: number;
+  tiers: { key: string; n: number; label: string; effort: string; cpu: number; ram: number; max_secs: number; max_tokens: number; compute_usd_per_min: number; compute_coins_per_min: number }[];
+  recent: UsageLine[];
+};
+export const UsageApi = {
+  mine: () => get<UsageInfo>("/usage", { _: Date.now() }),
+  invoices: () => get<{ items: { day: string; items: number; total_usd: string; total_coins: string; sent: number }[] }>("/invoices", { _: Date.now() }),
+};
+
 export const ShellAccount = {
   mine: () => get<ShellInfo>("/shell", { _: Date.now() }),
   addKey: (label: string, key: string) => post<ShellInfo>("/shell/keys", { label, key }),
@@ -944,7 +966,7 @@ export type AskResult =
  *  a time (the thinking-token count stops climbing the moment Claude starts using tools instead of
  *  thinking), so it is what the meter shows. It is the worker's own report of a call it actually made:
  *  never synthesise one, for the same reason the reasoning text is not invented. */
-export type ArtabotLive = { seq: number; text: string; think: number; phase: "" | "thinking" | "writing"; step?: string; done: number; idle?: number };
+export type ArtabotLive = { seq: number; text: string; think: number; phase: "" | "thinking" | "writing"; step?: string; secs?: number; done: number; idle?: number };
 // Anonymous visitors carry a stable client id so the server can keep their own conversation
 // across turns (kept in localStorage; logged-in users ignore it).
 function anonId(): string {
@@ -956,20 +978,22 @@ function anonId(): string {
   } catch { return ""; }
 }
 export const ArtaBot = {
-  history: () => get<{ items: ArtabotMsg[]; anon?: boolean }>("/artabot", { anon: anonId() }),
+  history: (session?: number) =>
+    get<{ items: ArtabotMsg[]; anon?: boolean }>("/artabot", { ...(session ? { session } : {}), anon: anonId() }),
   // `image` (optional) is a data URL of a screenshot to attach to this turn — sent inline to Claude,
   // never stored. JSON.stringify drops it when undefined, so text-only turns are unchanged.
   /** `effort` is how much THINKING to buy for this turn, not a better model — every tier runs Opus 5.
    *  The server re-reads it from Assistant::TIERS and decides what this member may actually spend, so
    *  the picker is a request, never an entitlement. */
-  ask: (message: string, image?: string, effort?: string) => post<AskResult>("/artabot", { message, image, effort, anon: anonId() }),
+  ask: (message: string, image?: string, effort?: string, session?: number) =>
+    post<AskResult>("/artabot", { message, image, effort, session, anon: anonId() }),
   clear: () => post<{ ok: boolean }>("/artabot/clear", { anon: anonId() }),
   /** The in-flight answer as it is written. LONG-POLL: the server holds this open (~20s) and answers
    *  the moment there is something new, so a streaming turn costs ~1 request/s rather than one per
    *  frame. `text` is the WHOLE answer so far — adopt it, never append it — so a dropped or repeated
    *  response can't corrupt what the member is reading. */
-  live: (seen: number) =>
-    get<ArtabotLive>("/artabot/live", { seen, anon: anonId(), _: Date.now() }),
+  live: (seen: number, session?: number) =>
+    get<ArtabotLive>("/artabot/live", { seen, ...(session ? { session } : {}), anon: anonId(), _: Date.now() }),
 };
 
 /** Server-injected first-paint identity (window.AQ_USER), present before any fetch. */
