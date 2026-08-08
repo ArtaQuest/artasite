@@ -308,7 +308,12 @@ final class Rest {
 		// falls back to the API otherwise (src/Relay.php). Same shared secret as the worker.
 		[ 'POST', 'relay/poll',                    'Relay::poll',            'worker' ],
 		[ 'POST', 'relay/complete',                'Relay::complete',        'worker' ],
-		[ 'POST', 'relay/stream',                  'Relay::stream_chunk',    'worker' ], // …and streams the answer as it writes it (live deltas → a transient, no row writes)
+		[ 'POST', 'relay/stream',                  'Relay::stream_chunk',    'worker' ],
+		// METERED USAGE — what compute actually cost, billed only once a turn has replied or a session
+		// has ended (src/Usage.php). The tier menu is public so the cost of a mode can be read before
+		// it is used; the lines and invoices are the member's own.
+		[ 'GET',  'usage',                         'Usage::mine',            'user'   ],
+		[ 'GET',  'invoices',                      'Usage::invoices',        'user'   ], // …and streams the answer as it writes it (live deltas → a transient, no row writes)
 		// MEMBER SHELLS — every member has their own unix account on the relay VM, reachable as
 		// `ssh <handle>@shell.artaquest.com`, landing in the SAME sandbox ArtaBot's tool turns run in
 		// (src/Shell.php + tools/ticket-agent/artabot-shell.mjs). Only PUBLIC keys are stored, which is

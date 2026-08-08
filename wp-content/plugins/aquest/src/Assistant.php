@@ -135,16 +135,18 @@ final class Assistant {
 	 * async turn can still open a contribution. A failed turn REFUNDS the tier and leaves an honest note
 	 * rather than a silent empty bubble.
 	 */
-	public static function deliver( $dlv, $text, $usage = [] ) {
+	public static function deliver( $dlv, $text, $usage = [], $metered = [] ) {
 		$amid = (int) ( $dlv['amid'] ?? 0 );
 		$uid  = (int) ( $dlv['uid'] ?? 0 );
-		$tier = self::tier( $dlv['tier'] ?? self::FREE_TIER );
+		$tier = Usage::tier( $dlv['tier'] ?? self::FREE_TIER );
 		$tref = (string) ( $dlv['ref'] ?? '' );
 		if ( ! $amid ) { return; }
 		$row = Data::one( 'SELECT body FROM ' . Data::t( 'aq_artabot_messages' ) . ' WHERE id = %d', [ $amid ] );
 		if ( ! $row || (string) $row['body'] !== self::PENDING_BODY ) { return; }  // already delivered/cleared — never answer twice
 
 		if ( $text === '' ) {
+			// Nothing to bill: true pay-per-use means an attempt that produced no reply is not a
+			// charge. The compute was still spent, and absorbing it is the honest side to err on.
 			self::refund_tier( $uid, $tier, $tref );
 			Data::update( 'aq_artabot_messages', [ 'body' => self::NAME . " couldn't finish that one — please try again" . self::refund_note( $tier ) ], [ 'id' => $amid ] );
 			return;
@@ -155,6 +157,16 @@ final class Assistant {
 		[ $filed ] = self::file_from_meta( $uid, $meta, $src, false, '' );
 		if ( $filed ) { $reply .= "\n\n" . implode( "\n", $filed ); }
 		Data::update( 'aq_artabot_messages', [ 'body' => $reply ], [ 'id' => $amid ] );
+		// THE CHARGE. Here and nowhere else: the turn has replied, so what it cost is now a fact rather
+		// than an estimate, and Usage::record turns the measurements into money at the live gold peg.
+		// Idempotent on the ref, so a redelivered completion bills once.
+		Usage::record( $uid, 'chat', $tier, [
+			'ref'     => 'turn:' . $amid,
+			'secs'    => (float) ( $metered['secs'] ?? 0 ),
+			'ai_usd'  => (float) ( $metered['ai_usd'] ?? 0 ),
+			'tokens'  => (int) ( $usage['input_tokens'] ?? 0 ) + (int) ( $usage['output_tokens'] ?? 0 ),
+			'note'    => mb_substr( (string) ( $dlv['prompt'] ?? '' ), 0, 90 ),
+		] );
 		// The transcript is now the source of truth — release any reader still holding on the live
 		// buffer so it switches over immediately instead of waiting out its hold.
 		Relay::stream_close( (string) ( $dlv['stream'] ?? '' ) );
@@ -546,11 +558,14 @@ final class Assistant {
 		// low is free forever; medium/high/xhigh cost coins. The charge is keyed to THIS message id, so
 		// a resend after a BUSY reply re-asks under a NEW ref (a fresh turn, fairly charged) while a
 		// retried identical request can never double-bill.
-		$tier = self::tier( Rest::p( $req, 'effort', self::FREE_TIER ) );
+		$tier = Usage::tier( Rest::p( $req, 'effort', self::FREE_TIER ) );
 		$tref = 'u' . (int) $uid . ':m' . (int) $umid;
-		if ( ! self::charge_tier( $uid, $tier, $tref ) ) {
-			$need = (int) self::TIERS[ $tier ]['coins'];
-			return Rest::err( 'insufficient_coins', 'That mode costs ' . $need . ' ArtaCoin — top up or switch to Quick (free)', 402 );
+		// TRUE PAY-PER-USE (operator 2026-08-08): nothing is reserved. What a turn costs is not known
+		// until it has replied, so there is no honest number to hold up front — the gate is what the
+		// member already owes. Usage::DEBT_FLOOR is the slack that lets a turn finish and settle even
+		// if it lands over the balance it started with; the NEXT one is what gets refused.
+		if ( ! Usage::may_start( $uid ) ) {
+			return Rest::err( 'insufficient_coins', 'Your balance is below the floor — top up to keep using ' . self::NAME . ', or see your usage for what has been charged', 402 );
 		}
 
 		$rows = Data::all(
@@ -583,7 +598,7 @@ final class Assistant {
 		// in the home they can ssh into, so chat and terminal are one workspace rather than two.
 		$u     = get_userdata( $uid );
 		$shell = $tools ? Shell::unix_name( $u ? $u->user_nicename : '' ) : '';
-		$out   = self::chat( $turns, self::artabot_prompt( $uid, $tools, $shell ), null, self::TIERS[ $tier ]['maxtok'], $tier, $dlv, $skey, $tools, $shell );
+		$out   = self::chat( $turns, self::artabot_prompt( $uid, $tools, $shell ), null, Usage::TIERS[ $tier ]['maxtok'], $tier, $dlv, $skey, $tools, $shell );
 		if ( $out === Relay::PENDING ) {
 			return [ 'pending' => true, 'id' => (int) $amid, 'tier' => $tier, 'live' => (bool) $skey,
 			         'message' => self::NAME . ' is working on this one — the answer will appear here when it lands' ];

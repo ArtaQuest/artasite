@@ -34,6 +34,17 @@ class Mailer {
 	 * as a blue button ('/path' resolves against home_url); 'sample' feeds the admin test-send.
 	 */
 	const TEMPLATES = [
+		// The daily statement. It moves no money — every line was charged the moment it happened, which
+		// is what pay-per-use means — so this exists to make an after-the-fact charge checkable: what
+		// ran, for how long, and what each piece cost, itemised.
+		'usage_invoice' => [
+			'label'    => 'Daily usage invoice',
+			'audience' => 'member',
+			'subject'  => 'Your ArtaQuest usage for {{day}}',
+			'body'     => "Hello {{name}},\n\nHere is what your work on ArtaQuest cost on {{day}}.\n\n{{lines}}\n\n{{items}} item(s) · {{total}} ArtaCoin (about \${{usd}})\nBalance now: {{balance}} ArtaCoin\n\nYou are charged only for what actually ran — a turn is priced when it replies, a session when it ends, from the compute it really used and the gold price at the time. Nothing is estimated or held in advance.\n\nEvery line is itemised at artaquest.com/settings — and if a charge looks wrong, reply to this email and we will look at it with you.",
+			'vars'     => [ 'name', 'day', 'lines', 'items', 'total', 'usd', 'balance', 'free' ],
+			'sample'   => [ 'name' => 'Arash', 'day' => '2026-08-08', 'lines' => "chat    low            8s   0.2163 ₳  what is ArtaQuest\nshell   max          612s   0.5265 ₳  terminal session", 'items' => '2', 'total' => '0.7428', 'usd' => '0.1037', 'balance' => '12.4', 'free' => 'no' ],
+		],
 		'signin_code' => [
 			'label'    => 'Sign-in code',
 			'audience' => 'member',

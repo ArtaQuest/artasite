@@ -3,7 +3,7 @@
  * Plugin Name: ArtaQuest
  * Description: The entire ArtaQuest platform — LMS, economy, social, i18n, funds — in one
  *              lean, dependency-free plugin. Replaces MasterStudy LMS + WooCommerce.
- * Version:     1.20.611
+ * Version:     1.20.612
  * Author:      ArtaQuest Foundation
  * License:     GNU AGPLv3
  * License URI: https://www.gnu.org/licenses/agpl-3.0.html
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 // disagree will send the next person chasing a production divergence that is not there: the
 // header is what get_plugin_data() reads, AQ_VERSION is what /version reports and what the
 // integrity sweep keys on. Bump them together, always.
-define( 'AQ_VERSION', '1.20.611' );
+define( 'AQ_VERSION', '1.20.612' );
 define( 'AQ_DIR', __DIR__ );
 define( 'AQ_URL', plugins_url( '', __FILE__ ) );
 
@@ -349,8 +349,12 @@ aq_cron_on( 'aq_social_crawl', 'aq_social_crawl', [ 'AQ\\Extra', 'social_crawl_t
  *  cash-out and shop fee — it sat 35 days stale before this cron existed, 2026-07-10). */
 add_action( 'plugins_loaded', function () {
 	if ( ! wp_next_scheduled( 'aq_gold_rate' ) ) { wp_schedule_event( time() + 400, 'daily', 'aq_gold_rate' ); }
+	// The daily statement (src/Usage.php). Just after the gold refresh, so a day's invoice is priced
+	// against a spot that was updated first rather than one that is a day stale.
+	if ( ! wp_next_scheduled( 'aq_daily_invoice' ) ) { wp_schedule_event( time() + 700, 'daily', 'aq_daily_invoice' ); }
 } );
 aq_cron_on( 'aq_gold_rate', 'aq_gold_rate', [ 'AQ\\Economy', 'gold_rate_tick' ], 3600 );
+aq_cron_on( 'aq_daily_invoice', 'aq_daily_invoice', [ 'AQ\\Usage', 'daily_invoice_tick' ], 3600 );
 aq_cron_on( 'aq_watchdog', 'aq_watchdog:oracle', [ 'AQ\\Economy', 'check_oracle' ], 1800 );
 
 /** Security watchdog (see Watchdog.php): hourly tamper sweep (honeytraps in the public DB,

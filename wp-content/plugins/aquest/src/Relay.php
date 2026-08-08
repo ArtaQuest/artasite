@@ -106,9 +106,24 @@ final class Relay {
 		return get_transient( $key );
 	}
 
-	/** Is the laptop relay able to take a job right now? Fresh heartbeat AND not usage-limited. */
+	/** Where a turn is PUSHED. Empty = fall back to the old pull model (a poller with a heartbeat). */
+	public static function endpoint() { return (string) Secrets::get( 'AQ_TURN_URL' ); }
+
+	/**
+	 * Can ArtaBot answer right now?
+	 *
+	 * This used to mean "a poll arrived in the last 90 seconds", and that single sentence is what
+	 * pinned ArtaBot to an always-on machine: something had to be awake to poll, so idle cost the same
+	 * as busy. Under push there is nothing to be awake — the endpoint scales from zero on the request —
+	 * so availability is "we know where to push", plus the usage park, which is still real.
+	 *
+	 * A configured endpoint that happens to be down therefore reads as available. That is deliberate:
+	 * the failure then surfaces as one turn that could not be delivered, which the member sees and can
+	 * retry, rather than as ArtaBot silently declaring itself offline platform-wide.
+	 */
 	public static function available() {
-		return get_transient( 'aq_relay_beat' ) && ! get_transient( 'aq_relay_limited' );
+		if ( get_transient( 'aq_relay_limited' ) ) { return false; }
+		return self::endpoint() !== '' || (bool) get_transient( 'aq_relay_beat' );
 	}
 
 	// ── the Assistant-facing side ────────────────────────────────────────────────
@@ -182,6 +197,12 @@ final class Relay {
 		] );
 		if ( ! $id ) { return null; }
 
+		// PUSH. Prod is always awake and the worker is not, so prod is what starts the work: one
+		// non-blocking POST wakes a container from zero, it answers, and it calls back /relay/complete.
+		// Non-blocking on purpose — holding a PHP worker for the length of a turn is exactly the cost
+		// the asynchronous delivery path was built to avoid, and the answer does not come back this way.
+		self::push( $id );
+
 		// STREAMED TURNS DO NOT BLOCK. The member is already watching deltas arrive, so holding a PHP
 		// worker here would buy nothing and cost the request budget — and it is what made a >50s turn
 		// return a shape the SPA could not render. Hand back PENDING at once; complete() delivers.
@@ -236,6 +257,25 @@ final class Relay {
 		// twice; signal BUSY so the caller degrades gracefully, costing zero API credit.
 		Data::update( 'aq_relay_jobs', [ 'status' => 'failed' ], [ 'id' => $id, 'status' => 'pending' ] );
 		return self::BUSY;
+	}
+
+	/**
+	 * Hand job $id to the push endpoint. Fire-and-forget: the reply arrives via /relay/complete, so
+	 * there is nothing here to wait for, and a failed dispatch must not cost the caller their request.
+	 * A job nobody picks up is pruned by the existing STALE_S sweep, exactly as an unclaimed one was.
+	 */
+	private static function push( $id ) {
+		$url = self::endpoint();
+		if ( $url === '' ) { return; }                       // no endpoint: a poller will claim it
+		$row = Data::one( 'SELECT payload FROM ' . Data::t( 'aq_relay_jobs' ) . ' WHERE id = %d', [ $id ] );
+		if ( ! $row ) { return; }
+		Data::update( 'aq_relay_jobs', [ 'status' => 'claimed', 'claimed' => Data::now() ], [ 'id' => (int) $id ] );
+		wp_remote_post( $url, [
+			'blocking' => false,                             // ← the whole point
+			'timeout'  => 1,
+			'headers'  => [ 'Content-Type' => 'application/json', 'X-AQ-Worker' => (string) Secrets::get( 'AQ_WORKER_TOKEN' ) ],
+			'body'     => wp_json_encode( [ 'id' => (int) $id, 'payload' => Data::dec( $row['payload'] ) ] ),
+		] );
 	}
 
 	/**
@@ -348,7 +388,11 @@ final class Relay {
 		$pay  = $row ? Data::dec( $row['payload'] ) : null;
 		$dlv  = is_array( $pay ) ? ( $pay['deliver'] ?? null ) : null;
 		if ( is_array( $dlv ) && ( $dlv['kind'] ?? '' ) === 'artabot' ) {
-			Assistant::deliver( $dlv, $ok ? trim( $text ) : '', is_array( $usage ) ? $usage : [] );
+			// The worker measured what this cost — wall-clock and the run's own reported spend. Prod
+			// cannot see either from here, and billing happens only once the turn has actually replied,
+			// so the numbers travel with the answer.
+			$metered = Rest::p( $req, 'metered', [] );
+			Assistant::deliver( $dlv, $ok ? trim( $text ) : '', is_array( $usage ) ? $usage : [], is_array( $metered ) ? $metered : [] );
 			global $wpdb;
 			$wpdb->delete( Data::t( 'aq_relay_jobs' ), [ 'id' => $id ] );
 		}
