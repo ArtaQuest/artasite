@@ -106,8 +106,27 @@ final class Relay {
 		return get_transient( $key );
 	}
 
-	/** Where a turn is PUSHED. Empty = fall back to the old pull model (a poller with a heartbeat). */
-	public static function endpoint() { return (string) Secrets::get( 'AQ_TURN_URL' ); }
+	/**
+	 * Where a turn is PUSHED, for a given tier.
+	 *
+	 * INDEPENDENT RESOURCES PER SESSION (operator 2026-08-08: "each session should have its independent
+	 * resources"). Container Apps sizes CPU and RAM per APP, not per request, so a session's tier picks
+	 * which app answers it — one scale-to-zero app per tier, each with its own vCPU/GiB. Two sessions
+	 * at different tiers are then genuinely two different machines, and two at the SAME tier are two
+	 * replicas of one, which is the same thing from the member's side.
+	 *
+	 * Falls back to the untiered endpoint when a tier has no app of its own, so the feature degrades to
+	 * "right effort, right bill, shared machine size" rather than failing — and standing a tier's app
+	 * up later is configuration, not a deploy.
+	 */
+	public static function endpoint( $tier = '' ) {
+		$t = strtoupper( preg_replace( '/[^a-z]/', '', strtolower( (string) $tier ) ) );
+		if ( $t !== '' ) {
+			$per = (string) Secrets::get( 'AQ_TURN_URL_' . $t );
+			if ( $per !== '' ) { return $per; }
+		}
+		return (string) Secrets::get( 'AQ_TURN_URL' );
+	}
 
 	/**
 	 * Can ArtaBot answer right now?
@@ -201,7 +220,7 @@ final class Relay {
 		// non-blocking POST wakes a container from zero, it answers, and it calls back /relay/complete.
 		// Non-blocking on purpose — holding a PHP worker for the length of a turn is exactly the cost
 		// the asynchronous delivery path was built to avoid, and the answer does not come back this way.
-		self::push( $id );
+		self::push( $id, $effort );
 
 		// STREAMED TURNS DO NOT BLOCK. The member is already watching deltas arrive, so holding a PHP
 		// worker here would buy nothing and cost the request budget — and it is what made a >50s turn
@@ -264,8 +283,8 @@ final class Relay {
 	 * there is nothing here to wait for, and a failed dispatch must not cost the caller their request.
 	 * A job nobody picks up is pruned by the existing STALE_S sweep, exactly as an unclaimed one was.
 	 */
-	private static function push( $id ) {
-		$url = self::endpoint();
+	private static function push( $id, $tier = '' ) {
+		$url = self::endpoint( $tier );
 		if ( $url === '' ) { return; }                       // no endpoint: a poller will claim it
 		$row = Data::one( 'SELECT payload FROM ' . Data::t( 'aq_relay_jobs' ) . ' WHERE id = %d', [ $id ] );
 		if ( ! $row ) { return; }

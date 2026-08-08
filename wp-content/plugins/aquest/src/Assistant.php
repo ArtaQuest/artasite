@@ -76,6 +76,60 @@ final class Assistant {
 	/** Normalise a requested tier — delegated, so there is one definition of what tiers exist. */
 	public static function tier( $want ) { return Usage::tier( $want ); }
 
+	/** How many conversations one member may have open at once. Each is a live machine when it is
+	 *  working, so this is a real resource bound and not a tidiness rule — and it is also what stops a
+	 *  single member opening fifty sessions and metering fifty machines at once. */
+	const MAX_SESSIONS = 8;
+
+	/**
+	 * The member's open conversations. Several may run AT THE SAME TIME, each with its own transcript,
+	 * its own tier (so its own CPU and RAM), its own live stream and its own bill.
+	 */
+	public static function sessions( $req ) {
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'signin_required', 'Sign in to use ' . self::NAME, 401 ); }
+		$rows = Data::all(
+			'SELECT id, title, tier, created, last, turns, coins FROM ' . Data::t( 'aq_artabot_sessions' )
+			. ' WHERE user_id = %d AND closed = 0 ORDER BY last DESC, id DESC LIMIT %d', [ $uid, self::MAX_SESSIONS ] );
+		return [ 'items' => $rows, 'max' => self::MAX_SESSIONS, 'tiers' => Usage::TIERS ];
+	}
+
+	/** POST /artabot/session {tier,title} — open a new conversation. */
+	public static function open_session( $req ) {
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'signin_required', 'Sign in to use ' . self::NAME, 401 ); }
+		if ( ! Usage::may_start( $uid ) ) { return Rest::err( 'insufficient_coins', 'Your balance is below the floor — top up to open a new session', 402 ); }
+		$open = (int) Data::col( 'SELECT COUNT(*) FROM ' . Data::t( 'aq_artabot_sessions' ) . ' WHERE user_id = %d AND closed = 0', [ $uid ] );
+		if ( $open >= self::MAX_SESSIONS ) { return Rest::err( 'too_many', 'You already have ' . self::MAX_SESSIONS . ' conversations open — close one first' ); }
+		$id = Data::insert( 'aq_artabot_sessions', [
+			'user_id' => $uid,
+			'title'   => substr( sanitize_text_field( (string) Rest::p( $req, 'title', '' ) ), 0, 120 ),
+			'tier'    => Usage::tier( Rest::p( $req, 'tier', self::FREE_TIER ) ),
+			'created' => Data::now(), 'last' => Data::now(),
+		] );
+		return [ 'id' => (int) $id, 'tier' => Usage::tier( Rest::p( $req, 'tier', self::FREE_TIER ) ) ];
+	}
+
+	/** POST /artabot/session/close {session} — end one conversation. Its transcript stays readable and
+	 *  its charges stay on the invoice; closing only stops it being worked in. */
+	public static function close_session( $req ) {
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'signin_required', 'Sign in first', 401 ); }
+		$sid = (int) Rest::p( $req, 'session', 0 );
+		// user_id in the WHERE, or any member could close anyone's conversation.
+		Data::update( 'aq_artabot_sessions', [ 'closed' => Data::now() ], [ 'id' => $sid, 'user_id' => $uid ] );
+		return [ 'ok' => true ];
+	}
+
+	/** The session a request is for, verified to belong to the caller. 0 when the member has none yet
+	 *  (their first turn opens one), '' -1 when they asked for one that is not theirs. */
+	private static function session_for( $uid, $sid ) {
+		$sid = (int) $sid;
+		if ( $sid <= 0 ) { return 0; }
+		$row = Data::one( 'SELECT id, tier FROM ' . Data::t( 'aq_artabot_sessions' ) . ' WHERE id = %d AND user_id = %d AND closed = 0', [ $sid, $uid ] );
+		return $row ? (int) $row['id'] : -1;
+	}
+
 	/** Marker text a not-yet-answered assistant row carries. The history endpoint surfaces it as
 	 *  `pending` so the UI can show a thinking state; it is never shown to the member as prose. */
 	const PENDING_BODY = '__AQ_PENDING__';
@@ -117,13 +171,23 @@ final class Assistant {
 		// THE CHARGE. Here and nowhere else: the turn has replied, so what it cost is now a fact rather
 		// than an estimate, and Usage::record turns the measurements into money at the live gold peg.
 		// Idempotent on the ref, so a redelivered completion bills once.
-		Usage::record( $uid, 'chat', $tier, [
+		$sid = (int) ( $dlv['sid'] ?? 0 );
+		$u = Usage::record( $uid, 'chat', $tier, [
 			'ref'     => 'turn:' . $amid,
+			'session' => $sid,
 			'secs'    => (float) ( $metered['secs'] ?? 0 ),
 			'ai_usd'  => (float) ( $metered['ai_usd'] ?? 0 ),
 			'tokens'  => (int) ( $usage['input_tokens'] ?? 0 ) + (int) ( $usage['output_tokens'] ?? 0 ),
 			'note'    => mb_substr( (string) ( $dlv['prompt'] ?? '' ), 0, 90 ),
 		] );
+		// The session carries its own running total, so a member can see what each conversation is
+		// costing them separately rather than one number for everything they have open.
+		if ( $sid > 0 ) {
+			global $wpdb;
+			$t = Data::t( 'aq_artabot_sessions' );
+			$wpdb->query( $wpdb->prepare( "UPDATE {$t} SET turns = turns + 1, coins = coins + %f, last = %d WHERE id = %d",
+				(float) ( $u['coins'] ?? 0 ), Data::now(), $sid ) );
+		}
 		// The transcript is now the source of truth — release any reader still holding on the live
 		// buffer so it switches over immediately instead of waiting out its hold.
 		Relay::stream_close( (string) ( $dlv['stream'] ?? '' ) );
@@ -140,12 +204,18 @@ final class Assistant {
 
 	/** The live buffer key for THIS caller, derived from the session — never from client input, so one
 	 *  member's stream cannot be addressed by another. Stable for the caller, opaque to the worker. */
-	public static function live_key( $req = null ) {
+	public static function live_key( $req = null, $session = 0 ) {
 		$uid = Rest::uid();
-		if ( $uid > 0 ) { return 'aqlive_' . hash( 'sha256', 'u' . $uid . '|' . wp_salt( 'nonce' ) ); }
+		// PER SESSION, not per member. A member may run several conversations at once, and a buffer
+		// keyed on the member alone means the second turn writes over the first one's words as it is
+		// still reading them — one stream, two authors. The session id is part of the key so parallel
+		// turns are parallel all the way down. It is still derived from the SESSION, never from client
+		// input, so one member cannot address another's stream by asking for it.
+		$sid = max( 0, (int) $session );
+		if ( $uid > 0 ) { return 'aqlive_' . hash( 'sha256', 'u' . $uid . ':s' . $sid . '|' . wp_salt( 'nonce' ) ); }
 		$anon = $req ? self::anon_key( $req ) : '';
 		if ( ! $anon ) { return ''; }
-		return 'aqlive_' . hash( 'sha256', 'a' . $anon . '|' . wp_salt( 'nonce' ) );
+		return 'aqlive_' . hash( 'sha256', 'a' . $anon . ':s' . $sid . '|' . wp_salt( 'nonce' ) );
 	}
 
 	/**
@@ -156,7 +226,7 @@ final class Assistant {
 	 * bootstraps. It returns the moment there is something new. Idle chats poll nothing at all.
 	 */
 	public static function live( $req ) {
-		$key = self::live_key( $req );
+		$key = self::live_key( $req, (int) Rest::p( $req, 'session', 0 ) );
 		if ( ! $key ) { return [ 'seq' => 0, 'text' => '', 'think' => 0, 'phase' => '', 'step' => '', 'done' => 1 ]; }
 		$seen     = max( 0, (int) Rest::p( $req, 'seen', 0 ) );
 		$deadline = microtime( true ) + Relay::POLL_WAIT;
@@ -459,10 +529,12 @@ final class Assistant {
 			$s   = $key ? self::anon_state( $key ) : [ 'msgs' => [] ];
 			return [ 'items' => array_values( $s['msgs'] ), 'anon' => true ];
 		}
-		$rows = Data::all(
-			'SELECT id, role, body, tokens, created FROM ' . Data::t( 'aq_artabot_messages' ) . ' WHERE user_id = %d ORDER BY id DESC LIMIT 50',
-			[ $uid ]
-		);
+		// Scoped to ONE conversation. Without the scope, several parallel sessions would render as one
+		// interleaved transcript — every member's chats stirred together in arrival order.
+		$sid  = (int) Rest::p( $req, 'session', 0 );
+		$rows = $sid > 0
+			? Data::all( 'SELECT id, role, body, tokens, created FROM ' . Data::t( 'aq_artabot_messages' ) . ' WHERE user_id = %d AND session_id = %d ORDER BY id DESC LIMIT 50', [ $uid, $sid ] )
+			: Data::all( 'SELECT id, role, body, tokens, created FROM ' . Data::t( 'aq_artabot_messages' ) . ' WHERE user_id = %d AND session_id = 0 ORDER BY id DESC LIMIT 50', [ $uid ] );
 		$rows = array_reverse( $rows );
 		// A turn still being worked on carries PENDING_BODY: report it as `pending` with an EMPTY body so
 		// the client shows a thinking state instead of the raw marker. This is what makes "no time limits"
@@ -495,14 +567,23 @@ final class Assistant {
 		// short marker. Exception: if this turn FILES a contribution, that screenshot IS saved onto the
 		// ticket so developers see the context the member shared (file_from_meta, #120) — the same public
 		// footing as a form-filed shot; a screenshot shared in ordinary chat is still never stored.
+		// WHICH CONVERSATION. A member may have several open and running at once; each is its own
+		// transcript, its own machine size and its own bill, so the session has to be established
+		// before anything is written or charged.
+		$sid = self::session_for( $uid, Rest::p( $req, 'session', 0 ) );
+		if ( $sid < 0 ) { return Rest::err( 'no_session', 'That conversation is not open', 404 ); }
+		$sess = $sid > 0 ? Data::one( 'SELECT id, tier FROM ' . Data::t( 'aq_artabot_sessions' ) . ' WHERE id = %d', [ $sid ] ) : null;
+
 		$stored = $text !== '' ? $text : '[shared a screenshot]';
-		$umid   = Data::insert( 'aq_artabot_messages', [ 'user_id' => $uid, 'role' => 'user', 'body' => $stored, 'created' => Data::now() ] );
+		$umid   = Data::insert( 'aq_artabot_messages', [ 'user_id' => $uid, 'session_id' => $sid, 'role' => 'user', 'body' => $stored, 'created' => Data::now() ] );
 
 		// ── EFFORT TIER ────────────────────────────────────────────────────────────────────────────
 		// Nothing is charged here. A turn is priced when it replies (Usage::record), keyed to this id, so
 		// a resend after a BUSY reply re-asks under a NEW ref (a fresh turn, fairly charged) while a
 		// retried identical request can never double-bill.
-		$tier = Usage::tier( Rest::p( $req, 'effort', self::FREE_TIER ) );
+		// The tier belongs to the CONVERSATION, not the message: it is the size of machine this work runs
+		// on, and changing it mid-thread would silently change what the member is paying per turn.
+		$tier = Usage::tier( $sess ? $sess['tier'] : Rest::p( $req, 'effort', self::FREE_TIER ) );
 		$tref = 'u' . (int) $uid . ':m' . (int) $umid;
 		// TRUE PAY-PER-USE (operator 2026-08-08): nothing is reserved. What a turn costs is not known
 		// until it has replied, so there is no honest number to hold up front — the gate is what the
@@ -512,9 +593,11 @@ final class Assistant {
 			return Rest::err( 'insufficient_coins', 'Your balance is below the floor — top up to keep using ' . self::NAME . ', or see your usage for what has been charged', 402 );
 		}
 
+		// Context from THIS conversation only — feeding one session's history into another is both a
+		// wrong answer and a privacy surprise, since the member deliberately kept them apart.
 		$rows = Data::all(
-			'SELECT role, body FROM ' . Data::t( 'aq_artabot_messages' ) . ' WHERE user_id = %d ORDER BY id DESC LIMIT 40',
-			[ $uid ]
+			'SELECT role, body FROM ' . Data::t( 'aq_artabot_messages' ) . ' WHERE user_id = %d AND session_id = %d ORDER BY id DESC LIMIT 40',
+			[ $uid, $sid ]
 		);
 		$rows = array_reverse( $rows );
 		$turns = [];
@@ -531,12 +614,12 @@ final class Assistant {
 		// HTTP budget the worker keeps going and the answer lands in the transcript later — the member is
 		// never told to "resend". A pending assistant row is created UP FRONT so the transcript shows the
 		// turn is in progress, and deliver() fills it in whenever the answer (or workflow) completes.
-		$amid = Data::insert( 'aq_artabot_messages', [ 'user_id' => $uid, 'role' => 'assistant', 'body' => self::PENDING_BODY, 'created' => Data::now() ] );
-		$skey = self::live_key( $req );
+		$amid = Data::insert( 'aq_artabot_messages', [ 'user_id' => $uid, 'session_id' => $sid, 'role' => 'assistant', 'body' => self::PENDING_BODY, 'created' => Data::now() ] );
+		$skey = self::live_key( $req, $sid );
 		// Start the buffer BEFORE the worker can write to it, so the SPA's first poll finds a thinking
 		// state rather than an empty 404-ish gap and can show that ArtaBot has begun.
 		if ( $skey ) { set_transient( $skey, [ 'seq' => 1, 'text' => '', 'think' => 0, 'phase' => 'thinking', 'done' => 0 ], Relay::LIVE_TTL ); }
-		$dlv  = [ 'kind' => 'artabot', 'uid' => $uid, 'amid' => (int) $amid, 'tier' => $tier, 'ref' => $tref, 'prompt' => $stored, 'stream' => $skey ];
+		$dlv  = [ 'kind' => 'artabot', 'uid' => $uid, 'amid' => (int) $amid, 'sid' => $sid, 'tier' => $tier, 'ref' => $tref, 'prompt' => $stored, 'stream' => $skey ];
 		$tools = self::tools_for( $uid, (bool) $img );
 		// The member's own machine account (Shell::unix_name of their handle) — a tool turn runs THERE,
 		// in the home they can ssh into, so chat and terminal are one workspace rather than two.
@@ -544,7 +627,7 @@ final class Assistant {
 		$shell = $tools ? Shell::unix_name( $u ? $u->user_nicename : '' ) : '';
 		$out   = self::chat( $turns, self::artabot_prompt( $uid, $tools, $shell ), null, Usage::TIERS[ $tier ]['maxtok'], $tier, $dlv, $skey, $tools, $shell );
 		if ( $out === Relay::PENDING ) {
-			return [ 'pending' => true, 'id' => (int) $amid, 'tier' => $tier, 'live' => (bool) $skey,
+			return [ 'pending' => true, 'id' => (int) $amid, 'session' => $sid, 'tier' => $tier, 'live' => (bool) $skey,
 			         'message' => self::NAME . ' is working on this one — the answer will appear here when it lands' ];
 		}
 		// BUSY = the relay (subscription) is answering but slower than the budget; we never bill the

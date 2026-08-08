@@ -37,7 +37,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Usage {
 
-	const TABLE_VERSION = '1';
+	const TABLE_VERSION = '2';
 
 	// ── the measured rates (see the header for provenance) ───────────────────────
 	/** USD per vCPU-second, Azure Container Apps consumption, swedencentral, 2026-08-08. */
@@ -101,6 +101,7 @@ final class Usage {
 		dbDelta( "CREATE TABLE {$wpdb->prefix}aq_usage (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			session_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			kind VARCHAR(12) NOT NULL DEFAULT 'chat',
 			tier VARCHAR(10) NOT NULL DEFAULT 'low',
 			started INT UNSIGNED NOT NULL DEFAULT 0,
@@ -119,6 +120,7 @@ final class Usage {
 			ref VARCHAR(80) NOT NULL DEFAULT '',
 			PRIMARY KEY  (id),
 			KEY user_ended (user_id, ended),
+			KEY session (session_id),
 			KEY ref (ref)
 		) {$charset};" );
 		dbDelta( "CREATE TABLE {$wpdb->prefix}aq_invoices (
@@ -190,7 +192,8 @@ final class Usage {
 		$coins   = self::usd_to_coins( $total, $spot );
 
 		$id = Data::insert( 'aq_usage', [
-			'user_id' => $uid, 'kind' => substr( (string) $kind, 0, 12 ), 'tier' => $tier,
+			'user_id' => $uid, 'session_id' => (int) ( $m['session'] ?? 0 ),
+			'kind' => substr( (string) $kind, 0, 12 ), 'tier' => $tier,
 			'started' => (int) ( $m['started'] ?? ( Data::now() - (int) $secs ) ),
 			'ended'   => Data::now(),
 			'secs'    => (int) round( $secs ),
@@ -247,7 +250,7 @@ final class Usage {
 			];
 		}
 		$rows = Data::all(
-			'SELECT id, kind, tier, started, ended, secs, tokens, ai_usd, azure_usd, total_usd, coins, free, note FROM '
+			'SELECT id, session_id, kind, tier, started, ended, secs, tokens, ai_usd, azure_usd, total_usd, coins, note FROM '
 			. Data::t( 'aq_usage' ) . ' WHERE user_id = %d ORDER BY id DESC LIMIT 50', [ $uid ] );
 		return [
 			'balance' => (float) Economy::coin_balance( $uid ),
@@ -270,7 +273,7 @@ final class Usage {
 			// One day, itemised — every line the total was made of.
 			$inv = Data::one( 'SELECT * FROM ' . Data::t( 'aq_invoices' ) . ' WHERE user_id = %d AND day = %s', [ $uid, $day ] );
 			$lines = Data::all(
-				'SELECT id, kind, tier, started, ended, secs, tokens, ai_usd, azure_usd, total_usd, coins, note FROM '
+				'SELECT id, session_id, kind, tier, started, ended, secs, tokens, ai_usd, azure_usd, total_usd, coins, note FROM '
 				. Data::t( 'aq_usage' ) . ' WHERE user_id = %d AND ended >= %d AND ended < %d ORDER BY id ASC',
 				[ $uid, strtotime( $day . ' 00:00:00 UTC' ), strtotime( $day . ' 00:00:00 UTC' ) + DAY_IN_SECONDS ] );
 			return [ 'day' => $day, 'invoice' => $inv, 'lines' => $lines ];
@@ -359,13 +362,16 @@ final class Usage {
 		$inv = Data::one( 'SELECT * FROM ' . Data::t( 'aq_invoices' ) . ' WHERE user_id = %d AND day = %s', [ $uid, $day ] );
 		if ( ! $inv ) { return; }
 		$lines = Data::all(
-			'SELECT kind, tier, secs, tokens, total_usd, coins, note FROM ' . Data::t( 'aq_usage' )
+			'SELECT session_id, kind, tier, secs, tokens, total_usd, coins, note FROM ' . Data::t( 'aq_usage' )
 			. ' WHERE user_id = %d AND ended >= %d AND ended < %d ORDER BY id ASC LIMIT 200',
 			[ $uid, strtotime( $day . ' 00:00:00 UTC' ), strtotime( $day . ' 00:00:00 UTC' ) + DAY_IN_SECONDS ] );
 		$body = [];
 		foreach ( $lines as $l ) {
-			$body[] = sprintf( '%-7s %-11s %5ds  %8s ₳  %s',
-				$l['kind'], $l['tier'], (int) $l['secs'], number_format( (float) $l['coins'], 4 ), $l['note'] );
+			// The session id is on every line: a member running several conversations at once needs to
+			// see which of them cost what, not one undifferentiated column of charges.
+			$body[] = sprintf( '#%-5s %-7s %-11s %5ds  %8s ₳  %s',
+				(int) $l['session_id'] ?: '-', $l['kind'], $l['tier'], (int) $l['secs'],
+				number_format( (float) $l['coins'], 4 ), $l['note'] );
 		}
 		$sent = Mailer::send( 'usage_invoice', $u->user_email, [
 			'name'   => $u->display_name,

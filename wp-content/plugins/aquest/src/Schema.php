@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.65.0';
+	const VERSION = '1.66.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -691,13 +691,34 @@ final class Schema {
 			'aq_artabot_messages' => "
 				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 				user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				session_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
 				role VARCHAR(12) NOT NULL DEFAULT 'user',
 				body LONGTEXT NULL,
 				tokens INT UNSIGNED NOT NULL DEFAULT 0,
 				cost INT UNSIGNED NOT NULL DEFAULT 0,
 				created INT UNSIGNED NOT NULL DEFAULT 0,
 				PRIMARY KEY  (id),
-				KEY user_id_id (user_id, id)",
+				KEY user_id_id (user_id, id),
+				KEY session_id_id (session_id, id)",
+
+			// A member may hold SEVERAL ArtaBot conversations at once and run them in parallel — each
+			// with its own transcript, its own tier (so its own CPU and RAM), its own live stream and
+			// its own bill. Before this there was exactly one conversation per member, and one live
+			// buffer keyed on the member, so two turns at the same time would have overwritten each
+			// other's stream mid-sentence. `tier` lives on the SESSION rather than the turn: it is the
+			// size of machine this conversation runs on, which is a property of the work, not the message.
+			'aq_artabot_sessions' => "
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				title VARCHAR(120) NOT NULL DEFAULT '',
+				tier VARCHAR(10) NOT NULL DEFAULT 'low',
+				created INT UNSIGNED NOT NULL DEFAULT 0,
+				last INT UNSIGNED NOT NULL DEFAULT 0,
+				closed INT UNSIGNED NOT NULL DEFAULT 0,
+				turns INT UNSIGNED NOT NULL DEFAULT 0,
+				coins DECIMAL(12,4) NOT NULL DEFAULT 0,
+				PRIMARY KEY  (id),
+				KEY user_last (user_id, last)",
 
 			// ── Competition seasons (new-moon resets) ──────────────────────────
 			// Each closed season is recorded here once it's been settled + archived. The current
@@ -1086,6 +1107,7 @@ final class Schema {
 			'aq_tickets'        => [ 'desc' => 'Contribution tickets (bug | feature | content | suggestion), Claude-triaged then shipped by the autonomous worker.', 'cols' => [ 'kind' => 'bug→Sentinel | feature→Visionary | content→Curator | suggestion→Sage', 'status' => 'open → triaging → queued → in_progress → (awaiting operator OK) → shipped → resolved', 'arch_ok' => '1 once the operator approved a major architectural change for this ticket', 'resolved_by' => 'user who closed it (the owner)' ] ],
 			'aq_ticket_messages'=> [ 'desc' => 'The conversation on a ticket.', 'cols' => [ 'role' => 'user | assistant (Claude) | agent (worker) | system', 'meta' => 'JSON (classification, run sha, …)' ] ],
 			'aq_artabot_messages'=> [ 'desc' => 'Each user\'s persistent conversation with ArtaBot, the platform AI assistant.', 'cols' => [ 'role' => 'user | assistant', 'tokens' => 'turn input+output tokens', 'cost' => 'points charged' ] ],
+			'aq_artabot_sessions'=> [ 'desc' => 'A member\'s ArtaBot conversations. Several may run at once, each with its own tier (CPU/RAM), its own live stream and its own bill.', 'cols' => [ 'tier' => 'the size of machine this conversation runs on', 'turns' => 'messages answered', 'coins' => 'metered cost accrued by this session' ] ],
 			'aq_seasons'        => [ 'desc' => 'Each closed competition season (new-moon resets). The current season is computed, not stored.', 'cols' => [ 'season_key' => 'reset timestamp', 'closed' => '1 once settled + frozen' ] ],
 			'aq_season_results' => [ 'desc' => 'Frozen leaderboard snapshot for a closed (season, course): podium + prizes.', 'cols' => [ 'place' => 'finishing position (1=🥇)', 'votes' => 'final season upvotes', 'prize' => 'coins awarded' ] ],
 			'aq_grants'         => [ 'desc' => 'Community-sourced grant catalogue (Outreach program).', 'cols' => [ 'fit' => 'relevance score', 'deadline' => 'YYYY-MM-DD (empty = rolling)', 'allows_regranting' => 'whether the funder permits bursary re-granting' ] ],

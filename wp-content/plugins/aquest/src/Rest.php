@@ -303,6 +303,12 @@ final class Rest {
 		// because signed-out visitors chat too; the buffer key is derived from the SESSION, never from
 		// input, so a caller can only ever read their own stream.
 		[ 'GET',  'artabot/live',                  'Assistant::live',        'public' ],
+		// PARALLEL CONVERSATIONS. A member may hold several at once and run them at the same time; each
+		// has its own transcript, its own tier (so its own CPU and RAM), its own live stream and its
+		// own bill (src/Assistant.php, src/Usage.php).
+		[ 'GET',  'artabot/sessions',              'Assistant::sessions',      'user'   ],
+		[ 'POST', 'artabot/session',               'Assistant::open_session',  'user'   ],
+		[ 'POST', 'artabot/session/close',         'Assistant::close_session', 'user'   ],
 		[ 'POST', 'artabot/clear',                 'Assistant::clear',       'user'   ],
 		// Subscription relay — the laptop daemon (tools/ticket-agent/artabot-relay.mjs) answers
 		// ArtaBot turns on the operator's Claude Max subscription when the laptop is awake; prod
