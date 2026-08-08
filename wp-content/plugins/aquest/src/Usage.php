@@ -70,13 +70,15 @@ final class Usage {
 	const DEFAULT_TIER = 'low';
 
 	/**
-	 * Handles that are never billed (operator directive: "only free for the /arash user").
+	 * NOBODY IS EXEMPT (operator, 2026-08-08: "not free for /artafather. it should be equal access and
+	 * price for all").
 	 *
-	 * Both spellings on purpose: the operator's handle is `artafather` today and `arash` is the name
-	 * they used when they asked for this, so whichever they settle on, the account stays free rather
-	 * than starting to bill them the day they rename themselves.
+	 * There was briefly an allow-list here holding the operator's own handles. It is deleted rather
+	 * than emptied, and that is the point: an empty exemption list is an invitation to add one back,
+	 * and a platform whose premise is that a stranger can check everything cannot have a price that
+	 * depends on who you are. The operator pays the same metered cost as every other member, from the
+	 * same measurements, on the same invoice.
 	 */
-	const FREE_HANDLES = [ 'arash', 'artafather' ];
 
 	/** A member may start work while owing up to this much (coins). Not a credit line — it is the slack
 	 *  that makes "charge only at the end" safe: a turn can finish and settle even if it costs more
@@ -153,16 +155,9 @@ final class Usage {
 		return round( ( (float) $usd ) * self::MG_PER_OZT / $spot, 4 );
 	}
 
-	/** Is this member billed at all? */
-	public static function is_free( $uid ) {
-		$u = get_userdata( (int) $uid );
-		return $u ? in_array( strtolower( $u->user_nicename ), self::FREE_HANDLES, true ) : false;
-	}
-
 	/** May this member START something? True pay-per-use means we cannot know the cost in advance, so
 	 *  the gate is on what they already owe, not on what this will cost. */
 	public static function may_start( $uid ) {
-		if ( self::is_free( $uid ) ) { return true; }
 		return (float) Economy::coin_balance( (int) $uid ) > self::DEBT_FLOOR;
 	}
 
@@ -190,7 +185,6 @@ final class Usage {
 		$total   = $ai + $azure;
 		$spot    = (float) Economy::gold_oz_usd();
 		$coins   = self::usd_to_coins( $total, $spot );
-		$free    = self::is_free( $uid );
 
 		$id = Data::insert( 'aq_usage', [
 			'user_id' => $uid, 'kind' => substr( (string) $kind, 0, 12 ), 'tier' => $tier,
@@ -200,16 +194,14 @@ final class Usage {
 			'tokens'  => (int) ( $m['tokens'] ?? 0 ),
 			'ai_usd'  => $ai, 'cpu_sec' => $cpu_sec, 'gib_sec' => $gib_sec,
 			'azure_usd' => $azure, 'total_usd' => $total, 'coins' => $coins, 'spot' => $spot,
-			'free'    => $free ? 1 : 0,
+			'free'    => 0,   // kept so rows written before the exemption was removed stay readable
 			'note'    => substr( sanitize_text_field( (string) ( $m['note'] ?? '' ) ), 0, 190 ),
 			'ref'     => substr( $ref, 0, 80 ),
 		] );
-		// The money moves only for a member who is billed. The usage row is written either way, so a
-		// free account still gets an honest meter and an honest invoice showing zero.
-		if ( ! $free && $coins > 0 ) {
+		if ( $coins > 0 ) {
 			Economy::credit_coins( $uid, -$coins, 'usage', $ref ?: ( 'u' . $uid . ':' . $id ) );
 		}
-		return [ 'id' => (int) $id, 'coins' => $coins, 'usd' => $total, 'free' => $free ];
+		return [ 'id' => (int) $id, 'coins' => $coins, 'usd' => $total ];
 	}
 
 	/** What a session is costing RIGHT NOW — the live meter, from the tier's rates and the seconds so
@@ -254,7 +246,6 @@ final class Usage {
 			'SELECT id, kind, tier, started, ended, secs, tokens, ai_usd, azure_usd, total_usd, coins, free, note FROM '
 			. Data::t( 'aq_usage' ) . ' WHERE user_id = %d ORDER BY id DESC LIMIT 50', [ $uid ] );
 		return [
-			'free'    => self::is_free( $uid ),
 			'balance' => (float) Economy::coin_balance( $uid ),
 			'floor'   => self::DEBT_FLOOR,
 			'spot'    => $spot,
@@ -330,7 +321,6 @@ final class Usage {
 		if ( ! $u || ! $u->user_email ) { return; }
 		$inv = Data::one( 'SELECT * FROM ' . Data::t( 'aq_invoices' ) . ' WHERE user_id = %d AND day = %s', [ $uid, $day ] );
 		if ( ! $inv ) { return; }
-		$free  = self::is_free( $uid );
 		$lines = Data::all(
 			'SELECT kind, tier, secs, tokens, total_usd, coins, note FROM ' . Data::t( 'aq_usage' )
 			. ' WHERE user_id = %d AND ended >= %d AND ended < %d ORDER BY id ASC LIMIT 200',
@@ -346,7 +336,6 @@ final class Usage {
 			'items'  => (int) $inv['items'],
 			'total'  => number_format( (float) $inv['total_coins'], 4 ),
 			'usd'    => number_format( (float) $inv['total_usd'], 4 ),
-			'free'   => $free ? 'yes' : 'no',
 			'lines'  => implode( "\n", $body ),
 			'balance' => number_format( (float) Economy::coin_balance( $uid ), 4 ),
 		] );

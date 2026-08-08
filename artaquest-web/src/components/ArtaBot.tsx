@@ -14,7 +14,7 @@ const DmThread = lazy(() => import("../pages/Messages").then((m) => ({ default: 
  * ArtaBot — the platform AI assistant, available on EVERY page via a floating launcher.
  *
  * A persistent chat: remembered per signed-in member across sessions; logged-out visitors get a
- * transient per-session conversation. FREE + unlimited for everyone — no coins, no token limit (an
+ * transient per-session conversation. METERED — a turn is priced when it replies, from what it
  * hourly rate limit is the only guard, server-side). Gold/blue brand only.
  */
 
@@ -31,7 +31,7 @@ function friendlyError(e: unknown): string {
 }
 
 // The effort tiers a member can buy for one turn. EVERY tier runs the same model (Claude Opus 5) —
-// what changes is thinking depth and reply length, never a better brain. `low` is free for everyone,
+// what changes is thinking depth, reply length and how much CPU and RAM the sandbox gets. Nothing is
 // signed in or not, forever. The ids must match Assistant::TIERS server-side; the server prices and
 // authorises the choice, so this list is a menu, not a permission.
 const EFFORTS = [
@@ -185,7 +185,7 @@ export function BotChat() {
   const pickSeq = useRef(0); // bumps per attachment so a slow downscale can't overwrite a newer pick
 
   useEffect(() => {
-    // Everyone — including logged-out visitors — gets a conversation, free and unlimited.
+    // Every member is charged the same way: what the turn measurably cost, once it has replied.
     Api.history()
       .then((h) => { setMsgs(h.items); })
       .catch(() => { /* empty start */ })
@@ -420,7 +420,7 @@ export function BotChat() {
       <div className="border-t border-line p-3">
         <div className="mb-2 flex items-center justify-between gap-3 text-[11px] text-ink-2">
           {/* HOW HARD TO THINK, not which model — every tier runs Opus 5; what changes is thinking
-              depth and reply length. `low` is free for everyone, forever. The server re-reads this
+              depth, reply length and sandbox size. You are charged what the turn actually used. The server re-reads this
               against Assistant::TIERS and decides what the member may actually spend, so this is a
               request rather than an entitlement. data-ay-skip: the tier names are identifiers the
               server matches on, so the i18n mesh must not translate them out from under it. */}
@@ -597,7 +597,7 @@ function DockBody({ view, setView }: {
               <LogoMark className="h-10 w-10 shrink-0" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[14px] font-semibold text-ink">ArtaBot</span>
-                <span className="block truncate text-[12px] text-ink-3">Ask anything — free, always</span>
+                <span className="block truncate text-[12px] text-ink-3">Ask anything — you pay what it uses</span>
               </span>
             </button>
 

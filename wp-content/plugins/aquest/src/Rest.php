@@ -291,12 +291,13 @@ final class Rest {
 		[ 'POST', 'tickets/(?P<id>[0-9]+)/message', 'Tickets::post_message', 'user'   ],
 		[ 'POST', 'tickets/(?P<id>[0-9]+)/resolve', 'Tickets::resolve',      'user'   ],
 		[ 'POST', 'tickets/(?P<id>[0-9]+)/reopen',  'Tickets::reopen',       'user'   ],
-		// ArtaBot — the global AI assistant. PUBLIC + FREE for everyone, signed-in or not
-		// (hourly rate limits in the handlers are the only guard).
+		// ArtaBot — the global AI assistant. METERED: a turn is priced when it replies, from what it
+		// measurably used, and the price is the same for every member including the founder (src/Usage.php).
 		[ 'GET',  'artabot',                       'Assistant::history',     'user'   ],
-		// Effort tiers: low is FREE forever; medium/high/xhigh cost ArtaCoin per message (same model —
-		// Claude Opus 5 — deeper thinking + a longer reply). Public so the SPA can price a turn upfront.
-		[ 'GET',  'artabot/tiers',                 'Assistant::tiers',       'public' ], // pricing is public so the LANDING page can advertise the free tier
+		// Effort tiers are CEILINGS, not prices: same model (Claude Opus 5) throughout; what changes is
+		// thinking depth, reply length, and how much CPU and RAM the sandbox gets. Public so the SPA can
+		// show what compute costs per minute — the AI part is only knowable once the turn has run.
+		[ 'GET',  'artabot/tiers',                 'Assistant::tiers',       'user'   ], // the tier menu + this member's balance and recent metered lines
 		[ 'POST', 'artabot',                       'Assistant::ask',         'user'   ],
 		// The in-flight answer as it is written (long-poll, ~20s hold — see Assistant::live). Public
 		// because signed-out visitors chat too; the buffer key is derived from the SESSION, never from

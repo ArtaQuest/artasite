@@ -922,7 +922,7 @@ export const Tickets = {
   reopen: (id: number) => post<{ ok: boolean }>(`/tickets/${id}/reopen`, {}),
 };
 
-// ── ArtaBot (the global AI assistant; persistent memory; free + unlimited) ───
+// ── ArtaBot (the global AI assistant; persistent memory; metered per turn) ───
 // `image` is client-only — the data URL of a screenshot the member attached, shown live in their own
 // bubble. The server forwards it to Claude for that turn but never stores or returns it.
 export type ArtabotMsg = { id: number; role: "user" | "assistant"; body: string; tokens?: number; at: number; image?: string; ticket?: { id: number; kind: string; status: string } };

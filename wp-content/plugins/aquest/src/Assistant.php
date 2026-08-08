@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *      member or signed-out visitor — describes something actionable it opens the contribution FOR
  *      them (Tickets::open_from_chat), pre-triaged, instead of pointing them at a form.
  *
- * ArtaBot is FREE and unlimited for everyone (members and logged-out visitors alike); the hourly rate
+ * ArtaBot is metered: every member pays what their turn measurably cost (src/Usage.php); the hourly rate
  * limits are the only guard. Cost is kept down by the cheap fast model (MODEL), a tight output ceiling
  * (MAXTOK), prompt-caching the conversation prefix (see chat()), very-concise-reply prompting, and
  * filing tickets directly from chat — which skips a second triage round-trip.
@@ -49,76 +49,17 @@ final class Assistant {
 	const BUSY     = '__AQ_ARTABOT_BUSY__';
 	const MAXTOK   = 800; // headroom so a reply + its aqmeta block can never truncate; the PROMPT keeps prose short
 
-	/** EFFORT TIERS (operator 2026-07-25). Every tier runs the SAME model — Claude Opus 5; what a member
-	 *  buys is THINKING DEPTH and reply length, never a better model.
+	/** THE TIER TABLE LIVES IN Usage::TIERS. There were briefly two of them here — one describing
+	 *  thinking depth and a coin price, one describing compute ceilings — and a second table is a
+	 *  second answer waiting to disagree with the first. It already had: the new `max` tier existed in
+	 *  one and not the other, so asking for it read a key that was not there.
 	 *
-	 *  `low` is FREE for everyone, signed in or not, forever — that is the platform's promise and the
-	 *  reason chat is capped there by default (Relay::ASK_WAIT is 50s under a ~60s gateway, so a deeper
-	 *  turn cannot answer in-band anyway). Paying lifts BOTH the thinking depth and the reply ceiling.
-	 *
-	 *  `xhigh` is not a single turn: it runs a real multi-agent WORKFLOW (plan → parallel sub-agents →
-	 *  adversarial verify → synthesis) on the laptop relay, which takes minutes. It is therefore ASYNC —
-	 *  the turn is queued, the member is told, and the answer lands in the transcript when it is done.
-	 *
-	 *  Coins are charged ONLY on a delivered answer and refunded (append-only, never a deleted row) when
-	 *  the relay fails — see charge_tier()/refund_tier(). */
-	const TIERS = [
-		'low'    => [ 'coins' =>  0, 'maxtok' =>  800, 'workflow' => false, 'label' => 'Quick'    ],
-		'medium' => [ 'coins' =>  1, 'maxtok' => 2000, 'workflow' => false, 'label' => 'Thoughtful' ],
-		'high'   => [ 'coins' =>  3, 'maxtok' => 4000, 'workflow' => false, 'label' => 'Deep'     ],
-		'xhigh'  => [ 'coins' => 10, 'maxtok' => 8000, 'workflow' => true,  'label' => 'Research' ],
-	];
-	const FREE_TIER = 'low';
+	 *  What a tier means now: a CEILING (effort, vCPU, RAM, wall clock, reply length), never a price.
+	 *  The price is what the turn measurably cost, charged once it has replied. */
+	const FREE_TIER = 'low';   // the DEFAULT tier — no longer "the free one"; nothing is free
 
-	/** THE SANDBOXED EXECUTOR (operator directive, reaffirmed: "ArtaBot should be able to do anything a
-	 *  user could do in the server, with a GUI, full access to everything, maximum flexibility,
-	 *  especially optimised for web searches"). A chat turn runs inside a throwaway Linux sandbox on the
-	 *  relay VM with a shell, a browser and the internet — see tools/ticket-agent/artabot-tools.mjs for
-	 *  what that sandbox is and, more to the point, what it is NOT allowed to reach.
-	 *
-	 *  It is a SERVER-SIDE decision, deliberately: the client sends no flag and cannot ask for it, so a
-	 *  crafted request buys no capability the platform did not already choose to grant. Set to false to
-	 *  turn the whole capability off platform-wide in one line; the worker has its own independent kill
-	 *  switch (AQ_ARTABOT_TOOLS=0) for turning it off without a deploy. */
-	const TOOLS = true;
-
-	/** Which turns get it. Chat is already members-only (see ask()), so this is attributable compute,
-	 *  never anonymous. Image turns are excluded because the screenshots are decrypted to the worker's
-	 *  own disk and the sandbox has no host paths bound in — the two are mutually exclusive by
-	 *  construction, and the screenshot the member is asking about wins. Triage, ArtaMod and @mentions
-	 *  never pass true: they are classification turns that would spend a sandbox each for no gain. */
-	private static function tools_for( $uid, $has_image ) {
-		return self::TOOLS && $uid > 0 && ! $has_image;
-	}
-
-	/** Normalise a requested tier to one we actually offer (unknown/absent ⇒ the free tier). */
-	public static function tier( $want ) {
-		$k = strtolower( trim( (string) $want ) );
-		return isset( self::TIERS[ $k ] ) ? $k : self::FREE_TIER;
-	}
-
-	/** Charge a paid tier. Idempotent on `ref` so a retried request can never double-bill. Returns
-	 *  true when the member may proceed (free tier, or the coins moved), false when they can't afford it. */
-	private static function charge_tier( $uid, $tier, $ref ) {
-		$cost = (int) ( self::TIERS[ $tier ]['coins'] ?? 0 );
-		if ( $cost <= 0 ) { return true; }
-		if ( ! $uid ) { return false; }                       // paid tiers require an account to bill
-		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'artabot' AND ref = %s LIMIT 1", [ $ref ] ) ) { return true; }
-		if ( (int) Economy::coin_balance( $uid ) < $cost ) { return false; }
-		Economy::credit_coins( $uid, -$cost, 'artabot', $ref );
-		return true;
-	}
-
-	/** Give the coins back when the answer never arrived. APPENDS a positive row (the ledger is
-	 *  append-only — a charge is never deleted), and is itself idempotent so a double-refund is
-	 *  impossible even if the failure path runs twice. */
-	private static function refund_tier( $uid, $tier, $ref ) {
-		$cost = (int) ( self::TIERS[ $tier ]['coins'] ?? 0 );
-		if ( $cost <= 0 || ! $uid ) { return; }
-		if ( ! Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'artabot' AND ref = %s LIMIT 1", [ $ref ] ) ) { return; }
-		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'artabot-refund' AND ref = %s LIMIT 1", [ $ref ] ) ) { return; }
-		Economy::credit_coins( $uid, $cost, 'artabot-refund', $ref );
-	}
+	/** Normalise a requested tier — delegated, so there is one definition of what tiers exist. */
+	public static function tier( $want ) { return Usage::tier( $want ); }
 
 	/** Marker text a not-yet-answered assistant row carries. The history endpoint surfaces it as
 	 *  `pending` so the UI can show a thinking state; it is never shown to the member as prose. */
@@ -147,8 +88,9 @@ final class Assistant {
 		if ( $text === '' ) {
 			// Nothing to bill: true pay-per-use means an attempt that produced no reply is not a
 			// charge. The compute was still spent, and absorbing it is the honest side to err on.
-			self::refund_tier( $uid, $tier, $tref );
-			Data::update( 'aq_artabot_messages', [ 'body' => self::NAME . " couldn't finish that one — please try again" . self::refund_note( $tier ) ], [ 'id' => $amid ] );
+			// Nothing to refund: under pay-per-use nothing was taken up front, and a turn that produced
+			// no reply is not charged at all — Usage::record is only reached on the success path below.
+			Data::update( 'aq_artabot_messages', [ 'body' => self::NAME . " couldn't finish that one — please try again, you were not charged" ], [ 'id' => $amid ] );
 			return;
 		}
 		[ $reply, $meta ] = self::split_meta( $text );
@@ -252,25 +194,12 @@ final class Assistant {
 		return [ 'seq' => $seen, 'text' => '', 'think' => 0, 'phase' => '', 'step' => '', 'done' => 0, 'idle' => 1 ];
 	}
 
-	/** " — you were not charged", but only when there was something to charge. */
-	private static function refund_note( $tier ) {
-		return (int) ( self::TIERS[ $tier ]['coins'] ?? 0 ) > 0 ? ' — you were not charged' : '';
-	}
+	/** The public tier menu. It no longer advertises a free tier, because there is not one: every
+	 *  member pays what their work measurably cost, the operator included. Compute is quoted per
+	 *  minute; the AI part is not quoted at all, because it is not knowable before the turn runs and
+	 *  a number invented for a price list is the thing this design exists to avoid. */
+	public static function tiers( $req ) { return Usage::mine( $req ); }
 
-	/** The public tier menu (price + what it buys) so the SPA can price a turn BEFORE it is sent. */
-	public static function tiers( $req ) {
-		$uid  = Rest::uid();
-		$out  = [];
-		foreach ( self::TIERS as $k => $t ) {
-			$out[] = [
-				'key' => $k, 'label' => $t['label'], 'coins' => $t['coins'],
-				'max_tokens' => $t['maxtok'], 'workflow' => (bool) $t['workflow'],
-				'free' => $t['coins'] === 0,
-			];
-		}
-		return [ 'model' => self::MODEL, 'free_tier' => self::FREE_TIER, 'tiers' => $out,
-		         'coins' => $uid ? (int) Economy::coin_balance( $uid ) : 0 ];
-	}
 	const QUEUE_CONFIDENCE = 0.6;             // min classification confidence to auto-queue for the worker
 	const MAX_CHAT_IMAGE_BYTES = 5 * 1024 * 1024; // a screenshot shared in chat caps at ~5 MB (Anthropic's image limit)
 
@@ -433,7 +362,7 @@ final class Assistant {
 		}
 		$lines = [
 			'You are ' . self::NAME . ", ArtaQuest's friendly AI guide — available everywhere on the platform.",
-			'ArtaQuest is a social feed of citable, reproducible works. Every published submission is a PUBLIC KAGGLE NOTEBOOK THAT HAS BEEN RUN — members write and run their notebooks on Kaggle, then paste the link in the free Studio (/studio) and choose which output files to publish. An exhaustive reproducibility checklist then reads the facts back from the public Kaggle API, which answers without a login, so anyone can re-run those checks: the notebook must be public, every input dataset/model/notebook must be public, it must need no private credentials, and the run must have finished and produced the files being published. Warnings (internet was on, randomness unseeded, a GPU is needed) are shown but never block. Nothing is scored, graded or ranked, and no AI reviews anything. Clearing the checklist only REQUESTS publication: the author confirms from their own registered inbox and signs with their device passkey, and only that publishes the work and mints a permanent DOI. Published files enter the Library, where any member can attach them to their own posts. Submitting, checking and publishing all cost nothing; members earn only by winning member-founded challenges (a kind + a sitewide topic + a full-moon deadline + an entry fee — every entrant pays into the pool and the most-hearted entry takes it all; an exact tie splits evenly). Hearts are the only vote — there are no downvotes anywhere. Discussion replies are screened automatically by ArtaMod — ArtaQuest welcomes the whole spectrum of honest thought (debate, dissent, fringe ideas) and filters only content that trades in hate or fear. The Foundation itself runs on donations with public financial transparency. You — ArtaBot — are free and unlimited for everyone.',
+			'ArtaQuest is a social feed of citable, reproducible works. Every published submission is a PUBLIC KAGGLE NOTEBOOK THAT HAS BEEN RUN — members write and run their notebooks on Kaggle, then paste the link in the free Studio (/studio) and choose which output files to publish. An exhaustive reproducibility checklist then reads the facts back from the public Kaggle API, which answers without a login, so anyone can re-run those checks: the notebook must be public, every input dataset/model/notebook must be public, it must need no private credentials, and the run must have finished and produced the files being published. Warnings (internet was on, randomness unseeded, a GPU is needed) are shown but never block. Nothing is scored, graded or ranked, and no AI reviews anything. Clearing the checklist only REQUESTS publication: the author confirms from their own registered inbox and signs with their device passkey, and only that publishes the work and mints a permanent DOI. Published files enter the Library, where any member can attach them to their own posts. Submitting, checking and publishing all cost nothing; members earn only by winning member-founded challenges (a kind + a sitewide topic + a full-moon deadline + an entry fee — every entrant pays into the pool and the most-hearted entry takes it all; an exact tie splits evenly). Hearts are the only vote — there are no downvotes anywhere. Discussion replies are screened automatically by ArtaMod — ArtaQuest welcomes the whole spectrum of honest thought (debate, dissent, fringe ideas) and filters only content that trades in hate or fear. The Foundation itself runs on donations with public financial transparency. Talking to you costs the member what their turn actually used — measured compute and AI, itemised on a daily invoice, the same price for everyone including the founder; nobody has a free account.',
 			'Also on the platform: one shared recent feed of every published work (/works, also the home page); each work\'s page at its /nb/ link with a permanent citable short link; global discussion boards; a ~133-language translation mesh; and the entire database is public at /data/ — radical transparency by design.',
 			'Help people author and publish works, find and cite what others made, understand challenges and the economy, and make the most of ArtaQuest.',
 			// ArtaBot kept answering "I have no visibility into where I'm hosted" — true of the model, but
@@ -555,7 +484,7 @@ final class Assistant {
 		$umid   = Data::insert( 'aq_artabot_messages', [ 'user_id' => $uid, 'role' => 'user', 'body' => $stored, 'created' => Data::now() ] );
 
 		// ── EFFORT TIER ────────────────────────────────────────────────────────────────────────────
-		// low is free forever; medium/high/xhigh cost coins. The charge is keyed to THIS message id, so
+		// Nothing is charged here. A turn is priced when it replies (Usage::record), keyed to this id, so
 		// a resend after a BUSY reply re-asks under a NEW ref (a fresh turn, fairly charged) while a
 		// retried identical request can never double-bill.
 		$tier = Usage::tier( Rest::p( $req, 'effort', self::FREE_TIER ) );
@@ -606,8 +535,9 @@ final class Assistant {
 		// BUSY = the relay (subscription) is answering but slower than the budget; we never bill the
 		// API for it. The member's message is kept, so resending re-asks with full context.
 		// A PAID tier that produced no answer is refunded — a member pays for a reply, not an attempt.
-		if ( $out === self::BUSY ) { self::refund_tier( $uid, $tier, $tref ); return Rest::err( 'busy', self::NAME . ' is taking a little longer than usual on this one — please resend in a moment' . self::refund_note( $tier ), 503 ); }
-		if ( $out === null ) { self::refund_tier( $uid, $tier, $tref ); return Rest::err( 'upstream', self::NAME . ' hit a snag — please try again' . self::refund_note( $tier ), 502 ); }
+		// Neither path charges anything: a turn is priced when it replies, and neither of these replied.
+		if ( $out === self::BUSY ) { return Rest::err( 'busy', self::NAME . ' is taking a little longer than usual on this one — please resend in a moment, you were not charged', 503 ); }
+		if ( $out === null ) { return Rest::err( 'upstream', self::NAME . ' hit a snag — please try again, you were not charged', 502 ); }
 
 		$in    = (int) ( $out['usage']['input_tokens'] ?? 0 );
 		$outk  = (int) ( $out['usage']['output_tokens'] ?? 0 );
