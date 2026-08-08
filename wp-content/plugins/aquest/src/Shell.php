@@ -37,6 +37,26 @@ final class Shell {
 	 *  pointing it at the relay VM would take the website down. */
 	const HOST = 'shell.artaquest.com';
 
+	/** The machine's address, used ONLY while the DNS record above does not exist yet. A member should
+	 *  never be shown a command that cannot work, and "we are waiting for DNS" is not their problem —
+	 *  so the address they can actually reach is offered until the name resolves, and then it stops
+	 *  being offered by itself. Nothing to remember to remove. */
+	const HOST_IP = '51.12.95.156';
+
+	/** The address to tell a member to use right now — the name once it resolves, the raw address until
+	 *  then. Public so ArtaBot's prompt says the same thing the settings page does. */
+	public static function reach() { return self::host_ready() ? self::HOST : self::HOST_IP; }
+
+	/** Does HOST resolve yet? Cached, because this is rendered on a settings page and a DNS lookup per
+	 *  request would be a needless dependency on a resolver being fast. */
+	private static function host_ready() {
+		$v = get_transient( 'aq_shell_host_ok' );
+		if ( $v !== false ) { return (bool) $v; }
+		$ok = function_exists( 'gethostbyname' ) && gethostbyname( self::HOST ) !== self::HOST;
+		set_transient( 'aq_shell_host_ok', $ok ? 1 : 0, $ok ? DAY_IN_SECONDS : 300 );
+		return $ok;
+	}
+
 	/** Keys per member. Enough for a laptop, a desktop and a phone, few enough that a compromised
 	 *  account cannot quietly accumulate a hundred ways back in. */
 	const MAX_KEYS = 5;
@@ -133,7 +153,9 @@ final class Shell {
 			// Say WHY there is no shell rather than just showing nothing — a handle that cannot be a
 			// unix name is fixable by the member in one field, but only if they are told.
 			'blocked' => $unix ? '' : 'Your handle cannot be a Linux username. Change it in Settings to letters, digits, - or _ (starting with a letter) and your shell will appear within a few minutes.',
-			'command' => $unix ? 'ssh ' . $unix . '@' . self::HOST : '',
+			// The command that works TODAY. Once shell.artaquest.com resolves this becomes the name, by
+			// itself, without anybody editing anything.
+			'command' => $unix ? 'ssh ' . $unix . '@' . ( self::host_ready() ? self::HOST : self::HOST_IP ) : '',
 			'max'     => self::MAX_KEYS,
 			'keys'    => array_map( static function ( $r ) {
 				return [ 'id' => (int) $r['id'], 'label' => (string) $r['label'], 'fp' => (string) $r['fp'],

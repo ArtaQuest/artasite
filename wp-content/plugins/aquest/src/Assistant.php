@@ -436,7 +436,7 @@ final class Assistant {
 						. ( $shell
 							// Worth stating precisely, because it changes what a member should ask for: the work
 							// PERSISTS, and they can walk into it from their own terminal.
-							? ' You are working in THEIR OWN home directory on that machine (/home/' . $shell . '), which persists between messages — and they can reach the very same files themselves with `ssh ' . $shell . '@' . Shell::HOST . '`. So building something for them is worth doing properly: it will still be there.'
+							? ' You are working in THEIR OWN home directory on that machine (/home/' . $shell . '), which persists between messages — and they can reach the very same files themselves with `ssh ' . $shell . '@' . Shell::reach() . '`. So building something for them is worth doing properly: it will still be there.'
 							: ' The sandbox is destroyed when the turn ends.' ) . ' It holds NO ArtaQuest credentials and cannot reach the database, production or the private network — every member-facing action still goes through the platform, and publication still needs the author\'s own emailed confirmation and passkey, which nothing you can run will ever substitute for.'
 					: 'This turn runs with NO tools — no shell, no file access, no web browsing — so you can only write chat messages and open a contribution on someone\'s behalf.' )
 				. ' You do not know anything about the machine beyond this paragraph, and you must not guess at hostnames, addresses, credentials or internals; say you were not told.',
