@@ -715,6 +715,16 @@ final class Rest {
 		}
 		$owed = self::birthday_gate( $handler, $method );
 		if ( $owed ) { return $owed; }
+		// "Last seen", recorded here because this is the one place every member action passes
+		// through, whatever route it took. Day-granular and self-throttling — see Auth::mark_seen —
+		// so this is a cached meta read on all but the first request a member makes each day.
+		//
+		// NOT keyed to 'user' routes only: reading the feed is being here just as much as posting to
+		// it, and a member who only ever reads would otherwise look like they had left. A token or
+		// worker call is not a person, so it is skipped.
+		if ( is_user_logged_in() && ! Api::via_token() && ! self::worker_ok() ) {
+			Auth::mark_seen( get_current_user_id() );
+		}
 		[ $class, $fn ] = explode( '::', $handler );
 		$class = 'AQ\\' . $class;
 		try {

@@ -13,7 +13,7 @@ import { NB_KIND_META, NbCard } from "../components/nbview";
 import { BlueCheck } from "../components/BlueCheck";
 import { Avatar, Button, EmptyState, HeartGlyph, LoadMoreButton, Pill, StatusNote, cx } from "../components/ui";
 import {
-  currentUser, fmtBirthday, followUser, getFollows, getProfile, isLoggedIn, localePath, PROFILE_LINKS, relAgo,
+  currentUser, fmtBirthday, followUser, getFollows, getProfile, isLoggedIn, lastSeenLabel, localePath, PROFILE_LINKS, relAgo,
   type FollowRow, type Profile as ProfileData,
 } from "../lib/wp";
 import { Points } from "../lib/currency";
@@ -248,6 +248,12 @@ export default function Profile() {
                 <Points n={p.points} /> points
               </span>
               {p.joined && <span>Joined {p.joined}</span>}
+              {/* Last seen, to the DAY — the server never records finer, because this database is
+                  published and an exact activity log for every member is not something anybody
+                  asked to publish. lastSeenLabel says only what that granularity supports; relAgo
+                  would render the same value as "9h ago" and invent precision. Omitted entirely
+                  when never recorded, rather than printed as "never". */}
+              {p.lastSeen ? <span>{lastSeenLabel(p.lastSeen)}</span> : null}
             </div>
             {/* Public identity facts. Every member states an exact date of birth when they join,
                 and ArtaQuest is radically transparent — the whole database is public — so the

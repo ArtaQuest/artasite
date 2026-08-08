@@ -134,6 +134,34 @@ export function relAgo(secs: number): string {
   return "just now";
 }
 
+/**
+ * "Active today" / "yesterday" / "3 days ago" for a LAST-SEEN value.
+ *
+ * Not relAgo(). The server stores UTC midnight of the day a member was last around and nothing
+ * finer (Auth::mark_seen — the database is public, so precision that is collected is precision that
+ * is published). Passing that to relAgo would print "9h ago" or "23h ago" for somebody seen today:
+ * an hour-accurate sentence built from a value that only knows the date, which is a claim the data
+ * cannot support and reads as tracking that is not happening.
+ *
+ * So it counts whole DAYS between calendar days, and says nothing more exact than it knows. ''
+ * when never recorded, so a caller can omit the line entirely rather than print "never".
+ */
+export function lastSeenLabel(secs: number): string {
+  if (!secs) return "";
+  const DAY = 86400;
+  // Both sides floored to a UTC day boundary: comparing a midnight against "now" would call
+  // somebody seen this morning "yesterday" for most of the day.
+  const days = Math.max(0, Math.floor(Date.now() / 1000 / DAY) - Math.floor(secs / DAY));
+  if (days === 0) return "Active today";
+  if (days === 1) return "Active yesterday";
+  if (days < 7) return `Active ${days} days ago`;
+  if (days < 14) return "Active last week";
+  if (days < 60) return `Active ${Math.floor(days / 7)} weeks ago`;
+  if (days < 365) return `Active ${Math.floor(days / 30)} months ago`;
+  const y = Math.floor(days / 365);
+  return `Active ${y} year${y === 1 ? "" : "s"} ago`;
+}
+
 /** A stored `YYYY-MM-DD` birthday as a full date in the reader's language ("14 March 1998").
  *  Built from the calendar PARTS, never `new Date("1998-03-14")` — that parses as UTC midnight,
  *  which renders as the previous day for every reader west of Greenwich. '' when unset/malformed. */
@@ -845,6 +873,9 @@ export type Profile = {
   /** Where else this member is. Keys are AQ\Auth::LINKS; every value is an absolute https URL,
    *  host-checked server-side at save time, so a renderer may link it without re-validating. */
   links?: Partial<Record<ProfileLinkKey, string>>;
+  /** UTC midnight of the day they were last around; 0 when never recorded. Day-granular by
+   *  design — render it with lastSeenLabel(), never relAgo(). */
+  lastSeen?: number;
   country?: string; // verified nationality (ISO alpha-2) → avatar flag; '' until verified
   // Public identity facts (radical transparency — the same values the /data/ explorer serves, and
   // required of every member at signup). `birthday` is the EXACT date, `YYYY-MM-DD`; '' if unset.
@@ -900,6 +931,7 @@ type ProfileR = {
   id: number; name: string; slug: string; avatar: string; palm?: string; country?: string; nationality?: string; email?: string; points: number; tier: string;
   birthday?: string; full_name?: string; season?: number; verified?: boolean;
   links?: Partial<Record<ProfileLinkKey, string>>;
+  last_seen?: number;
   coins?: number; joined?: string; bio?: string; completed?: number; breakdown?: TrackPoints;
   typologies?: TypologyTag[]; endorsements?: Record<string, number>; stats?: ProfileStats; is_following?: boolean;
   recent_threads?: ProfileThread[];
@@ -945,7 +977,7 @@ export async function getProfile(slug: string): Promise<Profile | null> {
   try {
     const pr = await get<ProfileR>(`${AQ}/profile?slug=${encodeURIComponent(slug)}`);
     return {
-      id: pr.id, name: pr.name, slug: pr.slug, avatar: pr.avatar, palm: pr.palm || "", country: pr.country || "", nationality: pr.nationality || "", email: pr.email || "", bio: pr.bio || "", links: pr.links || undefined,
+      id: pr.id, name: pr.name, slug: pr.slug, avatar: pr.avatar, palm: pr.palm || "", country: pr.country || "", nationality: pr.nationality || "", email: pr.email || "", bio: pr.bio || "", links: pr.links || undefined, lastSeen: pr.last_seen || 0,
       // Public identity facts the endpoint has always emitted but the SPA used to drop on the floor.
       birthday: pr.birthday || "", fullName: pr.full_name || "", season: pr.season ?? 0, verified: !!pr.verified,
       coins: pr.coins ?? 0, points: pr.points, completed: pr.completed ?? 0,

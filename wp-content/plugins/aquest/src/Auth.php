@@ -298,6 +298,37 @@ final class Auth {
 	);
 
 	/**
+	 * Note that somebody was here today. TO THE DAY, deliberately.
+	 *
+	 * This database is PUBLISHED — every row of it, by design — so whatever is stored here is not a
+	 * private record of when a member was around, it is a public one. An exact timestamp on every
+	 * request would be a per-member activity log accurate to the second: enough to read somebody's
+	 * sleep, their working hours and their timezone off a page anybody can fetch. Nobody asked for
+	 * that, and "last seen" does not need it — "active 3 days ago" is the whole of what it says.
+	 *
+	 * So it stores UTC midnight of the current day and nothing finer. The precision that is not
+	 * collected cannot be published, which is a stronger guarantee than choosing not to show it.
+	 *
+	 * It is also why this is CHEAP: the value only changes once a day, so the common case is a read
+	 * and a comparison, and there is exactly one write per member per day no matter how busy they
+	 * are. Chat's live presence stays where it is — in transients, never in the database (Chat.php,
+	 * "pure transients, nothing rests in the DB") — because "online right now" is a different claim
+	 * with different consequences, and that decision was made deliberately.
+	 */
+	public static function mark_seen( $uid ) {
+		$uid = (int) $uid;
+		if ( $uid <= 0 ) { return; }
+		$today = (int) ( floor( time() / DAY_IN_SECONDS ) * DAY_IN_SECONDS );
+		if ( (int) get_user_meta( $uid, 'aq_last_seen', true ) === $today ) { return; }
+		update_user_meta( $uid, 'aq_last_seen', $today );
+	}
+
+	/** UTC midnight of the day a member was last seen, or 0 if never recorded. */
+	public static function last_seen( $uid ) {
+		return (int) get_user_meta( (int) $uid, 'aq_last_seen', true );
+	}
+
+	/**
 	 * A member's public links: key => absolute https URL. Always an object, never a list, so a caller
 	 * can read `links.github` without searching. Unknown keys are dropped rather than trusted, so a
 	 * value written before a key was retired cannot resurface.
