@@ -315,6 +315,11 @@ final class Rest {
 		// falls back to the API otherwise (src/Relay.php). Same shared secret as the worker.
 		[ 'POST', 'relay/poll',                    'Relay::poll',            'worker' ],
 		[ 'POST', 'relay/complete',                'Relay::complete',        'worker' ],
+		// The completion path for the fully-powered tools container, which deliberately holds NO shared
+		// secret — a member has a root shell in there and could read one. It authenticates with a
+		// signature over ONE job id instead (Relay::verify_token). Public auth because the signature IS
+		// the authentication; the handler refuses anything that does not carry a valid one.
+		[ 'POST', 'relay/job/complete',            'Relay::job_complete',    'public' ],
 		[ 'POST', 'relay/stream',                  'Relay::stream_chunk',    'worker' ],
 		// METERED USAGE — what compute actually cost, billed only once a turn has replied or a session
 		// has ended (src/Usage.php). The tier menu is public so the cost of a mode can be read before
