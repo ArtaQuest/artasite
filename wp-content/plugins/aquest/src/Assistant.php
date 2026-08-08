@@ -88,6 +88,23 @@ final class Assistant {
 	public static function sessions( $req ) {
 		$uid = Rest::uid();
 		if ( ! $uid ) { return Rest::err( 'signin_required', 'Sign in to use ' . self::NAME, 401 ); }
+		// ADOPT THE OLD CONVERSATION. Members had one un-sessioned transcript before this existed, and
+		// once the UI shows tabs there is no tab for session 0 — so their entire history would simply
+		// stop being reachable. It becomes their first session instead, keeping the messages where the
+		// member expects them. Runs once: after this they have a session, so the condition is false.
+		$legacy = (int) Data::col( 'SELECT COUNT(*) FROM ' . Data::t( 'aq_artabot_messages' ) . ' WHERE user_id = %d AND session_id = 0', [ $uid ] );
+		$has    = (int) Data::col( 'SELECT COUNT(*) FROM ' . Data::t( 'aq_artabot_sessions' ) . ' WHERE user_id = %d', [ $uid ] );
+		if ( $legacy > 0 && $has === 0 ) {
+			$nid = Data::insert( 'aq_artabot_sessions', [
+				'user_id' => $uid, 'title' => 'Earlier chat', 'tier' => self::FREE_TIER,
+				'created' => Data::now(), 'last' => Data::now(), 'turns' => (int) floor( $legacy / 2 ),
+			] );
+			if ( $nid ) {
+				global $wpdb;
+				$wpdb->query( $wpdb->prepare( 'UPDATE ' . Data::t( 'aq_artabot_messages' ) . ' SET session_id = %d WHERE user_id = %d AND session_id = 0', (int) $nid, $uid ) );
+			}
+		}
+
 		$rows = Data::all(
 			'SELECT id, title, tier, created, last, turns, coins FROM ' . Data::t( 'aq_artabot_sessions' )
 			. ' WHERE user_id = %d AND closed = 0 ORDER BY last DESC, id DESC LIMIT %d', [ $uid, self::MAX_SESSIONS ] );

@@ -240,6 +240,10 @@ export function BotChat() {
     // Keyed on the SESSION, not run once. Switching conversations has to re-read the transcript, or
     // the member sees the previous session's messages under the new one's title — the same shape of
     // bug as a poll closure holding a stale room key.
+    // Wait for the session list before reading anything. Fetching at sid=0 first shows the member the
+    // pre-session transcript for a beat, then swaps it — a flash of somebody else's conversation, as
+    // far as they can tell.
+    if (sessions === null) return;
     let live = true;
     setLoaded(false);
     Api.history(sid || undefined)
@@ -247,7 +251,7 @@ export function BotChat() {
       .catch(() => { /* empty start */ })
       .finally(() => { if (live) setLoaded(true); });
     return () => { live = false; };
-  }, [sid]);
+  }, [sid, sessions]);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, busy]);
 
