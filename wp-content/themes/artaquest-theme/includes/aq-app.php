@@ -406,6 +406,15 @@ add_filter( 'document_title_parts', function ( $parts ) {
 		$parts['title'] = $thread->title;
 		return $parts;
 	}
+	// A member profile. Without this the whole branch was missing and every profile on the site
+	// titled itself "ArtaQuest" — so the one query that should certainly reach a profile, the
+	// person's own name, had nothing to match: not the title, not og:title, not the tab.
+	// aq_profile_name() publishes their REAL name, which display_name usually is not.
+	$pu = aq_profile_user( get_query_var( 'aq_profile' ) );
+	if ( $pu ) {
+		$parts['title'] = aq_profile_name( $pu );
+		return $parts;
+	}
 	return $parts;
 } );
 
@@ -503,6 +512,52 @@ function aq_app_is_app_page() {
 	return false;
 }
 
+/** Resolve a /u/<slug>/ to its user, by nicename then login. One place, so the title, the crawler
+ *  body, the meta description and the sitemap can never disagree about who a profile is. */
+function aq_profile_user( $pslug ) {
+	$pslug = sanitize_title( (string) $pslug );
+	if ( '' === $pslug ) { return null; }
+	$u = get_user_by( 'slug', $pslug );
+	if ( ! $u ) { $u = get_user_by( 'login', $pslug ); }
+	return $u ?: null;
+}
+
+/**
+ * The name to PUBLISH for a member — their real full name.
+ *
+ * `display_name` is what they are addressed by on the site and it is frequently not a name at all:
+ * on production it holds "Arash" for a member whose name is Arash Ashrafnejad, and "Eceergun10" for
+ * Ece Ergün. Every SEO signal on the profile was built from it, so the one search that should
+ * certainly find this page — the person's own full name — matched nothing on it.
+ *
+ * `aq_full_name` is the real name, collected by the identity gate (AQ\Verify) that every member must
+ * pass, and public by the same decision that publishes the whole database. It is the right field to
+ * title a profile with. Falls back to display_name, then to the login, so a page is never nameless.
+ */
+function aq_profile_name( $u ) {
+	if ( ! $u instanceof WP_User ) { return ''; }
+	$full = trim( (string) get_user_meta( $u->ID, 'aq_full_name', true ) );
+	if ( '' !== $full ) { return $full; }
+	$d = trim( (string) $u->display_name );
+	return '' !== $d ? $d : (string) $u->user_login;
+}
+
+/** A member's published works, newest first — what a profile is actually ABOUT. Guarded: the
+ *  aq_notebooks table may not exist on a cold site. Credited by `author_id`, the member who brought
+ *  the work here, which is the same person this profile belongs to. */
+function aq_profile_works( $uid, $limit = 50 ) {
+	global $wpdb;
+	static $ok = null;
+	$t = $wpdb->prefix . 'aq_notebooks';
+	if ( null === $ok ) { $ok = ( (string) $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $t ) ) === $t ); }
+	if ( ! $ok ) { return array(); }
+	return (array) $wpdb->get_results( $wpdb->prepare(
+		"SELECT id, slug, title, published_at FROM {$t} WHERE author_id = %d AND status = 'published' ORDER BY id DESC LIMIT %d",
+		(int) $uid,
+		max( 1, (int) $limit )
+	) );
+}
+
 /**
  * The "necessary SEO content" for the current route: server-rendered HTML placed inside
  * #aq-app-root as the crawler + no-JS fallback (React renders over it on load). The
@@ -514,13 +569,31 @@ function aq_app_seo_html() {
 	}
 	$pslug = get_query_var( 'aq_profile' );
 	if ( $pslug ) {
-		$u = get_user_by( 'slug', sanitize_title( $pslug ) );
-		if ( ! $u ) {
-			$u = get_user_by( 'login', sanitize_title( $pslug ) );
-		}
+		$u = aq_profile_user( $pslug );
 		if ( $u ) {
-			$bio = wp_strip_all_tags( (string) get_user_meta( $u->ID, 'description', true ) );
-			return '<h1>' . esc_html( $u->display_name ) . '</h1>' . ( $bio ? '<p>' . esc_html( $bio ) . '</p>' : '' );
+			$name = aq_profile_name( $u );
+			$bio  = wp_strip_all_tags( (string) get_user_meta( $u->ID, 'description', true ) );
+			$html = '<h1>' . esc_html( $name ) . '</h1>';
+			// The handle, when it differs, so a search for either one finds this page. It is also
+			// what everyone is addressed by on the site, so a reader arriving from a name search can
+			// tell they have the right person.
+			if ( $u->display_name && $u->display_name !== $name ) {
+				$html .= '<p>' . esc_html( sprintf( '%s goes by %s on %s.', $name, $u->display_name, get_bloginfo( 'name' ) ) ) . '</p>';
+			}
+			if ( $bio ) { $html .= '<p>' . esc_html( $bio ) . '</p>'; }
+			// THEIR WORK, as crawlable links. A profile whose whole server-rendered body is a name is
+			// thin content: nothing to rank on beyond the name itself, and no path from here to
+			// anything else. Listing what they brought here gives the page substance and gives a
+			// crawler somewhere to go — the same reason the kind hubs list their notebooks.
+			$works = aq_profile_works( $u->ID, 50 );
+			if ( $works ) {
+				$html .= '<h2>' . esc_html( sprintf( 'Work %s brought to %s', $name, get_bloginfo( 'name' ) ) ) . '</h2><ul>';
+				foreach ( $works as $w ) {
+					$html .= '<li><a href="' . esc_url( aq_notebook_url( $w ) ) . '">' . esc_html( (string) $w->title ) . '</a></li>';
+				}
+				$html .= '</ul>';
+			}
+			return $html;
 		}
 		return '';
 	}
@@ -880,16 +953,27 @@ function aq_app_head_meta() {
 		$desc = (string) $thread->body;
 		$type = 'article';
 	} elseif ( $pslug ) {
-		$u = get_user_by( 'slug', sanitize_title( $pslug ) );
-		if ( ! $u ) {
-			$u = get_user_by( 'login', sanitize_title( $pslug ) );
-		}
+		$u = aq_profile_user( $pslug );
 		if ( $u ) {
 			$puser = $u;
-			$desc  = (string) get_user_meta( $u->ID, 'description', true );
-			if ( trim( $desc ) === '' ) {
-				// No bio → a meaningful fallback so the profile still has a description (instead of none).
-				$desc = $u->display_name . ' on ' . get_bloginfo( 'name' ) . ' — published works, points, and standing in the community.';
+			$pname = aq_profile_name( $u );
+			$desc  = trim( (string) get_user_meta( $u->ID, 'description', true ) );
+			// LEAD WITH THE NAME even when there is a bio. The description is the snippet under a
+			// search result, and a bio rarely repeats the person's own name — so the one query this
+			// page exists to answer had no match in the only prose the crawler was given.
+			if ( '' !== $desc ) {
+				$desc = $pname . ' on ' . get_bloginfo( 'name' ) . ' — ' . $desc;
+			} else {
+				$n     = count( aq_profile_works( $u->ID, 51 ) );
+				$works = $n > 0
+					? sprintf( _n( '%d published work', '%d published works', $n, 'artaquest' ), $n )
+					: 'their published works';
+				$desc  = sprintf(
+					'%s on %s — %s, each one a public Kaggle notebook that has been run and checked against Kaggle\'s own record.',
+					$pname,
+					get_bloginfo( 'name' ),
+					$works
+				);
 			}
 			$type = 'profile';
 		}
@@ -1084,6 +1168,51 @@ function aq_app_head_meta() {
 			$ld['comment'] = $tcomments; // replies: each a Comment w/ text + author(url) + datePublished
 		}
 		$tags[] = '<script type="application/ld+json">' . wp_json_encode( $ld ) . '</script>';
+	}
+
+	// A MEMBER PROFILE — ProfilePage wrapping a Person.
+	//
+	// The only structured data a profile carried was the sitewide Organization block, which describes
+	// the Foundation and says nothing about whose page this is. A search engine had no machine-readable
+	// statement that /u/<slug>/ is a person, let alone which person — so the name in the title was the
+	// single unsupported signal for the query the page exists to answer.
+	//
+	// `name` is the real full name and `alternateName` the handle they post under, because both are
+	// things somebody might search, and they are usually different here. `mainEntity` is the Person,
+	// which is the shape Google documents for a profile page — the page is ABOUT them, it is not
+	// itself a person.
+	if ( $puser ) {
+		$pname   = aq_profile_name( $puser );
+		$pbio    = trim( wp_strip_all_tags( (string) get_user_meta( $puser->ID, 'description', true ) ) );
+		$pworks  = aq_profile_works( $puser->ID, 50 );
+		$person  = array(
+			'@type' => 'Person',
+			'name'  => $pname,
+			'url'   => home_url( '/u/' . $puser->user_nicename . '/' ),
+		);
+		if ( $puser->display_name && $puser->display_name !== $pname ) {
+			$person['alternateName'] = (string) $puser->display_name;
+		}
+		if ( '' !== $pbio ) { $person['description'] = $pbio; }
+		$avatar = get_avatar_url( $puser->ID, array( 'size' => 512 ) );
+		if ( $avatar ) { $person['image'] = $avatar; }
+		if ( $pworks ) {
+			// What they are known FOR. Named works are the strongest thing tying a person to a subject,
+			// and each is a real indexable URL on this site rather than an assertion about them.
+			$person['knowsAbout'] = array_values( array_filter( array_map( function ( $w ) {
+				return trim( (string) $w->title );
+			}, $pworks ) ) );
+			$person['mainEntityOfPage'] = array_map( function ( $w ) {
+				return array( '@type' => 'CreativeWork', 'name' => (string) $w->title, 'url' => aq_notebook_url( $w ) );
+			}, array_slice( $pworks, 0, 10 ) );
+		}
+		$tags[] = '<script type="application/ld+json">' . wp_json_encode( array(
+			'@context'   => 'https://schema.org',
+			'@type'      => 'ProfilePage',
+			'url'        => $person['url'],
+			'name'       => $pname,
+			'mainEntity' => $person,
+		) ) . '</script>';
 	}
 
 	// Highwire citation_* meta on a published PAPER notebook — the tags Google Scholar reads to index
@@ -2189,14 +2318,37 @@ if ( class_exists( 'WP_Sitemaps_Provider' ) ) {
 		// the note below says a sitemap must never do; it was simply missed when the other
 		// retired providers were dropped. The aq_threads ROWS are untouched — this only stops
 		// the sitemap claiming they are crawlable pages.)
-		// Member profiles — only members who've actually contributed (posted a section reply), so the
-		// sitemap stays high-quality instead of listing every empty account as thin content.
+		// Member profiles — only members who have actually contributed, so the sitemap stays
+		// high-quality instead of listing every empty account as thin content. That intent is
+		// unchanged; what counted as contributing was not.
+		//
+		// It asked `aq_comments WHERE context_type = 'section'` — a section-board reply, on the
+		// courses platform purged 2026-07-13. That surface has had ZERO rows since, so the provider
+		// counted zero members, reported zero pages, and dropped out of the sitemap index entirely.
+		// No profile has been submitted to a search engine since the purge, and nothing said so: an
+		// empty provider is indistinguishable from a healthy one that has nothing to offer yet.
+		//
+		// Contributing now means PUBLISHING A WORK, which is the act this platform is built around
+		// and a deliberate, email-confirmed decision by the member to appear here publicly. It is
+		// also what makes their profile worth reading — the page lists those works.
 		wp_register_sitemap_provider( 'aqmembers', new AQ_Sitemap_Query(
 			'aqmembers',
-			"SELECT COUNT(DISTINCT author_id) FROM {$p}aq_comments WHERE context_type = 'section'",
-			"SELECT u.user_nicename AS slug FROM {$p}users u JOIN ( SELECT DISTINCT author_id FROM {$p}aq_comments WHERE context_type = 'section' ) c ON c.author_id = u.ID ORDER BY u.ID ASC LIMIT %d OFFSET %d",
+			"SELECT COUNT(DISTINCT author_id) FROM {$p}aq_notebooks WHERE status = 'published'",
+			"SELECT u.user_nicename AS slug, MAX( n.published_at ) AS last_pub
+			   FROM {$p}users u JOIN {$p}aq_notebooks n ON n.author_id = u.ID
+			  WHERE n.status = 'published'
+			  GROUP BY u.ID, u.user_nicename
+			  ORDER BY u.ID ASC LIMIT %d OFFSET %d",
 			function ( $r ) {
-				return empty( $r->slug ) ? null : array( 'loc' => home_url( '/u/' . $r->slug . '/' ) );
+				if ( empty( $r->slug ) ) { return null; }
+				$e = array( 'loc' => home_url( '/u/' . $r->slug . '/' ) );
+				// Through aq_notebook_published_ts(), not strtotime(): published_at holds EITHER a
+				// unix timestamp or a datetime string, and strtotime() on the numeric form does not
+				// fail, it returns a wrong date — a bare year. Caught by testing the emitted lastmod
+				// rather than the query. That helper is the one place that knows both shapes.
+				$ts = aq_notebook_published_ts( (object) array( 'published_at' => $r->last_pub ?? '' ) );
+				if ( $ts ) { $e['lastmod'] = gmdate( 'c', $ts ); }
+				return $e;
 			}
 		) );
 		// (The pre-feed providers — aqcourses/aqtopics/aqlessons/aqarticles/aqbooks/aqtracks/
