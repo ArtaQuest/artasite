@@ -342,6 +342,19 @@ final class Relay {
 		wp_remote_get( preg_replace( '#/turn$#', '/health', $url ), [ 'blocking' => false, 'timeout' => 5 ] );
 
 		$body = [ 'id' => (int) $id, 'payload' => $payload ];
+		// ATTACHMENTS. The job ROW keeps the screenshot encrypted, because aq_relay_jobs is in the public
+		// database — but the worker that now answers holds no key and must not. So the ciphertext stays
+		// in the row and the bytes travel inline over TLS instead, decrypted here at the last moment.
+		// Without this the new push worker silently dropped every attachment: the member shared a
+		// screenshot, and ArtaBot answered as though they had said nothing.
+		if ( ! empty( $payload['images'] ) && is_array( $payload['images'] ) ) {
+			$plain = [];
+			foreach ( $payload['images'] as $im ) {
+				$raw = self::dec_image( (string) ( $im['enc'] ?? '' ) );
+				if ( $raw !== null ) { $plain[] = [ 'media_type' => (string) ( $im['media_type'] ?? 'image/png' ), 'b64' => base64_encode( $raw ) ]; }
+			}
+			$body['payload']['images'] = $plain;
+		}
 		if ( $tools ) {
 			// A tool turn's container gives the member a ROOT SHELL, so anything in its environment is
 			// theirs to read. It therefore gets credentials worth only this one turn: a signed
@@ -388,6 +401,17 @@ final class Relay {
 		$ct  = openssl_encrypt( $bytes, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag );
 		if ( $ct === false ) { return null; }
 		return base64_encode( $iv . $tag . $ct );
+	}
+
+	/** The inverse of enc_image — used only at push time, so the plaintext exists for the length of one
+	 *  outbound HTTPS request and never in a row. Returns null when it cannot be read. */
+	private static function dec_image( $b64 ) {
+		$token = (string) Secrets::get( 'AQ_WORKER_TOKEN' );
+		$buf   = base64_decode( $b64, true );
+		if ( $token === '' || $buf === false || strlen( $buf ) < 29 || ! function_exists( 'openssl_decrypt' ) ) { return null; }
+		$key = hash( 'sha256', $token, true );
+		$out = openssl_decrypt( substr( $buf, 28 ), 'aes-256-gcm', $key, OPENSSL_RAW_DATA, substr( $buf, 0, 12 ), substr( $buf, 12, 16 ) );
+		return $out === false ? null : $out;
 	}
 
 	/** Flatten the alternating transcript into one prompt for headless `claude -p`. */
@@ -483,7 +507,8 @@ final class Relay {
 			// cannot see either from here, and billing happens only once the turn has actually replied,
 			// so the numbers travel with the answer.
 			$metered = Rest::p( $req, 'metered', [] );
-			Assistant::deliver( $dlv, $ok ? trim( $text ) : '', is_array( $usage ) ? $usage : [], is_array( $metered ) ? $metered : [] );
+			$media   = Rest::p( $req, 'media', [] );
+			Assistant::deliver( $dlv, $ok ? trim( $text ) : '', is_array( $usage ) ? $usage : [], is_array( $metered ) ? $metered : [], is_array( $media ) ? $media : [] );
 			global $wpdb;
 			$wpdb->delete( Data::t( 'aq_relay_jobs' ), [ 'id' => $id ] );
 		}

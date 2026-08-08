@@ -175,7 +175,7 @@ final class Assistant {
 	 * async turn can still open a contribution. A failed turn REFUNDS the tier and leaves an honest note
 	 * rather than a silent empty bubble.
 	 */
-	public static function deliver( $dlv, $text, $usage = [], $metered = [] ) {
+	public static function deliver( $dlv, $text, $usage = [], $metered = [], $media = [] ) {
 		$amid = (int) ( $dlv['amid'] ?? 0 );
 		$uid  = (int) ( $dlv['uid'] ?? 0 );
 		$tier = Usage::tier( $dlv['tier'] ?? self::FREE_TIER );
@@ -197,6 +197,12 @@ final class Assistant {
 		$src = (string) ( $dlv['prompt'] ?? '' );
 		[ $filed ] = self::file_from_meta( $uid, $meta, $src, false, '' );
 		if ( $filed ) { $reply .= "\n\n" . implode( "\n", $filed ); }
+		// WHAT THE TURN MADE. A chart, an animation, a rendered page — saved and appended as Markdown so
+		// it renders in the bubble. Appended from the FILES the worker actually returned, not from
+		// anything the model wrote: a filename it invented cannot conjure an image, and a chart it
+		// forgot to mention still reaches the member.
+		$shown = self::attach_media( $uid, $media );
+		if ( $shown ) { $reply .= "\n\n" . implode( "\n", $shown ); }
 		Data::update( 'aq_artabot_messages', [ 'body' => $reply ], [ 'id' => $amid ] );
 		// THE CHARGE. Here and nowhere else: the turn has replied, so what it cost is now a fact rather
 		// than an estimate, and Usage::record turns the measurements into money at the live gold peg.
@@ -221,6 +227,40 @@ final class Assistant {
 		// The transcript is now the source of truth — release any reader still holding on the live
 		// buffer so it switches over immediately instead of waiting out its hold.
 		Relay::stream_close( (string) ( $dlv['stream'] ?? '' ) );
+	}
+
+	/**
+	 * Save the files a tool turn produced and return the Markdown that shows them.
+	 *
+	 * Everything here is worker-supplied and therefore untrusted: the media type decides the extension
+	 * (never the model's filename, which would be a path-traversal seam), the bytes are size-capped, and
+	 * anything that is not a media type we can render is skipped rather than saved and linked.
+	 */
+	private static function attach_media( $uid, $media ) {
+		if ( ! is_array( $media ) || ! $media ) { return []; }
+		$ext = [ 'image/png' => 'png', 'image/jpeg' => 'jpg', 'image/gif' => 'gif', 'image/webp' => 'webp',
+		         'image/svg+xml' => 'svg', 'video/mp4' => 'mp4', 'video/webm' => 'webm' ];
+		$up  = wp_upload_dir();
+		$out = [];
+		foreach ( array_slice( $media, 0, 4 ) as $m ) {
+			$type = (string) ( $m['media_type'] ?? '' );
+			$name = sanitize_file_name( (string) ( $m['name'] ?? 'output' ) );
+			if ( ! isset( $ext[ $type ] ) ) { continue; }
+			if ( ! empty( $m['too_big'] ) ) {
+				$out[] = '*(' . $name . ' was too large to attach — it is in your machine\'s `out` folder)*';
+				continue;
+			}
+			$bytes = base64_decode( (string) ( $m['b64'] ?? '' ), true );
+			if ( $bytes === false || $bytes === '' || strlen( $bytes ) > 6 * 1024 * 1024 ) { continue; }
+			$file = 'artabot-' . $uid . '-' . wp_generate_password( 10, false ) . '.' . $ext[ $type ];
+			$path = trailingslashit( $up['path'] ) . $file;
+			if ( ! @file_put_contents( $path, $bytes ) ) { continue; }
+			$url  = trailingslashit( $up['url'] ) . $file;
+			$out[] = strpos( $type, 'video/' ) === 0
+				? '[' . $name . '](' . $url . ')'          // renderRich turns a video link into a player
+				: '![' . $name . '](' . $url . ')';
+		}
+		return $out;
 	}
 
 	// ── the LIVE channel (see Relay::stream_chunk) ────────────────────────────────────────────────
