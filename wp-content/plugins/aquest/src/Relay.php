@@ -283,6 +283,46 @@ final class Relay {
 	 * there is nothing here to wait for, and a failed dispatch must not cost the caller their request.
 	 * A job nobody picks up is pruned by the existing STALE_S sweep, exactly as an unclaimed one was.
 	 */
+	/**
+	 * Mint a short-lived, single-job token: `<id>.<expiry>.<hmac>`.
+	 *
+	 * This is what lets a FULLY POWERED tool container exist. That container gives the member a root
+	 * shell, so anything in its environment is theirs to read — it must never hold the shared worker
+	 * secret or the Claude subscription token. It holds these instead: one names a single job and
+	 * expires; the other is exchanged at the broker for the real credential, on a machine the member
+	 * has no shell on. Stolen, either is worth this one turn, which the member already had.
+	 */
+	public static function mint_token( $id, $ttl = 1800 ) {
+		$secret = (string) Secrets::get( 'AQ_TURN_SECRET' );
+		if ( $secret === '' ) { return ''; }
+		$exp = time() + max( 60, (int) $ttl );
+		return $id . '.' . $exp . '.' . hash_hmac( 'sha256', $id . '.' . $exp, $secret );
+	}
+
+	/** Verify one. Constant-time, expiry-checked, and bound to the job it names — a token lifted from
+	 *  one turn cannot complete another. */
+	public static function verify_token( $id, $token ) {
+		$secret = (string) Secrets::get( 'AQ_TURN_SECRET' );
+		$parts  = explode( '.', (string) $token );
+		if ( $secret === '' || count( $parts ) !== 3 ) { return false; }
+		if ( (int) $parts[0] !== (int) $id || (int) $parts[1] < time() ) { return false; }
+		return hash_equals( hash_hmac( 'sha256', $parts[0] . '.' . $parts[1], $secret ), $parts[2] );
+	}
+
+	/**
+	 * POST /relay/job/complete — the completion path for a container holding no shared secret.
+	 *
+	 * Its own route rather than a second way into the worker-authenticated one: folding a per-job
+	 * signature into the shared `worker` check would make every relay route reachable by anything
+	 * holding any job token, which is the opposite of what the signature is for.
+	 */
+	public static function job_complete( $req ) {
+		$id  = (int) Rest::p( $req, 'id', 0 );
+		$tok = isset( $_SERVER['HTTP_X_AQ_JOB'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_AQ_JOB'] ) ) : '';
+		if ( ! $id || ! self::verify_token( $id, $tok ) ) { return Rest::err( 'unauthorised', 'bad job token', 401 ); }
+		return self::complete( $req );
+	}
+
 	private static function push( $id, $tier = '' ) {
 		$row = Data::one( 'SELECT payload FROM ' . Data::t( 'aq_relay_jobs' ) . ' WHERE id = %d', [ $id ] );
 		if ( ! $row ) { return; }
