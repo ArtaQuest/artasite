@@ -122,7 +122,7 @@ final class Relay {
 	 * heartbeat lapses mid-wait (the laptop slept/crashed). A live, working relay is ALWAYS waited
 	 * for — even a slow claimed answer is the subscription doing its job, never the paid API. Never throws.
 	 */
-	public static function ask( $messages, $system, $model, $max_tokens, $effort = 'low', $deliver = null, $stream_key = '', $tools = false ) {
+	public static function ask( $messages, $system, $model, $max_tokens, $effort = 'low', $deliver = null, $stream_key = '', $tools = false, $shell_user = '' ) {
 		if ( ! self::available() ) { return null; } // no fresh heartbeat or usage-limited → API is the backup
 
 		// Pull any attached screenshots out of the transcript so the turn (incl. ticket-triage with a
@@ -172,6 +172,11 @@ final class Relay {
 				// tool sandbox installed, and a "yes" the worker cannot honour must degrade to a text turn
 				// rather than become an unsandboxed shell. See artabot-relay.mjs toolsFor().
 				'tools'      => $tools ?: null,
+				// WHOSE machine to run it on. The worker gives a tool turn the member's OWN unix account
+				// and persistent home, so what ArtaBot builds is waiting for them when they
+				// `ssh <handle>@shell.artaquest.com`. Just the name: the worker owns provisioning and
+				// decides whether that account exists there, falling back to its throwaway sandbox if not.
+				'shell'      => $tools && $shell_user ? $shell_user : null,
 			], static function ( $v ) { return $v !== null; } ) ),
 			'created' => Data::now(),
 		] );
