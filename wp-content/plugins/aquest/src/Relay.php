@@ -352,8 +352,14 @@ final class Relay {
 			$body['payload']['broker'] = rtrim( (string) Secrets::get( 'AQ_BROKER_URL' ), '/' );
 		}
 		wp_remote_post( $url, [
-			'blocking' => false,                             // ← the whole point
-			'timeout'  => 5,                                 // long enough to connect and write, never to wait
+			// BLOCKING, with a short budget — and that is not a contradiction of "never wait for the
+			// answer". A non-blocking request abandons the socket as soon as it is queued, so against a
+			// cold endpoint the BODY was never finished: the replica woke, saw a connection, and sat
+			// waiting for a payload that never came while the member watched a spinner. Blocking writes
+			// the whole request first; the timeout then abandons only the RESPONSE, which we never
+			// wanted. The turn's answer still comes back later over /relay/complete.
+			'blocking' => true,
+			'timeout'  => 3,
 			'headers'  => array_filter( [
 				'Content-Type' => 'application/json',
 				// The tools container is never given the shared secret; it authenticates by signature.
