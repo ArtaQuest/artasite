@@ -41,9 +41,9 @@ class Mailer {
 			'label'    => 'Daily usage invoice',
 			'audience' => 'member',
 			'subject'  => 'Your ArtaQuest usage for {{day}}',
-			'body'     => "Hello {{name}},\n\nHere is what your work on ArtaQuest cost on {{day}}.\n\n{{lines}}\n\n{{items}} item(s) · {{total}} ArtaCoin (about \${{usd}})\nBalance now: {{balance}} ArtaCoin\n\nYou are charged only for what actually ran — a turn is priced when it replies, a session when it ends, from the compute it really used and the gold price at the time. Nothing is estimated or held in advance.\n\nEvery line is itemised at artaquest.com/settings — and if a charge looks wrong, reply to this email and we will look at it with you.",
-			'vars'     => [ 'name', 'day', 'lines', 'items', 'total', 'usd', 'balance', 'free' ],
-			'sample'   => [ 'name' => 'Arash', 'day' => '2026-08-08', 'lines' => "chat    low            8s   0.2163 ₳  what is ArtaQuest\nshell   max          612s   0.5265 ₳  terminal session", 'items' => '2', 'total' => '0.7428', 'usd' => '0.1037', 'balance' => '12.4', 'free' => 'no' ],
+			'body'     => "Hello {{name}},\n\nHere is what your work on ArtaQuest cost on {{day}}.\n\n{{lines}}\n\n{{items}} item(s) · {{total}} ArtaCoin used (about \${{usd}})\nCharged today: {{charged}} ArtaCoin · carried to tomorrow: {{carry}}\nBalance now: {{balance}} ArtaCoin\n\nYou are charged only for what actually ran — a turn is priced when it replies, a session when it ends, from the compute it really used and the gold price at the time. Nothing is estimated or held in advance.\n\nOne ArtaCoin is one milligram of gold, and gold does not come in fractions of a milligram, so usage adds up at full precision and only whole coins are taken. Anything under a coin is carried to tomorrow rather than rounded away — in either direction.\n\nEvery line is itemised at artaquest.com/settings — and if a charge looks wrong, reply to this email and we will look at it with you.",
+			'vars'     => [ 'name', 'day', 'lines', 'items', 'total', 'usd', 'charged', 'carry', 'balance' ],
+			'sample'   => [ 'name' => 'Arash', 'day' => '2026-08-08', 'lines' => "chat    low            8s   0.2163 ₳  what is ArtaQuest\nshell   max          612s   0.5265 ₳  terminal session", 'items' => '2', 'total' => '0.7428', 'usd' => '0.1037', 'charged' => '0', 'carry' => '0.7428', 'balance' => '12' ],
 		],
 		'signin_code' => [
 			'label'    => 'Sign-in code',

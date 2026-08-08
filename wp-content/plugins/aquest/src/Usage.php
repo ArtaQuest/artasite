@@ -80,6 +80,9 @@ final class Usage {
 	 * same measurements, on the same invoice.
 	 */
 
+	/** Where a member's un-settled fraction of a coin lives between daily settlements. */
+	const CARRY_META = 'aq_usage_carry';
+
 	/** A member may start work while owing up to this much (coins). Not a credit line — it is the slack
 	 *  that makes "charge only at the end" safe: a turn can finish and settle even if it costs more
 	 *  than the balance it started with, and the NEXT one is refused until they top up. Without slack,
@@ -198,9 +201,10 @@ final class Usage {
 			'note'    => substr( sanitize_text_field( (string) ( $m['note'] ?? '' ) ), 0, 190 ),
 			'ref'     => substr( $ref, 0, 80 ),
 		] );
-		if ( $coins > 0 ) {
-			Economy::credit_coins( $uid, -$coins, 'usage', $ref ?: ( 'u' . $uid . ':' . $id ) );
-		}
+		// NOTE WHAT IS *NOT* HERE: no ledger write. See settle() — the coin ledger is integer-denominated
+		// (1 ₳ = 1 mg of gold, full-reserve), and a typical turn costs about 0.65 ₳. Debiting per turn
+		// wrote `delta = 0` every single time, so the platform metered everything and charged nobody.
+		// Usage accrues here at full precision; whole coins move once a day.
 		return [ 'id' => (int) $id, 'coins' => $coins, 'usd' => $total ];
 	}
 
@@ -247,6 +251,7 @@ final class Usage {
 			. Data::t( 'aq_usage' ) . ' WHERE user_id = %d ORDER BY id DESC LIMIT 50', [ $uid ] );
 		return [
 			'balance' => (float) Economy::coin_balance( $uid ),
+			'carry'   => (float) get_user_meta( $uid, self::CARRY_META, true ),
 			'floor'   => self::DEBT_FLOOR,
 			'spot'    => $spot,
 			'coin_usd' => $spot > 0 ? round( $spot / self::MG_PER_OZT, 6 ) : 0,
@@ -310,13 +315,45 @@ final class Usage {
 					'created' => Data::now(), 'sent' => 0,
 				] );
 			}
-			if ( ! $existing || ! (int) $existing['sent'] ) { self::mail_invoice( $uid, $day ); }
+			// Settle BEFORE mailing, so the statement can say what was actually taken.
+			$st = self::settle( $uid, $day, (float) $r['coins'] );
+			if ( ! $existing || ! (int) $existing['sent'] ) { self::mail_invoice( $uid, $day, $st ); }
 		}
 		return count( $rows );
 	}
 
+	/**
+	 * Settle one member's day: accrued usage → whole coins off the ledger, fraction carried forward.
+	 *
+	 * THE COIN LEDGER IS INTEGER-DENOMINATED, because 1 ₳ is 1 mg of gold held in full reserve — you
+	 * cannot hold a third of a milligram, and `delta` is a bigint for exactly that reason. A typical
+	 * turn costs ~0.65 ₳, so charging per turn rounded every one of them to zero: perfectly metered,
+	 * never billed. Rounding UP per turn would have been worse, taking 1 ₳ for 0.65 ₳ of work — a 54%
+	 * overcharge dressed up as a rounding decision.
+	 *
+	 * So precision lives in aq_usage (DECIMAL) and money moves once a day in whole coins, with the
+	 * remainder carried. Nothing is lost in either direction, the reserve invariant holds, and the
+	 * daily invoice becomes the thing that actually charges rather than a letter restating a charge.
+	 *
+	 * Idempotent on the ref: settling the same day twice moves nothing the second time.
+	 */
+	public static function settle( $uid, $day, $accrued ) {
+		$uid = (int) $uid;
+		$ref = 'day:' . $day;
+		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'usage' AND ref = %s LIMIT 1", [ $ref ] ) ) {
+			return [ 'charged' => 0, 'carry' => (float) get_user_meta( $uid, self::CARRY_META, true ) ];
+		}
+		$carry = (float) get_user_meta( $uid, self::CARRY_META, true );
+		$total = $carry + (float) $accrued;
+		$whole = (int) floor( $total );
+		$rest  = round( $total - $whole, 4 );
+		if ( $whole > 0 ) { Economy::credit_coins( $uid, -$whole, 'usage', $ref ); }
+		update_user_meta( $uid, self::CARRY_META, $rest );
+		return [ 'charged' => $whole, 'carry' => $rest ];
+	}
+
 	/** Email one day's statement. Fail-open: a mail problem must never hold up the ledger. */
-	private static function mail_invoice( $uid, $day ) {
+	private static function mail_invoice( $uid, $day, $st = [ 'charged' => 0, 'carry' => 0 ] ) {
 		$u = get_userdata( (int) $uid );
 		if ( ! $u || ! $u->user_email ) { return; }
 		$inv = Data::one( 'SELECT * FROM ' . Data::t( 'aq_invoices' ) . ' WHERE user_id = %d AND day = %s', [ $uid, $day ] );
@@ -335,6 +372,8 @@ final class Usage {
 			'day'    => $day,
 			'items'  => (int) $inv['items'],
 			'total'  => number_format( (float) $inv['total_coins'], 4 ),
+			'charged' => (string) (int) ( $st['charged'] ?? 0 ),
+			'carry'  => number_format( (float) ( $st['carry'] ?? 0 ), 4 ),
 			'usd'    => number_format( (float) $inv['total_usd'], 4 ),
 			'lines'  => implode( "\n", $body ),
 			'balance' => number_format( (float) Economy::coin_balance( $uid ), 4 ),
