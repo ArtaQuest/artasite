@@ -472,6 +472,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   // About, Privacy and Terms belong. Dropping the footer from both would have taken the legal links
   // off the one page most likely to be a stranger's first.
   const onFeed = (active === "/" && isLoggedIn()) || active === "/works";
+  // ArtaChat is an APP PANE, not a document: it sizes itself to the viewport so the composer
+  // stays put while the messages scroll under it. A marketing footer below that is 295px of
+  // page nobody can see without scrolling PAST a pane that is already the height of the screen
+  // — and its existence is what made the whole page scroll instead of just the conversation.
+  const onAppPane = active === "/messages";
   // Arta needs a ledge. The two that exist — the messaging dock and the bottom tab bar — are BOTH
   // members-only, so a signed-out visitor has none and the figure stands on nothing.
   const signedIn = isLoggedIn();
@@ -543,7 +548,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {/* The feed is a stream, not a document. A marketing footer under an endless column of
             posts is furniture nobody scrolled for, and it lands directly beneath the right rail
             where it reads as part of it. Every link in it also lives in the left rail. */}
-        {onFeed ? null : <Footer />}
+        {onFeed || onAppPane ? null : <Footer />}
       <BottomTabs />
       {/*
         THE SPACE ARTA OCCUPIES, RESERVED BY THE PAGE.

@@ -1215,10 +1215,15 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
          pixels below the fold. Stick-to-bottom silently did nothing too, because the element it
          scrolls was never scrollable. `dvh` rather than `vh` so a phone's retracting address bar
          does not leave the composer under the viewport edge. */
+      /* EDGE TO EDGE ON A PHONE. The card treatment — gutter, rounded corners, border, shadow —
+         cost 48px of a 393px screen, 12% of the width, to draw a frame around the only thing on
+         screen. Every phone chat app is full-bleed for exactly this reason: the conversation IS
+         the page there. The frame comes back at `md`, where the thread sits BESIDE the list and
+         the border is what separates them. */
       className={`flex min-h-0 flex-col overflow-hidden bg-space-2 ${
         compact
           ? "flex-1"
-          : "h-[calc(100dvh-10.5rem)] min-h-[380px] md:h-auto md:min-h-0 md:flex-1 rounded-card border border-line shadow-card"}`}
+          : "h-[calc(100dvh-7.75rem)] min-h-[380px] max-md:-mx-gutter md:h-auto md:min-h-0 md:flex-1 md:rounded-card md:border md:border-line md:shadow-card"}`}
       /* aria-label carries no member name: the i18n mesh collects ATTRIBUTES too, and every
          string it collects is persisted into the public aq_translations table. The name is
          announced by the header link below, which is data-ay-skip'd. */
@@ -1232,18 +1237,30 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
             repeating them here stacked two headers with two identical Back buttons. Only the
             per-conversation TOOLS (search / timer / safety code) belong to the thread there, plus
             the live status line, which the dock header has no room for. */}
+        {/* NAME OVER STATUS, not beside it. Side by side, the name had `flex-1` — which is
+            `flex-basis: 0%` — while the status line was sized by its content, so on a 393px phone
+            the browser gave the status its 125px and squeezed the name to LITERALLY ZERO: you
+            opened a conversation and could not see who it was with. Stacking makes the name the
+            thing that gets the width, and it is what every chat app does with the same two facts. */}
         {!compact && (
           <>
             <span className="relative shrink-0">
               <Avatar src={peer.avatar} name={peer.name} className="h-9 w-9" />
               {live.online && <span className="absolute -bottom-0.5 -end-0.5 h-3 w-3 rounded-full border-2 border-space-2 bg-yang" title="Active now" />}
             </span>
-            <a href={localePath(`/u/${peer.slug}/`)} data-ay-skip="1" className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink hover:text-yin-light">{peer.name}</a>
+            <span className="flex min-w-0 flex-1 flex-col leading-tight">
+              <a href={localePath(`/u/${peer.slug}/`)} data-ay-skip="1" className="truncate text-[15px] font-semibold text-ink hover:text-yin-light">{peer.name}</a>
+              <span className="truncate text-[11.5px] text-ink-3" aria-live="polite">
+                {live.typing ? "typing…" : live.online ? "Active now" : rel.muted ? "Muted" : "End-to-end encrypted"}
+              </span>
+            </span>
           </>
         )}
-        <p className={`truncate text-[12px] text-ink-3 ${compact ? "min-w-0 flex-1" : ""}`} aria-live="polite">
-          {live.typing ? "typing…" : live.online ? "Active now" : rel.muted ? "Muted" : "End-to-end encrypted"}
-        </p>
+        {compact && (
+          <p className="min-w-0 flex-1 truncate text-[12px] text-ink-3" aria-live="polite">
+            {live.typing ? "typing…" : live.online ? "Active now" : rel.muted ? "Muted" : "End-to-end encrypted"}
+          </p>
+        )}
         {/* TWO controls, not five. Call is the one action worth its own button; everything else
             lives behind the menu, where it can carry a word instead of a glyph nobody can decode. */}
         <button type="button" aria-label="Start a video call" title="Video call" disabled={!canSend || callState !== "idle" || !!offer}
@@ -1900,9 +1917,14 @@ export default function Messages() {
            sets `flex-basis: 0%`, which takes precedence over `height` on a flex item — so the cap
            was ignored, and desktop only looked right because `items-stretch` happened to inherit
            the sidebar's height. Sizing the container makes both panes deterministic. */
-        <div className="flex flex-col gap-4 md:h-[calc(100dvh-15rem)] md:max-h-[860px] md:min-h-[420px] md:flex-row md:items-stretch">
+        <div className={`flex flex-col gap-4 md:h-[calc(100dvh-18rem)] md:max-h-[860px] md:min-h-[420px] md:flex-row md:items-stretch ${
+          /* An open conversation on a phone is full-bleed, so the page’s own py-7 shows up as a
+             grey seam above the header and below the composer — 28px of nothing, twice, on the
+             screen with the least room. Cancel it for the pane only; the LIST keeps its padding,
+             because there it is ordinary page rhythm rather than a gap in a surface. */
+          peer ? "max-md:-my-7" : ""}`}>
           {/* conversation list — hidden on phones while a thread is open (single-pane) */}
-          <aside className={`w-full flex-col gap-3 md:flex md:w-72 md:shrink-0 md:min-h-0 md:overflow-y-auto ${peer ? "hidden" : "flex"}`} aria-label="Conversations">
+          <aside className={`w-full flex-col gap-3 md:flex md:w-72 md:shrink-0 md:min-h-0 md:overflow-y-auto lg:w-[19rem] ${peer ? "hidden" : "flex"}`} aria-label="Conversations">
             {/* THREE tabs, not two lists and a form. Chats · Requests · People covers everything
                 the sidebar is for, and the two rarely-wanted boxes (archived, blocked) hang off the
                 end where they don't compete for attention with the inbox. */}
@@ -1910,7 +1932,13 @@ export default function Messages() {
               {([["chats", "Chats"], ["requests", "Requests"], ["rooms", "Rooms"], ["people", "People"]] as const).map(([k, label]) => (
                 <button key={k} type="button" role="tab" aria-selected={side === k}
                   onClick={() => setSide(k)}
-                  className={`flex-1 px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+                  /* FOUR tabs in a 288px column, one of them carrying a count badge. Equal widths
+                     (`flex-1`, i.e. basis 0) gave every tab the same 76px and then CLIPPED the one
+                     that needed more — first "People" fell off the end, then "Requests" lost its
+                     badge inside its own cell. `grow basis-auto` starts each tab at its content
+                     width and shares out only the LEFTOVER space, so nothing is ever cut and the
+                     row still fills the column. */
+                  className={`grow basis-auto px-2 py-1.5 text-[12.5px] font-semibold transition-colors ${
                     side === k ? "bg-veil/[0.10] text-ink" : "text-ink-3 hover:bg-veil/[0.05] hover:text-ink"
                   }`}>
                   {label}
@@ -1918,7 +1946,7 @@ export default function Messages() {
                     <span className="ms-1 h-1.5 w-1.5 rounded-full bg-yang align-middle" aria-label="unread" />
                   )}
                   {k === "requests" && requests > 0 && (
-                    <span className="ms-1.5 rounded-pill bg-yang px-1.5 text-[10.5px] font-bold text-on-accent">{requests}</span>
+                    <span className="ms-1 rounded-pill bg-yang px-1 text-[10.5px] font-bold text-on-accent">{requests}</span>
                   )}
                   {k === "people" && dir && dir.online > 0 && (
                     <span className="ms-1.5 text-[11px] font-bold text-yang">{dir.online}</span>

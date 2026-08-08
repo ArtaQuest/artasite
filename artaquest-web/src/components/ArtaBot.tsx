@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { ArtaBot as Api, ApiError, BotSessions, chatGetKey, chatMembers, type ArtabotMsg, type BotSession, type ChatMember, type ChatUserCard, type UsageTier } from "../lib/api";
 import { currentUser, isLoggedIn, localePath, renderRich } from "../lib/wp";
 import { armAutoAnswer, clearRing, getChatState, markSeen, subscribeChat, watchList } from "../lib/chat-store";
@@ -788,6 +789,8 @@ function DockBody({ view, setView }: {
 
 export function ArtaBot() {
   const [open, setOpen] = useState(false);
+  // The ArtaChat page is the dock's own content at full size — see hideDock below.
+  const onChatPage = /^\/(?:[a-z]{2}(?:-[a-z]+)?\/)?messages\/?$/i.test(useLocation().pathname);
   // Which conversation the dock is showing. Lifted here so the phone tab bar's ArtaBot button can
   // open ArtaBot directly (ticket #156) rather than dropping the member on the list.
   const [dockView, setDockView] = useState<View>({ k: "list" });
@@ -953,7 +956,12 @@ export function ArtaBot() {
   // is focused AND the viewport is actually shrunk (so a stuck focus can never strand the launcher
   // hidden, and a shrink with no field focused — split-screen, foldables — never hides it either).
   // Browsers without visualViewport fall back to focus alone, the pre-existing behaviour.
-  const hideDock = !open && ((fieldFocused && (vvSupported ? kbShrunk : true)) || scrolledAway);
+  // NOT ON ARTACHAT ITSELF. The dock is a shortcut to the page you are already looking at, and it
+  // was landing ON TOP of that page's composer — a 400px panel over the last 300px of the input,
+  // burying the mic button. It stays MOUNTED (this is the same invisible/pointer-events-none path
+  // the keyboard uses, not an unmount), so an incoming call still rings and the unread count still
+  // ticks; the page has its own, larger, version of every control it offers.
+  const hideDock = onChatPage || (!open && ((fieldFocused && (vvSupported ? kbShrunk : true)) || scrolledAway));
 
   const inThread = dockView.k !== "list";
   const title = dockView.k === "bot" ? "ArtaBot" : dockView.k === "dm" ? dockView.peer.name : "ArtaChat";
