@@ -133,6 +133,29 @@ cmd_ship() {
   [ "$br" = "main" ] && die "do not ship from a local main; use tools/aq start <name>"
   [ -z "$(git status --porcelain)" ] || die "commit or stash your changes first"
 
+  # ── CATCH UP FIRST, before anything is judged. ───────────────────────────────────────────────
+  # Rebasing only after a REJECTED push was too late. Everything below — the outbound guard, and
+  # especially the version gate — compares this branch against artasite/main, so when somebody else
+  # has shipped in the meantime those checks are being run against a base that is already gone.
+  #
+  # It cost a cycle: another agent shipped 1.20.607 while this branch was being written, which is the
+  # number this branch had also picked. Preflight then failed with "plugin PHP changed but its
+  # version did not move" — true against the new base, confusing on a branch that had plainly bumped
+  # it — and because the failure happened BEFORE the push, the rebase that would have explained it
+  # never ran. Two agents choosing the same next version is not an edge case here; it is what
+  # concurrent work looks like.
+  #
+  # A conflicting rebase still refuses and still leaves the branch untouched.
+  if [ "$(git rev-list --count HEAD..artasite/main)" != "0" ]; then
+    warn "artasite/main has moved — rebasing before checking anything"
+    if ! git rebase artasite/main >/dev/null 2>&1; then
+      git rebase --abort 2>/dev/null
+      die "rebase onto artasite/main CONFLICTS — resolve it yourself: git fetch artasite && git rebase artasite/main. Nothing was pushed and your branch is untouched."
+    fi
+    ok "rebased onto $(git log --oneline -1 artasite/main | cut -c1-50)"
+    warn "re-check your version bump: it is compared against the NEW base, and somebody may have taken the number you picked"
+  fi
+
   # ── The outbound guard. artasite is PUBLIC and a SUBSET. ────────────────────────────────────
   # A branch made with `aq start` adds only its own files, so this list is tiny. A branch made from
   # the monorepo would add ~12,000 — ArtaDev and its relays, CLAUDE.md, and every analysis output.

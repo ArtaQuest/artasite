@@ -732,7 +732,10 @@ final class Social {
 			'breakdown'  => Economy::points_by_track( $id ),
 			'completed'  => Learn::completed_count( $id ),
 			'bio'        => (string) get_user_meta( $id, 'description', true ),
-			'links'      => Auth::links( $id ),                 // where else this member is, key => https URL
+			// (object) so an EMPTY set encodes as {} and not []: PHP's empty array is a JSON array, and
+			// a consumer typed against a keyed object would be handed a list on exactly the members who
+			// have set nothing — which is most of them.
+			'links'      => (object) Auth::links( $id ),        // where else this member is, key => https URL
 			'joined'     => Verify::joined_label( $u->user_registered ), // clamped to the platform launch (ticket #103)
 			'verified'   => Verify::is_verified( $id ),         // the blue check
 			'full_name'  => Verify::full_name( $id ),           // public (radical transparency)

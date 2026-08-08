@@ -252,7 +252,7 @@ final class Auth {
 			'breakdown' => Economy::points_by_track( $uid ), // {learn,donate,volunteer,outreach} for the profile
 			'completed' => Learn::completed_count( $uid ), // courses completed (cert threshold) for the profile stat
 			'bio'       => (string) get_user_meta( $uid, 'description', true ), // so the saved bio loads back (was never read)
-			'links'     => self::links( $uid ),                                  // so the settings form loads them back too
+			'links'     => (object) self::links( $uid ),                          // (object): an empty set is {} not [] — see Social::profile
 			'joined'    => Verify::joined_label( $u->user_registered ), // clamped to the platform launch (ticket #103)
 			'verified'     => Verify::is_verified( $uid ),   // blue check
 			'has_identity' => Verify::has_identity( $uid ),  // name + birthday set (gates posting)
@@ -416,7 +416,7 @@ final class Auth {
 		// handle simultaneously, WP suffixes the loser (-2) — the client must learn what it actually got.
 		// `links` comes back NORMALISED — a member who typed a bare handle sees the real URL that was
 		// stored, so the form shows what the profile will show rather than what they typed.
-		return array( 'ok' => true, 'name' => $u ? $u->display_name : $name, 'bio' => $bio, 'slug' => $u ? $u->user_nicename : '', 'links' => self::links( $uid ) );
+		return array( 'ok' => true, 'name' => $u ? $u->display_name : $name, 'bio' => $bio, 'slug' => $u ? $u->user_nicename : '', 'links' => (object) self::links( $uid ) );
 	}
 
 	/** GET /username/check?u= — live availability for the settings form. Public: every username is
