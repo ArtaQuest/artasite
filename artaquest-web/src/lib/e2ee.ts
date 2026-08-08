@@ -287,9 +287,23 @@ export type ChatPayload =
   | { v: 2; t: "call"; act: "start" | "end"; sid?: string; dur?: number; why?: "declined" | "missed" | "failed" }
   /** The handshake. Never rendered; see the note above. */
   | { v: 2; t: "rtc"; kind: "offer" | "answer" | "bye"; sid: string; sdp?: string; to?: number }
-  /** One whiteboard stroke, or a clear. Points are normalised 0..1 so the drawing is the same
-   *  shape on a phone and a laptop — see components/chat/Whiteboard. */
-  | { v: 2; t: "draw"; stroke?: { pts: [number, number][]; color: string; w: number }; clear?: boolean };
+  /** One whiteboard stroke, a clear, or an undo of the sender's own last stroke. Points are
+   *  normalised 0..1 so the drawing is the same shape on a phone and a laptop — see
+   *  components/chat/Whiteboard. */
+  | { v: 2; t: "draw"; stroke?: { pts: [number, number][]; color: string; w: number }; clear?: boolean; undo?: boolean }
+  /**
+   * THE TEACHING TOOLS. Each is a tiny sealed payload rather than a server feature, which is what
+   * makes the set EXTENSIBLE: another tool is another variant here plus a button, and it inherits
+   * the room's encryption for free. Nothing about a raised hand or a running timer is ever legible
+   * to the server.
+   */
+  | { v: 2; t: "hand"; up: boolean }
+  /** A shared countdown. `ends` is a wall-clock ms timestamp so every screen agrees without anybody
+   *  having to be the clock; null stops it. */
+  | { v: 2; t: "timer"; ends: number | null; label?: string }
+  /** "Look here" — a pulse on the board at a normalised point. Sent on TAP, never on move: a
+   *  continuous pointer would be a message per frame per person. */
+  | { v: 2; t: "point"; x: number; y: number };
 
 export function encodePayload(p: ChatPayload): string {
   return JSON.stringify(p);

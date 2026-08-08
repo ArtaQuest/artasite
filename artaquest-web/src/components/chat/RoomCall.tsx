@@ -6,7 +6,7 @@ import {
 } from "../../lib/e2ee";
 import { Call, callSupported, mediaErrorMessage, newCallSid } from "../../lib/webrtc";
 import { Avatar } from "../ui";
-import { Whiteboard, type Stroke } from "./Whiteboard";
+import { Whiteboard, type Ping, type Stroke } from "./Whiteboard";
 
 /**
  * A group call — a MESH, with no server anywhere in it.
@@ -44,9 +44,20 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
   const [camOn, setCamOn] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
-  const [board, setBoard] = useState(false);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
+  const [pings, setPings] = useState<Ping[]>([]);
   const camTrack = useRef<MediaStreamTrack | null>(null);
+  /**
+   * THE STAGE. A teaching session is not a strip of video beside a chat — it is one thing you are
+   * all looking at, with faces around it. `focus` expands the call to the whole screen; `view`
+   * decides what the middle is. Everything else (the tools) is a sealed payload, which is what
+   * keeps the set open-ended: another tool is one more variant and one more button.
+   */
+  const [focus, setFocus] = useState(false);
+  const [view, setView] = useState<"grid" | "board" | "screen">("grid");
+  const [hands, setHands] = useState<Record<number, boolean>>({});
+  const [timerEnds, setTimerEnds] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const calls = useRef(new Map<number, Call>());
   const seen = useRef(new Set<number>());
   const media = useRef<MediaStream | null>(null);
@@ -201,9 +212,17 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
           if (p.t === "draw") {
             // The board is shared state, so a stroke from anybody applies to everybody.
             if (p.clear) setStrokes([]);
-            else if (p.stroke) setStrokes((cur) => [...cur, p.stroke as Stroke]);
+            else if (p.undo) setStrokes((cur) => {
+              // Undo removes the SENDER'S own last stroke, never somebody else's work.
+              const i = [...cur].reverse().findIndex((st) => st.by === m.sender);
+              return i < 0 ? cur : cur.filter((_, j) => j !== cur.length - 1 - i);
+            });
+            else if (p.stroke) setStrokes((cur) => [...cur, { ...(p.stroke as Stroke), by: m.sender }]);
             continue;
           }
+          if (p.t === "point") { setPings((cur) => [...cur.slice(-6), { x: p.x, y: p.y, at: Date.now(), by: m.sender }]); continue; }
+          if (p.t === "hand") { setHands((cur) => ({ ...cur, [m.sender]: p.up })); continue; }
+          if (p.t === "timer") { setTimerEnds(p.ends); continue; }
           if (p.t !== "rtc" || p.to !== me) continue;   // in a mesh, an offer is for ONE person
           if (p.kind === "offer" && p.sdp) {
             const s = await localMedia();
@@ -224,56 +243,143 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
     return () => { stop = true; clearInterval(t); };
   }, [room.id, roomKey, me]);
 
+  // The countdown ticks only while there IS one — no idle interval on a call that has no timer.
+  useEffect(() => {
+    if (!timerEnds) return;
+    const t = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(t);
+  }, [timerEnds]);
+  const left = timerEnds ? Math.max(0, Math.round((timerEnds - now) / 1000)) : 0;
+  const myHand = !!hands[me];
+
   const tiles = Object.values(peers);
+
+  const nameOf = (uid: number) => room.members.find((m2) => m2.id === uid);
+  const btn = "rounded-pill px-3 py-1 text-[12px] font-semibold";
+
+  /** The faces. On the focus stage they line the edge; in the strip they ARE the stage. */
+  const faces = (
+    <>
+      <Tile stream={local} label="You" muted mirror name="You" hand={myHand} />
+      {tiles.map((p) => {
+        const who = nameOf(p.uid);
+        return <Tile key={p.uid} stream={p.stream} label={who?.name || "Member"} name={who?.name}
+          avatar={who?.avatar} state={p.state} hand={!!hands[p.uid]} />;
+      })}
+    </>
+  );
+
+  const boardEl = (
+    <Whiteboard
+      strokes={strokes} pings={pings} tall={focus}
+      canUndo={strokes.some((st) => st.by === me)}
+      onStroke={(st) => { setStrokes((cur) => [...cur, { ...st, by: me }]); void signal({ v: 2, t: "draw", stroke: st }); }}
+      onClear={() => { setStrokes([]); void signal({ v: 2, t: "draw", clear: true }); }}
+      onUndo={() => {
+        setStrokes((cur) => {
+          const i = [...cur].reverse().findIndex((st) => st.by === me);
+          return i < 0 ? cur : cur.filter((_, j) => j !== cur.length - 1 - i);
+        });
+        void signal({ v: 2, t: "draw", undo: true });
+      }}
+      onPoint={(x, y) => { setPings((cur) => [...cur.slice(-6), { x, y, at: Date.now(), by: me }]); void signal({ v: 2, t: "point", x, y }); }} />
+  );
+
   const cols = tiles.length <= 1 ? 1 : tiles.length <= 3 ? 2 : 3;
+  const controls = (
+    <div className="flex flex-wrap items-center gap-2 border-t border-line px-3 py-2">
+      <p className="min-w-0 flex-1 truncate text-[12px] text-ink-3">
+        {tiles.length === 0
+          ? "You’re the only one here — invite someone, or just sit for a while."
+          : `Direct between all ${tiles.length + 1} of you — no server in between`}
+      </p>
+      {timerEnds ? (
+        <span className={`${btn} ${left <= 10 ? "bg-yang text-on-accent" : "border border-line text-ink"}`}
+          aria-live="polite">{Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}</span>
+      ) : null}
+      <button type="button"
+        onClick={() => {
+          const ends = timerEnds ? null : Date.now() + 5 * 60 * 1000;
+          setTimerEnds(ends);
+          void signal({ v: 2, t: "timer", ends });
+        }}
+        title="A five-minute countdown everybody sees — for an exercise, or a break"
+        className={`${btn} ${timerEnds ? "bg-yang text-on-accent" : "border border-line text-ink-2"}`}>
+        {timerEnds ? "Stop timer" : "Timer"}
+      </button>
+      <button type="button"
+        onClick={() => { setHands((cur) => ({ ...cur, [me]: !myHand })); void signal({ v: 2, t: "hand", up: !myHand }); }}
+        className={`${btn} ${myHand ? "bg-yang text-on-accent" : "border border-line text-ink-2"}`}>
+        {myHand ? "Lower hand" : "Raise hand"}
+      </button>
+      <button type="button" onClick={() => { setMicOn((v) => { media.current?.getAudioTracks().forEach((t) => (t.enabled = !v)); return !v; }); }}
+        className={`${btn} ${micOn ? "border border-line text-ink-2" : "bg-yang text-on-accent"}`}>
+        {micOn ? "Mute" : "Unmute"}
+      </button>
+      <button type="button" onClick={() => { setCamOn((v) => { media.current?.getVideoTracks().forEach((t) => (t.enabled = !v)); return !v; }); }}
+        className={`${btn} ${camOn ? "border border-line text-ink-2" : "bg-yang text-on-accent"}`}>
+        {camOn ? "Camera off" : "Camera on"}
+      </button>
+      <button type="button" onClick={() => { void toggleShare(); if (!sharing) setView("screen"); }}
+        className={`${btn} ${sharing ? "bg-yang text-on-accent" : "border border-line text-ink-2"}`}>
+        {sharing ? "Stop sharing" : "Share screen"}
+      </button>
+      <button type="button" onClick={() => setFocus((f) => !f)}
+        className={`${btn} border border-line text-ink-2`}>{focus ? "Exit focus" : "Focus"}</button>
+      <button type="button" onClick={() => { void signal({ v: 2, t: "rtc", kind: "bye", sid: sid.current }); onLeft(); }}
+        className={`${btn} bg-yang text-on-accent`}>Leave</button>
+    </div>
+  );
 
   return (
-    <section className="border-b border-line bg-space-1" aria-label="Room call">
-      <div className={`grid gap-1 p-1 ${cols === 1 ? "grid-cols-1" : cols === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
-        <Tile stream={local} label="You" muted mirror name="You" />
-        {tiles.map((p) => {
-          const who = room.members.find((m) => m.id === p.uid);
-          return <Tile key={p.uid} stream={p.stream} label={who?.name || "Member"} name={who?.name} avatar={who?.avatar} state={p.state} />;
-        })}
+    <section
+      className={focus
+        ? "fixed inset-0 z-[95] flex flex-col bg-space-2"
+        : "flex flex-col border-b border-line bg-space-1"}
+      aria-label="Room call">
+
+      {/* WHAT EVERYONE IS LOOKING AT. One stage with a switch, rather than a video strip that a
+          whiteboard appears underneath — in a lesson the board or the shared screen IS the session,
+          and the faces belong around it. */}
+      <div className="flex items-center gap-1.5 border-b border-line px-2 py-1.5" role="tablist" aria-label="Stage">
+        {([["grid", "People"], ["board", "Whiteboard"], ["screen", "Shared screen"]] as const).map(([k, label]) => (
+          <button key={k} type="button" role="tab" aria-selected={view === k} onClick={() => setView(k)}
+            className={`${btn} ${view === k ? "bg-veil/[0.12] text-ink" : "text-ink-3 hover:text-ink"}`}>
+            {label}
+            {k === "screen" && sharing && <span className="ms-1 text-[10px] text-yang">live</span>}
+          </button>
+        ))}
+        {Object.entries(hands).some(([, up]) => up) && (
+          <span className="ms-auto truncate text-[11.5px] text-yang" data-ay-skip="1">
+            ✋ {Object.entries(hands).filter(([, up]) => up).map(([u]) => nameOf(Number(u))?.name || "Someone").join(", ")}
+          </span>
+        )}
       </div>
-      {board && (
-        <Whiteboard strokes={strokes}
-          onStroke={(st) => { setStrokes((cur) => [...cur, st]); void signal({ v: 2, t: "draw", stroke: st }); }}
-          onClear={() => { setStrokes([]); void signal({ v: 2, t: "draw", clear: true }); }} />
+
+      {view === "board" ? (
+        <div className={`flex min-h-0 ${focus ? "flex-1" : ""} flex-col`}>{boardEl}</div>
+      ) : (
+        <div className={`grid gap-1 p-1 ${focus ? "min-h-0 flex-1 content-center" : ""} ${
+          view === "screen" ? "grid-cols-1" : cols === 1 ? "grid-cols-1" : cols === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+          {faces}
+        </div>
       )}
+
+      {/* On the focus stage the faces stay visible under the board or the shared screen — a lesson
+          where you cannot see anybody's reaction is a screencast, not a session. */}
+      {focus && view !== "grid" && (
+        <div className="grid shrink-0 grid-cols-4 gap-1 border-t border-line p-1 sm:grid-cols-6">{faces}</div>
+      )}
+
       {err && <p className="px-3 py-1.5 text-[12px] text-yang">{err}</p>}
-      <div className="flex items-center gap-2 px-3 py-2">
-        <p className="min-w-0 flex-1 truncate text-[12px] text-ink-3">
-          {tiles.length === 0
-            ? "You’re the only one here — invite someone, or just sit for a while."
-            : `Direct between all ${tiles.length + 1} of you — no server in between`}
-        </p>
-        <button type="button" onClick={() => { setMicOn((v) => { media.current?.getAudioTracks().forEach((t) => (t.enabled = !v)); return !v; }); }}
-          className={`rounded-pill px-3 py-1 text-[12px] font-semibold ${micOn ? "border border-line text-ink-2" : "bg-yang text-on-accent"}`}>
-          {micOn ? "Mute" : "Unmute"}
-        </button>
-        <button type="button" onClick={() => { setCamOn((v) => { media.current?.getVideoTracks().forEach((t) => (t.enabled = !v)); return !v; }); }}
-          className={`rounded-pill px-3 py-1 text-[12px] font-semibold ${camOn ? "border border-line text-ink-2" : "bg-yang text-on-accent"}`}>
-          {camOn ? "Camera off" : "Camera on"}
-        </button>
-        <button type="button" onClick={() => void toggleShare()}
-          className={`rounded-pill px-3 py-1 text-[12px] font-semibold ${sharing ? "bg-yang text-on-accent" : "border border-line text-ink-2"}`}>
-          {sharing ? "Stop sharing" : "Share screen"}
-        </button>
-        <button type="button" onClick={() => setBoard((v) => !v)}
-          className={`rounded-pill px-3 py-1 text-[12px] font-semibold ${board ? "bg-yang text-on-accent" : "border border-line text-ink-2"}`}>
-          Whiteboard
-        </button>
-        <button type="button" onClick={() => { void signal({ v: 2, t: "rtc", kind: "bye", sid: sid.current }); onLeft(); }}
-          className="rounded-pill bg-yang px-3 py-1 text-[12px] font-bold text-on-accent">Leave</button>
-      </div>
+      {controls}
     </section>
   );
 }
 
-function Tile({ stream, label, muted, mirror, name, avatar, state }: {
+function Tile({ stream, label, muted, mirror, name, avatar, state, hand }: {
   stream: MediaStream | null; label: string; muted?: boolean; mirror?: boolean;
-  name?: string; avatar?: string; state?: string;
+  name?: string; avatar?: string; state?: string; hand?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement | null>(null);
   useEffect(() => {
@@ -295,6 +401,7 @@ function Tile({ stream, label, muted, mirror, name, avatar, state }: {
         </div>
       )}
       <span className="absolute bottom-1 start-1 rounded bg-black/60 px-1.5 py-0.5 text-[10.5px] text-white" data-ay-skip="1">{name || label}</span>
+      {hand && <span className="absolute top-1 end-1 rounded-full bg-yang px-1.5 py-0.5 text-[11px]" title="Hand raised">✋</span>}
     </div>
   );
 }
