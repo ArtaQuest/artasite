@@ -58,6 +58,21 @@ final class Assistant {
 	 *  The price is what the turn measurably cost, charged once it has replied. */
 	const FREE_TIER = 'low';   // the DEFAULT tier — no longer "the free one"; nothing is free
 
+	/** THE SANDBOXED EXECUTOR (operator directive: "ArtaBot should be able to do anything a user could
+	 *  do in the server"). A chat turn runs inside a throwaway Linux sandbox with a shell, a browser and
+	 *  the internet — see tools/ticket-agent/artabot-tools.mjs for what it is, and what it cannot reach.
+	 *  Set false to turn the capability off platform-wide; the worker has its own independent kill
+	 *  switch (AQ_ARTABOT_TOOLS=0) for turning it off without a deploy. */
+	const TOOLS = true;
+
+	/** Which turns get it. Chat is members-only, so this is attributable compute, never anonymous.
+	 *  Image turns are excluded: the screenshots are decrypted to the worker's own disk and the sandbox
+	 *  has no host paths bound in, so the two are mutually exclusive by construction and the screenshot
+	 *  the member asked about wins. Triage, ArtaMod and @mentions never pass true. */
+	private static function tools_for( $uid, $has_image ) {
+		return self::TOOLS && $uid > 0 && ! $has_image;
+	}
+
 	/** Normalise a requested tier — delegated, so there is one definition of what tiers exist. */
 	public static function tier( $want ) { return Usage::tier( $want ); }
 
