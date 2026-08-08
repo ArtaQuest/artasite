@@ -1222,6 +1222,54 @@ html {
 html[data-theme="light"] .tk-s { color: #1d7a35; }
 html[data-theme="light"] .tk-n { color: #7a3fbf; }
 
+/* ── Scientific messaging: code + maths inside a conversation ──────────────────
+   Messages carry equations and code, and both fail in ways ordinary body type hides.
+
+   NO LIGATURES, deliberately. A coding font will happily draw `!=` as ≠, `->` as →, and `===` as a
+   single glyph — which is pleasant in an editor you are writing in and WRONG in a message you are
+   reading, where the question is often exactly which characters somebody typed. `!==` and `!=` must
+   not look alike when a colleague is telling you which one to use.
+
+   `font-variant-numeric: tabular-nums slashed-zero` for the same reason: a zero that cannot be
+   mistaken for an O, and digits that line up in a matrix or a table of results.
+
+   `text-rendering` is left alone here — optimizeLegibility applies ligatures/kerning, which is the
+   opposite of what code wants. */
+.aq-code {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas,
+               "Liberation Mono", "Courier New", monospace;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "clig" 0, "calt" 0, "zero" 1;
+  font-variant-numeric: tabular-nums slashed-zero;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* A code block sits ON a message bubble, so it needs its own surface to read as code rather than as
+   emphasised prose — and enough contrast against BOTH bubble tints (a sent bubble is blue-tinted,
+   a received one neutral). space-1 is the page's darkest/lightest surface, so it separates from
+   either. Tabs render as 2 spaces: a message is narrow, and 8 wastes a third of the line. */
+pre.aq-code {
+  tab-size: 2;
+  /* INHERIT, never a named token. `--color-ink` is set by ArtaContrast and is not always what the
+     message bubble's own text resolves to — binding to it let code drift away from the prose it
+     sits beside (measured: 7.5:1 on one surface, 2.4:1 on another, while the sentence above it was
+     fine). Inheriting makes code EXACTLY as legible as the message around it, whatever the contrast
+     engine decides, which is the guarantee worth having. */
+  color: inherit;
+  /* Long lines scroll rather than wrap: a wrapped line of code is a different program. */
+  white-space: pre;
+}
+
+/* Maths inside a message. KaTeX sizes relative to its container, and a chat bubble is smaller than
+   an article — without this, inline maths comes out noticeably smaller than the sentence around it
+   and display maths crowds the bubble's edges. */
+.aq-msg .katex { font-size: 1.06em; }
+.aq-msg .katex-display { margin: 0.5em 0; overflow-x: auto; overflow-y: hidden; padding-bottom: 2px; }
+
+/* Prose in a message gets a slightly taller line than the site default: mixed text and inline maths
+   needs the extra room, or KaTeX's taller glyphs collide with the line above. */
+.aq-msg { line-height: 1.62; }
+
 /* ArtaTTS translation panel — what the reader is SPEAKING when reading in another language (the band
    lights the source paragraph). dir=auto + plaintext keep RTL scripts (Farsi/Arabic) correct. */
 .aq-tr-panel { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(1rem + env(safe-area-inset-bottom)); width: min(42rem, calc(100vw - 2rem)); max-height: 9rem; overflow-y: auto; background: color-mix(in srgb, var(--color-space-1, #06121E) 95%, transparent); border: 1px solid var(--color-line, #26405c); border-radius: 12px; padding: 0.65rem 0.9rem; z-index: 40; font-size: 14.5px; line-height: 1.6; color: var(--color-ink, #e8eef6); unicode-bidi: plaintext; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); backdrop-filter: blur(6px); }

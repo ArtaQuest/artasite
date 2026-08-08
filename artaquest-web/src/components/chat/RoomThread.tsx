@@ -9,6 +9,9 @@ import {
   type ChatPayload,
 } from "../../lib/e2ee";
 import { Avatar, ErrorNote, Input } from "../ui";
+import { watchMath } from "../../lib/math";
+import { MessageBody } from "./MessageBody";
+import { insideFence } from "./fence";
 
 /**
  * A ROOM — a conversation with N people in it, and the place a call lives.
@@ -284,7 +287,10 @@ export function RoomThread({
 
       {renderCall?.(room, key, me, leaveCall)}
 
-      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      {/* watchMath typesets LaTeX as it arrives and re-typesets if React re-renders over it — the
+          same watcher the DM thread uses, so there is one maths implementation, not two. */}
+      <div ref={(el) => { scroller.current = el; if (el) watchMath(el, "auto"); }}
+        className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
         {noKey && !alone ? (
           <p className="py-10 text-center text-[13px] leading-relaxed text-ink-3">
             You’re in this room, but nobody has handed your device the key yet. It arrives the moment another
@@ -317,7 +323,7 @@ export function RoomThread({
                     )}
                     {r.payload === null
                       ? <span className="italic text-ink-3">Sealed with a key this device doesn’t have.</span>
-                      : <span className="whitespace-pre-wrap break-words" dir="auto">{body ?? "…"}</span>}
+                      : <span className="aq-msg block">{body ? <MessageBody text={body} /> : "…"}</span>}
                     <span className="mt-0.5 block text-end text-[10.5px] text-ink-3">{fmtTime(r.at)}</span>
                   </span>
                 </li>
@@ -334,7 +340,7 @@ export function RoomThread({
             <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={1} maxLength={4000}
               placeholder={alone ? "Leave yourself a note…" : "Message the room…"}
               aria-label="Room message" dir="auto"
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !insideFence(draft)) { e.preventDefault(); void send(); } }}
               className="max-h-[120px] min-h-[42px] flex-1 resize-none rounded-field border border-line bg-space-1 px-3.5 py-2.5 text-[14.5px] leading-snug text-ink outline-none placeholder:text-ink-3 focus:border-yin-light" />
             <button type="button" onClick={() => void send()} disabled={busy || !draft.trim()} aria-label="Send"
               className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-yang text-on-accent disabled:opacity-40">→</button>

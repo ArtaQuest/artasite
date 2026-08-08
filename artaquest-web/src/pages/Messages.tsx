@@ -25,6 +25,8 @@ import { roomsCreate, roomsList, type Room } from "../lib/api";
 import { CallPanel, CallPrivacyNote } from "../components/chat/CallPanel";
 import { Call, callSupported, mediaErrorMessage, newCallSid, type CallState } from "../lib/webrtc";
 import { QUICK_REACTIONS } from "../components/chat/emoji";
+import { MessageBody } from "../components/chat/MessageBody";
+import { insideFence } from "../components/chat/fence";
 import { knownSticker, stickerLabel, stickerUrl } from "../components/chat/stickers";
 
 /**
@@ -407,7 +409,10 @@ function Composer({
         <GrowingTextarea value={draft} onChange={change}
           placeholder={editing ? "Edit your message…" : "Write an encrypted message…"}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+            // ENTER SENDS — unless the draft is mid-code-fence, where it adds a line instead.
+            // Writing a function into a box that fires on Enter is otherwise a fight, and
+            // Shift+Enter is not something you should have to know to paste six lines of Python.
+            if (e.key === "Enter" && !e.shiftKey && !insideFence(draft)) { e.preventDefault(); send(); }
             if (e.key === "Escape" && (replyTo || editing || panel)) {
               // Claim the key so the surrounding dock does not also close (which would throw away
               // the message being typed). An Escape with nothing to cancel bubbles on.
@@ -1493,7 +1498,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                         ) : p.t === "img" || p.t === "voice" || p.t === "file" ? (
                           <>
                             <Media att={p.att} url={media[m.id] ?? null} onZoom={setZoom} />
-                            {(p.t === "img" || p.t === "file") && body && <p className="mt-1.5 whitespace-pre-wrap break-words" dir="auto">{body}</p>}
+                            {(p.t === "img" || p.t === "file") && body && <div className="aq-msg mt-1.5"><MessageBody text={body} /></div>}
                           </>
                         ) : p.t === "stick" ? (
                           knownSticker(p.id)
@@ -1524,7 +1529,9 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                             })()}
                           </p>
                         ) : (
-                          <p className="whitespace-pre-wrap break-words" dir="auto">{body}</p>
+                          /* `aq-msg` scopes the maths sizing; MessageBody handles code and leaves
+                             the LaTeX delimiters for watchMath to typeset. */
+                          <div className="aq-msg">{body ? <MessageBody text={body} /> : null}</div>
                         )}
                         {/* per-message meta (WhatsApp-style, inside every bubble): time · edited ·
                             failed, plus the sent/delivered/read tick on each of my messages */}
