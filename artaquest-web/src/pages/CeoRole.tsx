@@ -28,7 +28,7 @@
  * encrypted with per-attachment keys, and `/messages/?with=<slug>` is its deep link. So a signed-in
  * visitor lands straight in a conversation with Arash and attaches the file there; a signed-out one
  * goes to sign-in with that same destination as the redirect, so they arrive where they were going
- * rather than on the home page. Nobody is asked to find the Messages tab and search for a person.
+ * rather than on the home page. Nobody is asked to find the ArtaChat tab and search for a person.
  *
  * Why a DM and not an upload form: a CV is personal data, and this platform publishes its ENTIRE
  * database. A file posted through any ordinary surface would be public. The chat is the one place
@@ -173,7 +173,7 @@ function ApplyCard() {
         CV to it — the paperclip in the composer takes a PDF or a document.
       </p>
       <p className="text-[14px] leading-relaxed text-ink-2">
-        Messages here are end-to-end encrypted, so your CV is sealed to your device and mine.
+        ArtaChat is end-to-end encrypted, so your CV is sealed to your device and mine.
         That matters more than usual on this platform: every other table is public on purpose,
         and the chat is the one place your file is not.
       </p>

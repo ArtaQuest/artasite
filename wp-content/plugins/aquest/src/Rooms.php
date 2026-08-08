@@ -335,11 +335,11 @@ final class Rooms {
 		if ( count( self::members_of( $rid ) ) >= self::MAX_MEMBERS ) {
 			return Rest::err( 'full', 'This room is full (' . self::MAX_MEMBERS . ' members).', 400 );
 		}
-		// A member who has never opened Messages has no device key, so nobody can seal the room key
+		// A member who has never opened ArtaChat has no device key, so nobody can seal the room key
 		// to them — say so now rather than letting them sit in a room they cannot read.
 		$has_key = (bool) Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_chat_keys' ) . ' WHERE user_id = %d LIMIT 1', [ $target ] );
 		if ( ! $has_key ) {
-			return Rest::err( 'no_device_key', $u->display_name . ' hasn’t opened Messages yet, so there’s no key to seal this room to.', 400 );
+			return Rest::err( 'no_device_key', $u->display_name . ' hasn’t opened ArtaChat yet, so there’s no key to seal this room to.', 400 );
 		}
 		Data::insert( 'aq_room_members', [
 			'room_id' => $rid, 'user_id' => $target, 'role' => 'member', 'joined' => Data::now(),

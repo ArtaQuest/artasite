@@ -557,7 +557,7 @@ final class Chat {
 
 	/**
 	 * GET chat/keys?user=<slug|id> — a member's active public key (public: the same bytes sit in
-	 * the open DB). Null key = they haven't opened Messages yet, so nobody can write to them.
+	 * the open DB). Null key = they haven't opened ArtaChat yet, so nobody can write to them.
 	 */
 	public static function get_key( $req ) {
 		self::ensure_tables();
@@ -782,7 +782,7 @@ final class Chat {
 	 * There is nothing to hide here — the whole user table is already public in /data/ — so this
 	 * exposes exactly what that does plus the presence beacon, and no more. Ordered online-first
 	 * (then by name) so the answer to "who is around?" is the top of the list. `has_key` is what
-	 * actually matters before writing: a member who has never opened Messages has published no
+	 * actually matters before writing: a member who has never opened ArtaChat has published no
 	 * public key, so nobody can seal anything to them yet.
 	 *
 	 * Presence lives in per-user transients, which SQL cannot ORDER BY — so this reads a bounded

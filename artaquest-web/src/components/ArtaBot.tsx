@@ -6,7 +6,7 @@ import { useTypewriter } from "../lib/useTypewriter";
 import { Avatar, Button, LogoMark, RichText } from "./ui";
 import { IncomingCall } from "./chat/CallPanel";
 
-/** The DM thread lives in the Messages chunk (it carries the whole E2EE stack). Lazy, so the dock
+/** The DM thread lives in the ArtaChat page chunk (it carries the whole E2EE stack). Lazy, so the dock
  *  costs nothing until a member actually opens a conversation. */
 const DmThread = lazy(() => import("../pages/Messages").then((m) => ({ default: m.DmThread })));
 
@@ -600,7 +600,7 @@ const Ico = ({ d, size = 17, className }: { d: React.ReactNode; size?: number; c
 );
 const BACK = <path d="M15 5l-7 7 7 7" />;
 const SEARCH = <><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></>;
-/* The drawer bar's two affordances: compose (jump to the full Messages page) and the chevron that
+/* The drawer bar's two affordances: compose (jump to the full ArtaChat page) and the chevron that
    rolls the drawer up and down — pointing UP when collapsed (rotate-180), DOWN when open. */
 const COMPOSE = <><path d="M4 20h4l10-10a2.1 2.1 0 0 0-3-3L5 17v3z" /><path d="M13.5 6.5l4 4" /></>;
 const CHEVRON = <path d="M6 9.5l6 6 6-6" />;
@@ -659,7 +659,7 @@ function DockBody({ view, setView }: {
     try {
       const k = await chatGetKey(slug);
       setView({ k: "dm", peer: k.user });
-      if (!k.key) setNote(`${k.user.name} hasn’t opened Messages yet, so they can’t receive one until they do.`);
+      if (!k.key) setNote(`${k.user.name} hasn’t opened ArtaChat yet, so they can’t receive one until they do.`);
     } catch { setNote("Couldn’t open that conversation."); }
   }
 
@@ -762,7 +762,7 @@ function DockBody({ view, setView }: {
                 <p className="px-3 pb-1 pt-3 text-[11px] font-bold uppercase tracking-wider text-ink-3">Members</p>
                 {newPeople.map((m) => (
                   <button key={m.id} type="button" data-ay-skip="1" onClick={() => void openBySlug(m.slug)}
-                    title={m.has_key ? "Send an encrypted message" : "Hasn’t opened Messages yet"}
+                    title={m.has_key ? "Send an encrypted message" : "Hasn’t opened ArtaChat yet"}
                     className="flex w-full items-center gap-3 border-b border-line px-3 py-2.5 text-start transition-colors hover:bg-veil/[0.05]">
                     <span className="relative shrink-0">
                       <Avatar src={m.avatar} name={m.name} country={m.country} className="h-10 w-10" />
@@ -956,13 +956,13 @@ export function ArtaBot() {
   const hideDock = !open && ((fieldFocused && (vvSupported ? kbShrunk : true)) || scrolledAway);
 
   const inThread = dockView.k !== "list";
-  const title = dockView.k === "bot" ? "ArtaBot" : dockView.k === "dm" ? dockView.peer.name : "Messaging";
+  const title = dockView.k === "bot" ? "ArtaBot" : dockView.k === "dm" ? dockView.peer.name : "ArtaChat";
   const toggle = () => setOpen((o) => !o);
   const me = currentUser();
 
   /* A DRAWER, not a popup (operator, 2026-07-30: "like LinkedIn, opens up and down like a drawer
      that says messaging"). The bar is ALWAYS on screen, welded to the bottom edge; only the body
-     slides. That is the whole point of the pattern — the collapsed state still says "Messaging" and
+     slides. That is the whole point of the pattern — the collapsed state still says "ArtaChat" and
      carries the unread count, so the member never has to remember where messages live. The old
      floating circle mounted and unmounted the entire panel, which is a popup wearing a chat's
      clothes: nothing persisted, and the label existed only once you had already opened it.
@@ -1047,11 +1047,11 @@ export function ArtaBot() {
             </>
           )}
           {!inThread && (
-            <a href={localePath("/messages/")} aria-label="Open the full Messages page"
+            <a href={localePath("/messages/")} aria-label="Open ArtaChat"
               className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-veil/[0.07] hover:text-ink"><Ico d={COMPOSE} size={17} /></a>
           )}
           <button type="button" onClick={toggle} aria-expanded={open} aria-controls="aq-dock-body"
-            aria-label={open ? "Collapse messaging" : "Expand messaging"}
+            aria-label={open ? "Collapse ArtaChat" : "Expand ArtaChat"}
             className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-veil/[0.07] hover:text-ink">
             <Ico d={CHEVRON} size={18} className={open ? "" : "rotate-180"} />
           </button>

@@ -2147,7 +2147,7 @@ export type ChatRing = { from: ChatUserCard; chat: number; at: number };
 export function chatUnread() {
   return get<{ unread: number; requests: number; ring: ChatRing | null }>("/chat/unread");
 }
-/** One row of the member directory. `has_key` false = they have never opened Messages, so no
+/** One row of the member directory. `has_key` false = they have never opened ArtaChat, so no
  *  device key exists to seal anything to them yet. */
 export type ChatMember = {
   id: number; name: string; slug: string; avatar: string; country?: string;

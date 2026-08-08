@@ -1,5 +1,5 @@
 /**
- * End-to-end encryption for ArtaChat (Messages) — WebCrypto only, no dependencies.
+ * End-to-end encryption for ArtaChat — WebCrypto only, no dependencies.
  *
  * Threat model: the ENTIRE ArtaQuest database is public (the /data/ explorer serves every row),
  * so the server must never be able to read a message — and neither can anyone who downloads the

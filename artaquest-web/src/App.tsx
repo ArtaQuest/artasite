@@ -114,7 +114,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/my-library": "My Library",
   "/ceo": "CEO",
   "/library": "Library",
-  "/messages": "Messages",
+  "/messages": "ArtaChat",
   "/login": "Sign in", "/sponsors": "Sponsors",
   "/fearometer": "ArtaMod",
   "/works": "Home", "/challenges": "Challenges", "/rankings": "Rankings", "/studio": "Your Studio", "/console": "Operator console",

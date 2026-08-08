@@ -324,7 +324,7 @@ export default function Profile() {
             </a>
           ) : isLoggedIn() ? (
             /* Follow + Message. Until now the ONLY way to open a conversation was typing a
-               member's exact @handle into the Messages sidebar — this is the entry point the
+               member's exact @handle into the ArtaChat sidebar — this is the entry point the
                /messages/?with= deep link was always built for. */
             <div className="flex shrink-0 gap-2 sm:ml-auto">
               <Button type="button" onClick={toggleFollow} disabled={followBusy}

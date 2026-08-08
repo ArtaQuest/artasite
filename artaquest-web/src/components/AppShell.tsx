@@ -93,7 +93,7 @@ const ME_SLUG = currentUser()?.slug;
  *  the sparkle back). Visitors get no bottom bar — the topbar's Sign in / Register covers
  *  joining (the fixed join banner was removed 2026-07-16). */
 function BottomTabs() {
-  // Unread count for the Messages tab. On a phone the floating dock launcher is hidden (ticket
+  // Unread count for the ArtaChat tab. On a phone the floating dock launcher is hidden (ticket
   // #156 — the centre slot is ArtaBot), so without this the badge a member sees on desktop simply
   // does not exist on the device they mostly read on. Hooks run before the visitor early-return
   // below, because they must be called in the same order on every render.
@@ -105,7 +105,7 @@ function BottomTabs() {
   const T = [
     { href: "/", d: "home" as IconKey, label: "Home" },
     { href: "/studio/", d: "book" as IconKey, label: "Studio" },
-    { href: "/messages/", d: "chat" as IconKey, label: "Messages" },
+    { href: "/messages/", d: "chat" as IconKey, label: "ArtaChat" },
     { href: me?.slug ? `/u/${me.slug}/` : "/user-account/", d: "profile" as IconKey, label: "Profile" },
   ];
   const tab = (t: (typeof T)[number]) => (
@@ -160,7 +160,7 @@ const NAV: { label: string; href: string; icon: IconKey; divider?: boolean; exte
   // invisible: a shared shelf nobody can find is not a shared shelf.
   { label: "Library", href: "/library/", icon: "book", external: true },
   // ArtaChat — end-to-end encrypted DMs; keys live on the member's device, the DB holds ciphertext.
-  { label: "Messages", href: "/messages/", icon: "mail", external: true, auth: true },
+  { label: "ArtaChat", href: "/messages/", icon: "mail", external: true, auth: true },
   { label: "Rankings", href: "/rankings/", icon: "trophy", external: true },
   // UNLISTED, not retired (operator 2026-08-03): /topics/ and /issues/ still resolve and still
   // render. They are reached from where they are actually needed — the seasons and cycles surfaces

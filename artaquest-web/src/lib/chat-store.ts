@@ -89,7 +89,7 @@ let bootPromise: Promise<void> | null = null;
  * Deliberately NOT called just because the dock is on screen. Registering a public key is a
  * consequential act: the server treats a new key as a rotation, and every message sealed to the
  * previous one becomes unopenable to this member forever. Before the dock, that only happened when
- * someone opened Messages. If merely rendering a badge did it, then reading the feed in a private
+ * someone opened ArtaChat. If merely rendering a badge did it, then reading the feed in a private
  * window — or on a colleague's browser, or after clearing site data — would silently retire the
  * member's real device key and strand their history.
  *
@@ -421,7 +421,7 @@ export function subscribeChat(fn: () => void): () => void {
 
 /** Declare that this surface is SHOWING the conversation list, so the list may be polled (and
  *  presence-marking reads are acceptable). Call from the dock only while it is open, and from the
- *  full Messages page. Returns a release function. */
+ *  full ArtaChat page. Returns a release function. */
 export function watchList(): () => void {
   listWatchers++;
   if (listWatchers === 1) {
