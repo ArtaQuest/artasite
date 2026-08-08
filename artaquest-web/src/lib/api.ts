@@ -793,6 +793,17 @@ export type ApiTokenItem = {
   id: number; label: string; prefix: string; scopes: ApiTokenScope[];
   calls: number; last_used: number; created: number; revoked: boolean;
 };
+/** A member's own machine account on the relay VM. `unix` is their handle; `blocked` says why there
+ *  is no account when a handle cannot be a Linux username. Only PUBLIC keys ever travel — a private
+ *  key must never reach this platform, whose whole database is published at /data/. */
+export type ShellKey = { id: number; label: string; fp: string; key: string; at: number };
+export type ShellInfo = { host: string; unix: string; blocked: string; command: string; max: number; keys: ShellKey[] };
+export const ShellAccount = {
+  mine: () => get<ShellInfo>("/shell", { _: Date.now() }),
+  addKey: (label: string, key: string) => post<ShellInfo>("/shell/keys", { label, key }),
+  removeKey: (id: number) => post<ShellInfo>("/shell/keys/remove", { id }),
+};
+
 export const ApiTokens = {
   list: () => get<{ items: ApiTokenItem[] }>("/api/tokens", { _: Date.now() }),
   create: (label: string, scopes: ApiTokenScope[]) =>

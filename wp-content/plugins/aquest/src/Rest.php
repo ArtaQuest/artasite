@@ -309,6 +309,15 @@ final class Rest {
 		[ 'POST', 'relay/poll',                    'Relay::poll',            'worker' ],
 		[ 'POST', 'relay/complete',                'Relay::complete',        'worker' ],
 		[ 'POST', 'relay/stream',                  'Relay::stream_chunk',    'worker' ], // …and streams the answer as it writes it (live deltas → a transient, no row writes)
+		// MEMBER SHELLS — every member has their own unix account on the relay VM, reachable as
+		// `ssh <handle>@shell.artaquest.com`, landing in the SAME sandbox ArtaBot's tool turns run in
+		// (src/Shell.php + tools/ticket-agent/artabot-shell.mjs). Only PUBLIC keys are stored, which is
+		// forced by the design of this platform rather than merely chosen: the whole database is
+		// published at /data/, so a private key could never live in it.
+		[ 'GET',  'shell',                         'Shell::mine',            'user'   ],
+		[ 'POST', 'shell/keys',                    'Shell::add_key',         'user'   ],
+		[ 'POST', 'shell/keys/remove',             'Shell::remove_key',      'user'   ],
+		[ 'POST', 'relay/shell/roster',            'Shell::roster',          'worker' ], // the VM pulls accounts + keys every few minutes
 		// ArtaScience — the fully automated AI review pipeline (src/Science.php). Submissions MUST ship
 		// open data + code; the ArtaScience daemon (tools/ticket-agent/artascience-relay.mjs) runs the
 		// code, checks reproducibility at --effort max, and returns a multi-round verdict. Public record.

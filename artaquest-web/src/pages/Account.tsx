@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DobWheel } from "../components/DobWheel";
 import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, postProfileUpdate, type CourseCard, type Dashboard, type UsernameCheck } from "../lib/wp";
-import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, KaggleIds, Passkeys, myParticipation, setGender as setGender_, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type KaggleIdItem, type SessionItem, type BursaryResult, type BursaryStatus, type ShareKit } from "../lib/api";
+import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, KaggleIds, Passkeys, ShellAccount, myParticipation, setGender as setGender_, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type KaggleIdItem, type SessionItem, type ShellInfo, type ShellKey, type BursaryResult, type BursaryStatus, type ShareKit } from "../lib/api";
 import { signOut } from "../lib/auth";
 import { VerifyApi, fileToImage, type VerifyStatus } from "../lib/verify";
 import { countryName, countryOptions, flagEmoji } from "../lib/flags";
@@ -349,6 +349,128 @@ function TokenManager() {
       )}
       {items && active.length === 0 && !err && !creating && (
         <p className="mt-4 text-[14px] text-ink-3">No active tokens.</p>
+      )}
+    </section>
+  );
+}
+
+// ── Your machine — a real Linux account, reachable over SSH ─────────────────
+// The account is not a shell on ArtaQuest's server: sshd force-commands every session into the SAME
+// sandbox ArtaBot's tool turns run in, with the member's own persistent home. So "ask ArtaBot to
+// build it, then ssh in and find it" is one workspace, and what a member can reach from a terminal
+// is exactly what ArtaBot could already reach on their behalf.
+function ShellManager() {
+  const [info, setInfo] = useState<ShellInfo | null>(null);
+  const [err, setErr] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [label, setLabel] = useState("");
+  const [key, setKey] = useState("");
+  const [addErr, setAddErr] = useState("");
+  const [busy, setBusy] = useState<number | "add" | "">("");
+  const [armed, setArmed] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => { ShellAccount.mine().then(setInfo).catch(() => setErr(true)); }, []);
+
+  async function add() {
+    setBusy("add"); setAddErr("");
+    try {
+      setInfo(await ShellAccount.addKey(label.trim(), key.trim()));
+      setAdding(false); setLabel(""); setKey("");
+    } catch (e) {
+      setAddErr(e instanceof ApiError ? e.message : "Could not add that key — please try again.");
+    } finally { setBusy(""); }
+  }
+  async function remove(k: ShellKey) {
+    setBusy(k.id);
+    try { setInfo(await ShellAccount.removeKey(k.id)); } catch { setErr(true); } finally { setBusy(""); }
+  }
+
+  return (
+    <section>
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <h2 className="text-[20px] font-bold tracking-tight">Your machine · SSH</h2>
+        {info?.unix && (
+          <Button variant="outline" onClick={() => setAdding((v) => !v)} className="h-9 px-3 text-[13px]">
+            {adding ? "Cancel" : "Add a key"}
+          </Button>
+        )}
+      </div>
+      <p className="mt-1 text-[13px] text-ink-3">
+        You have your own Linux account on ArtaQuest's machine — a sandbox with a shell, Python, Node, git and the open
+        internet. It is the SAME place ArtaBot works when you ask it to build something, so whatever it makes is waiting
+        for you here. Your files persist; 2 GB of space. The rest of the machine, this database and everyone else's files
+        are out of reach from it, and there are no ArtaQuest credentials inside.
+      </p>
+
+      {err && <ErrorNote className="mt-4">Something went wrong loading your shell. Please reload the page.</ErrorNote>}
+      {!info && !err && <StatusNote className="py-4 text-start">Loading…</StatusNote>}
+
+      {info?.blocked && <StatusNote className="mt-4 py-3 text-start">{info.blocked}</StatusNote>}
+
+      {info?.unix && (
+        <Card className="mt-4 px-4 py-3">
+          <div className="text-[13px] text-ink-3">Sign in from your terminal with</div>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <code data-ay-skip="1" className="break-all rounded bg-space-2 px-2 py-1 text-[14px] text-ink">{info.command}</code>
+            <Button variant="outline" className="h-8 px-3 text-[12px]"
+              onClick={() => { navigator.clipboard?.writeText(info.command).then(() => setCopied(true)); }}>
+              {copied ? "Copied" : "Copy"}
+            </Button>
+          </div>
+          {info.keys.length === 0 && (
+            <div className="mt-2 text-[12.5px] text-ink-3">
+              Add a key below first — that is what lets you in. On your own computer:{" "}
+              <code data-ay-skip="1" className="rounded bg-space-2 px-1.5 py-0.5 text-[12px]">ssh-keygen -t ed25519</code>{" "}
+              then paste the contents of <code data-ay-skip="1" className="rounded bg-space-2 px-1.5 py-0.5 text-[12px]">~/.ssh/id_ed25519.pub</code>.
+            </div>
+          )}
+        </Card>
+      )}
+
+      {adding && (
+        <Card className="mt-4 px-4 py-4">
+          <Field label="What is this key for?">
+            <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Work laptop" maxLength={60} />
+          </Field>
+          <Field label="Your PUBLIC key (the .pub file)">
+            <textarea value={key} onChange={(e) => setKey(e.target.value)} rows={3} spellCheck={false}
+              placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5..."
+              className="w-full rounded-card border border-line bg-space-2 px-3 py-2 font-mono text-[12.5px] text-ink outline-none focus:border-yin" />
+          </Field>
+          {/* Said plainly because the consequence is permanent: everything in this database is
+              published at /data/, so a private key pasted here would be published too. */}
+          <p className="mt-2 text-[12.5px] text-ink-3">
+            Paste the <b className="text-ink">public</b> half only — the file ending <code data-ay-skip="1">.pub</code>. Never a private key:
+            ArtaQuest's whole database is public, so anything you put here is public too.
+          </p>
+          {addErr && <ErrorNote className="mt-3">{addErr}</ErrorNote>}
+          <Button onClick={add} disabled={busy === "add" || !key.trim()} className="mt-4 h-9 px-4 text-[13px]">
+            {busy === "add" ? "Adding…" : "Add key"}
+          </Button>
+        </Card>
+      )}
+
+      {info && info.keys.length > 0 && (
+        <ul className="mt-4 flex flex-col gap-3">
+          {info.keys.map((k) => (
+            <li key={k.id}>
+              <Card className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <div className="text-[15px] font-semibold">{k.label || "Key"}</div>
+                  {/* The fingerprint, so it can be checked against `ssh-keygen -lf` rather than believed. */}
+                  <code data-ay-skip="1" className="mt-0.5 block break-all text-[12px] text-ink-3">{k.fp}</code>
+                </div>
+                <Button variant="outline"
+                  onClick={() => { if (armed === k.id) { setArmed(null); remove(k); } else { setArmed(k.id); } }}
+                  disabled={busy === k.id}
+                  className={"h-9 px-3 text-[13px] " + (armed === k.id ? "border-rose-400/60 text-rose-300" : "hover:text-rose-300")}>
+                  {busy === k.id ? "Removing…" : armed === k.id ? "Really remove? That computer stops being able to sign in" : "Remove"}
+                </Button>
+              </Card>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );
@@ -1238,6 +1360,7 @@ export default function Account() {
       <SessionManager />
 
       <TokenManager />
+      <ShellManager />
       <PasskeyManager />
 
       <DeleteAccount />
