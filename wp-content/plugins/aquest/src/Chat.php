@@ -983,6 +983,12 @@ final class Chat {
 			// either of us blocked the other, is it muted/pinned/archived.
 			'pending'      => $chat ? self::is_request( $chat, $uid ) : false,
 			'asked'        => $chat ? ( ! (int) $chat['accepted'] && (int) $chat['starter'] === $uid ) : false,
+			// BEFORE the first word is typed, not after it is sent. `asked` can only be true once a
+			// message exists, so someone writing to a stranger learned their message was a request —
+			// capped at three, deliverable only if the other side agrees — from a line that appeared
+			// AFTERWARDS. This is the same question asked one moment earlier: if I write here now,
+			// is it a request? Only meaningful while the conversation does not exist yet.
+			'will_request' => $chat ? false : ! self::pre_accepted( $uid, $peer ),
 			'request_left' => $left,
 			'blocked'      => $chat ? self::flag( $chat, $uid, 'block' ) : false,
 			'blocked_by'   => $chat ? self::peer_flag( $chat, $uid, 'block' ) : false,

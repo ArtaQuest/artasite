@@ -2124,7 +2124,7 @@ export type ChatMessages = {
   items: ChatCipherMsg[]; next: number | null;
   /** Relationship state for the header + composer. `blocked_by` = THEY blocked me (I can read the
    *  history, I cannot write); `request_left` = how many more messages an unanswered request holds. */
-  pending: boolean; asked: boolean; request_left: number;
+  pending: boolean; asked: boolean; will_request: boolean; request_left: number;
   blocked: boolean; blocked_by: boolean; muted: boolean; pinned: boolean; archived: boolean;
 };
 /** Which list chatList() returns — the same query with a different filter (see Chat::list_chats). */

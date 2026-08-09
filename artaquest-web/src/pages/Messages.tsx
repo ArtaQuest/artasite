@@ -321,12 +321,12 @@ function Media({ att, url, onZoom }: { att: SealedAttachment; url: string | null
  * pre-filled with the message being edited and restored afterwards without the parent tracking it.
  */
 function Composer({
-  peerId, peerName, compact, editing, replyTo, replyPreview, busy, asked, requestLeft,
+  peerId, peerName, compact, editing, replyTo, replyPreview, busy, asked, willRequest, requestLeft,
   initialText, onSend, onCancel, onPick, onFile,
 }: {
   peerId: number; peerName: string; compact: boolean;
   editing: boolean; replyTo: boolean; replyPreview: string; busy: boolean;
-  asked: boolean; requestLeft: number;
+  asked: boolean; willRequest: boolean; requestLeft: number;
   initialText: string;
   onSend: (text: string) => void;
   onCancel: () => void;
@@ -402,11 +402,21 @@ function Composer({
             onPick(r);
           }} />
       )}
-      {asked && (
+      {asked ? (
         <p className="mb-2 px-1 text-[12px] text-ink-3">
           Message request — {requestLeft} of 3 messages left until they accept.
         </p>
-      )}
+      ) : willRequest ? (
+        /* SAID BEFORE THE FIRST WORD, because that is when it changes what you write. `asked` can
+           only be true once a message exists, so someone writing to a stranger used to learn their
+           message was a request — capped at three, delivered only if the other side agrees — from a
+           line that appeared afterwards. */
+        <p className="mb-2 px-1 text-[12px] text-ink-3">
+          <span data-ay-skip="1" className="font-semibold text-ink-2">{peerName}</span>{" "}
+          <span>doesn’t follow you, so this starts as a message request: up to three messages, and they
+          arrive once it’s accepted.</span>
+        </p>
+      ) : null}
       <div className="flex items-end gap-1.5">
         <button type="button" aria-label="Emoji, stickers and GIFs" title="Emoji, stickers, GIFs"
           aria-expanded={panel} onClick={() => setPanel((v) => !v)}
@@ -482,7 +492,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
    *  because the OTHER side can change it — accepting my request has to unlock my composer without
    *  a reload. */
   const [rel, setRel] = useState({
-    pending: false, asked: false, request_left: 3, blocked: false, blocked_by: false,
+    pending: false, asked: false, will_request: false, request_left: 3, blocked: false, blocked_by: false,
     muted: false, pinned: false, archived: false,
   });
   // ── Calling ────────────────────────────────────────────────────────────────
@@ -631,16 +641,17 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
           && cur.online === page.peer_online && cur.ttl === page.ttl
           ? cur
           : { read: page.peer_read, typing: page.peer_typing, online: page.peer_online, ttl: page.ttl }));
-        setRel((cur) => (cur.pending === page.pending && cur.asked === page.asked
-          && cur.request_left === page.request_left && cur.blocked === page.blocked
-          && cur.blocked_by === page.blocked_by && cur.muted === page.muted
-          && cur.pinned === page.pinned && cur.archived === page.archived
-          ? cur
-          : {
-            pending: page.pending, asked: page.asked, request_left: page.request_left,
-            blocked: page.blocked, blocked_by: page.blocked_by,
-            muted: page.muted, pinned: page.pinned, archived: page.archived,
-          }));
+        // COMPARED FROM THE OBJECT ITSELF, not from a hand-written list of its fields. The
+        // equality check named eight of them explicitly, and the ninth — added with this change —
+        // was simply not in it: the poll built a correct object every tick and threw it away
+        // because the fields it happened to check had not moved. A guard you must remember to
+        // extend is a guard that silently stops guarding the newest thing.
+        const nextRel = {
+          pending: page.pending, asked: page.asked, will_request: page.will_request, request_left: page.request_left,
+          blocked: page.blocked, blocked_by: page.blocked_by,
+          muted: page.muted, pinned: page.pinned, archived: page.archived,
+        };
+        setRel((cur) => ((Object.keys(nextRel) as (keyof typeof nextRel)[]).every((k) => cur[k] === nextRel[k]) ? cur : nextRel));
         const plain = await decrypt(page);
         if (stop) return;
         if (plain.length) {
@@ -1261,7 +1272,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
       className={`flex min-h-0 flex-col overflow-hidden bg-space-2 ${
         compact
           ? "flex-1"
-          : "h-[calc(100dvh-7.75rem)] min-h-[380px] max-md:-mx-gutter md:h-auto md:min-h-0 md:flex-1 md:rounded-card md:border md:border-line md:shadow-card"}`}
+          : "h-[calc(100dvh-7.75rem)] min-h-[380px] max-md:-mx-gutter md:h-auto md:min-h-0 md:w-full md:max-w-2xl md:flex-1 md:rounded-card md:border md:border-line md:shadow-card"}`}
       /* aria-label carries no member name: the i18n mesh collects ATTRIBUTES too, and every
          string it collects is persisted into the public aq_translations table. The name is
          announced by the header link below, which is data-ay-skip'd. */
@@ -1710,7 +1721,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
             peerId={peer.id} peerName={peer.name} compact={compact}
             editing={!!editing} replyTo={!!replyTo}
             replyPreview={replyTo ? (view.textOf.get(replyTo.id) || "message") : ""}
-            busy={busy} asked={rel.asked} requestLeft={rel.request_left}
+            busy={busy} asked={rel.asked} willRequest={rel.will_request} requestLeft={rel.request_left}
             initialText={editing ? (view.edits.get(editing.id) ?? (editing.payload && "body" in editing.payload ? editing.payload.body ?? "" : "")) : (drafts.get(peer.id) ?? "")}
             onSend={(text) => void submit(text)}
             onCancel={() => { setReplyTo(null); setEditing(null); }}
@@ -1961,7 +1972,9 @@ export default function Messages() {
           composer to 1036px in an 844px viewport — you landed in a chat and had to scroll past the
           page title to reach the box you came to type in. The hero is orientation for the LIST; once
           you are in a conversation it is just something in the way. Desktop keeps it: there is room. */}
-      <div className={peer ? "hidden md:block" : ""}>
+      {/* The hero shares the row's measure. At full container width it began 75px to the start of
+          the columns beneath it, so the page had two different left edges. */}
+      <div className={`mx-auto w-full max-w-[1076px] ${peer ? "hidden md:block" : ""}`}>
         <PageHero eyebrow="Community" title="ArtaChat"
           lede="Private conversations, sealed on your own device — nobody else can read them, not even us." />
       </div>
@@ -1974,14 +1987,23 @@ export default function Messages() {
            sets `flex-basis: 0%`, which takes precedence over `height` on a flex item — so the cap
            was ignored, and desktop only looked right because `items-stretch` happened to inherit
            the sidebar's height. Sizing the container makes both panes deterministic. */
-        <div className={`flex flex-col gap-4 md:h-[calc(100dvh-18rem)] md:max-h-[860px] md:min-h-[420px] md:flex-row md:items-stretch ${
+        /* THE FEED'S GEOMETRY, because ArtaChat is not a special page (operator 2026-08-09). Every
+           other surface centres one main column inside `max-w-[1076px]` with a rail beside it; this
+           one had a 288px list hard against the start edge and a 768px conversation sprawling to the
+           far side — not a different opinion about layout, the site's layout not being applied. Same
+           wrapper, same gap, same `max-w-2xl` centre column as pages/Feed.tsx. */
+        <div className={`mx-auto flex w-full max-w-[1076px] flex-col justify-center gap-4 md:h-[calc(100dvh-18rem)] md:max-h-[860px] md:min-h-[420px] md:flex-row md:items-stretch lg:gap-7 ${
           /* An open conversation on a phone is full-bleed, so the page’s own py-7 shows up as a
              grey seam above the header and below the composer — 28px of nothing, twice, on the
              screen with the least room. Cancel it for the pane only; the LIST keeps its padding,
              because there it is ordinary page rhythm rather than a gap in a surface. */
           peer ? "max-md:-my-7" : ""}`}>
-          {/* conversation list — hidden on phones while a thread is open (single-pane) */}
-          <aside className={`w-full flex-col gap-3 md:flex md:w-72 md:shrink-0 md:min-h-0 md:overflow-y-auto lg:w-[19rem] ${peer ? "hidden" : "flex"}`} aria-label="Conversations">
+          {/* THE LIST IS THE RIGHT-HAND RAIL, exactly where the feed keeps its news column (operator
+              2026-08-09). `order` rather than moving the markup: the conversation stays FIRST in the
+              document, which is what a screen reader and a phone should meet first — on a phone this
+              is one pane at a time anyway, and the rail is a rail only from `md` up.
+              Hidden on phones while a thread is open (single-pane). */}
+          <aside className={`w-full flex-col gap-3 md:order-2 md:flex md:w-[300px] md:shrink-0 md:min-h-0 md:overflow-y-auto lg:w-[330px] ${peer ? "hidden" : "flex"}`} aria-label="Conversations">
             {/* THREE tabs, not two lists and a form. Chats · Requests · People covers everything
                 the sidebar is for, and the two rarely-wanted boxes (archived, blocked) hang off the
                 end where they don't compete for attention with the inbox. */}
@@ -2264,7 +2286,7 @@ export default function Messages() {
             <StatusNote className="flex-1">Opening the conversation…</StatusNote>
           ) : (
             <EmptyState className="hidden flex-1 md:flex" title="Pick a conversation"
-              body="Choose a conversation on the left, or start one with a member’s @username." />
+              body="Choose a conversation from the list, or start one with a member’s @username." />
           )}
         </div>
       )}
