@@ -107,6 +107,19 @@ function inlineMd(t: string): string {
       OUR_MEDIA.test(url)
         ? `<video src="${url}" controls playsinline preload="metadata" class="aq-md-img"></video>`
         : `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`)
+    // Sound gets a player rather than a download link, which shows nobody anything.
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+\.(?:mp3|wav|ogg|m4a))\)/g, (_m: string, label: string, url: string) =>
+      OUR_MEDIA.test(url)
+        ? `<audio src="${url}" controls preload="metadata" class="aq-md-audio"></audio>`
+        : `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`)
+    // INTERACTIVE. A self-contained page ArtaBot built, embedded live so it can be explored rather
+    // than described. `sandbox` WITHOUT allow-same-origin is the whole safety argument: the frame gets
+    // an opaque origin, so its scripts run but cannot read a cookie, a token or the DOM around them —
+    // and it is still only ever loaded from our own uploads, never a URL somebody pasted.
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+\.html)\)/g, (_m: string, label: string, url: string) =>
+      OUR_MEDIA.test(url)
+        ? `<iframe src="${url}" title="${label}" class="aq-md-frame" sandbox="allow-scripts allow-popups" loading="lazy" referrerpolicy="no-referrer"></iframe>`
+        : `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`)
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
 }
 

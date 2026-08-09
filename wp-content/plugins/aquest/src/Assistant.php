@@ -239,7 +239,9 @@ final class Assistant {
 	private static function attach_media( $uid, $media ) {
 		if ( ! is_array( $media ) || ! $media ) { return []; }
 		$ext = [ 'image/png' => 'png', 'image/jpeg' => 'jpg', 'image/gif' => 'gif', 'image/webp' => 'webp',
-		         'image/svg+xml' => 'svg', 'video/mp4' => 'mp4', 'video/webm' => 'webm' ];
+		         'image/svg+xml' => 'svg', 'video/mp4' => 'mp4', 'video/webm' => 'webm',
+		         'audio/mpeg' => 'mp3', 'audio/wav' => 'wav', 'audio/ogg' => 'ogg', 'audio/mp4' => 'm4a',
+		         'text/html' => 'html' ];
 		$up  = wp_upload_dir();
 		$out = [];
 		foreach ( array_slice( $media, 0, 4 ) as $m ) {
@@ -256,9 +258,12 @@ final class Assistant {
 			$path = trailingslashit( $up['path'] ) . $file;
 			if ( ! @file_put_contents( $path, $bytes ) ) { continue; }
 			$url  = trailingslashit( $up['url'] ) . $file;
-			$out[] = strpos( $type, 'video/' ) === 0
-				? '[' . $name . '](' . $url . ')'          // renderRich turns a video link into a player
-				: '![' . $name . '](' . $url . ')';
+			// The markdown says WHAT it is; renderRich decides how to show it. A picture is `![]()`,
+			// everything with a player or a frame is `[]()` — the client keys off the extension, so the
+			// reply stays readable as plain text wherever markdown is not rendered.
+			$out[] = strpos( $type, 'image/' ) === 0
+				? '![' . $name . '](' . $url . ')'
+				: '[' . $name . '](' . $url . ')';
 		}
 		return $out;
 	}
