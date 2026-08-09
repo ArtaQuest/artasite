@@ -242,6 +242,11 @@ final class Health {
 			'Extra::stripe_webhook', // signature-verified raw body from Stripe; sessionless by construction
 			'Auth::request_code', 'Auth::verify_code', 'Auth::google', // sign-in: the session does not exist yet
 			'I18n::resolve', 'I18n::translate', 'I18n::save', // the mesh gates first paint, before any session
+			// The fully-powered tools container completes turns through this. It deliberately holds NO
+			// shared secret — a member has a root shell in there and could read one — so it authenticates
+			// with an HMAC over ONE job id instead (Relay::verify_token), which the handler checks before
+			// doing anything. Sessionless by construction, like the Stripe webhook above.
+			'Relay::job_complete',
 		];
 		$open   = [];
 		foreach ( $routes as [ $method, $path, $handler, $auth ] ) {
