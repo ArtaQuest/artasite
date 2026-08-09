@@ -87,16 +87,31 @@ cmd_who() {
     [ -d "$dir" ] || continue
     [ "$dir" = "$self" ] && continue
     br="$(git -C "$dir" branch --show-current 2>/dev/null)"; [ -n "$br" ] || br="(detached)"
-    local dirty touched
+    local dirty newest age when
     dirty="$(git -C "$dir" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
-    # Most recent edit among the uncommitted files: the honest "is somebody in here right now".
-    touched="$(git -C "$dir" status --porcelain 2>/dev/null | sed 's/^...//' | sed 's/.* -> //' \
-      | while IFS= read -r f; do [ -f "$dir/$f" ] && stat -f '%Sm' -t '%H:%M' "$dir/$f"; done | sort -r | head -1)"
+    # Most recent edit among the uncommitted files, as an EPOCH — never a bare clock time. This
+    # printed '%H:%M' and sorted it LEXICALLY, so a 21:57 edit from yesterday outranked 09:00 today
+    # and every long-abandoned worktree read as "ACTIVE, do not touch" (it misled me into leaving a
+    # stale tree alone). Epoch orders correctly across days and lets us print an age instead.
+    newest="$(git -C "$dir" status --porcelain 2>/dev/null | sed 's/^...//' | sed 's/.* -> //' \
+      | while IFS= read -r f; do [ -f "$dir/$f" ] && stat -f %m "$dir/$f"; done | sort -rn | head -1)"
     n=$((n+1))
-    if [ "$dirty" != "0" ]; then
-      warn "$(basename "$dir") [$br] — ${dirty} uncommitted, last edit ${touched:-?} — ACTIVE, do not touch"
-    else
+    if [ "$dirty" = "0" ]; then
       printf "  %s [%s] — clean\n" "$(basename "$dir")" "$br"
+    elif [ -z "$newest" ]; then
+      warn "$(basename "$dir") [$br] — ${dirty} uncommitted, last edit unknown — treat as ACTIVE"
+    else
+      age=$(( $(date +%s) - newest ))
+      if   [ "$age" -lt 3600 ];  then when="$((age/60))m ago"
+      elif [ "$age" -lt 86400 ]; then when="$((age/3600))h ago"
+      else                            when="$((age/86400))d ago"; fi
+      # "ACTIVE" is a claim about NOW, so only an edit inside the last 90 minutes earns it. Anything
+      # older is somebody's abandoned tree: still don't commit from it, but it is not a live race.
+      if [ "$age" -lt 5400 ]; then
+        warn "$(basename "$dir") [$br] — ${dirty} uncommitted, last edit ${when} — ACTIVE, do not touch"
+      else
+        printf "  %s [%s] — %s uncommitted, last edit %s — idle\n" "$(basename "$dir")" "$br" "$dirty" "$when"
+      fi
     fi
   done <<< "$(git worktree list)"
   [ "$n" = "0" ] && ok "no other worktrees — you are alone in this repository"
