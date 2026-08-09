@@ -542,6 +542,12 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   /** Attachment ids already fetched, so the decrypt effect never re-scans on its own output. */
   const asked = useRef(new Set<number>()); // decrypted attachment URLs awaiting revocation
   const scroller = useRef<HTMLDivElement | null>(null);
+  // WATCH THE STREAM ONCE, AND DISCONNECT IT. This used to hang off an INLINE REF CALLBACK,
+  // which React re-invokes on every render because the arrow is a new function each time — so
+  // a busy conversation built one MutationObserver per render on the same node and threw away
+  // every cleanup function watchMath returned. An effect runs it once per mount and hands the
+  // disconnect back to React, which is the only arrangement where the teardown actually runs.
+  useEffect(() => watchMath(scroller.current, "auto"), []);
   const rowRefs = useRef(new Map<number, HTMLElement>());
   const tempSeq = useRef(-1);
 
@@ -765,7 +771,25 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
       const p = m.payload;
       return !(p?.t === "call" && p.act === "end" && p.sid && callStartSids.has(p.sid));
     });
-    return { rows, edits, reacts, textOf, callEnd };
+    // ONE NOTICE PER RUN OF UNREADABLE MESSAGES, for the same reason calls fold above: a member
+    // whose device key changed does not have "a problem with message 41" — they have a STRETCH of
+    // history this browser cannot open, and repeating the same italic apology once per message
+    // turned a whole conversation into a wall of it (operator screenshot, 2026-08-09). Collapsing
+    // says the true thing once, with the size of it, and leaves room to explain what happened.
+    // A LONE unreadable message stays inline: one line is a footnote, not a wall.
+    const sealedHead = new Map<number, { n: number; from: number; to: number }>();
+    const sealedSkip = new Set<number>();
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i].payload !== null) continue;
+      let j = i;
+      while (j + 1 < rows.length && rows[j + 1].payload === null) j++;
+      if (j > i) {
+        sealedHead.set(rows[i].id, { n: j - i + 1, from: rows[i].at, to: rows[j].at });
+        for (let k = i + 1; k <= j; k++) sealedSkip.add(rows[k].id);
+      }
+      i = j;
+    }
+    return { rows, edits, reacts, textOf, callEnd, sealedHead, sealedSkip };
   }, [items]);
 
   /**
@@ -1406,7 +1430,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
       )}
 
       {/* stream */}
-      <div ref={(el) => { scroller.current = el; if (el) watchMath(el, "auto"); }} onScroll={onScroll}
+      <div ref={scroller} onScroll={onScroll}
         onPointerDown={(e) => {
           // A tap on empty space dismisses an open action bar. Guarded on the target so the tap
           // that OPENS one (handled on the bubble) is not immediately undone by this.
@@ -1450,6 +1474,29 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
               const newDay = !prev || fmtDay(prev.at) !== fmtDay(m.at);
               const groupWithPrev = !newDay && prev && prev.sender === m.sender && m.at - prev.at < GROUP_S;
               const groupWithNext = next && next.sender === m.sender && next.at - m.at < GROUP_S && fmtDay(next.at) === fmtDay(m.at);
+              // A run of messages this device cannot open is drawn ONCE, as a system note.
+              if (view.sealedSkip.has(m.id)) return null;
+              const sealedRun = view.sealedHead.get(m.id);
+              if (sealedRun) {
+                return (
+                  <li key={m.id}>
+                    {newDay && (
+                      <p className="py-3 text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-3">{fmtDay(m.at)}</p>
+                    )}
+                    <div className="my-2.5 rounded-card border border-line bg-veil/[0.04] px-3 py-2.5 text-center">
+                      <p className="text-[12.5px] font-semibold text-ink-2">
+                        <span data-ay-skip="1">{sealedRun.n}</span> messages can’t be opened on this device
+                      </p>
+                      <p className="mt-1 text-[11.5px] leading-relaxed text-ink-3">
+                        They were sealed to an encryption key this browser no longer has — clearing this site’s data,
+                        or signing in from a different device, creates a new one. Nobody can recover them for you, and
+                        that is the point: not us, and not anyone who takes the database. The other person still reads
+                        their copy, and everything from here on is readable normally.
+                      </p>
+                    </div>
+                  </li>
+                );
+              }
               const p = m.payload;
               const body = p && (p.t === "text" || p.t === "img" || p.t === "file") ? (view.edits.get(m.id) ?? p.body) : undefined;
               const reacts = view.reacts.get(m.id);

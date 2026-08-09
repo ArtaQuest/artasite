@@ -178,9 +178,13 @@ function insideKatex(node: Node | null): boolean {
 export function watchMath(root: HTMLElement | null | undefined, mode: "auto" | "nodes"): () => void {
   if (!root) return () => {};
   const run = () => void (mode === "auto" ? autoRenderMathIn(root) : renderMathIn(root));
-  const present = mode === "auto" ? hasAutoMath(root) : hasMath(root);
   run(); // initial typeset (a no-op when there is no math, so no KaTeX download on math-free content)
-  if (!present) return () => {}; // nothing to keep alive
+  // THE OBSERVER ATTACHES EVEN WHEN THERE IS NO MATHS YET. It used to bail out here — "nothing to
+  // keep alive" — which is true of an article, whose content is all present at attach time, and
+  // false of anything LIVE. A chat thread mounts empty and fills by poll, so the one root that most
+  // needs watching was the one guaranteed to fail the test: a received equation stayed raw source
+  // forever, because nothing was left watching for it to arrive. An observer on a root that never
+  // mutates costs nothing (it only runs on mutations), and on a root that does, running is the job.
   let queued = false;
   const obs = new MutationObserver((muts) => {
     if (queued) return;

@@ -84,6 +84,12 @@ export function RoomThread({
    *  signalling cadence never actually engaged and a three-way handshake crawled at 4s a hop. */
   const inCallRef = useRef(false);
   const scroller = useRef<HTMLDivElement | null>(null);
+  // WATCH THE STREAM ONCE, AND DISCONNECT IT. This used to hang off an INLINE REF CALLBACK,
+  // which React re-invokes on every render because the arrow is a new function each time — so
+  // a busy conversation built one MutationObserver per render on the same node and threw away
+  // every cleanup function watchMath returned. An effect runs it once per mount and hands the
+  // disconnect back to React, which is the only arrangement where the teardown actually runs.
+  useEffect(() => watchMath(scroller.current, "auto"), []);
   const inCall = !!room?.in_call.includes(me);
 
   const open = useCallback(async (items: RoomCipherMsg[], k: CryptoKey): Promise<Row[]> => {
@@ -289,7 +295,7 @@ export function RoomThread({
 
       {/* watchMath typesets LaTeX as it arrives and re-typesets if React re-renders over it — the
           same watcher the DM thread uses, so there is one maths implementation, not two. */}
-      <div ref={(el) => { scroller.current = el; if (el) watchMath(el, "auto"); }}
+      <div ref={scroller}
         className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
         {noKey && !alone ? (
           <p className="py-10 text-center text-[13px] leading-relaxed text-ink-3">
