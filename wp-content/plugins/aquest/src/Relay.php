@@ -329,7 +329,16 @@ final class Relay {
 		if ( ! $row ) { return; }
 		$payload = Data::dec( $row['payload'] );
 		$tools   = ! empty( $payload['tools'] );
-		$url     = $tools ? (string) Secrets::get( 'AQ_TURN_URL_TOOLS' ) : '';
+		// A TOOL TURN GETS ITS TIER'S MACHINE. Every member turn is a tool turn, so routing them all to
+		// one app made the tier ladder half a promise — it set effort, wall clock and price, but every
+		// session ran on the same CPU and RAM whatever it had paid for. Per-tier tools app first, the
+		// shared one only if that tier has none.
+		$url = '';
+		if ( $tools ) {
+			$t   = strtoupper( preg_replace( '/[^a-z]/', '', strtolower( (string) $tier ) ) );
+			$url = $t !== '' ? (string) Secrets::get( 'AQ_TURN_URL_TOOLS_' . $t ) : '';
+			if ( $url === '' ) { $url = (string) Secrets::get( 'AQ_TURN_URL_TOOLS' ); }
+		}
 		if ( $url === '' ) { $url = self::endpoint( $tier ); $tools = false; }
 		if ( $url === '' ) { return; }                       // no endpoint: a poller will claim it
 		Data::update( 'aq_relay_jobs', [ 'status' => 'claimed', 'claimed' => Data::now() ], [ 'id' => (int) $id ] );
