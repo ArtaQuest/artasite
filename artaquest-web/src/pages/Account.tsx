@@ -399,6 +399,9 @@ function UsageManager() {
 
   const n = (v: string | number, d = 4) => Number(v).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
   const when = (t: number) => new Date(t * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  // The line's `tier` is the stored KEY ("low", "high"); the table above names the same thing
+  // "Quick" and "Max". One row per mode, one name for it.
+  const label = (key: string) => info?.tiers.find((t) => t.key === key)?.label ?? key;
 
   return (
     <section>
@@ -449,6 +452,9 @@ function UsageManager() {
             </p>
           </Card>
 
+          {days && days.length === 0 && info.recent.length > 0 && (
+            <p className="mt-4 text-[13px] text-ink-3">Your first daily statement is emailed once today's usage settles.</p>
+          )}
           {days && days.length > 0 && (
             <div className="mt-4">
               <div className="text-[13px] font-semibold text-ink">Daily statements</div>
@@ -487,7 +493,7 @@ function UsageManager() {
                   {(open ? info.recent : info.recent.slice(0, 6)).map((l) => (
                     <tr key={l.id} className="border-t border-line align-top">
                       <td className="py-1.5 text-ink-3">{when(l.ended ?? 0)}</td>
-                      <td className="text-ink-2" title={l.note}>{l.tier}{l.session_id ? ` · #${l.session_id}` : ""}</td>
+                      <td className="text-ink-2" title={l.note}>{label(l.tier)}{l.session_id ? ` · #${l.session_id}` : ""}</td>
                       <td className="text-end tabular-nums text-ink-3">{l.secs}s</td>
                       <td className="text-end tabular-nums text-ink-3">${n(l.ai_usd)}</td>
                       <td className="text-end tabular-nums text-ink-3">${n(l.azure_usd, 6)}</td>
