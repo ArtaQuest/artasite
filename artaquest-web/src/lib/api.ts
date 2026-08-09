@@ -824,6 +824,9 @@ export const ShellAccount = {
   mine: () => get<ShellInfo>("/shell", { _: Date.now() }),
   addKey: (label: string, key: string) => post<ShellInfo>("/shell/keys", { label, key }),
   removeKey: (id: number) => post<ShellInfo>("/shell/keys/remove", { id }),
+  // One session's ticket. Short-lived by design, so it is fetched at the moment a terminal opens and
+  // never stored anywhere.
+  open: () => post<{ url: string; unix: string; expires: number; tier: string; idle: number }>("/shell/open", {}),
 };
 
 export const ApiTokens = {

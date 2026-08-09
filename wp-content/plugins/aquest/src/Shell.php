@@ -4,20 +4,29 @@ namespace AQ;
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 /**
- * MEMBER SHELLS — every member gets their own account on ArtaQuest's relay machine, reachable over
- * SSH with their own key: `ssh <handle>@shell.artaquest.com`.
+ * MEMBER SHELLS — every member gets their own Linux account, and a terminal in the browser that opens
+ * on demand and costs nothing when nobody is in it.
  *
  * Operator directive (2026-08-08): "I want each user to have its own linux user with ssh key … each
- * user to be able to ssh to their sandbox into the server."
+ * user to be able to ssh to their sandbox into the server." Then, the day after: "ensure everything
+ * scales down to zero and unnecessary server costs are avoided." Both are satisfied by the same move —
+ * the shell went from an always-on VM to the on-demand containers ArtaBot already runs on. A machine
+ * starts when a member connects and stops when they leave.
  *
  * WHAT A MEMBER IS ACTUALLY GETTING, and why this is not as alarming as "shell access to our server"
- * sounds. Their session is force-commanded into the SAME sandbox ArtaBot's tool turns already run in
- * — a bubblewrap namespace with a read-only /usr, a masked /etc, an nftables fence that blocks the
- * private network and the cloud metadata endpoint, and no platform credentials of any kind. What is
- * new is PERSISTENCE: their home survives, and it is the same home ArtaBot works in on their behalf,
- * so "ask ArtaBot to build it, then ssh in and find it" is one workspace rather than two. The machine
- * itself, production, this database and other members' files are all as unreachable from a member's
- * shell as they were from a tool turn. See tools/ticket-agent/artabot-shell.mjs.
+ * sounds. Their session runs as their OWN unprivileged uid, in the same container ArtaBot's tool turns
+ * run in, with a home fetched from the file share and written back when they leave. The share itself is
+ * mounted so that only the supervising process can read it, so one member's terminal cannot see
+ * another member's files — checked, not asserted: `ls /mnt/aq` from inside a session answers Permission
+ * denied. Production, this database and the platform's credentials are not reachable from it at all.
+ *
+ * What is new is PERSISTENCE: their home survives, and it is the same home ArtaBot works in on their
+ * behalf, so "ask ArtaBot to build it, then open a terminal and find it" is one workspace rather than
+ * two.
+ *
+ * SSH itself is not back yet. Container Apps speaks HTTP and nothing else, so `ssh` needs a
+ * ProxyCommand over the same WebSocket this terminal uses — worth doing, and a separate piece of work.
+ * Until then the settings card says so rather than offering an address that cannot answer.
  *
  * WHAT THIS CLASS HOLDS. Only PUBLIC keys, and that is deliberate rather than incidental: the whole
  * ArtaQuest database is published at /data/, so a private key could never live here (see the
@@ -69,6 +78,18 @@ final class Shell {
 		set_transient( 'aq_shell_host_ok', $ok ? 1 : 0, $ok ? DAY_IN_SECONDS : 300 );
 		return $ok;
 	}
+
+	/** How long a ticket stays mintable-into-a-session. Long enough to survive a slow page and a cold
+	 *  container, short enough that one copied out of a browser is worthless by the time it travels. */
+	const TICKET_TTL = 120;
+
+	/** The machine a terminal runs on, named in the same ladder ArtaBot's turns are priced by — so the
+	 *  usage page can explain a terminal line without a second set of rates to keep in step. */
+	const TIER = 'medium';
+
+	/** The longest single session anyone can be billed for. The container reports its own seconds and
+	 *  the container is the thing being measured, so the ceiling lives here. */
+	const MAX_SESSION = 4 * HOUR_IN_SECONDS;
 
 	/** Keys per member. Enough for a laptop, a desktop and a phone, few enough that a compromised
 	 *  account cannot quietly accumulate a hundred ways back in. */
@@ -177,6 +198,89 @@ final class Shell {
 				         'key' => (string) $r['pubkey'], 'at' => (int) $r['created'] ];
 			}, $rows ),
 		];
+	}
+
+	/**
+	 * POST /shell/open — a ticket for one terminal session.
+	 *
+	 * The member's browser cannot be handed anything long-lived: it is a public page and whatever it
+	 * holds, it holds in the open. So this mints a SHORT-LIVED, SINGLE-PURPOSE ticket — the handle and
+	 * an expiry, signed with the secret production and the container already share. The container can
+	 * verify one and cannot mint one, so it can never invent a session for a member who did not ask,
+	 * and a ticket copied out of someone's browser stops working in minutes.
+	 *
+	 * Nothing is charged here. A terminal is billed for the seconds it actually ran, reported by the
+	 * container when it closes — the same after-the-fact metering every ArtaBot turn uses.
+	 */
+	public static function open( $req ) {
+		self::ensure_table();
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'signin_required', 'Sign in to open a terminal', 401 ); }
+		if ( ! self::ready() ) { return Rest::err( 'unavailable', 'Your machine is being rebuilt — try again shortly', 503 ); }
+		$u    = get_userdata( $uid );
+		$unix = self::unix_name( $u ? $u->user_nicename : '' );
+		if ( ! $unix ) { return Rest::err( 'bad_handle', 'Your handle cannot be a Linux username — change it in Settings first' ); }
+		// The same gate a turn faces, for the same reason: a terminal costs compute by the second, and
+		// a member already past the floor should be told before the meter starts, not after.
+		if ( ! Usage::may_start( $uid ) ) {
+			return Rest::err( 'insufficient_coins', 'Your balance is below the floor — top up to open a terminal', 402 );
+		}
+		if ( Rest::throttle( 'shellopen', 20, 3600 ) ) { return Rest::err( 'rate_limited', 'Too many terminals — give it a minute', 429 ); }
+		$secret = (string) Secrets::get( 'AQ_TURN_SECRET' );
+		if ( $secret === '' ) { return Rest::err( 'unavailable', 'Terminals are not configured', 503 ); }
+		$exp    = time() + self::TICKET_TTL;
+		$ticket = $unix . '.' . $exp . '.' . hash_hmac( 'sha256', $unix . '.' . $exp, $secret );
+		$ws     = preg_replace( '~^https?://~', 'wss://', self::endpoint() );
+		return [
+			'url'     => rtrim( $ws, '/' ) . '/term?t=' . rawurlencode( $ticket ),
+			'unix'    => $unix,
+			'expires' => $exp,
+			'tier'    => self::TIER,
+			'idle'    => 600,
+		];
+	}
+
+	/**
+	 * POST /shell/close {ticket, secs} — the container reporting what a terminal actually used.
+	 *
+	 * PUBLIC by necessity and safe by signature: the container holds no worker token (a member has a
+	 * shell in there and could read one), so it authenticates by presenting the ticket production
+	 * itself signed. The ticket names the member, which is what makes this billable — nobody can
+	 * charge a member without a ticket only this site can mint.
+	 *
+	 * The clock is bounded on THIS side. A caller who claims a million seconds gets the session
+	 * ceiling: the number that matters is the member's bill, and it may not be set by the thing being
+	 * measured (see the container's own report of a turn — same rule, same reason).
+	 */
+	public static function close( $req ) {
+		$parts  = explode( '.', (string) Rest::p( $req, 'ticket', '' ) );
+		$secret = (string) Secrets::get( 'AQ_TURN_SECRET' );
+		if ( $secret === '' || count( $parts ) !== 3 ) { return Rest::err( 'unauthorised', 'bad ticket', 401 ); }
+		[ $unix, $exp, $mac ] = $parts;
+		// Expiry is NOT checked here, deliberately: a ticket is minted for the START of a session and a
+		// long session outlives it. The signature is what authenticates; the ceiling below is what
+		// bounds it.
+		if ( ! hash_equals( hash_hmac( 'sha256', $unix . '.' . $exp, $secret ), $mac ) ) {
+			return Rest::err( 'unauthorised', 'bad ticket', 401 );
+		}
+		$secs = min( self::MAX_SESSION, max( 0, (int) Rest::p( $req, 'secs', 0 ) ) );
+		$uid  = self::uid_for_unix( $unix );
+		if ( ! $uid || $secs < 1 ) { return [ 'ok' => true, 'billed' => 0 ]; }
+		Usage::record( $uid, 'shell', self::TIER, [
+			'secs' => $secs,
+			'ai_usd' => 0,                       // a terminal is compute only — no model runs in it
+			'note' => 'terminal session',
+			'ref'  => 'shell:' . $unix . ':' . (int) $exp,
+		] );
+		return [ 'ok' => true, 'billed' => $secs ];
+	}
+
+	/** Which member owns a unix name, when no key has been added to point the way. Derived the same way
+	 *  the name itself is, so the two can never disagree. */
+	private static function uid_for_unix( $unix ) {
+		$u = get_user_by( 'slug', $unix );
+		if ( $u && self::unix_name( $u->user_nicename ) === $unix ) { return (int) $u->ID; }
+		return 0;
 	}
 
 	/** POST /shell/keys {label, key} — add a public key. */

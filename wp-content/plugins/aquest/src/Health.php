@@ -247,6 +247,10 @@ final class Health {
 			// with an HMAC over ONE job id instead (Relay::verify_token), which the handler checks before
 			// doing anything. Sessionless by construction, like the Stripe webhook above.
 			'Relay::job_complete',
+			// And the terminal container reporting how long a member's shell ran, for exactly the same
+			// reason and by the same mechanism: it presents the ticket THIS site signed, which is both
+			// the authentication and the name of the member being billed (Shell::close).
+			'Shell::close',
 		];
 		$open   = [];
 		foreach ( $routes as [ $method, $path, $handler, $auth ] ) {

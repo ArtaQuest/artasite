@@ -821,7 +821,7 @@ add_action( 'send_headers', function () {
 		// would fail to connect — with no error naming the cause. Scheme-source, not a host list:
 		// which STUN servers are used is a client concern (lib/webrtc.ts), and STUN carries no media,
 		// no identity and no conversation.
-		. "connect-src 'self' stun: https://cdn.jsdelivr.net https://translate.googleapis.com https://accounts.google.com https://s0.wp.com https://stats.wp.com https://public-api.wordpress.com https://zenodo.org https://www.kaggle.com https://storage.googleapis.com" . $aq_cdn . "; "
+		. "connect-src 'self' stun: wss://*.azurecontainerapps.io https://cdn.jsdelivr.net https://translate.googleapis.com https://accounts.google.com https://s0.wp.com https://stats.wp.com https://public-api.wordpress.com https://zenodo.org https://www.kaggle.com https://storage.googleapis.com" . $aq_cdn . "; "
 		// NO CALL ORIGIN HERE ANY MORE. ArtaChat calls were briefly an embedded meet.jit.si room and
 		// are now peer-to-peer WebRTC (artaquest-web/src/lib/webrtc.ts): the two browsers connect
 		// directly, so there is no frame to allow and no third-party bridge that could see the media.

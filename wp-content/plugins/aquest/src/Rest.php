@@ -337,6 +337,12 @@ final class Rest {
 		[ 'GET',  'shell',                         'Shell::mine',            'user'   ],
 		[ 'POST', 'shell/keys',                    'Shell::add_key',         'user'   ],
 		[ 'POST', 'shell/keys/remove',             'Shell::remove_key',      'user'   ],
+		// A TERMINAL IN THE BROWSER. `shell/open` hands the member's own browser a signed, short-lived
+		// ticket for one session; `shell/close` is how the container reports the seconds it ran, and is
+		// public because that container holds no worker token — it authenticates with the ticket this
+		// site signed, which is also what names the member being billed.
+		[ 'POST', 'shell/open',                    'Shell::open',            'user'   ],
+		[ 'POST', 'shell/close',                   'Shell::close',           'public' ],
 		[ 'POST', 'relay/shell/roster',            'Shell::roster',          'worker' ], // the VM pulls accounts + keys every few minutes
 		// ArtaScience — the fully automated AI review pipeline (src/Science.php). Submissions MUST ship
 		// open data + code; the ArtaScience daemon (tools/ticket-agent/artascience-relay.mjs) runs the

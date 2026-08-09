@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { DobWheel } from "../components/DobWheel";
 import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, postProfileUpdate, PROFILE_LINKS, type CourseCard, type Dashboard, type UsernameCheck } from "../lib/wp";
 import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, KaggleIds, Passkeys, ShellAccount, UsageApi, myParticipation, setGender as setGender_, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type KaggleIdItem, type SessionItem, type ShellInfo, type ShellKey, type UsageInfo, type BursaryResult, type BursaryStatus, type ShareKit } from "../lib/api";
@@ -515,7 +515,10 @@ function UsageManager() {
 // sandbox ArtaBot's tool turns run in, with the member's own persistent home. So "ask ArtaBot to
 // build it, then ssh in and find it" is one workspace, and what a member can reach from a terminal
 // is exactly what ArtaBot could already reach on their behalf.
+const TerminalPanel = lazy(() => import("../components/Terminal"));
+
 function ShellManager() {
+  const [term, setTerm] = useState(false);
   const [info, setInfo] = useState<ShellInfo | null>(null);
   const [err, setErr] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -571,6 +574,23 @@ function ShellManager() {
       )}
 
       {info?.unix && !info.moving && (
+        <>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Button onClick={() => setTerm((v) => !v)} className="h-10 px-4 text-[14px]">
+              {term ? "Close the terminal" : "Open a terminal"}
+            </Button>
+            <span className="text-[12.5px] text-ink-3">
+              Opens in this page. Your machine starts when you connect and stops when you leave, and you are charged for
+              the seconds it ran.
+            </span>
+          </div>
+          {term && <Suspense fallback={<StatusNote className="mt-4 py-4 text-start">Loading the terminal…</StatusNote>}>
+            <TerminalPanel onClose={() => setTerm(false)} />
+          </Suspense>}
+        </>
+      )}
+
+      {info?.unix && !info.moving && info.command && (
         <Card className="mt-4 px-4 py-3">
           <div className="text-[13px] text-ink-3">Sign in from your terminal with</div>
           <div className="mt-1 flex flex-wrap items-center gap-2">
