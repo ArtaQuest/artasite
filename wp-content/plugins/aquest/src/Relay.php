@@ -217,6 +217,12 @@ final class Relay {
 		] );
 		if ( ! $id ) { return null; }
 
+		// Sweep for turns that were handed over and never came back. This used to live in poll(), which
+		// under the push model NOTHING CALLS ANY MORE — so the safety net for an undelivered turn was
+		// dead code, and three real turns sat `claimed` for half an hour with nobody coming for them.
+		// Inverting the direction moved the responsibility here; it did not remove it.
+		self::retry_stuck();
+
 		// PUSH. Prod is always awake and the worker is not, so prod is what starts the work: one
 		// non-blocking POST wakes a container from zero, it answers, and it calls back /relay/complete.
 		// Non-blocking on purpose — holding a PHP worker for the length of a turn is exactly the cost
@@ -588,6 +594,10 @@ final class Relay {
 	 * STALE_S so a job cannot be retried forever.
 	 */
 	private static function retry_stuck() {
+		// Throttled: this runs on every turn now, and a sweep per message would be a query per message
+		// for a table that is almost always empty.
+		if ( get_transient( 'aq_relay_swept' ) ) { return; }
+		set_transient( 'aq_relay_swept', 1, 30 );
 		global $wpdb;
 		$t    = Data::t( 'aq_relay_jobs' );
 		$rows = $wpdb->get_results( $wpdb->prepare(
