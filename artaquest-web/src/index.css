@@ -1576,6 +1576,9 @@ html[data-theme="dark"] .aq-pdf-crop[data-invert] svg { filter: invert(1) hue-ro
 @media (min-width: 640px) { .aq-pl-sheet-card { border-radius: 20px; } }
 .aq-pl-close { position: absolute; top: 0.5rem; inset-inline-start: 0.5rem; }
 .aq-pl-hero { display: flex; justify-content: center; margin: 0.6rem 0 1rem; }
+/* The live spectrum under the cover. Sits between the artwork and the title, so the sheet reads
+   cover → sound → name, and it costs no layout when the track is silent (fixed height). */
+.aq-pl-fft { height: 44px; width: 100%; margin: -0.4rem 0 0.5rem; }
 .aq-pl-hero .aq-pl-cover { width: min(228px, 62vw); height: min(228px, 62vw); border-radius: 16px; }
 .aq-pl-title { margin: 0; font-size: 16px; font-weight: 700; color: var(--color-ink); }
 .aq-pl-sub { margin: 0.2rem 0 0; font-size: 13px; color: var(--color-ink-3); }

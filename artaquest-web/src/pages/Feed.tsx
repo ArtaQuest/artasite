@@ -106,11 +106,19 @@ function PostMedia({ items }: { items: LibraryItem[] }) {
       <ul className={cx("grid gap-1.5", one ? "grid-cols-1" : "grid-cols-2")}>
         {items.map((it, i) => {
           const wide = one || (items.length === 3 && i === 2); // the odd third tile runs the full width
+          // AUDIO IS NOT A PICTURE. A track is a transport bar a few rems tall, so an aspect box
+          // either stranded it in the middle of a square of empty space or squashed it — now that it
+          // renders a real player with a spectrum, it takes the full width and its own height.
+          const audio = it.class === "audio";
           return (
-            <li key={it.id} className={cx("overflow-hidden rounded-2xl border border-line bg-space-2", wide && !one && "col-span-2")}>
-              <span className={cx("block w-full", wide ? "aspect-[16/9]" : "aspect-square")}>
-                <LibraryMedia item={it} className="h-full w-full" />
-              </span>
+            <li key={it.id} className={cx("overflow-hidden rounded-2xl border border-line bg-space-2", audio ? "col-span-full" : wide && !one && "col-span-2")}>
+              {audio ? (
+                <LibraryMedia item={it} className="w-full" />
+              ) : (
+                <span className={cx("block w-full", wide ? "aspect-[16/9]" : "aspect-square")}>
+                  <LibraryMedia item={it} className="h-full w-full" />
+                </span>
+              )}
             </li>
           );
         })}
@@ -171,9 +179,14 @@ function NbBlock({ nb, compact }: { nb: NotebookCard; compact?: boolean }) {
         /* THE WORK ITSELF. teaser/thumb were written by the retired execution relay, so without
            this every Kaggle-era publication landed in the timeline as a grey box bearing its own
            kind's name — a member's first work looking broken while its artifact sat on our CDN. */
-        <div className={cx("mt-2 overflow-hidden rounded-xl border border-line bg-space-2", nb.hero.class === "audio" ? "" : "aspect-[16/9]")}>
-          <LibraryMedia item={nb.hero} className={nb.hero.class === "audio" ? "p-3" : "h-full w-full"} />
-        </div>
+        nb.hero.class === "audio" ? (
+          /* A track brings its own surface (the player) — no outer panel to nest it in. */
+          <div className="mt-2"><LibraryMedia item={nb.hero} className="w-full" /></div>
+        ) : (
+          <div className="mt-2 aspect-[16/9] overflow-hidden rounded-xl border border-line bg-space-2">
+            <LibraryMedia item={nb.hero} className="h-full w-full" />
+          </div>
+        )
       ) : !compact ? (
         /* Last resort — a work with no serveable file still keeps a visual, not a bare text card. */
         <div className="mt-2 grid aspect-[16/9] w-full place-items-center rounded-xl border border-line bg-space-2 text-xs uppercase tracking-widest text-ink-3">
@@ -284,6 +297,14 @@ function FeedPost({ post, onDeleted, hearted }: { post: FeedPostT; onDeleted?: (
     createPost("", undefined, post.id).catch(() => { setReposted(false); setReposts((n) => n - 1); });
   };
 
+  // KaTeX, attached ONCE. This was an inline `ref={(el) => watchMath(el)}`, which React re-runs on
+  // every render and which discarded watchMath's returned disconnect — so every heart tap, edit and
+  // repost left ANOTHER MutationObserver watching that post's subtree, in a timeline that never
+  // stops growing. Every other caller on the platform already did it this way; the feed, the one
+  // surface where it compounds, was the exception.
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => watchMath(bodyRef.current, "auto"), []);
+
   const [burst, setBurst] = useState(false);
   const doubleTap = () => {                       // Instagram muscle memory: double-tap hearts
     if (!mine) toggleHeart({ stopPropagation: () => {} } as React.MouseEvent);
@@ -301,7 +322,7 @@ function FeedPost({ post, onDeleted, hearted }: { post: FeedPostT; onDeleted?: (
         <Link to={`/u/${post.author.slug}`} className="shrink-0 self-start">
           <Avatar name={post.author.name} src={post.author.avatar} className="h-10 w-10" />
         </Link>
-        <div className="min-w-0 flex-1" ref={(el) => { if (el) watchMath(el, "auto"); }}>
+        <div className="min-w-0 flex-1" ref={bodyRef}>
           {/* X's byline: bold name, muted @handle, dot, relative time — then the ⋯ corner menu on
               your own posts. The handle doubles as the profile link's visible address. */}
           <div className="flex items-center gap-1.5 text-sm">
@@ -374,8 +395,10 @@ function FeedPost({ post, onDeleted, hearted }: { post: FeedPostT; onDeleted?: (
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M17 2l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 22l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></svg>
                 {reposts > 0 ? reposts : ""}
               </button>
+              {/* Same 44px target as its neighbours: this was a bare 12px text run, the one control
+                  in the row a thumb could miss. */}
               <button type="button" onClick={(e) => { e.stopPropagation(); quoteIntent?.(post); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                aria-label="Quote" className="text-[12px] hover:text-yang-ink">Quote</button>
+                aria-label="Quote" className="-my-2 inline-flex min-h-11 items-center rounded-pill px-1.5 py-2 text-[12px] transition-colors hover:text-yang-ink">Quote</button>
             </span>
             <button type="button" onClick={toggleHeart} aria-pressed={mine} aria-label={mine ? "Remove heart" : "Heart"}
               className={cx("-my-2 inline-flex min-h-11 items-center gap-1 rounded-pill px-1.5 py-2 transition-colors", mine ? "text-yang" : "hover:text-yang")}>

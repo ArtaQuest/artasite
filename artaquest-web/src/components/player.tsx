@@ -3,8 +3,14 @@
 // and the Media Session API so the lock screen / headphone buttons / car controls all work — put
 // the phone in a pocket and the music keeps going. Videos play in a lightbox with PiP. All bytes
 // come from the on-device library (IndexedDB); nothing streams from a server, so it works offline.
+/* eslint-disable react-refresh/only-export-components -- player kit module, like library.tsx and
+   ui.tsx: the HOOK that owns playback state (usePlayer) and its context accessor (usePlayerCtx)
+   have to live beside the bar and sheet that render them, or the queue would be split across two
+   files that must agree about every transition. */
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { type MediaItem, fileUrl, coverUrl, notePlayed, getProgress, setProgress, pinMedia } from "../lib/media-store";
+import { useMotionOff } from "../lib/theme";
+import { Spectrum } from "./audio-player";
 
 export type Repeat = "off" | "all" | "one";
 
@@ -40,6 +46,10 @@ export function usePlayer() {
   const curRef = useRef<MediaItem | null>(null);
   curRef.current = current;
 
+  // The element, mirrored into state: the spectrum needs to re-render once it EXISTS, and a ref
+  // alone never tells it (created lazily, inside a handler, long after first paint).
+  const [el, setEl] = useState<HTMLAudioElement | null>(null);
+
   const audio = (): HTMLAudioElement => {
     if (!audioRef.current) {
       // A REAL element in the DOM: detached Audio() objects are treated inconsistently by iOS
@@ -51,6 +61,7 @@ export function usePlayer() {
       a.hidden = true;
       document.body.appendChild(a);
       audioRef.current = a;
+      setEl(a);
     }
     return audioRef.current;
   };
@@ -202,10 +213,11 @@ export function usePlayer() {
     };
   }, [toggle, step, seek]);
 
-  useEffect(() => () => { const a = audioRef.current; if (a) { a.pause(); a.remove(); audioRef.current = null; } }, []);
+  useEffect(() => () => { const a = audioRef.current; if (a) { a.pause(); a.remove(); audioRef.current = null; setEl(null); } }, []);
 
   return {
     state: { queue, index, playing, shuffle, repeat, current, time, duration } as PlayerState,
+    el,
     playAt, toggle, step, seek, stop,
     setShuffle: (v: boolean) => setShuffle(v),
     cycleRepeat: () => setRepeat((r) => (r === "off" ? "all" : r === "all" ? "one" : "off")),
@@ -229,6 +241,7 @@ function Cover({ item, size = 44 }: { item: MediaItem; size?: number }) {
 /** The persistent bottom mini-player + expandable Now-playing sheet. */
 export function PlayerBar({ p }: { p: ReturnType<typeof usePlayer> }) {
   const { state } = p;
+  const motionOff = useMotionOff();
   const [big, setBig] = useState(false);
   const item = state.current;
   // Mark the document while the bar is up so other fixed furniture (the ArtaBot launcher, which is
@@ -267,6 +280,9 @@ export function PlayerBar({ p }: { p: ReturnType<typeof usePlayer> }) {
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M6 9l6 6 6-6" /></svg>
             </button>
             <div className="aq-pl-hero"><Cover item={item} size={228} /></div>
+            {/* The live spectrum. Offline bytes arrive as blob: URLs, which are same-origin, so the
+                analyser tap is always safe here (see audio-player.tsx on why that matters). */}
+            <div className="aq-pl-fft"><Spectrum el={p.el} playing={state.playing} motionOff={motionOff} /></div>
             <p className="aq-pl-title" data-ay-skip="1">{item.title}</p>
             <p className="aq-pl-sub" data-ay-skip="1">{item.artist || "My Library"}{item.album ? ` · ${item.album}` : ""}</p>
             <div className="aq-pl-seek">

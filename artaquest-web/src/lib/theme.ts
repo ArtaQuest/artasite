@@ -13,6 +13,7 @@
  * The preference is device-local (localStorage) — radical-transparency rules out
  * per-user server state we don't need (the DB is public), and it keeps GETs CDN-cacheable.
  */
+import { useEffect, useState } from "react";
 import { isLoggedIn } from "./wp";
 
 export type Theme = "dark" | "light";
@@ -77,4 +78,29 @@ export function setCalmStop(v: number): number {
   try { localStorage.setItem(CALM_KEY, String(clamped)); } catch { /* private mode */ }
   window.dispatchEvent(new Event("aq:calm"));
   return clamped;
+}
+
+// Read once at module load: the MediaQueryList object is live, only the listener is per-component.
+const REDUCE_Q = typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+const motionSuppressed = () => (REDUCE_Q?.matches ?? false) || calmStop() === 1;
+
+/**
+ * Is motion suppressed for this member right now? OS "reduce motion" OR the strictest Motion-calm
+ * stop ("Still") — the same pair ttsCalmMode() reads, because it is the same contract.
+ *
+ * THE PLATFORM OWNS THIS DECISION, not the individual file or component. It lives here, beside
+ * calmStop and the "aq:calm" broadcast it listens to, so that every surface that moves — an
+ * animated scene, an audio spectrum, a teaser — answers the question identically. It was defined
+ * privately inside the Library kit until the audio players needed it too, and a second copy in the
+ * main bundle would have been free to drift from this one.
+ */
+export function useMotionOff(): boolean {
+  const [off, setOff] = useState(motionSuppressed);
+  useEffect(() => {
+    const on = () => setOff(motionSuppressed());
+    REDUCE_Q?.addEventListener("change", on);
+    window.addEventListener("aq:calm", on);  // the Motion-calm slider, live
+    return () => { REDUCE_Q?.removeEventListener("change", on); window.removeEventListener("aq:calm", on); };
+  }, []);
+  return off;
 }

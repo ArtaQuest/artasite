@@ -20,7 +20,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Link } from "react-router-dom";
 import { libraryItems, type LibraryItem } from "../lib/api";
 import { listItems, saveFromUrl } from "../lib/media-store";
-import { calmStop } from "../lib/theme";
+import { useMotionOff } from "../lib/theme";
+import AudioPlayer from "./audio-player";
 import {
   Avatar, Button, Card, Chip, EmptyState, IconButton, LoadMoreButton,
   SearchPill, SkeletonGrid, StatusNote, cx,
@@ -196,30 +197,6 @@ export function foldScene(files: LibraryItem[]): LibraryItem[] {
   return files.filter((f) => !twins.includes(f.id));
 }
 
-// Read once at module load, like the reader's own motion query: the object is live, only the
-// listener is per-component.
-const REDUCE_Q = typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
-const motionSuppressed = () => (REDUCE_Q?.matches ?? false) || calmStop() === 1;
-
-/**
- * Is motion suppressed for this member right now? OS "reduce motion" OR the strictest Motion-calm
- * stop ("Still") — the same pair ttsCalmMode() reads, because it is the same contract.
- *
- * THE PLATFORM OWNS THIS DECISION, not the file. An animated SVG can carry its own
- * `@media (prefers-reduced-motion)` block, but it is the author's file: we neither wrote it nor
- * can verify it, and inside an <img> we cannot reach in to check. So the swap to poster.png
- * happens out here, in the document, where the member's setting is ours to honour.
- */
-function useMotionOff(): boolean {
-  const [off, setOff] = useState(motionSuppressed);
-  useEffect(() => {
-    const on = () => setOff(motionSuppressed());
-    REDUCE_Q?.addEventListener("change", on);
-    window.addEventListener("aq:calm", on);  // the Motion-calm slider, live
-    return () => { REDUCE_Q?.removeEventListener("change", on); window.removeEventListener("aq:calm", on); };
-  }, []);
-  return off;
-}
 
 /**
  * The scene, in an <img>.
@@ -305,6 +282,20 @@ export function SceneMedia({ set, className, still }: {
   return <span ref={box} className={cx(BOX, className, tile && "flex-col gap-1 p-2 text-center")}>{body}</span>;
 }
 
+/**
+ * Audio — our own transport plus a live FFT spectrum (audio-player.tsx), never the browser's grey
+ * `<audio controls>` bar. A component of its own rather than a branch inside LibraryMedia, because
+ * the motion decision is read with a HOOK and LibraryMedia returns early several times above the
+ * audio branch — a hook down there would run conditionally.
+ */
+function AudioTile({ item, className }: { item: LibraryItem; className?: string }) {
+  const motionOff = useMotionOff();
+  // Deliberately NOT wrapped in BOX. The player already carries the border, the surface and the
+  // padding, and nesting it inside the generic tile stacked three panels of slightly different
+  // greys around one transport bar.
+  return <AudioPlayer src={item.url} motionOff={motionOff} className={cx("min-w-0", className)} />;
+}
+
 /** The neutral typed tile — glyph, extension, size. Contents only: the caller owns the box. */
 function FileTileBody({ item }: { item: LibraryItem }) {
   return (
@@ -371,14 +362,7 @@ export function LibraryMedia({ item, className, still, files }: {
     );
   }
 
-  if (item.class === "audio" && !still) {
-    return (
-      <span className={cx(box, "flex-col gap-2 p-2")}>
-        <span aria-hidden className="text-yang"><ClassGlyph cls="audio" /></span>
-        <audio src={item.url} controls preload="metadata" className="w-full min-w-0 max-w-full" />
-      </span>
-    );
-  }
+  if (item.class === "audio" && !still) return <AudioTile item={item} className={className} />;
 
   const ext = fileExt(item).toLowerCase();
 
