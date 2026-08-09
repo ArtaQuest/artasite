@@ -136,11 +136,53 @@ export default function NewsDetectionPage() {
           crawler reads the coordinates and timestamps as text rather than meeting an opaque image.
           It is backend-generated from the frozen pixel record — never member input — so
           dangerouslySetInnerHTML has a single, controlled source. */}
-      {d.svg ? (
+      {d.svg || d.map ? (
         <section>
           <h2 className="mb-3 text-[18px] font-semibold">Measured extent</h2>
-          <Card className="overflow-x-auto p-4">
-            <div className="min-w-[320px]" dangerouslySetInnerHTML={{ __html: d.svg }} />
+          {d.svg ? (
+            <Card className="overflow-x-auto p-4">
+              <div className="min-w-[320px]" dangerouslySetInnerHTML={{ __html: d.svg }} />
+            </Card>
+          ) : null}
+          {/* The locator sits UNDER the detector's own figure, never above it: the measurement is the
+              story and the map only answers "where". It is drawn from a bundled coastline outline —
+              no tile server, so nothing here calls a third party or leaks a reader's interest in a
+              conflict region to one. Absent whenever the detection carries no coordinate. */}
+          {d.map ? (
+            <Card className={`overflow-x-auto p-4${d.svg ? ' mt-3' : ''}`}>
+              <div className="min-w-[320px]" dangerouslySetInnerHTML={{ __html: d.map }} />
+            </Card>
+          ) : null}
+        </section>
+      ) : null}
+
+      {/* TIER 2. Everything above this line is measurement; everything in here is somebody talking,
+          and the layout has to keep saying so — printing a headline next to a number asserts a
+          connection by position alone even when the prose does not. Hence: never the word "cause" in
+          the heading, the caveat BEFORE the list rather than as a footnote, each title inside a
+          <cite> so it reads as quotation rather than as this platform's own claim, per-reference
+          match strength, and nofollow links that are plainly somebody else's page. */}
+      {d.context?.refs?.length ? (
+        <section>
+          <h2 className="mb-3 text-[18px] font-semibold">{d.context.heading}</h2>
+          <Card className="p-5">
+            <p className="mb-4 text-[14px] leading-relaxed text-ink-2">{d.context.caveat}</p>
+            <ul className="space-y-4">
+              {d.context.refs.map((r) => (
+                <li key={r.url} className="border-t border-line pt-4 first:border-0 first:pt-0">
+                  <cite className="block text-[15px] not-italic leading-snug">“{r.title}”</cite>
+                  <p className="mt-1 text-[13px] text-ink-2">
+                    {r.community} · posted {new Date(r.posted * 1000).toISOString().slice(0, 16).replace('T', ' ')} UTC
+                  </p>
+                  <p className="mt-1 text-[13px] text-ink-2">{r.match_note}</p>
+                  <p className="mt-1 break-all text-[12px]">
+                    <a className="text-yin-light hover:underline" href={r.url} rel="noreferrer nofollow" target="_blank">
+                      {r.url}
+                    </a>
+                  </p>
+                </li>
+              ))}
+            </ul>
           </Card>
         </section>
       ) : null}

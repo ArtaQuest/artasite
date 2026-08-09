@@ -3,7 +3,7 @@
  * Plugin Name: ArtaQuest
  * Description: The entire ArtaQuest platform — LMS, economy, social, i18n, funds — in one
  *              lean, dependency-free plugin. Replaces MasterStudy LMS + WooCommerce.
- * Version:     1.20.642
+ * Version:     1.20.643
  * Author:      ArtaQuest Foundation
  * License:     GNU AGPLv3
  * License URI: https://www.gnu.org/licenses/agpl-3.0.html
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 // disagree will send the next person chasing a production divergence that is not there: the
 // header is what get_plugin_data() reads, AQ_VERSION is what /version reports and what the
 // integrity sweep keys on. Bump them together, always.
-define( 'AQ_VERSION', '1.20.642' );
+define( 'AQ_VERSION', '1.20.643' );
 define( 'AQ_DIR', __DIR__ );
 define( 'AQ_URL', plugins_url( '', __FILE__ ) );
 
@@ -313,6 +313,12 @@ add_action( 'plugins_loaded', function () {
 	// ArtaNews: DETECT polls the instrument feeds and thresholds them. Detection keeps running — it
 	// is measurement, and it is what a report is made of.
 	if ( ! wp_next_scheduled( 'aq_news_detect' ) )      { wp_schedule_event( time() + 300, 'aq_6h', 'aq_news_detect' ); }
+	// …and SOCIAL collects Tier-2 context for detections that already exist. Separate hook, separate
+	// schedule, and deliberately OFFSET from detection rather than chained to it: it must be obvious
+	// in the scheduler that nothing social feeds detection. It cannot create or rank an event — see
+	// News::social_tick. Hourly because Reddit throttles hard and there is nothing to gain by asking
+	// more often than the feeds turn over.
+	if ( ! wp_next_scheduled( 'aq_news_social' ) )      { wp_schedule_event( time() + 1500, 'hourly', 'aq_news_social' ); }
 	// THE LEGACY REPORT LOOP IS DISARMED (operator 2026-07-28). It wrote an aq_news_articles row and
 	// published it on an emailed secret alone — a SECOND publication path with no Kaggle notebook,
 	// no reproducibility checklist, no passkey co-signature, no DOI, no Library entry and no
@@ -334,6 +340,7 @@ aq_cron_on( 'aq_mkt_sample', 'aq_mkt_sample', [ 'AQ\\Extra', 'mkt_sample_tick' ]
 // Daily commodity prices in ArtaCoin (operator 2026-07-24): oil/gas/coal/wheat/maize, 56-day ₳ series. See Extra::commodities_tick.
 aq_cron_on( 'aq_commodities', 'aq_commodities', [ 'AQ\\Extra', 'commodities_tick' ], 600 );
 aq_cron_on( 'aq_news_detect', 'aq_news_detect', [ 'AQ\\News', 'detect_tick' ], 900 );  // ~9MB satellite pull + clustering
+aq_cron_on( 'aq_news_social', 'aq_news_social', [ 'AQ\\News', 'social_tick' ], 300 );  // TIER 2 ONLY — attributed context, never a detection
 // @artabot mentions (operator 2026-07-30): ArtaBot is a participant, not just a publisher — tag it
 // anywhere and it replies in that thread. A CRON, not a comment hook: the relay is async and may be
 // cold, and a hook that throws would take the member's comment down with it.
