@@ -179,6 +179,38 @@ for f in artaquest-web/src/generated/arta/rig/arta.ts artaquest-web/src/generate
 done
 grep -q GENERATED artaquest-web/src/generated/arta/render/Arta.tsx 2>/dev/null && ok "Arta vendored from artalife"
 
+# ── 4b. Every API path is rooted ────────────────────────────────────────────────────────────────
+# api.ts builds a request as `${BASE}${path}` with BASE = "/wp-json/aq/v1" and NO trailing slash, so a
+# path that forgets its leading slash silently concatenates: "wallet/transfer" became
+# "/wp-json/aq/v1wallet/transfer". That 404s as rest_no_route, and it fails ONLY in the browser —
+# a curl against the real route answers 401 and looks like proof the endpoint is fine, which is
+# exactly the false reassurance that let it ship. tsc cannot see it; it is a correct string.
+step "API paths are rooted"
+if [ -f artaquest-web/src/lib/api.ts ]; then
+  node -e '
+    const fs = require("fs");
+    const src = fs.readFileSync("artaquest-web/src/lib/api.ts", "utf8");
+    const bad = [];
+    // The first string literal handed to a request helper, whether inline or on the next line.
+    const re = /\b(?:post|get|del|postForm)\s*(?:<[\s\S]*?>)?\s*\(\s*(?:\/\/[^\n]*\n|\s)*("([^"\\]|\\.)*"|`([^`\\]|\\.)*`)/g;
+    let m;
+    while ((m = re.exec(src))) {
+      const lit = m[1];
+      const body = lit.slice(1, -1);
+      if (body.startsWith("${BASE}")) continue;   // explicit template form, already rooted below
+      if (!body.startsWith("/")) bad.push(lit);
+    }
+    // And the template form must not glue a letter straight onto BASE.
+    for (const t of src.match(/\$\{BASE\}[A-Za-z]/g) || []) bad.push(t);
+    if (bad.length) {
+      for (const b of bad) console.log("::error::api.ts request path is not rooted: " + b + "  (BASE has no trailing slash — start it with /)");
+      process.exit(1);
+    }
+  ' && ok "every api.ts path starts at the root" || { fail "an api.ts request path would concatenate onto BASE"; mark; }
+else
+  skip "no api.ts"
+fi
+
 # ── 5. PHP syntax ──────────────────────────────────────────────────────────────────────────────
 # The plugin and theme never reach a runtime in CI, so syntax is all that can be asserted.
 step "PHP syntax"

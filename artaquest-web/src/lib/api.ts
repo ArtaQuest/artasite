@@ -1043,7 +1043,11 @@ export type FearTransparency = {
  *  or a retried request safe. Mint one per attempt, not per component. */
 export function sendCoins(toSlug: string, amount: number, nonce: string, note?: string) {
   return post<{ ok: boolean; code: "sent" | "already"; amount: number; balance: number }>(
-    "wallet/transfer",
+    // LEADING SLASH. BASE is "/wp-json/aq/v1" with no trailing one, and post() concatenates, so
+    // "wallet/transfer" built "/wp-json/aq/v1wallet/transfer" — a URL that 404s as rest_no_route.
+    // Every other call in this file carries the slash; this one did not, and a curl against the
+    // real route said 401 (it exists) while the button said "No route was found".
+    "/wallet/transfer",
     { to_slug: toSlug, amount, nonce, ...(note ? { note } : {}) },
   );
 }
