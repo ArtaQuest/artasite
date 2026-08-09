@@ -1038,6 +1038,16 @@ export type FearTransparency = {
   promise?: string;
 };
 /** GET /fearometer — public methodology + live stats of the deployed test set (radical transparency). */
+/** Send coins to another member. `nonce` is the idempotency key: replaying the SAME one returns the
+ *  original transfer (`code: "already"`) instead of sending twice, which is what makes a double-tap
+ *  or a retried request safe. Mint one per attempt, not per component. */
+export function sendCoins(toSlug: string, amount: number, nonce: string, note?: string) {
+  return post<{ ok: boolean; code: "sent" | "already"; amount: number; balance: number }>(
+    "wallet/transfer",
+    { to_slug: toSlug, amount, nonce, ...(note ? { note } : {}) },
+  );
+}
+
 export function getFearometer(): Promise<FearTransparency> {
   return get<FearTransparency>("/fearometer");
 }

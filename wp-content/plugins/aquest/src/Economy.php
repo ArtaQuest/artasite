@@ -652,6 +652,116 @@ final class Economy {
 		}
 	}
 
+	// ── member-to-member transfer ───────────────────────────────────────────
+
+	/** A single transfer is capped. Not a policy about wealth — a bound on how much one mistyped
+	 *  figure or one borrowed session can move in a single action. */
+	const XFER_MAX = 5000;
+
+	/**
+	 * Move coins from one member to another. NEVER mints or burns: one debit and one credit of the
+	 * same size, under the SENDER's wallet lock, sharing one idempotency ref.
+	 *
+	 * WHY ONLY THE SENDER'S LOCK. The debit is the side with an invariant to protect — a balance must
+	 * not go below zero — and it is checked inside that lock. The credit only ever raises a balance,
+	 * so there is nothing to serialise on the far side. Taking both locks would also invite the
+	 * classic deadlock: A sending to B while B sends to A, each holding the lock the other wants.
+	 *
+	 * SUPPLY IS UNCHANGED, and that falls out rather than being asserted: credit_coins moves
+	 * `coins_issued` by each delta, so −n then +n nets to zero and the full-reserve invariant
+	 * (Σ ledger == coins_issued == backing) holds across the pair without special-casing.
+	 *
+	 * IDEMPOTENT PER REF. Both rows carry the same ref and the probe runs inside the lock, so a
+	 * retried request — a double-tap, a dropped response the client repeats — finds the first
+	 * transfer and returns it instead of sending twice. The ledger's (reason, ref) index makes that
+	 * probe a range read rather than a scan.
+	 *
+	 * Returns [ ok, code, message ]: 'sent' | 'already' on success, else a refusal code.
+	 */
+	public static function transfer_coins( $from, $to, $amount, $ref ) {
+		$from   = (int) $from;
+		$to     = (int) $to;
+		$amount = (int) $amount;
+		$ref    = substr( (string) $ref, 0, 64 );
+
+		if ( $from <= 0 || $to <= 0 )     { return [ false, 'input', 'Who is this for?' ]; }
+		if ( $from === $to )              { return [ false, 'self', 'That is your own wallet.' ]; }
+		if ( $amount < 1 )                { return [ false, 'amount', 'Send at least ₳1.' ]; }
+		if ( $amount > self::XFER_MAX )   { return [ false, 'amount', 'The most you can send at once is ₳' . self::XFER_MAX . '.' ]; }
+		if ( '' === $ref )                { return [ false, 'input', 'Missing transfer id.' ]; }
+		if ( ! get_userdata( $to ) )      { return [ false, 'no_member', 'That member no longer exists.' ]; }
+
+		$lock = 'wallet_u' . $from;
+		if ( ! self::acquire_lock( $lock, 15 ) ) {
+			return [ false, 'busy', 'Another payment is in progress. Try again in a moment.' ];
+		}
+		try {
+			// Inside the lock, so a second request for the same ref cannot pass this before the first
+			// one's rows land.
+			if ( Data::col( 'SELECT id FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'xfer' AND ref = %s LIMIT 1", [ $ref ] ) ) {
+				return [ true, 'already', 'Already sent.' ];
+			}
+			if ( self::coin_balance( $from ) < $amount ) {
+				return [ false, 'poor', 'Not enough coins for that.' ];
+			}
+			// Debit FIRST. If the process dies between the two writes the sender is short and the
+			// recipient is unpaid, which is visible in the ledger and repairable by appending the
+			// missing credit; the other order would have created coins that were never debited.
+			self::credit_coins( $from, -$amount, 'xfer', $ref );
+			self::credit_coins( $to, $amount, 'xfer', $ref );
+			return [ true, 'sent', 'Sent.' ];
+		} finally {
+			self::release_lock( $lock );
+		}
+	}
+
+	/**
+	 * POST wallet/transfer {to_slug|to, amount, nonce, note?} — send coins to another member.
+	 *
+	 * `nonce` is the client's idempotency key: the same one replayed returns the original transfer
+	 * instead of sending again, which is what makes a double-tap or a retried request safe. The UI
+	 * mints one per attempt.
+	 */
+	public static function transfer_rest( $req ) {
+		$from = Rest::uid();
+		if ( ! $from ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+		// Bounded well above any honest use and well below what a script could drain in a session.
+		if ( Rest::throttle( 'coinxfer', 20, 600 ) ) {
+			return Rest::err( 'rate_limited', 'Too many transfers just now — try again shortly.' );
+		}
+		$slug = sanitize_title( (string) Rest::p( $req, 'to_slug', '' ) );
+		$to   = (int) Rest::p( $req, 'to', 0 );
+		if ( ! $to && '' !== $slug ) {
+			$u  = get_user_by( 'slug', $slug ) ?: get_user_by( 'login', $slug );
+			$to = $u ? (int) $u->ID : 0;
+		}
+		$amount = (int) Rest::p( $req, 'amount', 0 );
+		$nonce  = preg_replace( '/[^A-Za-z0-9_-]/', '', (string) Rest::p( $req, 'nonce', '' ) );
+		$nonce  = substr( $nonce, 0, 48 );
+		if ( '' === $nonce ) { return Rest::err( 'input', 'Missing transfer id.' ); }
+
+		list( $ok, $code, $msg ) = self::transfer_coins( $from, $to, $amount, 'xfer:' . $nonce );
+		if ( ! $ok ) { return Rest::err( $code, $msg, 'busy' === $code ? 429 : 400 ); }
+
+		// Tell the recipient, once — 'already' means this exact transfer was recorded on an earlier
+		// request, and re-notifying would ring their bell again for money that arrived once.
+		if ( 'sent' === $code ) {
+			$me   = get_userdata( $from );
+			$name = $me ? $me->display_name : 'A member';
+			$note = trim( wp_strip_all_tags( (string) Rest::p( $req, 'note', '' ) ) );
+			Notify::push(
+				$to,
+				'coins',
+				$name . ' sent you ₳' . (int) $amount,
+				// The note is the sender's words, so it is quoted and clipped rather than presented as
+				// ours; stripped of tags above, and Notify renders text.
+				'' !== $note ? '“' . substr( $note, 0, 160 ) . '”' : 'It is in your wallet.',
+				$me ? '/u/' . $me->user_nicename . '/' : ''
+			);
+		}
+		return [ 'ok' => true, 'code' => $code, 'amount' => (int) $amount, 'balance' => self::coin_balance( $from ) ];
+	}
+
 	// ── balances ────────────────────────────────────────────────────────────
 	public static function coin_balance( $uid ) {
 		return (int) Data::col( 'SELECT COALESCE(SUM(delta),0) FROM ' . Data::t( 'aq_coin_ledger' ) . ' WHERE user_id = %d', [ $uid ] );

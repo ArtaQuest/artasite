@@ -86,6 +86,9 @@ final class Rest {
 
 		// ── Economy ───────────────────────────────────────────────────────────
 		[ 'GET',  'wallet',                        'Economy::wallet',   'user'   ],
+		// Member-to-member coin transfer. POST + session; idempotent per client nonce, and it moves
+		// coins rather than minting them (Economy::transfer_coins).
+		[ 'POST', 'wallet/transfer',               'Economy::transfer_rest', 'user'   ],
 		[ 'GET',  'leaderboard',                   'Economy::leaderboard', 'public' ],
 		[ 'GET',  'reserve',                       'Economy::reserve',  'public' ],
 		[ 'GET',  'coins/price',                   'Economy::price',    'public' ],

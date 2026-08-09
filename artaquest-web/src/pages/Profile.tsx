@@ -11,12 +11,13 @@ import { useParams } from "react-router-dom";
 import { listNotebooks, normalizeNbKind, type NbKind, type NotebookCard } from "../lib/api";
 import { NB_KIND_META, NbCard } from "../components/nbview";
 import { BlueCheck } from "../components/BlueCheck";
-import { Avatar, Button, EmptyState, HeartGlyph, LoadMoreButton, Pill, StatusNote, cx } from "../components/ui";
+import { Avatar, Button, EmptyState, HeartGlyph, Input, LoadMoreButton, Pill, StatusNote, cx } from "../components/ui";
 import {
   currentUser, fmtBirthday, followUser, getFollows, getProfile, isLoggedIn, lastSeenLabel, localePath, PROFILE_LINKS, relAgo,
   type FollowRow, type Profile as ProfileData,
 } from "../lib/wp";
 import { Points } from "../lib/currency";
+import { sendCoins } from "../lib/api";
 
 /** The feed API filters by author (GET /notebooks?author=<slug>); the shared params type
  *  doesn't declare `author` yet, so widen it locally rather than touching api.ts (other
@@ -135,6 +136,81 @@ function FollowPanel({ slug, dir, count, onClose }: {
 }
 
 // ── the page ──────────────────────────────────────────────────────────────────
+
+/**
+ * Send coins to this member.
+ *
+ * Deliberately a disclosure on the profile rather than a page of its own: you send coins to a
+ * PERSON, and this is where you are looking at one — their name, their work, their handle. A
+ * separate transfer screen would ask you to type a handle you just navigated away from, which is
+ * both more work and the step where money goes to the wrong stranger.
+ *
+ * The nonce is minted per ATTEMPT and kept until that attempt resolves, so the retry after a
+ * dropped response carries the same one and the server returns the original transfer instead of
+ * sending twice. It is regenerated only once a send has succeeded.
+ */
+function SendCoins({ slug, name, onSent }: { slug: string; name: string; onSent: (balance: number) => void }) {
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [done, setDone] = useState(false);
+  const nonce = useRef<string>("");
+
+  const n = Math.floor(Number(amount));
+  const valid = Number.isFinite(n) && n >= 1;
+
+  async function send() {
+    if (!valid || busy) return;
+    // One nonce per attempt: minted on the first try and REUSED by any retry of the same attempt.
+    if (!nonce.current) nonce.current = (crypto.randomUUID?.() || String(Date.now()) + Math.random().toString(36).slice(2));
+    setBusy(true);
+    setMsg("");
+    try {
+      const r = await sendCoins(slug, n, nonce.current, note.trim() || undefined);
+      nonce.current = ""; // this attempt is settled; a further send is a new one
+      setDone(true);
+      setMsg(r.code === "already" ? `Already sent to ${name}` : `Sent ₳${r.amount} to ${name}`);
+      onSent(r.balance);
+      setAmount("");
+      setNote("");
+    } catch (e) {
+      // The server's own words — "Not enough coins for that", "The most you can send at once is
+      // ₳5000" — are the useful ones. The nonce is KEPT so a retry is the same attempt.
+      setMsg(e instanceof Error && e.message ? e.message : "Could not send — try again");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <Button type="button" variant="outline" onClick={() => { setOpen(true); setDone(false); setMsg(""); }}
+        className="h-10 px-5 text-[14px]" title={`Send coins to ${name}`}>
+        Send coins
+      </Button>
+    );
+  }
+  return (
+    <div className="w-full rounded-card border border-line bg-space-1 p-3 sm:w-[320px]">
+      <p className="text-[13px] font-semibold text-ink">Send coins to {name}</p>
+      <div className="mt-2 flex gap-2">
+        <Input value={amount} onChange={(e) => { setAmount(e.target.value.replace(/[^0-9]/g, "")); setDone(false); }}
+          inputMode="numeric" placeholder="₳ amount" aria-label="Amount in coins" className="bg-space-2 px-3" />
+        <Button type="button" onClick={send} disabled={!valid || busy}
+          className="h-10 shrink-0 px-4 text-[14px] disabled:opacity-40">{busy ? "Sending…" : "Send"}</Button>
+      </div>
+      <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={160} placeholder="Note (optional)"
+        aria-label="Note to include" className="mt-2 bg-space-2 px-3" />
+      {msg && (
+        <p role="status" className={`mt-2 text-[12.5px] ${done ? "text-yang" : "text-rose-300"}`}>{msg}</p>
+      )}
+      <button type="button" onClick={() => { setOpen(false); setMsg(""); }}
+        className="mt-2 text-[12.5px] font-semibold text-ink-3 transition-colors hover:text-yang">Close</button>
+    </div>
+  );
+}
 
 export default function Profile() {
   const { slug = "" } = useParams();
@@ -336,6 +412,7 @@ export default function Profile() {
                 className="h-10 px-5 text-[14px]" title="Send an encrypted message">
                 Message
               </Button>
+              <SendCoins slug={p.slug} name={p.fullName?.trim() || p.name} onSent={() => undefined} />
             </div>
           ) : (
             <Button href={loginHref} variant="primaryYin" className="h-10 shrink-0 px-6 text-[14px] sm:ml-auto">Follow</Button>
