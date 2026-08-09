@@ -411,7 +411,9 @@ function FeedPost({ post, onDeleted, hearted }: { post: FeedPostT; onDeleted?: (
                 {fmtCount(nb.views)}
               </span>
             ) : null}
-            {nb ? <a href={liteRunUrl(nb.id, nb.slug)} onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener" className="transition-colors hover:text-ink-2" title="Runs in your browser — nothing leaves your device">Run it ↗</a> : null}
+            {/* Measured at 48x20 in the rendered feed while every button beside it was 44 tall —
+                the last short target in the row. */}
+            {nb ? <a href={liteRunUrl(nb.id, nb.slug)} onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener" className="-my-2 -me-1.5 inline-flex min-h-11 items-center rounded-pill px-1.5 py-2 transition-colors hover:text-ink-2" title="Runs in your browser — nothing leaves your device">Run it ↗</a> : null}
           </div>
           {talk && nb ? (
             <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} className="mt-3 cursor-default rounded-2xl border border-line bg-space-1/60 p-3">
