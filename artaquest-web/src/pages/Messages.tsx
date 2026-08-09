@@ -12,6 +12,7 @@ import {
   takeAutoAnswer, watchList,
 } from "../lib/chat-store";
 import { watchMath } from "../lib/math";
+import MediaViewer from "../components/chat/MediaViewer";
 import {
   decodePayload, deriveChatKey, encodePayload, importPeerPub,
   openAttachment, openMessage, safetyCode, sealAttachment, sealMessage,
@@ -248,12 +249,12 @@ function fmtSize(n: number): string {
 
 /** Decrypted-attachment media (image → lightbox; video → inline player; voice/audio → player;
  *  anything else → a download chip). Object URLs cached upstream. */
-function Media({ att, url, onZoom }: { att: SealedAttachment; url: string | null; onZoom: (u: string) => void }) {
+function Media({ att, url, onZoom }: { att: SealedAttachment; url: string | null; onZoom: (u: string, mime: string) => void }) {
   if (!url) return <p className="text-[13px] italic text-ink-3">Couldn’t open this attachment.</p>;
   if (att.mime.startsWith("image/")) {
     const ratio = att.w && att.h ? att.w / att.h : undefined;
     return (
-      <button type="button" onClick={() => onZoom(url)} className="relative block overflow-hidden rounded-card"
+      <button type="button" onClick={() => onZoom(url, att.mime)} className="relative block overflow-hidden rounded-card"
         aria-label={att.gif ? "View GIF full size" : "View image full size"}>
         {/* object-CONTAIN, not cover. A cropped photo is an annoyance; a cropped GIF is usually the
             joke cut in half, and a portrait screenshot arrives with its content sliced out. */}
@@ -266,9 +267,20 @@ function Media({ att, url, onZoom }: { att: SealedAttachment; url: string | null
     );
   }
   if (att.mime.startsWith("video/")) {
+    // Openable now, like a still. It played inline at 288px and that was the only size it had —
+    // fine for a clip of someone talking, no use at all for a screen recording of a plot or a
+    // terminal, which is most of what gets sent here.
     return (
-      <video controls playsInline preload="metadata" src={url} aria-label="Video message"
-        className="max-h-72 max-w-full rounded-card bg-black/40" />
+      <span className="relative block">
+        <video controls playsInline preload="metadata" src={url} aria-label="Video message"
+          className="max-h-72 max-w-full rounded-card bg-black/40" />
+        <button type="button" onClick={() => onZoom(url, att.mime)} aria-label="View video full size"
+          title="View full size"
+          className="absolute end-1.5 top-1.5 grid h-8 w-8 place-items-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80">
+          <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2"
+            strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M9 4H4v5M15 20h5v-5M4 15v5h5M20 9V4h-5" /></svg>
+        </button>
+      </span>
     );
   }
   if (att.mime.startsWith("audio/")) {
@@ -517,7 +529,9 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
     const t = setTimeout(() => setConfirmUnsend(0), 5000);
     return () => clearTimeout(t);
   }, [confirmUnsend]);
-  const [zoom, setZoom] = useState<string | null>(null);
+  // { url, mime } rather than a bare url: the viewer now opens video as well as stills, so it
+  // has to be told which. Was `string | null` when only images could be enlarged.
+  const [zoom, setZoom] = useState<{ url: string; mime: string } | null>(null);
   const [media, setMedia] = useState<Record<number, string | null>>({});
   const [atBottom, setAtBottom] = useState(true);
   const [missed, setMissed] = useState(0);
@@ -1514,7 +1528,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                           <p className="italic text-ink-3">Sealed to a previous device key — this device cannot open it.</p>
                         ) : p.t === "img" || p.t === "voice" || p.t === "file" ? (
                           <>
-                            <Media att={p.att} url={media[m.id] ?? null} onZoom={setZoom} />
+                            <Media att={p.att} url={media[m.id] ?? null} onZoom={(u, mime) => setZoom({ url: u, mime })} />
                             {(p.t === "img" || p.t === "file") && body && <div className="aq-msg mt-1.5"><MessageBody text={body} /></div>}
                           </>
                         ) : p.t === "stick" ? (
@@ -1691,15 +1705,11 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
         )}
       </footer>
 
-      {/* lightbox */}
-      {zoom && (
-        <div role="dialog" aria-label="Image" className="fixed inset-0 z-[80] grid place-items-center bg-black/80 p-4"
-          onClick={() => setZoom(null)} onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); setZoom(null); } }} tabIndex={-1}>
-          <img src={zoom} alt="" className="max-h-[92vh] max-w-[94vw] rounded-card object-contain" />
-          <button type="button" aria-label="Close" onClick={() => setZoom(null)}
-            className="absolute end-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-space-2 text-ink shadow-card"><Ic d={IC.x} size={18} /></button>
-        </div>
-      )}
+      {/* The full-screen viewer: wheel/pinch to zoom, drag to pan, double-tap to toggle. Replaces a
+          fit-to-screen <img>, which could show you that a plot had axis labels but never let you
+          read them. */}
+      {zoom && <MediaViewer src={zoom.url} mime={zoom.mime} onClose={() => setZoom(null)} />}
+
     </section>
   );
 }
