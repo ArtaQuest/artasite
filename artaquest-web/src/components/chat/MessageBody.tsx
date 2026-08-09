@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { escHtml, hlJS, hlPython } from "../../lib/highlight";
+import ChatPlot from "./ChatPlot";
+import { parsePlot } from "./plot";
 
 /**
  * A message, rendered for people who write about science.
@@ -10,8 +12,12 @@ import { escHtml, hlJS, hlPython } from "../../lib/highlight";
  *
  * WHAT IT IS NOT: a Markdown renderer. Message text is written by the other party, so every feature
  * is an attack surface — no links, no images, no HTML, no tables. The whole grammar is fenced code,
- * inline code, and LaTeX delimiters, because those are what the maths and the code need and the rest
- * is risk without a reason.
+ * inline code, LaTeX delimiters, and a ```plot fence, because those are what the maths, the code and
+ * the data need and the rest is risk without a reason.
+ *
+ * The plot fence keeps that rule rather than bending it: it carries a JSON spec, which is parsed and
+ * validated into numbers and short labels and handed to uPlot. Nothing in a message is ever
+ * executed, fetched or emitted as markup — see ChatPlot.
  *
  * SAFETY. Nothing here trusts its input. Prose is emitted as React TEXT NODES, never as HTML, so it
  * cannot inject anything. Code is the only path that produces markup, and it goes through
@@ -127,7 +133,18 @@ export function MessageBody({ text }: { text: string }) {
   FENCE.lastIndex = 0;
   while ((m = FENCE.exec(text))) {
     if (m.index > last) parts.push(<Prose key={`p${last}`} text={text.slice(last, m.index)} />);
-    parts.push(<CodeBlock key={`k${m.index}`} lang={m[1]} src={m[2].replace(/\n$/, "")} />);
+    {
+      const lang = m[1];
+      const src = m[2].replace(/\n$/, "");
+      // ```plot — an interactive chart, written as a JSON spec. It is DATA, never code: parsed,
+      // validated and drawn by uPlot (see ChatPlot). A spec that does not validate falls through to
+      // the ordinary code block below, so a typo shows the sender's JSON rather than a blank gap or
+      // an error inside somebody's conversation.
+      const spec = lang.toLowerCase() === "plot" ? parsePlot(src) : null;
+      parts.push(spec
+        ? <ChatPlot key={`k${m.index}`} spec={spec} />
+        : <CodeBlock key={`k${m.index}`} lang={lang} src={src} />);
+    }
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push(<Prose key={`p${last}`} text={text.slice(last)} />);
