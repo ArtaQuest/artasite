@@ -5,6 +5,7 @@ import { currentUser, isLoggedIn, localePath, renderRich } from "../lib/wp";
 import { armAutoAnswer, clearRing, getChatState, markSeen, subscribeChat, watchList } from "../lib/chat-store";
 import { useTypewriter } from "../lib/useTypewriter";
 import { Avatar, Button, LogoMark, RichText } from "./ui";
+import Arta from "../generated/arta/render/Arta";
 import { IncomingCall } from "./chat/CallPanel";
 
 /** The DM thread lives in the ArtaChat page chunk (it carries the whole E2EE stack). Lazy, so the dock
@@ -130,6 +131,20 @@ function TypeOut({ body, onTick, onDone, streaming }: { body: string; onTick: ()
 // nothing else. Do NOT "enrich" it with invented reasoning: a plausible chain of thought the member
 // cannot check is worse than an honest meter.
 // data-ay-skip keeps the live numbers out of the i18n mesh (they'd be collected as translations).
+/** ArtaBot's face: Arta itself, which is the platform's own figure rather than a second mark that
+ *  means nothing. Used only where there is ONE of it — the profile pic and the live bubble — because
+ *  Arta drives a requestAnimationFrame loop per instance, and one per message in a fifty-message
+ *  transcript is fifty loops in a list somebody is scrolling. The repeated per-message avatar stays
+ *  the flat mark, which costs nothing to paint. */
+function ArtaFace({ size = 26, className = "" }: { size?: number; className?: string }) {
+  return (
+    <span aria-hidden="true" className={"grid shrink-0 place-items-center overflow-hidden " + className}
+          style={{ width: size, height: size }}>
+      <Arta height={size * 1.9} ground={false} />
+    </span>
+  );
+}
+
 /** THE COST METER (operator: "each session they start should have a cost meter attached to it").
  *
  *  It shows what the COMPUTE has cost so far, because that is the part that can honestly be known
@@ -167,9 +182,14 @@ function Thinking({ tokens, since, step }: { tokens: number; since: number; step
       {/* A TOOL turn replaces the token count with the tool it is actually running, because that is
           the true thing to say: once Claude starts using tools it stops thinking, the estimate stops
           climbing, and a frozen "~4,200 tokens" for two minutes reads as a hang. */}
-      <span className="truncate">{step
-        ? `${step}${secs >= 2 ? ` · ${secs}s` : ""}`
-        : `Thinking${tokens > 0 ? ` · ~${tokens.toLocaleString()} tokens` : ""}${secs >= 2 ? ` · ${secs}s` : ""}`}</span>
+      {/* The token count is shown ALONGSIDE the step, not instead of it. It used to be replaced the
+          moment a tool ran, so the one number telling you the model had been thinking vanished exactly
+          when the turn got interesting. */}
+      <span className="truncate">{[
+        step || "Thinking",
+        tokens > 0 ? `~${tokens.toLocaleString()} thinking tokens` : "",
+        secs >= 2 ? `${secs}s` : "",
+      ].filter(Boolean).join(" · ")}</span>
     </div>
   );
 }
@@ -494,7 +514,7 @@ export function BotChat() {
             rendered above with srcLang="en", translates as usual. */}
         {live && (
           <div className="flex justify-start gap-2">
-            <LogoMark className="mt-0.5 h-6 w-6 shrink-0" />
+            <ArtaFace size={26} className="mt-0.5" />
             <div data-ay-skip="1" className="max-w-[80%] rounded-card border border-line bg-space-2 px-3.5 py-2.5 text-[14px] leading-relaxed text-ink-2">
               {live.text
                 ? <TypeOut body={live.text} onTick={followTyping} onDone={() => {}} streaming />
@@ -515,7 +535,7 @@ export function BotChat() {
           </div>
         )}
         {/* Only when there is no live channel to show — otherwise the stream IS the progress. */}
-        {busy && !live && <div className="flex items-center gap-2 text-[13px] text-ink-3"><LogoMark className="h-6 w-6 animate-pulse" />ArtaBot is thinking…</div>}
+        {busy && !live && <div className="flex items-center gap-2 text-[13px] text-ink-3"><ArtaFace size={24} />ArtaBot is thinking…</div>}
         {err && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-card border border-yin/40 bg-yin/10 px-3 py-2 text-[13px] text-yin-light">
             <span>{err}</span>
@@ -701,7 +721,7 @@ function DockBody({ view, setView }: {
             {/* ArtaBot is pinned first: it is the one conversation every member always has. */}
             <button type="button" onClick={() => setView({ k: "bot" })}
               className="flex w-full items-center gap-3 border-b border-line px-3 py-2.5 text-start transition-colors hover:bg-veil/[0.05]">
-              <LogoMark className="h-10 w-10 shrink-0" />
+              <ArtaFace size={40} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[14px] font-semibold text-ink">ArtaBot</span>
                 <span className="block truncate text-[12px] text-ink-3">Ask anything — you pay what it uses</span>
