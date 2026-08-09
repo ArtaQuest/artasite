@@ -25,6 +25,28 @@ raise a confidence tier, or supply a number no instrument measured.
 **The platform never asserts cause or perpetrator.** A satellite sees radiant heat; a seismometer
 sees ground motion; BGP sees withdrawn prefixes.
 
+### Reddit sits in Tier 2, and that is not a style preference (2026-08-09)
+
+Operator asked for Reddit. It is in — as **attributed context hung off a detection an instrument
+already made**, never as a detector. The rule above is the whole reason this platform is hard to
+flood: you cannot fake a seismometer, and you can fake a Reddit post in four seconds. A social
+detector would hand any account holder the power to manufacture an ArtaQuest story, so
+`News::social_tick` can only ever write an option — it cannot create, rank, revise or promote an
+event, and the scheduler shows that as a separate hook on a separate cadence.
+
+⚠️ **The match is by place NAME, not by position, and every panel says so.** Reddit's search
+endpoint answers 429 to unauthenticated clients without exception, so "what was posted near this
+coordinate" is unanswerable; only "what did these subreddits post recently" is. The first live test
+proved why that must be stated rather than assumed — a detection in Russia drew *"Russia Hit Odesa
+with 11 Missiles and 100 Drones"*, a post about a city in **Ukraine**, matched on the country name
+alone. Each reference therefore carries its own match strength (`settlement` beats `country`, and
+sorts above it) instead of relying on one blanket caveat a reader may not carry down the list.
+
+Measured limits, live 2026-08-09, none worked around: plain subreddit RSS (`/r/<sub>/new/.rss`) is
+the last keyless surface; it 429s roughly half of requests even 30 s apart; and a subreddit can be
+silently dead — r/earthquake's newest post was two years old. Everything fails soft, records health
+per subreddit, and a detection with no context renders exactly as before: the measurement, alone.
+
 ---
 
 ## 2. ⚠️ THE JUXTAPOSITION TRAP — the single most dangerous thing in this design

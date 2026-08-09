@@ -1964,8 +1964,24 @@ export type NewsDetection = {
   observed: number; updated: number;
   /** inline animated SVG of the measured extent over time; empty when the detector has no raster. */
   svg: string;
+  /** inline locator map, drawn from a bundled coastline — no tile server. Empty without a coordinate. */
+  map: string;
   /** plain-language statement of what was not determined. Empty when nothing is outstanding. */
   unknown: string;
+  /**
+   * TIER 2 — human posts as attributed context. Never evidence, never a cause, never a measurement.
+   * Absent (or with no refs) whenever nothing was matched, which is the normal case.
+   */
+  context?: {
+    heading: string;
+    caveat: string;
+    fetched: number;
+    refs: {
+      source: string; community: string; title: string; url: string;
+      posted: number; posted_iso: string;
+      matched_name: string; match_kind: 'settlement' | 'country'; match_note: string;
+    }[];
+  };
 };
 export function newsDetection(slug: string) {
   return get<NewsDetection>(`/news/${encodeURIComponent(slug)}`);

@@ -198,6 +198,15 @@ final class News {
 	// USGS blast CLASSIFICATION is dominated by North American regional networks, so it carries very
 	// little conflict-zone coverage. It is a high-value, low-volume path, not a steady feed.
 	const BLAST_MIN_MAG = 4.0;    // outside the watchlist only a large explosion is news
+	// AN EARTHQUAKE FLOOR AND AN EXPLOSION FLOOR ARE NOT THE SAME NUMBER, and for a long time one
+	// constant answered both questions. `BLAST_MIN_MAG` is named for what it is: the bar a
+	// CLASSIFIED explosion must clear, and M4.0 is enormous for one (every blast in the live USGS
+	// catalogue over a week was M0.18–M1.77). Applied to ordinary earthquakes the same 4.0 means
+	// something entirely different — roughly 130 a day worldwide, which is weather, not news.
+	// Both detector legs therefore carried a hard-coded 5.5 for earthquakes while newsworthy()
+	// tested against BLAST_MIN_MAG, so the two disagreed by 1.5 magnitudes and the gate's quake
+	// branch was unreachable below 5.5. Naming the second floor is what stops them drifting again.
+	const QUAKE_MIN_MAG = 5.5;    // an ORDINARY earthquake is news at this size, worldwide
 	const ISOLATION_KM  = 25.0;   // no other cluster within this range ⇒ genuinely isolated
 	const MAX_HOT       = 6000;   // hot pixels clustered per tick — O(n²) guard on a severe fire day
 	const CENSUS_TTL    = 15552000; // 180 d — a cell unseen for a season stops being evidence
@@ -648,13 +657,32 @@ final class News {
 			case 'blackout':
 				return $sev >= ( $watched ? self::ARTANEWS_MIN_DROP_WATCH : self::ARTANEWS_MIN_DROP );
 			case 'quake':
-				return $sev >= self::BLAST_MIN_MAG;
+				// A classified explosion and an ordinary earthquake are not the same story and do not
+				// share a floor — see QUAKE_MIN_MAG. `kind` is the detector's own classification,
+				// carried inside `measures` because the ledger has no column for it.
+				return $sev >= ( self::is_blast_row( $r ) ? self::BLAST_MIN_MAG : self::QUAKE_MIN_MAG );
 			case 'price':
 				return $sev >= self::PRICE_SIGMA;
 			case 'claude':
 				return $sev >= self::CLAUDE_MIN_SEVERITY;
 		}
 		return false;   // an unregistered detector shows nothing rather than everything
+	}
+
+	/**
+	 * Was this seismic row classified as an EXPLOSION by the network that solved it? The ledger
+	 * stores no column for it — `kind` travels inside the `measures` JSON — so both the stored blob
+	 * and an in-flight detector row have to answer, and this is the single place that knows how.
+	 * Unparseable or absent ⇒ FALSE, which applies the HIGHER earthquake floor: failing to
+	 * recognise a blast hides one story, whereas guessing "blast" publishes ordinary earthquakes as
+	 * explosions. Only one of those two mistakes is a false claim about the world.
+	 */
+	private static function is_blast_row( $r ) {
+		if ( isset( $r['blast'] ) ) { return (bool) $r['blast']; }
+		$m = $r['measures'] ?? '';
+		if ( is_string( $m ) ) { $m = json_decode( $m, true ); }
+		$kind = is_array( $m ) ? (string) ( $m['kind'] ?? '' ) : '';
+		return false !== strpos( $kind, 'explosion' );
 	}
 
 	/**
@@ -855,10 +883,176 @@ final class News {
 			// The visualisation ships WITH the data: inline SVG, so the page needs no second request
 			// and a crawler reads the measurements as text.
 			'svg'       => self::detection_svg( $row ),
+			// The locator answers WHERE; `svg` answers WHAT and HOW MUCH. Separate fields so a page can
+			// lay them out together under one visualisation heading.
+			'map'       => self::locator_svg( $row['lat'] ?? 0, $row['lon'] ?? 0 ),
+			// TIER 2 — human reporting, attributed, and structurally separate from every measured field
+			// above it. Read from cache only: rendering a page must never call an outside service.
+			'context'   => self::social_context( (int) $row['id'] ),
 			// Stated on every page, not implied: an instrument measured energy, nothing more.
 			'unknown'   => 'These figures describe what an instrument measured. They do not establish the'
 				. ' cause of the event, who was involved, or any consequence on the ground.',
 		];
+	}
+
+	/**
+	 * ─── TIER 2 ────────────────────────────────────────────────────────────────────────────────
+	 * REDDIT AS CONTEXT, NEVER AS A DETECTOR (operator asked for Reddit, 2026-08-09).
+	 *
+	 * A Reddit post cannot start a story here and this code gives it no way to. The two-tier rule
+	 * is the platform's whole immunity to information flooding — *you cannot fake a seismometer* —
+	 * and you can fake a Reddit post in about four seconds. Anything social that could create a
+	 * detection would hand any account holder the power to manufacture ArtaQuest news. So social
+	 * material enters exactly where human reporting already enters: as ATTRIBUTED CONTEXT hung off
+	 * a detection an instrument already made, which can never raise a confidence tier and can never
+	 * supply a number. Every constraint in ARTANEWS.md §2 (the juxtaposition trap) applies unchanged.
+	 *
+	 * ⚠️ THE MATCH IS BY PLACE NAME, NOT BY POSITION, and the payload says so on every panel. Reddit's
+	 * search endpoint answers 429 to unauthenticated clients without exception (measured 2026-08-09),
+	 * so there is no way to ask "what was posted near this coordinate" — only "what did these
+	 * subreddits post recently", filtered by the place name appearing in the title. That is a much
+	 * weaker claim than the geolocated distance a wire citation carries, and printing it next to a
+	 * measurement without saying so is precisely the trap: a post mentioning a country is not a
+	 * report about a spot in it, and layout alone would assert that it is.
+	 *
+	 * Measured limits, all live 2026-08-09, none of them worked around: plain subreddit RSS is the
+	 * only keyless surface left (`/r/<sub>/new/.rss`); it answers 429 to roughly half of requests
+	 * even spaced 30 s apart; and a subreddit can be silently dead — r/earthquake's newest post was
+	 * two years old. So this fails soft everywhere, records its health, and a detection with no
+	 * context renders exactly as it did before: the measurement, alone, which is the whole story.
+	 */
+	const REDDIT_SUBS   = [ 'worldnews', 'news', 'CredibleDefense', 'geopolitics', 'TropicalWeather' ];
+	const REDDIT_CACHE  = 'aq_news_social';  // one option holding id => refs; capped, never a per-view fetch
+	const REDDIT_MAX    = 4;                 // references shown per detection
+	const REDDIT_TTL    = 43200;             // 12 h — context ages out rather than going stale forever
+
+	/** Cached Tier-2 references for one detection. Reads only — never fetches. */
+	public static function social_context( $event_id ) {
+		$all = get_option( self::REDDIT_CACHE, [] );
+		$hit = is_array( $all ) ? ( $all[ (int) $event_id ] ?? null ) : null;
+		if ( ! is_array( $hit ) || ( (int) ( $hit['fetched'] ?? 0 ) + self::REDDIT_TTL ) < time() ) { return []; }
+		return [
+			// NEVER "causes" — the heading is what was posted, in what period, and nothing more.
+			'heading'  => 'What was posted about this area and period',
+			'caveat'   => 'These posts are not evidence of a connection to this measurement, and no link'
+				. ' has been established. They were matched because the place name appears in the title —'
+				. ' not by position, so a post may be about somewhere else entirely in the same country.',
+			'refs'     => array_values( (array) ( $hit['refs'] ?? [] ) ),
+			'fetched'  => (int) $hit['fetched'],
+		];
+	}
+
+	/**
+	 * Populate that cache (cron aq_news_social). ONE pass over the allow-list per tick, not one per
+	 * event: the feeds are the same whoever is asking, and hitting Reddit once per detection would
+	 * both waste the rate limit this barely fits inside and scale with the news, which is backwards.
+	 * Nothing here can create, promote, revise or rank a detection — it only ever writes an option.
+	 */
+	public static function social_tick() {
+		$posts = [];
+		foreach ( self::REDDIT_SUBS as $sub ) {
+			$t0  = microtime( true );
+			$got = self::reddit_feed( $sub );
+			// A dead or throttled subreddit is recorded, not hidden: half of these calls are expected
+			// to fail, and a source that starts failing ALWAYS is the thing worth seeing in health.
+			Extra::src_health( 'news:reddit:' . $sub, (bool) $got, ( microtime( true ) - $t0 ) * 1000, count( $got ) );
+			$posts = array_merge( $posts, $got );
+		}
+		if ( ! $posts ) { return; }
+		// Only live, newsworthy detections get context — matching against the whole ledger would
+		// attach today's headlines to months-old events, which is the juxtaposition trap with a
+		// time axis instead of a distance one.
+		$rows = Data::all(
+			'SELECT id, place, country, first_ts, last_ts, detector, severity, measures FROM ' . Data::t( 'aq_news_events' )
+			. ' WHERE last_ts > %d ORDER BY rank_score DESC LIMIT %d',
+			[ time() - self::FEED_MAX_AGE, self::MAX_EVENTS ]
+		);
+		$out = [];
+		foreach ( (array) $rows as $r ) {
+			if ( ! self::newsworthy( $r ) ) { continue; }
+			$refs = self::match_posts( $posts, $r );
+			if ( $refs ) { $out[ (int) $r['id'] ] = [ 'fetched' => time(), 'refs' => $refs ]; }
+		}
+		update_option( self::REDDIT_CACHE, $out, false );
+	}
+
+	/** One subreddit's recent posts via the last keyless surface: plain Atom. [] on any failure. */
+	private static function reddit_feed( $sub ) {
+		$xml = self::fetch( 'https://www.reddit.com/r/' . rawurlencode( $sub ) . '/new/.rss', 15 );
+		if ( ! $xml ) { return []; }
+		// libxml is told to keep its errors to itself: a 429 body or a truncated read is an ordinary
+		// outcome here, not something to raise into a PHP warning on a cron tick.
+		$prev = libxml_use_internal_errors( true );
+		$feed = simplexml_load_string( $xml );
+		libxml_clear_errors();
+		libxml_use_internal_errors( $prev );
+		if ( ! $feed || ! isset( $feed->entry ) ) { return []; }
+		$out = [];
+		foreach ( $feed->entry as $e ) {
+			$ts = strtotime( (string) $e->updated );
+			// Stale is worse than absent: r/earthquake's newest post was two years old when this was
+			// written, and an ancient thread printed beside a measurement from this morning reads as
+			// contemporaneous. Anything older than the feed window is simply not context for it.
+			if ( ! $ts || $ts < time() - self::FEED_MAX_AGE ) { continue; }
+			$out[] = [
+				'source'    => 'reddit',
+				'community' => 'r/' . $sub,
+				'title'     => trim( (string) $e->title ),
+				'url'       => (string) ( $e->link['href'] ?? '' ),
+				'posted'    => $ts,
+				'posted_iso'=> gmdate( 'c', $ts ),
+			];
+		}
+		return $out;
+	}
+
+	/**
+	 * Which of those posts name this detection's place, inside its window? Deliberately narrow, and
+	 * deliberately dumb: a whole-word match on the settlement or country, never a fuzzy or semantic
+	 * one. A loose matcher here does not produce more context, it produces confident-looking
+	 * coincidence — and the juxtaposition trap is a layout problem, so the cheapest fix is to
+	 * attach less. `preg_quote` matters: place names really do contain regex metacharacters.
+	 */
+	private static function match_posts( $posts, $ev ) {
+		// A SETTLEMENT MATCH AND A COUNTRY MATCH ARE NOT THE SAME EVIDENCE, and collapsing them was
+		// the first thing this got wrong in testing: a detection in Russia drew "Russia Hit Odesa
+		// with 11 Missiles" — a post about a city in UKRAINE, matched on the country name, printed
+		// beside a measurement a thousand kilometres away. The blanket caveat covers it, but a
+		// reader reads references one at a time, so each one carries its own strength and the
+		// stronger kind sorts first. Country-level matches stay because for most of this ledger the
+		// country is all there is — they are just never allowed to look like more than they are.
+		$names = [];
+		$place = trim( (string) ( $ev['place'] ?? '' ) );
+		$ctry  = trim( (string) ( $ev['country'] ?? '' ) );
+		if ( '' !== $place ) { $names[] = [ $place, 'settlement' ]; }
+		if ( '' !== $ctry && 0 !== strcasecmp( $ctry, $place ) ) { $names[] = [ $ctry, 'country' ]; }
+		if ( ! $names ) { return []; }
+		$from = (int) $ev['first_ts'] - 86400;   // a day either side: reporting lags a measurement,
+		$to   = (int) $ev['last_ts'] + 86400;    // and a warning can precede one
+		$hits = [];
+		foreach ( $posts as $p ) {
+			if ( $p['posted'] < $from || $p['posted'] > $to ) { continue; }
+			foreach ( $names as list( $n, $kind ) ) {
+				if ( mb_strlen( $n ) < 4 ) { continue; }   // 3-letter tokens match half the language
+				if ( preg_match( '/\b' . preg_quote( $n, '/' ) . '\b/iu', $p['title'] ) ) {
+					$hits[] = $p + [
+						'matched_name' => $n,
+						'match_kind'   => $kind,
+						'match_note'   => 'settlement' === $kind
+							? 'mentions ' . $n . ', the nearest settlement to the measurement'
+							: 'mentions ' . $n . ' only — the country, not the location measured',
+					];
+					break;
+				}
+			}
+		}
+		// Strongest first, then most recent, and only then truncated — so a country-level match can
+		// never displace a settlement-level one just by arriving earlier in the feed.
+		usort( $hits, static function ( $a, $b ) {
+			$rank = static fn( $h ) => 'settlement' === $h['match_kind'] ? 0 : 1;
+			return [ $rank( $a ), -$a['posted'] ] <=> [ $rank( $b ), -$b['posted'] ];
+		} );
+		return array_slice( $hits, 0, self::REDDIT_MAX );
 	}
 
 	/** A stable, readable, route-safe slug that pins the exact event: …-e<id>. */
@@ -938,6 +1132,71 @@ final class News {
 	const ARTANEWS_MIN_WATCH = 300.0;  // MW inside a watched box, where the census does the rest
 	const ARTANEWS_MIN_DROP       = 50.0; // % below a country's own normal connectivity
 	const ARTANEWS_MIN_DROP_WATCH = 25.0; // …lower inside a watched country, where it carries more
+
+	/**
+	 * WHERE ON EARTH — a locator map, drawn offline from a bundled outline.
+	 *
+	 * The detail figures plot latitude and longitude, which tells a reader the shape of an event but
+	 * not its place: a dot cloud at longitude 59.89 is not a location to anyone. This draws the
+	 * coastline and marks the measurement on it.
+	 *
+	 * NO TILE SERVER, deliberately. A slippy map would mean an external request from a page whose
+	 * whole claim is that it is self-contained and reproducible — and the site's CSP blocks outbound
+	 * hosts anyway. data/world-outline.json is Natural Earth 110 m land, Douglas-Peucker simplified
+	 * to 50 rings and 903 points (11.8 KB, public domain), which is coarse for a continent and ample
+	 * for "which part of the world is this".
+	 *
+	 * Equirectangular, because the job is orientation rather than area or distance — and a projection
+	 * that distorts area would be the wrong one to put beside measured quantities.
+	 */
+	public static function locator_svg( $lat, $lon, $w = 640, $h = 320 ) {
+		$lat = (float) $lat; $lon = (float) $lon;
+		if ( ( 0.0 === $lat && 0.0 === $lon ) || $lat < -90 || $lat > 90 || $lon < -180 || $lon > 180 ) {
+			return '';   // no coordinate: country-level events (netloss, price) have nothing to mark
+		}
+		static $rings = null;
+		if ( null === $rings ) {
+			$f = AQ_DIR . '/data/world-outline.json';
+			$rings = is_readable( $f ) ? ( json_decode( (string) file_get_contents( $f ), true ) ?: [] ) : [];
+		}
+		if ( ! $rings ) { return ''; }
+		$x = static fn( $lo ) => ( ( $lo + 180.0 ) / 360.0 ) * $w;
+		$y = static fn( $la ) => ( ( 90.0 - $la ) / 180.0 ) * $h;
+		$o = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . $w . ' ' . $h . '" role="img" '
+			. 'font-family="system-ui,sans-serif" '
+			. 'aria-label="' . esc_attr( 'World locator: ' . number_format( abs( $lat ), 2 ) . ( $lat >= 0 ? '°N ' : '°S ' )
+				. number_format( abs( $lon ), 2 ) . ( $lon >= 0 ? '°E' : '°W' ) ) . '" '
+			. 'style="width:100%;height:auto;background:#06121E;border-radius:10px">';
+		$o .= '<title>Where on Earth this was measured</title>';
+		$o .= '<desc>' . esc_html( 'Coastlines from Natural Earth 110 m (public domain), equirectangular. '
+			. 'The marker is the measured coordinate.' ) . '</desc>';
+		// equator and prime meridian, so the marker can be read against something
+		$o .= '<line x1="0" y1="' . round( $y( 0 ), 1 ) . '" x2="' . $w . '" y2="' . round( $y( 0 ), 1 )
+			. '" stroke="#1b2b3d" stroke-width="1"/>'
+			. '<line x1="' . round( $x( 0 ), 1 ) . '" y1="0" x2="' . round( $x( 0 ), 1 ) . '" y2="' . $h
+			. '" stroke="#1b2b3d" stroke-width="1"/>';
+		$d = '';
+		foreach ( $rings as $ring ) {
+			$first = true;
+			foreach ( $ring as $pt ) {
+				$d .= ( $first ? 'M' : 'L' ) . round( $x( (float) $pt[0] ), 1 ) . ' ' . round( $y( (float) $pt[1] ), 1 ) . ' ';
+				$first = false;
+			}
+			$d .= 'Z ';
+		}
+		$o .= '<path d="' . trim( $d ) . '" fill="#16283a" stroke="#2b4157" stroke-width=".7"/>';
+		$mx = round( $x( $lon ), 1 ); $my = round( $y( $lat ), 1 );
+		// a ping, so the eye finds it on a busy outline
+		$o .= '<circle cx="' . $mx . '" cy="' . $my . '" r="5" fill="none" stroke="#E8B923" stroke-width="1.6">'
+			. '<animate attributeName="r" values="5;17;5" dur="2.8s" repeatCount="indefinite"/>'
+			. '<animate attributeName="opacity" values="1;0;1" dur="2.8s" repeatCount="indefinite"/></circle>'
+			. '<circle cx="' . $mx . '" cy="' . $my . '" r="3.6" fill="#E8B923" stroke="#06121E" stroke-width="1"/>';
+		// the coordinate as real text — the point of the figure, and indexable
+		$o .= '<text x="14" y="' . ( $h - 14 ) . '" fill="#8fa3b8" font-size="12">'
+			. esc_html( number_format( abs( $lat ), 2 ) . ( $lat >= 0 ? '°N ' : '°S ' )
+				. number_format( abs( $lon ), 2 ) . ( $lon >= 0 ? '°E' : '°W' ) ) . '</text>';
+		return $o . '</svg>';
+	}
 
 	/**
 	 * THE RIGHT PICTURE FOR THE INSTRUMENT — the registry names it.
@@ -1367,8 +1626,9 @@ final class News {
 		// 1. USGS ANSS — everything M2.5+ in the past day, so NON-earthquake types (explosions,
 		//    quarry/mining blasts) are caught at magnitudes far below the damage threshold.
 		// all_day, not 2.5_day: quarry/mining blasts are catalogued well below M2.5, and they are the
-		// one source that CLASSIFIES an explosion rather than inferring it. The M5.5 earthquake floor
-		// below still applies — this only stops the feed itself from discarding the blasts first.
+		// one source that CLASSIFIES an explosion rather than inferring it. The QUAKE_MIN_MAG
+		// earthquake floor below still applies — this only stops the feed itself from discarding
+		// the blasts first.
 		$uurl = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';
 		$body = json_decode( self::fetch( $uurl, 20 ), true );
 		foreach ( (array) ( $body['features'] ?? [] ) as $f ) {
@@ -1377,9 +1637,9 @@ final class News {
 			$mag  = (float) ( $p['mag'] ?? 0 );
 			$type = strtolower( (string) ( $p['type'] ?? 'earthquake' ) );
 			$blast = ( false !== strpos( $type, 'explosion' ) || false !== strpos( $type, 'blast' ) );
-			// Earthquakes need M5.5+ to be newsworthy; a seismically CONFIRMED explosion is news at
-			// any recorded size, because the classification itself is the story.
-			if ( ! $blast && $mag < 5.5 ) { continue; }
+			// Earthquakes need QUAKE_MIN_MAG to be newsworthy; a seismically CONFIRMED explosion is
+			// news at any recorded size, because the classification itself is the story.
+			if ( ! $blast && $mag < self::QUAKE_MIN_MAG ) { continue; }
 			// BLAST NEWSWORTHINESS IS CONTEXTUAL, NOT A MAGNITUDE FLOOR. Verified against the live USGS
 			// catalogue 2026-07-26: all 44 blasts classified in the past week were M0.18–M1.77, so ANY
 			// floor at M2.5 silently deletes this entire feature — the one instrument that CLASSIFIES a
@@ -1422,7 +1682,18 @@ final class News {
 		//    by proximity so one earthquake never becomes two stories.
 		// A time bound is mandatory: without `start` this endpoint returns its whole recent catalogue,
 		// so month-old quakes arrive on every tick, outrank today's events and publish as news.
-		$eurl = 'https://www.seismicportal.eu/fdsnws/event/1/query?format=json&limit=60&minmag=5.5'
+		//
+		// FETCH AT THE LOWEST FLOOR ANY ROW COULD QUALIFY UNDER — the per-type floors below decide
+		// what is kept. This leg asked the endpoint for M5.5+, which is the EARTHQUAKE floor, so a
+		// classified explosion between M4.0 and M5.5 — newsworthy under BLAST_MIN_MAG, and inside a
+		// watched region newsworthy at any size at all — could never even be fetched to be judged.
+		// A request threshold silently outranks every rule downstream of it: whatever is not asked
+		// for cannot be filtered, corroborated or published, and nothing reports the absence.
+		// Measured against the live catalogue on 2026-08-09 over this same 48 h window, EMSC at
+		// M5.5 returned ZERO events (USGS's largest that day was M5.3, and the endpoint answered
+		// 204 No Content); at M4.0 it returned 82, of which 19 were events USGS did not have.
+		$eurl = 'https://www.seismicportal.eu/fdsnws/event/1/query?format=json&limit=500&minmag='
+			. rawurlencode( (string) self::BLAST_MIN_MAG )
 			. '&start=' . gmdate( 'Y-m-d\TH:i:s', $now - self::FRESH_S );
 		$emsc = json_decode( self::fetch( $eurl, 20 ), true );
 		foreach ( (array) ( $emsc['features'] ?? [] ) as $f ) {
@@ -1431,7 +1702,28 @@ final class News {
 			$lat = (float) ( $p['lat'] ?? 0 );
 			$lon = (float) ( $p['lon'] ?? 0 );
 			$ts  = strtotime( (string) ( $p['time'] ?? '' ) ) ?: $now;
-			if ( $mag < 5.5 || ( ! $lat && ! $lon ) ) { continue; }
+			if ( ! $lat && ! $lon ) { continue; }
+			// EMSC CLASSIFIES EXPLOSIONS TOO, and this leg was throwing that away — every row it
+			// produced was hard-coded `'blast' => false`, `'kind' => 'earthquake'`, so a catalogued
+			// mine or nuclear shot would have been recorded as an ordinary earthquake by the one
+			// source type this platform calls "a human-verified, objective identification of a
+			// blast, which no thermal pixel can give". EMSC's `evtype` follows the FDSN convention:
+			// a leading k (known) or s (suspected), then the class — m mine, x experimental,
+			// n nuclear. Nothing else counts as an explosion; ke/se are earthquakes and kr/sr are
+			// rockslides. Measured over 30 days EMSC classified no explosion at all (1,991 of 2,000
+			// events were plain `ke`) while USGS classified 242 — so this changes nothing today and
+			// is exactly why it was easy to get wrong and never notice.
+			$evtype = strtolower( (string) ( $p['evtype'] ?? 'ke' ) );
+			$eblast = in_array( $evtype, [ 'km', 'sm', 'kx', 'sx', 'kn', 'sn' ], true );
+			// Mirror the USGS leg exactly: an ordinary earthquake needs QUAKE_MIN_MAG worldwide; a
+			// classified explosion needs BLAST_MIN_MAG, and nothing at all inside a watched box,
+			// where a small blast is precisely the signal. Reading both floors from the constants
+			// instead of repeating a literal is what let this leg drift 1.5 magnitudes in the first
+			// place. A small earthquake in a watched region is an earthquake, not an attack, so the
+			// watch-box exemption deliberately applies to blasts only.
+			if ( $eblast ) {
+				if ( $mag < ( self::in_watch_box( $lat, $lon ) ? 0.0 : self::BLAST_MIN_MAG ) ) { continue; }
+			} elseif ( $mag < self::QUAKE_MIN_MAG ) { continue; }
 			$dupe = false;
 			foreach ( $out as $o ) {
 				if ( abs( $o['ts'] - $ts ) < 180 && self::km( $o['lat'], $o['lon'], $lat, $lon ) < 150 ) { $dupe = true; break; }
@@ -1441,23 +1733,50 @@ final class News {
 				'ekey'       => 'emsc_' . (string) ( $p['unid'] ?? ( $ts . '_' . round( $lat, 2 ) ) ),
 				'ts'         => $ts,
 				'lat'        => $lat, 'lon' => $lon,
-				'severity'   => $mag,
-				'rank'       => $mag,
+				'severity'   => $mag,                              // THE MEASUREMENT — this is what renders
+				'rank'       => $eblast ? max( 6.0, $mag ) : $mag, // queue ordering ONLY — never rendered
 				'mag'        => $mag,
-				'blast'      => false,
+				'blast'      => $eblast,
 				'confidence' => 'high',
-				'kind'       => 'earthquake',
+				'kind'       => $eblast ? 'seismically recorded explosion' : 'earthquake',
 				'measures'   => [
-					'Event type (network classification)' => (string) ( $p['evtype'] ?? 'ke' ) === 'ke' ? 'earthquake' : (string) $p['evtype'],
+					// The raw FDSN code is kept beside the expansion: it is what the network actually
+					// published, and an unrecognised code must show itself rather than be flattened
+					// into "earthquake" — which is how the classification got lost before.
+					'Event type (network classification)' => self::emsc_evtype_label( $evtype ),
 					'Magnitude'    => 'M' . number_format( $mag, 1 ) . ' (' . (string) ( $p['magtype'] ?? '' ) . ')',
 					'Depth'        => round( (float) ( $p['depth'] ?? 0 ), 1 ) . ' km',
 					'Origin time'  => gmdate( 'Y-m-d H:i', $ts ) . ' UTC',
 					'Network region' => (string) ( $p['flynn_region'] ?? '' ),
 				],
-				'source'     => [ 'name' => 'EMSC · European-Mediterranean Seismological Centre (M5.5+)', 'url' => $eurl, 'retrieved' => $now ],
+				'source'     => [ 'name' => 'EMSC · European-Mediterranean Seismological Centre (M'
+					. number_format( self::QUAKE_MIN_MAG, 1 ) . '+ earthquakes, classified explosions from M'
+					. number_format( self::BLAST_MIN_MAG, 1 ) . ' and from any size inside a watched region)',
+					'url' => $eurl, 'retrieved' => $now ],
 			];
 		}
 		return $out;
+	}
+
+	/**
+	 * EMSC's `evtype` in words. The convention is FDSN's: a leading `k` (known) or `s` (suspected)
+	 * followed by the class. An unknown code is returned AS THE RAW CODE rather than guessed at or
+	 * flattened to "earthquake" — this field is a network's classification, and the one thing it
+	 * must never do is quietly report a category the network did not assign.
+	 */
+	private static function emsc_evtype_label( $evtype ) {
+		$class = [
+			'e' => 'earthquake', 'm' => 'mine explosion', 'x' => 'experimental explosion',
+			'n' => 'nuclear explosion', 'r' => 'rockslide', 'i' => 'induced event',
+			'l' => 'landslide', 'v' => 'volcanic event',
+		];
+		$evtype = strtolower( (string) $evtype );
+		if ( 2 !== strlen( $evtype ) || ! isset( $class[ $evtype[1] ] ) ) {
+			return '' === $evtype ? 'not stated' : $evtype . ' (code not recognised)';
+		}
+		$known = 'k' === $evtype[0];
+		if ( ! $known && 's' !== $evtype[0] ) { return $evtype . ' (code not recognised)'; }
+		return ( $known ? '' : 'suspected ' ) . $class[ $evtype[1] ] . ' (' . $evtype . ')';
 	}
 
 	/**
@@ -1535,7 +1854,11 @@ final class News {
 					'Country'            => $name,
 					'Connectivity drop'  => round( $drop ) . '% below this country\'s own recent normal',
 					'Measurement plane'  => (string) ( $a['datasource'] ?? '' ) . ' (bgp = routes withdrawn from the global routing table; active-probing = hosts stopped answering; darknet = background traffic ceased)',
-					'Alert level'        => (string) ( $a['level'] ?? '' ),
+					// IODA's own level is NOT calibrated to the size of the drop — observed live, it labels a
+					// 1.9% dip (9,760 vs 9,953) 'critical'. Printing that word beside our own measured percentage
+					// lends the number an authority the source does not intend, so it ships as what it is: the
+					// upstream classification, named as theirs.
+					'IODA alert class'   => (string) ( $a['level'] ?? '' ) . ' (IODA\'s own label; not scaled to the drop)',
 					'Observed'           => gmdate( 'Y-m-d H:i', $ts ) . ' UTC',
 					'Measured value'     => round( $val, 2 ) . ' vs recent normal ' . round( $hist, 2 ),
 				],
