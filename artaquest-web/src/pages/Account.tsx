@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DobWheel } from "../components/DobWheel";
 import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, postProfileUpdate, PROFILE_LINKS, type CourseCard, type Dashboard, type UsernameCheck } from "../lib/wp";
-import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, KaggleIds, Passkeys, ShellAccount, myParticipation, setGender as setGender_, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type KaggleIdItem, type SessionItem, type ShellInfo, type ShellKey, type BursaryResult, type BursaryStatus, type ShareKit } from "../lib/api";
+import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, KaggleIds, Passkeys, ShellAccount, UsageApi, myParticipation, setGender as setGender_, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type KaggleIdItem, type SessionItem, type ShellInfo, type ShellKey, type UsageInfo, type BursaryResult, type BursaryStatus, type ShareKit } from "../lib/api";
 import { signOut } from "../lib/auth";
 import { VerifyApi, fileToImage, type VerifyStatus } from "../lib/verify";
 import { countryName, countryOptions, flagEmoji } from "../lib/flags";
@@ -376,6 +376,129 @@ function TokenManager() {
       )}
       {items && active.length === 0 && !err && !creating && (
         <p className="mt-4 text-[14px] text-ink-3">No active tokens.</p>
+      )}
+    </section>
+  );
+}
+
+// ── What your work costs ────────────────────────────────────────────────────
+// Charging after the fact is only fair if it can be taken apart, so this shows the parts: what ran,
+// for how long, what the AI cost, what the compute cost, and what that came to in coins at the gold
+// price of the moment. Nothing here is a price list — there isn't one — so the tier table quotes the
+// COMPUTE per minute and says plainly that the AI part is not knowable before the turn runs.
+function UsageManager() {
+  const [info, setInfo] = useState<UsageInfo | null>(null);
+  const [days, setDays] = useState<{ day: string; items: number; total_usd: string; total_coins: string; sent: number }[] | null>(null);
+  const [err, setErr] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    UsageApi.mine().then(setInfo).catch(() => setErr(true));
+    UsageApi.invoices().then((r) => setDays(r.items)).catch(() => setDays([]));
+  }, []);
+
+  const n = (v: string | number, d = 4) => Number(v).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
+  const when = (t: number) => new Date(t * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <section>
+      <h2 className="text-[20px] font-bold tracking-tight">What your work costs</h2>
+      <p className="mt-1 text-[13px] text-ink-3">
+        You are charged only for what actually ran — a turn when it replies, a session when it ends — from the compute it
+        really used and the gold price at the time. Nothing is estimated or held in advance. One ArtaCoin is one milligram
+        of gold, and gold has no fractions of a milligram, so usage adds up exactly and only whole coins are taken; the
+        remainder carries to the next day rather than being rounded away in either direction.
+      </p>
+
+      {err && <ErrorNote className="mt-4">Could not load your usage. Please reload the page.</ErrorNote>}
+      {!info && !err && <StatusNote className="py-4 text-start">Loading…</StatusNote>}
+
+      {info && (
+        <>
+          <div data-ay-skip="1" className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat label="Balance" value={`${n(info.balance, 2)} ₳`} sub={info.balance <= info.floor ? "below the floor" : "spendable"} />
+            <Stat label="Not yet charged" value={`${n(info.carry)} ₳`} sub="settles daily, in whole coins" />
+            <Stat label="One ArtaCoin" value={`$${n(info.coin_usd, 4)}`} sub="1 mg of gold" />
+            <Stat label="Gold" value={`$${Number(info.spot).toLocaleString()}`} sub="per troy ounce" />
+          </div>
+
+          <Card className="mt-4 px-4 py-3">
+            <div className="text-[13px] font-semibold text-ink">What each mode gives you</div>
+            <div className="mt-2 overflow-x-auto">
+              <table data-ay-skip="1" className="w-full text-[12.5px]">
+                <thead className="text-ink-3">
+                  <tr><th className="py-1 text-start font-normal">Mode</th><th className="text-start font-normal">Machine</th><th className="text-start font-normal">Max time</th><th className="text-end font-normal">Compute / min</th></tr>
+                </thead>
+                <tbody>
+                  {info.tiers.map((t) => (
+                    <tr key={t.key} className="border-t border-line">
+                      <td className="py-1.5 text-ink">{t.label}</td>
+                      <td className="text-ink-2">{t.cpu} vCPU · {t.ram} GiB</td>
+                      <td className="text-ink-2">{Math.round(t.max_secs / 60)} min</td>
+                      <td className="text-end tabular-nums text-ink-2">{n(t.compute_coins_per_min)} ₳</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* Said plainly, because the compute figure above is the small half of the bill and quoting
+                it alone would read like the whole price. */}
+            <p className="mt-2 text-[12px] text-ink-3">
+              Compute only. What the AI itself costs depends on how much thinking a turn actually needs, so it is measured
+              per turn rather than quoted — it is usually most of the bill.
+            </p>
+          </Card>
+
+          {days && days.length > 0 && (
+            <div className="mt-4">
+              <div className="text-[13px] font-semibold text-ink">Daily statements</div>
+              <ul className="mt-2 flex flex-col gap-2">
+                {days.slice(0, 7).map((d) => (
+                  <li key={d.day}>
+                    <Card className="flex items-center justify-between gap-3 px-4 py-2.5">
+                      <span className="text-[14px] text-ink">{d.day}</span>
+                      <span data-ay-skip="1" className="text-[13px] text-ink-3">
+                        {d.items} item{d.items === 1 ? "" : "s"} · <b className="text-ink-2">{n(d.total_coins)} ₳</b>
+                        {d.sent ? " · emailed" : ""}
+                      </span>
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="mt-4 flex items-baseline justify-between">
+            <div className="text-[13px] font-semibold text-ink">Every charge, itemised</div>
+            {info.recent.length > 6 && (
+              <Button variant="outline" onClick={() => setOpen((v) => !v)} className="h-8 px-3 text-[12px]">
+                {open ? "Show less" : `Show all ${info.recent.length}`}
+              </Button>
+            )}
+          </div>
+          {info.recent.length === 0 && <p className="mt-2 text-[14px] text-ink-3">Nothing yet.</p>}
+          {info.recent.length > 0 && (
+            <div className="mt-2 overflow-x-auto">
+              <table data-ay-skip="1" className="w-full text-[12.5px]">
+                <thead className="text-ink-3">
+                  <tr><th className="py-1 text-start font-normal">When</th><th className="text-start font-normal">Mode</th><th className="text-end font-normal">Time</th><th className="text-end font-normal">AI</th><th className="text-end font-normal">Compute</th><th className="text-end font-normal">Total</th></tr>
+                </thead>
+                <tbody>
+                  {(open ? info.recent : info.recent.slice(0, 6)).map((l) => (
+                    <tr key={l.id} className="border-t border-line align-top">
+                      <td className="py-1.5 text-ink-3">{when(l.ended ?? 0)}</td>
+                      <td className="text-ink-2" title={l.note}>{l.tier}{l.session_id ? ` · #${l.session_id}` : ""}</td>
+                      <td className="text-end tabular-nums text-ink-3">{l.secs}s</td>
+                      <td className="text-end tabular-nums text-ink-3">${n(l.ai_usd)}</td>
+                      <td className="text-end tabular-nums text-ink-3">${n(l.azure_usd, 6)}</td>
+                      <td className="text-end tabular-nums text-ink">{n(l.coins)} ₳</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
     </section>
   );
@@ -1387,6 +1510,7 @@ export default function Account() {
       <SessionManager />
 
       <TokenManager />
+      <UsageManager />
       <ShellManager />
       <PasskeyManager />
 

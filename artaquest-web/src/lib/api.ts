@@ -809,7 +809,7 @@ export const BotSessions = {
 };
 
 /** What a member has spent, and on what. Charged only when a turn replies or a session ends. */
-export type UsageLine = { id: number; session_id: number; kind: string; tier: string; secs: number; tokens: number; ai_usd: string; azure_usd: string; total_usd: string; coins: string; note: string };
+export type UsageLine = { id: number; session_id: number; kind: string; tier: string; started: number; ended: number; secs: number; tokens: number; ai_usd: string; azure_usd: string; total_usd: string; coins: string; note: string };
 export type UsageInfo = {
   balance: number; floor: number; carry: number; spot: number; coin_usd: number;
   tiers: { key: string; n: number; label: string; effort: string; cpu: number; ram: number; max_secs: number; max_tokens: number; compute_usd_per_min: number; compute_coins_per_min: number }[];
