@@ -797,7 +797,7 @@ export type ApiTokenItem = {
  *  is no account when a handle cannot be a Linux username. Only PUBLIC keys ever travel — a private
  *  key must never reach this platform, whose whole database is published at /data/. */
 export type ShellKey = { id: number; label: string; fp: string; key: string; at: number };
-export type ShellInfo = { host: string; unix: string; blocked: string; command: string; max: number; keys: ShellKey[] };
+export type ShellInfo = { host: string; unix: string; blocked: string; command: string; moving: string; max: number; keys: ShellKey[] };
 /** One of a member's parallel ArtaBot conversations. `tier` is the size of machine it runs on, and
  *  `coins` is what this conversation has cost so far — each session is metered and billed on its own. */
 export type BotSession = { id: number; title: string; tier: string; created: number; last: number; turns: number; coins: number };

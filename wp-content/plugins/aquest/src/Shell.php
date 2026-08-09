@@ -47,6 +47,19 @@ final class Shell {
 	 *  then. Public so ArtaBot's prompt says the same thing the settings page does. */
 	public static function reach() { return self::host_ready() ? self::HOST : self::HOST_IP; }
 
+	/** IS THERE A MACHINE TO REACH? (2026-08-09.) The always-on VM those addresses point at was switched
+	 *  off when ArtaBot moved to on-demand containers that cost nothing while nobody is using them, so
+	 *  the ssh line above currently names a box that will not answer. Rather than a flag someone has to
+	 *  remember to flip back, this asks the ONE thing that is true only once the replacement exists: the
+	 *  address of its gateway. No endpoint configured ⇒ the machine is between homes, and the settings
+	 *  page says so instead of handing out a command that times out. Configure it and the shell offers
+	 *  itself again, by itself. Member homes are untouched throughout — they live on the file share, not
+	 *  on the machine that was switched off. */
+	public static function endpoint() { $u = Secrets::get( 'AQ_SHELL_URL' ); return is_string( $u ) ? trim( $u ) : ''; }
+
+	/** Can a member open a shell at all right now? */
+	public static function ready() { return self::endpoint() !== ''; }
+
 	/** Does HOST resolve yet? Cached, because this is rendered on a settings page and a DNS lookup per
 	 *  request would be a needless dependency on a resolver being fast. */
 	private static function host_ready() {
@@ -154,8 +167,10 @@ final class Shell {
 			// unix name is fixable by the member in one field, but only if they are told.
 			'blocked' => $unix ? '' : 'Your handle cannot be a Linux username. Change it in Settings to letters, digits, - or _ (starting with a letter) and your shell will appear within a few minutes.',
 			// The command that works TODAY. Once shell.artaquest.com resolves this becomes the name, by
-			// itself, without anybody editing anything.
-			'command' => $unix ? 'ssh ' . $unix . '@' . ( self::host_ready() ? self::HOST : self::HOST_IP ) : '',
+			// itself, without anybody editing anything — and while there is no machine to reach, there
+			// is no command either, because a copyable line that hangs is worse than none.
+			'command' => $unix && self::ready() ? 'ssh ' . $unix . '@' . ( self::host_ready() ? self::HOST : self::HOST_IP ) : '',
+			'moving'  => self::ready() ? '' : 'Your machine is moving. ArtaBot now runs on hosting that costs nothing while nobody is using it, and your shell is being rebuilt the same way — so it will start when you connect rather than running around the clock. Your files are safe: homes live on the file share, not on the machine that was switched off. Keys you add here are kept and will work the moment it opens.',
 			'max'     => self::MAX_KEYS,
 			'keys'    => array_map( static function ( $r ) {
 				return [ 'id' => (int) $r['id'], 'label' => (string) $r['label'], 'fp' => (string) $r['fp'],

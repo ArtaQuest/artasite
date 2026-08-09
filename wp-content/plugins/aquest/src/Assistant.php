@@ -529,15 +529,18 @@ final class Assistant {
 			// the FACTS are ours to state and they are already public (the whole database is). Withholding
 			// them read as evasive about our own infrastructure on a platform whose premise is that a
 			// stranger can check everything. Say what is true; do not speculate beyond it.
-			'How you run, if anyone asks — this is public, so answer plainly rather than saying you cannot see it: you are Claude Opus 5, reached through headless Claude Code running on the operator\'s Claude Max SUBSCRIPTION (never a metered API key), by a small Node relay on an always-on Ubuntu 24.04 VM in Microsoft Azure\'s Sweden Central region. The relay long-polls ArtaQuest for queued turns and streams your answer back token by token as you write it, which is why members watch the words appear. '
+			'How you run, if anyone asks — this is public, so answer plainly rather than saying you cannot see it: you are Claude Opus 5, reached through headless Claude Code running on the operator\'s Claude Max SUBSCRIPTION (never a metered API key), by a small Node relay running in Microsoft Azure Container Apps in the Sweden Central region — on-demand containers that start when a turn arrives and shut down to nothing when nobody is talking to you, so idle time costs the Foundation nothing. ArtaQuest pushes each turn to that container and holds the connection open while you answer, streaming your words back as you write them, which is why members watch them appear. '
 				. ( $tools
 					// The honest version of the boundary, because a member WILL ask what you can reach —
 					// and the answer being checkable is the whole premise of the platform.
-					? 'This turn runs in a Linux sandbox on that VM with real tools: a shell, Python, Node and the open internet, plus `browse <url>` for a real browser.'
+					? 'This turn runs in a Linux container with real tools: a shell, Python, Node and the open internet, plus `browse <url>` for a real browser.'
 						. ( $shell
 							// Worth stating precisely, because it changes what a member should ask for: the work
 							// PERSISTS, and they can walk into it from their own terminal.
-							? ' You are working in THEIR OWN home directory on that machine (/home/' . $shell . '), which persists between messages — and they can reach the very same files themselves with `ssh ' . $shell . '@' . Shell::reach() . '`. So building something for them is worth doing properly: it will still be there.'
+							? ' You are working in THEIR OWN home directory (/home/' . $shell . '), kept on a file share so it survives between messages and outlives any one container. ' . ( Shell::ready()
+										? 'They can reach the very same files themselves with `ssh ' . $shell . '@' . Shell::reach() . '`.'
+										: 'Their own ssh access to it is being rebuilt on the same on-demand hosting and is not available at the moment — say so if asked, and never offer an address.' )
+									. ' So building something for them is worth doing properly: it will still be there.'
 							: ' The sandbox is destroyed when the turn ends.' ) . ' It holds NO ArtaQuest credentials and cannot reach the database, production or the private network — every member-facing action still goes through the platform, and publication still needs the author\'s own emailed confirmation and passkey, which nothing you can run will ever substitute for.'
 					: 'This turn runs with NO tools — no shell, no file access, no web browsing — so you can only write chat messages and open a contribution on someone\'s behalf.' )
 				. ' You do not know anything about the machine beyond this paragraph, and you must not guess at hostnames, addresses, credentials or internals; say you were not told.',

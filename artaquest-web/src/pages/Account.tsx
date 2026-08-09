@@ -553,9 +553,9 @@ function ShellManager() {
         )}
       </div>
       <p className="mt-1 text-[13px] text-ink-3">
-        You have your own Linux account on ArtaQuest's machine — a sandbox with a shell, Python, Node, git and the open
-        internet. It is the SAME place ArtaBot works when you ask it to build something, so whatever it makes is waiting
-        for you here. Your files persist; 2 GB of space. The rest of the machine, this database and everyone else's files
+        You have your own Linux account — a sandbox with a shell, Python, Node, git and the open internet. It is the
+        SAME place ArtaBot works when you ask it to build something, so whatever it makes is waiting for you here. Your
+        files persist on a file share; 2 GB of space. The machine around them, this database and everyone else's files
         are out of reach from it, and there are no ArtaQuest credentials inside.
       </p>
 
@@ -564,7 +564,13 @@ function ShellManager() {
 
       {info?.blocked && <StatusNote className="mt-4 py-3 text-start">{info.blocked}</StatusNote>}
 
-      {info?.unix && (
+      {/* While there is no machine to reach, the copyable ssh line is replaced rather than left to
+          time out — and key management stays open, because the keys outlive the move. */}
+      {info?.unix && info.moving && (
+        <StatusNote className="mt-4 py-3 text-start">{info.moving}</StatusNote>
+      )}
+
+      {info?.unix && !info.moving && (
         <Card className="mt-4 px-4 py-3">
           <div className="text-[13px] text-ink-3">Sign in from your terminal with</div>
           <div className="mt-1 flex flex-wrap items-center gap-2">
