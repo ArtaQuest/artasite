@@ -590,9 +590,15 @@ function ShellManager() {
         </>
       )}
 
+      {/* Only ever a NAME, and only once it resolves — the card used to offer the machine's raw address
+          while DNS was pending, which published infrastructure to save members a wait. */}
+      {info?.unix && !info.moving && info.ssh && (
+        <p className="mt-3 text-[12.5px] text-ink-3">{info.ssh}</p>
+      )}
+
       {info?.unix && !info.moving && info.command && (
         <Card className="mt-4 px-4 py-3">
-          <div className="text-[13px] text-ink-3">Sign in from your terminal with</div>
+          <div className="text-[13px] text-ink-3">Sign in from your own terminal with</div>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <code data-ay-skip="1" className="break-all rounded bg-space-2 px-2 py-1 text-[14px] text-ink">{info.command}</code>
             <Button variant="outline" className="h-8 px-3 text-[12px]"

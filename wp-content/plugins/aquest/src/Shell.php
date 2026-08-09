@@ -46,15 +46,11 @@ final class Shell {
 	 *  pointing it at the relay VM would take the website down. */
 	const HOST = 'shell.artaquest.com';
 
-	/** The machine's address, used ONLY while the DNS record above does not exist yet. A member should
-	 *  never be shown a command that cannot work, and "we are waiting for DNS" is not their problem —
-	 *  so the address they can actually reach is offered until the name resolves, and then it stops
-	 *  being offered by itself. Nothing to remember to remove. */
-	const HOST_IP = '51.12.95.156';
-
-	/** The address to tell a member to use right now — the name once it resolves, the raw address until
-	 *  then. Public so ArtaBot's prompt says the same thing the settings page does. */
-	public static function reach() { return self::host_ready() ? self::HOST : self::HOST_IP; }
+	/** The address to tell a member about — the NAME, only ever the name (operator, 2026-08-09: "no IP
+	 *  should be exposed"). An earlier version offered the machine's raw address while DNS was pending,
+	 *  which published infrastructure on a settings page to save members a wait they never asked about.
+	 *  A name that does not resolve yet means we say nothing, not that we say the address. */
+	public static function reach() { return self::HOST; }
 
 	/** IS THERE A MACHINE TO REACH? (2026-08-09.) The always-on VM those addresses point at was switched
 	 *  off when ArtaBot moved to on-demand containers that cost nothing while nobody is using them, so
@@ -66,8 +62,14 @@ final class Shell {
 	 *  on the machine that was switched off. */
 	public static function endpoint() { $u = Secrets::get( 'AQ_SHELL_URL' ); return is_string( $u ) ? trim( $u ) : ''; }
 
-	/** Can a member open a shell at all right now? */
+	/** Can a member open a shell at all right now? (The browser terminal.) */
 	public static function ready() { return self::endpoint() !== ''; }
+
+	/** Can they reach it with their OWN ssh client? Two conditions, and the second is not decoration:
+	 *  a gateway must exist AND the name must resolve, because the alternative to a name is publishing
+	 *  an address. Both are read, never remembered — configure the gateway, add the DNS record, and the
+	 *  ssh line appears by itself. */
+	public static function ssh_ready() { return self::ready() && self::host_ready(); }
 
 	/** Does HOST resolve yet? Cached, because this is rendered on a settings page and a DNS lookup per
 	 *  request would be a needless dependency on a resolver being fast. */
@@ -190,8 +192,12 @@ final class Shell {
 			// The command that works TODAY. Once shell.artaquest.com resolves this becomes the name, by
 			// itself, without anybody editing anything — and while there is no machine to reach, there
 			// is no command either, because a copyable line that hangs is worse than none.
-			'command' => $unix && self::ready() ? 'ssh ' . $unix . '@' . ( self::host_ready() ? self::HOST : self::HOST_IP ) : '',
-			'moving'  => self::ready() ? '' : 'Your machine is moving. ArtaBot now runs on hosting that costs nothing while nobody is using it, and your shell is being rebuilt the same way — so it will start when you connect rather than running around the clock. Your files are safe: homes live on the file share, not on the machine that was switched off. Keys you add here are kept and will work the moment it opens.',
+			'command' => $unix && self::ssh_ready() ? 'ssh ' . $unix . '@' . self::HOST : '',
+			'moving'  => self::ready() ? '' : 'Your machine is being rebuilt on hosting that costs nothing while nobody is using it, so it will start when you connect rather than running around the clock. Your files are safe — homes live on the file share, not on the machine that was switched off — and keys you add here are kept.',
+			// SSH is a separate promise from the terminal, so it gets a separate answer. Container Apps
+			// speaks HTTP and nothing else, so `ssh` needs a ProxyCommand over the same socket the
+			// terminal uses, on the member's own machine. Until that exists, say so.
+			'ssh'     => self::ssh_ready() ? '' : 'Opening a terminal here works today. Connecting with your own `ssh` client is being rebuilt for the new hosting — your keys are kept and will work when it lands.',
 			'max'     => self::MAX_KEYS,
 			'keys'    => array_map( static function ( $r ) {
 				return [ 'id' => (int) $r['id'], 'label' => (string) $r['label'], 'fp' => (string) $r['fp'],

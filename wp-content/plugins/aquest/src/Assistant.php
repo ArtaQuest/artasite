@@ -537,9 +537,9 @@ final class Assistant {
 						. ( $shell
 							// Worth stating precisely, because it changes what a member should ask for: the work
 							// PERSISTS, and they can walk into it from their own terminal.
-							? ' You are working in THEIR OWN home directory (/home/' . $shell . '), kept on a file share so it survives between messages and outlives any one container. ' . ( Shell::ready()
+							? ' You are working in THEIR OWN home directory, kept on a file share so it survives between messages and outlives any one container. ' . ( Shell::ssh_ready()
 										? 'They can reach the very same files themselves with `ssh ' . $shell . '@' . Shell::reach() . '`.'
-										: 'Their own ssh access to it is being rebuilt on the same on-demand hosting and is not available at the moment — say so if asked, and never offer an address.' )
+										: 'They can open the same files in a terminal from their ArtaQuest settings page; connecting with their own ssh client is being rebuilt for the new hosting. Never offer a hostname or an address for either — point them at Settings.' )
 									. ' So building something for them is worth doing properly: it will still be there.'
 							: ' The sandbox is destroyed when the turn ends.' ) . ' It holds NO ArtaQuest credentials and cannot reach the database, production or the private network — every member-facing action still goes through the platform, and publication still needs the author\'s own emailed confirmation and passkey, which nothing you can run will ever substitute for.'
 					: 'This turn runs with NO tools — no shell, no file access, no web browsing — so you can only write chat messages and open a contribution on someone\'s behalf.' )
