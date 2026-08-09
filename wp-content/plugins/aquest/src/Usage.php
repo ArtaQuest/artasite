@@ -80,9 +80,6 @@ final class Usage {
 	 * same measurements, on the same invoice.
 	 */
 
-	/** Where a member's un-settled fraction of a coin lives between daily settlements. */
-	const CARRY_META = 'aq_usage_carry';
-
 	/** A member may start work while owing up to this much (coins). Not a credit line — it is the slack
 	 *  that makes "charge only at the end" safe: a turn can finish and settle even if it costs more
 	 *  than the balance it started with, and the NEXT one is refused until they top up. Without slack,
@@ -254,7 +251,7 @@ final class Usage {
 			. Data::t( 'aq_usage' ) . ' WHERE user_id = %d ORDER BY id DESC LIMIT 50', [ $uid ] );
 		return [
 			'balance' => (float) Economy::coin_balance( $uid ),
-			'carry'   => (float) get_user_meta( $uid, self::CARRY_META, true ),
+			'carry'   => self::carry( $uid ),
 			'floor'   => self::DEBT_FLOOR,
 			'spot'    => $spot,
 			'coin_usd' => $spot > 0 ? round( $spot / self::MG_PER_OZT, 6 ) : 0,
@@ -319,40 +316,65 @@ final class Usage {
 				] );
 			}
 			// Settle BEFORE mailing, so the statement can say what was actually taken.
-			$st = self::settle( $uid, $day, (float) $r['coins'] );
+			$st = self::settle( $uid );
 			if ( ! $existing || ! (int) $existing['sent'] ) { self::mail_invoice( $uid, $day, $st ); }
 		}
 		return count( $rows );
 	}
 
+	/** The running total a member has actually been charged, in whole coins. */
+	const SETTLED_META = 'aq_usage_settled';
+
+	/** Coins accrued but not yet charged — always derived, never stored, so it cannot drift from the
+	 *  two numbers it sits between. */
+	public static function carry( $uid ) {
+		return max( 0.0, round( self::accrued( $uid ) - self::settled( $uid ), 4 ) );
+	}
+
+	/** Everything this member's work has cost, all time, at full precision. */
+	public static function accrued( $uid ) {
+		return (float) Data::col( 'SELECT COALESCE(SUM(coins),0) FROM ' . Data::t( 'aq_usage' ) . ' WHERE user_id = %d', [ (int) $uid ] );
+	}
+
+	/** Everything they have actually been charged. Seeded from the LEDGER the first time, so a member
+	 *  who was already billed under the old per-day scheme is not billed for it twice. */
+	public static function settled( $uid ) {
+		$m = get_user_meta( (int) $uid, self::SETTLED_META, true );
+		if ( $m !== '' ) { return (float) $m; }
+		$prior = (float) Data::col( 'SELECT COALESCE(-SUM(delta),0) FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE user_id = %d AND reason = 'usage'", [ (int) $uid ] );
+		update_user_meta( (int) $uid, self::SETTLED_META, $prior );
+		return $prior;
+	}
+
 	/**
-	 * Settle one member's day: accrued usage → whole coins off the ledger, fraction carried forward.
+	 * Charge whatever has accrued and not yet been charged, in whole coins.
 	 *
-	 * THE COIN LEDGER IS INTEGER-DENOMINATED, because 1 ₳ is 1 mg of gold held in full reserve — you
-	 * cannot hold a third of a milligram, and `delta` is a bigint for exactly that reason. A typical
-	 * turn costs ~0.65 ₳, so charging per turn rounded every one of them to zero: perfectly metered,
-	 * never billed. Rounding UP per turn would have been worse, taking 1 ₳ for 0.65 ₳ of work — a 54%
-	 * overcharge dressed up as a rounding decision.
+	 * ON A RUNNING TOTAL, NOT PER DAY — and that distinction is a money bug I shipped and had to
+	 * find. The first version keyed settlement on the calendar day and made it idempotent by day. Any
+	 * settlement of a day that was not yet OVER therefore locked the rest of it: usage that landed
+	 * afterwards fell inside an already-settled ref and could never be charged. Measured on production:
+	 * 10.6515 coins of real work with 1.0000 charged and 9.3248 stranded, silently, with every
+	 * individual number correct.
 	 *
-	 * So precision lives in aq_usage (DECIMAL) and money moves once a day in whole coins, with the
-	 * remainder carried. Nothing is lost in either direction, the reserve invariant holds, and the
-	 * daily invoice becomes the thing that actually charges rather than a letter restating a charge.
-	 *
-	 * Idempotent on the ref: settling the same day twice moves nothing the second time.
+	 * A running total cannot do that. Owed is always accrued-minus-settled, so late arrivals, retries,
+	 * clock skew and a cron that fires twice all converge on the same answer. The ledger ref is the new
+	 * settled total, which is monotonic — so it is idempotent without needing a window to be closed.
 	 */
-	public static function settle( $uid, $day, $accrued ) {
-		$uid = (int) $uid;
-		$ref = 'day:' . $day;
+	public static function settle( $uid ) {
+		$uid     = (int) $uid;
+		$accrued = self::accrued( $uid );
+		$settled = self::settled( $uid );
+		$owed    = round( $accrued - $settled, 4 );
+		if ( $owed < 1 ) { return [ 'charged' => 0, 'carry' => max( 0.0, $owed ) ]; }
+		$whole = (int) floor( $owed );
+		$next  = $settled + $whole;
+		$ref   = 'settle:' . number_format( $next, 4, '.', '' );
 		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'usage' AND ref = %s LIMIT 1", [ $ref ] ) ) {
-			return [ 'charged' => 0, 'carry' => (float) get_user_meta( $uid, self::CARRY_META, true ) ];
+			return [ 'charged' => 0, 'carry' => round( $accrued - $next, 4 ) ];
 		}
-		$carry = (float) get_user_meta( $uid, self::CARRY_META, true );
-		$total = $carry + (float) $accrued;
-		$whole = (int) floor( $total );
-		$rest  = round( $total - $whole, 4 );
-		if ( $whole > 0 ) { Economy::credit_coins( $uid, -$whole, 'usage', $ref ); }
-		update_user_meta( $uid, self::CARRY_META, $rest );
-		return [ 'charged' => $whole, 'carry' => $rest ];
+		Economy::credit_coins( $uid, -$whole, 'usage', $ref );
+		update_user_meta( $uid, self::SETTLED_META, $next );
+		return [ 'charged' => $whole, 'carry' => round( $accrued - $next, 4 ) ];
 	}
 
 	/** Email one day's statement. Fail-open: a mail problem must never hold up the ledger. */
