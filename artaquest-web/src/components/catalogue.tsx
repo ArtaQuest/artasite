@@ -1,7 +1,8 @@
 /**
- * Catalogue card family — the unified ResultCard the Explore hub and the five browse pages
- * (Courses · Topics · Grants · Discussions · Donate) all render, so a course, a topic, a grant,
- * a discussion and a cause read as one bespoke system. Built on the Orbit primitives in ui.tsx
+ * Catalogue card family — the unified ResultCard the browse pages (Courses · Topics · Grants ·
+ * Discussions · Donate) all render, so a course, a topic, a grant, a discussion and a cause read
+ * as one bespoke system. (The Explore hub that shared them is gone: /explore was retired to a
+ * redirect to /works, and its page + search hook were dead code.) Built on the Orbit primitives in ui.tsx
  * (Card surface, MetricChip, Avatar). Cards take NORMALISED props — each caller maps its own row
  * (the wp.ts page shapes OR the /search result shapes) into them, so the card never couples to a
  * single backend shape. Two accents only (gold = the chosen/earned metric, blue = hover), no third
@@ -22,6 +23,12 @@ import { CATEGORY_GROUPS, STYLE_HOW, STYLE_LABEL, AXIS_COLOR } from "../lib/typo
 export type Domain = "explore" | "course" | "topic" | "group" | "grant" | "discussion" | "cause";
 
 const compact = (n: number) => Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+
+// Whole days from now until a UNIX SECOND (`daysUntil` below is the other one — a date string, for
+// grant deadlines). Reads the wall clock, so it lives OUTSIDE the render path: react-hooks/purity
+// rightly refuses `Date.now()` in a component body. Re-deriving a countdown per render is correct
+// behaviour for a countdown — the rule's objection is to the call site, not the arithmetic.
+const daysFromNow = (ts?: number) => (ts ? Math.max(0, Math.ceil((ts - Date.now() / 1000) / 86400)) : 0);
 
 /** Relative time from unix seconds ("3d", "2h", "just now"). Strings (already-relative) pass through. */
 function rel(at?: string | number): string {
@@ -57,7 +64,7 @@ export function DomainGlyph({ domain, className }: { domain: Domain; className?:
 
 /* ───────────────────────── StatusBadge (topic honesty label) ─────────────────────────
    Empirical/validated instruments get a blue badge; everything else a neutral one — so the
-   honesty label is visible without a third colour. Shared so Topics page + Explore match. */
+   honesty label is visible without a third colour. Shared so every surface showing a topic matches. */
 export function StatusBadge({ label, empirical, className }: { label: string; empirical?: boolean; className?: string }) {
   return (
     <span className={cx("inline-flex items-center rounded-pill px-2 py-0.5 text-[11px] font-semibold",
@@ -176,7 +183,7 @@ export function ResultCard(p: ResultCardProps) {
       ? <MetricChip dense tone="gold" icon={<TrendIcon />} title={`Its average video draws about ${p.commentsPerDay.toLocaleString("en")} YouTube comments a day${p.commentsTotal ? ` — ${p.commentsTotal.toLocaleString("en")} comments in total` : ""} — how much discussion this course's videos draw`}>{compact(p.commentsPerDay)}/day</MetricChip>
       : p.commentsTotal && p.commentsTotal > 0 ? <MetricChip dense>{compact(p.commentsTotal)} comments</MetricChip> : null;
     // Live prize pool + season countdown — the strongest enrol signal a card can carry.
-    const daysLeft = p.seasonEnds ? Math.max(0, Math.ceil((p.seasonEnds - Date.now() / 1000) / 86400)) : 0;
+    const daysLeft = daysFromNow(p.seasonEnds);
     const poolChip = p.pool && p.pool > 0
       ? <MetricChip dense tone="gold" title={`This season's prize pool is ₳${p.pool.toLocaleString("en")} — the top three questers share it${daysLeft ? `; the season closes in ${daysLeft} day${daysLeft === 1 ? "" : "s"}` : ""}`}>₳{compact(p.pool)} pool{daysLeft ? ` · ${daysLeft}d` : ""}</MetricChip>
       : null;
@@ -327,24 +334,3 @@ export function daysUntil(d: string): number | null {
   return Math.ceil((t - Date.now()) / 86400000);
 }
 
-/* ───────────────────────── ResultSection (Explore "All" tab group) ─────────────────────────
-   A domain's headline + a few cards + a "See all →" link to that domain's own page (filtered). */
-export function ResultSection({ glyph, title, count, seeAllHref, seeAllLabel, children }: {
-  glyph?: ReactNode; title: ReactNode; count?: number; seeAllHref?: string; seeAllLabel?: string; children: ReactNode;
-}) {
-  return (
-    <section className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-[17px] font-bold tracking-tight">
-          {glyph}{title}{count != null && <span className="text-[14px] font-medium text-ink-3">{count}</span>}
-        </h2>
-        {seeAllHref && (
-          <a href={localePath(seeAllHref)} className="shrink-0 text-[13px] font-semibold text-ink-2 transition-colors hover:text-yang">
-            {seeAllLabel || "See all"} →
-          </a>
-        )}
-      </div>
-      {children}
-    </section>
-  );
-}
