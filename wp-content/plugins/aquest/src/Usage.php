@@ -37,7 +37,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Usage {
 
-	const TABLE_VERSION = '3';
+	const TABLE_VERSION = '4';
 
 	// ── the measured rates (see the header for provenance) ───────────────────────
 	/** USD per vCPU-second, Azure Container Apps consumption, swedencentral, 2026-08-08. */
@@ -91,6 +91,15 @@ final class Usage {
 		global $wpdb;
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		$charset = $wpdb->get_charset_collate();
+		// NO `--` COMMENTS INSIDE THE DDL BELOW. dbDelta parses the statement itself, line by line, and a
+		// SQL comment makes it skip the columns around it — it ran, wrote the new version number, and
+		// added nothing, so the code stored measurements into columns that did not exist and every read
+		// came back empty. Explain the schema HERE, in PHP, where the parser never looks.
+		//
+		// `used_cpu` / `peak_mb` are what a turn ACTUALLY used, as against what its tier reserved:
+		// cpu_sec is the billed figure (tier vCPU × wall clock), these two are what the container
+		// measured of itself. Keeping both is the point — the gap between them IS the waste, and it is
+		// only visible if both are stored.
 		// One row per metered thing: a chat turn that replied, or a shell session that ended. The
 		// components are stored SEPARATELY, not just the total, because an invoice a member cannot take
 		// apart is a number to be trusted rather than checked — and this platform's whole premise is
@@ -108,10 +117,6 @@ final class Usage {
 			ai_usd DECIMAL(12,6) NOT NULL DEFAULT 0,
 			cpu_sec DECIMAL(12,3) NOT NULL DEFAULT 0,
 			gib_sec DECIMAL(12,3) NOT NULL DEFAULT 0,
-			-- What the turn ACTUALLY used, as opposed to what its tier reserved. cpu_sec above is the
-			-- billed figure (tier vCPU × wall clock); these two are the measurement the container took
-			-- from its own cgroup, and they are what the tier sizes are set from. Keeping both is the
-			-- point: the gap between them IS the waste, and it is only visible if both are stored.
 			used_cpu DECIMAL(12,3) NOT NULL DEFAULT 0,
 			peak_mb INT UNSIGNED NOT NULL DEFAULT 0,
 			azure_usd DECIMAL(12,6) NOT NULL DEFAULT 0,
