@@ -324,6 +324,10 @@ final class Rest {
 		// the authentication; the handler refuses anything that does not carry a valid one.
 		[ 'POST', 'relay/job/complete',            'Relay::job_complete',    'public' ],
 		[ 'POST', 'relay/stream',                  'Relay::stream_chunk',    'worker' ],
+		// …and the same channel for the tools container, which holds no worker token: it signs with the
+		// per-job HMAC instead. Without this row a tool turn could not stream a single word, and the
+		// failure was silent on both sides.
+		[ 'POST', 'relay/job/stream',              'Relay::job_stream',      'public' ],
 		// METERED USAGE — what compute actually cost, billed only once a turn has replied or a session
 		// has ended (src/Usage.php). The tier menu is public so the cost of a mode can be read before
 		// it is used; the lines and invoices are the member's own.

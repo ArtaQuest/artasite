@@ -323,6 +323,25 @@ final class Relay {
 	 * signature into the shared `worker` check would make every relay route reachable by anything
 	 * holding any job token, which is the opposite of what the signature is for.
 	 */
+	/**
+	 * POST /relay/job/stream — the LIVE channel for a container that holds no shared secret.
+	 *
+	 * This was missing, and its absence was invisible: `relay/stream` is worker-authenticated, the tools
+	 * container deliberately holds no worker token, and the write is best-effort with a swallowed error
+	 * — so every streaming write from a tool turn was rejected 401 and nobody was told. Since EVERY
+	 * member turn is a tool turn, that meant the live channel had quietly been dead for all of them:
+	 * dots, then an answer, with no words appearing, no thinking meter and no sign of the work.
+	 *
+	 * Same shape and same reasoning as job_complete above: an HMAC over ONE job id, verified before
+	 * anything is written. Sessionless by construction.
+	 */
+	public static function job_stream( $req ) {
+		$id  = (int) Rest::p( $req, 'id', 0 );
+		$tok = isset( $_SERVER['HTTP_X_AQ_JOB'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_AQ_JOB'] ) ) : '';
+		if ( ! $id || ! self::verify_token( $id, $tok ) ) { return Rest::err( 'unauthorised', 'bad job token', 401 ); }
+		return self::stream_chunk( $req );
+	}
+
 	public static function job_complete( $req ) {
 		$id  = (int) Rest::p( $req, 'id', 0 );
 		$tok = isset( $_SERVER['HTTP_X_AQ_JOB'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_AQ_JOB'] ) ) : '';
