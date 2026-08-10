@@ -267,17 +267,25 @@ export default function AudioPlayer({ src, motionOff = false, className }: {
             : <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden className="ms-0.5"><path d="M8 5v14l11-7z" /></svg>}
         </button>
 
-        <input
-          type="range" min={0} max={dur || 0} step={0.01} value={Math.min(t, dur || 0)}
-          onChange={(e) => { const a = ref.current; if (a) { a.currentTime = Number(e.target.value); setT(Number(e.target.value)); } }}
-          aria-label="Seek" disabled={!dur}
-          style={{ backgroundImage: `linear-gradient(to right, var(--color-yang) ${pct}%, var(--color-space-3) ${pct}%)` }}
-          className={cx(
-            "h-1.5 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-space-3 disabled:cursor-default",
-            "[&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-yang [&::-webkit-slider-thumb]:transition-transform hover:[&::-webkit-slider-thumb]:scale-125",
-            "[&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-yang",
-          )}
-        />
+        {/* A 6px-tall range input is a 6px-tall HIT AREA — measured on /library, and on a phone that
+            is a scrub bar you stab at. The bar stays visually thin, but the control is 28px: the
+            painted track is a sibling, and the input lies transparent on top of it at full height. */}
+        <span className="relative flex h-7 min-w-0 flex-1 items-center">
+          <span aria-hidden className="pointer-events-none absolute inset-x-0 h-1.5 rounded-full"
+            style={{ backgroundImage: `linear-gradient(to right, var(--color-yang) ${pct}%, var(--color-space-3) ${pct}%)` }} />
+          <input
+            type="range" min={0} max={dur || 0} step={0.01} value={Math.min(t, dur || 0)}
+            onChange={(e) => { const a = ref.current; if (a) { a.currentTime = Number(e.target.value); setT(Number(e.target.value)); } }}
+            aria-label="Seek" disabled={!dur}
+            className={cx(
+              "absolute inset-0 m-0 h-7 w-full cursor-pointer appearance-none bg-transparent disabled:cursor-default",
+              "[&::-webkit-slider-runnable-track]:h-7 [&::-webkit-slider-runnable-track]:bg-transparent",
+              "[&::-webkit-slider-thumb]:mt-[0.6875rem] [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-yang [&::-webkit-slider-thumb]:transition-transform hover:[&::-webkit-slider-thumb]:scale-125",
+              "[&::-moz-range-track]:h-7 [&::-moz-range-track]:bg-transparent",
+              "[&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-yang",
+            )}
+          />
+        </span>
 
         <span data-ay-skip="1" className="shrink-0 text-[11px] tabular-nums text-ink-3">{fmt(t)} / {fmt(dur)}</span>
 

@@ -706,7 +706,7 @@ function RailLinks() {
   ];
   return (
     <nav aria-label="Quick links" className="flex flex-wrap gap-x-3 gap-y-1 px-3 text-[12px] text-ink-3">
-      {L.map((l) => <a key={l.href} href={l.href} className="transition-colors hover:text-ink-2 hover:underline">{l.label}</a>)}
+      {L.map((l) => <a key={l.href} href={l.href} className="-mx-1 inline-block px-1 py-1 transition-colors hover:text-ink-2 hover:underline">{l.label}</a>)}
       <span>© {new Date().getFullYear()} ArtaQuest</span>
     </nav>
   );

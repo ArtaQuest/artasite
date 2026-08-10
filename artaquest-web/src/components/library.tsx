@@ -482,7 +482,11 @@ function Provenance({ work, links, compact }: {
   const title = <span data-ay-skip="1">{work.title}</span>;
   const name = <span data-ay-skip="1" className="truncate">{work.author.name}</span>;
   return (
-    <span className={cx("flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-ink-3",
+    /* Measured on /library: each of these four links was 17px tall, and on a phone they sit a
+       couple of millimetres apart separated by a dot — four crowded targets in one line. The
+       anchors get a vertical pad so each clears 24px; the type size and the line's density are
+       untouched, because this is a provenance run and it should still read as one. */
+    <span className={cx("flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-ink-3 [&_a]:py-1",
       !compact && "mt-auto w-full border-t border-line pt-2")}>
       {links ? (
         <Link to={`/nb/${work.id}/${work.slug}`} className="min-w-0 max-w-full truncate font-semibold text-ink-2 no-underline hover:underline">{title}</Link>
@@ -511,7 +515,7 @@ function Provenance({ work, links, compact }: {
         <>
           {dot}
           {/* The permanent short link — a server route, so a plain full-load anchor. */}
-          <a href={`/d/n${work.id}`} className="font-semibold text-yin-ink hover:underline"><span data-ay-skip="1">DOI</span></a>
+          <a href={`/d/n${work.id}`} className="rounded px-1.5 font-semibold text-yin-ink hover:underline" title="The permanent citation for this work"><span data-ay-skip="1">DOI</span></a>
         </>
       ) : null}
     </span>

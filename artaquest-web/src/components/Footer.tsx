@@ -107,7 +107,7 @@ export function Footer() {
               <ul role="list" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
                 {LEGAL.map((l) => (
                   <li key={l.href}>
-                    <a href={localePath(l.href)} className="text-[13px] text-ink-2 transition-colors hover:text-yang">{l.label}</a>
+                    <a href={localePath(l.href)} className="inline-block py-1 text-[13px] text-ink-2 transition-colors hover:text-yang">{l.label}</a>
                   </li>
                 ))}
               </ul>
