@@ -200,6 +200,22 @@ export async function identityFromPair(pair: CryptoKeyPair): Promise<Identity> {
   return { priv: pair.privateKey, pub: pair.publicKey, pubB64: b64encode(raw), fp: await sha256hex(raw) };
 }
 
+/**
+ * Mint a NEW extractable identity, replacing whatever this device holds.
+ *
+ * Only for members whose key predates recovery: those were generated non-extractable, so they
+ * cannot be escrowed — not by us, not by anyone, which is the property they were given on purpose.
+ * The old key is not discarded; boot has already filed it under the id it registered as, so this
+ * device keeps reading everything sealed to it. What changes is that from here on there is a key
+ * that CAN follow the member to their next device.
+ */
+export async function newIdentity(): Promise<Identity> {
+  const pair = (await crypto.subtle.generateKey(
+    { name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"],
+  )) as CryptoKeyPair;
+  return adoptIdentity(pair);
+}
+
 /** Adopt a restored keypair as this device's identity, replacing whatever it had. */
 export async function adoptIdentity(pair: CryptoKeyPair): Promise<Identity> {
   const db = await openDb();

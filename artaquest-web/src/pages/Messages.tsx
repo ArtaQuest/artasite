@@ -1808,6 +1808,7 @@ function RecoveryPanel() {
   useEffect(() => subscribeChat(() => bump((n) => n + 1)), []);
   const st = getChatState();
   const [code, setCode] = useState("");
+  const [migrated, setMigrated] = useState(false);
   const [entry, setEntry] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -1828,6 +1829,13 @@ function RecoveryPanel() {
         <p data-ay-skip="1" className="aq-code mt-2 select-all break-all rounded-field border border-line bg-space-1 px-2.5 py-2 text-[13px] font-semibold tracking-[0.06em] text-ink">
           {code}
         </p>
+        {migrated && (
+          <p className="mt-2 text-[11.5px] leading-relaxed text-ink-3">
+            Messages from before today were sealed to this browser’s previous key, which was built so
+            that it could never be exported — by us or anyone. They stay readable here, but this code
+            cannot carry them to another device. Everything from now on, it can.
+          </p>
+        )}
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <button type="button"
             onClick={() => { navigator.clipboard?.writeText(code).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => undefined); }}
@@ -1886,7 +1894,7 @@ function RecoveryPanel() {
       <button type="button" disabled={busy}
         onClick={() => {
           setBusy(true); setErr("");
-          enableRecovery().then(setCode)
+          enableRecovery().then((r) => { setCode(r.code); setMigrated(r.migrated); })
             .catch(() => setErr("Couldn’t save the recovery key — try again."))
             .finally(() => setBusy(false));
         }}

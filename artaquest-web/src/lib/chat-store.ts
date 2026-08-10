@@ -22,7 +22,7 @@ import {
 } from "./api";
 import {
   adoptIdentity, decodePayload, deriveChatKey, e2eeSupported, ensureIdentity, hasIdentity, importPeerPub,
-  newRecoveryCode, openMessage, rememberKid, unwrapIdentity, wrapIdentity,
+  newIdentity, newRecoveryCode, openMessage, rememberKid, unwrapIdentity, wrapIdentity,
   type ChatPayload, type Identity,
 } from "./e2ee";
 import { isLoggedIn } from "./wp";
@@ -473,14 +473,33 @@ export function watchList(): () => void {
  * not in the database. If the member loses it, the escrow is a blob nobody can open, which is the
  * same position they are in today, and the reason the UI insists they write it down first.
  */
-export async function enableRecovery(): Promise<string> {
-  const { identity } = getChatState();
-  if (!identity) throw new Error("no identity");
+export async function enableRecovery(): Promise<{ code: string; migrated: boolean }> {
+  const cur = getChatState().identity;
+  if (!cur) throw new Error("no identity");
   const code = newRecoveryCode();
-  const blob = await wrapIdentity(identity.priv, code);
+
+  // KEYS MADE BEFORE RECOVERY EXISTED CANNOT BE ESCROWED. They were generated non-extractable —
+  // deliberately, and irreversibly: `exportKey` throws InvalidAccessError and no flag changes that.
+  // So for those members this mints a key that CAN travel, and says so. Their existing history is
+  // not lost: boot filed the old key under the id it registered as, so this device keeps reading
+  // what was sealed to it. What it cannot do is carry that part to a new device, because the key
+  // that opens it was built never to leave.
+  let identity = cur;
+  let migrated = false;
+  let blob;
+  try {
+    blob = await wrapIdentity(identity.priv, code);
+  } catch {
+    identity = await newIdentity();
+    const reg = await chatRegisterKey(identity.pubB64);
+    if (reg.key?.kid) await rememberKid(reg.key.kid, { privateKey: identity.priv, publicKey: identity.pub });
+    set({ identity, myKey: reg.key });
+    blob = await wrapIdentity(identity.priv, code);
+    migrated = true;
+  }
   await chatSetVault(blob, identity.fp);
   set({ recovery: "none" });
-  return code;
+  return { code, migrated };
 }
 
 /**
