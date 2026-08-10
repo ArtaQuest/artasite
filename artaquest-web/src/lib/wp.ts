@@ -295,7 +295,7 @@ export type TrackPoints = {
 const ZERO_TRACKS: TrackPoints = { learn: 0, donate: 0, volunteer: 0, outreach: 0 };
 export type EnrolledCourse = { id?: number; value: string; url: string; resume?: string; image?: string; lessons?: number; pct?: number; cert?: boolean };
 export type Dashboard = {
-  user: { name: string; avatar: string; slug?: string; bio?: string; country?: string; palm?: string; links?: Partial<Record<ProfileLinkKey, string>> };
+  user: { name: string; avatar: string; slug?: string; bio?: string; country?: string; palm?: string; links?: Partial<Record<ProfileLinkKey, string>>; relationship?: string; location?: string };
   coins: number; points: number;
   tier: { label?: string; next: string | null; pct: number; remaining: number };
   stats: Stat[]; courses: EnrolledCourse[];
@@ -306,12 +306,12 @@ export async function getDashboard(): Promise<Dashboard | null> {
   try {
     const [d, me] = await Promise.all([
       get<{ courses: EnrolledCourse[]; points: number; coins: number }>(`${AQ}/dashboard`),
-      get<{ user: ({ name: string; slug: string; avatar: string; country?: string; palm?: string; tier: string; bio?: string; links?: Partial<Record<ProfileLinkKey, string>>; completed?: number; works?: number; progress?: { label: string; next: string | null; pct: number; remaining: number } }) | null }>(`${AQ}/me`),
+      get<{ user: ({ name: string; slug: string; avatar: string; country?: string; palm?: string; tier: string; bio?: string; links?: Partial<Record<ProfileLinkKey, string>>; relationship?: string; location?: string; completed?: number; works?: number; progress?: { label: string; next: string | null; pct: number; remaining: number } }) | null }>(`${AQ}/me`),
     ]);
     const u = me.user;
     const courses = d.courses || [];
     return {
-      user: { name: u?.name || "Quester", avatar: u?.avatar || "", slug: u?.slug, bio: u?.bio || "", country: u?.country || "", palm: u?.palm || "", links: u?.links },
+      user: { name: u?.name || "Quester", avatar: u?.avatar || "", slug: u?.slug, bio: u?.bio || "", country: u?.country || "", palm: u?.palm || "", links: u?.links, relationship: u?.relationship || "", location: u?.location || "" },
       coins: d.coins, points: d.points,
       // Real rank-ring progress, computed server-side (Economy::tier_progress) — was hardcoded next:null/pct:0.
       tier: u?.progress ?? { label: u?.tier || "Quester", next: null, pct: 0, remaining: 0 },
@@ -340,15 +340,20 @@ export async function postProfileUpdate(
   bio: string,
   username?: string,
   links?: Partial<Record<ProfileLinkKey, string>>,
-): Promise<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; message?: string }> {
+  // Both follow the links contract: `undefined` means LEAVE IT ALONE, "" means stop saying.
+  relationship?: string,
+  location?: string,
+): Promise<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; relationship?: string; location?: string; message?: string }> {
   try {
     const body: Record<string, unknown> = { name, bio };
     if (username) body.username = username; // only sent when the member actually changed their handle
     // OMITTED means "leave them alone"; {} means "clear them". A caller that does not edit links must
     // not wipe them, so this is only sent when the caller actually has a value to state.
     if (links) body.links = links;
-    const r = await post<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>> }>(`${AQ}/profile-update`, body);
-    return { ok: !!r.ok, name: r.name ?? name, bio: r.bio ?? bio, slug: r.slug, links: r.links };
+    if (relationship !== undefined) body.relationship = relationship;
+    if (location !== undefined) body.location = location;
+    const r = await post<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; relationship?: string; location?: string }>(`${AQ}/profile-update`, body);
+    return { ok: !!r.ok, name: r.name ?? name, bio: r.bio ?? bio, slug: r.slug, links: r.links, relationship: r.relationship, location: r.location };
   } catch (e) {
     // Surface the server's reason (taken / reserved / invalid / rate-limited) so the form can show it.
     return { ok: false, name, bio, message: e instanceof Error ? e.message : undefined };
@@ -904,6 +909,22 @@ export const PROFILE_LINKS = [
 ] as const;
 export type ProfileLinkKey = (typeof PROFILE_LINKS)[number][0];
 
+/** Relationship options, in the order the picker lists them. MIRRORS `AQ\Auth::RELATIONSHIPS` —
+ *  the server refuses any key not in its own copy, so the two lists must not drift. The empty key
+ *  is deliberately absent: "not saying" is the ABSENCE of a value, not an option with a label. */
+export const RELATIONSHIPS = [
+  ["single", "Single"], ["relationship", "In a relationship"], ["engaged", "Engaged"],
+  ["married", "Married"], ["partnership", "In a civil partnership"], ["open", "In an open relationship"],
+  ["complicated", "It\u2019s complicated"], ["separated", "Separated"], ["divorced", "Divorced"],
+  ["widowed", "Widowed"],
+] as const;
+export type RelationshipKey = (typeof RELATIONSHIPS)[number][0];
+/** '' for anything unknown, so a junk value stored by hand renders as nothing rather than as text. */
+export const relationshipLabel = (k?: string): string =>
+  RELATIONSHIPS.find(([key]) => key === k)?.[1] ?? "";
+/** Matches AQ\Auth::LOCATION_MAX — a city, not an address. */
+export const LOCATION_MAX = 60;
+
 export type ProfileStats = { threads: number; comments: number; reviews: number; enrolled: number; followers: number; following: number };
 export type ProfileThread = { id: number; title: string; comments: number; score: number; at: number; topic?: string; excerpt?: string };
 export type Profile = {
@@ -924,6 +945,10 @@ export type Profile = {
   season?: number; // the ONE season this member follows (1…12 cycle position; 0 = none on record)
   palm?: string; // opt-in palm "back photo" (ticket #94) → the avatar flips to it; '' if unset
   nationality?: string; // self-entered nationality claim (ISO alpha-2) → header flag detail; '' if unset (shown unverified, like the birthday)
+  /** Self-declared, both. `relationship` is a RELATIONSHIPS key ('' = not saying); `location` is
+   *  whatever the member typed and is NEVER inferred from an IP address (see AQ\Auth::location). */
+  relationship?: string;
+  location?: string;
   coins: number; points: number; breakdown: PointBreakdown;
   tier: string; joined: string; completed?: number;
   typologies?: TypologyTag[];
@@ -971,6 +996,10 @@ type ProfileR = {
   birthday?: string; full_name?: string; season?: number; verified?: boolean;
   links?: Partial<Record<ProfileLinkKey, string>>;
   last_seen?: number;
+  // Self-declared, both. Added to the endpoint 2026-08-10; they must be listed HERE and mapped in
+  // getProfile below, or the SPA silently drops them exactly as it once dropped the birthday.
+  relationship?: string;
+  location?: string;
   coins?: number; joined?: string; bio?: string; completed?: number; breakdown?: TrackPoints;
   typologies?: TypologyTag[]; endorsements?: Record<string, number>; stats?: ProfileStats; is_following?: boolean;
   recent_threads?: ProfileThread[];
@@ -1019,6 +1048,7 @@ export async function getProfile(slug: string): Promise<Profile | null> {
       id: pr.id, name: pr.name, slug: pr.slug, avatar: pr.avatar, palm: pr.palm || "", country: pr.country || "", nationality: pr.nationality || "", email: pr.email || "", bio: pr.bio || "", links: pr.links || undefined, lastSeen: pr.last_seen || 0,
       // Public identity facts the endpoint has always emitted but the SPA used to drop on the floor.
       birthday: pr.birthday || "", fullName: pr.full_name || "", season: pr.season ?? 0, verified: !!pr.verified,
+      relationship: pr.relationship || "", location: pr.location || "",
       coins: pr.coins ?? 0, points: pr.points, completed: pr.completed ?? 0,
       breakdown: { ...ZERO_TRACKS, ...pr.breakdown, total: pr.points },
       tier: pr.tier, joined: pr.joined || "",

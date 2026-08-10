@@ -736,6 +736,8 @@ final class Social {
 			// a consumer typed against a keyed object would be handed a list on exactly the members who
 			// have set nothing — which is most of them.
 			'links'      => (object) Auth::links( $id ),        // where else this member is, key => https URL
+			'relationship' => Auth::relationship( $id ),       // '' = not saying; the profile then renders nothing
+			'location'     => Auth::location( $id ),           // what the MEMBER typed; never inferred from an IP
 			'last_seen'  => Auth::last_seen( $id ),            // UTC midnight of their last active day; 0 = never recorded
 			'joined'     => Verify::joined_label( $u->user_registered ), // clamped to the platform launch (ticket #103)
 			'verified'   => Verify::is_verified( $id ),         // the blue check

@@ -13,7 +13,7 @@ import { NB_KIND_META, NbCard } from "../components/nbview";
 import { BlueCheck } from "../components/BlueCheck";
 import { Avatar, Button, EmptyState, HeartGlyph, Input, LoadMoreButton, Pill, StatusNote, cx } from "../components/ui";
 import {
-  currentUser, fmtBirthday, followUser, getFollows, getProfile, isLoggedIn, lastSeenLabel, localePath, PROFILE_LINKS, relAgo,
+  currentUser, fmtBirthday, followUser, getFollows, getProfile, isLoggedIn, lastSeenLabel, localePath, PROFILE_LINKS, relAgo, relationshipLabel,
   type FollowRow, type Profile as ProfileData,
 } from "../lib/wp";
 import { Coins, Points } from "../lib/currency";
@@ -340,6 +340,26 @@ export default function Profile() {
                   would render the same value as "9h ago" and invent precision. Omitted entirely
                   when never recorded, rather than printed as "never". */}
               {p.lastSeen ? <span>{lastSeenLabel(p.lastSeen)}</span> : null}
+              {/* Two facts the member STATED about themselves. Both omitted entirely when unset — no
+                  "Prefer not to say" on a public page, because a silent field and a field announcing
+                  its own silence are different things, and only one of them was asked for. The
+                  location is whatever they typed; it is never inferred from an IP address. */}
+              {relationshipLabel(p.relationship) ? (
+                <span className="inline-flex items-center gap-1.5" title="Relationship status, as stated by this member">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" aria-hidden>
+                    <path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9z" />
+                  </svg>
+                  {relationshipLabel(p.relationship)}
+                </span>
+              ) : null}
+              {p.location?.trim() ? (
+                <span className="inline-flex min-w-0 items-center gap-1.5" title="Where this member says they are">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" aria-hidden>
+                    <path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11z" /><circle cx="12" cy="10" r="2.6" />
+                  </svg>
+                  <span data-ay-skip="1" className="truncate">{p.location.trim()}</span>
+                </span>
+              ) : null}
             </div>
             {/* Public identity facts. Every member states an exact date of birth when they join,
                 and ArtaQuest is radically transparent — the whole database is public — so the

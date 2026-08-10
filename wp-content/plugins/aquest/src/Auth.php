@@ -253,6 +253,8 @@ final class Auth {
 			'completed' => Learn::completed_count( $uid ), // courses completed (cert threshold) for the profile stat
 			'bio'       => (string) get_user_meta( $uid, 'description', true ), // so the saved bio loads back (was never read)
 			'links'     => (object) self::links( $uid ),                          // (object): an empty set is {} not [] — see Social::profile
+			'relationship' => self::relationship( $uid ),                         // '' = not saying; the settings form prefills from this
+			'location'     => self::location( $uid ),                             // self-declared only — never inferred, see Auth::location
 			'works'     => Notebook::published_count( $uid ),                     // published works — the dashboard's headline tile
 			'joined'    => Verify::joined_label( $u->user_registered ), // clamped to the platform launch (ticket #103)
 			'verified'     => Verify::is_verified( $uid ),   // blue check
@@ -334,6 +336,48 @@ final class Auth {
 	 * can read `links.github` without searching. Unknown keys are dropped rather than trusted, so a
 	 * value written before a key was retired cannot resurface.
 	 */
+	/**
+	 * Relationship status — a CLOSED vocabulary, never free text.
+	 *
+	 * Free text would be three bad things at once on this platform: an unmoderated public string on
+	 * a page about a real person, an untranslatable one (the i18n mesh renders ~133 languages from
+	 * fixed strings), and a field nobody can filter or reason about later. A key set is none of them.
+	 * The empty key is the default and means NOT SAYING — it renders nothing at all, because the
+	 * absence of a stated status is not "Single".
+	 */
+	const RELATIONSHIPS = array(
+		'single'       => 'Single',
+		'relationship' => 'In a relationship',
+		'engaged'      => 'Engaged',
+		'married'      => 'Married',
+		'partnership'  => 'In a civil partnership',
+		'open'         => 'In an open relationship',
+		'complicated'  => "It's complicated",
+		'separated'    => 'Separated',
+		'divorced'     => 'Divorced',
+		'widowed'      => 'Widowed',
+	);
+
+	/** The member's stated relationship status key, or '' when they have not said. */
+	public static function relationship( $uid ) {
+		$v = (string) get_user_meta( (int) $uid, 'aq_relationship', true );
+		return isset( self::RELATIONSHIPS[ $v ] ) ? $v : '';
+	}
+
+	/**
+	 * Where the member says they are, in their own words ("Istanbul", "Istanbul, Türkiye").
+	 *
+	 * SELF-DECLARED, ALWAYS. It is never inferred from an IP address, a timezone or a request
+	 * header, and it never may be: this database is published in full, so a location we GUESSED
+	 * would be us publishing somebody's whereabouts on their behalf. A member types it or there is
+	 * nothing here. Capped at LOCATION_MAX characters — a city, not an address.
+	 */
+	const LOCATION_MAX = 60;
+
+	public static function location( $uid ) {
+		return (string) get_user_meta( (int) $uid, 'aq_location', true );
+	}
+
 	public static function links( $uid ) {
 		$raw = get_user_meta( (int) $uid, 'aq_links', true );
 		$raw = is_array( $raw ) ? $raw : (array) json_decode( (string) $raw, true );
@@ -438,6 +482,28 @@ final class Auth {
 		update_user_meta( $uid, 'description', $bio );
 
 		if ( null !== $links_clean ) { update_user_meta( $uid, 'aq_links', wp_json_encode( $links_clean ) ); }
+
+		// Relationship + location. OMITTED means "leave it alone" (same contract as links above), so a
+		// form that only edits the bio cannot silently blank either one. An empty STRING is a real
+		// instruction: stop saying. An unknown relationship key is refused rather than stored, because
+		// the profile renders from the vocabulary and would otherwise show nothing with no explanation.
+		$rel_in = Rest::p( $req, 'relationship', null );
+		if ( null !== $rel_in ) {
+			$rel = strtolower( trim( (string) $rel_in ) );
+			if ( '' !== $rel && ! isset( self::RELATIONSHIPS[ $rel ] ) ) {
+				return Rest::err( 'bad_relationship', 'That is not one of the relationship options.' );
+			}
+			update_user_meta( $uid, 'aq_relationship', $rel );
+		}
+		$loc_in = Rest::p( $req, 'location', null );
+		if ( null !== $loc_in ) {
+			// One line, city-sized. sanitize_text_field already strips tags and newlines; the cap is
+			// what stops the field becoming a paragraph on a page that budgets one line for it. Cut by
+			// CHARACTERS, not bytes — "İstanbul" would split mid-character and render as a broken glyph.
+			$loc = sanitize_text_field( (string) $loc_in );
+			$loc = function_exists( 'mb_substr' ) ? mb_substr( $loc, 0, self::LOCATION_MAX ) : substr( $loc, 0, self::LOCATION_MAX );
+			update_user_meta( $uid, 'aq_location', trim( $loc ) );
+		}
 		$u = get_userdata( $uid );
 		// Notify the member their profile changed (a paper trail in the account drawer's bell).
 		$note = $slug_changed && $u
@@ -448,7 +514,7 @@ final class Auth {
 		// handle simultaneously, WP suffixes the loser (-2) — the client must learn what it actually got.
 		// `links` comes back NORMALISED — a member who typed a bare handle sees the real URL that was
 		// stored, so the form shows what the profile will show rather than what they typed.
-		return array( 'ok' => true, 'name' => $u ? $u->display_name : $name, 'bio' => $bio, 'slug' => $u ? $u->user_nicename : '', 'links' => (object) self::links( $uid ) );
+		return array( 'ok' => true, 'name' => $u ? $u->display_name : $name, 'bio' => $bio, 'slug' => $u ? $u->user_nicename : '', 'links' => (object) self::links( $uid ), 'relationship' => self::relationship( $uid ), 'location' => self::location( $uid ) );
 	}
 
 	/** GET /username/check?u= — live availability for the settings form. Public: every username is

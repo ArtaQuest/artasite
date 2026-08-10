@@ -1,12 +1,12 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { DobWheel } from "../components/DobWheel";
-import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, postProfileUpdate, PROFILE_LINKS, type CourseCard, type Dashboard, type UsernameCheck } from "../lib/wp";
+import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, LOCATION_MAX, postProfileUpdate, PROFILE_LINKS, RELATIONSHIPS, type CourseCard, type Dashboard, type UsernameCheck } from "../lib/wp";
 import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, KaggleIds, Passkeys, ShellAccount, UsageApi, myParticipation, setGender as setGender_, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type KaggleIdItem, type SessionItem, type ShellInfo, type ShellKey, type UsageInfo, type BursaryResult, type BursaryStatus, type ShareKit } from "../lib/api";
 import { signOut } from "../lib/auth";
 import { VerifyApi, fileToImage, type VerifyStatus } from "../lib/verify";
 import { countryName, countryOptions, flagEmoji } from "../lib/flags";
 import { BlueCheck } from "../components/BlueCheck";
-import { Avatar, Button, Card, CertBadge, ErrorNote, Field, Input, Pill, SignInGate, StatusNote, Textarea } from "../components/ui";
+import { Avatar, Button, Card, CertBadge, ErrorNote, Field, Input, Pill, Select, SignInGate, StatusNote, Textarea } from "../components/ui";
 
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -27,13 +27,16 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
   // rejected value stays on screen to be corrected rather than being thrown away.
   const [links, setLinks] = useState<Record<string, string>>(() =>
     Object.fromEntries(PROFILE_LINKS.map(([k]) => [k, (user.links as Record<string, string> | undefined)?.[k] ?? ""])));
+  const [relationship, setRelationship] = useState(user.relationship || "");
+  const [location, setLocation] = useState(user.location || "");
   const [username, setUsername] = useState(user.slug || "");
   const [check, setCheck] = useState<UsernameCheck | null>(null); // live availability of a NEW handle
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const usernameChanged = username !== (user.slug || "") && username !== "";
   const linksDirty = PROFILE_LINKS.some(([k]) => (links[k] || "") !== ((user.links as Record<string, string> | undefined)?.[k] ?? ""));
-  const dirty = name.trim() !== user.name || bio !== (user.bio || "") || usernameChanged || linksDirty;
+  const dirty = name.trim() !== user.name || bio !== (user.bio || "") || usernameChanged || linksDirty
+    || relationship !== (user.relationship || "") || location !== (user.location || "");
 
   // Debounced live availability check — only while the handle differs from the current one.
   useEffect(() => {
@@ -50,9 +53,13 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
     setSaving(true);
     setMsg("");
     try {
-      const r = await postProfileUpdate(name.trim(), bio, usernameChanged ? username : undefined, links);
+      const r = await postProfileUpdate(name.trim(), bio, usernameChanged ? username : undefined, links, relationship, location.trim());
       if (!r.ok) { setMsg(r.message || "Could not save — try again"); return; }
       if (r.links) setLinks(Object.fromEntries(PROFILE_LINKS.map(([k]) => [k, (r.links as Record<string, string>)[k] ?? ""])));
+      // Adopt what was STORED, not what was typed: the server trims and caps the location, so a
+      // 70-character entry must come back as the 60 the profile will actually show.
+      if (r.relationship !== undefined) setRelationship(r.relationship);
+      if (r.location !== undefined) setLocation(r.location);
       // Adopt what the server actually stored (a simultaneous claim can suffix the handle).
       if (r.slug) setUsername(r.slug);
       onSaved(r.name, r.bio, r.slug);
@@ -97,6 +104,32 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
           <Textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={4} maxLength={600} placeholder="Tell the community what you are exploring." className="resize-y bg-space-1 px-3.5" />
           <span className="self-end text-[12px] font-normal text-ink-3">{bio.length}/600</span>
         </Field>
+        {/* ABOUT YOU — both optional, both PUBLIC, and the label says so rather than leaving a member
+            to find out from their own profile. This database is published in full, so there is no
+            such thing as a quiet field here; the honest thing is to be plain at the point of entry.
+            Leave either blank and the profile simply does not mention it. */}
+        <Field label="About you">
+          <span className="text-[12.5px] font-normal text-ink-3">
+            Optional, and public — both appear on your profile. Leave them blank to say nothing.
+          </span>
+          <div className="mt-1 grid gap-2 sm:grid-cols-2">
+            <label className="flex flex-col gap-1">
+              <span className="text-[12.5px] font-normal text-ink-3">Relationship status</span>
+              <Select value={relationship} onChange={setRelationship} label="Relationship status"
+                className="bg-space-1"
+                options={[{ value: "", label: "Prefer not to say" }, ...RELATIONSHIPS.map(([k, label]) => ({ value: k, label }))]} />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[12.5px] font-normal text-ink-3">Where you are</span>
+              {/* Typed, never detected. We do not read a location from an IP address or a timezone:
+                  this database is public, so a GUESSED location would be us publishing somebody's
+                  whereabouts for them. A city is the intended grain, not an address. */}
+              <Input value={location} maxLength={LOCATION_MAX} onChange={(e) => setLocation(e.target.value)}
+                placeholder="Istanbul" autoComplete="off" className="bg-space-1 px-3.5" />
+            </label>
+          </div>
+        </Field>
+
         {/* WHERE ELSE YOU ARE. Two fields per row on anything wider than a phone: seven stacked
             inputs reads as a form to endure, and none of them is required. A bare handle is enough —
             the server turns it into the real address and hands it back, which is why the value can
