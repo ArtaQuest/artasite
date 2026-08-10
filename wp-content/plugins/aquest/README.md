@@ -31,7 +31,8 @@ LMS bundle + WooCommerce.
 | `src/Funds.php` | donations, bursaries, course entry-fee pricing, public financial transparency |
 | `src/Extra.php` | DB explorer, certificates, outreach grants + ICS, creator ladder, coin world map, course checkout |
 | `src/Notify.php` | per-user notification centre |
-| `src/Meet.php` | Google Meet group meetings for grant outreach (OAuth refresh-token) |
+| `src/Meetings.php` | ArtaMeet — scheduled meetings; the E2EE room is bound at T-15m and released after |
+| `src/Calendar.php` | ArtaCalendar — one dated view over meetings, claimed grant deadlines and entered challenges; owns no data |
 | `src/Tickets.php` | Claude-triaged contribution tickets (bug/feature/content/suggestion) |
 | `src/Assistant.php` | ArtaBot — AI assistant (Claude), coin-metered |
 
