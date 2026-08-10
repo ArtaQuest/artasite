@@ -37,7 +37,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Usage {
 
-	const TABLE_VERSION = '2';
+	const TABLE_VERSION = '3';
 
 	// ── the measured rates (see the header for provenance) ───────────────────────
 	/** USD per vCPU-second, Azure Container Apps consumption, swedencentral, 2026-08-08. */
@@ -108,6 +108,12 @@ final class Usage {
 			ai_usd DECIMAL(12,6) NOT NULL DEFAULT 0,
 			cpu_sec DECIMAL(12,3) NOT NULL DEFAULT 0,
 			gib_sec DECIMAL(12,3) NOT NULL DEFAULT 0,
+			-- What the turn ACTUALLY used, as opposed to what its tier reserved. cpu_sec above is the
+			-- billed figure (tier vCPU × wall clock); these two are the measurement the container took
+			-- from its own cgroup, and they are what the tier sizes are set from. Keeping both is the
+			-- point: the gap between them IS the waste, and it is only visible if both are stored.
+			used_cpu DECIMAL(12,3) NOT NULL DEFAULT 0,
+			peak_mb INT UNSIGNED NOT NULL DEFAULT 0,
 			azure_usd DECIMAL(12,6) NOT NULL DEFAULT 0,
 			total_usd DECIMAL(12,6) NOT NULL DEFAULT 0,
 			coins DECIMAL(12,4) NOT NULL DEFAULT 0,
@@ -196,6 +202,8 @@ final class Usage {
 			'secs'    => (int) round( $secs ),
 			'tokens'  => (int) ( $m['tokens'] ?? 0 ),
 			'ai_usd'  => $ai, 'cpu_sec' => $cpu_sec, 'gib_sec' => $gib_sec,
+			'used_cpu' => max( 0.0, (float) ( $m['cpu_secs'] ?? 0 ) ),
+			'peak_mb'  => max( 0, (int) ( $m['peak_mb'] ?? 0 ) ),
 			'azure_usd' => $azure, 'total_usd' => $total, 'coins' => $coins, 'spot' => $spot,
 			'free'    => 0,   // kept so rows written before the exemption was removed stay readable
 			'note'    => substr( sanitize_text_field( (string) ( $m['note'] ?? '' ) ), 0, 190 ),

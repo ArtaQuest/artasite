@@ -214,6 +214,11 @@ final class Assistant {
 			'secs'    => (float) ( $metered['secs'] ?? 0 ),
 			'ai_usd'  => (float) ( $metered['ai_usd'] ?? 0 ),
 			'tokens'  => (int) ( $usage['input_tokens'] ?? 0 ) + (int) ( $usage['output_tokens'] ?? 0 ),
+			// What the container measured of ITSELF — cpu-seconds burned and peak memory. Not billed
+			// (the tier's reservation is what the platform charges us for); stored so the tier sizes can
+			// be set from evidence instead of caution. See Usage::TIERS.
+			'cpu_secs' => (float) ( $metered['cpu_secs'] ?? 0 ),
+			'peak_mb'  => (int) ( $metered['peak_mb'] ?? 0 ),
 			'note'    => mb_substr( (string) ( $dlv['prompt'] ?? '' ), 0, 90 ),
 		] );
 		// The session carries its own running total, so a member can see what each conversation is
