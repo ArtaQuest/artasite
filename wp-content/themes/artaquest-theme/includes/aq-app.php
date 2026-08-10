@@ -466,7 +466,8 @@ function aq_app_is_private_soft_path() {
 		// is the trap: an unregistered path falls through to is_404(), so React routes it correctly while
 		// WordPress sends a 404 header and titles the tab "Page not found". Verified against prod before
 		// writing this: GET /meet/ returned 404 with the SPA shell inside it.
-		|| 'meet' === $path || 0 === strpos( $path, 'meet/' );
+		|| 'meet' === $path || 0 === strpos( $path, 'meet/' )
+		|| 'calendar' === $path; // ArtaCalendar — a member's own dated things (200 + noindex)
 }
 
 function aq_app_is_dashboard() {

@@ -37,6 +37,7 @@ const MyLibrary = lazy(() => import("./pages/MyLibrary"));
 import { PlayerProvider } from "./components/player"; // the member's OWN device library (distinct from /library)
 const Messages = lazy(() => import("./pages/Messages")); // ArtaChat — end-to-end encrypted DMs
 const Meet = lazy(() => import("./pages/Meet")); // ArtaMeet — scheduled meetings on ArtaChat rooms
+const Calendar = lazy(() => import("./pages/Calendar")); // ArtaCalendar — everything dated, in one place
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ArtaRead = lazy(() => import("./pages/ArtaRead")); // read/translate/listen to ANY PDF, on-device
 const Page = lazy(() => import("./pages/Page"));
@@ -117,6 +118,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/library": "Library",
   "/messages": "ArtaChat",
   "/meet": "ArtaMeet",
+  "/calendar": "ArtaCalendar",
   "/login": "Sign in", "/sponsors": "Sponsors",
   "/fearometer": "ArtaMod",
   "/works": "Home", "/challenges": "Challenges", "/rankings": "Rankings", "/studio": "Your Studio", "/console": "Operator console",
@@ -163,7 +165,7 @@ function stripLang(pathname: string): string {
 const STATIC_ROUTES = new Set([
   "/", "/about", "/wallet", "/faq-contact", "/developers",
   "/my-library", "/library", "/ceo",
-  "/user-account", "/login", "/donate", "/messages", "/meet",
+  "/user-account", "/login", "/donate", "/messages", "/meet", "/calendar",
   "/sponsors", "/offline", "/studio", "/console", "/fearometer",
   "/works", "/challenges", "/rankings", "/topics", "/lab",
   "/surveys", "/datasets", "/models", "/articles",
@@ -408,6 +410,8 @@ export default function App() {
           <Route path="/about/" element={<About />} />
           <Route path="/wallet" element={<Wallet />} />
           <Route path="/wallet/" element={<Wallet />} />
+          <Route path="/calendar" element={<Calendar />} />
+          <Route path="/calendar/" element={<Calendar />} />
           <Route path="/meet" element={<Meet />} />
           <Route path="/meet/" element={<Meet />} />
           <Route path="/meet/:id" element={<Meet />} />

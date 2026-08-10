@@ -49,6 +49,21 @@ final class Meetings {
 	const ICS_PAST_S   = 2592000;   // 30 days
 	const ICS_FUTURE_S = 15552000;  // 180 days
 
+	/**
+	 * How long before the start each reminder fires, MOST DISTANT FIRST — the order is load-bearing,
+	 * because the bucket a meeting falls in is the last one it qualifies for (see remind()).
+	 *
+	 * These are exactly the two VALARMs vevent() writes into the .ics, deliberately: a member who
+	 * subscribed to their calendar and a member who never did should be nudged at the same two
+	 * moments, not at four different ones. A day ahead is the one that can still change your day; half
+	 * an hour ahead is the one that gets you to the room, which opens at T-15m.
+	 */
+	const REMIND     = [ 'd1' => 86400, 'm30' => 1800 ];
+	/** Meetings examined for reminders per tick. Five seats apiece, so ≤300 guests and ~600 indexed
+	 *  reads — a ceiling a five-minute cron cannot trip over however deep the backlog gets. Ordered
+	 *  by start_ts ASC, so the imminent bell is never the one a backlog drops. */
+	const REMIND_MAX = 60;
+
 	/** Grant working sessions: reminder_key → days before the deadline. Kept verbatim from the
 	 *  retired Google path — it was pure scheduling policy and it was right. */
 	const REMINDERS = [ 't-14' => 14, 't-1' => 1 ];
@@ -119,7 +134,38 @@ final class Meetings {
 			'ctx_key'   => (string) $m['ctx_key'],
 			'created'   => (int) $m['created'],
 			'updated'   => (int) $m['updated'],
+			'gcal_url'  => self::gcal_url( $m ),
 		];
+	}
+
+	/**
+	 * A "+ Google Calendar" one-click add link, built the way Extra::gcal_link builds one for a grant
+	 * deadline — but TIMED, which is the whole difference.
+	 *
+	 * Google reads `dates` as an ALL-DAY range when it is handed two bare YYYYMMDDs, so the grant
+	 * form would turn a one-hour meeting into a whole day blocked out and lose the hour entirely. The
+	 * basic UTC form (`…THHMMSSZ`) carries the hour, and being absolute it needs no `ctz` — which is
+	 * the honest choice anyway, since the server has no idea what clock the reader is on and Google
+	 * will render it in theirs.
+	 *
+	 * Empty for a cancelled meeting, and for anything undated: "add this to my calendar" is not an
+	 * offer to make about a meeting that is not happening.
+	 */
+	private static function gcal_url( $m ) {
+		$start = (int) $m['start_ts'];
+		$end   = (int) $m['end_ts'];
+		if ( $start <= 0 || $end <= $start || 'cancelled' === (string) $m['status'] ) { return ''; }
+		$join    = home_url( '/meet/' . (int) $m['id'] );
+		$details = trim( (string) ( $m['agenda'] ?? '' ) );
+		$details .= ( '' !== $details ? "\n\n" : '' ) . 'Join: ' . $join . "\n"
+			. 'Up to ' . (int) $m['seats'] . ' people, end-to-end encrypted: nothing is recorded and nobody, including ArtaQuest, can listen in.';
+		return 'https://calendar.google.com/calendar/render?' . http_build_query( [
+			'action'   => 'TEMPLATE',
+			'text'     => (string) $m['title'],
+			'dates'    => gmdate( 'Ymd\THis\Z', $start ) . '/' . gmdate( 'Ymd\THis\Z', $end ),
+			'details'  => $details,
+			'location' => $join,
+		] );
 	}
 
 	/** Derived from TIMESTAMPS, never from the status column: cron can stall, wall-clock cannot. The
@@ -307,6 +353,108 @@ final class Meetings {
 			'guests'   => self::guest_cards( $id ),
 			'warnings' => $warnings,
 			'cal'      => self::cal_urls( $uid ),
+		];
+	}
+
+	/**
+	 * POST meet/now {title?, agenda?, guests?[], minutes?, tz?, seats?} — a meeting that has ALREADY
+	 * started, with its room bound before the response is written, so the caller walks straight in.
+	 *
+	 * Every line of the work here is create()'s and open()'s, driven through synthesised requests.
+	 * Nothing is reimplemented, and open() least of all: its bind is the single most fragile
+	 * invariant in this class (the binder must be ALONE in the room when their browser mints the key),
+	 * and a second copy of that would be a second place for it to be got wrong — silently, since a
+	 * mis-bound room fails only later, as a meeting nobody can decrypt.
+	 *
+	 * WHY IT IS CREATED FIVE MINUTES OUT AND THEN MOVED. create() refuses a start inside five minutes,
+	 * and it is right to: a meeting promised to other people who cannot get there in time is a broken
+	 * promise. An instant meeting is the opposite case — nobody is being promised a future, the host
+	 * is already standing in the room. So it is created at the earliest time create() will accept and
+	 * retimed to NOW in the same breath. No SEQUENCE bump and no "rescheduled" bell go with that move:
+	 * the row is seconds old, no calendar has ever fetched it, and there is nothing to correct.
+	 *
+	 * start_ts = now, not now + a nudge: the join window opens at T-15m, so "now" sits comfortably
+	 * inside it, which is what makes the open() below a bind rather than a 'too_early' refusal. end_ts
+	 * is start + the requested minutes (60 by default), because end_ts is what the sweep in tick()
+	 * reads to decide the room may be thrown away — an instant meeting with no end never gets cleaned
+	 * up, and its room outlives it.
+	 *
+	 * The ctx_key needs no special handling and gets none: create() writes 'm:<id>' from the
+	 * auto-increment id, ids are never reused, and the only other namespaces in that UNIQUE column are
+	 * 'grant:…' and the throwaway 'new:<uuid>'. Collision is impossible by construction.
+	 */
+	public static function now( $req ) {
+		// Its own bucket on top of create()'s: this route also makes an ArtaRooms room, which is far
+		// more expensive than a row, so it deserves a tighter ceiling than a scheduled meeting.
+		if ( Rest::throttle( 'aq_meet_now', 6, 300 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+
+		$minutes = Rest::pint( $req, 'minutes', 60 );
+		if ( $minutes < 15 || $minutes > 480 ) { return Rest::err( 'bad_duration', 'A meeting runs between 15 minutes and 8 hours.', 400 ); }
+
+		// No title is the normal case here — the whole point is that there is no form to fill in — so
+		// this is a default, never an error. The name is trimmed rather than the whole string, or a
+		// long display name would eat the noun and the card would read as somebody's name alone.
+		$title = mb_substr( wp_strip_all_tags( trim( (string) Rest::p( $req, 'title', '' ) ) ), 0, self::TITLE_MAX );
+		if ( '' === $title ) {
+			$suffix = '’s meeting';
+			$title  = mb_substr( self::card( $uid )['name'], 0, max( 8, self::TITLE_MAX - mb_strlen( $suffix ) ) ) . $suffix;
+		}
+
+		$now = Data::now();
+		$sub = new \WP_REST_Request();
+		$sub->set_param( 'title',   $title );
+		$sub->set_param( 'agenda',  Rest::p( $req, 'agenda', '' ) );
+		$sub->set_param( 'start',   $now + 300 );   // the earliest create() accepts; retimed to $now below
+		$sub->set_param( 'minutes', $minutes );
+		$sub->set_param( 'tz',      Rest::p( $req, 'tz', 'UTC' ) );
+		$sub->set_param( 'seats',   Rest::pint( $req, 'seats', self::SEATS_MAX ) );
+		$sub->set_param( 'guests',  Rest::p( $req, 'guests', [] ) );
+
+		$made = self::create( $sub );
+		// A refusal from create() is returned exactly as it came: it already carries the right code,
+		// the right status and the right sentence, and rewording it here would make two error
+		// vocabularies for one operation.
+		if ( $made instanceof \WP_REST_Response ) { return $made; }
+		$mid = (int) $made['meet']['id'];
+
+		Data::update( 'aq_meets', [
+			'start_ts' => $now,
+			'end_ts'   => $now + ( $minutes * 60 ),
+			'sort_key' => self::sort_key( $now, $mid ),
+			'updated'  => $now,
+		], [ 'id' => $mid ] );
+
+		$sub2 = new \WP_REST_Request();
+		$sub2->set_param( 'id', $mid );
+		$open     = self::open( $sub2 );
+		$warnings = (array) ( $made['warnings'] ?? [] );
+		if ( $open instanceof \WP_REST_Response ) {
+			// The meeting is real, the guests have already been told about it, and /meet/<id> offers
+			// Join for the next 45 minutes. A room that would not open is a warning on a working
+			// meeting, never a reason to unwind an invitation somebody has already received.
+			$d          = (array) $open->get_data();
+			$warnings[] = (string) ( $d['message'] ?? 'The room did not open — press Join on the meeting page.' );
+			$open       = [ 'room_id' => 0, 'epoch' => 0, 'mint' => false, 'seated' => false ];
+		}
+		$rid   = (int) $open['room_id'];
+		$epoch = (int) $open['epoch'];
+
+		return [
+			'ok'       => true,
+			'meet'     => self::meet_payload( self::row( $mid ) ),
+			'guests'   => self::guest_cards( $mid, $rid, $epoch ),
+			'warnings' => $warnings,
+			'cal'      => self::cal_urls( $uid ),
+			// Everything the page needs to walk in without a second round trip: where to go, which room
+			// it landed in, and — the one that matters — whether THIS browser is the one that must mint
+			// the room key, which is true for exactly one caller and can never be inferred client-side.
+			'url'      => '/meet/' . $mid,
+			'room_id'  => $rid,
+			'epoch'    => $epoch,
+			'mint'     => ! empty( $open['mint'] ),
+			'seated'   => ! empty( $open['seated'] ),
 		];
 	}
 
@@ -930,8 +1078,15 @@ final class Meetings {
 	 * on every poll. The two VALARMs reproduce what the retired Google path was giving us (a day
 	 * ahead, and half an hour ahead) — and they fire on the member's own device, with no server
 	 * involved, which is what carries the reminder when our cron is late.
+	 *
+	 * PUBLIC because Calendar::vevent asks for it BY NAME (`is_callable([ Meetings::class,'vevent' ])`)
+	 * and falls back to a thinner event of its own when the probe fails. While it was private the probe
+	 * could never succeed, so the unified feed and this one emitted the SAME UID — meetings are keyed
+	 * `artameet-<id>@artaquest.org` in both — carrying different descriptions and different alarms at
+	 * the SAME SEQUENCE. A client subscribed to both then picks between two bodies for one event with
+	 * nothing to break the tie. One meeting has one VEVENT; this is it.
 	 */
-	private static function vevent( $r ) {
+	public static function vevent( $r ) {
 		$id      = (int) $r['id'];
 		$stamp   = gmdate( 'Ymd\THis\Z', (int) ( $r['updated'] ?: $r['created'] ?: $r['start_ts'] ) );
 		$join    = home_url( '/meet/' . $id );
@@ -1151,13 +1306,17 @@ final class Meetings {
 	// ── Housekeeping ────────────────────────────────────────────────────────
 
 	/**
-	 * Bounded sweeps, run lazily from meet/list (the Season::ensure_archived pattern) so a quiet
-	 * site still keeps its rows honest. Gated to once every five minutes: every transient here is a
-	 * wp_options write on a box with no persistent object cache.
+	 * Bounded sweeps, on the 'aq_meet_tick' cron every five minutes AND lazily from meet/list (the
+	 * Season::ensure_archived pattern) so a quiet site still keeps its rows honest. Gated, because
+	 * every transient here is a wp_options write on a box with no persistent object cache.
 	 */
 	public static function tick() {
 		if ( get_transient( 'aq_meet_tick' ) ) { return; }
-		set_transient( 'aq_meet_tick', 1, 300 );
+		// 240s, NOT 300s. The cron fires every 300s, so a gate exactly as long as the interval races
+		// its own schedule and rounds to running every OTHER firing — which would put the half-hour
+		// reminder out at T-20m or later, after the room has already opened. Running a minute early
+		// costs nothing; running late is the failure that matters.
+		set_transient( 'aq_meet_tick', 1, 240 );
 		global $wpdb;
 		$now = Data::now();
 		$t   = Data::t( 'aq_meets' );
@@ -1203,5 +1362,92 @@ final class Meetings {
 			$wpdb->delete( Data::t( 'aq_meet_guests' ), [ 'meet_id' => (int) $r['id'] ] );
 			$wpdb->delete( Data::t( 'aq_meets' ), [ 'id' => (int) $r['id'] ] );
 		}
+
+		self::remind( $now );
+	}
+
+	/**
+	 * Ring everyone who is expected at a meeting that is about to start.
+	 *
+	 * EXACTLY-ONCE FOR FREE, AND NO NEW TABLE. Notify::push is idempotent on `ref`, so
+	 * 'mtrem<meet>-<uid>-<bucket>' is the whole delivery record: the cron may fire five times inside
+	 * one bucket, a member may open meet/list ten times, and the bell rings once. That is the reason
+	 * this needs no sent-flag column and therefore no Schema::VERSION bump.
+	 *
+	 * ONE BUCKET PER PASS, THE NEAREST ONE. REMIND is ordered most-distant-first and the last
+	 * qualifying entry wins, so a meeting 20 minutes away is only ever told "in 30 minutes" — it never
+	 * also collects a "in 24 hours" bell it has outlived. A meeting created inside its own day-ahead
+	 * window simply never earns that bucket, which is the correct outcome rather than a special case.
+	 *
+	 * Three refusals, all of them things a reminder must never do:
+	 *  · a CANCELLED meeting is excluded in SQL — telling somebody to attend a meeting the host called
+	 *    off is worse than saying nothing at all;
+	 *  · a meeting that has STARTED or ENDED is excluded by start_ts > now (end_ts > now is belt on
+	 *    braces, and costs nothing on the start_status index);
+	 *  · a guest who replied 'no' is skipped — they have already answered, and re-asking is nagging.
+	 */
+	private static function remind( $now ) {
+		$leads = array_values( self::REMIND );   // most distant first — the widest window to select on
+		$rows  = Data::all(
+			'SELECT id, title, start_ts, tz FROM ' . Data::t( 'aq_meets' )
+			. " WHERE status <> 'cancelled' AND start_ts > %d AND start_ts <= %d AND end_ts > %d"
+			. ' ORDER BY start_ts ASC LIMIT ' . self::REMIND_MAX,
+			[ (int) $now, (int) $now + (int) $leads[0], (int) $now ]
+		);
+		foreach ( $rows as $m ) {
+			$left   = (int) $m['start_ts'] - (int) $now;
+			$bucket = '';
+			foreach ( self::REMIND as $key => $secs ) {
+				if ( $left <= $secs ) { $bucket = $key; }
+			}
+			if ( '' === $bucket ) { continue; }
+
+			// The HEADLINE names the bucket, never a number of minutes. "In 30 minutes" is a promise
+			// about the delivery moment, and nothing here controls that: WP-cron only runs when a
+			// request arrives, so a quiet site can deliver this bucket at T-5m and a phrase baked into
+			// the code would then be a lie on the member's screen. The exact figure belongs in the
+			// body, where it is computed at the instant of pushing and is therefore always true.
+			$mid  = (int) $m['id'];
+			$head = ( 'd1' === $bucket ? 'Coming up: ' : 'Starting soon: ' ) . (string) $m['title'];
+			$body = 'Starts ' . self::in_words( $left ) . ' — ' . self::when_line( $m );
+			foreach ( self::guests_of( $mid ) as $g ) {
+				if ( 'no' === (string) $g['rsvp'] ) { continue; }
+				Notify::push(
+					(int) $g['user_id'], 'meeting', $head, $body, '/meet/' . $mid,
+					'mtrem' . $mid . '-' . (int) $g['user_id'] . '-' . $bucket
+				);
+			}
+		}
+	}
+
+	/** How far off it is, in words, measured at the moment of writing — the half of "when" that is
+	 *  the same on every clock on earth, and the only half the server can state without knowing
+	 *  anything about the reader. Rounded, and never below a minute: "in 0 minutes" reads as broken. */
+	private static function in_words( $secs ) {
+		$secs = max( 60, (int) $secs );
+		if ( $secs < 5400 ) {
+			$n = max( 1, (int) round( $secs / 60 ) );
+			return 'in ' . $n . ' minute' . ( 1 === $n ? '' : 's' );
+		}
+		$h = max( 1, (int) round( $secs / 3600 ) );   // capped at 24 by the caller's selection window
+		return 'in about ' . $h . ' hour' . ( 1 === $h ? '' : 's' );
+	}
+
+	/**
+	 * What the server can HONESTLY tell a reader about the CLOCK time.
+	 *
+	 * It has no browser to ask for a timezone and no stored preference to read, so a bare "at 16:00"
+	 * is a sentence it is not entitled to write — it would be wrong for most of the guest list. So the
+	 * absolute time is always NAMED WITH THE ZONE it belongs to (the meeting's own tz column, which
+	 * exists for exactly this), and the reader is told which zone that is rather than left to assume
+	 * it is theirs. The same guard vevent() uses: a zone the database no longer recognises costs a
+	 * line of prose, never the notification.
+	 */
+	private static function when_line( $m ) {
+		$tz  = (string) ( $m['tz'] ?? '' );
+		$tz  = ( '' !== $tz && in_array( $tz, timezone_identifiers_list(), true ) ) ? $tz : 'UTC';
+		$abs = wp_date( 'D j M, H:i', (int) $m['start_ts'], new \DateTimeZone( $tz ) );
+		if ( ! $abs ) { $abs = gmdate( 'D j M, H:i', (int) $m['start_ts'] ); $tz = 'UTC'; }
+		return $abs . ' ' . $tz . ' (the meeting’s own timezone). The room opens 15 minutes before it starts.';
 	}
 }

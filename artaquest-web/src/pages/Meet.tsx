@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ApiError,
   meetCalRotate, meetCancel, meetCreate, meetGet, meetInvite, meetList, meetLobby,
-  meetOpen, meetRsvp, meetSeat, meetUninvite, meetUpdate, roomsCall,
+  meetNow, meetOpen, meetRsvp, meetSeat, meetUninvite, meetUpdate, roomsCall,
   type Meet as MeetRow, type MeetCal, type MeetGuest, type MeetLobby, type MeetRsvp,
 } from "../lib/api";
 import { isLoggedIn, localePath } from "../lib/wp";
@@ -488,6 +488,7 @@ function MeetingCard({ meet, now, calIcs }: { meet: MeetRow; now: number; calIcs
 }
 
 function MeetList() {
+  const nav = useNavigate();
   const [scope, setScope] = useState<"upcoming" | "past">("upcoming");
   const [items, setItems] = useState<MeetRow[] | null>(null);
   const [next, setNext] = useState<number | null>(null);
@@ -499,6 +500,8 @@ function MeetList() {
   /** The confirmation carries the host's own title and the server's per-guest warnings, so it is
    *  held apart from the sentence around it — those two pieces get the skip marker, the copy does not. */
   const [note, setNote] = useState<{ title: string; warnings: string[] } | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [startErr, setStartErr] = useState<string | null>(null);
   const [now, setNow] = useState(() => Math.round(Date.now() / 1000));
   const seq = useRef(0);
 
@@ -528,6 +531,21 @@ function MeetList() {
   }, [scope]);
 
   useEffect(() => { setItems(null); load(); }, [load]);
+
+  /** One press: a meeting that has already started, and straight into it. `starting` is NOT cleared
+   *  on the way out — the navigation is the success, and re-enabling the button during it is how a
+   *  second press books a second meeting nobody asked for. */
+  async function startNow() {
+    if (starting) return;
+    setStarting(true); setStartErr(null);
+    try {
+      const r = await meetNow();
+      nav(localePath(`/meet/${r.meet.id}`));
+    } catch (e) {
+      setStarting(false);
+      setStartErr(errText(e, "Couldn’t start a meeting just now — try again."));
+    }
+  }
 
   if (!isLoggedIn()) {
     // PageHero owns the page's one <h1>, so the gate here is an EmptyState rather than SignInGate —
@@ -559,10 +577,19 @@ function MeetList() {
               <Segmented label="Which meetings" value={scope} onChange={(v) => setScope(v as "upcoming" | "past")}
                 options={[{ value: "upcoming", label: "Upcoming" }, { value: "past", label: "Past" }]} />
             }
-            trailing={
-              !composing && <Button size="sm" onClick={() => setComposing(true)}>New meeting</Button>
-            }
+            trailing={!composing && (
+              <>
+                {/* The loudest control on the page, because it is the shortest path in the product:
+                    nothing → a room you are already in. Scheduling is the considered thing next to it. */}
+                <Button size="sm" disabled={starting} onClick={() => void startNow()}>
+                  {starting ? "Starting…" : "Meet now"}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setComposing(true)}>New meeting</Button>
+              </>
+            )}
           />
+
+          {startErr && <ErrorNote>{startErr}</ErrorNote>}
 
           {note && (
             <StatusNote className="py-3">
@@ -1109,6 +1136,16 @@ function MeetingPage({ id }: { id: number }) {
             <a href={oneEventIcs(cal.ics, id)}
               className="inline-flex h-10 items-center justify-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink">
               Add this one to your calendar
+            </a>
+          )}
+
+          {/* Google takes a template URL rather than a file, and the SERVER composes it — the title,
+              both instants and the join link are its to state, and a URL built here would be a
+              second place for this meeting's wording to drift out of step with the .ics above. */}
+          {meet.gcal_url && meet.status !== "cancelled" && (
+            <a href={meet.gcal_url} target="_blank" rel="noopener noreferrer"
+              className="inline-flex h-10 items-center justify-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink">
+              Add to Google Calendar
             </a>
           )}
 

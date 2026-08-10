@@ -162,6 +162,7 @@ const NAV: { label: string; href: string; icon: IconKey; divider?: boolean; exte
   // ArtaChat — end-to-end encrypted DMs; keys live on the member's device, the DB holds ciphertext.
   { label: "ArtaChat", href: "/messages/", icon: "mail", external: true, auth: true },
   { label: "ArtaMeet", href: "/meet/", icon: "calendar", external: true, auth: true },
+  { label: "ArtaCalendar", href: "/calendar/", icon: "calendar", external: true, auth: true },
   { label: "Rankings", href: "/rankings/", icon: "trophy", external: true },
   // UNLISTED, not retired (operator 2026-08-03): /topics/ and /issues/ still resolve and still
   // render. They are reached from where they are actually needed — the seasons and cycles surfaces

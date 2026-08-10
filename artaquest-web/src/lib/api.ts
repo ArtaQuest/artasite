@@ -2570,6 +2570,12 @@ export type Meet = {
   room_id: number; opened_ts: number; seq: number;
   context_type: string; context_id: number; ctx_key: string;
   created: number; updated: number;
+  /** A one-click "add this to Google Calendar" TEMPLATE url, composed SERVER-side (the precedent is
+   *  Extra::gcal_link for a grant deadline). The browser is deliberately not trusted to build it:
+   *  the title, the two instants and the join link are the server's to state, and a page that
+   *  assembled them itself would be a second place for the meeting's wording to drift. Empty when
+   *  there is nothing to add — a cancelled meeting, say. */
+  gcal_url: string;
 };
 
 export type MeetGuest = {
@@ -2631,6 +2637,25 @@ export function meetCreate(b: {
 }) {
   return post<{ ok: boolean; meet: Meet; guests: MeetGuest[]; cal: MeetCal; warnings: string[] }>("/meet/create", b as unknown as Json);
 }
+/**
+ * Start a meeting RIGHT NOW — the fastest path in the product, one press from nothing to a room.
+ *
+ * meet/create refuses anything less than five minutes out, on purpose: a scheduled meeting is a
+ * promise, and a promise you make for thirty seconds' time is not one. This is the other thing —
+ * a meeting whose start has already passed, so `phase` is 'open' the moment it exists and the
+ * caller can walk straight into it.
+ *
+ * The room is NOT bound here in any way the caller has to act on: whether the server binds one or
+ * leaves it to /meet/<id>, the browser mints the key on the meeting page, alone in the room, which
+ * is the only sequence lib/rooms.ts will mint under. So the only field this promises is `meet` —
+ * everything else is optional because navigating to the meeting is the whole of the handover.
+ */
+export function meetNow(b?: { title?: string; minutes?: number; guests?: string[] }) {
+  return post<{
+    ok: boolean; meet: Meet; guests?: MeetGuest[]; cal?: MeetCal;
+    room_id?: number; epoch?: number; mint?: boolean; seated?: boolean;
+  }>("/meet/now", { ...(b || {}) } as unknown as Json);
+}
 /** Host only. Any change to the time, the title or the status advances SEQUENCE, or subscribed
  *  calendars ignore the update and everybody keeps the old time. */
 export function meetUpdate(b: {
@@ -2668,4 +2693,83 @@ export function meetSeat(id: number) {
 export function meetCalUrl() { return get<MeetCal & { url: string }>("/meet/cal"); }
 /** Bump the counter inside the signature — every calendar URL issued before this stops working. */
 export function meetCalRotate() { return post<MeetCal & { ok: boolean; url: string }>("/meet/cal", {}); }
+
+// ── ArtaCalendar — everything dated, in one place (src/Calendar.php) ────────
+// One window (`from`…`to`), one flat list, three sources: the meetings you are invited to, the
+// grant deadlines you are registered against, and the challenges you entered. It is a PROJECTION,
+// not a fourth table — every item already exists as a row somewhere else, which is why an item is
+// identified by a `key` naming its source rather than by an id of its own.
+//
+// There is no cursor here, deliberately. A calendar is read as a WINDOW ("the next 30 days"), not
+// as a stream, and a window is bounded by construction: widen `to` to see further. Keyset paging
+// exists for feeds whose length nobody chose.
+
+/** The three sources, named as `Calendar::collect` names them. `grant` and not `deadline`: the
+ *  wire value is the source, and the WORD a page prints for it ("Deadline") is the page's business. */
+export type CalendarKind = "meeting" | "grant" | "challenge";
+
+export type CalendarItem = {
+  /** Unique across kinds and stable between reads — "meeting:12", "grant:8", "challenge:3". Two
+   *  different sources can carry the same numeric id, so this is what a list keys on. */
+  key: string;
+  kind: CalendarKind;
+  id: number;
+  /** Member-authored, or a funder's — treat as member text at every render (data-ay-skip). */
+  title: string;
+  /**
+   * UTC unix seconds, and the only thing that says when this is. The two kinds are NOT the same
+   * sort of value and must not be formatted the same way:
+   *
+   *   TIMED (all_day false) — a real instant. Render it in the VIEWER's zone, naming the zone.
+   *   ALL-DAY (all_day true) — midnight UTC of the DATE it names. A deadline is a date, not an
+   *     instant: format it in UTC, or every member west of Greenwich is shown a deadline a day
+   *     early and every member east of it, a day late.
+   *
+   * `end_ts` on an all-day item is EXCLUSIVE — the midnight after the last day, as RFC 5545 and
+   * Google both require — so a one-day deadline ends 86400 later and never at 23:59:59.
+   */
+  start_ts: number;
+  end_ts: number;
+  all_day: boolean;
+  /** Where this lives on ArtaQuest — an app path such as "/meet/12", or "" when there is nowhere
+   *  to send anybody. */
+  url: string;
+  /** The item's own words: a meeting's agenda, a grant's summary, what a challenge deadline does.
+   *  Member/funder text, so it carries data-ay-skip like a title. */
+  detail: string;
+  /** "confirmed" | "cancelled". A cancelled meeting STAYS in the window on purpose: something that
+   *  silently vanishes from a calendar is not a cancellation, it is a ghost. */
+  status: string;
+  /** Composed server-side, exactly as a meeting's is (Calendar::gcal_url). "" when there is
+   *  nothing to add. Never rebuild it in the browser: the all-day and timed `dates` grammars
+   *  differ, and getting that wrong lands an event silently on the wrong day. */
+  gcal_url: string;
+  /** Feed bookkeeping — the values the .ics needs to make a subscribed client accept a change.
+   *  Carried because the agenda and the feed are ONE list; a page has no use for them. */
+  seq: number;
+  stamp_ts: number;
+  uid_tag: string;
+};
+
+/** The ArtaCalendar subscription. `url` and `ics` are one value under two names (meet/cal's shape
+ *  exactly, so a panel written against either payload reads this one); `meet` is the narrower
+ *  meetings-only feed. ONE secret behind both — rotation stays at POST meet/cal. */
+export type CalendarCal = { ics: string; webcal: string; rev: number; url: string; meet: string };
+
+/** Everything dated between two instants, oldest first. The server CLAMPS the window (400 days
+ *  max), so asking for ten years answers with as far as it will go and says so in `from`/`to` —
+ *  read those back rather than assuming you got what you asked for. */
+export function calendarAgenda(b: { from: number; to: number }) {
+  return get<{
+    items: CalendarItem[]; from: number; to: number; now: number; me: number;
+    counts: Record<CalendarKind, number>;
+    /** The subscription pair, inline. Narrower than calendarCal()'s — no `rev`, no meetings-only
+     *  feed — because this payload only has to answer "where do I subscribe". */
+    cal: { ics: string; webcal: string };
+  }>("/calendar/agenda", { from: Math.round(b.from), to: Math.round(b.to) });
+}
+/** The member's own subscription URLs. Handed out one member at a time and never in a list
+ *  payload: a subscription URL is by nature the kind of string that ends up pasted into somebody
+ *  else's server. */
+export function calendarCal() { return get<CalendarCal & { ok: boolean }>("/calendar/cal"); }
 

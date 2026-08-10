@@ -519,9 +519,13 @@ final class Rest {
 		// invitation never depends on a week-old key epoch. Deliberately NONE of these is in
 		// Api::TOKEN_ROUTES, for the same reason no rooms/* route is: a bearer token must not be
 		// able to book a human's time or seat itself in a sealed room.
+		// ── ArtaCalendar — everything dated, in one place (src/Calendar.php) ────
+		[ 'GET',  'calendar/agenda',               'Calendar::agenda',    'user' ], // ?from=&to= → meetings + deadlines + challenges
+		[ 'GET',  'calendar/cal',                  'Calendar::cal',       'user' ], // my signed subscription URLs
 		[ 'GET',  'meet/list',                     'Meetings::list_mine', 'user' ], // ?scope=upcoming|past
 		[ 'GET',  'meet/get',                      'Meetings::get',       'user' ], // ?id= → one meeting + its guests
 		[ 'POST', 'meet/create',                   'Meetings::create',    'user' ], // {title, start, minutes, tz, guests[]}
+		[ 'POST', 'meet/now',                      'Meetings::now',       'user' ], // start one RIGHT NOW and open its room in the same breath
 		[ 'POST', 'meet/update',                   'Meetings::update',    'user' ], // host only; bumps SEQUENCE
 		[ 'POST', 'meet/cancel',                   'Meetings::cancel',    'user' ], // host only; the row STAYS (STATUS:CANCELLED)
 		[ 'POST', 'meet/invite',                   'Meetings::invite',    'user' ], // host only

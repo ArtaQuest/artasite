@@ -288,7 +288,11 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
   const cols = tiles.length <= 1 ? 1 : tiles.length <= 3 ? 2 : 3;
   const controls = (
     <div className="flex flex-wrap items-center gap-2 border-t border-line px-3 py-2">
-      <p className="min-w-0 flex-1 truncate text-[12px] text-ink-3">
+      {/* ITS OWN LINE, not a flex sibling of the controls. With `flex-1 truncate` this sentence
+          competed with seven shrink-0 buttons for a 672px column and always lost — it rendered as
+          "You're the ..." even on a 1440px desktop, which is a status line that has stopped telling
+          anyone anything. `basis-full` lets the controls wrap beneath it and the sentence be read. */}
+      <p className="basis-full text-[12px] text-ink-3">
         {tiles.length === 0
           ? "You’re the only one here — invite someone, or just sit for a while."
           : `Direct between all ${tiles.length + 1} of you — no server in between`}
