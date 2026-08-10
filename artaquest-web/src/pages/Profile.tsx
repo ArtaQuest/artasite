@@ -16,7 +16,7 @@ import {
   currentUser, fmtBirthday, followUser, getFollows, getProfile, isLoggedIn, lastSeenLabel, localePath, PROFILE_LINKS, relAgo,
   type FollowRow, type Profile as ProfileData,
 } from "../lib/wp";
-import { Points } from "../lib/currency";
+import { Coins, Points } from "../lib/currency";
 import { sendCoins } from "../lib/api";
 
 /** The feed API filters by author (GET /notebooks?author=<slug>); the shared params type
@@ -322,6 +322,16 @@ export default function Profile() {
               {p.tier && <Pill className="px-3 py-0.5 text-[13px]">{p.tier}</Pill>}
               <span className="inline-flex items-center gap-1 rounded-pill bg-yang/15 px-3 py-0.5 font-semibold text-yang" title="Lifetime points">
                 <Points n={p.points} /> points
+              </span>
+              {/* THE WALLET, in the open. The whole coin ledger is already published — every entry of
+                  it is downloadable from /data/ — so a balance was public in fact while being absent
+                  from the one page about this member, which is the worst of both: transparent to
+                  anyone who reads tables, opaque to everyone else. Blue, because points are gold and
+                  the two currencies must never read as one number (points are a lifetime score and
+                  are never spent; coins are money and move). */}
+              <span className="inline-flex items-center gap-1 rounded-pill bg-yin/15 px-3 py-0.5 font-semibold text-yin-ink"
+                title="Coins in their wallet — every entry in the coin ledger is public">
+                <Coins n={p.coins ?? 0} />
               </span>
               {p.joined && <span>Joined {p.joined}</span>}
               {/* Last seen, to the DAY — the server never records finer, because this database is
