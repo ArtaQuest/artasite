@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Chat {
 
-	const TABLE_VERSION = '3';
+	const TABLE_VERSION = '4';
 
 	/** Uncompressed P-256 point (0x04 ‖ X ‖ Y = 65 bytes) as base64 — the only accepted pub format. */
 	const PUB_B64_LEN = 88;
@@ -74,6 +74,30 @@ final class Chat {
 			created INT UNSIGNED NOT NULL DEFAULT 0,
 			PRIMARY KEY  (id),
 			KEY user_id_id (user_id, id)
+		) {$charset};" );
+
+		/**
+		 * THE ESCROW. One row per member: their own private key, sealed in their browser under a
+		 * 160-bit recovery code we never see, so a new device can restore the SAME key and open the
+		 * whole history instead of starting a fresh epoch and orphaning it.
+		 *
+		 * Storing this in a database published in full at /data/ is deliberate and safe, for exactly
+		 * the reason the message ciphertext beside it is safe: we hold no key for either. It is not a
+		 * platform secret and Secrets::get has nothing to do with it. What makes it safe is that the
+		 * code is GENERATED, never chosen — a member's password would be brute-forced offline by
+		 * anyone who downloaded this table, and 160 random bits cannot be.
+		 *
+		 * The column is `vault_key` so Extra::redact_row's default-deny-by-name-shape masks it in the
+		 * explorer anyway. Belt and braces: publishing it would not be a breach, and not publishing
+		 * it costs nothing.
+		 */
+		dbDelta( "CREATE TABLE {$p}aq_chat_vault (
+			user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			vault_key TEXT NOT NULL,
+			fp VARCHAR(64) NOT NULL DEFAULT '',
+			created INT UNSIGNED NOT NULL DEFAULT 0,
+			updated INT UNSIGNED NOT NULL DEFAULT 0,
+			PRIMARY KEY  (user_id)
 		) {$charset};" );
 		// One row per 1:1 conversation; the pair is stored ordered (a < b) so it's unique.
 		// a_read/b_read are read watermarks (last message id each side has seen); `ttl` is the
@@ -531,6 +555,55 @@ final class Chat {
 	 * point). Idempotent: re-posting the active key returns its existing id; a different key
 	 * APPENDS (rotation) and becomes active. The private half never reaches this server.
 	 */
+	/**
+	 * GET chat/vault — the caller's own sealed key blob, or null.
+	 *
+	 * Caller's OWN only. The blob is safe to publish (see the table comment), but there is no reason
+	 * to hand one member another's, and an endpoint that will only ever serve you your own is one
+	 * fewer thing to reason about later.
+	 */
+	public static function get_vault( $req ) {
+		self::ensure_tables();
+		$uid = Rest::uid();
+		$row = Data::one( 'SELECT vault_key, fp, updated FROM ' . Data::t( 'aq_chat_vault' ) . ' WHERE user_id = %d', [ $uid ] );
+		if ( ! $row ) { return [ 'blob' => null, 'fp' => '', 'at' => 0 ]; }
+		$blob = json_decode( (string) $row['vault_key'], true );
+		return [ 'blob' => is_array( $blob ) ? $blob : null, 'fp' => (string) $row['fp'], 'at' => (int) $row['updated'] ];
+	}
+
+	/**
+	 * POST chat/vault — store (or replace) the caller's sealed key blob.
+	 *
+	 * The server validates SHAPE and nothing else: it cannot check the contents of something it has
+	 * no key for, and pretending otherwise would be theatre. `fp` is the fingerprint of the PUBLIC
+	 * key this blob restores, so a device can tell whether the escrow matches the key currently
+	 * registered without unwrapping anything.
+	 */
+	public static function set_vault( $req ) {
+		self::ensure_tables();
+		if ( Rest::throttle( 'aq_chat_vault', 10, 60 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
+		$uid  = Rest::uid();
+		$blob = Rest::p( $req, 'blob', null );
+		$fp   = preg_replace( '/[^a-f0-9]/', '', strtolower( (string) Rest::p( $req, 'fp', '' ) ) );
+		if ( ! is_array( $blob ) || empty( $blob['ct'] ) || empty( $blob['iv'] ) || empty( $blob['salt'] ) ) {
+			return Rest::err( 'bad_blob', 'Expected a sealed key blob.', 400 );
+		}
+		$json = wp_json_encode( [
+			'v'    => (int) ( $blob['v'] ?? 1 ),
+			'iter' => (int) ( $blob['iter'] ?? 0 ),
+			'salt' => (string) $blob['salt'],
+			'iv'   => (string) $blob['iv'],
+			'ct'   => (string) $blob['ct'],
+		] );
+		// A blob is ~1KB of base64; anything far larger is not one of ours.
+		if ( ! $json || strlen( $json ) > 8000 || strlen( $fp ) !== 64 ) {
+			return Rest::err( 'bad_blob', 'Expected a sealed key blob.', 400 );
+		}
+		$now = Data::now();
+		Data::upsert( 'aq_chat_vault', [ 'user_id' => $uid ], [ 'vault_key' => $json, 'fp' => $fp, 'created' => $now, 'updated' => $now ] );
+		return [ 'ok' => true, 'at' => $now ];
+	}
+
 	public static function set_key( $req ) {
 		self::ensure_tables();
 		if ( Rest::throttle( 'aq_chat_key', 10, 60 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
@@ -545,6 +618,17 @@ final class Chat {
 		$cur = self::active_key( $uid );
 		if ( $cur && hash_equals( (string) $cur['pub'], $pub ) ) {
 			return [ 'ok' => true, 'key' => self::key_payload( $cur ), 'rotated' => false ];
+		}
+		// IDEMPOTENT ACROSS THE MEMBER'S WHOLE KEY HISTORY, not just their newest key. A member who
+		// restores their escrowed key on a second device is presenting a public key they ALREADY
+		// registered; inserting it again would mint a second id for one key, and every message sealed
+		// under the first id would then be addressed to an epoch nothing points at. Same key, same id.
+		$known = Data::one(
+			'SELECT id, pub, fp, created FROM ' . Data::t( 'aq_chat_keys' ) . ' WHERE user_id = %d AND pub = %s ORDER BY id ASC LIMIT 1',
+			[ $uid, $pub ]
+		);
+		if ( $known ) {
+			return [ 'ok' => true, 'key' => self::key_payload( $known ), 'rotated' => false ];
 		}
 		$id = Data::insert( 'aq_chat_keys', [
 			'user_id' => $uid,

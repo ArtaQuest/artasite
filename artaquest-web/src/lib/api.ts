@@ -8,6 +8,7 @@
  *   - GET = public + cacheable; POST = needs the session cookie (+ nonce in prod).
  */
 
+import type { WrappedIdentity } from "./e2ee";
 import { aqFetch } from "./offline/fetch";
 
 const BASE = "/wp-json/aq/v1";
@@ -2159,6 +2160,14 @@ export function chatGetKey(user: string | number) {
 }
 export function chatRegisterKey(pub: string) {
   return post<{ ok: boolean; key: ChatKey; rotated: boolean }>("/chat/keys", { pub });
+}
+/** The caller's own sealed key blob — what a new device restores history from. */
+export function chatGetVault() {
+  return get<{ blob: WrappedIdentity | null; fp: string; at: number }>("/chat/vault");
+}
+/** Store (or replace) it. Sealed in the browser first; the server never holds the code. */
+export function chatSetVault(blob: WrappedIdentity, fp: string) {
+  return post<{ ok: boolean; at: number }>("/chat/vault", { blob, fp });
 }
 export type ChatListPage = {
   items: ChatListItem[];

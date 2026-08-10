@@ -513,6 +513,8 @@ final class Rest {
 		//    private keys are non-extractable, device-bound, and never leave the member's browser). ──
 		[ 'GET',  'chat/keys',                     'Chat::get_key',    'public' ], // ?user=<slug|id> → their active public key (same bytes as the open DB)
 		[ 'POST', 'chat/keys',                     'Chat::set_key',    'user'   ], // register/rotate the caller's device public key
+		[ 'GET',  'chat/vault',                    'Chat::get_vault',  'user'   ], // my own sealed key blob (restores history on a new device)
+		[ 'POST', 'chat/vault',                    'Chat::set_vault',  'user'   ], // store it — sealed in the browser under a code we never see
 		[ 'GET',  'chat/list',                     'Chat::list_chats', 'user'   ], // ?box=chats|requests|archived|blocked → conversations + unread counts
 		[ 'GET',  'chat/members',                  'Chat::members',    'user'   ], // the member directory + live presence (online first)
 		[ 'GET',  'chat/unread',                   'Chat::unread',     'user'   ], // badge only (+waiting requests, +inbound call) — deliberately does NOT mark presence (see Chat::mark_presence)

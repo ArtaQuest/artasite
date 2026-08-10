@@ -17,11 +17,12 @@
  * string it can reach into the PUBLIC aq_translations table.
  */
 import {
-  chatList, chatRegisterKey, chatUnread,
+  chatGetVault, chatList, chatRegisterKey, chatSetVault, chatUnread,
   type ChatBox, type ChatKey, type ChatListPage, type ChatRing,
 } from "./api";
 import {
-  decodePayload, deriveChatKey, e2eeSupported, ensureIdentity, importPeerPub, openMessage,
+  adoptIdentity, decodePayload, deriveChatKey, e2eeSupported, ensureIdentity, hasIdentity, importPeerPub,
+  newRecoveryCode, openMessage, rememberKid, unwrapIdentity, wrapIdentity,
   type ChatPayload, type Identity,
 } from "./e2ee";
 import { isLoggedIn } from "./wp";
@@ -54,6 +55,12 @@ export type ChatState = {
   box: ChatBox;
   /** A hard failure that leaves messaging unusable (no WebCrypto, boot failed). */
   fatal: string | null;
+  /** What this device needs from the member before its history is complete.
+   *  "none"    — the key here matches the escrowed one; nothing to do.
+   *  "restore" — the member HAS an escrow and this device does not hold that key: entering the
+   *              recovery code opens the whole history instead of starting a fresh epoch.
+   *  "backup"  — no escrow exists yet, so this key is one cleared browser away from being gone. */
+  recovery: "none" | "restore" | "backup";
   /** True once a conversation list has actually arrived — not merely once the key was registered. */
   ready: boolean;
   /** The list has never loaded and the last attempt failed (offline, timeout, 5xx). */
@@ -62,7 +69,7 @@ export type ChatState = {
 
 let state: ChatState = {
   identity: null, myKey: null, page: null, previews: {}, unread: 0, requests: 0, ring: null,
-  box: "chats", fatal: null, ready: false, listError: false,
+  box: "chats", fatal: null, recovery: "none", ready: false, listError: false,
 };
 
 const subs = new Set<() => void>();
@@ -106,9 +113,33 @@ export function bootChat(): Promise<void> {
       return;
     }
     try {
+      // ── RESTORE BEFORE MINTING ────────────────────────────────────────────────────────────
+      // The old boot generated a key whenever this browser had none, and `Chat::active_key` makes
+      // the newest key THE key — so simply opening ArtaChat on a second device silently took the
+      // conversation with it and orphaned everything sealed to the first. Ask what the member
+      // already has BEFORE creating anything: if an escrow exists and this device does not hold
+      // that key, we say so and wait for the recovery code rather than starting a new epoch behind
+      // their back. Creating a key is now something a member is told about, not a side effect of
+      // opening a page.
+      const vault = await chatGetVault().catch(() => ({ blob: null, fp: "", at: 0 }));
+      // A DEVICE WITH SOMETHING TO RESTORE MINTS NOTHING. Creating a key here would register it, and
+      // the newest registered key IS the member's key — so the throwaway this device made while
+      // waiting for a recovery code would become the one peers seal to, and the restore that
+      // followed would be a THIRD epoch. The member restores first, or writes nothing yet; that is
+      // the correct order and it is why this asks before it creates.
+      if (vault.blob && !(await hasIdentity())) {
+        set({ recovery: "restore" });
+        await refresh(true);
+        return;
+      }
       const identity = await ensureIdentity();
       const reg = await chatRegisterKey(identity.pubB64);
-      set({ identity, myKey: reg.key }); // `ready` waits for the first list — see refresh()
+      // This device's key IS the escrowed one when the fingerprints agree.
+      const recovery: ChatState["recovery"] = !vault.blob ? "backup" : (vault.fp === identity.fp ? "none" : "restore");
+      set({ identity, myKey: reg.key, recovery }); // `ready` waits for the first list — see refresh()
+      // Remember the key under the id it registered as, so this device keeps opening messages
+      // sealed to it even after a later restore replaces the active identity.
+      if (reg.key?.kid) await rememberKid(reg.key.kid, { privateKey: identity.priv, publicKey: identity.pub });
       await refresh(true);
     } catch {
       set({ fatal: "Couldn’t set up encrypted messaging — refresh to try again." });
@@ -432,4 +463,48 @@ export function watchList(): () => void {
     listWatchers = Math.max(0, listWatchers - 1);
     sync();
   };
+}
+
+
+/**
+ * Turn on recovery: mint a code, seal THIS device's key under it, and store the sealed blob.
+ *
+ * Returns the code, which is shown once and never stored anywhere — not here, not on the server,
+ * not in the database. If the member loses it, the escrow is a blob nobody can open, which is the
+ * same position they are in today, and the reason the UI insists they write it down first.
+ */
+export async function enableRecovery(): Promise<string> {
+  const { identity } = getChatState();
+  if (!identity) throw new Error("no identity");
+  const code = newRecoveryCode();
+  const blob = await wrapIdentity(identity.priv, code);
+  await chatSetVault(blob, identity.fp);
+  set({ recovery: "none" });
+  return code;
+}
+
+/**
+ * Restore the member's key on this device from their recovery code.
+ *
+ * On success this device adopts the SAME private key the escrow holds, re-registers its public half
+ * — which `Chat::set_key` recognises as already-current, so nothing rotates — and every message
+ * sealed to that key becomes readable here. The previously-held device key is kept under its own
+ * kid, so anything sealed to THAT stays readable too rather than turning into a wall of apology.
+ */
+export async function restoreFromCode(code: string): Promise<boolean> {
+  const vault = await chatGetVault().catch(() => ({ blob: null, fp: "", at: 0 }));
+  if (!vault.blob) return false;
+  const pair = await unwrapIdentity(vault.blob, code);
+  if (!pair) return false;                       // wrong code — GCM refused to authenticate
+  const identity = await adoptIdentity(pair);
+  const reg = await chatRegisterKey(identity.pubB64);
+  if (reg.key?.kid) await rememberKid(reg.key.kid, pair);
+  set({ identity, myKey: reg.key, recovery: "none" });
+  // RELOAD, deliberately. Everything already on screen was decrypted — or failed to be — with the
+  // key this device had a moment ago: the open thread's messages, its derived-key cache, and the
+  // list's previews are all downstream of an identity that has just been replaced. Re-deriving each
+  // of those in place is several caches to invalidate correctly and one to forget; a member who has
+  // just typed a recovery code is not in a hurry, and this way every surface comes back correct.
+  if (typeof window !== "undefined") window.location.reload();
+  return true;
 }

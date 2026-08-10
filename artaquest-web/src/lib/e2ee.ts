@@ -85,9 +85,161 @@ export function e2eeSupported(): boolean {
 }
 
 /**
- * Load (or create on first use) this device's identity keypair. The private key is generated
- * NON-EXTRACTABLE and persisted as a CryptoKey via IndexedDB's structured clone — it can be
- * used by this origin on this device, but no script (ours or an attacker's) can export it.
+ * ── THE MEMBER'S KEY, NOT THE DEVICE'S ──────────────────────────────────────────────────────
+ *
+ * This used to mint a fresh keypair per browser, and `Chat::active_key` treats the NEWEST
+ * registered key as the only live one. So a second device did not merely fail to read old
+ * messages — it took the conversation with it. Peers sealed to the new key, the first device could
+ * no longer read anything new, and going back to it registered again and flipped the epoch a third
+ * time. One account in the dev database had 147 registered keys. Every rotation orphaned a slice of
+ * history permanently, because the server holds only ciphertext and cannot re-encrypt anything.
+ *
+ * The identity now belongs to the MEMBER. A device that has never seen it asks the server for the
+ * member's escrowed copy and unwraps it with their recovery code, so every device holds the SAME
+ * private key: history opens everywhere, two devices work at once, and nothing rotates.
+ *
+ * WHY A GENERATED CODE AND NOT A PASSWORD. The escrowed blob lives in a database PUBLISHED IN FULL
+ * at /data/ — anyone may download it. A member-chosen password would be attacked offline, at
+ * leisure, by anybody who felt like it, and most passwords lose that fight. A 160-bit random code
+ * cannot be brute-forced whether the blob is public or not, and that is the only property which
+ * makes escrow safe HERE. So the code is generated, shown once, and never chosen. PBKDF2 on top is
+ * belt-and-braces; the entropy is doing the work.
+ *
+ * WHAT THIS DOES NOT DO: it does not let us read anything. The server stores a blob it has no key
+ * for, exactly as it already stores message ciphertext it has no key for. A member who loses the
+ * code loses that history — the cost of nobody, us included, being able to recover it for them.
+ * It is now a warned choice rather than something that happens by accident on a new laptop.
+ *
+ * OLD DEVICE KEYS KEEP WORKING. Keys are kept as a map of kid -> keypair rather than one
+ * "identity", so a browser holding pre-escrow device keys still decrypts the messages sealed to
+ * them instead of showing the member a wall of "can't be opened".
+ */
+
+/** Shape version of the wrapped blob. Bumping it is how a future KDF change stays readable. */
+const VAULT_V = 1;
+/** OWASP's floor for PBKDF2-SHA256. The code carries the real entropy; this is defence in depth. */
+const KDF_ITER = 600000;
+/** 160 bits -> 32 Crockford base32 characters, shown in 8 groups of 4. */
+const CODE_BYTES = 20;
+const CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // no I, L, O, U: unambiguous written down
+
+export type WrappedIdentity = { v: number; iter: number; salt: string; iv: string; ct: string };
+
+/** A fresh recovery code, grouped for transcription. The ONLY secret a member has to keep. */
+export function newRecoveryCode(): string {
+  const b = crypto.getRandomValues(new Uint8Array(CODE_BYTES));
+  let bits = 0, acc = 0, out = "";
+  for (const byte of b) {
+    acc = (acc << 8) | byte; bits += 8;
+    while (bits >= 5) { out += CODE_ALPHABET[(acc >>> (bits - 5)) & 31]; bits -= 5; }
+  }
+  return (out.match(/.{1,4}/g) || []).join("-");
+}
+
+/** Accept what a member actually types: any case or spacing, and the O/0 and I/1 confusions. */
+export function normaliseRecoveryCode(input: string): string {
+  return input.toUpperCase().replace(/[^0-9A-Z]/g, "")
+    .replace(/O/g, "0").replace(/I/g, "1").replace(/L/g, "1").replace(/U/g, "V");
+}
+
+async function codeKey(code: string, salt: Uint8Array, iter: number): Promise<CryptoKey> {
+  const base = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(normaliseRecoveryCode(code)), "PBKDF2", false, ["deriveKey"],
+  );
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", hash: "SHA-256", salt: salt as unknown as ArrayBuffer, iterations: iter },
+    base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"],
+  );
+}
+
+/** Seal the member's private key under their recovery code. The result is safe to publish. */
+export async function wrapIdentity(priv: CryptoKey, code: string): Promise<WrappedIdentity> {
+  const pkcs8 = await crypto.subtle.exportKey("pkcs8", priv);
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await codeKey(code, salt, KDF_ITER);
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, pkcs8);
+  return { v: VAULT_V, iter: KDF_ITER, salt: b64encode(salt.buffer), iv: b64encode(iv.buffer), ct: b64encode(ct) };
+}
+
+/** Open it on another device. Null when the code is wrong — AES-GCM tells us that for free. */
+export async function unwrapIdentity(blob: WrappedIdentity, code: string): Promise<CryptoKeyPair | null> {
+  try {
+    const key = await codeKey(code, b64decode(blob.salt), blob.iter || KDF_ITER);
+    const pkcs8 = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: b64decode(blob.iv) as unknown as ArrayBuffer },
+      key, b64decode(blob.ct) as unknown as ArrayBuffer,
+    );
+    return await pairFromPkcs8(pkcs8);
+  } catch { return null; }
+}
+
+/**
+ * Rebuild a usable keypair from a PKCS8 private key.
+ *
+ * WebCrypto will not hand back the public half, and it is not optional: the public key is what gets
+ * registered and what peers seal to, so a restore that could not produce it would restore nothing
+ * usable. A P-256 PKCS8 carries the public point inline, so the JWK round-trip reads it back —
+ * export as JWK, keep the curve point (x, y), import that as the public key.
+ */
+async function pairFromPkcs8(pkcs8: ArrayBuffer): Promise<CryptoKeyPair> {
+  const priv = await crypto.subtle.importKey(
+    "pkcs8", pkcs8, { name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"],
+  );
+  const jwk = await crypto.subtle.exportKey("jwk", priv);
+  const pub = await crypto.subtle.importKey(
+    "jwk", { kty: "EC", crv: "P-256", x: jwk.x, y: jwk.y, ext: true },
+    { name: "ECDH", namedCurve: "P-256" }, true, [],
+  );
+  return { privateKey: priv, publicKey: pub };
+}
+
+/** Describe a keypair the way the rest of the app wants it. */
+export async function identityFromPair(pair: CryptoKeyPair): Promise<Identity> {
+  const raw = await crypto.subtle.exportKey("raw", pair.publicKey);
+  return { priv: pair.privateKey, pub: pair.publicKey, pubB64: b64encode(raw), fp: await sha256hex(raw) };
+}
+
+/** Adopt a restored keypair as this device's identity, replacing whatever it had. */
+export async function adoptIdentity(pair: CryptoKeyPair): Promise<Identity> {
+  const db = await openDb();
+  await idbPut(db, IDENTITY, pair);
+  db.close();
+  const id = await identityFromPair(pair);
+  identityPromise = Promise.resolve(id);
+  return id;
+}
+
+/** Does this browser already hold an identity? Asked BEFORE creating one, so a device that ought to
+ *  restore never mints a throwaway key that would rotate the member's epoch out from under them. */
+export async function hasIdentity(): Promise<boolean> {
+  const db = await openDb();
+  const pair = await idbGet<CryptoKeyPair>(db, IDENTITY);
+  db.close();
+  return !!pair?.privateKey;
+}
+
+/** Keep a private key under the kid it was registered as, so old ciphertext stays readable here. */
+export async function rememberKid(kid: number, pair: CryptoKeyPair): Promise<void> {
+  if (!kid) return;
+  const db = await openDb();
+  await idbPut(db, "kid:" + kid, pair);
+  db.close();
+}
+
+/** The private key this device holds for a given kid, if any. Used to open pre-escrow messages. */
+export async function privForKid(kid: number): Promise<CryptoKey | null> {
+  if (!kid) return null;
+  const db = await openDb();
+  const pair = await idbGet<CryptoKeyPair>(db, "kid:" + kid);
+  db.close();
+  return pair?.privateKey ?? null;
+}
+
+/**
+ * Load (or create on first use) this member's identity keypair. Generated EXTRACTABLE, because a
+ * key that cannot be exported cannot be escrowed — see the block above for why that trades the
+ * right way here.
  *
  * MEMOISED, and that memo is load-bearing rather than an optimisation. The body is a
  * read-then-write with an `await` between the read and the write, so two concurrent callers both
@@ -117,7 +269,7 @@ async function createIdentity(): Promise<Identity> {
   if (!pair?.privateKey) {
     pair = (await crypto.subtle.generateKey(
       { name: "ECDH", namedCurve: "P-256" },
-      false, // non-extractable: the private key can never leave this device
+      true, // EXTRACTABLE: a key that cannot be exported cannot be escrowed or restored
       ["deriveKey", "deriveBits"],
     )) as CryptoKeyPair;
     await idbPut(db, IDENTITY, pair);

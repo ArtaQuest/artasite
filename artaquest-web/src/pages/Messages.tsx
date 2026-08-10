@@ -8,13 +8,14 @@ import {
 } from "../lib/api";
 import { currentUser, isLoggedIn, localePath } from "../lib/wp";
 import {
-  applyRelation, bumpRequests, clearRing, getChatState, markSeen, setBox, subscribeChat,
+  applyRelation, bumpRequests, clearRing, enableRecovery, getChatState, markSeen, restoreFromCode,
+  setBox, subscribeChat,
   takeAutoAnswer, watchList,
 } from "../lib/chat-store";
 import { watchMath } from "../lib/math";
 import MediaViewer from "../components/chat/MediaViewer";
 import {
-  decodePayload, deriveChatKey, encodePayload, importPeerPub,
+  decodePayload, deriveChatKey, encodePayload, importPeerPub, privForKid,
   openAttachment, openMessage, safetyCode, sealAttachment, sealMessage,
   type ChatPayload, type Identity, type SealedAttachment,
 } from "../lib/e2ee";
@@ -548,6 +549,8 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
 
   const lastId = useRef(0);
   const keyCache = useRef(new Map<string, CryptoKey>());
+  /** kid → the private key this device holds for it (null = not here). */
+  const privCache = useRef(new Map<number, CryptoKey | null>());
   const objectUrls = useRef(new Set<string>());
   /** Attachment ids already fetched, so the decrypt effect never re-scans on its own output. */
   const asked = useRef(new Set<number>()); // decrypted attachment URLs awaiting revocation
@@ -564,15 +567,29 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   const low = Math.min(me, peer.id);
   const high = Math.max(me, peer.id);
 
-  const convKey = useCallback(async (akid: number, bkid: number, peerPubB64: string) => {
+  /**
+   * The private key this message was sealed to — not necessarily the current one.
+   *
+   * Decryption used to be gated on `myKid === myKey.kid`, so the moment a member's key changed,
+   * every earlier message became "sealed to a previous device key" EVEN ON THE DEVICE THAT STILL
+   * HELD THAT KEY. The key had not gone anywhere; nothing was looking for it. Keys are kept under
+   * the kid they registered as, so anything this browser can still open, it opens.
+   */
+  const privFor = useCallback(async (kid: number): Promise<CryptoKey | null> => {
+    if (kid === myKey.kid) return identity.priv;
+    if (!privCache.current.has(kid)) privCache.current.set(kid, await privForKid(kid));
+    return privCache.current.get(kid) ?? null;
+  }, [identity, myKey.kid]);
+
+  const convKey = useCallback(async (akid: number, bkid: number, peerPubB64: string, myPriv: CryptoKey) => {
     const ck = `${akid}:${bkid}`;
     let key = keyCache.current.get(ck);
     if (!key) {
-      key = await deriveChatKey(identity.priv, await importPeerPub(peerPubB64), low, high, akid, bkid);
+      key = await deriveChatKey(myPriv, await importPeerPub(peerPubB64), low, high, akid, bkid);
       keyCache.current.set(ck, key);
     }
     return key;
-  }, [identity, low, high]);
+  }, [low, high]);
 
   const decrypt = useCallback(async (page: ChatMessages): Promise<Item[]> => {
     const out: Item[] = [];
@@ -581,15 +598,16 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
       const peerKid = page.me === page.low_uid ? m.bkid : m.akid;
       const peerPubB64 = page.keys[peerKid]?.pub;
       let payload: ChatPayload | null = null;
-      if (myKid === myKey.kid && peerPubB64) {
-        const key = await convKey(m.akid, m.bkid, peerPubB64);
+      const myPriv = peerPubB64 ? await privFor(myKid) : null;
+      if (myPriv && peerPubB64) {
+        const key = await convKey(m.akid, m.bkid, peerPubB64, myPriv);
         const plain = await openMessage(key, m.iv, m.ct, low, high, m.sender);
         if (plain !== null) payload = decodePayload(plain);
       }
       out.push({ id: m.id, sender: m.sender, at: m.at, payload });
     }
     return out;
-  }, [convKey, myKey.kid, low, high]);
+  }, [convKey, privFor, low, high]);
 
   // Merge a batch (poll or history), drop optimistic temp rows their ack replaced, keep order by id.
   const merge = useCallback((batch: Item[], prepend = false) => {
@@ -1007,7 +1025,8 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
     if (!peerKey) return false;
     const akid = me === low ? myKey.kid : peerKey.kid;
     const bkid = me === low ? peerKey.kid : myKey.kid;
-    const key = await convKey(akid, bkid, peerKey.pub);
+    // Sending always uses the CURRENT key — that is what the peer will seal back to.
+    const key = await convKey(akid, bkid, peerKey.pub, identity.priv);
     const sealed = await sealMessage(key, encodePayload(payload), low, high, me);
     const temp = tempSeq.current--;
     // `rtc` rows are the call handshake: no bubble, no optimistic echo, no notification.
@@ -1772,6 +1791,112 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   );
 }
 
+/**
+ * Recovery — the difference between "your messages are encrypted" and "your messages are gone".
+ *
+ * Two states, and the member only ever sees the one that applies:
+ *   · no escrow yet   → this key exists in one browser and nowhere else. Offer to make a code.
+ *   · escrow exists, but this device holds a different key → offer to restore, which is what makes
+ *     the history readable HERE instead of starting another epoch.
+ *
+ * The code is shown ONCE, at the moment it is created, and is never stored — not in this app, not
+ * on the server, not in the database. That is the whole point, so the panel says so plainly rather
+ * than implying a support route that does not exist.
+ */
+function RecoveryPanel() {
+  const [, bump] = useState(0);
+  useEffect(() => subscribeChat(() => bump((n) => n + 1)), []);
+  const st = getChatState();
+  const [code, setCode] = useState("");
+  const [entry, setEntry] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  // THE CODE BRANCH COMES FIRST. Enabling recovery sets the state to "none" — correctly, there is
+  // nothing left to do — and if that guard ran first it would unmount this panel at the exact moment
+  // it exists to show the one thing the member must write down, which is how the first run of this
+  // silently produced a vault nobody had the code for.
+  if (code) {
+    return (
+      <div className="rounded-card border border-yang bg-yang/[0.06] p-3">
+        <p className="text-[12.5px] font-semibold text-ink">Write this down now</p>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-ink-3">
+          It is the only thing that opens your messages on another device. Nobody can look it up for
+          you — not us, not from the database. If you lose it, this history stays sealed.
+        </p>
+        <p data-ay-skip="1" className="aq-code mt-2 select-all break-all rounded-field border border-line bg-space-1 px-2.5 py-2 text-[13px] font-semibold tracking-[0.06em] text-ink">
+          {code}
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button type="button"
+            onClick={() => { navigator.clipboard?.writeText(code).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => undefined); }}
+            className="rounded-pill border border-line px-3 py-1 text-[12px] font-semibold text-ink-2 hover:text-ink">
+            {copied ? "Copied" : "Copy"}
+          </button>
+          <button type="button" onClick={() => setCode("")}
+            className="rounded-pill bg-yang px-3 py-1 text-[12px] font-bold text-on-accent hover:opacity-90">
+            I’ve saved it
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // NOTE THE ORDER: the restore branch must come BEFORE the identity guard, because a device with
+  // something to restore deliberately has no identity yet — that is the whole point. Requiring one
+  // here hid the panel on exactly the device that needed it.
+  if (st.recovery === "restore") {
+    return (
+      <div className="rounded-card border border-line bg-veil/[0.04] p-3">
+        <p className="text-[12.5px] font-semibold text-ink">Open your messages on this device</p>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-ink-3">
+          Your conversations were sealed to a key this browser doesn’t have yet. Enter your recovery
+          code and they open here too — on every device, not instead of the others.
+        </p>
+        <input value={entry} onChange={(e) => { setEntry(e.target.value); setErr(""); }}
+          aria-label="Recovery code" placeholder="XXXX-XXXX-XXXX-XXXX…" autoComplete="off" spellCheck={false}
+          className="aq-code mt-2 w-full rounded-field border border-line bg-space-1 px-2.5 py-1.5 text-[12.5px] text-ink" />
+        {err && <p className="mt-1 text-[11.5px] text-yang">{err}</p>}
+        <button type="button" disabled={busy || entry.trim().length < 8}
+          onClick={() => {
+            setBusy(true); setErr("");
+            restoreFromCode(entry).then((ok) => {
+              if (!ok) setErr("That code doesn’t open this vault. Check for a mistyped character.");
+            }).catch(() => setErr("Couldn’t reach the server — try again."))
+              .finally(() => setBusy(false));
+          }}
+          className="mt-2 rounded-pill bg-yang px-3 py-1 text-[12px] font-bold text-on-accent hover:opacity-90 disabled:opacity-50">
+          {busy ? "Opening…" : "Restore"}
+        </button>
+      </div>
+    );
+  }
+
+  if (!st.identity || st.recovery === "none") return null;
+
+  return (
+    <div className="rounded-card border border-line bg-veil/[0.04] p-3">
+      <p className="text-[12.5px] font-semibold text-ink">These messages exist only in this browser</p>
+      <p className="mt-1 text-[11.5px] leading-relaxed text-ink-3">
+        Clear this site’s data or move to another device and they cannot be opened again — by anyone,
+        including us. A recovery code fixes that: keep it, and your messages follow you.
+      </p>
+      {err && <p className="mt-1 text-[11.5px] text-yang">{err}</p>}
+      <button type="button" disabled={busy}
+        onClick={() => {
+          setBusy(true); setErr("");
+          enableRecovery().then(setCode)
+            .catch(() => setErr("Couldn’t save the recovery key — try again."))
+            .finally(() => setBusy(false));
+        }}
+        className="mt-2 rounded-pill bg-yang px-3 py-1 text-[12px] font-bold text-on-accent hover:opacity-90 disabled:opacity-50">
+        {busy ? "Setting up…" : "Set up recovery"}
+      </button>
+    </div>
+  );
+}
+
 export default function Messages() {
   const [sp, setSp] = useSearchParams();
   // ONE shared session with the chat dock (lib/chat-store): the same device identity, the same
@@ -1980,6 +2105,12 @@ export default function Messages() {
       </div>
       {fatal ? (
         <ErrorNote>{fatal}</ErrorNote>
+      ) : store.recovery === "restore" ? (
+        /* THE PROMPT LIVES HERE, not only in the sidebar. Everything below this branch — the rail
+           included — renders only once an identity exists, and a device waiting to restore has none
+           by design. Putting the panel behind that gate hid it on precisely the device it is for,
+           and left the member watching "preparing your key…" for a key that was never coming. */
+        <div className="mx-auto w-full max-w-[420px]"><RecoveryPanel /></div>
       ) : !identity || !myKey ? (
         <StatusNote>Preparing this device’s encryption key…</StatusNote>
       ) : (
@@ -2246,6 +2377,7 @@ export default function Messages() {
                 <span>Email me about messages I haven’t read</span>
               </label>
             )}
+            <RecoveryPanel />
             {/* Folded away. It is important and it is TRUE, but it is a paragraph about key
                 management sitting permanently under a list of friends — read once, then in the way
                 forever. A summary line that opens is the same information without the weight. */}
