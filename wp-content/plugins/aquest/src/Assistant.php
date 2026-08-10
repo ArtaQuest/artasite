@@ -711,7 +711,7 @@ final class Assistant {
 		// in the home they can ssh into, so chat and terminal are one workspace rather than two.
 		$u     = get_userdata( $uid );
 		$shell = $tools ? Shell::unix_name( $u ? $u->user_nicename : '' ) : '';
-		$out   = self::chat( $turns, self::artabot_prompt( $uid, $tools, $shell ), null, Usage::TIERS[ $tier ]['maxtok'], $tier, $dlv, $skey, $tools, $shell );
+		$out   = self::chat( $turns, self::artabot_prompt( $uid, $tools, $shell ), null, Usage::TIERS[ $tier ]['maxtok'], $tier, $dlv, $skey, $tools, $shell, $tier );
 		if ( $out === Relay::PENDING ) {
 			return [ 'pending' => true, 'id' => (int) $amid, 'session' => $sid, 'tier' => $tier, 'live' => (bool) $skey,
 			         'message' => self::NAME . ' is working on this one — the answer will appear here when it lands' ];
@@ -875,14 +875,14 @@ final class Assistant {
 	 *  (relay offline → caller shows ArtaBot's default "offline" message). Defaults are the CHAT
 	 *  profile (latest Opus, low effort, tight ceiling — fast); triage keeps the model and effort and
 	 *  overrides only the output ceiling (TRIAGE_MAXTOK protects the trailing aqmeta block). */
-	private static function chat( $messages, $system, $model = null, $max_tokens = null, $effort = 'low', $deliver = null, $stream_key = '', $tools = false, $shell_user = '' ) {
+	private static function chat( $messages, $system, $model = null, $max_tokens = null, $effort = 'low', $deliver = null, $stream_key = '', $tools = false, $shell_user = '', $tier = '' ) {
 		// SUBSCRIPTION-ONLY (operator rule 2026-06-13): every turn runs on the Claude Max subscription
 		// via the laptop relay (headless `claude -p`, src/Relay.php) — the paid Anthropic API has been
 		// removed from the platform entirely. Relay::ask returns the answer; self::BUSY (relay alive but
 		// slower than its wait budget) → the caller degrades gracefully (asks the member to resend); or
 		// null → the relay is genuinely unavailable (laptop away/asleep/usage-limited), and the caller
 		// shows ArtaBot's default "offline" message. There is no API fallback.
-		$via = Relay::ask( $messages, $system, $model ?: self::MODEL, $max_tokens ?: self::MAXTOK, $effort, $deliver, $stream_key, $tools, $shell_user );
+		$via = Relay::ask( $messages, $system, $model ?: self::MODEL, $max_tokens ?: self::MAXTOK, $effort, $deliver, $stream_key, $tools, $shell_user, $tier );
 		if ( $via === Relay::PENDING ) { return Relay::PENDING; } // async: the worker keeps going, deliver() lands it
 		if ( $via === Relay::BUSY ) { return self::BUSY; }
 		return $via; // a [text,usage] array, or null when the subscription relay is unavailable

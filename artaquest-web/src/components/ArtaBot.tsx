@@ -36,11 +36,17 @@ function friendlyError(e: unknown): string {
 // what changes is thinking depth, reply length and how much CPU and RAM the sandbox gets. Nothing is
 // signed in or not, forever. The ids must match Assistant::TIERS server-side; the server prices and
 // authorises the choice, so this list is a menu, not a permission.
+// The fallback menu, used only until the server's own list arrives. It is deliberately the SAME six
+// keys the server defines: a hardcoded four (which is what this was) meant the two most expensive
+// tiers could not be chosen from here at all, and a member picking "Deepest" got a tier that no longer
+// existed under that name.
 const EFFORTS = [
   { id: "low", label: "Quick" },
-  { id: "medium", label: "Considered" },
+  { id: "medium", label: "Thoughtful" },
   { id: "high", label: "Deep" },
-  { id: "xhigh", label: "Deepest" },
+  { id: "xhigh", label: "Research" },
+  { id: "max", label: "Max" },
+  { id: "workflow", label: "Workflow" },
 ] as const;
 
 // Image types ArtaBot (Claude) can read — mirror the server's allow-list so the file picker only
@@ -160,7 +166,7 @@ function CostMeter({ secs, tier, tiers }: { secs: number; tier: string; tiers?: 
   const usd = secs * (t.cpu * 0.000024 + t.ram * 0.000003);
   return (
     <span data-ay-skip="1" className="whitespace-nowrap text-[11px] text-ink-3">
-      {t.cpu} vCPU · {t.ram} GiB · ~${usd.toFixed(4)} compute
+      {t.label} · ~${usd.toFixed(4)} compute
     </span>
   );
 }
@@ -547,7 +553,7 @@ export function BotChat() {
         <div data-ay-skip="1" className="flex items-center gap-1 overflow-x-auto border-b border-line px-2 py-1.5">
           {sessions.map((x) => (
             <button key={x.id} type="button" onClick={() => setSid(x.id)}
-              title={`${tiers?.[x.tier]?.label ?? x.tier} · ${tiers?.[x.tier]?.cpu ?? "?"} vCPU · ${Number(x.coins).toFixed(3)} ₳ so far`}
+              title={`${tiers?.[x.tier]?.label ?? x.tier} · ${Number(x.coins).toFixed(3)} ₳ so far`}
               className={"group flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] transition-colors "
                 + (x.id === sid ? "border-yang/50 bg-yang/10 text-ink" : "border-line text-ink-3 hover:text-ink")}>
               <span className="max-w-[9rem] truncate">{x.title || `Chat ${x.id}`}</span>
@@ -564,19 +570,21 @@ export function BotChat() {
             className="ml-1 shrink-0 rounded-full border border-line bg-space-2 px-2 py-1 text-[12px] text-ink-3">
             <option value="">+ New</option>
             {Object.entries(tiers ?? {}).map(([k, t]) => (
-              <option key={k} value={k}>{t.label} · {t.cpu} vCPU / {t.ram} GiB</option>
+              <option key={k} value={k}>{t.label}{t.blurb ? ` — ${t.blurb}` : ""}</option>
             ))}
           </select>
         </div>
       )}
       {sessions && sessions.length === 0 && (
         <div className="border-b border-line px-3 py-2 text-[12.5px] text-ink-3">
-          Start a conversation — pick how big a machine it runs on:{" "}
+          {/* The MACHINE is not the member's decision — it is ours, and it is sized from what turns
+              actually use. They choose how hard the work should be tried; we choose what to run it on. */}
+          Start a conversation — pick how hard it should try:{" "}
           <select aria-label="Start a conversation" value="" onChange={(e) => { if (e.target.value) void newSession(e.target.value); }}
             className="rounded-full border border-line bg-space-2 px-2 py-1 text-[12px] text-ink">
             <option value="">Choose…</option>
             {Object.entries(tiers ?? {}).map(([k, t]) => (
-              <option key={k} value={k}>{t.label} · {t.cpu} vCPU / {t.ram} GiB</option>
+              <option key={k} value={k}>{t.label}{t.blurb ? ` — ${t.blurb}` : ""}</option>
             ))}
           </select>
         </div>
@@ -669,7 +677,9 @@ export function BotChat() {
               className="rounded-pill border border-line bg-space-2 px-2 py-0.5 text-[11px] text-ink-2 hover:border-yin-light focus:border-yin-light focus:outline-none"
               aria-label="How deeply ArtaBot should think about this turn"
             >
-              {EFFORTS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+              {/* The server's own ladder when it has arrived, the fallback only until then. */}
+              {(tiers ? Object.entries(tiers).map(([k, t]) => ({ id: k, label: t.label })) : EFFORTS)
+                .map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
           </label>
           {msgs.length > 0 && <button onClick={clear} className="hover:text-yin-light">Clear</button>}

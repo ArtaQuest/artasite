@@ -37,9 +37,32 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Usage {
 
-	const TABLE_VERSION = '4';
+	const TABLE_VERSION = '5';
 
 	// ── the measured rates (see the header for provenance) ───────────────────────
+	/**
+	 * WHAT THE AI ACTUALLY COSTS THE FOUNDATION — not what the tokens would cost somebody else.
+	 *
+	 * The run reports `total_cost_usd`: the API-equivalent value of the tokens it used. Billing that
+	 * figure was defensible while it happened to match what the plan cost us — the first 73 turns
+	 * averaged $0.087 and a $200 plan breaks even around 76 turns a day. It no longer matches: measured
+	 * over 38 real turns on 2026-08-09, the average is $0.24, because every turn is now a TOOL turn and
+	 * those think far harder. At ~69 turns a day that is ~$497 a month of API-equivalent value against
+	 * a plan that costs $200 — so billing the list price would charge members two and a half times what
+	 * their work costs the Foundation.
+	 *
+	 * So the plan is AMORTISED over what it actually served: each turn is charged its share of the
+	 * subscription, `list × (plan ÷ list value of everything the plan served in the last 30 days)`. The
+	 * factor is capped at 1 — we never charge MORE than the tokens are worth, even in a quiet month —
+	 * and both numbers are stored on every row, so a member can see the list price, the factor and what
+	 * they were actually charged, and check the arithmetic themselves.
+	 *
+	 * Rolling 30 days rather than calendar-month-to-date deliberately: a factor that resets on the 1st
+	 * would charge the first member of the month the full list price and the last one almost nothing,
+	 * for identical work.
+	 */
+	const PLAN_USD_MONTH = 200.0;
+
 	/** USD per vCPU-second, Azure Container Apps consumption, swedencentral, 2026-08-08. */
 	const USD_PER_VCPU_SEC = 0.000024;
 	/** USD per GiB-second, same. */
@@ -61,11 +84,12 @@ final class Usage {
 	 * `maxtok` is the reply ceiling. `effort` is how hard it may think.
 	 */
 	const TIERS = [
-		'low'    => [ 'n' => 1, 'label' => 'Quick',      'effort' => 'low',    'cpu' => 0.5, 'ram' => 1, 'secs' =>  240, 'maxtok' =>   800, 'workflow' => false ],
-		'medium' => [ 'n' => 2, 'label' => 'Thoughtful', 'effort' => 'medium', 'cpu' => 1.0, 'ram' => 2, 'secs' =>  600, 'maxtok' =>  2000, 'workflow' => false ],
-		'high'   => [ 'n' => 3, 'label' => 'Deep',       'effort' => 'high',   'cpu' => 2.0, 'ram' => 4, 'secs' => 1200, 'maxtok' =>  4000, 'workflow' => false ],
-		'xhigh'  => [ 'n' => 4, 'label' => 'Research',   'effort' => 'xhigh',  'cpu' => 3.0, 'ram' => 6, 'secs' => 2400, 'maxtok' =>  8000, 'workflow' => true  ],
-		'max'    => [ 'n' => 5, 'label' => 'Max',        'effort' => 'max',    'cpu' => 4.0, 'ram' => 8, 'secs' => 3600, 'maxtok' => 16000, 'workflow' => true  ],
+		'low'      => [ 'n' => 1, 'label' => 'Quick',      'effort' => 'low',    'cpu' => 1.0, 'ram' => 2, 'secs' =>  180, 'maxtok' =>   800, 'workflow' => false, 'blurb' => 'A question and an answer' ],
+		'medium'   => [ 'n' => 2, 'label' => 'Thoughtful', 'effort' => 'medium', 'cpu' => 1.0, 'ram' => 2, 'secs' =>  300, 'maxtok' =>  2000, 'workflow' => false, 'blurb' => 'Thinks before it answers' ],
+		'high'     => [ 'n' => 3, 'label' => 'Deep',       'effort' => 'high',   'cpu' => 2.0, 'ram' => 4, 'secs' =>  600, 'maxtok' =>  4000, 'workflow' => false, 'blurb' => 'Builds things, runs them, shows you' ],
+		'xhigh'    => [ 'n' => 4, 'label' => 'Research',   'effort' => 'xhigh',  'cpu' => 2.0, 'ram' => 4, 'secs' => 1200, 'maxtok' =>  8000, 'workflow' => false, 'blurb' => 'Reads around, checks, comes back' ],
+		'max'      => [ 'n' => 5, 'label' => 'Max',        'effort' => 'max',    'cpu' => 4.0, 'ram' => 8, 'secs' => 1800, 'maxtok' => 16000, 'workflow' => false, 'blurb' => 'Everything it has, on one problem' ],
+		'workflow' => [ 'n' => 6, 'label' => 'Workflow',   'effort' => 'max',    'cpu' => 4.0, 'ram' => 8, 'secs' => 2700, 'maxtok' => 16000, 'workflow' => true,  'blurb' => 'Many agents at once, then one answer' ],
 	];
 	const DEFAULT_TIER = 'low';
 
@@ -117,6 +141,8 @@ final class Usage {
 			ai_usd DECIMAL(12,6) NOT NULL DEFAULT 0,
 			cpu_sec DECIMAL(12,3) NOT NULL DEFAULT 0,
 			gib_sec DECIMAL(12,3) NOT NULL DEFAULT 0,
+			ai_list DECIMAL(12,6) NOT NULL DEFAULT 0,
+			ai_factor DECIMAL(6,4) NOT NULL DEFAULT 1,
 			used_cpu DECIMAL(12,3) NOT NULL DEFAULT 0,
 			peak_mb INT UNSIGNED NOT NULL DEFAULT 0,
 			azure_usd DECIMAL(12,6) NOT NULL DEFAULT 0,
@@ -181,6 +207,22 @@ final class Usage {
 	 * `$m` carries what was measured: ai_usd (what the run itself reported), secs, and the tier's
 	 * cpu/ram. Idempotent on `ref`, so a delivery that runs twice bills once.
 	 */
+	/** The share of the subscription one dollar of list-price AI is charged at right now. Cached for
+	 *  six hours: it is a slow-moving average over thirty days, and recomputing it per turn would put a
+	 *  full-table aggregate in front of every reply. */
+	public static function ai_factor() {
+		$f = get_transient( 'aq_ai_factor' );
+		if ( $f !== false ) { return (float) $f; }
+		// GREATEST(ai_list, ai_usd): rows written before this change stored the list price in ai_usd and
+		// have no ai_list, and dropping them would make the plan look emptier than it was.
+		$list = (float) Data::col(
+			'SELECT COALESCE(SUM(GREATEST(ai_list, ai_usd)),0) FROM ' . Data::t( 'aq_usage' ) . ' WHERE ended >= %d',
+			[ time() - 30 * DAY_IN_SECONDS ] );
+		$f = $list > self::PLAN_USD_MONTH ? self::PLAN_USD_MONTH / $list : 1.0;
+		set_transient( 'aq_ai_factor', $f, 6 * HOUR_IN_SECONDS );
+		return $f;
+	}
+
 	public static function record( $uid, $kind, $tier, $m ) {
 		self::ensure_tables();
 		$uid  = (int) $uid;
@@ -193,7 +235,9 @@ final class Usage {
 		$secs    = max( 0.0, (float) ( $m['secs'] ?? 0 ) );
 		$cpu_sec = $t['cpu'] * $secs;
 		$gib_sec = $t['ram'] * $secs;
-		$ai      = max( 0.0, (float) ( $m['ai_usd'] ?? 0 ) );
+		$list    = max( 0.0, (float) ( $m['ai_usd'] ?? 0 ) );   // what the tokens are worth at API rates
+		$factor  = self::ai_factor();
+		$ai      = $list * $factor;                              // …and what that costs the Foundation
 		$azure   = self::azure_usd( $t['cpu'], $t['ram'], $secs );
 		$total   = $ai + $azure;
 		$spot    = (float) Economy::gold_oz_usd();
@@ -206,7 +250,8 @@ final class Usage {
 			'ended'   => Data::now(),
 			'secs'    => (int) round( $secs ),
 			'tokens'  => (int) ( $m['tokens'] ?? 0 ),
-			'ai_usd'  => $ai, 'cpu_sec' => $cpu_sec, 'gib_sec' => $gib_sec,
+			'ai_usd'  => $ai, 'ai_list' => $list, 'ai_factor' => $factor,
+			'cpu_sec' => $cpu_sec, 'gib_sec' => $gib_sec,
 			'used_cpu' => max( 0.0, (float) ( $m['cpu_secs'] ?? 0 ) ),
 			'peak_mb'  => max( 0, (int) ( $m['peak_mb'] ?? 0 ) ),
 			'azure_usd' => $azure, 'total_usd' => $total, 'coins' => $coins, 'spot' => $spot,
@@ -255,6 +300,7 @@ final class Usage {
 			$tiers[] = [
 				'key' => $k, 'n' => $t['n'], 'label' => $t['label'], 'effort' => $t['effort'],
 				'cpu' => $t['cpu'], 'ram' => $t['ram'], 'max_secs' => $t['secs'], 'max_tokens' => $t['maxtok'],
+				'blurb' => $t['blurb'], 'workflow' => (bool) $t['workflow'],
 				'compute_usd_per_min' => round( $per_min, 6 ),
 				'compute_coins_per_min' => self::usd_to_coins( $per_min, $spot ),
 			];

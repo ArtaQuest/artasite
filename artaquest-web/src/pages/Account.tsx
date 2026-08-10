@@ -430,14 +430,14 @@ function UsageManager() {
             <div className="mt-2 overflow-x-auto">
               <table data-ay-skip="1" className="w-full text-[12.5px]">
                 <thead className="text-ink-3">
-                  <tr><th className="py-1 text-start font-normal">Mode</th><th className="text-start font-normal">Machine</th><th className="text-start font-normal">Max time</th><th className="text-end font-normal">Compute / min</th></tr>
+                  <tr><th className="py-1 text-start font-normal">Mode</th><th className="text-start font-normal">What it does</th><th className="text-start font-normal">Max time</th><th className="text-end font-normal">Compute / min</th></tr>
                 </thead>
                 <tbody>
                   {info.tiers.map((t) => (
                     <tr key={t.key} className="border-t border-line">
                       <td className="py-1.5 text-ink">{t.label}</td>
-                      <td className="text-ink-2">{t.cpu} vCPU · {t.ram} GiB</td>
-                      <td className="text-ink-2">{Math.round(t.max_secs / 60)} min</td>
+                      <td className="text-ink-2">{t.blurb}</td>
+                      <td className="text-ink-2">{t.max_secs >= 120 ? `${Math.round(t.max_secs / 60)} min` : `${t.max_secs}s`}</td>
                       <td className="text-end tabular-nums text-ink-2">{n(t.compute_coins_per_min)} ₳</td>
                     </tr>
                   ))}

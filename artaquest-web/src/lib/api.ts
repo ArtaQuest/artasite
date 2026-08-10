@@ -802,7 +802,7 @@ export type ShellInfo = { host: string; unix: string; blocked: string; command: 
 /** One of a member's parallel ArtaBot conversations. `tier` is the size of machine it runs on, and
  *  `coins` is what this conversation has cost so far — each session is metered and billed on its own. */
 export type BotSession = { id: number; title: string; tier: string; created: number; last: number; turns: number; coins: number };
-export type UsageTier = { n: number; label: string; effort: string; cpu: number; ram: number; secs: number; maxtok: number };
+export type UsageTier = { n: number; label: string; effort: string; cpu: number; ram: number; secs: number; maxtok: number; workflow?: boolean; blurb?: string };
 export const BotSessions = {
   list: () => get<{ items: BotSession[]; max: number; tiers: Record<string, UsageTier> }>("/artabot/sessions", { _: Date.now() }),
   open: (tier: string, title: string) => post<{ id: number; tier: string }>("/artabot/session", { tier, title }),
@@ -813,7 +813,7 @@ export const BotSessions = {
 export type UsageLine = { id: number; session_id: number; kind: string; tier: string; started: number; ended: number; secs: number; tokens: number; ai_usd: string; azure_usd: string; total_usd: string; coins: string; note: string };
 export type UsageInfo = {
   balance: number; floor: number; carry: number; spot: number; coin_usd: number;
-  tiers: { key: string; n: number; label: string; effort: string; cpu: number; ram: number; max_secs: number; max_tokens: number; compute_usd_per_min: number; compute_coins_per_min: number }[];
+  tiers: { key: string; n: number; label: string; effort: string; cpu: number; ram: number; max_secs: number; max_tokens: number; blurb: string; workflow: boolean; compute_usd_per_min: number; compute_coins_per_min: number }[];
   recent: UsageLine[];
 };
 export const UsageApi = {

@@ -157,7 +157,7 @@ final class Relay {
 	 * heartbeat lapses mid-wait (the laptop slept/crashed). A live, working relay is ALWAYS waited
 	 * for — even a slow claimed answer is the subscription doing its job, never the paid API. Never throws.
 	 */
-	public static function ask( $messages, $system, $model, $max_tokens, $effort = 'low', $deliver = null, $stream_key = '', $tools = false, $shell_user = '' ) {
+	public static function ask( $messages, $system, $model, $max_tokens, $effort = 'low', $deliver = null, $stream_key = '', $tools = false, $shell_user = '', $tier = '' ) {
 		if ( ! self::available() ) { return null; } // no fresh heartbeat or usage-limited → API is the backup
 
 		// Pull any attached screenshots out of the transcript so the turn (incl. ticket-triage with a
@@ -199,7 +199,18 @@ final class Relay {
 				'prompt'     => self::render_prompt( $flat ),
 				'model'      => $model,
 				'max_tokens' => (int) $max_tokens,
-				'effort'     => in_array( $effort, [ 'low', 'medium', 'high', 'xhigh', 'max' ], true ) ? $effort : 'low', // ArtaBot chat = low (fast); ArtaMod/ArtaVerify pass 'max'
+				// EFFORT IS NOT THE TIER. They shared a spelling for as long as every tier key happened to
+				// be an effort name, and callers pass a tier here — so the moment a tier was added whose
+				// key is not an effort ('workflow'), it would have failed this allow-list and silently
+				// become 'low': the most expensive tier running as the cheapest one.
+				'effort'     => in_array( $effort, [ 'low', 'medium', 'high', 'xhigh', 'max' ], true ) ? $effort
+					: ( isset( Usage::TIERS[ $effort ]['effort'] ) ? Usage::TIERS[ $effort ]['effort'] : 'low' ),
+				// The tier's WALL CLOCK, so the worker stops the turn where the member's tier says, not at
+				// its own default. The replica keeps itself alive for as long as this allows (see /hold).
+				'max_secs'   => isset( Usage::TIERS[ $tier ?: $effort ]['secs'] ) ? (int) Usage::TIERS[ $tier ?: $effort ]['secs'] : null,
+				// The one tier that may ORCHESTRATE — fan out to several agents and synthesise. It costs
+				// the most because it does the most, so it is a tier a member chooses, never a default.
+				'workflow'   => ! empty( Usage::TIERS[ $tier ?: $effort ]['workflow'] ) ? 1 : null,
 				'images'     => $images ?: null, // encrypted; the daemon decrypts → temp files → Read
 				'deliver'    => $deliver, // opaque: who to hand the finished answer to (see complete())
 				'stream'     => $stream_key ?: null, // opaque: where to post live deltas (see stream_chunk())
