@@ -513,6 +513,25 @@ final class Rest {
 		//    private keys are non-extractable, device-bound, and never leave the member's browser). ──
 		[ 'GET',  'chat/keys',                     'Chat::get_key',    'public' ], // ?user=<slug|id> → their active public key (same bytes as the open DB)
 		[ 'POST', 'chat/keys',                     'Chat::set_key',    'user'   ], // register/rotate the caller's device public key
+		// ── ArtaMeet — scheduled meetings (src/Meetings.php) ────────────────────
+		// A meeting is a PROMISE about a future time. The end-to-end encrypted room that carries
+		// it is bound at T-15m by whoever arrives first and released afterwards, so a week-old
+		// invitation never depends on a week-old key epoch. Deliberately NONE of these is in
+		// Api::TOKEN_ROUTES, for the same reason no rooms/* route is: a bearer token must not be
+		// able to book a human's time or seat itself in a sealed room.
+		[ 'GET',  'meet/list',                     'Meetings::list_mine', 'user' ], // ?scope=upcoming|past
+		[ 'GET',  'meet/get',                      'Meetings::get',       'user' ], // ?id= → one meeting + its guests
+		[ 'POST', 'meet/create',                   'Meetings::create',    'user' ], // {title, start, minutes, tz, guests[]}
+		[ 'POST', 'meet/update',                   'Meetings::update',    'user' ], // host only; bumps SEQUENCE
+		[ 'POST', 'meet/cancel',                   'Meetings::cancel',    'user' ], // host only; the row STAYS (STATUS:CANCELLED)
+		[ 'POST', 'meet/invite',                   'Meetings::invite',    'user' ], // host only
+		[ 'POST', 'meet/uninvite',                 'Meetings::uninvite',  'user' ], // host only
+		[ 'POST', 'meet/rsvp',                     'Meetings::rsvp',      'user' ], // guest: yes|no|maybe
+		[ 'GET',  'meet/lobby',                    'Meetings::lobby',     'user' ], // the join-window poll
+		[ 'POST', 'meet/open',                     'Meetings::open',      'user' ], // bind a room, atomically, once
+		[ 'POST', 'meet/seat',                     'Meetings::seat',      'user' ], // add me to the bound room
+		[ 'GET',  'meet/cal',                      'Meetings::cal',       'user' ], // my calendar subscription URLs
+		[ 'POST', 'meet/cal',                      'Meetings::cal_rotate','user' ], // rotate the key in those URLs
 		[ 'GET',  'chat/vault',                    'Chat::get_vault',  'user'   ], // my own sealed key blob (restores history on a new device)
 		[ 'POST', 'chat/vault',                    'Chat::set_vault',  'user'   ], // store it — sealed in the browser under a code we never see
 		[ 'GET',  'chat/list',                     'Chat::list_chats', 'user'   ], // ?box=chats|requests|archived|blocked → conversations + unread counts

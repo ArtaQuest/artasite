@@ -2541,3 +2541,131 @@ export function roomsCall(id: number, action: "join" | "leave") {
 }
 export function roomsMute(id: number, on: boolean) { return post<{ ok: boolean }>("/rooms/mute", { id, on: on ? 1 : 0 }); }
 
+// ── ArtaMeet — scheduled meetings (src/Meetings.php) ────────────────────────
+// A meeting is a PROMISE about a future time; the encrypted room that carries it is bound at T-15m
+// by whoever arrives first and thrown away afterwards. That separation is why `room_id` is 0 for
+// almost all of a meeting's life, and why an invitation issued a week ago never depends on a
+// week-old key epoch. Every one of these routes is session-only — none is in Api::TOKEN_ROUTES,
+// deliberately, so a bearer token can neither book a human's time nor seat itself in a sealed room.
+//
+// PUBLIC vs PRIVATE, stated once so the UI can say it too: the title, agenda, time and guest list
+// are ordinary rows served in full at /data/. What is SAID in the meeting is not — it rides the
+// room's own key, which this server never holds.
+
+export type MeetStatus = "scheduled" | "live" | "ended" | "cancelled";
+/** Derived from timestamps on every read, never from `status` — a stalled cron must not decide
+ *  whether a member can join a meeting that is happening now. */
+export type MeetPhase = "waiting" | "open" | "live" | "ended" | "cancelled";
+export type MeetRsvp = "none" | "yes" | "no" | "maybe";
+
+export type Meet = {
+  id: number; host_id: number; title: string; agenda: string;
+  /** The authoritative instant, UTC unix seconds. `tz` is the zone the host CHOSE it in, kept for
+   *  DST-correct recomputation and for honest labelling in email — never for rendering here. */
+  start_ts: number; end_ts: number; tz: string;
+  seats: number; status: MeetStatus;
+  /** Derived server-side from the timestamps rather than read off `status`, so a stalled cron
+   *  cannot leave a meeting that is happening now saying it has not started. */
+  phase: MeetPhase;
+  room_id: number; opened_ts: number; seq: number;
+  context_type: string; context_id: number; ctx_key: string;
+  created: number; updated: number;
+};
+
+export type MeetGuest = {
+  id: number; name: string; avatar: string; slug: string;
+  role: "host" | "guest";
+  rsvp: MeetRsvp;
+  /** When this guest was added to the bound room (0 = not yet). A member can be invited long
+   *  before they have a device key, so seating is retried rather than refused. */
+  seated: number;
+  /** Whether they have registered a device key at all — the difference between "not here yet" and
+   *  "has never opened anything that makes a key". */
+  has_device: boolean;
+  /** Whether they can open the bound room right now. False everywhere no room is bound. */
+  holds_key: boolean;
+};
+
+/** The member's own calendar URLs. The key in them is a signature over the member plus a revision
+ *  counter — derived, never stored, so there is no token row for anyone to lift. `rev` is what a
+ *  reset advances. */
+export type MeetCal = { ics: string; webcal: string; rev: number };
+
+export type MeetLobby = {
+  meet: Meet; me: number; phase: MeetPhase;
+  guests: MeetGuest[];
+  /** Uids that beaconed presence within the last few seconds. */
+  here: number[];
+  room_id: number; epoch: number;
+  /** Who could seal this room's key to a newcomer right now. The server works this out by
+   *  comparing each seal's device-key ids against the member's current one — without ever holding
+   *  a key itself. Empty means nobody present or absent can open the room. */
+  holders: number[];
+  present_holders: number[];
+  unseated: number[];
+  can_open: boolean; can_seat: boolean;
+  /** The room payload, when the caller is already a member of it — this is what feeds roomKey()
+   *  and distributeRoomKey(). Null until they are seated. */
+  room: Room | null;
+  seats_max: number;
+};
+
+export function meetList(opts?: { scope?: "upcoming" | "past"; cursor?: number; limit?: number }) {
+  return get<{
+    items: (Meet & { my_rsvp: MeetRsvp })[]; next: number | null; me: number; cal: MeetCal; seats_max: number;
+  }>("/meet/list", {
+    ...(opts?.scope ? { scope: opts.scope } : {}),
+    ...(opts?.cursor ? { cursor: opts.cursor } : {}),
+    ...(opts?.limit ? { limit: opts.limit } : {}),
+  });
+}
+/** A meeting you are not invited to answers 404, exactly as a missing one does — the API is not a
+ *  probe for guest lists, even though the row itself is public at /data/. */
+export function meetGet(id: number) {
+  return get<{ meet: Meet; guests: MeetGuest[]; me: number; my_rsvp: MeetRsvp; is_host: boolean; cal: MeetCal }>("/meet/get", { id });
+}
+/** A guest who cannot be resolved comes back in `warnings` rather than failing the whole meeting —
+ *  the meeting exists, and a mistyped handle is fixed from the page the host lands on. */
+export function meetCreate(b: {
+  title: string; agenda?: string; start: number; minutes: number; tz: string; seats?: number; guests?: string[];
+}) {
+  return post<{ ok: boolean; meet: Meet; guests: MeetGuest[]; cal: MeetCal; warnings: string[] }>("/meet/create", b as unknown as Json);
+}
+/** Host only. Any change to the time, the title or the status advances SEQUENCE, or subscribed
+ *  calendars ignore the update and everybody keeps the old time. */
+export function meetUpdate(b: {
+  id: number; title?: string; agenda?: string; start?: number; minutes?: number; seats?: number; tz?: string;
+}) {
+  return post<{ ok: boolean; meet: Meet; guests: MeetGuest[]; unchanged?: boolean }>("/meet/update", b as unknown as Json);
+}
+/** The row is kept, not deleted: a cancelled meeting has to go on saying it is cancelled to every
+ *  calendar subscribed to it. */
+export function meetCancel(id: number) { return post<{ ok: boolean; meet: Meet; already?: boolean }>("/meet/cancel", { id }); }
+export function meetInvite(id: number, user: string | number) {
+  return post<{ ok: boolean; already?: boolean; user?: number }>("/meet/invite", { id, user });
+}
+/** Off the guest list and out of the room — but not locked out of what was already said in it.
+ *  There is no key rotation; the blast radius is one disposable meeting. */
+export function meetUninvite(id: number, user: string | number) {
+  return post<{ ok: boolean; removed?: number; left_room?: boolean; already?: boolean; guests: MeetGuest[] }>("/meet/uninvite", { id, user });
+}
+export function meetRsvp(id: number, reply: "yes" | "no" | "maybe") {
+  return post<{ ok: boolean; meet: Meet; guests: MeetGuest[]; my_rsvp: MeetRsvp }>("/meet/rsvp", { id, reply });
+}
+/** The join-window poll. Reading it also beacons presence, which is why there is no separate
+ *  presence route to keep in step with it. */
+export function meetLobby(id: number) { return get<MeetLobby>("/meet/lobby", { id }); }
+/** Bind the room. `mint: true` means the caller is ALONE in a brand-new room and must call
+ *  roomKey() now — that is the only sequence lib/rooms.ts will mint under. */
+export function meetOpen(id: number) {
+  return post<{ ok: boolean; room_id: number; epoch: number; mint: boolean; seated: boolean; meet: Meet }>("/meet/open", { id });
+}
+/** Add the guests who are not in the room yet. Refused unless the caller can already open it —
+ *  seating somebody is only useful if there is a key-holder present to seal to them. */
+export function meetSeat(id: number) {
+  return post<{ ok: boolean; seated: number[]; needs_device: number[]; guests: MeetGuest[] }>("/meet/seat", { id });
+}
+export function meetCalUrl() { return get<MeetCal & { url: string }>("/meet/cal"); }
+/** Bump the counter inside the signature — every calendar URL issued before this stops working. */
+export function meetCalRotate() { return post<MeetCal & { ok: boolean; url: string }>("/meet/cal", {}); }
+

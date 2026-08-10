@@ -183,7 +183,7 @@ final class Extra {
 	// Statuses that occupy a slot / count as "registered".
 	const CLAIM_ACTIVE = "('claimed','submitted','verified')";
 
-	/** GET /outreach — open grants, their registrants, scheduled group meetings + the viewer's status. */
+	/** GET /outreach — open grants, their registrants, scheduled ArtaMeet sessions + the viewer's status. */
 	public static function outreach( $req ) {
 		$uid    = Rest::uid();
 		$grants = Data::all( 'SELECT * FROM ' . Data::t( 'aq_grants' ) . ' WHERE active = 1 ORDER BY fit DESC, points DESC LIMIT 200' );
@@ -209,13 +209,37 @@ final class Extra {
 			if ( $uid && (int) $c['user_id'] === $uid ) { $mine[ $g ] = $c['status']; }
 		}
 
-		// All scheduled group meetings, grouped by grant.
+		// All scheduled working sessions, grouped by grant. These live in aq_meets now (ArtaMeet);
+		// aq_grant_meetings is retired — its rows are kept as the historical record of the Google
+		// Calendar era, but nothing reads meet_url any more and no new row is ever written there.
+		//
+		// The join link is emitted ONLY to a member who holds a guest row on that sitting. This route
+		// is public and edge-cached for anonymous callers, so a link in the anonymous body would be a
+		// link the whole internet reads — which is exactly what the Google Meet URL was. /meet/<id>
+		// authorises on the guest row plus a session, so nothing depends on the URL staying secret;
+		// withholding it is simply not advertising a door you cannot open.
 		$meets = [];
-		foreach ( Data::all( 'SELECT grant_id, reminder_key, start_ts, end_ts, meet_url FROM ' . Data::t( 'aq_grant_meetings' ) . ' ORDER BY start_ts ASC' ) as $m ) {
-			$meets[ (int) $m['grant_id'] ][] = [
-				'reminder_key' => $m['reminder_key'], 'start' => (int) $m['start_ts'],
-				'end' => (int) $m['end_ts'], 'meet_url' => $m['meet_url'],
-			];
+		$gids  = array_map( static function ( $g ) { return (int) $g['id']; }, $grants );
+		if ( $gids ) {
+			$ph = implode( ',', array_fill( 0, count( $gids ), '%d' ) );
+			foreach ( Data::all(
+				'SELECT m.id, m.context_id, m.ctx_key, m.start_ts, m.end_ts, g.user_id AS guest_uid'
+				. ' FROM ' . Data::t( 'aq_meets' ) . ' m'
+				. ' LEFT JOIN ' . Data::t( 'aq_meet_guests' ) . ' g ON g.meet_id = m.id AND g.user_id = %d'
+				. " WHERE m.context_type = 'grant' AND m.context_id IN ($ph) AND m.status <> 'cancelled'"
+				. ' ORDER BY m.start_ts ASC',
+				array_merge( [ $uid ], $gids )
+			) as $m ) {
+				$id  = (int) $m['id'];
+				$key = (string) $m['ctx_key'];
+				$meets[ (int) $m['context_id'] ][] = [
+					// ctx_key is 'grant:<gid>:t-14' (plus 'b', 'c'… when the registrants outgrow one
+					// mesh) — the milestone is its last segment, and stays the field the page keys on.
+					'reminder_key' => ( strrpos( $key, ':' ) === false ? $key : substr( $key, strrpos( $key, ':' ) + 1 ) ),
+					'start' => (int) $m['start_ts'], 'end' => (int) $m['end_ts'],
+					'id' => $id, 'meet_url' => $m['guest_uid'] ? '/meet/' . $id : '',
+				];
+			}
 		}
 
 		$total_registered = 0;
@@ -242,7 +266,7 @@ final class Extra {
 
 		return [
 			'grants' => $out, 'count' => count( $out ), 'total_registered' => $total_registered,
-			'logged_in' => (bool) $uid, 'meet_enabled' => Meet::enabled(),
+			'logged_in' => (bool) $uid,
 			'ics_url' => home_url( '/?aq_grants_ics=1' ),
 		];
 	}
@@ -272,8 +296,8 @@ final class Extra {
 		$taken = (int) Data::col( 'SELECT COUNT(*) FROM ' . Data::t( 'aq_grant_claims' ) . ' WHERE grant_id = %d AND status IN ' . self::CLAIM_ACTIVE, [ $gid ] );
 		if ( $taken >= max( 1, (int) $g['capacity'] ) ) { return Rest::err( 'full', 'No slots left', 409 ); }
 		Data::insert( 'aq_grant_claims', [ 'grant_id' => $gid, 'user_id' => $uid, 'status' => 'claimed', 'points' => (int) $g['points'], 'claimed_ts' => Data::now() ] );
-		// Schedule/refresh the group working sessions and add this member to the calendar invite.
-		Meet::sync_grant( $gid );
+		// Schedule/refresh the ArtaMeet working sessions and seat this member on one of them.
+		Meetings::ensure_for_grant( $gid );
 		return [ 'ok' => true ];
 	}
 
@@ -290,8 +314,11 @@ final class Extra {
 
 	public static function outreach_release( $req ) {
 		$uid = Rest::uid(); $gid = Rest::pint( $req, 'grant', 0 );
+		// Only a 'claimed' row is released: a member who has already submitted or been verified is
+		// still working on this application, so they keep their slot AND their seat — the re-sync
+		// below deliberately re-invites them. That was always the behaviour; it was never written down.
 		$GLOBALS['wpdb']->delete( Data::t( 'aq_grant_claims' ), [ 'grant_id' => $gid, 'user_id' => $uid, 'status' => 'claimed' ] );
-		Meet::sync_grant( $gid ); // drop the member from the calendar invite
+		Meetings::ensure_for_grant( $gid ); // withdraw the member's invitation to the sessions
 		return [ 'ok' => true ];
 	}
 
@@ -661,12 +688,15 @@ final class Extra {
 			if ( strlen( $d ) !== 8 ) { continue; }
 			$dtend = gmdate( 'Ymd', strtotime( $g['deadline'] . ' +1 day' ) );
 			$lines[] = 'BEGIN:VEVENT';
-			$lines[] = 'UID:grant-' . preg_replace( '/[^a-z0-9-]/', '', (string) $g['slug'] ) . '@artaquest.org';
+			// FOLDED like every other line. It was not, and a funder with a long slug emitted a
+			// 94-octet UID — over RFC 5545 §3.1's 75-octet limit, which strict parsers may reject.
+			// Found while building ArtaMeet's feed next door; the two now fold identically.
+			$lines[] = self::ics_fold( 'UID:grant-' . preg_replace( '/[^a-z0-9-]/', '', (string) $g['slug'] ) . '@artaquest.org' );
 			$lines[] = 'DTSTAMP:' . $now;
 			$lines[] = 'DTSTART;VALUE=DATE:' . $d;
 			$lines[] = 'DTEND;VALUE=DATE:' . $dtend;
 			$lines[] = self::ics_fold( 'SUMMARY:' . self::ics_esc( $g['funder'] . ': ' . $g['title'] ) );
-			$lines[] = self::ics_fold( 'DESCRIPTION:' . self::ics_esc( trim( (string) $g['summary'] ) . ( $g['url'] ? "\n" . $g['url'] : '' ) . "\nhttps://artaquest.com/outreach/" ) );
+			$lines[] = self::ics_fold( 'DESCRIPTION:' . self::ics_esc( trim( (string) $g['summary'] ) . ( $g['url'] ? "\n" . $g['url'] : '' ) . "\nhttps://artaquest.com/sponsors/" ) );
 			if ( $g['url'] ) { $lines[] = self::ics_fold( 'URL:' . self::ics_esc( $g['url'] ) ); }
 			foreach ( [ 60, 30, 14, 7, 1 ] as $days ) {
 				$lines[] = 'BEGIN:VALARM';
@@ -686,13 +716,13 @@ final class Extra {
 		exit;
 	}
 
-	/** Escape a value for an iCalendar text field (RFC 5545 §3.3.11). */
-	private static function ics_esc( $s ) {
+	/** Escape a value for an iCalendar text field (RFC 5545 §3.3.11). Public: Meetings emits a feed too. */
+	public static function ics_esc( $s ) {
 		return str_replace( [ "\\", "\n", ',', ';' ], [ "\\\\", "\\n", "\\,", "\\;" ], (string) $s );
 	}
 
 	/** Fold a content line to ≤75 octets, continuation lines prefixed with a single space. */
-	private static function ics_fold( $line ) {
+	public static function ics_fold( $line ) {
 		if ( strlen( $line ) <= 75 ) { return $line; }
 		$out = '';
 		$first = true;

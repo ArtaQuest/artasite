@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.66.0';
+	const VERSION = '1.67.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -878,6 +878,57 @@ final class Schema {
 			// Scheduled group meetings for a grant's registrants (1-hour Google Meet working sessions
 			// at deadline-reminder milestones). reminder_key = e.g. 't-14' / 't-1'. meet_url + the
 			// Calendar event id come from the Calendar API (Meet); empty when Meet is not configured.
+			// ── ArtaMeet — scheduled meetings ─────────────────────────────────
+			// A meeting is a PROMISE about a future time; the end-to-end encrypted room that
+			// carries it is bound at T-15m and thrown away after, so a week-old invitation never
+			// depends on a week-old key epoch. room_id is 0 for almost all of a meeting's life.
+			// sort_key = start_ts * 10000000 + id: Db::page emits a bare "col > %d" cursor, so
+			// paging on start_ts alone SILENTLY DROPS ties — and grant sittings tie by
+			// construction (all computed at 16:00 ET). title is VARCHAR(255) for a 60-CHARACTER
+			// cap because VARCHAR counts BYTES and MySQL rejects the whole row on overflow.
+			'aq_meets' => "
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				host_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				title VARCHAR(255) NOT NULL DEFAULT '',
+				agenda TEXT NULL,
+				start_ts INT UNSIGNED NOT NULL DEFAULT 0,
+				end_ts INT UNSIGNED NOT NULL DEFAULT 0,
+				tz VARCHAR(64) NOT NULL DEFAULT 'UTC',
+				seats TINYINT UNSIGNED NOT NULL DEFAULT 5,
+				status VARCHAR(12) NOT NULL DEFAULT 'scheduled',
+				room_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				opened_ts INT UNSIGNED NOT NULL DEFAULT 0,
+				seq INT UNSIGNED NOT NULL DEFAULT 0,
+				sort_key BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				context_type VARCHAR(16) NOT NULL DEFAULT '',
+				context_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				ctx_key VARCHAR(64) NOT NULL DEFAULT '',
+				created INT UNSIGNED NOT NULL DEFAULT 0,
+				updated INT UNSIGNED NOT NULL DEFAULT 0,
+				PRIMARY KEY  (id),
+				UNIQUE KEY ctx_key (ctx_key),
+				KEY start_status (start_ts, status),
+				KEY host_id (host_id),
+				KEY ctx (context_type, context_id),
+				KEY sort_key (sort_key)",
+
+			// One row per invited member. `seated` is what makes membership RETRYABLE: Rooms::invite
+			// refuses anyone with no device key, so a guest who has never opened ArtaChat cannot be
+			// added to a room — here they are simply recorded, and seated the moment they show up.
+			'aq_meet_guests' => "
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				meet_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				role VARCHAR(12) NOT NULL DEFAULT 'guest',
+				rsvp VARCHAR(8) NOT NULL DEFAULT 'none',
+				invited_by BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				invited INT UNSIGNED NOT NULL DEFAULT 0,
+				rsvp_ts INT UNSIGNED NOT NULL DEFAULT 0,
+				seated INT UNSIGNED NOT NULL DEFAULT 0,
+				PRIMARY KEY  (id),
+				UNIQUE KEY meet_user (meet_id, user_id),
+				KEY user_meet (user_id, meet_id)",
+
 			'aq_grant_meetings' => "
 				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 				grant_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
@@ -1112,7 +1163,9 @@ final class Schema {
 			'aq_season_results' => [ 'desc' => 'Frozen leaderboard snapshot for a closed (season, course): podium + prizes.', 'cols' => [ 'place' => 'finishing position (1=🥇)', 'votes' => 'final season upvotes', 'prize' => 'coins awarded' ] ],
 			'aq_grants'         => [ 'desc' => 'Community-sourced grant catalogue (Outreach program).', 'cols' => [ 'fit' => 'relevance score', 'deadline' => 'YYYY-MM-DD (empty = rolling)', 'allows_regranting' => 'whether the funder permits bursary re-granting' ] ],
 			'aq_grant_claims'   => [ 'desc' => 'A member committing to draft a grant application.', 'cols' => [ 'status' => 'claimed → submitted → verified' ] ],
-			'aq_grant_meetings' => [ 'desc' => 'Scheduled group working sessions for a grant\'s registrants.', 'cols' => [ 'reminder_key' => 'milestone (e.g. t-14, t-1)', 'meet_url' => 'Google Meet link' ] ],
+			'aq_meets' => [ 'desc' => 'ArtaMeet — a scheduled meeting. The E2EE room that carries it is bound at T-15m and released after, so room_id is 0 for almost all of a meeting\'s life.', 'cols' => [ 'room_id' => 'the ArtaRooms room, only while live', 'seq' => 'iCalendar SEQUENCE — clients ignore an updated event without it', 'sort_key' => 'start_ts*1e7+id, a unique keyset cursor (start_ts alone ties)', 'ctx_key' => 'idempotency handle, e.g. grant:12:t-14' ] ],
+			'aq_meet_guests' => [ 'desc' => 'Who is invited to an ArtaMeet, and whether they have been seated in its room yet.', 'cols' => [ 'rsvp' => 'none|yes|no|maybe', 'seated' => 'when they were added to the live room (0 = not yet)' ] ],
+			'aq_grant_meetings' => [ 'desc' => 'Scheduled group working sessions for a grant\'s registrants.', 'cols' => [ 'reminder_key' => 'milestone (e.g. t-14, t-1)', 'meet_url' => 'RETIRED — the Google Meet link these sessions used before ArtaMeet; kept for the record, read by nothing' ] ],
 			'aq_competitions'   => [ 'desc' => 'Kaggle-style predictive-modelling contests. Public train/test data are files under uploads/competitions/<slug>/; the hidden holdout targets are server-only (never in this public DB).', 'cols' => [ 'owner_uid' => 'the member who opened the competition', 'metric' => 'scorer (r2)', 'holdout' => 'how the hidden test split is defined', 'status' => 'active | closed', 'n_train' => 'training rows', 'n_test' => 'holdout rows', 'n_features' => 'features per row', 'n_targets' => 'number of prediction targets', 'prize' => 'coin prize pool paid 50/30/20 to the top-3 at the deadline (0 = no prize)', 'thread_id' => 'the competition\'s official discussion thread (aq_threads.id)' ] ],
 			'aq_comp_subs'      => [ 'desc' => 'APPEND-ONLY competition submissions. The leaderboard takes the MAX score per member, so a better submission outranks earlier ones and a worse one never demotes them.', 'cols' => [ 'comp_id' => 'the competition', 'uid' => 'submitter', 'score' => 'R² against the hidden holdout', 'place' => 'leaderboard position snapshot at submission time', 'note' => 'optional submitter note', 'score' => 'R\xc2\xb2 on the PUBLIC holdout half (the live leaderboard); the private half decides the prize at the deadline', 'preds' => 'the submitted predictions (JSON, holdout rows only; oversized blobs stored as "gz:"+base64(deflate)) — kept so the private-half prize can be re-scored at settlement; public like every row here (they are the submitter\'s own guesses, not the hidden answers)', 'phase' => 'phase-metric telemetry (JSON): the full shift→R² distribution, the best shift, its zodiac sign, the per-30°-sector zodiac distribution and rep — which sky rotation the model locked onto, and how decisively', 'code_url' => 'open code the member submitted for adversarial review', 'method' => 'the member\'s method write-up', 'review' => 'review state: none | submitted | reviewing | verified | flagged | revisions-requested', 'verified' => 'the ArtaCompete reviewer ran the code + confirmed the score reproduces with no holdout leakage — required to win the prize' ] ],
 			'aq_comp_reviews'   => [ 'desc' => 'Adversarial review rounds for a competition SOLUTION (the ArtaScience mirror). The ArtaCompete relay clones + RUNS the member\'s open code against the public data, checks the leaderboard score reproduces and probes for holdout leakage/hardcoding, and returns a verdict per round; only a verified solution wins the prize.', 'cols' => [ 'sub_id' => 'the reviewed submission', 'round' => 'review round', 'verdict' => 'verify | revise | reject', 'verified' => 'the code reproduced the score with no leakage', 'score' => 'reviewer confidence 0-100', 'report' => 'the reviewer report', 'model' => 'reviewer model', 'effort' => 'reviewer reasoning effort', 'runtime_s' => 'review runtime (s)' ] ],

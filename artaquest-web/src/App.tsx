@@ -36,6 +36,7 @@ const Wallet = lazy(() => import("./pages/Wallet"));
 const MyLibrary = lazy(() => import("./pages/MyLibrary"));
 import { PlayerProvider } from "./components/player"; // the member's OWN device library (distinct from /library)
 const Messages = lazy(() => import("./pages/Messages")); // ArtaChat — end-to-end encrypted DMs
+const Meet = lazy(() => import("./pages/Meet")); // ArtaMeet — scheduled meetings on ArtaChat rooms
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ArtaRead = lazy(() => import("./pages/ArtaRead")); // read/translate/listen to ANY PDF, on-device
 const Page = lazy(() => import("./pages/Page"));
@@ -115,6 +116,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/ceo": "CEO",
   "/library": "Library",
   "/messages": "ArtaChat",
+  "/meet": "ArtaMeet",
   "/login": "Sign in", "/sponsors": "Sponsors",
   "/fearometer": "ArtaMod",
   "/works": "Home", "/challenges": "Challenges", "/rankings": "Rankings", "/studio": "Your Studio", "/console": "Operator console",
@@ -161,7 +163,7 @@ function stripLang(pathname: string): string {
 const STATIC_ROUTES = new Set([
   "/", "/about", "/wallet", "/faq-contact", "/developers",
   "/my-library", "/library", "/ceo",
-  "/user-account", "/login", "/donate", "/messages",
+  "/user-account", "/login", "/donate", "/messages", "/meet",
   "/sponsors", "/offline", "/studio", "/console", "/fearometer",
   "/works", "/challenges", "/rankings", "/topics", "/lab",
   "/surveys", "/datasets", "/models", "/articles",
@@ -177,6 +179,7 @@ function isReactRoute(pathname: string): boolean {
   // A feed notebook: id + optional slug, and either read as the page or as the JupyterBook
   // (/nb/12/book AND /nb/12/some-slug/book — the slug form was missing, so "Read the notebook as
   // a book" full-reloaded the whole SPA on every click).
+  if (/^\/meet\/\d+$/.test(p)) return true;                 // one ArtaMeet meeting
   if (/^\/nb\/\d+(\/[^/]+)?(\/book)?$/.test(p)) return true;
   if (/^\/studio\/nb\/\d+(\/edit)?$/.test(p)) return true;       // the Studio editor for one notebook
   return false;
@@ -405,6 +408,9 @@ export default function App() {
           <Route path="/about/" element={<About />} />
           <Route path="/wallet" element={<Wallet />} />
           <Route path="/wallet/" element={<Wallet />} />
+          <Route path="/meet" element={<Meet />} />
+          <Route path="/meet/" element={<Meet />} />
+          <Route path="/meet/:id" element={<Meet />} />
           <Route path="/messages" element={<Messages />} />
           <Route path="/messages/" element={<Messages />} />
           <Route path="/faq-contact" element={<FaqContact />} />

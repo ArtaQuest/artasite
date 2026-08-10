@@ -161,6 +161,7 @@ const NAV: { label: string; href: string; icon: IconKey; divider?: boolean; exte
   { label: "Library", href: "/library/", icon: "book", external: true },
   // ArtaChat — end-to-end encrypted DMs; keys live on the member's device, the DB holds ciphertext.
   { label: "ArtaChat", href: "/messages/", icon: "mail", external: true, auth: true },
+  { label: "ArtaMeet", href: "/meet/", icon: "calendar", external: true, auth: true },
   { label: "Rankings", href: "/rankings/", icon: "trophy", external: true },
   // UNLISTED, not retired (operator 2026-08-03): /topics/ and /issues/ still resolve and still
   // render. They are reached from where they are actually needed — the seasons and cycles surfaces
@@ -476,7 +477,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // stays put while the messages scroll under it. A marketing footer below that is 295px of
   // page nobody can see without scrolling PAST a pane that is already the height of the screen
   // — and its existence is what made the whole page scroll instead of just the conversation.
-  const onAppPane = active === "/messages";
+  const onAppPane = active === "/messages" || active === "/meet";
   // Arta needs a ledge. The two that exist — the messaging dock and the bottom tab bar — are BOTH
   // members-only, so a signed-out visitor has none and the figure stands on nothing.
   const signedIn = isLoggedIn();

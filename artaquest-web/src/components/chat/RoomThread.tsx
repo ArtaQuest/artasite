@@ -39,14 +39,23 @@ function fmtTime(ts: number) {
   return new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+/** Payload kinds that are call machinery rather than something a member said. */
+const SIGNAL_ONLY = new Set(["rtc", "draw", "point", "hand", "timer"]);
+
 export function RoomThread({
-  roomId, me: meProp, onLeave, compact = false, renderCall,
+  roomId, me: meProp, onLeave, compact = false, managed = false, renderCall,
 }: {
   roomId: number;
   /** A hint only — see `me` below. */
   me: number;
   onLeave: () => void;
   compact?: boolean;
+  /** True when something ELSE owns this room's membership — ArtaMeet, whose guest list is the only
+   *  door into a meeting. Hides the room-management controls, because there they are not merely
+   *  redundant but destructive: "Leave room" forgets the room key and locks the member out of a
+   *  meeting they were invited to, with no way back in, and "Invite someone" walks straight past the
+   *  guest list, the host-only invite rule and the seat cap. */
+  managed?: boolean;
   /** The call surface, supplied by the page so this component owns no WebRTC. `me` is handed OUT
    *  rather than read by the page: the page's own copy comes from the chat store's conversation
    *  list, which on the Rooms tab may never have loaded — it was 0, so the call never rendered. */
@@ -268,15 +277,19 @@ export function RoomThread({
             ))}
           </ul>
           <div className="mt-2.5 flex flex-wrap gap-2">
-            <button type="button" onClick={() => setPanel("invite")}
-              className="rounded-pill bg-yang px-3 py-1 text-[12px] font-bold text-on-accent hover:opacity-90">Invite someone</button>
+            {!managed && (
+              <button type="button" onClick={() => setPanel("invite")}
+                className="rounded-pill bg-yang px-3 py-1 text-[12px] font-bold text-on-accent hover:opacity-90">Invite someone</button>
+            )}
             <button type="button" onClick={() => void roomsMute(roomId, !room.muted).then(() => setRoom({ ...room, muted: !room.muted }))}
               className="rounded-pill border border-line px-3 py-1 text-[12px] font-semibold text-ink-2 hover:text-ink">
               {room.muted ? "Unmute" : "Mute"}
             </button>
-            <button type="button"
-              onClick={() => void roomsLeave(roomId).then(() => { forgetRoomKey(roomId); onLeave(); })}
-              className="rounded-pill border border-line px-3 py-1 text-[12px] font-semibold text-yang hover:opacity-90">Leave room</button>
+            {!managed && (
+              <button type="button"
+                onClick={() => void roomsLeave(roomId).then(() => { forgetRoomKey(roomId); onLeave(); })}
+                className="rounded-pill border border-line px-3 py-1 text-[12px] font-semibold text-yang hover:opacity-90">Leave room</button>
+            )}
           </div>
         </div>
       )}
@@ -311,6 +324,11 @@ export function RoomThread({
         ) : (
           <ol className="flex flex-col gap-1.5" data-ay-skip="1">
             {rows.map((r, i) => {
+              // MACHINERY IS NOT CONVERSATION. Every WebRTC offer, whiteboard stroke, raised hand and
+              // timer travels as an ordinary sealed room message, and this list drew each one as an
+              // empty "…" bubble — so a call filled its own transcript with hundreds of them.
+              // pages/Messages.tsx has always skipped these in DMs; rooms simply never did.
+              if (r.payload && SIGNAL_ONLY.has(r.payload.t)) return null;
               const mine = r.sender === me;
               const who = nameOf.get(r.sender);
               const grouped = i > 0 && rows[i - 1].sender === r.sender && r.at - rows[i - 1].at < 300;

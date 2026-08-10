@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, Fragment, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   getOutreach, claimGrant, submitGrant, releaseGrant, isLoggedIn, localePath,
   type OutreachGrant, type OutreachData, type OutreachMember,
@@ -53,8 +53,8 @@ function Registrants({ members, max = 4 }: { members: OutreachMember[]; max?: nu
 }
 
 // The expandable detail panel for one grant: summary, red flags, full registrant list,
-// scheduled meetings, and the member's claim/submit/release controls.
-function GrantDetail({ g, loggedIn, meetEnabled, onChanged }: { g: OutreachGrant; loggedIn: boolean; meetEnabled: boolean; onChanged: () => void }) {
+// scheduled sessions, and the member's claim/submit/release controls.
+function GrantDetail({ g, loggedIn, onChanged }: { g: OutreachGrant; loggedIn: boolean; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
   const [showSubmit, setShowSubmit] = useState(false);
   const [note, setNote] = useState("");
@@ -106,24 +106,30 @@ function GrantDetail({ g, loggedIn, meetEnabled, onChanged }: { g: OutreachGrant
           )}
         </div>
 
-        {/* scheduled group meetings */}
+        {/* scheduled working sessions — ArtaMeet, on ArtaQuest, end-to-end encrypted */}
         {g.meetings.length > 0 && (
           <div>
-            <h4 className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-ink-3">Group meetings (1 hr · Google Meet)</h4>
+            <h4 className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-ink-3">Working sessions (1 hr · ArtaMeet)</h4>
             <ul className="flex flex-col gap-1.5">
               {g.meetings.map((mt) => (
                 <li key={mt.reminder_key} className="flex flex-wrap items-center gap-2 text-[13px] text-ink-2">
-                  <span className="tabular-nums">{fmtMeeting(mt.start)}</span>
-                  {mt.meet_url
-                    ? <a href={mt.meet_url} target="_blank" rel="noopener noreferrer" className="rounded-md bg-yin/15 px-2 py-0.5 text-[12px] font-medium text-yin-light hover:bg-yin/25">Join Meet ↗</a>
-                    : <span className="text-[12px] text-ink-3">link pending</span>}
+                  <span className="tabular-nums" data-ay-skip="1">{fmtMeeting(mt.start)}</span>
+                  {mt.meet_url ? (
+                    <>
+                      <Link to={localePath(mt.meet_url)} className="rounded-md bg-yin/15 px-2 py-0.5 text-[12px] font-medium text-yin-light no-underline hover:bg-yin/25">Open the session</Link>
+                      <span className="text-[12px] text-ink-3">opens 15 minutes before</span>
+                    </>
+                  ) : (
+                    <span className="text-[12px] text-ink-3">Registrants get a join link</span>
+                  )}
                 </li>
               ))}
             </ul>
+            <p className="mt-1.5 text-[12px] text-ink-3">Held here on ArtaQuest, end-to-end encrypted, up to five people to a session</p>
           </div>
         )}
-        {g.meetings.length === 0 && g.members.length > 0 && g.deadline && (
-          <p className="text-[12px] text-ink-3">{meetEnabled ? "Group meetings are scheduled once members register." : "Group Meet sessions activate once the foundation finishes calendar setup."}</p>
+        {g.meetings.length === 0 && g.deadline && (
+          <p className="text-[12px] text-ink-3">No working sessions yet — one is scheduled 14 days and again 1 day before the deadline, for everyone registered by then</p>
         )}
       </div>
 
@@ -242,7 +248,7 @@ export default function Grants() {
       <PageHero
         eyebrow="Win funding" glyph={<DomainGlyph domain="grant" />}
         title="Sponsors"
-        lede={<>ArtaQuest is funded by sponsors. We research funding programmes and industry partners worldwide — for the open-education platform, for paying creators to produce learning content, and for learner bursaries — and post every deadline here. <strong className="text-ink">Claim a sponsor to help us apply</strong>, and earn <strong className="text-ink">points equal to the sponsorship amount</strong> in the <a href={localePath("/rankings/")} className="text-yang hover:underline">rankings</a>. Registered members are invited to <strong className="text-ink">group Google Meet sessions</strong> before each deadline.</>}
+        lede={<>ArtaQuest is funded by sponsors. We research funding programmes and industry partners worldwide — for the open-education platform, for paying creators to produce learning content, and for learner bursaries — and post every deadline here. <strong className="text-ink">Claim a sponsor to help us apply</strong>, and earn <strong className="text-ink">points equal to the sponsorship amount</strong> in the <a href={localePath("/rankings/")} className="text-yang hover:underline">rankings</a>. Registered members are invited to <strong className="text-ink">ArtaMeet working sessions</strong> before each deadline.</>}
       />
 
       <div className="grid gap-3 rounded-card border border-line bg-space-2 p-4 text-[13.5px] leading-relaxed text-ink-2 sm:grid-cols-3">
@@ -348,7 +354,7 @@ export default function Grants() {
                     {isOpen && (
                       <tr>
                         <td colSpan={8} className="p-0">
-                          <GrantDetail g={g} loggedIn={loggedIn} meetEnabled={!!data.meet_enabled} onChanged={load} />
+                          <GrantDetail g={g} loggedIn={loggedIn} onChanged={load} />
                         </td>
                       </tr>
                     )}
