@@ -377,6 +377,57 @@ final class Usage {
 		return [ 'charged' => $whole, 'carry' => round( $accrued - $next, 4 ) ];
 	}
 
+	/**
+	 * THE STATEMENT, as something a person reads (operator, 2026-08-10, of the first version: "this is
+	 * extremely ugly and useless").
+	 *
+	 * It was a monospace dump of internal columns — session id, kind, tier key, seconds, a raw coin
+	 * figure and the member's own prompt cut mid-word. Every field was there and none of it answered
+	 * the question a statement exists to answer: what did I do, and what did it cost me. So: the three
+	 * numbers that matter first, then one row per piece of work in the words the member used.
+	 */
+	private static function invoice_summary( $inv, $st, $uid ) {
+		$cell = static function ( $big, $small, $tone = '#1f2a37' ) {
+			return '<td width="33%" style="padding:0 6px 0 0;vertical-align:top">'
+				. '<div style="background:#f6f8fb;border-radius:10px;padding:12px 14px">'
+				. '<div style="font-size:20px;font-weight:700;color:' . $tone . ';white-space:nowrap">' . $big . '</div>'
+				. '<div style="font-size:12px;color:#8a97a6;margin-top:2px">' . $small . '</div></div></td>';
+		};
+		return '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:2px 0 18px"><tr>'
+			. $cell( esc_html( number_format( (float) $inv['total_coins'], 4 ) ) . ' &#8371;', 'used today', '#1746DC' )
+			. $cell( esc_html( (string) (int) ( $st['charged'] ?? 0 ) ) . ' &#8371;', 'charged, in whole coins' )
+			. $cell( esc_html( number_format( (float) Economy::coin_balance( $uid ), 2 ) ) . ' &#8371;', 'balance now' )
+			. '</tr></table>';
+	}
+
+	/** One row per piece of work: when, what the member asked for, which mode, how long, what it cost.
+	 *  No session ids and no tier keys — those are ours, not theirs. */
+	private static function invoice_table( $lines ) {
+		if ( ! $lines ) { return ''; }
+		$th = 'style="padding:0 8px 6px 0;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#8a97a6;text-align:left"';
+		$out = '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 18px;border-collapse:collapse">'
+			. '<tr><th ' . $th . '>What you asked</th><th ' . $th . '>Mode</th>'
+			. '<th ' . str_replace( 'text-align:left', 'text-align:right', $th ) . '>Time</th>'
+			. '<th ' . str_replace( 'text-align:left', 'text-align:right', $th ) . '>Cost</th></tr>';
+		foreach ( $lines as $l ) {
+			$tier = self::TIERS[ self::tier( $l['tier'] ) ]['label'] ?? $l['tier'];
+			$what = trim( (string) $l['note'] );
+			if ( $what === '' ) { $what = $l['kind'] === 'shell' ? 'Terminal session' : 'A message to ArtaBot'; }
+			// Cut on a WORD, and only when there is something to cut — a statement that ends every line
+			// mid-syllable reads as broken software, which is exactly how the first version read.
+			if ( mb_strlen( $what ) > 64 ) { $what = rtrim( mb_substr( $what, 0, 61 ), " ,.;:" ) . '…'; }
+			$secs = (int) $l['secs'];
+			$td   = 'style="padding:9px 8px 9px 0;border-top:1px solid #eef2f7;font-size:13px;color:#1f2a37;vertical-align:top"';
+			$out .= '<tr><td ' . $td . '>' . esc_html( $what ) . '</td>'
+				. '<td ' . $td . '><span style="color:#8a97a6">' . esc_html( $tier ) . '</span></td>'
+				. '<td ' . str_replace( 'vertical-align:top', 'vertical-align:top;text-align:right;white-space:nowrap;color:#8a97a6', $td ) . '>'
+				. esc_html( $secs >= 60 ? intdiv( $secs, 60 ) . 'm ' . ( $secs % 60 ) . 's' : $secs . 's' ) . '</td>'
+				. '<td ' . str_replace( 'vertical-align:top', 'vertical-align:top;text-align:right;white-space:nowrap;font-weight:600', $td ) . '>'
+				. esc_html( number_format( (float) $l['coins'], 4 ) ) . ' &#8371;</td></tr>';
+		}
+		return $out . '</table>';
+	}
+
 	/** Email one day's statement. Fail-open: a mail problem must never hold up the ledger. */
 	private static function mail_invoice( $uid, $day, $st = [ 'charged' => 0, 'carry' => 0 ] ) {
 		$u = get_userdata( (int) $uid );
@@ -387,24 +438,18 @@ final class Usage {
 			'SELECT session_id, kind, tier, secs, tokens, total_usd, coins, note FROM ' . Data::t( 'aq_usage' )
 			. ' WHERE user_id = %d AND ended >= %d AND ended < %d ORDER BY id ASC LIMIT 200',
 			[ $uid, strtotime( $day . ' 00:00:00 UTC' ), strtotime( $day . ' 00:00:00 UTC' ) + DAY_IN_SECONDS ] );
-		$body = [];
-		foreach ( $lines as $l ) {
-			// The session id is on every line: a member running several conversations at once needs to
-			// see which of them cost what, not one undifferentiated column of charges.
-			$body[] = sprintf( '#%-5s %-7s %-11s %5ds  %8s ₳  %s',
-				(int) $l['session_id'] ?: '-', $l['kind'], $l['tier'], (int) $l['secs'],
-				number_format( (float) $l['coins'], 4 ), $l['note'] );
-		}
 		$sent = Mailer::send( 'usage_invoice', $u->user_email, [
-			'name'   => $u->display_name,
-			'day'    => $day,
-			'items'  => (int) $inv['items'],
-			'total'  => number_format( (float) $inv['total_coins'], 4 ),
+			// The real-name helper lives in the theme, and the plugin may not assume the theme is loaded
+			// (wp-cli, cron). Ask for it when it is there and fall back to what the account has.
+			'name'    => function_exists( 'aq_profile_name' ) ? aq_profile_name( $u ) : $u->display_name,
+			'day'     => date_i18n( 'l j F', strtotime( $day . ' 12:00:00' ) ),
+			'items'   => (int) $inv['items'],
+			'total'   => number_format( (float) $inv['total_coins'], 4 ),
 			'charged' => (string) (int) ( $st['charged'] ?? 0 ),
-			'carry'  => number_format( (float) ( $st['carry'] ?? 0 ), 4 ),
-			'usd'    => number_format( (float) $inv['total_usd'], 4 ),
-			'lines'  => implode( "\n", $body ),
-			'balance' => number_format( (float) Economy::coin_balance( $uid ), 4 ),
+			'carry'   => number_format( (float) ( $st['carry'] ?? 0 ), 4 ),
+			'usd'     => number_format( (float) $inv['total_usd'], 2 ),
+			'summary' => self::invoice_summary( $inv, $st, $uid ),
+			'table'   => self::invoice_table( $lines ),
 		] );
 		if ( $sent ) { Data::update( 'aq_invoices', [ 'sent' => Data::now() ], [ 'id' => (int) $inv['id'] ] ); }
 	}
