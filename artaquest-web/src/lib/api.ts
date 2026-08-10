@@ -969,7 +969,11 @@ export type AskResult =
  *  a time (the thinking-token count stops climbing the moment Claude starts using tools instead of
  *  thinking), so it is what the meter shows. It is the worker's own report of a call it actually made:
  *  never synthesise one, for the same reason the reasoning text is not invented. */
-export type ArtabotLive = { seq: number; text: string; think: number; phase: "" | "thinking" | "writing"; step?: string; secs?: number; done: number; idle?: number };
+/** One tool the turn ran: what it was, what it was given, how it went, and what came back. `run` is a
+ *  step still going — it is written the instant Claude commits to the tool, before its arguments even
+ *  exist, so `arg` fills in a moment later and `out` only once the result lands. */
+export type LiveStep = { id: string; name: string; arg: string; state: "run" | "ok" | "fail"; out: string };
+export type ArtabotLive = { seq: number; text: string; think: number; phase: "" | "thinking" | "writing"; step?: string; steps?: LiveStep[]; secs?: number; done: number; idle?: number };
 // Anonymous visitors carry a stable client id so the server can keep their own conversation
 // across turns (kept in localStorage; logged-in users ignore it).
 function anonId(): string {

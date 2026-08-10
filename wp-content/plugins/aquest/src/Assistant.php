@@ -302,7 +302,7 @@ final class Assistant {
 	 */
 	public static function live( $req ) {
 		$key = self::live_key( $req, (int) Rest::p( $req, 'session', 0 ) );
-		if ( ! $key ) { return [ 'seq' => 0, 'text' => '', 'think' => 0, 'phase' => '', 'step' => '', 'done' => 1 ]; }
+		if ( ! $key ) { return [ 'seq' => 0, 'text' => '', 'think' => 0, 'phase' => '', 'step' => '', 'steps' => [], 'done' => 1 ]; }
 		$seen     = max( 0, (int) Rest::p( $req, 'seen', 0 ) );
 		$deadline = microtime( true ) + Relay::POLL_WAIT;
 		$gather   = 0.0;
@@ -346,12 +346,15 @@ final class Assistant {
 				// TOOL turn this is the only thing moving for minutes at a time — the thinking meter's
 				// token count stops climbing the moment Claude starts using tools instead of thinking.
 				'step'  => (string) ( $buf['step'] ?? '' ),
+				// …and the whole sequence behind it: every tool this turn has run, what it was given
+				// and what came back. The single step above is the CURRENT one; this is the record.
+				'steps' => is_array( $buf['steps'] ?? null ) ? array_values( $buf['steps'] ) : [],
 				'done'  => (int) ( $buf['done'] ?? 0 ),
 			];
 		}
 		// Nothing new within the hold — the client re-polls. `seq` echoes what it already has so a
 		// timeout is indistinguishable from "no change", and never rewinds the rendered text.
-		return [ 'seq' => $seen, 'text' => '', 'think' => 0, 'phase' => '', 'step' => '', 'done' => 0, 'idle' => 1 ];
+		return [ 'seq' => $seen, 'text' => '', 'think' => 0, 'phase' => '', 'step' => '', 'steps' => [], 'done' => 0, 'idle' => 1 ];
 	}
 
 	/** The public tier menu. It no longer advertises a free tier, because there is not one: every

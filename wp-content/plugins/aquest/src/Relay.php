@@ -547,7 +547,7 @@ final class Relay {
 		$key = (string) Rest::p( $req, 'key', '' );
 		if ( ! preg_match( '/^aqlive_[a-f0-9]{16,64}$/', $key ) ) { return [ 'ok' => false ]; }
 		$buf = get_transient( $key );
-		if ( ! is_array( $buf ) ) { $buf = [ 'seq' => 0, 'text' => '', 'think' => 0, 'phase' => 'thinking', 'step' => '', 'done' => 0 ]; }
+		if ( ! is_array( $buf ) ) { $buf = [ 'seq' => 0, 'text' => '', 'think' => 0, 'phase' => 'thinking', 'step' => '', 'steps' => [], 'done' => 0 ]; }
 
 		$add = (string) Rest::p( $req, 'text', '' );
 		if ( $add !== '' ) {
@@ -565,6 +565,7 @@ final class Relay {
 		// worker-supplied text that will be RENDERED: strip control characters, cap the length.
 		$step = trim( preg_replace( '/[\x00-\x1F\x7F]+/u', ' ', (string) Rest::p( $req, 'step', '' ) ) );
 		if ( $step !== '' ) { $buf['step'] = mb_substr( $step, 0, 160 ); }
+		$buf['steps'] = self::merge_steps( is_array( $buf['steps'] ?? null ) ? $buf['steps'] : [], Rest::p( $req, 'steps', [] ) );
 		$buf['seq'] = (int) $buf['seq'] + 1;
 
 		set_transient( $key, $buf, self::LIVE_TTL );
@@ -573,6 +574,52 @@ final class Relay {
 
 	/** Mark a live buffer finished so a reader stops holding and falls back to the transcript. Called
 	 *  from Assistant::deliver — the transcript row is the source of truth from that moment on. */
+	/**
+	 * THE ACTIVITY LIST — every tool the turn ran, in order, with what it was given and what came back.
+	 *
+	 * Operator, 2026-08-09: "I want all the intermediate results to be shown in realtime like in VS
+	 * Code." The single `step` above is a WINDOW — it shows the current tool and forgets the last one —
+	 * so a member watching a three-minute turn saw one line change five times and never learned what
+	 * any of it produced. This keeps the whole sequence.
+	 *
+	 * Merged by ID rather than appended, because a step is written twice by design: once the instant
+	 * Claude commits to a tool (name only, no arguments yet) and again when its result lands. Appending
+	 * would show every call twice, the second time contradicting the first.
+	 *
+	 * Everything here is WORKER-SUPPLIED TEXT that ends up rendered in a chat bubble, so every field is
+	 * stripped of control characters and capped, and the list itself is bounded — a turn that runs two
+	 * hundred commands must not grow an unbounded transient, and the last few are the interesting ones.
+	 */
+	const LIVE_MAX_STEPS = 40;
+	private static function merge_steps( $have, $add ) {
+		if ( ! is_array( $add ) || ! $add ) { return $have; }
+		$clean = static function ( $v, $len, $keep_lines = false ) {
+			$p = $keep_lines ? '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]+/u' : '/[\x00-\x1F\x7F]+/u';
+			return mb_substr( trim( (string) preg_replace( $p, ' ', (string) $v ) ), 0, $len );
+		};
+		foreach ( $add as $st ) {
+			if ( ! is_array( $st ) || empty( $st['id'] ) ) { continue; }
+			$id = $clean( $st['id'], 64 );
+			$row = [
+				'id'    => $id,
+				'name'  => $clean( $st['name'] ?? '', 40 ),
+				'arg'   => $clean( $st['arg'] ?? '', 200 ),
+				// One of three, never free text: it drives an icon, and a state we do not recognise is
+				// a state we cannot draw.
+				'state' => in_array( $st['state'] ?? '', [ 'run', 'ok', 'fail' ], true ) ? $st['state'] : 'run',
+				'out'   => $clean( $st['out'] ?? '', 600, true ),
+			];
+			$at = null;
+			foreach ( $have as $i => $old ) { if ( ( $old['id'] ?? '' ) === $id ) { $at = $i; break; } }
+			if ( $at === null ) { $have[] = $row; continue; }
+			// A later write must not blank what an earlier one already said: the start event knows the
+			// name, the finish event knows the result, and neither knows the other.
+			foreach ( [ 'name', 'arg', 'out' ] as $k ) { if ( $row[ $k ] === '' ) { $row[ $k ] = $have[ $at ][ $k ] ?? ''; } }
+			$have[ $at ] = $row;
+		}
+		return count( $have ) > self::LIVE_MAX_STEPS ? array_slice( $have, -self::LIVE_MAX_STEPS ) : $have;
+	}
+
 	public static function stream_close( $key ) {
 		if ( ! is_string( $key ) || ! preg_match( '/^aqlive_[a-f0-9]{16,64}$/', $key ) ) { return; }
 		$buf = get_transient( $key );

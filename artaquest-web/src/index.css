@@ -1640,6 +1640,10 @@ html[data-aq-player="1"] .aq-bot-panel { bottom: calc(4.25rem + var(--aq-safe-bo
   opacity: .35; animation: aq-think-pulse 1.25s ease-in-out infinite; }
 .aq-think-dots > i:nth-child(2) { animation-delay: .18s }
 .aq-think-dots > i:nth-child(3) { animation-delay: .36s }
+/* The same three dots at the size of a status glyph, for a tool step that is still running — it sits
+   in a list beside ✓ and ✕, so it has to occupy the same small box they do. */
+.aq-think-dots--tiny { gap: 2px }
+.aq-think-dots--tiny > i { width: 3px; height: 3px }
 @keyframes aq-think-pulse { 0%, 100% { opacity: .3; transform: translateY(0) } 45% { opacity: 1; transform: translateY(-2px) } }
 
 @media (prefers-reduced-motion: reduce) {

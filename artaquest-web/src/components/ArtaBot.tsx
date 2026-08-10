@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { ArtaBot as Api, ApiError, BotSessions, chatGetKey, chatMembers, type ArtabotMsg, type BotSession, type ChatMember, type ChatUserCard, type UsageTier } from "../lib/api";
+import { ArtaBot as Api, ApiError, BotSessions, chatGetKey, chatMembers, type ArtabotMsg, type BotSession, type ChatMember, type ChatUserCard, type LiveStep, type UsageTier } from "../lib/api";
 import { currentUser, isLoggedIn, localePath, renderRich } from "../lib/wp";
 import { armAutoAnswer, clearRing, getChatState, markSeen, subscribeChat, watchList } from "../lib/chat-store";
 import { useTypewriter } from "../lib/useTypewriter";
@@ -195,6 +195,95 @@ function Thinking({ tokens, since, step }: { tokens: number; since: number; step
 }
 
 /**
+ * WHAT IT IS DOING, AS IT DOES IT (operator, 2026-08-09: "I want all the intermediate results to be
+ * shown in realtime like in VS Code").
+ *
+ * A tool turn can run for minutes with nothing to read. The old view showed the CURRENT tool on one
+ * line, which meant the line changed five times and the member learned nothing from any of it: not
+ * what ran before, not whether it worked, not what it produced. This is the sequence instead — every
+ * call, its argument, whether it succeeded, and the output it returned.
+ *
+ * Output is rendered as PLAIN TEXT in a <pre>, never as markdown and never as HTML. It is the literal
+ * bytes a command printed, arriving from a container a member controls; the only safe thing to do
+ * with it is show it exactly as it is.
+ */
+/** The same list, folded, under a finished answer. Separate from <Activity> only because the default
+ *  is the other way round: while a turn runs the work IS the content, and afterwards the answer is. */
+function PastActivity({ steps }: { steps: LiveStep[] }) {
+  const [open, setOpen] = useState(false);
+  const failed = steps.filter((s) => s.state === "fail").length;
+  return (
+    <div data-ay-skip="1" className="mt-2">
+      <button onClick={() => setOpen((v) => !v)} className="text-[12px] text-ink-3 hover:text-ink-2">
+        {open ? "Hide" : "Show"} what it did · {steps.length} step{steps.length === 1 ? "" : "s"}
+        {failed ? ` · ${failed} failed` : ""}
+      </button>
+      {open && <Activity steps={steps} open />}
+    </div>
+  );
+}
+
+function Activity({ steps, open }: { steps: LiveStep[]; open?: boolean }) {
+  const [shown, setShown] = useState<Record<string, boolean>>({});
+  const [all, setAll] = useState(!!open);
+  const tail = useRef<HTMLDivElement | null>(null);
+  const last = steps.length ? steps[steps.length - 1].id : "";
+  useEffect(() => {
+    // Follow the newest step the way a terminal follows its own output — but only inside this panel,
+    // so it never yanks the page while the member is reading something above it.
+    if (tail.current) tail.current.scrollIntoView({ block: "nearest" });
+  }, [last, steps.length]);
+  if (!steps.length) return null;
+  const view = all ? steps : steps.slice(-6);
+
+  return (
+    <div data-ay-skip="1" className="mt-2 overflow-hidden rounded-card border border-line bg-space-1">
+      <div className="flex items-center justify-between gap-2 border-b border-line px-2.5 py-1.5">
+        <span className="text-[11.5px] uppercase tracking-wide text-ink-3">What it did · {steps.length}</span>
+        {steps.length > 6 && (
+          <button onClick={() => setAll((v) => !v)} className="text-[11.5px] text-ink-3 hover:text-ink-2">
+            {all ? "Show recent" : `Show all ${steps.length}`}
+          </button>
+        )}
+      </div>
+      <ul className="max-h-[260px] overflow-y-auto px-1 py-1">
+        {view.map((st) => {
+          const isOpen = !!shown[st.id];
+          return (
+            <li key={st.id} className="rounded px-1.5 py-1 hover:bg-space-2">
+              <button
+                onClick={() => st.out && setShown((m) => ({ ...m, [st.id]: !m[st.id] }))}
+                className={`flex w-full items-start gap-2 text-start ${st.out ? "cursor-pointer" : "cursor-default"}`}
+              >
+                {/* Three states, three shapes — never colour alone. */}
+                <span className="mt-[3px] shrink-0 text-[11px] leading-none">
+                  {st.state === "run" ? <span className="aq-think-dots aq-think-dots--tiny" aria-hidden="true"><i /><i /><i /></span>
+                    : st.state === "fail" ? <span className="text-yin">✕</span>
+                      : <span className="text-yang">✓</span>}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="text-[12.5px] font-medium text-ink-2">{st.name || "tool"}</span>
+                  {st.arg && <span className="ms-1.5 font-mono text-[11.5px] text-ink-3">{st.arg}</span>}
+                  {st.out && !isOpen && (
+                    <span className="mt-0.5 block truncate font-mono text-[11px] text-ink-3 opacity-80">
+                      {st.out.split("\n").filter(Boolean).slice(-1)[0] || ""}
+                    </span>
+                  )}
+                </span>
+              </button>
+              {st.out && isOpen && (
+                <pre className="mt-1 max-h-[180px] overflow-auto whitespace-pre-wrap break-words rounded bg-space-2 px-2 py-1.5 font-mono text-[11px] leading-snug text-ink-3">{st.out}</pre>
+              )}
+            </li>
+          );
+        })}
+        <div ref={tail} />
+      </ul>
+    </div>
+  );
+}
+
+/**
  * ArtaBot's conversation body — now one thread inside the unified chat dock, alongside DMs.
  *
  * Exported so the dock can mount it as a peer of DmThread. It owns everything about the AI
@@ -214,7 +303,11 @@ export function BotChat() {
   const [loaded, setLoaded] = useState(false);
   const [animId, setAnimId] = useState<number | null>(null); // the one reply currently typing itself out
   // The turn being written RIGHT NOW, streamed from the relay. Null when nothing is in flight.
-  const [live, setLive] = useState<{ text: string; think: number; phase: string; step: string; secs: number; since: number } | null>(null);
+  const [live, setLive] = useState<{ text: string; think: number; phase: string; step: string; steps: LiveStep[]; secs: number; since: number } | null>(null);
+  // What the LAST finished turn did, kept for the rest of the visit. The live bubble is replaced by
+  // the transcript row the moment a turn completes, and the work it did should not vanish with it —
+  // this is memory only, never a database row.
+  const [pastSteps, setPastSteps] = useState<Record<number, LiveStep[]>>({});
   // PARALLEL CONVERSATIONS. Each has its own transcript, its own tier (so its own CPU and RAM), its
   // own live stream and its own bill — so the panel has to know which one it is showing before it
   // reads history, opens a stream, or sends anything.
@@ -308,7 +401,11 @@ export function BotChat() {
             // `step` is STICKY: the buffer only ever carries the latest tool, and an empty one means
             // "nothing new to report", not "the tool finished" — so keep the last one rather than
             // flickering the line away between calls.
-            setLive((p) => ({ text: s.text, think: s.think, phase: s.phase || "thinking", step: s.step || p?.step || "", secs: s.secs ?? p?.secs ?? 0, since: p?.since ?? Date.now() }));
+            // The server merges the activity list and hands back the WHOLE of it, so an empty array
+            // means "nothing new", never "it forgot" — adopt it only when it has something in it.
+            setLive((p) => ({ text: s.text, think: s.think, phase: s.phase || "thinking", step: s.step || p?.step || "",
+              steps: s.steps && s.steps.length ? s.steps : (p?.steps ?? []),
+              secs: s.secs ?? p?.secs ?? 0, since: p?.since ?? Date.now() }));
           }
           if (s.done) break;
         } catch {
@@ -330,7 +427,7 @@ export function BotChat() {
     setDraft(""); setImage(null); setErr("");
     setMsgs((m) => [...m, { id: -Date.now(), role: "user", body: text, at: Date.now() / 1000, image: img ?? undefined }]);
     setBusy(true);
-    setLive({ text: "", think: 0, phase: "thinking", step: "", secs: 0, since: Date.now() });
+    setLive({ text: "", think: 0, phase: "thinking", step: "", steps: [], secs: 0, since: Date.now() });
     // The live reader starts BEFORE the answer is asked for. The buffer is keyed on the session, so
     // there is nothing to wait for — and starting here means the thinking meter is already ticking
     // while the request is still in flight.
@@ -352,7 +449,15 @@ export function BotChat() {
       await stream.finished;
       const h = await Api.history(sid || undefined).catch(() => null);
       if (h) setMsgs(h.items);
-      setLive(null);
+      // Keep the activity with the answer it produced. The live bubble is about to be replaced by the
+      // transcript row, and the work that got there should not disappear with it — so the steps move
+      // onto the reply's id and stay foldable for the rest of the visit.
+      setLive((p) => {
+        const steps = p?.steps ?? [];
+        const reply = h?.items?.length ? h.items[h.items.length - 1] : null;
+        if (steps.length && reply && reply.role === "assistant") setPastSteps((m) => ({ ...m, [reply.id]: steps }));
+        return null;
+      });
     } catch (e) {
       stream.stop();
       setLive(null);
@@ -505,6 +610,9 @@ export function BotChat() {
                   View contribution #{m.ticket.id} →
                 </a>
               )}
+              {/* What this answer actually did, if we watched it happen. Folded away by default: the
+                  answer is the point, the work behind it is there when a member wants to check it. */}
+              {pastSteps[m.id] && <PastActivity steps={pastSteps[m.id]} />}
             </div>
           </div>
         ))}
@@ -522,15 +630,17 @@ export function BotChat() {
                     <Thinking tokens={live.think} since={live.since} step={live.step} />
                     <CostMeter secs={live.secs} tier={sess?.tier || "low"} tiers={tiers} />
                   </div>}
-              {/* On a TOOL turn Claude narrates as it works, so there IS text — and the step line has
+              {/* On a TOOL turn Claude narrates as it works, so there IS text — and the progress has
                   to sit under it or the member watches a paragraph go still for two minutes with
                   nothing saying why. */}
-              {live.text && live.step && (
+              {live.text && (live.step || live.steps.length > 0) && (
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-2">
                   <Thinking tokens={live.think} since={live.since} step={live.step} />
                   <CostMeter secs={live.secs} tier={sess?.tier || "low"} tiers={tiers} />
                 </div>
               )}
+              {/* The work itself, growing as it happens. */}
+              <Activity steps={live.steps} />
             </div>
           </div>
         )}
