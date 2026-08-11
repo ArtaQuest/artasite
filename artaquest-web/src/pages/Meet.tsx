@@ -11,6 +11,9 @@ import { bootChat, getChatState, subscribeChat } from "../lib/chat-store";
 import { distributeRoomKey, roomKey } from "../lib/rooms";
 import { RoomThread } from "../components/chat/RoomThread";
 import { RoomCall } from "../components/chat/RoomCall";
+import { CallModeChoice } from "../components/chat/CallPanel";
+import { CALL_MODES, callModePref, deviceSuggestedMode, rememberCallMode } from "../components/chat/callmode";
+import type { CallMode } from "../lib/webrtc";
 import {
   Avatar, Button, EmptyState, ErrorNote, Field, Input, LoadMoreButton, PageHero,
   Pill, Segmented, Select, SignInGate, StatusNote, Textarea, Toolbar,
@@ -737,6 +740,54 @@ function HostControls({ meet, busy, onInvite, onRetime, onCancel }: {
 }
 
 /**
+ * HOW YOU WILL JOIN — the choice, before the door.
+ *
+ * Somebody on a train who knows their connection is poor should be able to say so DELIBERATELY,
+ * and arrive with sound only; somebody who has never thought about it should never be asked. So
+ * this is one sentence and a link, not a form: the default comes from the device and the link
+ * itself (lib/webrtc's suggestedMode, via callModePref), and the choice is remembered per device
+ * because it is a fact about someone's morning rather than about this meeting.
+ *
+ * It writes the preference rather than passing it down: the call surface is mounted later, by
+ * RoomThread, from a completely different branch of this page, and RoomCall reads the same
+ * preference on the way in. One value, two surfaces, no prop threaded through a component that
+ * has nothing to do with cameras.
+ */
+function JoinAs() {
+  const [mode, setMode] = useState<CallMode>(callModePref);
+  const [suggested] = useState(deviceSuggestedMode);
+  const [open, setOpen] = useState(false);
+  const chosen = CALL_MODES.find((m) => m.value === mode);
+  return (
+    <div className="mt-4 border-t border-line pt-3 text-start">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <p className="text-[12.5px] text-ink-2">
+          You’ll join with <span className="font-semibold text-ink">{chosen?.label}</span>
+        </p>
+        {/* 40px of height even though it reads as a link: it is the one control on this panel a
+            member on a phone actually has to hit. */}
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
+          className="inline-flex h-10 items-center text-[12.5px] font-semibold text-ink-3 underline underline-offset-2 hover:text-ink">
+          {open ? "Keep it" : "Change"}
+        </button>
+      </div>
+      {!open && chosen && <p className="mt-1 text-[12px] leading-relaxed text-ink-3">{chosen.blurb}</p>}
+      {open && (
+        <div className="mt-2.5">
+          <CallModeChoice value={mode} suggested={suggested}
+            onChange={(m) => { setMode(m); rememberCallMode(m); setOpen(false); }} />
+          <p className="mt-2 text-[12px] leading-relaxed text-ink-3">
+            A call with no server in it means everyone sends their own camera to everyone else, so on a
+            small connection the picture is what has to give — never the voice. You can change this during
+            the meeting
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * The join panel — the whole point of the page.
  *
  * It never mounts the call surface without a key. A member who joins the roster with no key opens
@@ -797,6 +848,7 @@ function JoinPanel({ lobby, busy, now, opening, onOpen, guests }: {
           The room is made fifteen minutes before the meeting and thrown away after, so an invitation sent weeks
           ago still works on a laptop you bought yesterday
         </p>
+        <JoinAs />
       </div>
     );
   }
@@ -812,6 +864,7 @@ function JoinPanel({ lobby, busy, now, opening, onOpen, guests }: {
         <Button className="mt-4 h-12 px-7 text-[15px]" disabled={busy || opening || !lobby.can_open} onClick={onOpen}>
           {opening ? "Opening…" : "Open the meeting"}
         </Button>
+        <JoinAs />
       </div>
     );
   }
@@ -850,6 +903,7 @@ function JoinPanel({ lobby, busy, now, opening, onOpen, guests }: {
           <span data-ay-skip="1">{nameOf(present[0])}</span> is in the room and their browser is sealing the key to
           this device. It takes a few seconds, and it is the only way in — we don’t hold a copy to give you
         </p>
+        <JoinAs />
       </div>
     );
   }
@@ -862,6 +916,7 @@ function JoinPanel({ lobby, busy, now, opening, onOpen, guests }: {
           <span data-ay-skip="1">{nameOf(holders[0])}</span> holds this room’s key but isn’t here right now. The
           moment they open this page, your device is sealed in — nothing here can hand it over on their behalf
         </p>
+        <JoinAs />
       </div>
     );
   }
@@ -873,6 +928,7 @@ function JoinPanel({ lobby, busy, now, opening, onOpen, guests }: {
         The room is open but its key hasn’t reached anyone who is here. Stay on this page — the first key-holder
         to arrive seals it to you automatically
       </p>
+      <JoinAs />
     </div>
   );
 }
