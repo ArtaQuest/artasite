@@ -263,6 +263,40 @@ final class I18n {
 		return isset( self::registry()[ $code ] ) ? $code : '';
 	}
 
+	/**
+	 * A submitted language code normalised to one this platform actually has, or '' if it is not one.
+	 *
+	 * Public because member-facing fields validate against the SAME registry the interface is
+	 * translated into: if a member can say they speak a language, it has to be a language we can
+	 * render the site in, or the two lists drift and the profile shows a code nobody can resolve.
+	 * `lang()` itself stays private — it is the router/cookie path and its name is too terse to be
+	 * an API.
+	 */
+	public static function language_code( $code ) {
+		return self::lang( (string) $code );
+	}
+
+	/**
+	 * A registry code → [ code, English name, native name, direction ], or null if we do not have it.
+	 *
+	 * The public profile RESOLVES NAMES SERVER-SIDE with this rather than sending bare codes for the
+	 * page to look up in window.AQ_I18N. The boot config is a separate artefact: when it is missing
+	 * (a dev server, a cached shell, a failed inject) every code fails to resolve and a member's
+	 * stated languages VANISH from their profile with no error anywhere. A payload that carries its
+	 * own names cannot half-render.
+	 */
+	public static function language_meta( $code ) {
+		$c = self::lang( (string) $code );
+		if ( '' === $c ) { return null; }
+		$pair = self::registry()[ $c ];
+		return array(
+			'code'   => $c,
+			'name'   => $pair[0],
+			'native' => $pair[1],
+			'dir'    => in_array( $c, self::RTL, true ) ? 'rtl' : 'ltr',
+		);
+	}
+
 	// ── Language-prefix URL router (/es/, /fa/, …) ───────────────────────────
 	// Replaces the router that lived in the retired MasterStudy plugin. On plugins_loaded
 	// (before WordPress parses the request) the /xx/ prefix is stripped from REQUEST_URI so

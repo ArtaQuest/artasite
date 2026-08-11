@@ -352,6 +352,24 @@ export default function Profile() {
                   {relationshipLabel(p.relationship)}
                 </span>
               ) : null}
+              {/* Languages, resolved from the same registry the interface is translated into. Native
+                  name, because that is how LanguageSelector names a language and how a speaker
+                  recognises their own; each one in <bdi dir> with data-ay-skip so an RTL endonym
+                  (فارسی, العربية) cannot reorder the Latin line around it and the mesh does not try
+                  to translate a proper noun. Nothing at all when the member has said nothing. */}
+              {(p.languages?.length ?? 0) > 0 ? (
+                <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5" title="Languages this member says they speak">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M4 6h10M9 4v2c0 4-2.2 7-5 8" /><path d="M7 11c1.3 2.3 3.3 4 6 5" />
+                    <path d="M13 20l4-9 4 9M14.8 17h4.4" />
+                  </svg>
+                  {p.languages!.map((l, i) => (
+                    <span key={l.code}>
+                      <bdi dir={l.dir} data-ay-skip="1">{l.native}</bdi>{i < p.languages!.length - 1 ? "," : ""}
+                    </span>
+                  ))}
+                </span>
+              ) : null}
               {p.location?.trim() ? (
                 <span className="inline-flex min-w-0 items-center gap-1.5" title="Where this member says they are">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" aria-hidden>

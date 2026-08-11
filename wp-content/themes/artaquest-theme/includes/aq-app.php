@@ -1209,6 +1209,13 @@ function aq_app_head_meta() {
 		if ( class_exists( 'AQ\\Auth' ) ) {
 			$plinks = array_values( AQ\Auth::links( $puser->ID ) );
 			if ( $plinks ) { $person['sameAs'] = $plinks; }
+			// knowsLanguage — schema.org's own property for exactly this, emitted as BCP-47 codes
+			// because that is what the vocabulary asks for and what a consumer can act on, where the
+			// visible profile shows endonyms a reader recognises. Both come from the one registry.
+			if ( class_exists( 'AQ\\I18n' ) ) {
+				$plangs = AQ\Auth::languages( $puser->ID );
+				if ( $plangs ) { $person['knowsLanguage'] = array_values( $plangs ); }
+			}
 		}
 		if ( $pworks ) {
 			// What they are known FOR. Named works are the strongest thing tying a person to a subject,

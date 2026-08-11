@@ -255,6 +255,7 @@ final class Auth {
 			'links'     => (object) self::links( $uid ),                          // (object): an empty set is {} not [] — see Social::profile
 			'relationship' => self::relationship( $uid ),                         // '' = not saying; the settings form prefills from this
 			'location'     => self::location( $uid ),                             // self-declared only — never inferred, see Auth::location
+			'languages'    => self::languages( $uid ),                            // I18n registry codes, the member's own order
 			'works'     => Notebook::published_count( $uid ),                     // published works — the dashboard's headline tile
 			'joined'    => Verify::joined_label( $u->user_registered ), // clamped to the platform launch (ticket #103)
 			'verified'     => Verify::is_verified( $uid ),   // blue check
@@ -357,6 +358,32 @@ final class Auth {
 		'divorced'     => 'Divorced',
 		'widowed'      => 'Widowed',
 	);
+
+	/**
+	 * How many languages a member may claim. Eight is past what anyone credibly speaks and it keeps
+	 * the profile's one-line meta row readable; the registry itself has 132, so an uncapped list
+	 * would be a way to turn a profile into a wall.
+	 */
+	const LANGS_MAX = 8;
+
+	/**
+	 * The languages this member says they speak, as I18n registry codes.
+	 *
+	 * Validated on READ as well as on write, exactly like relationship(): a code that is no longer in
+	 * the registry (or was written straight into this public database by hand) resolves to nothing
+	 * rather than rendering as raw text on somebody's profile. Order is the MEMBER'S — we do not
+	 * collect fluency, so re-sorting their list would be us inventing a ranking they never stated.
+	 */
+	public static function languages( $uid ) {
+		$raw = get_user_meta( (int) $uid, 'aq_languages', true );
+		$raw = is_array( $raw ) ? $raw : (array) json_decode( (string) $raw, true );
+		$out = array();
+		foreach ( $raw as $c ) {
+			$code = I18n::language_code( (string) $c );
+			if ( '' !== $code && ! in_array( $code, $out, true ) ) { $out[] = $code; }
+		}
+		return array_slice( $out, 0, self::LANGS_MAX );
+	}
 
 	/** The member's stated relationship status key, or '' when they have not said. */
 	public static function relationship( $uid ) {
@@ -495,6 +522,26 @@ final class Auth {
 			}
 			update_user_meta( $uid, 'aq_relationship', $rel );
 		}
+		$langs_in = Rest::p( $req, 'languages', null );
+		if ( null !== $langs_in ) {
+			$langs_in = is_array( $langs_in ) ? $langs_in : (array) json_decode( (string) $langs_in, true );
+			$clean = array();
+			$bad   = array();
+			foreach ( $langs_in as $c ) {
+				$code = I18n::language_code( (string) $c );
+				if ( '' === $code ) { $bad[] = sanitize_text_field( substr( (string) $c, 0, 12 ) ); continue; }
+				if ( ! in_array( $code, $clean, true ) ) { $clean[] = $code; }
+			}
+			// REFUSE rather than silently drop: a member who picked something we cannot render must be
+			// told, not left looking at a profile that quietly disagrees with what they submitted.
+			if ( $bad ) {
+				return Rest::err( 'bad_language', 'We do not have that language: ' . implode( ', ', array_slice( $bad, 0, 3 ) ) . '.' );
+			}
+			if ( count( $clean ) > self::LANGS_MAX ) {
+				return Rest::err( 'too_many_languages', 'You can list up to ' . self::LANGS_MAX . ' languages.' );
+			}
+			update_user_meta( $uid, 'aq_languages', wp_json_encode( array_values( $clean ) ) );
+		}
 		$loc_in = Rest::p( $req, 'location', null );
 		if ( null !== $loc_in ) {
 			// One line, city-sized. sanitize_text_field already strips tags and newlines; the cap is
@@ -514,7 +561,7 @@ final class Auth {
 		// handle simultaneously, WP suffixes the loser (-2) — the client must learn what it actually got.
 		// `links` comes back NORMALISED — a member who typed a bare handle sees the real URL that was
 		// stored, so the form shows what the profile will show rather than what they typed.
-		return array( 'ok' => true, 'name' => $u ? $u->display_name : $name, 'bio' => $bio, 'slug' => $u ? $u->user_nicename : '', 'links' => (object) self::links( $uid ), 'relationship' => self::relationship( $uid ), 'location' => self::location( $uid ) );
+		return array( 'ok' => true, 'name' => $u ? $u->display_name : $name, 'bio' => $bio, 'slug' => $u ? $u->user_nicename : '', 'links' => (object) self::links( $uid ), 'relationship' => self::relationship( $uid ), 'location' => self::location( $uid ), 'languages' => self::languages( $uid ) );
 	}
 
 	/** GET /username/check?u= — live availability for the settings form. Public: every username is

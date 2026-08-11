@@ -1,12 +1,18 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { DobWheel } from "../components/DobWheel";
-import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, LOCATION_MAX, postProfileUpdate, PROFILE_LINKS, RELATIONSHIPS, type CourseCard, type Dashboard, type UsernameCheck } from "../lib/wp";
+import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, LANGS_MAX, LOCATION_MAX, postProfileUpdate, PROFILE_LINKS, RELATIONSHIPS, type CourseCard, type Dashboard, type UsernameCheck } from "../lib/wp";
 import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, KaggleIds, Passkeys, ShellAccount, UsageApi, myParticipation, setGender as setGender_, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type KaggleIdItem, type SessionItem, type ShellInfo, type ShellKey, type UsageInfo, type BursaryResult, type BursaryStatus, type ShareKit } from "../lib/api";
 import { signOut } from "../lib/auth";
 import { VerifyApi, fileToImage, type VerifyStatus } from "../lib/verify";
 import { countryName, countryOptions, flagEmoji } from "../lib/flags";
 import { BlueCheck } from "../components/BlueCheck";
-import { Avatar, Button, Card, CertBadge, ErrorNote, Field, Input, Pill, Select, SignInGate, StatusNote, Textarea } from "../components/ui";
+import { Avatar, Button, Card, CertBadge, Chip, ErrorNote, Field, Input, Pill, Select, SignInGate, StatusNote, Textarea } from "../components/ui";
+import { availableLangs } from "../lib/i18n";
+
+/** code → LangMeta, built once: the picker and the chips both resolve names, and availableLangs()
+ *  rebuilds an array of 132 on every call. */
+const LANG_BY_CODE: Record<string, { code: string; native: string; name: string; dir: "ltr" | "rtl" }> =
+  Object.fromEntries(availableLangs().map((l) => [l.code, l]));
 
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -29,6 +35,7 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
     Object.fromEntries(PROFILE_LINKS.map(([k]) => [k, (user.links as Record<string, string> | undefined)?.[k] ?? ""])));
   const [relationship, setRelationship] = useState(user.relationship || "");
   const [location, setLocation] = useState(user.location || "");
+  const [langs, setLangs] = useState<string[]>(() => user.languages ?? []);
   const [username, setUsername] = useState(user.slug || "");
   const [check, setCheck] = useState<UsernameCheck | null>(null); // live availability of a NEW handle
   const [saving, setSaving] = useState(false);
@@ -36,7 +43,8 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
   const usernameChanged = username !== (user.slug || "") && username !== "";
   const linksDirty = PROFILE_LINKS.some(([k]) => (links[k] || "") !== ((user.links as Record<string, string> | undefined)?.[k] ?? ""));
   const dirty = name.trim() !== user.name || bio !== (user.bio || "") || usernameChanged || linksDirty
-    || relationship !== (user.relationship || "") || location !== (user.location || "");
+    || relationship !== (user.relationship || "") || location !== (user.location || "")
+    || langs.join(",") !== (user.languages ?? []).join(",");
 
   // Debounced live availability check — only while the handle differs from the current one.
   useEffect(() => {
@@ -53,13 +61,14 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
     setSaving(true);
     setMsg("");
     try {
-      const r = await postProfileUpdate(name.trim(), bio, usernameChanged ? username : undefined, links, relationship, location.trim());
+      const r = await postProfileUpdate(name.trim(), bio, usernameChanged ? username : undefined, links, relationship, location.trim(), langs);
       if (!r.ok) { setMsg(r.message || "Could not save — try again"); return; }
       if (r.links) setLinks(Object.fromEntries(PROFILE_LINKS.map(([k]) => [k, (r.links as Record<string, string>)[k] ?? ""])));
       // Adopt what was STORED, not what was typed: the server trims and caps the location, so a
       // 70-character entry must come back as the 60 the profile will actually show.
       if (r.relationship !== undefined) setRelationship(r.relationship);
       if (r.location !== undefined) setLocation(r.location);
+      if (r.languages !== undefined) setLangs(r.languages);
       // Adopt what the server actually stored (a simultaneous claim can suffix the handle).
       if (r.slug) setUsername(r.slug);
       onSaved(r.name, r.bio, r.slug);
@@ -129,6 +138,55 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
             </label>
           </div>
         </Field>
+
+        {/* LANGUAGES SPOKEN. Deliberately NOT inside <Field>: Field renders a <label>, and the chips
+            below are buttons — a button inside a label swallows the click into the labelled control.
+            So this reproduces Field's typography on a plain container instead.
+
+            The list is the SAME 132-language registry the interface itself is translated into
+            (availableLangs(), served in window.AQ_I18N at boot, so no extra request), because a
+            member should not be able to claim a language the platform cannot render. Native name
+            first with the English name beside it, matching LanguageSelector — and every endonym is
+            wrapped in <bdi dir> with data-ay-skip, or an RTL name like فارسی reorders the
+            punctuation of the Latin line it sits in, and the translation mesh tries to translate a
+            proper noun. */}
+        <div className="flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2">
+          <span>Languages you speak <span className="font-normal text-ink-3">(optional)</span></span>
+          <span className="text-[12.5px] font-normal text-ink-3">
+            Public, and up to {LANGS_MAX}. Add the ones you can actually hold a conversation in — nobody is checking, and that is rather the point.
+          </span>
+          {langs.length > 0 && (
+            <ul className="mt-1 flex list-none flex-wrap gap-2">
+              {langs.map((code) => {
+                const l = LANG_BY_CODE[code];
+                return (
+                  <li key={code}>
+                    <Chip active onClick={() => setLangs((cur) => cur.filter((c) => c !== code))}
+                      className="gap-1.5" >
+                      <bdi dir={l?.dir || "ltr"} data-ay-skip="1">{l?.native || code}</bdi>
+                      <span aria-hidden className="text-[15px] leading-none text-ink-3">×</span>
+                      <span className="sr-only">Remove</span>
+                    </Chip>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <div className="mt-1">
+            <Select
+              value=""
+              onChange={(code) => { if (code && !langs.includes(code) && langs.length < LANGS_MAX) setLangs((cur) => [...cur, code]); }}
+              label="Add a language"
+              className="w-full bg-space-1 sm:w-72"
+              options={[
+                { value: "", label: langs.length >= LANGS_MAX ? `That is ${LANGS_MAX} — remove one to add another` : "Add a language…" },
+                ...availableLangs()
+                  .filter((l) => !langs.includes(l.code))
+                  .map((l) => ({ value: l.code, label: `${l.native} — ${l.name}` })),
+              ]}
+            />
+          </div>
+        </div>
 
         {/* WHERE ELSE YOU ARE. Two fields per row on anything wider than a phone: seven stacked
             inputs reads as a form to endure, and none of them is required. A bare handle is enough —

@@ -295,7 +295,7 @@ export type TrackPoints = {
 const ZERO_TRACKS: TrackPoints = { learn: 0, donate: 0, volunteer: 0, outreach: 0 };
 export type EnrolledCourse = { id?: number; value: string; url: string; resume?: string; image?: string; lessons?: number; pct?: number; cert?: boolean };
 export type Dashboard = {
-  user: { name: string; avatar: string; slug?: string; bio?: string; country?: string; palm?: string; links?: Partial<Record<ProfileLinkKey, string>>; relationship?: string; location?: string };
+  user: { name: string; avatar: string; slug?: string; bio?: string; country?: string; palm?: string; links?: Partial<Record<ProfileLinkKey, string>>; relationship?: string; location?: string; languages?: string[] };
   coins: number; points: number;
   tier: { label?: string; next: string | null; pct: number; remaining: number };
   stats: Stat[]; courses: EnrolledCourse[];
@@ -306,12 +306,12 @@ export async function getDashboard(): Promise<Dashboard | null> {
   try {
     const [d, me] = await Promise.all([
       get<{ courses: EnrolledCourse[]; points: number; coins: number }>(`${AQ}/dashboard`),
-      get<{ user: ({ name: string; slug: string; avatar: string; country?: string; palm?: string; tier: string; bio?: string; links?: Partial<Record<ProfileLinkKey, string>>; relationship?: string; location?: string; completed?: number; works?: number; progress?: { label: string; next: string | null; pct: number; remaining: number } }) | null }>(`${AQ}/me`),
+      get<{ user: ({ name: string; slug: string; avatar: string; country?: string; palm?: string; tier: string; bio?: string; links?: Partial<Record<ProfileLinkKey, string>>; relationship?: string; location?: string; languages?: string[]; completed?: number; works?: number; progress?: { label: string; next: string | null; pct: number; remaining: number } }) | null }>(`${AQ}/me`),
     ]);
     const u = me.user;
     const courses = d.courses || [];
     return {
-      user: { name: u?.name || "Quester", avatar: u?.avatar || "", slug: u?.slug, bio: u?.bio || "", country: u?.country || "", palm: u?.palm || "", links: u?.links, relationship: u?.relationship || "", location: u?.location || "" },
+      user: { name: u?.name || "Quester", avatar: u?.avatar || "", slug: u?.slug, bio: u?.bio || "", country: u?.country || "", palm: u?.palm || "", links: u?.links, relationship: u?.relationship || "", location: u?.location || "", languages: u?.languages ?? [] },
       coins: d.coins, points: d.points,
       // Real rank-ring progress, computed server-side (Economy::tier_progress) — was hardcoded next:null/pct:0.
       tier: u?.progress ?? { label: u?.tier || "Quester", next: null, pct: 0, remaining: 0 },
@@ -343,7 +343,8 @@ export async function postProfileUpdate(
   // Both follow the links contract: `undefined` means LEAVE IT ALONE, "" means stop saying.
   relationship?: string,
   location?: string,
-): Promise<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; relationship?: string; location?: string; message?: string }> {
+  languages?: string[],
+): Promise<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; relationship?: string; location?: string; languages?: string[]; message?: string }> {
   try {
     const body: Record<string, unknown> = { name, bio };
     if (username) body.username = username; // only sent when the member actually changed their handle
@@ -352,8 +353,9 @@ export async function postProfileUpdate(
     if (links) body.links = links;
     if (relationship !== undefined) body.relationship = relationship;
     if (location !== undefined) body.location = location;
-    const r = await post<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; relationship?: string; location?: string }>(`${AQ}/profile-update`, body);
-    return { ok: !!r.ok, name: r.name ?? name, bio: r.bio ?? bio, slug: r.slug, links: r.links, relationship: r.relationship, location: r.location };
+    if (languages !== undefined) body.languages = languages;
+    const r = await post<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; relationship?: string; location?: string; languages?: string[] }>(`${AQ}/profile-update`, body);
+    return { ok: !!r.ok, name: r.name ?? name, bio: r.bio ?? bio, slug: r.slug, links: r.links, relationship: r.relationship, location: r.location, languages: r.languages };
   } catch (e) {
     // Surface the server's reason (taken / reserved / invalid / rate-limited) so the form can show it.
     return { ok: false, name, bio, message: e instanceof Error ? e.message : undefined };
@@ -924,6 +926,11 @@ export const relationshipLabel = (k?: string): string =>
   RELATIONSHIPS.find(([key]) => key === k)?.[1] ?? "";
 /** Matches AQ\Auth::LOCATION_MAX — a city, not an address. */
 export const LOCATION_MAX = 60;
+/** Matches AQ\Auth::LANGS_MAX — how many languages a member may claim. */
+export const LANGS_MAX = 8;
+
+/** One language on a profile, as the server resolved it. */
+export type ProfileLang = { code: string; name: string; native: string; dir: "ltr" | "rtl" };
 
 export type ProfileStats = { threads: number; comments: number; reviews: number; enrolled: number; followers: number; following: number };
 export type ProfileThread = { id: number; title: string; comments: number; score: number; at: number; topic?: string; excerpt?: string };
@@ -949,6 +956,10 @@ export type Profile = {
    *  whatever the member typed and is NEVER inferred from an IP address (see AQ\Auth::location). */
   relationship?: string;
   location?: string;
+  /** Languages the member says they speak, RESOLVED SERVER-SIDE (AQ\I18n::language_meta) so the
+   *  page never depends on window.AQ_I18N to name one. Member's own order; we collect no fluency,
+   *  so the order implies nothing. */
+  languages?: ProfileLang[];
   coins: number; points: number; breakdown: PointBreakdown;
   tier: string; joined: string; completed?: number;
   typologies?: TypologyTag[];
@@ -1000,6 +1011,7 @@ type ProfileR = {
   // getProfile below, or the SPA silently drops them exactly as it once dropped the birthday.
   relationship?: string;
   location?: string;
+  languages?: ProfileLang[];
   coins?: number; joined?: string; bio?: string; completed?: number; breakdown?: TrackPoints;
   typologies?: TypologyTag[]; endorsements?: Record<string, number>; stats?: ProfileStats; is_following?: boolean;
   recent_threads?: ProfileThread[];
@@ -1048,7 +1060,7 @@ export async function getProfile(slug: string): Promise<Profile | null> {
       id: pr.id, name: pr.name, slug: pr.slug, avatar: pr.avatar, palm: pr.palm || "", country: pr.country || "", nationality: pr.nationality || "", email: pr.email || "", bio: pr.bio || "", links: pr.links || undefined, lastSeen: pr.last_seen || 0,
       // Public identity facts the endpoint has always emitted but the SPA used to drop on the floor.
       birthday: pr.birthday || "", fullName: pr.full_name || "", season: pr.season ?? 0, verified: !!pr.verified,
-      relationship: pr.relationship || "", location: pr.location || "",
+      relationship: pr.relationship || "", location: pr.location || "", languages: pr.languages ?? [],
       coins: pr.coins ?? 0, points: pr.points, completed: pr.completed ?? 0,
       breakdown: { ...ZERO_TRACKS, ...pr.breakdown, total: pr.points },
       tier: pr.tier, joined: pr.joined || "",
