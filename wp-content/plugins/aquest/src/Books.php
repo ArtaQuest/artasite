@@ -92,10 +92,10 @@ final class Books {
 		'net_assets' => [ 'Accumulated surplus / (deficit)', 'equity', '3600', '3600',
 			'Retained earnings/deficit. Derived from the ledger, never posted to directly' ],
 
-		'donations' => [ 'Gifts received', 'revenue', '8223', '8220',
+		'donations' => [ 'Gifts received', 'revenue', '8223', '8223',
 			'GIFI block "Items 8220 to 8224 | For non-profit organizations". NOT 8522, which is an expense' ],
-		'grants_in' => [ 'Subsidies and grants received', 'revenue', '8242', '8220', '' ],
-		'activity_revenue' => [ 'Revenue from organisational activities', 'revenue', '8224', '8220', '' ],
+		'grants_in' => [ 'Subsidies and grants received', 'revenue', '8242', '8242', '' ],
+		'activity_revenue' => [ 'Revenue from organisational activities', 'revenue', '8224', '8224', '' ],
 
 		'software' => [ 'Computer and software subscriptions', 'expense', '9150', '9150',
 			'Computer-related expenses. CRA publishes no general-corporation code named for a SaaS subscription; 9150 is the nearest verified line and 9807 belongs to the farming section' ],
@@ -107,10 +107,16 @@ final class Books {
 			'GIFI 8522 "Donations" — amounts the corporation pays out' ],
 	];
 
-	/** GIFI totals that are computed, not posted: code => label. Reported on the schedules. */
+	/**
+	 * GIFI totals that are computed, not posted: code => label. Reported on the schedules.
+	 *
+	 * Only codes whose number AND official description were read off RC4088 appear here. The
+	 * balance-sheet SUBTOTALS (total assets, total liabilities) are deliberately absent: their codes
+	 * were not confirmed against the guide, and a wrong code on a filed return is worse than a
+	 * subtotal the filing software derives for itself. `cra()` says so in its notes rather than
+	 * quietly omitting them.
+	 */
 	const GIFI_TOTALS = [
-		'1599' => 'Total current assets',
-		'2599' => 'Total current liabilities',
 		'3600' => 'Retained earnings/deficit',
 		'3620' => 'Total shareholder equity',
 		'3640' => 'Total liabilities and shareholder equity',
@@ -334,7 +340,15 @@ final class Books {
 		if ( $dt->format( 'd' ) === $dt->format( 't' ) ) {
 			return $dt->modify( 'first day of +6 months' )->modify( 'last day of this month' )->format( 'Y-m-d' );
 		}
-		return $dt->modify( '+6 months' )->format( 'Y-m-d' );
+		// Add six months by CALENDAR arithmetic and clamp to the target month's length. PHP's
+		// '+6 months' overflows instead of clamping — a 30 August year end became 30 February and
+		// therefore 2 March, publishing a deadline two days after the real one.
+		$y = (int) $dt->format( 'Y' );
+		$m = (int) $dt->format( 'n' ) + 6;
+		$d = (int) $dt->format( 'j' );
+		$y += intdiv( $m - 1, 12 );
+		$m  = ( ( $m - 1 ) % 12 ) + 1;
+		return self::clamp_date( $y, $m, $d );
 	}
 
 	// ── The one write choke point ─────────────────────────────────────────────
@@ -429,6 +443,38 @@ final class Books {
 			}
 		}
 		return $eid;
+	}
+
+	/**
+	 * Mirror one fund-ledger row into the general ledger. Called from Funds::fund_append, the single
+	 * door every donated cent passes through.
+	 *
+	 * Money ARRIVING is revenue against cash; money LEAVING a bucket is the Foundation spending it
+	 * (a bursary, a prize pool, a redeemed credit) and reduces cash. The fund ledger row id is the
+	 * idempotency anchor, so a replayed Stripe fulfilment that finds its existing fund row will also
+	 * find its existing journal entry.
+	 *
+	 * Deliberately best-effort in ONE direction only: if the books tables are absent this no-ops, so
+	 * a donation is never blocked by bookkeeping. It is not best-effort about correctness — an
+	 * unbalanced mirror is refused by journal() like any other entry.
+	 */
+	public static function mirror_fund( $fund_id, $bucket, $cents, $note = '' ) {
+		$fund_id = (int) $fund_id;
+		$cents   = (int) $cents;
+		if ( $fund_id < 1 || 0 === $cents ) { return 0; }
+		if ( get_option( 'aq_books_table_version' ) !== self::TABLE_VERSION ) { return 0; }
+		$memo = substr( sanitize_text_field( (string) ( $note ?: $bucket ) ), 0, 191 );
+		$date = self::today();
+		if ( $cents > 0 ) {
+			return self::journal( 'fund:' . $fund_id, $date, $memo, [
+				[ 'account' => 'cash',      'debit'  => $cents, 'memo' => 'Received into ' . $bucket ],
+				[ 'account' => 'donations', 'credit' => $cents, 'memo' => $memo ],
+			], 'donation', 0 );
+		}
+		return self::journal( 'fund:' . $fund_id, $date, $memo, [
+			[ 'account' => 'grants_out', 'debit'  => -$cents, 'memo' => $memo ],
+			[ 'account' => 'cash',       'credit' => -$cents, 'memo' => 'Paid out of ' . $bucket ],
+		], 'donation', 0 );
 	}
 
 	/** 'YYYY-MM-DD' or '' — a real calendar date, not merely a well-shaped string. */
@@ -575,9 +621,14 @@ final class Books {
 
 	/** Every entry of a period, newest first, with its lines — the audit trail itself. */
 	private static function recent_entries( $fy, $limit = 200 ) {
+		// Selected by DATE RANGE, not by the stored fy label. The label is denormalised at write time
+		// and never recomputed, so moving the year end (still the operator's to choose until the
+		// first T2 is filed) would silently drop entries out of the published audit trail while the
+		// statements — which do use the range — went on counting them.
 		$rows = Data::all(
 			'SELECT id, ref, on_date, memo, source, invoice_id FROM ' . Data::t( 'aq_books_entry' )
-			. ' WHERE fy = %s ORDER BY on_date DESC, id DESC LIMIT %d', [ $fy['label'], (int) $limit ] );
+			. ' WHERE on_date >= %s AND on_date <= %s ORDER BY on_date DESC, id DESC LIMIT %d',
+			[ $fy['start'], $fy['end'], (int) $limit ] );
 		if ( ! $rows ) { return []; }
 		$ids   = array_map( fn( $r ) => (int) $r['id'], $rows );
 		$in    = implode( ',', array_map( 'intval', $ids ) );
@@ -663,15 +714,20 @@ final class Books {
 	/**
 	 * GET /foundation/invoices/{id}/file/{doc} — the evidence document itself.
 	 *
-	 * Served through a route rather than as a file in the web root, deliberately. Media's origin
-	 * allow-list does not admit PDFs — a PDF is script-capable in-origin, and a past incident put
-	 * an attacker-named .pdf on the site — so the bytes live outside any published directory and
-	 * this handler is the only way to them. Content-Disposition: attachment plus a nosniff header
-	 * means the browser saves the file rather than executing anything in our origin, and the name
-	 * is ours (content-addressed), never the uploader's.
+	 * This is the CANONICAL address for an invoice document, and the one the API publishes. It sets
+	 * Content-Disposition: attachment, nosniff and a sandbox CSP, so a browser saves the file rather
+	 * than running anything from our origin.
 	 *
-	 * The documents themselves are PUBLIC, by the operator's decision: an invoice is evidence for
-	 * a published figure and it is worth nothing if a stranger cannot open it.
+	 * SAY THE TRUE THING ABOUT THIS, THOUGH: the bytes live under wp-content/uploads, which IS
+	 * web-served on this host (verified against production). So the same file is also reachable at
+	 * its direct uploads URL, where none of those headers apply. The headers here are a sensible
+	 * default for the link we hand out, NOT a containment boundary, and nothing should be built on
+	 * the belief that they are one. What actually keeps this safe is narrower and more reliable:
+	 * only an operator can upload, the stored name is the sha256 of the content rather than anything
+	 * a stranger chose, and the documents are meant to be public anyway.
+	 *
+	 * They are PUBLIC by the operator's decision: an invoice is the evidence for a published figure,
+	 * and it is worth nothing if a stranger cannot open it.
 	 */
 	public static function invoice_file( $req ) {
 		self::ensure_tables();
@@ -740,13 +796,19 @@ final class Books {
 	 * Prove the books. Each row is [ check, ok, detail ]. Nothing here trusts a stored total: every
 	 * figure is recomputed from the lines, so a check that passes is evidence rather than assertion.
 	 */
+	/** Integer cents as a readable CAD figure. A check that fails must be legible to whoever reads
+	 *  it — "liabilities 84000" is a number nobody can act on; "CA$840.00" is. */
+	private static function cad( $cents ) {
+		return 'CA$' . number_format( ( (int) $cents ) / 100, 2 );
+	}
+
 	public static function verify() {
 		self::ensure_tables();
 		$checks = [];
 
 		$tb = self::trial_balance();
 		$checks[] = [ 'check' => 'trial_balance', 'ok' => $tb['debits'] === $tb['credits'],
-			'detail' => 'debits ' . $tb['debits'] . ' vs credits ' . $tb['credits'] ];
+			'detail' => 'debits ' . self::cad( $tb['debits'] ) . ' vs credits ' . self::cad( $tb['credits'] ) ];
 
 		$bad = Data::all(
 			'SELECT e.id, e.ref, COALESCE(SUM(l.debit),0) d, COALESCE(SUM(l.credit),0) c FROM '
@@ -758,25 +820,35 @@ final class Books {
 		$fy = self::fy_of( self::today() );
 		$st = self::period_statements( $fy );
 		$checks[] = [ 'check' => 'accounting_equation', 'ok' => (bool) $st['position']['balances'],
-			'detail' => 'assets ' . $st['position']['total_assets'] . ' = liabilities ' . $st['position']['total_liabilities']
-				. ' + net assets ' . $st['position']['net_assets'] ];
+			'detail' => 'assets ' . self::cad( $st['position']['total_assets'] ) . ' = liabilities '
+				. self::cad( $st['position']['total_liabilities'] ) . ' + net assets ' . self::cad( $st['position']['net_assets'] ) ];
 
+		// Compare the register against the expense DEBITS OF INVOICE ENTRIES ONLY. Comparing it with
+		// the net expense balance looks equivalent and is not: the year-end prepaid adjustment
+		// CREDITS an expense account, so from the first close onward the net balance is legitimately
+		// lower than the register and this check would have gone permanently red — the system's own
+		// correct accounting driving its own public proof to "failing".
 		$inv_total = (int) Data::col( 'SELECT COALESCE(SUM(cad_cents),0) FROM ' . Data::t( 'aq_books_invoice' ) );
-		$exp_total = 0;
-		foreach ( self::movement() as $code => $cents ) {
-			if ( 'expense' === ( self::ACCOUNTS[ $code ][1] ?? '' ) ) { $exp_total += $cents; }
-		}
+		$exp_total = (int) Data::col(
+			'SELECT COALESCE(SUM(l.debit),0) FROM ' . Data::t( 'aq_books_line' ) . ' l JOIN '
+			. Data::t( 'aq_books_entry' ) . " e ON e.id = l.entry_id WHERE e.source = 'invoice'" );
 		$checks[] = [ 'check' => 'invoices_tie_to_expenses', 'ok' => $inv_total === $exp_total,
-			'detail' => 'invoice register ' . $inv_total . ' vs expense accounts ' . $exp_total ];
+			'detail' => 'invoice register ' . self::cad( $inv_total ) . ' vs invoice-sourced expense entries ' . self::cad( $exp_total ) ];
 
+		// Compare the books against the coin rows the books THEMSELVES created ('reimb'), not against
+		// the platform-wide circulating supply. coins_issued moves every time any member earns, buys,
+		// spends or transfers a coin, so equating it with a bookkeeping figure would turn the public
+		// verify endpoint red on the first ordinary wallet movement and stay that way.
 		$booked_coins = (int) Data::col( 'SELECT COALESCE(SUM(coins),0) FROM ' . Data::t( 'aq_books_invoice' ) );
-		$issued       = class_exists( '\\AQ\\Economy' ) ? (int) Economy::counter( 'coins_issued' ) : 0;
-		$checks[] = [ 'check' => 'coins_issued_matches_books', 'ok' => $booked_coins === $issued,
-			'detail' => 'books say ' . $booked_coins . ' ₳ issued, the coin ledger counter says ' . $issued ];
+		$reimb        = (int) Data::col(
+			'SELECT COALESCE(SUM(delta),0) FROM ' . Data::t( 'aq_coin_ledger' ) . ' WHERE reason = %s', [ 'reimb' ] );
+		$checks[] = [ 'check' => 'coins_issued_matches_books', 'ok' => $booked_coins === $reimb,
+			'detail' => 'books say ' . $booked_coins . ' ₳ issued to settle advances, the coin ledger holds ' . $reimb ];
 
+		$issued     = class_exists( '\\AQ\\Economy' ) ? (int) Economy::counter( 'coins_issued' ) : 0;
 		$ledger_sum = (int) Data::col( 'SELECT COALESCE(SUM(delta),0) FROM ' . Data::t( 'aq_coin_ledger' ) );
 		$checks[] = [ 'check' => 'coin_counter_matches_ledger', 'ok' => $ledger_sum === $issued,
-			'detail' => 'Σ coin ledger ' . $ledger_sum . ' vs coins_issued ' . $issued ];
+			'detail' => 'Σ coin ledger ' . $ledger_sum . ' ₳ vs the coins_issued counter ' . $issued ];
 
 		$missing = (int) Data::col(
 			'SELECT COUNT(*) FROM ' . Data::t( 'aq_books_doc' ) . " WHERE file_key = '' OR sha256 = ''" );
@@ -976,6 +1048,14 @@ final class Books {
 				. 'confirmed, and it should be put to a professional adviser before the return is filed.',
 		];
 		$notes[] = [
+			'title' => 'GIFI balance-sheet subtotals are not asserted here',
+			'body'  => 'Each account above carries the GIFI code read off Guide RC4088 with its official '
+				. 'description. The balance-sheet SUBTOTAL codes (total assets, total liabilities) are '
+				. 'deliberately not asserted: they were not confirmed against the guide, and a wrong code on a '
+				. 'filed return is worse than a subtotal the filing software derives for itself. Confirm them '
+				. 'there, along with whether Form T1178 (GIFI-Short) is the right vehicle at this size.',
+		];
+		$notes[] = [
 			'title' => 'Records retention',
 			'body'  => 'CRA requires records and supporting documents to be kept for six years from the end of the last tax year '
 				. 'they relate to. Records that were born electronic must be kept in electronic form; a printout is not sufficient. '
@@ -1075,7 +1155,17 @@ final class Books {
 			[ 'account' => $acct,   'debit'  => $cad, 'memo' => $vendor . ' ' . $number ],
 			[ 'account' => $funded, 'credit' => $cad, 'party_uid' => $payer, 'memo' => $payer > 0 ? 'Paid personally by a director' : 'Paid from Foundation funds' ],
 		], 'invoice', $id );
-		if ( $eid ) { Data::update( 'aq_books_invoice', [ 'entry_id' => $eid ], [ 'id' => $id ] ); }
+		// A register row with no double entry is worse than no row: it shows on the public statement,
+		// burns the invoice number against the UNIQUE key so the cost can never be re-entered, and
+		// breaks invoices_tie_to_expenses forever. If the journal refused, take the row back out.
+		if ( ! $eid ) {
+			global $wpdb;
+			$wpdb->delete( Data::t( 'aq_books_doc' ), [ 'invoice_id' => $id ] );
+			$wpdb->delete( Data::t( 'aq_books_invoice' ), [ 'id' => $id ] );
+			error_log( 'AQ Books: add_invoice rolled back ' . $number . ' — the journal refused the entry' );
+			return Rest::err( 'not_posted', 'That cost could not be posted to the ledger — check the date is inside an open fiscal period.', 409 );
+		}
+		Data::update( 'aq_books_invoice', [ 'entry_id' => $eid ], [ 'id' => $id ] );
 
 		return [ 'ok' => true, 'id' => $id, 'entry_id' => $eid, 'cad_cents' => $cad, 'documents' => count( $stored ) ];
 	}
@@ -1155,16 +1245,26 @@ final class Books {
 		$wpdb->query( $wpdb->prepare( "DELETE FROM $c WHERE name IN ('coins_issued','backing_mg')" ) );
 		$wpdb->query( $wpdb->prepare( "DELETE FROM $c WHERE name LIKE %s", $wpdb->esc_like( 'fund_' ) . '%' ) );
 
-		$st = get_option( 'aq_watchdog_state', [] );
-		if ( is_array( $st ) ) { unset( $st['ledgers'] ); update_option( 'aq_watchdog_state', $st, true ); }
+		// The watchdog keeps its checkpoints in a FILE, not an option, and its save() is private — so
+		// clearing an option here would have written something nothing reads and let three CRITICAL
+		// "the money record was tampered with" pages fire anyway.
+		if ( class_exists( '\\AQ\\Watchdog' ) ) { Watchdog::forget_ledgers(); }
 
 		update_option( 'aq_books_genesis', self::today(), true );
 		return 'reset';
 	}
 
-	/** How many coins have deliberately been issued without gold behind them. */
+	/**
+	 * How many coins have deliberately been issued without gold behind them.
+	 *
+	 * DERIVED from the invoice register, not accumulated in an option. An accumulator only ever
+	 * grows: it would keep raising the ceiling that Integrity::check_reserve subtracts, so a genuine
+	 * unbacked mint of up to that size would stop paging anyone. Deriving it means the authorised
+	 * figure is exactly what the books can account for, and anything above it is still an alarm.
+	 */
 	public static function authorised_shortfall() {
-		return max( 0, (int) get_option( 'aq_books_unbacked_coins', 0 ) );
+		if ( get_option( 'aq_books_table_version' ) !== self::TABLE_VERSION ) { return 0; }
+		return max( 0, (int) Data::col( 'SELECT COALESCE(SUM(coins),0) FROM ' . Data::t( 'aq_books_invoice' ) ) );
 	}
 
 	/**
@@ -1205,8 +1305,8 @@ final class Books {
 			Economy::credit_coins( $uid, $coins, 'reimb', $ref );
 		}
 		// No add_backing() call, and that omission is the whole point: the cash went to a supplier,
-		// so there is no gold. Recording the shortfall is what makes the reserve page honest.
-		update_option( 'aq_books_unbacked_coins', self::authorised_shortfall() + $coins, true );
+		// so there is no gold. The shortfall needs no separate bookkeeping: authorised_shortfall()
+		// derives it from the invoice row updated just below, so it can never drift from the books.
 
 		Data::update( 'aq_books_invoice', [
 			'coins'           => $coins,
@@ -1360,6 +1460,14 @@ final class Books {
 			] );
 			$done++;
 		}
+		// Stamp ONLY when every founding cost is on the books. Stamping unconditionally would freeze
+		// a partial seed forever: genesis has already emptied the ledgers by then, so the books would
+		// be permanently missing costs with no path back.
+		$on_books = (int) Data::col( 'SELECT COUNT(*) FROM ' . Data::t( 'aq_books_invoice' ) );
+		if ( $on_books < count( self::FOUNDING_COSTS ) ) {
+			error_log( 'AQ Books: seed incomplete (' . $on_books . '/' . count( self::FOUNDING_COSTS ) . ') — NOT recording it as done, so the next request retries' );
+			return 'incomplete ' . $on_books . '/' . count( self::FOUNDING_COSTS );
+		}
 		update_option( 'aq_books_seeded', self::today(), true );
 		return 'seeded ' . $done;
 	}
@@ -1430,6 +1538,16 @@ final class Books {
 			self::journal( 'prepaid:' . $label, $fy['end'], 'Prepaid subscription time at the year end', [
 				[ 'account' => 'prepaid',  'debit'  => $pre['cents'], 'memo' => implode( ', ', $by ) ],
 				[ 'account' => 'software', 'credit' => $pre['cents'], 'memo' => 'Deferred to the next period' ],
+			], 'closing', 0 );
+			// AND RELEASE IT AGAIN on the first day of the new period. A deferral without a reversal
+			// is not an accrual, it is a disappearing expense: the cost would leave this year's
+			// operations and never arrive in any other, while `prepaid` sat on the balance sheet as
+			// an asset the Foundation does not own. Dated into the NEXT period, so the year being
+			// locked below still shows the deferral and the new year picks the cost up.
+			$next = ( new \DateTimeImmutable( $fy['end'], new \DateTimeZone( self::TZ ) ) )->modify( '+1 day' )->format( 'Y-m-d' );
+			self::journal( 'prepaid-release:' . $label, $next, 'Prepaid subscription time released into the new period', [
+				[ 'account' => 'software', 'debit'  => $pre['cents'], 'memo' => 'Released from ' . $label ],
+				[ 'account' => 'prepaid',  'credit' => $pre['cents'], 'memo' => implode( ', ', $by ) ],
 			], 'closing', 0 );
 		}
 		$locked = self::locked_years();

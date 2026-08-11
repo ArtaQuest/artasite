@@ -46,12 +46,15 @@ export default function Finances() {
   const [cra, setCra] = useState<CraPackage | null>(null);
   const [err, setErr] = useState("");
   const [tab, setTab] = useState<"statements" | "invoices" | "cra">("statements");
+  /* The period being viewed. Without this the page would only ever show the CURRENT one, so on
+     1 January 2027 the journal and the statements would go blank while the ledger was still full. */
+  const [fy, setFy] = useState("");
 
   useEffect(() => {
     let live = true;
     (async () => {
       try {
-        const [s, i, c] = await Promise.all([Books.statements(), Books.invoices(), Books.cra()]);
+        const [s, i, c] = await Promise.all([Books.statements(fy), Books.invoices(), Books.cra(fy)]);
         if (!live) return;
         setSt(s); setInv(i.items); setCra(c);
       } catch {
@@ -59,7 +62,7 @@ export default function Finances() {
       }
     })();
     return () => { live = false; };
-  }, []);
+  }, [fy]);
 
   if (err) return <div className="mx-auto max-w-4xl px-4 py-16 text-[15px] text-ink-2">{err}</div>;
   if (!st) return <div className="mx-auto max-w-4xl px-4 py-16 text-[15px] text-ink-3">Opening the books…</div>;
@@ -84,7 +87,26 @@ export default function Finances() {
           <div><dt className="text-ink-3">Entity</dt><dd data-ay-skip="1" className="mt-0.5 font-semibold text-ink-2">{st.entity.name}</dd></div>
           <div><dt className="text-ink-3">Business number</dt><dd data-ay-skip="1" className="mt-0.5 font-semibold text-ink-2">{st.entity.bn}</dd></div>
           <div><dt className="text-ink-3">Incorporated</dt><dd data-ay-skip="1" className="mt-0.5 font-semibold text-ink-2">{st.entity.incorporated}</dd></div>
-          <div><dt className="text-ink-3">Fiscal period</dt><dd data-ay-skip="1" className="mt-0.5 font-semibold text-ink-2">{st.statements.fy.start} → {st.statements.fy.end}</dd></div>
+          <div>
+            <dt className="text-ink-3">Fiscal period</dt>
+            <dd className="mt-0.5 font-semibold text-ink-2">
+              {st.fiscal.years.length > 1 ? (
+                <select
+                  value={st.statements.fy.label}
+                  onChange={(e) => setFy(e.target.value)}
+                  aria-label="Fiscal period"
+                  className="rounded border border-line bg-space-1 px-1.5 py-0.5 text-[13px] font-semibold text-ink-2"
+                >
+                  {st.fiscal.years.map((y) => <option key={y.label} value={y.label}>{y.label}</option>)}
+                </select>
+              ) : (
+                <span data-ay-skip="1">{st.statements.fy.label}</span>
+              )}
+              {/* bdi keeps the two dates in written order — without it the bidi algorithm swaps them
+                  around the arrow in every RTL locale, so the period reads end-first. */}
+              <bdi data-ay-skip="1" className="ml-2 font-normal text-ink-3">{st.statements.fy.start} → {st.statements.fy.end}</bdi>
+            </dd>
+          </div>
         </dl>
       </header>
 
@@ -256,7 +278,7 @@ export default function Finances() {
               </dl>
               <p className="mt-3 text-[12.5px] leading-relaxed text-ink-3">{cra.t2.form_why}</p>
               <ul className="mt-3 grid gap-1 text-[13px] text-ink-2">
-                {cra.t2.schedules.map((s) => <li key={s} data-ay-skip="1">· {s}</li>)}
+                {cra.t2.schedules.map((s) => <li key={s}>· {s}</li>)}
               </ul>
             </Card>
 

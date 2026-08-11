@@ -150,6 +150,24 @@ final class Watchdog {
 	}
 
 	/** Append a line to the watchdog's audit log (shown on the admin page; kept in the state file). */
+	/**
+	 * Forget the append-only ledger checkpoints so the next sweep re-baselines instead of reporting
+	 * a deliberate, operator-ordered wipe as tampering.
+	 *
+	 * check_ledgers() compares a stored (count, sum) over a window of row ids. Empty the table and
+	 * that comparison fails, which is exactly what it is for — rows are never legitimately deleted.
+	 * The ONE exception is a one-shot migration carrying an explicit operator order, and it has to
+	 * be able to say so, or the reset arrives as three CRITICAL "the money record was tampered with"
+	 * pages and the next real one is read as more of the same.
+	 *
+	 * The state lives in a FILE, not an option (see path()), so this is the only way to clear it.
+	 */
+	public static function forget_ledgers() {
+		self::state();
+		self::$state['ledgers'] = [];
+		self::save();
+	}
+
 	public static function note( $line ) {
 		self::state();
 		self::$state['log'][] = [ 't' => time(), 'm' => mb_substr( (string) $line, 0, 300 ) ];

@@ -59,6 +59,13 @@ final class Funds {
 			return 0;
 		}
 		Economy::counter_add( 'fund_' . $bucket, (int) $cents );
+		// Mirror the movement into the Foundation's double-entry books (Books.php, 2026-08-11).
+		// THIS is why the mirror lives here rather than at each caller: fund_append is the one door
+		// every cent goes through, so a mirror on it cannot miss a donation and cannot count one
+		// twice. Without it the general ledger has no revenue writer at all and the published
+		// statement would report nil income forever while donations piled up in the bucket counters.
+		// Guarded by class_exists so Funds never hard-depends on Books.
+		if ( class_exists( '\\AQ\\Books' ) ) { Books::mirror_fund( $id, $bucket, (int) $cents, (string) $note ); }
 		return $id;
 	}
 
