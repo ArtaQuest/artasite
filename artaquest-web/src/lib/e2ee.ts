@@ -471,7 +471,11 @@ export type ChatPayload =
   | { v: 2; t: "timer"; ends: number | null; label?: string }
   /** "Look here" — a pulse on the board at a normalised point. Sent on TAP, never on move: a
    *  continuous pointer would be a message per frame per person. */
-  | { v: 2; t: "point"; x: number; y: number };
+  | { v: 2; t: "point"; x: number; y: number }
+  // Each participant's own view of its own link, so everyone can work out who should carry the
+  // shared work. SEALED like everything else here: the server never learns who has the good line,
+  // and could not act on it if it did — the election is a function every peer computes for itself.
+  | { v: 2; t: "link"; score: number };
 
 export function encodePayload(p: ChatPayload): string {
   return JSON.stringify(p);

@@ -8,6 +8,7 @@ import {
   Call, callSupported, mediaErrorMessage, newCallSid, openCallMedia,
   type CallMode, type LinkReport,
 } from "../../lib/webrtc";
+import { WINDOW, elect, score as linkScore, type Sample, type ScoreTable } from "../../lib/anchor";
 import { Avatar } from "../ui";
 import { CallModeChoice, LinkNote } from "./CallPanel";
 import { callModePref, deviceSuggestedMode, rememberCallMode, useVideoLive } from "./callmode";
@@ -221,6 +222,13 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
   const [suggested] = useState(deviceSuggestedMode);
   const modeRef = useRef(mode);
   const [links, setLinks] = useState<Record<number, LinkReport>>({});
+  /** What every participant says about their own link, including us. The table an election reads. */
+  const [scores, setScores] = useState<ScoreTable>({});
+  /** Our own recent samples, which is what we publish a score from. */
+  const samples = useRef<Sample[]>([]);
+  /** Who carries the shared work, and how long a challenger has been ahead — see lib/anchor.ts. */
+  const [anchor, setAnchor] = useState(0);
+  const held = useRef(0);
   // Is a picture actually leaving this device? Every peer connection agrees on this, so any of
   // them can answer; with no connections yet, nothing has been shed.
   const sendingVideo = Object.values(links).every((l) => l.videoOn !== false);
@@ -257,6 +265,40 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
   const [roster, setRoster] = useState<number[]>(room.in_call);
   useEffect(() => { setRoster((cur) => (cur.join() === room.in_call.join() ? cur : room.in_call)); }, [room.in_call]);
   const others = roster.filter((u) => u !== me);
+
+
+  /**
+   * PUBLISH WHAT OUR LINK IS DOING, AND WORK OUT WHO SHOULD CARRY THE SHARED WORK.
+   *
+   * Every participant sends its own score into the room and every participant reads the same table,
+   * so the election needs no proposal, no vote and no coordinator that could itself be the thing
+   * that fails. The rule lives in lib/anchor.ts, which is pure precisely so it can be tested: steady
+   * beats fast, an unproven link is not a candidate, a quiet one stops being one, and a challenger
+   * has to be clearly better for several rounds running before anything moves.
+   */
+  useEffect(() => {
+    if (!roomKey || !me) return;
+    let stop = false;
+    const beat = window.setInterval(() => {
+      if (stop) return;
+      const mine = linkScore(samples.current);
+      setScores((cur) => ({ ...cur, [me]: { score: mine, at: Date.now() } }));
+      if (mine > 0) void signal({ v: 2, t: "link", score: mine });
+      setScores((cur) => {
+        const r = elect(cur, anchor, held.current, Date.now());
+        held.current = r.held;
+        if (r.anchor !== anchor) setAnchor(r.anchor);
+        return cur;
+      });
+    }, 5000);
+    return () => { stop = true; window.clearInterval(beat); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomKey, me, anchor]);
+
+  /** True when this device is the one that should be sealing the room key to newcomers. Nobody
+   *  being anchor yet must never mean nobody does it — an empty election falls through to everyone,
+   *  because a room that cannot admit anyone is worse than a little duplicated work. */
+  const isAnchor = !anchor || anchor === me;
 
   /** Seal one signalling payload into the room, addressed at one participant. */
   async function signal(p: ChatPayload) {
@@ -337,7 +379,14 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
       onState: (st) => setPeers((cur) => (cur[uid] ? { ...cur, [uid]: { ...cur[uid], state: st } } : cur)),
       onRemote: (stream) => setPeers((cur) => (cur[uid] ? { ...cur, [uid]: { ...cur[uid], stream } } : cur)),
       onLocal: () => {},
-      onLink: (r) => setLinks((cur) => (same(cur[uid], r) ? cur : { ...cur, [uid]: r })),
+      onLink: (r) => {
+        setLinks((cur) => (same(cur[uid], r) ? cur : { ...cur, [uid]: r }));
+        // Our own outgoing link, sampled from whichever connection reported. In a mesh these are
+        // separate paths, so the WORST of them is the honest description of what we can promise —
+        // an anchor has to reach everybody, not just its best-connected neighbour.
+        samples.current = [...samples.current.slice(-(WINDOW - 1)),
+          { kbps: r.kbps, lossPct: r.lossPct, rttMs: r.rttMs, shed: r.videoOn === false }];
+      },
     }, modeRef.current);
     calls.current.set(uid, c);
     setPeers((cur) => ({ ...cur, [uid]: { uid, call: c, stream: null, state: "connecting" } }));
@@ -486,6 +535,7 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
           if (p.t === "point") { setPings((cur) => [...cur.slice(-6), { x: p.x, y: p.y, at: Date.now(), by: m.sender }]); continue; }
           if (p.t === "hand") { setHands((cur) => ({ ...cur, [m.sender]: p.up })); continue; }
           if (p.t === "timer") { setTimerEnds(p.ends); continue; }
+          if (p.t === "link") { setScores((cur) => ({ ...cur, [m.sender]: { score: p.score, at: Date.now() } })); continue; }
           if (p.t !== "rtc" || p.to !== me) continue;   // in a mesh, an offer is for ONE person
           if (p.kind === "offer" && p.sdp) {
             // A DIFFERENT session id from the same person means the connection we hold for them is
@@ -615,6 +665,11 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
 
   // A phone gets two columns, never three: a 393px screen divided three ways is a 128px face.
   const total = tiles.length + 1;
+  /** Who the measurement chose, said out loud — a call that quietly appoints somebody is a call
+   *  nobody can reason about when it goes wrong. */
+  const anchorNote = !anchor || total < 2 ? ""
+    : isAnchor ? "Your connection is the steadiest here, so this device is letting people in"
+    : `${nameOf(anchor)?.name || "Someone"} has the steadiest connection and is letting people in`;
   const gridCols = view === "screen" || total <= 1 ? "grid-cols-1"
     : total === 2 ? "grid-cols-1 sm:grid-cols-2"
     : total <= 4 ? "grid-cols-2"
@@ -633,6 +688,14 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
           ? "You’re the only one here — invite someone, or just sit for a while."
           : <>Direct between all <span data-ay-skip="1">{total}</span> of you — no server in between</>}
       </p>
+      {/* SAID OUT LOUD. A call that quietly appoints somebody is a call nobody can reason about when
+          it goes wrong — and this one is chosen by measurement, so the measurement is worth showing. */}
+      {anchorNote && (
+        <p className="text-[11.5px] leading-relaxed text-ink-3" data-ay-skip="1"
+          title={Object.entries(scores).map(([u, v]) => `${nameOf(Number(u))?.name || u}: ${v.score}`).join("   ")}>
+          {anchorNote}
+        </p>
+      )}
 
       {/* The truth about the link, in one sentence and never a dialog. */}
       <LinkNote link={worst} mode={mode} />
