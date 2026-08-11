@@ -228,6 +228,15 @@ function SendCoins({ slug, name, onSent }: { slug: string; name: string; onSent:
 export default function Profile() {
   const { slug = "" } = useParams();
   const [p, setP] = useState<ProfileData | null>(null);
+
+  // What this member has NOT said yet — used only on their own profile, to turn an empty-looking
+  // card into one tap. Order matches the settings form so the prompt reads like a to-do list.
+  const missingFacts = !p ? [] : [
+    relationshipLabel(p.relationship) ? "" : "Relationship",
+    p.location?.trim() ? "" : "Where you live",
+    (p.languages?.length ?? 0) > 0 ? "" : "Languages you speak",
+    p.birthplace?.trim() ? "" : "Place of birth",
+  ].filter(Boolean);
   const [missing, setMissing] = useState(false);
   useEffect(() => {
     setP(null); setMissing(false);
@@ -322,7 +331,7 @@ export default function Profile() {
                   made the browser wait for layout before even starting the request. Carries the
                   verified-nationality flag and the opt-in palm flip. */}
               <Avatar priority src={p.avatar} name={p.name} country={p.country} palm={p.palm || undefined}
-                className="h-24 w-24 shrink-0 text-3xl ring-4 ring-space-2 sm:h-32 sm:w-32" />
+                className="h-24 w-24 shrink-0 bg-space-2 text-3xl ring-4 ring-space-2 sm:h-32 sm:w-32" />
               <div className="min-w-0 flex-1 sm:pb-1">
                 {/* THE REAL NAME IS THE HEADING. `p.name` is display_name — the handle a member is
                     addressed by, and frequently not a name at all ("Arash" for Arash Ashrafnejad).
@@ -450,7 +459,7 @@ export default function Profile() {
           derived from an IP address or a header. Rows appear only when there is something to say —
           a member who has filled none of this in gets no card at all, rather than a grid of blanks
           advertising what they declined to answer. */}
-      {p && (relationshipLabel(p.relationship) || p.location?.trim() || (p.languages?.length ?? 0) > 0 || fmtBirthday(p.birthday)) ? (
+      {p && (isOwn || relationshipLabel(p.relationship) || p.location?.trim() || (p.languages?.length ?? 0) > 0 || fmtBirthday(p.birthday) || p.birthplace?.trim()) ? (
         <section className="grid gap-x-8 gap-y-5 rounded-card border border-line bg-space-2 px-5 py-5 sm:grid-cols-2 lg:grid-cols-4" aria-label="About">
           {relationshipLabel(p.relationship) ? (
             <Fact label="Relationship" icon={<svg {...FACT_SVG}><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9z" /></svg>}>
@@ -490,6 +499,24 @@ export default function Profile() {
               {fmtBirthday(p.birthday) && p.birthplace?.trim() ? <span className="text-ink-3"> · </span> : null}
               {p.birthplace?.trim() ? <span data-ay-skip="1">{p.birthplace.trim()}</span> : null}
             </Fact>
+          ) : null}
+          {/* YOUR OWN profile, and something is unsaid. A card holding one lonely row reads as broken
+              rather than as sparse, and the member looking at it is the one person who can fix that —
+              so the gaps become an invitation instead of empty space. Shown to NOBODY else: a visitor
+              has no business seeing a list of what this person declined to answer. */}
+          {isOwn && missingFacts.length > 0 ? (
+            <a href={localePath("/user-account/?settings=1")}
+              className="group flex min-w-0 items-start gap-2.5 rounded-card border border-dashed border-line px-3 py-2 transition-colors hover:border-yang">
+              <span aria-hidden className="mt-0.5 shrink-0 text-ink-3 transition-colors group-hover:text-yang">
+                <svg {...FACT_SVG}><path d="M12 5v14M5 12h14" /></svg>
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[11.5px] font-semibold uppercase tracking-wider text-ink-3">Add to your profile</span>
+                <span className="mt-0.5 block text-[14px] leading-snug text-ink-2 transition-colors group-hover:text-ink">
+                  {missingFacts.join(" · ")}
+                </span>
+              </span>
+            </a>
           ) : null}
         </section>
       ) : null}
