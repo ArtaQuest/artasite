@@ -3,7 +3,7 @@
  * Plugin Name: ArtaQuest
  * Description: The entire ArtaQuest platform — LMS, economy, social, i18n, funds — in one
  *              lean, dependency-free plugin. Replaces MasterStudy LMS + WooCommerce.
- * Version:     1.20.660
+ * Version:     1.20.661
  * Author:      ArtaQuest Foundation
  * License:     GNU AGPLv3
  * License URI: https://www.gnu.org/licenses/agpl-3.0.html
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 // disagree will send the next person chasing a production divergence that is not there: the
 // header is what get_plugin_data() reads, AQ_VERSION is what /version reports and what the
 // integrity sweep keys on. Bump them together, always.
-define( 'AQ_VERSION', '1.20.660' );
+define( 'AQ_VERSION', '1.20.661' );
 define( 'AQ_DIR', __DIR__ );
 define( 'AQ_URL', plugins_url( '', __FILE__ ) );
 
@@ -37,7 +37,7 @@ spl_autoload_register( function ( $class ) {
  * that worker, yielding "Class AQ\Db not found". Loading all classes up-front (each guarded
  * by class_exists) makes the backend deterministic regardless of autoload/opcache timing.
  */
-foreach ( [ 'Data', 'Schema', 'Cron', 'Secrets', 'Vault', 'Watchdog', 'Integrity', 'Health', 'Rest', 'Auth', 'Sessions', 'Account', 'Verify', 'Courses', 'Topics', 'Typology', 'Learn', 'Economy', 'Season', 'Social', 'Search', 'I18n', 'Funds', 'Extra', 'Offline', 'Notify', 'Meetings', 'Calendar', 'Assistant', 'Relay', 'Science', 'Library', 'Music', 'Motion', 'Narrate', 'Film', 'Illustration', 'Fearometer', 'Tickets', 'Stripe', 'YouTube', 'Console', 'Trends', 'Houses', 'Competitions', 'Translate', 'Artaai', 'Games', 'Challenges', 'Demo', 'Doi', 'Notebook', 'Chat', 'Rooms', 'Shell', 'Api', 'Passkey', 'News', 'Kaggle', 'Kernel', 'Gist', 'Credits', 'KaggleId', 'Cities' ] as $aq_cls ) {
+foreach ( [ 'Data', 'Schema', 'Cron', 'Secrets', 'Vault', 'Watchdog', 'Integrity', 'Health', 'Rest', 'Auth', 'Sessions', 'Account', 'Verify', 'Courses', 'Topics', 'Typology', 'Learn', 'Economy', 'Season', 'Social', 'Search', 'I18n', 'Funds', 'Extra', 'Offline', 'Notify', 'Meetings', 'Calendar', 'Assistant', 'Relay', 'Science', 'Library', 'Music', 'Motion', 'Narrate', 'Film', 'Illustration', 'Fearometer', 'Tickets', 'Stripe', 'YouTube', 'Console', 'Trends', 'Houses', 'Competitions', 'Translate', 'Artaai', 'Games', 'Challenges', 'Demo', 'Doi', 'Notebook', 'Chat', 'Rooms', 'Shell', 'Api', 'Passkey', 'News', 'Kaggle', 'Kernel', 'Gist', 'Credits', 'KaggleId', 'Cities', 'Books' ] as $aq_cls ) {
 	$aq_file = AQ_DIR . '/src/' . $aq_cls . '.php';
 	if ( ! class_exists( 'AQ\\' . $aq_cls, false ) && is_readable( $aq_file ) ) { require_once $aq_file; }
 }
@@ -52,6 +52,9 @@ add_action( 'user_register', [ 'AQ\\Economy', 'grant_signup_allowance' ] );
  *  two — the extra ones default). */
 add_action( 'aq_dm_email', [ 'AQ\\Chat', 'send_dm_email' ], 10, 5 );
 add_action( 'aq_meet_tick', [ 'AQ\\Meetings', 'tick' ] );
+/** Daily: once a fiscal period has ended, post its accrual adjustment, freeze it so a late entry
+ *  cannot rewrite a filed figure, and publish the year-end CRA package at /foundation/cra. */
+add_action( 'aq_books_year_end', [ 'AQ\\Books', 'year_end_tick' ] );
 
 /** Daily sweep of sealed chat attachments no message references — every abandoned composer (a failed
  *  send, a closed tab, a change of mind) leaves one on disk, and nothing else would ever unlink them
@@ -153,6 +156,12 @@ add_action( 'plugins_loaded', function () {
 	AQ\Notebook::ensure_tables(); // self-installs aq_notebooks + aq_nb_runs + aq_nb_reviews — THE feed substrate (2026-07-13)
 	AQ\Api::ensure_table(); // self-installs aq_api_tokens — the developer API layer (2026-07-23)
 	AQ\Passkey::ensure_table(); // self-installs aq_passkeys — publication co-signing keys (2026-07-24)
+	// Self-installs the four aq_books_* tables, and — ONCE, gated on the presence of the
+	// aq_books_genesis option rather than on any version — resets every ledger to zero and opens the
+	// Foundation's double-entry books with the costs it has actually incurred (2026-08-11, operator
+	// order). Gating a delete-then-seed on a version constant is what cost this project a real gold
+	// reserve once; that mistake is not repeated here.
+	AQ\Books::bootstrap();
 	// ── 2026-07-13 NOTEBOOK-FEED RESET: every legacy seed/import call was removed here.
 	//    They re-populated retired content (courses, tracks, films, competitions, typologies …) whenever
 	//    a table was empty or a bundled file's mtime moved — after the full data purge that would silently
@@ -183,6 +192,7 @@ add_action( 'plugins_loaded', [ 'AQ\\I18n', 'boot_router' ], 1 );
  *  the reset is robust even where WP-cron is unreliable (e.g. local PHP-WASM). */
 add_action( 'plugins_loaded', function () {
 	if ( ! wp_next_scheduled( 'aq_season_reset' ) ) { wp_schedule_event( time() + 300, 'daily', 'aq_season_reset' ); }
+	if ( ! wp_next_scheduled( 'aq_books_year_end' ) ) { wp_schedule_event( time() + 1500, 'daily', 'aq_books_year_end' ); }
 } );
 aq_cron_on( 'aq_season_reset', 'aq_season_reset', [ 'AQ\\Season', 'ensure_archived' ], 3600 );
 aq_cron_on( 'aq_season_reset', 'aq_season_reset:challenges', [ 'AQ\\Challenges', 'ensure_archived' ], 3600 ); // settle + freeze the creative challenges on the same new-moon reset (also lazy on read)

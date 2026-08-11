@@ -1,0 +1,1465 @@
+<?php
+namespace AQ;
+
+if ( ! defined( 'ABSPATH' ) ) { exit; }
+
+/**
+ * The Foundation's books — a real double-entry general ledger, published in full.
+ *
+ * ArtaQuest Foundation is a Canadian non-profit CORPORATION relying on the paragraph 149(1)(l)
+ * income-tax exemption. It is NOT a registered charity, which decides three things this class
+ * encodes: it must file a T2 every year even with nil income (CRA excuses only tax-exempt Crown
+ * corporations, Hutterite colonies and registered charities); it files a T1044 only if one of
+ * three thresholds is crossed; and it may NEVER issue an official donation receipt.
+ *
+ * WHY A SECOND LEDGER, next to aq_fund_ledger. The fund ledger answers "how much donated money is
+ * sitting in which bucket" — one signed number per bucket, single-entry. That is a cash book, not
+ * a set of books: it cannot express an expense, a liability, a director's advance, an accrual or a
+ * deficit, and none of those are optional in a corporate return. So this class keeps the general
+ * ledger — every transaction as balanced debits and credits — and the fund ledger stays exactly
+ * what it always was, the earmark tracker feeding /foundation/finances. They are reconciled by
+ * verify() rather than merged, so neither one silently rewrites the other.
+ *
+ * THE INVARIANT THAT MATTERS: an entry that does not balance is never written. journal() is the
+ * ONE writer, it sums the lines before it inserts anything, and a torn write is deleted rather
+ * than left behind — because a half-written entry is not a ledger row, it is a corrupt one. Every
+ * downstream figure (trial balance, balance sheet, statement of operations, GIFI schedules) is a
+ * pure function of the lines, so the statements cannot disagree with the ledger.
+ *
+ * EVERYTHING HERE IS PUBLIC. Extra::db enumerates with SHOW TABLES, so these four tables publish
+ * themselves at /data the moment they exist. That is deliberate — the point of the exercise is
+ * that a stranger can check the books — and it is also why no personal data lands in them: the
+ * ledger holds amounts, dates, codes and vendor names, never an address or a card number.
+ *
+ * Money is INTEGER CENTS, CAD, everywhere. Dates are 'YYYY-MM-DD' strings, never timestamps: a
+ * fiscal period is a calendar fact about Edmonton, and string dates compare and sort correctly
+ * without a single timezone conversion to get wrong.
+ */
+final class Books {
+
+	/** Bumped when the table shapes change. Isolated from Schema::VERSION, like every subsystem
+	 *  added since 2026-07 (Notebook, Chat, Rooms, Library, Api, Passkey…). */
+	const TABLE_VERSION = '1';
+
+	const CURRENCY = 'CAD';
+	const TZ       = 'America/Edmonton';
+
+	/** Identity, as it appears on the corporation's own records and on every vendor invoice. */
+	const ENTITY       = 'ArtaQuest Foundation';
+	const BN           = '779107374';
+	const INCORPORATED = '2026-05-20';
+	const PROVINCE     = 'AB';
+
+	/** Default fiscal year end (MM-DD). A corporation's first fiscal period must end within 53
+	 *  weeks of incorporation and is FIXED BY THE FIRST T2 FILED — so until that return goes in,
+	 *  this is genuinely still the operator's choice. Overridable with the aq_books_fy_end option;
+	 *  fy_end_md() refuses a value that would put the first period beyond the 53-week limit. */
+	const FY_END_DEFAULT = '12-31';
+
+	/**
+	 * The chart of accounts, each line carrying the CRA GIFI code it reports under.
+	 *
+	 * Every code below was read off Guide RC4088 Appendix A with its official description; nothing
+	 * here is inferred. Three traps are deliberately avoided:
+	 *   - 8522 "Donations" is an EXPENSE code (donations the corporation PAYS OUT). Donation
+	 *     REVENUE for a non-profit is 8223 "Gifts", inside the "Items 8220 to 8224 | For non-profit
+	 *     organizations" block. Coding gifts to 8522 would understate revenue and overstate
+	 *     expenses at the same time.
+	 *   - The 9800-series office/professional/bank codes are FARMING codes. The general-corporation
+	 *     ones are 8810, 8860 and 8715.
+	 *   - Prepaid expenses are 1484 in Appendix A. RC4088's own narrative "Examples" section says
+	 *     1483, which is wrong twice over (1483 is "Taxes recoverable/refundable" and "Other current
+	 *     assets" is 1480). Appendix A is the authoritative table.
+	 *
+	 * `short` is the GIFI-Short (Form T1178) rollup, which is what this Foundation will actually
+	 * file while gross revenue and assets stay under $1 million.
+	 *
+	 * Shape: code => [ label, type, gifi, short, note ].
+	 */
+	const ACCOUNTS = [
+		'cash' => [ 'Cash and bank', 'asset', '1002', '1000',
+			'Deposits in Canadian banks and institutions – Canadian currency' ],
+		'prepaid' => [ 'Prepaid expenses', 'asset', '1484', '1480',
+			'Subscription time paid for but not yet consumed at the year end' ],
+
+		'due_director' => [ 'Due to a director', 'liability', '2780', '2780',
+			'Current amounts due to shareholder(s)/director(s), such as advances, loans, and notes' ],
+		'coin_liability' => [ 'ArtaCoin in circulation', 'liability', '2960', '2960',
+			'Other current liabilities — member-held tokens the Foundation is obliged to honour' ],
+		'deferred' => [ 'Deferred income', 'liability', '2770', '2960',
+			'Amounts received for a period that has not yet run' ],
+
+		'net_assets' => [ 'Accumulated surplus / (deficit)', 'equity', '3600', '3600',
+			'Retained earnings/deficit. Derived from the ledger, never posted to directly' ],
+
+		'donations' => [ 'Gifts received', 'revenue', '8223', '8220',
+			'GIFI block "Items 8220 to 8224 | For non-profit organizations". NOT 8522, which is an expense' ],
+		'grants_in' => [ 'Subsidies and grants received', 'revenue', '8242', '8220', '' ],
+		'activity_revenue' => [ 'Revenue from organisational activities', 'revenue', '8224', '8220', '' ],
+
+		'software' => [ 'Computer and software subscriptions', 'expense', '9150', '9150',
+			'Computer-related expenses. CRA publishes no general-corporation code named for a SaaS subscription; 9150 is the nearest verified line and 9807 belongs to the farming section' ],
+		'office' => [ 'Office expenses', 'expense', '8810', '8810', '' ],
+		'professional_fees' => [ 'Professional fees', 'expense', '8860', '8860',
+			'Accounting, bookkeeping, audit and legal. NOT 9809, which is the farming code' ],
+		'bank_charges' => [ 'Bank and payment charges', 'expense', '8715', '8710', '' ],
+		'grants_out' => [ 'Bursaries and grants paid', 'expense', '8522', '8522',
+			'GIFI 8522 "Donations" — amounts the corporation pays out' ],
+	];
+
+	/** GIFI totals that are computed, not posted: code => label. Reported on the schedules. */
+	const GIFI_TOTALS = [
+		'1599' => 'Total current assets',
+		'2599' => 'Total current liabilities',
+		'3600' => 'Retained earnings/deficit',
+		'3620' => 'Total shareholder equity',
+		'3640' => 'Total liabilities and shareholder equity',
+		'8299' => 'Total revenue',
+		'9367' => 'Total operating expenses',
+		'9368' => 'Total expenses',
+		'9970' => 'Net income/loss before taxes and extraordinary items',
+		'9999' => 'Net income/loss after taxes and extraordinary items',
+	];
+
+	// ── Tables ────────────────────────────────────────────────────────────────
+	// Self-installing, gated on aq_books_table_version. NOTHING may be commented INSIDE a CREATE
+	// TABLE body: dbDelta parses it line-by-line with regexes, and under Studio's SQLite emulation
+	// an inline `--` makes it emit NO TABLE AT ALL, silently. `PRIMARY KEY  (` keeps its two spaces
+	// for the same parser. No column is called `stored`, `blob` or `rank`, and no index is a MySQL
+	// prefix index — each of those has already cost this repo a silently-missing table.
+
+	public static function ensure_tables() {
+		global $wpdb;
+		if ( get_option( 'aq_books_table_version' ) === self::TABLE_VERSION ) { return; }
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		$p       = $wpdb->prefix;
+		$charset = $wpdb->get_charset_collate();
+
+		$tables = [
+			'aq_books_entry' => "
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				ref VARCHAR(96) NOT NULL DEFAULT '',
+				on_date CHAR(10) NOT NULL DEFAULT '',
+				fy VARCHAR(12) NOT NULL DEFAULT '',
+				memo VARCHAR(191) NOT NULL DEFAULT '',
+				source VARCHAR(24) NOT NULL DEFAULT 'manual',
+				invoice_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				created INT UNSIGNED NOT NULL DEFAULT 0,
+				PRIMARY KEY  (id),
+				UNIQUE KEY ref (ref),
+				KEY on_date_id (on_date, id),
+				KEY fy_id (fy, id),
+				KEY invoice_id (invoice_id)",
+
+			'aq_books_line' => "
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				entry_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				account VARCHAR(32) NOT NULL DEFAULT '',
+				debit BIGINT NOT NULL DEFAULT 0,
+				credit BIGINT NOT NULL DEFAULT 0,
+				party_uid BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				memo VARCHAR(191) NOT NULL DEFAULT '',
+				PRIMARY KEY  (id),
+				KEY entry_id (entry_id),
+				KEY account_id (account, id)",
+
+			'aq_books_invoice' => "
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				vendor VARCHAR(160) NOT NULL DEFAULT '',
+				number VARCHAR(96) NOT NULL DEFAULT '',
+				description VARCHAR(191) NOT NULL DEFAULT '',
+				issued CHAR(10) NOT NULL DEFAULT '',
+				paid CHAR(10) NOT NULL DEFAULT '',
+				period_start CHAR(10) NOT NULL DEFAULT '',
+				period_end CHAR(10) NOT NULL DEFAULT '',
+				currency CHAR(3) NOT NULL DEFAULT 'CAD',
+				subtotal_cents BIGINT NOT NULL DEFAULT 0,
+				tax_cents BIGINT NOT NULL DEFAULT 0,
+				total_cents BIGINT NOT NULL DEFAULT 0,
+				fx_rate BIGINT NOT NULL DEFAULT 1000000,
+				fx_date CHAR(10) NOT NULL DEFAULT '',
+				fx_source VARCHAR(191) NOT NULL DEFAULT '',
+				cad_cents BIGINT NOT NULL DEFAULT 0,
+				account VARCHAR(32) NOT NULL DEFAULT 'software',
+				tax_note VARCHAR(191) NOT NULL DEFAULT '',
+				pay_method VARCHAR(64) NOT NULL DEFAULT '',
+				payer_uid BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				coins BIGINT NOT NULL DEFAULT 0,
+				coin_price_1e6 BIGINT NOT NULL DEFAULT 0,
+				gold_oz_usd_1e4 BIGINT NOT NULL DEFAULT 0,
+				usdcad_1e6 BIGINT NOT NULL DEFAULT 0,
+				rate_date CHAR(10) NOT NULL DEFAULT '',
+				rate_source VARCHAR(191) NOT NULL DEFAULT '',
+				entry_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				note VARCHAR(191) NOT NULL DEFAULT '',
+				created INT UNSIGNED NOT NULL DEFAULT 0,
+				PRIMARY KEY  (id),
+				UNIQUE KEY number (number),
+				KEY paid_id (paid, id)",
+
+			'aq_books_doc' => "
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				invoice_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				kind VARCHAR(16) NOT NULL DEFAULT 'invoice',
+				name VARCHAR(191) NOT NULL DEFAULT '',
+				file_key VARCHAR(191) NOT NULL DEFAULT '',
+				mime VARCHAR(64) NOT NULL DEFAULT 'application/pdf',
+				bytes BIGINT NOT NULL DEFAULT 0,
+				sha256 CHAR(64) NOT NULL DEFAULT '',
+				uploaded_by BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				created INT UNSIGNED NOT NULL DEFAULT 0,
+				PRIMARY KEY  (id),
+				KEY invoice_id_id (invoice_id, id),
+				KEY sha256 (sha256)",
+		];
+		foreach ( $tables as $name => $body ) {
+			dbDelta( "CREATE TABLE {$p}{$name} (\n{$body}\n) {$charset};" );
+		}
+
+		// VERIFY BEFORE CLAIMING. The version option is a "do not run this again" guard, so writing
+		// it is a promise that the columns really landed. The SQLite dev integration has been seen
+		// to skip an entire CREATE while the caller's version stamp advanced anyway, which leaves
+		// the table missing forever because the retry that would fix it never happens.
+		$want = [
+			'aq_books_entry'   => [ 'ref', 'on_date', 'fy' ],
+			'aq_books_line'    => [ 'entry_id', 'account', 'debit', 'credit' ],
+			'aq_books_invoice' => [ 'number', 'total_cents', 'cad_cents', 'coins', 'rate_date' ],
+			'aq_books_doc'     => [ 'invoice_id', 'file_key', 'sha256' ],
+		];
+		$missing = [];
+		foreach ( $want as $t => $cols ) {
+			$have = array_map( 'strval', (array) $wpdb->get_col( "SHOW COLUMNS FROM {$p}{$t}" ) );
+			if ( ! $have ) { $missing[] = $t; continue; }
+			foreach ( $cols as $c ) {
+				if ( ! in_array( $c, $have, true ) ) { $missing[] = "{$t}.{$c}"; }
+			}
+		}
+		if ( $missing ) {
+			error_log( 'AQ Books: schema v' . self::TABLE_VERSION . ' incomplete, NOT recording the version — missing ' . implode( ', ', $missing ) );
+			return;
+		}
+		update_option( 'aq_books_table_version', self::TABLE_VERSION, true );
+	}
+
+	// ── The fiscal calendar ───────────────────────────────────────────────────
+
+	/** Today, as a date string in the Foundation's own timezone (Edmonton). */
+	public static function today() {
+		return ( new \DateTimeImmutable( 'now', new \DateTimeZone( self::TZ ) ) )->format( 'Y-m-d' );
+	}
+
+	/**
+	 * The fiscal year end as 'MM-DD'.
+	 *
+	 * A first fiscal period may not exceed 53 weeks from incorporation, so a year end that would
+	 * blow that limit is not merely unusual, it is invalid — and a set of books that quietly
+	 * accepted it would produce a return CRA rejects. An out-of-range option is therefore refused
+	 * (falling back to the default) rather than honoured.
+	 */
+	public static function fy_end_md() {
+		$md = (string) get_option( 'aq_books_fy_end', self::FY_END_DEFAULT );
+		if ( ! preg_match( '/^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/', $md ) ) { return self::FY_END_DEFAULT; }
+		$first = self::first_period_end( $md );
+		return ( $first !== '' && $first <= self::max_first_year_end() ) ? $md : self::FY_END_DEFAULT;
+	}
+
+	/** The last date the FIRST fiscal period may legally end: 53 weeks (371 days) after incorporation. */
+	public static function max_first_year_end() {
+		return ( new \DateTimeImmutable( self::INCORPORATED, new \DateTimeZone( self::TZ ) ) )
+			->modify( '+371 days' )->format( 'Y-m-d' );
+	}
+
+	/** The end date of the first fiscal period under a given MM-DD, or '' if none can be formed. */
+	private static function first_period_end( $md ) {
+		[ $m, $d ] = array_map( 'intval', explode( '-', $md ) );
+		$inc = new \DateTimeImmutable( self::INCORPORATED, new \DateTimeZone( self::TZ ) );
+		for ( $y = (int) $inc->format( 'Y' ); $y <= (int) $inc->format( 'Y' ) + 2; $y++ ) {
+			$cand = self::clamp_date( $y, $m, $d );
+			if ( $cand > self::INCORPORATED ) { return $cand; }
+		}
+		return '';
+	}
+
+	/** A 'Y-m-d' for (year, month, day), clamped to the month's real length (29 Feb → 28 Feb). */
+	private static function clamp_date( $y, $m, $d ) {
+		$last = (int) ( new \DateTimeImmutable( sprintf( '%04d-%02d-01', $y, $m ), new \DateTimeZone( self::TZ ) ) )->format( 't' );
+		return sprintf( '%04d-%02d-%02d', $y, $m, min( $d, $last ) );
+	}
+
+	/**
+	 * The fiscal period containing a date: [ label, start, end, first ].
+	 * The label is the calendar year the period ENDS in, prefixed 'FY'. The first period is
+	 * truncated at incorporation — the corporation did not exist before then, so nothing can be
+	 * dated into a period that starts earlier.
+	 */
+	public static function fy_of( $date ) {
+		$md = self::fy_end_md();
+		[ $m, $d ] = array_map( 'intval', explode( '-', $md ) );
+		$y = (int) substr( $date, 0, 4 );
+		$end = self::clamp_date( $y, $m, $d );
+		if ( $date > $end ) { $end = self::clamp_date( $y + 1, $m, $d ); }
+		$prev  = self::clamp_date( (int) substr( $end, 0, 4 ) - 1, $m, $d );
+		$start = ( new \DateTimeImmutable( $prev, new \DateTimeZone( self::TZ ) ) )->modify( '+1 day' )->format( 'Y-m-d' );
+		$first = $start <= self::INCORPORATED;
+		if ( $first ) { $start = self::INCORPORATED; }
+		return [ 'label' => 'FY' . substr( $end, 0, 4 ), 'start' => $start, 'end' => $end, 'first' => $first ];
+	}
+
+	/** Every fiscal period from incorporation to the one containing today, oldest first. */
+	public static function fy_list() {
+		$out  = [];
+		$cur  = self::fy_of( self::INCORPORATED );
+		$last = self::fy_of( self::today() );
+		$guard = 0;
+		while ( $guard++ < 60 ) {
+			$out[] = $cur;
+			if ( $cur['label'] === $last['label'] ) { break; }
+			$cur = self::fy_of( ( new \DateTimeImmutable( $cur['end'], new \DateTimeZone( self::TZ ) ) )->modify( '+1 day' )->format( 'Y-m-d' ) );
+		}
+		return $out;
+	}
+
+	/** Fiscal periods whose return has been filed and which are therefore frozen. */
+	public static function locked_years() {
+		$v = get_option( 'aq_books_locked_years', [] );
+		return is_array( $v ) ? array_values( array_filter( array_map( 'strval', $v ) ) ) : [];
+	}
+
+	/** The filing deadline for a period: six months after the end, same day of the month. */
+	public static function filing_due( $end ) {
+		$dt = new \DateTimeImmutable( $end, new \DateTimeZone( self::TZ ) );
+		// CRA: when the year end is the LAST day of a month, the return is due on the last day of
+		// the sixth month after; otherwise on the same day of the sixth month after. Those two
+		// rules differ for a 31st, so the month-end case is handled explicitly.
+		if ( $dt->format( 'd' ) === $dt->format( 't' ) ) {
+			return $dt->modify( 'first day of +6 months' )->modify( 'last day of this month' )->format( 'Y-m-d' );
+		}
+		return $dt->modify( '+6 months' )->format( 'Y-m-d' );
+	}
+
+	// ── The one write choke point ─────────────────────────────────────────────
+
+	/**
+	 * Post ONE balanced journal entry, or post nothing at all.
+	 *
+	 * $lines is a list of [ account, debit, credit, party_uid?, memo? ] in integer CAD cents. A
+	 * line is a debit OR a credit, never both — a line carrying both is a sign error wearing a
+	 * disguise, and summing it would balance an entry that means nothing.
+	 *
+	 * Idempotent by $ref, so a retried import, a replayed webhook and a re-run migration all land
+	 * exactly one entry. Returns the entry id (existing or new), or 0 when nothing was written.
+	 *
+	 * A torn write — the header inserted, a line refused — is DELETED rather than kept. That is not
+	 * a ledger mutation: an entry whose lines do not sum was never a valid entry, and leaving it
+	 * behind would break every statement derived from the lines. The house append-only rule
+	 * protects records that were once true; this one never was.
+	 */
+	private static function journal( $ref, $on_date, $memo, $lines, $source = 'manual', $invoice_id = 0 ) {
+		self::ensure_tables();
+		$ref = substr( sanitize_text_field( (string) $ref ), 0, 96 );
+		if ( '' === $ref ) { error_log( 'AQ Books: journal refused — empty ref' ); return 0; }
+
+		$on_date = self::norm_date( $on_date );
+		if ( '' === $on_date ) { error_log( "AQ Books: journal refused ref={$ref} — bad date" ); return 0; }
+
+		$existing = (int) Data::col( 'SELECT id FROM ' . Data::t( 'aq_books_entry' ) . ' WHERE ref = %s', [ $ref ] );
+		if ( $existing ) { return $existing; }
+
+		$fy = self::fy_of( $on_date );
+		if ( in_array( $fy['label'], self::locked_years(), true ) ) {
+			error_log( "AQ Books: journal refused ref={$ref} — {$fy['label']} is filed and locked" );
+			return 0;
+		}
+		if ( $on_date < self::INCORPORATED ) {
+			error_log( "AQ Books: journal refused ref={$ref} — dated before incorporation" );
+			return 0;
+		}
+
+		$dr = 0; $cr = 0; $clean = [];
+		foreach ( (array) $lines as $l ) {
+			$acct = (string) ( $l['account'] ?? '' );
+			if ( ! isset( self::ACCOUNTS[ $acct ] ) ) {
+				error_log( "AQ Books: journal refused ref={$ref} — unknown account '{$acct}'" );
+				return 0;
+			}
+			$d = (int) ( $l['debit'] ?? 0 );
+			$c = (int) ( $l['credit'] ?? 0 );
+			if ( $d < 0 || $c < 0 ) {
+				error_log( "AQ Books: journal refused ref={$ref} — negative amount on '{$acct}' (post the other side instead)" );
+				return 0;
+			}
+			if ( $d > 0 && $c > 0 ) {
+				error_log( "AQ Books: journal refused ref={$ref} — line on '{$acct}' is both a debit and a credit" );
+				return 0;
+			}
+			if ( 0 === $d && 0 === $c ) { continue; }
+			$dr += $d; $cr += $c;
+			$clean[] = [
+				'account'   => $acct,
+				'debit'     => $d,
+				'credit'    => $c,
+				'party_uid' => (int) ( $l['party_uid'] ?? 0 ),
+				'memo'      => substr( sanitize_text_field( (string) ( $l['memo'] ?? '' ) ), 0, 191 ),
+			];
+		}
+		if ( count( $clean ) < 2 || $dr !== $cr ) {
+			error_log( "AQ Books: journal refused ref={$ref} — debits {$dr} != credits {$cr} (" . count( $clean ) . ' lines)' );
+			return 0;
+		}
+
+		$eid = (int) Data::insert( 'aq_books_entry', [
+			'ref'        => $ref,
+			'on_date'    => $on_date,
+			'fy'         => $fy['label'],
+			'memo'       => substr( sanitize_text_field( (string) $memo ), 0, 191 ),
+			'source'     => substr( sanitize_key( (string) $source ), 0, 24 ),
+			'invoice_id' => (int) $invoice_id,
+			'created'    => Data::now(),
+		] );
+		if ( ! $eid ) { error_log( "AQ Books: journal INSERT FAILED ref={$ref} — nothing recorded" ); return 0; }
+
+		foreach ( $clean as $l ) {
+			$l['entry_id'] = $eid;
+			if ( ! Data::insert( 'aq_books_line', $l ) ) {
+				global $wpdb;
+				$wpdb->delete( Data::t( 'aq_books_line' ), [ 'entry_id' => $eid ] );
+				$wpdb->delete( Data::t( 'aq_books_entry' ), [ 'id' => $eid ] );
+				error_log( "AQ Books: line INSERT FAILED ref={$ref} — the whole entry was rolled back" );
+				return 0;
+			}
+		}
+		return $eid;
+	}
+
+	/** 'YYYY-MM-DD' or '' — a real calendar date, not merely a well-shaped string. */
+	private static function norm_date( $v ) {
+		$v = trim( (string) $v );
+		if ( ! preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', $v, $m ) ) { return ''; }
+		return checkdate( (int) $m[2], (int) $m[3], (int) $m[1] ) ? $v : '';
+	}
+
+	// ── Reading the ledger ────────────────────────────────────────────────────
+
+	/**
+	 * Net movement per account over a date window, as [ account => cents ] in the account's own
+	 * natural direction: assets and expenses positive on a debit, liabilities, equity and revenue
+	 * positive on a credit. Both bounds inclusive; '' means unbounded.
+	 */
+	public static function movement( $from = '', $to = '' ) {
+		self::ensure_tables();
+		$where = [];
+		$args  = [];
+		if ( '' !== $from ) { $where[] = 'e.on_date >= %s'; $args[] = $from; }
+		if ( '' !== $to )   { $where[] = 'e.on_date <= %s'; $args[] = $to; }
+		$sql = 'SELECT l.account, COALESCE(SUM(l.debit),0) d, COALESCE(SUM(l.credit),0) c FROM '
+			. Data::t( 'aq_books_line' ) . ' l JOIN ' . Data::t( 'aq_books_entry' ) . ' e ON e.id = l.entry_id'
+			. ( $where ? ' WHERE ' . implode( ' AND ', $where ) : '' ) . ' GROUP BY l.account';
+		$out = [];
+		foreach ( Data::all( $sql, $args ) as $r ) {
+			$acct = (string) $r['account'];
+			if ( ! isset( self::ACCOUNTS[ $acct ] ) ) { continue; }
+			$type = self::ACCOUNTS[ $acct ][1];
+			$out[ $acct ] = in_array( $type, [ 'asset', 'expense' ], true )
+				? (int) $r['d'] - (int) $r['c']
+				: (int) $r['c'] - (int) $r['d'];
+		}
+		return $out;
+	}
+
+	/** Raw debit/credit totals over a window — the trial balance, before any natural-direction flip. */
+	public static function trial_balance( $from = '', $to = '' ) {
+		self::ensure_tables();
+		$where = [];
+		$args  = [];
+		if ( '' !== $from ) { $where[] = 'e.on_date >= %s'; $args[] = $from; }
+		if ( '' !== $to )   { $where[] = 'e.on_date <= %s'; $args[] = $to; }
+		$sql = 'SELECT COALESCE(SUM(l.debit),0) d, COALESCE(SUM(l.credit),0) c FROM '
+			. Data::t( 'aq_books_line' ) . ' l JOIN ' . Data::t( 'aq_books_entry' ) . ' e ON e.id = l.entry_id'
+			. ( $where ? ' WHERE ' . implode( ' AND ', $where ) : '' );
+		$r = Data::one( $sql, $args );
+		return [ 'debits' => (int) ( $r['d'] ?? 0 ), 'credits' => (int) ( $r['c'] ?? 0 ) ];
+	}
+
+	/**
+	 * The two statements for one fiscal period.
+	 *
+	 * The balance sheet is CUMULATIVE from incorporation to the period end; the statement of
+	 * operations is the period alone. Accumulated surplus/(deficit) is DERIVED — cumulative revenue
+	 * less cumulative expenses — never posted, so there is no year-end closing entry to forget and
+	 * no way for the equity line to drift from the income it represents.
+	 */
+	public static function period_statements( $fy ) {
+		$cum    = self::movement( '', $fy['end'] );
+		$per    = self::movement( $fy['start'], $fy['end'] );
+		$assets = []; $liabs = []; $rev = []; $exp = [];
+		foreach ( self::ACCOUNTS as $code => $a ) {
+			$row_c = [ 'account' => $code, 'label' => $a[0], 'gifi' => $a[2], 'gifi_short' => $a[3], 'cents' => (int) ( $cum[ $code ] ?? 0 ) ];
+			$row_p = [ 'account' => $code, 'label' => $a[0], 'gifi' => $a[2], 'gifi_short' => $a[3], 'cents' => (int) ( $per[ $code ] ?? 0 ) ];
+			if ( 'asset' === $a[1] )     { $assets[] = $row_c; }
+			if ( 'liability' === $a[1] ) { $liabs[]  = $row_c; }
+			if ( 'revenue' === $a[1] )   { $rev[]    = $row_p; }
+			if ( 'expense' === $a[1] )   { $exp[]    = $row_p; }
+		}
+		$sum = fn( $rows ) => array_sum( array_map( fn( $r ) => $r['cents'], $rows ) );
+
+		$total_assets = $sum( $assets );
+		$total_liabs  = $sum( $liabs );
+		$total_rev    = $sum( $rev );
+		$total_exp    = $sum( $exp );
+
+		// Cumulative result to the period end = the accumulated surplus/(deficit).
+		$cum_rev = 0; $cum_exp = 0;
+		foreach ( self::ACCOUNTS as $code => $a ) {
+			if ( 'revenue' === $a[1] ) { $cum_rev += (int) ( $cum[ $code ] ?? 0 ); }
+			if ( 'expense' === $a[1] ) { $cum_exp += (int) ( $cum[ $code ] ?? 0 ); }
+		}
+		$net_assets = $cum_rev - $cum_exp;
+
+		return [
+			'fy'      => $fy,
+			'position' => [
+				'assets'            => $assets,
+				'total_assets'      => $total_assets,
+				'liabilities'       => $liabs,
+				'total_liabilities' => $total_liabs,
+				'net_assets'        => $net_assets,
+				'balances'          => $total_assets === $total_liabs + $net_assets,
+			],
+			'operations' => [
+				'revenue'       => $rev,
+				'total_revenue' => $total_rev,
+				'expenses'      => $exp,
+				'total_expenses' => $total_exp,
+				'result'        => $total_rev - $total_exp,
+			],
+		];
+	}
+
+	/**
+	 * GET /foundation/statements — the whole published set of books.
+	 * ?fy=FY2026 selects a period; the default is the one containing today.
+	 */
+	public static function statements( $req ) {
+		self::ensure_tables();
+		$want = sanitize_text_field( (string) Rest::p( $req, 'fy', '' ) );
+		$years = self::fy_list();
+		$fy = $years ? $years[ count( $years ) - 1 ] : self::fy_of( self::today() );
+		foreach ( $years as $y ) { if ( $y['label'] === $want ) { $fy = $y; } }
+
+		$st = self::period_statements( $fy );
+		return [
+			'entity'   => [
+				'name'          => self::ENTITY,
+				'bn'            => self::BN,
+				'kind'          => 'Canadian non-profit corporation, paragraph 149(1)(l) — NOT a registered charity',
+				'incorporated'  => self::INCORPORATED,
+				'province'      => self::PROVINCE,
+				'receipts'      => false,
+				'receipts_note' => 'A non-profit organisation cannot issue official donation receipts for income tax purposes (CRA Summary Policy CSP-N03). Gifts to the Foundation are not tax-deductible.',
+			],
+			'currency'    => self::CURRENCY,
+			'fiscal'      => [
+				'year_end'          => self::fy_end_md(),
+				'year_end_settled'  => (bool) get_option( 'aq_books_fy_filed_once', false ),
+				'max_first_end'     => self::max_first_year_end(),
+				'note'              => 'The first fiscal period must end within 53 weeks of incorporation, and is fixed by the first T2 filed.',
+				'years'             => $years,
+				'locked'            => self::locked_years(),
+				'filing_due'        => self::filing_due( $fy['end'] ),
+			],
+			'statements'  => $st,
+			'entries'     => self::recent_entries( $fy ),
+			'checks'      => self::verify(),
+		];
+	}
+
+	/** Every entry of a period, newest first, with its lines — the audit trail itself. */
+	private static function recent_entries( $fy, $limit = 200 ) {
+		$rows = Data::all(
+			'SELECT id, ref, on_date, memo, source, invoice_id FROM ' . Data::t( 'aq_books_entry' )
+			. ' WHERE fy = %s ORDER BY on_date DESC, id DESC LIMIT %d', [ $fy['label'], (int) $limit ] );
+		if ( ! $rows ) { return []; }
+		$ids   = array_map( fn( $r ) => (int) $r['id'], $rows );
+		$in    = implode( ',', array_map( 'intval', $ids ) );
+		$lines = Data::all( 'SELECT entry_id, account, debit, credit, memo FROM ' . Data::t( 'aq_books_line' )
+			. " WHERE entry_id IN ($in) ORDER BY id" );
+		$by = [];
+		foreach ( $lines as $l ) { $by[ (int) $l['entry_id'] ][] = [
+			'account' => $l['account'],
+			'label'   => self::ACCOUNTS[ $l['account'] ][0] ?? $l['account'],
+			'debit'   => (int) $l['debit'],
+			'credit'  => (int) $l['credit'],
+			'memo'    => $l['memo'],
+		]; }
+		return array_map( fn( $r ) => [
+			'id'         => (int) $r['id'],
+			'ref'        => $r['ref'],
+			'date'       => $r['on_date'],
+			'memo'       => $r['memo'],
+			'source'     => $r['source'],
+			'invoice_id' => (int) $r['invoice_id'],
+			'lines'      => $by[ (int) $r['id'] ] ?? [],
+		], $rows );
+	}
+
+	// ── The invoice register ──────────────────────────────────────────────────
+
+	/** GET /foundation/invoices — every invoice with its evidence documents. */
+	public static function invoices( $req ) {
+		self::ensure_tables();
+		$rows = Data::all( 'SELECT * FROM ' . Data::t( 'aq_books_invoice' ) . ' ORDER BY paid DESC, id DESC LIMIT 500' );
+		$docs = Data::all( 'SELECT id, invoice_id, kind, name, bytes, sha256, mime FROM ' . Data::t( 'aq_books_doc' ) . ' ORDER BY id' );
+		$by   = [];
+		foreach ( $docs as $d ) {
+			$by[ (int) $d['invoice_id'] ][] = [
+				'id'     => (int) $d['id'],
+				'kind'   => $d['kind'],
+				'name'   => $d['name'],
+				'bytes'  => (int) $d['bytes'],
+				'sha256' => $d['sha256'],
+				'mime'   => $d['mime'],
+				'url'    => rest_url( 'aq/v1/foundation/invoices/' . (int) $d['invoice_id'] . '/file/' . (int) $d['id'] ),
+			];
+		}
+		$total = 0;
+		$items = [];
+		foreach ( $rows as $r ) {
+			$total += (int) $r['cad_cents'];
+			$items[] = [
+				'id'          => (int) $r['id'],
+				'vendor'      => $r['vendor'],
+				'number'      => $r['number'],
+				'description' => $r['description'],
+				'issued'      => $r['issued'],
+				'paid'        => $r['paid'],
+				'period'      => [ 'start' => $r['period_start'], 'end' => $r['period_end'] ],
+				'currency'    => $r['currency'],
+				'subtotal_cents' => (int) $r['subtotal_cents'],
+				'tax_cents'   => (int) $r['tax_cents'],
+				'total_cents' => (int) $r['total_cents'],
+				'fx'          => [ 'rate' => (int) $r['fx_rate'] / 1000000, 'date' => $r['fx_date'], 'source' => $r['fx_source'] ],
+				'cad_cents'   => (int) $r['cad_cents'],
+				'account'     => $r['account'],
+				'gifi'        => self::ACCOUNTS[ $r['account'] ][2] ?? '',
+				'tax_note'    => $r['tax_note'],
+				'pay_method'  => $r['pay_method'],
+				'payer_uid'   => (int) $r['payer_uid'],
+				'coins'       => (int) $r['coins'],
+				'coin_basis'  => (int) $r['coins'] > 0 ? [
+					'price_cad'   => (int) $r['coin_price_1e6'] / 1000000,
+					'gold_oz_usd' => (int) $r['gold_oz_usd_1e4'] / 10000,
+					'usdcad'      => (int) $r['usdcad_1e6'] / 1000000,
+					'rate_date'   => $r['rate_date'],
+					'source'      => $r['rate_source'],
+				] : null,
+				'entry_id'    => (int) $r['entry_id'],
+				'note'        => $r['note'],
+				'documents'   => $by[ (int) $r['id'] ] ?? [],
+			];
+		}
+		return [ 'items' => $items, 'count' => count( $items ), 'total_cad_cents' => $total, 'currency' => self::CURRENCY ];
+	}
+
+	/**
+	 * GET /foundation/invoices/{id}/file/{doc} — the evidence document itself.
+	 *
+	 * Served through a route rather than as a file in the web root, deliberately. Media's origin
+	 * allow-list does not admit PDFs — a PDF is script-capable in-origin, and a past incident put
+	 * an attacker-named .pdf on the site — so the bytes live outside any published directory and
+	 * this handler is the only way to them. Content-Disposition: attachment plus a nosniff header
+	 * means the browser saves the file rather than executing anything in our origin, and the name
+	 * is ours (content-addressed), never the uploader's.
+	 *
+	 * The documents themselves are PUBLIC, by the operator's decision: an invoice is evidence for
+	 * a published figure and it is worth nothing if a stranger cannot open it.
+	 */
+	public static function invoice_file( $req ) {
+		self::ensure_tables();
+		$doc = (int) Rest::pint( $req, 'doc', 0 );
+		$inv = (int) Rest::pint( $req, 'id', 0 );
+		$row = Data::one( 'SELECT * FROM ' . Data::t( 'aq_books_doc' ) . ' WHERE id = %d AND invoice_id = %d', [ $doc, $inv ] );
+		if ( ! $row ) { return Rest::err( 'not_found', 'No such document', 404 ); }
+		$path = self::doc_path( (string) $row['file_key'] );
+		if ( '' === $path || ! is_file( $path ) ) { return Rest::err( 'gone', 'The stored file is missing', 410 ); }
+
+		while ( ob_get_level() ) { ob_end_clean(); }
+		status_header( 200 );
+		header( 'Content-Type: ' . ( $row['mime'] ?: 'application/pdf' ) );
+		header( 'Content-Length: ' . (string) filesize( $path ) );
+		header( 'Content-Disposition: attachment; filename="' . sanitize_file_name( (string) $row['name'] ) . '"' );
+		header( 'X-Content-Type-Options: nosniff' );
+		header( 'Content-Security-Policy: default-src \'none\'; sandbox' );
+		header( 'Cache-Control: public, max-age=86400, s-maxage=86400' );
+		header( 'X-AQ-SHA256: ' . (string) $row['sha256'] );
+		readfile( $path );
+		exit;
+	}
+
+	/** Where evidence documents live. Outside aq-media on purpose — nothing here is web-root served. */
+	private static function doc_dir() {
+		$up  = wp_upload_dir();
+		$dir = trailingslashit( $up['basedir'] ) . 'aq-books';
+		if ( ! is_dir( $dir ) ) { wp_mkdir_p( $dir ); }
+		return $dir;
+	}
+
+	/** Absolute path for a stored key, or '' if the key tries to escape the directory. */
+	private static function doc_path( $key ) {
+		$key = (string) $key;
+		if ( '' === $key || ! preg_match( '/^[a-f0-9]{64}\.[a-z0-9]{1,8}$/', $key ) ) { return ''; }
+		return trailingslashit( self::doc_dir() ) . $key;
+	}
+
+	/**
+	 * Store one evidence PDF, content-addressed by its own sha256.
+	 * Returns [ file_key, sha256, bytes ] or a WP_REST_Response error.
+	 */
+	private static function store_doc( $f ) {
+		$size = (int) ( $f['size'] ?? 0 );
+		if ( $size <= 0 ) { return Rest::err( 'empty', 'The file is empty' ); }
+		if ( $size > 25 * 1024 * 1024 ) { return Rest::err( 'too_big', 'An invoice PDF may not exceed 25 MB' ); }
+		$tmp = (string) ( $f['tmp_name'] ?? '' );
+		if ( '' === $tmp || ! is_uploaded_file( $tmp ) ) { return Rest::err( 'failed', 'No uploaded file', 400 ); }
+		if ( strncmp( (string) @file_get_contents( $tmp, false, null, 0, 5 ), '%PDF', 4 ) !== 0 ) {
+			return Rest::err( 'bad_type', 'That file is not a PDF' );
+		}
+		$sha = hash_file( 'sha256', $tmp );
+		if ( ! $sha ) { return Rest::err( 'failed', 'Could not hash the file', 500 ); }
+		$key  = $sha . '.pdf';
+		$dest = trailingslashit( self::doc_dir() ) . $key;
+		if ( ! is_file( $dest ) && ! @move_uploaded_file( $tmp, $dest ) ) {
+			return Rest::err( 'failed', 'Could not store the file', 500 );
+		}
+		@chmod( $dest, 0644 );
+		return [ 'file_key' => $key, 'sha256' => $sha, 'bytes' => $size ];
+	}
+
+	// ── Verification — every invariant, checkable by a stranger ────────────────
+
+	/**
+	 * Prove the books. Each row is [ check, ok, detail ]. Nothing here trusts a stored total: every
+	 * figure is recomputed from the lines, so a check that passes is evidence rather than assertion.
+	 */
+	public static function verify() {
+		self::ensure_tables();
+		$checks = [];
+
+		$tb = self::trial_balance();
+		$checks[] = [ 'check' => 'trial_balance', 'ok' => $tb['debits'] === $tb['credits'],
+			'detail' => 'debits ' . $tb['debits'] . ' vs credits ' . $tb['credits'] ];
+
+		$bad = Data::all(
+			'SELECT e.id, e.ref, COALESCE(SUM(l.debit),0) d, COALESCE(SUM(l.credit),0) c FROM '
+			. Data::t( 'aq_books_entry' ) . ' e LEFT JOIN ' . Data::t( 'aq_books_line' ) . ' l ON l.entry_id = e.id'
+			. ' GROUP BY e.id, e.ref HAVING d <> c OR d = 0' );
+		$checks[] = [ 'check' => 'every_entry_balances', 'ok' => ! $bad,
+			'detail' => $bad ? count( $bad ) . ' unbalanced: ' . implode( ', ', array_map( fn( $r ) => $r['ref'], array_slice( $bad, 0, 5 ) ) ) : 'all entries balance' ];
+
+		$fy = self::fy_of( self::today() );
+		$st = self::period_statements( $fy );
+		$checks[] = [ 'check' => 'accounting_equation', 'ok' => (bool) $st['position']['balances'],
+			'detail' => 'assets ' . $st['position']['total_assets'] . ' = liabilities ' . $st['position']['total_liabilities']
+				. ' + net assets ' . $st['position']['net_assets'] ];
+
+		$inv_total = (int) Data::col( 'SELECT COALESCE(SUM(cad_cents),0) FROM ' . Data::t( 'aq_books_invoice' ) );
+		$exp_total = 0;
+		foreach ( self::movement() as $code => $cents ) {
+			if ( 'expense' === ( self::ACCOUNTS[ $code ][1] ?? '' ) ) { $exp_total += $cents; }
+		}
+		$checks[] = [ 'check' => 'invoices_tie_to_expenses', 'ok' => $inv_total === $exp_total,
+			'detail' => 'invoice register ' . $inv_total . ' vs expense accounts ' . $exp_total ];
+
+		$booked_coins = (int) Data::col( 'SELECT COALESCE(SUM(coins),0) FROM ' . Data::t( 'aq_books_invoice' ) );
+		$issued       = class_exists( '\\AQ\\Economy' ) ? (int) Economy::counter( 'coins_issued' ) : 0;
+		$checks[] = [ 'check' => 'coins_issued_matches_books', 'ok' => $booked_coins === $issued,
+			'detail' => 'books say ' . $booked_coins . ' ₳ issued, the coin ledger counter says ' . $issued ];
+
+		$ledger_sum = (int) Data::col( 'SELECT COALESCE(SUM(delta),0) FROM ' . Data::t( 'aq_coin_ledger' ) );
+		$checks[] = [ 'check' => 'coin_counter_matches_ledger', 'ok' => $ledger_sum === $issued,
+			'detail' => 'Σ coin ledger ' . $ledger_sum . ' vs coins_issued ' . $issued ];
+
+		$missing = (int) Data::col(
+			'SELECT COUNT(*) FROM ' . Data::t( 'aq_books_doc' ) . " WHERE file_key = '' OR sha256 = ''" );
+		$checks[] = [ 'check' => 'every_document_hashed', 'ok' => 0 === $missing,
+			'detail' => $missing ? $missing . ' document(s) without a stored hash' : 'all documents carry a sha256' ];
+
+		$orphan = (int) Data::col( 'SELECT COUNT(*) FROM ' . Data::t( 'aq_books_line' ) . ' l LEFT JOIN '
+			. Data::t( 'aq_books_entry' ) . ' e ON e.id = l.entry_id WHERE e.id IS NULL' );
+		$checks[] = [ 'check' => 'no_orphan_lines', 'ok' => 0 === $orphan,
+			'detail' => $orphan ? $orphan . ' line(s) with no entry' : 'every line belongs to an entry' ];
+
+		return $checks;
+	}
+
+	/** GET /foundation/books/verify — the invariants alone, for a monitor or a sceptic. */
+	public static function verify_rest( $req ) {
+		$c = self::verify();
+		return [ 'checks' => $c, 'ok' => ! array_filter( $c, fn( $x ) => ! $x['ok'] ) ];
+	}
+
+	// ── The CRA package ───────────────────────────────────────────────────────
+
+	/**
+	 * GET /foundation/cra — the year-end filing package, computed from the ledger.
+	 *
+	 * This PREPARES a return; it does not file one. It produces the GIFI schedules CRA wants with
+	 * the T2 (100 balance sheet, 101 opening balance sheet in the first year, 125 income statement,
+	 * 141 additional information), applies the three T1044 threshold tests, and states the deadline.
+	 *
+	 * The T1044 test is deliberately conservative in one direction: it reports "not required" when
+	 * no threshold is met, and says so loudly, because filing one voluntarily is a ONE-WAY RATCHET
+	 * — CRA requires an information return for every subsequent period once one has been filed,
+	 * with a $25/day penalty attached forever after.
+	 */
+	public static function cra( $req ) {
+		self::ensure_tables();
+		$want  = sanitize_text_field( (string) Rest::p( $req, 'fy', '' ) );
+		$years = self::fy_list();
+		$fy    = $years ? $years[ count( $years ) - 1 ] : self::fy_of( self::today() );
+		foreach ( $years as $y ) { if ( $y['label'] === $want ) { $fy = $y; } }
+
+		$st  = self::period_statements( $fy );
+		$s100 = []; $s125 = [];
+		foreach ( $st['position']['assets'] as $r )      { if ( $r['cents'] ) { $s100[] = self::gifi_row( $r ); } }
+		foreach ( $st['position']['liabilities'] as $r ) { if ( $r['cents'] ) { $s100[] = self::gifi_row( $r ); } }
+		foreach ( $st['operations']['revenue'] as $r )   { if ( $r['cents'] ) { $s125[] = self::gifi_row( $r ); } }
+		foreach ( $st['operations']['expenses'] as $r )  { if ( $r['cents'] ) { $s125[] = self::gifi_row( $r ); } }
+
+		$net = $st['operations']['result'];
+		$s100[] = [ 'gifi' => '3600', 'label' => self::GIFI_TOTALS['3600'], 'cents' => $st['position']['net_assets'] ];
+		$s100[] = [ 'gifi' => '3620', 'label' => self::GIFI_TOTALS['3620'], 'cents' => $st['position']['net_assets'] ];
+		$s100[] = [ 'gifi' => '3640', 'label' => self::GIFI_TOTALS['3640'], 'cents' => $st['position']['total_liabilities'] + $st['position']['net_assets'] ];
+		$s125[] = [ 'gifi' => '8299', 'label' => self::GIFI_TOTALS['8299'], 'cents' => $st['operations']['total_revenue'] ];
+		$s125[] = [ 'gifi' => '9367', 'label' => self::GIFI_TOTALS['9367'], 'cents' => $st['operations']['total_expenses'] ];
+		$s125[] = [ 'gifi' => '9368', 'label' => self::GIFI_TOTALS['9368'], 'cents' => $st['operations']['total_expenses'] ];
+		$s125[] = [ 'gifi' => '9970', 'label' => self::GIFI_TOTALS['9970'], 'cents' => $net ];
+		$s125[] = [ 'gifi' => '9999', 'label' => self::GIFI_TOTALS['9999'], 'cents' => $net ];
+
+		return [
+			'fy'     => $fy,
+			'entity' => [ 'name' => self::ENTITY, 'bn' => self::BN, 'incorporated' => self::INCORPORATED, 'province' => self::PROVINCE ],
+			'currency' => self::CURRENCY,
+			't2' => [
+				'required' => true,
+				'why'      => 'CRA requires a T2 from every resident corporation for every tax year, even with no tax payable. Only tax-exempt Crown corporations, Hutterite colonies and registered charities are excused — a 149(1)(l) non-profit is not.',
+				'form'     => 'T2 Short Return',
+				'form_why' => 'Eligible because the corporation is exempt from tax under section 149. Confirm the remaining conditions before filing: one permanent establishment, no taxable dividends paid or received, reporting in Canadian dollars, no refundable credits claimed.',
+				'due'      => self::filing_due( $fy['end'] ),
+				'schedules' => array_values( array_filter( [
+					'100' => 'Schedule 100 — Balance Sheet Information',
+					'101' => $fy['first'] ? 'Schedule 101 — Opening Balance Sheet Information (first year only)' : '',
+					'125' => 'Schedule 125 — Income Statement Information',
+					'141' => 'Schedule 141 — GIFI Additional Information',
+				] ) ),
+				'gifi_short_eligible' => ( $st['position']['total_assets'] < 100000000 && $st['operations']['total_revenue'] < 100000000 ),
+				'gifi_short_note'     => 'Form T1178 (GIFI-Short) may be used on paper when both gross revenue and assets are under $1 million.',
+			],
+			'schedule_100' => $s100,
+			'schedule_101' => $fy['first'] ? [ [ 'gifi' => '3640', 'label' => 'Total liabilities and shareholder equity at incorporation', 'cents' => 0 ] ] : [],
+			'schedule_125' => $s125,
+			'schedule_141' => self::schedule_141(),
+			't1044'        => self::t1044_test( $fy, $years ),
+			'notes'        => self::filing_notes( $fy ),
+			'generated'    => self::today(),
+			'source'       => 'Computed from the published general ledger. Every figure is reproducible from /foundation/statements and /data.',
+		];
+	}
+
+	private static function gifi_row( $r ) {
+		return [ 'gifi' => $r['gifi'], 'gifi_short' => $r['gifi_short'], 'label' => $r['label'], 'account' => $r['account'], 'cents' => $r['cents'] ];
+	}
+
+	/**
+	 * Schedule 141 — the questions about who prepared the statements. Two of these are facts about
+	 * a person, not about the ledger, so they are stored as operator-set options rather than
+	 * guessed; the rest are answered from what the books actually contain.
+	 */
+	private static function schedule_141() {
+		$designated = (bool) get_option( 'aq_books_preparer_designated', false );
+		return [
+			'part1' => [
+				[ 'line' => '111', 'q' => 'Can you identify the person primarily involved with the financial information?', 'a' => 'Yes',
+					'note' => 'One person prepares more than 50% of the financial information.' ],
+				[ 'line' => '095', 'q' => 'Does that person have a professional designation in accounting?', 'a' => $designated ? 'Yes' : 'No',
+					'note' => 'Operator-set (aq_books_preparer_designated).' ],
+				[ 'line' => '097', 'q' => 'Is that person connected with the corporation?', 'a' => 'Yes',
+					'note' => 'A director of the corporation is a connected person by CRA\'s definition.' ],
+			],
+			'part2' => [ [ 'line' => '304', 'selected' => true, 'q' => 'Provided bookkeeping services' ] ],
+			'part3' => [ [ 'line' => '099', 'q' => 'Has the person expressed a reservation?', 'a' => 'n/a',
+				'note' => 'Answered only when option 300 (auditor\'s report) or 301 (review engagement) is selected in Part 2.' ] ],
+			'part4' => [
+				[ 'line' => '101', 'q' => 'Were notes to the financial statements prepared?', 'a' => 'Yes',
+					'note' => 'The published statements carry notes — see the notes block of this package.' ],
+				[ 'line' => '104', 'q' => 'Did the corporation have any subsequent events?', 'a' => 'Operator to confirm' ],
+				[ 'line' => '105', 'q' => 'Did the corporation re-evaluate its assets during the tax year?', 'a' => 'No' ],
+				[ 'line' => '106', 'q' => 'Did the corporation have any contingent liabilities during the tax year?', 'a' => 'Yes',
+					'note' => 'See the GST/HST self-assessment note.' ],
+				[ 'line' => '107', 'q' => 'Did the corporation have any commitments during the tax year?', 'a' => 'Operator to confirm' ],
+				[ 'line' => '108', 'q' => 'Does the corporation have investments in joint ventures or partnerships?', 'a' => 'No' ],
+			],
+			'note' => 'Schedule 141 must be completed even when there are no notes to the financial statements.',
+		];
+	}
+
+	/**
+	 * The three T1044 threshold tests. Any ONE of them triggers the information return.
+	 * The asset test looks at the PRECEDING period, not the current one — a detail that is easy to
+	 * get backwards and that CRA's own worked example turns on.
+	 */
+	private static function t1044_test( $fy, $years ) {
+		$prev_end = '';
+		foreach ( $years as $i => $y ) {
+			if ( $y['label'] === $fy['label'] && $i > 0 ) { $prev_end = $years[ $i - 1 ]['end']; }
+		}
+		$prev_assets = 0;
+		if ( '' !== $prev_end ) {
+			foreach ( self::movement( '', $prev_end ) as $code => $cents ) {
+				if ( 'asset' === ( self::ACCOUNTS[ $code ][1] ?? '' ) ) { $prev_assets += $cents; }
+			}
+		}
+		// Only taxable dividends, interest, rentals and royalties count toward the $10,000 test —
+		// gifts and membership revenue do NOT. The Foundation books none of those categories today,
+		// so the figure is zero by construction rather than by omission.
+		$investment_income = 0;
+		$filed_before      = (bool) get_option( 'aq_books_t1044_filed_once', false );
+
+		$t1 = $investment_income > 1000000;
+		$t2 = $prev_assets > 20000000;
+		$t3 = $filed_before;
+		$req = $t1 || $t2 || $t3;
+		return [
+			'required' => $req,
+			'tests'    => [
+				[ 'test' => 'Taxable dividends, interest, rentals or royalties over $10,000 in the period', 'met' => $t1, 'value_cents' => $investment_income ],
+				[ 'test' => 'Total assets over $200,000 at the end of the IMMEDIATELY PRECEDING period', 'met' => $t2, 'value_cents' => $prev_assets, 'as_at' => $prev_end ?: 'no preceding period' ],
+				[ 'test' => 'An NPO information return had to be filed for a previous period', 'met' => $t3 ],
+			],
+			'due'      => $req ? self::filing_due( $fy['end'] ) : '',
+			'warning'  => 'Do not file a T1044 voluntarily. Once one has been filed, CRA requires an information return for every subsequent fiscal period regardless of later revenue or assets, and the late-filing penalty is $25 per day (minimum $100, maximum $2,500) for each failure.',
+			'note'     => $req ? 'File by mail to the Jonquière Tax Centre, T1044 Program.' : 'No NPO information return is due for this period. The T2 obligation is separate and unconditional.',
+		];
+	}
+
+	/** Notes to the financial statements — the things a reader must be told, in plain words. */
+	private static function filing_notes( $fy ) {
+		$notes = [];
+		$notes[] = [
+			'title' => 'Basis of preparation',
+			'body'  => 'These statements are prepared from a double-entry general ledger held in ' . self::CURRENCY
+				. ' and published in full. Every figure is the sum of ledger lines; nothing is entered as a total. '
+				. 'The ledger, the invoice register and the supporting documents are all public.',
+		];
+		$notes[] = [
+			'title' => 'Not a registered charity',
+			'body'  => self::ENTITY . ' is a Canadian non-profit corporation relying on the paragraph 149(1)(l) exemption. '
+				. 'It is not a registered charity and cannot issue official donation receipts for income tax purposes. '
+				. 'Gifts to the Foundation are not tax-deductible.',
+		];
+		$notes[] = [
+			'title' => 'Expenses paid by a director',
+			'body'  => 'Operating costs have been paid personally by a director and recorded as an expense of the Foundation '
+				. 'with a matching amount due to that director. Where the director has accepted ArtaCoin in settlement, the '
+				. 'amount due is reduced and a coin liability recognised in its place. No cash passed through a Foundation bank account.',
+		];
+		$notes[] = [
+			'title' => 'ArtaCoin is a liability, and it is not gold-backed',
+			'body'  => 'ArtaCoin issued to settle a director advance is an obligation of the Foundation, not revenue. '
+				. 'The cash that gave rise to it was spent on operating costs, so no gold was acquired to back those coins. '
+				. 'The reserve shortfall is stated openly on the reserve page rather than smoothed over.',
+		];
+		$notes[] = [
+			'title' => 'GST/HST — contingency, unresolved',
+			'body'  => 'Vendor invoices were issued with 0% tax on a reverse-charge basis because a Canadian business number was '
+				. 'supplied. If the Foundation is not registered for GST/HST, tax on these imported taxable supplies may be '
+				. 'self-assessable rather than avoided. This is disclosed as a contingency and is not accrued: it has not been '
+				. 'confirmed, and it should be put to a professional adviser before the return is filed.',
+		];
+		$notes[] = [
+			'title' => 'Records retention',
+			'body'  => 'CRA requires records and supporting documents to be kept for six years from the end of the last tax year '
+				. 'they relate to. Records that were born electronic must be kept in electronic form; a printout is not sufficient. '
+				. 'The invoice PDFs held here are the original electronic documents.',
+		];
+		return $notes;
+	}
+
+	// ── Operator writes ───────────────────────────────────────────────────────
+
+	/**
+	 * POST /studio/books/invoice — record a cost and its evidence.
+	 *
+	 * Multipart: invoice_pdf and/or receipt_pdf files, plus the figures. The figures are TYPED by
+	 * the operator rather than parsed out of the PDF, and that is a considered choice: a PDF stores
+	 * spaces as positioning rather than as characters, so a pure-PHP parser recovers glyphs but not
+	 * the adjacency that binds the word "Total" to the number beside it. A bookkeeping total that
+	 * is right 95% of the time manufactures errors that only surface at year end.
+	 *
+	 * Posts the double entry: expense debited, and either cash or the director's account credited.
+	 */
+	public static function add_invoice( $req ) {
+		self::ensure_tables();
+		if ( Rest::throttle( 'books_invoice', 60, 3600 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
+
+		$vendor = substr( sanitize_text_field( (string) Rest::p( $req, 'vendor', '' ) ), 0, 160 );
+		$number = substr( sanitize_text_field( (string) Rest::p( $req, 'number', '' ) ), 0, 96 );
+		$desc   = substr( sanitize_text_field( (string) Rest::p( $req, 'description', '' ) ), 0, 191 );
+		$paid   = self::norm_date( Rest::p( $req, 'paid', '' ) );
+		$issued = self::norm_date( Rest::p( $req, 'issued', '' ) ) ?: $paid;
+		$acct   = (string) Rest::p( $req, 'account', 'software' );
+		$cur    = strtoupper( substr( (string) Rest::p( $req, 'currency', self::CURRENCY ), 0, 3 ) );
+		$total  = (int) round( (float) Rest::p( $req, 'total', 0 ) * 100 );
+		$tax    = (int) round( (float) Rest::p( $req, 'tax', 0 ) * 100 );
+		$payer  = (int) Rest::pint( $req, 'payer_uid', 0 );
+
+		if ( '' === $vendor || '' === $number ) { return Rest::err( 'bad_input', 'A vendor and an invoice number are required.' ); }
+		if ( '' === $paid )   { return Rest::err( 'bad_input', 'A payment date is required (YYYY-MM-DD).' ); }
+		if ( $total <= 0 )    { return Rest::err( 'bad_input', 'The invoice total must be positive.' ); }
+		if ( ! isset( self::ACCOUNTS[ $acct ] ) || 'expense' !== self::ACCOUNTS[ $acct ][1] ) {
+			return Rest::err( 'bad_input', 'Choose an expense account.' );
+		}
+		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_books_invoice' ) . ' WHERE number = %s', [ $number ] ) ) {
+			return Rest::err( 'duplicate', 'That invoice number is already recorded.', 409 );
+		}
+
+		// Foreign currency converts at the Bank of Canada rate for the day the expense arose, which
+		// is what CRA's Income Tax Folio S5-F4-C1 calls the relevant spot rate. A day the Bank does
+		// not quote resolves to the most recent published rate at or before it.
+		$fx = [ 'rate' => 1000000, 'date' => $paid, 'source' => 'no conversion — invoiced in CAD' ];
+		if ( self::CURRENCY !== $cur ) {
+			$got = self::fx_rate( $cur, $paid );
+			if ( ! $got ) { return Rest::err( 'fx_unavailable', 'Could not resolve an exchange rate for that date. Try again shortly.', 503 ); }
+			$fx = $got;
+		}
+		$cad = (int) round( $total * ( $fx['rate'] / 1000000 ) );
+
+		$files   = (array) $req->get_file_params();
+		$stored  = [];
+		foreach ( [ 'invoice_pdf' => 'invoice', 'receipt_pdf' => 'receipt' ] as $field => $kind ) {
+			if ( empty( $files[ $field ] ) ) { continue; }
+			$s = self::store_doc( $files[ $field ] );
+			if ( $s instanceof \WP_REST_Response || is_wp_error( $s ) ) { return $s; }
+			$s['kind'] = $kind;
+			$s['name'] = sanitize_file_name( (string) ( $files[ $field ]['name'] ?? ( $kind . '.pdf' ) ) );
+			$stored[]  = $s;
+		}
+
+		$id = (int) Data::insert( 'aq_books_invoice', [
+			'vendor' => $vendor, 'number' => $number, 'description' => $desc,
+			'issued' => $issued, 'paid' => $paid,
+			'period_start' => self::norm_date( Rest::p( $req, 'period_start', '' ) ),
+			'period_end'   => self::norm_date( Rest::p( $req, 'period_end', '' ) ),
+			'currency' => $cur, 'subtotal_cents' => $total - $tax, 'tax_cents' => $tax, 'total_cents' => $total,
+			'fx_rate' => (int) $fx['rate'], 'fx_date' => (string) $fx['date'], 'fx_source' => substr( (string) $fx['source'], 0, 191 ),
+			'cad_cents' => $cad, 'account' => $acct,
+			'tax_note' => substr( sanitize_text_field( (string) Rest::p( $req, 'tax_note', '' ) ), 0, 191 ),
+			'pay_method' => substr( sanitize_text_field( (string) Rest::p( $req, 'pay_method', '' ) ), 0, 64 ),
+			'payer_uid' => $payer,
+			'note' => substr( sanitize_text_field( (string) Rest::p( $req, 'note', '' ) ), 0, 191 ),
+			'created' => Data::now(),
+		] );
+		if ( ! $id ) { return Rest::err( 'failed', 'Could not record the invoice', 500 ); }
+
+		foreach ( $stored as $s ) {
+			Data::insert( 'aq_books_doc', [
+				'invoice_id' => $id, 'kind' => $s['kind'], 'name' => $s['name'],
+				'file_key' => $s['file_key'], 'mime' => 'application/pdf', 'bytes' => (int) $s['bytes'],
+				'sha256' => $s['sha256'], 'uploaded_by' => Rest::uid(), 'created' => Data::now(),
+			] );
+		}
+
+		// A cost paid personally by a director is owed back to them; one paid from a Foundation
+		// account reduces cash. Both are the same expense.
+		$funded = $payer > 0 ? 'due_director' : 'cash';
+		$eid = self::journal( 'inv:' . $number, $paid, $vendor . ' — ' . ( $desc ?: $number ), [
+			[ 'account' => $acct,   'debit'  => $cad, 'memo' => $vendor . ' ' . $number ],
+			[ 'account' => $funded, 'credit' => $cad, 'party_uid' => $payer, 'memo' => $payer > 0 ? 'Paid personally by a director' : 'Paid from Foundation funds' ],
+		], 'invoice', $id );
+		if ( $eid ) { Data::update( 'aq_books_invoice', [ 'entry_id' => $eid ], [ 'id' => $id ] ); }
+
+		return [ 'ok' => true, 'id' => $id, 'entry_id' => $eid, 'cad_cents' => $cad, 'documents' => count( $stored ) ];
+	}
+
+	// ── Rates ─────────────────────────────────────────────────────────────────
+
+	/**
+	 * The Bank of Canada daily rate for a currency on a date, as an integer ×1e6.
+	 * Returns null when it cannot be resolved — never a guess, because a guessed rate silently
+	 * misstates every figure derived from it. Cached per (currency, date) once resolved: a
+	 * published historical rate never changes.
+	 */
+	public static function fx_rate( $currency, $date ) {
+		$cur  = strtoupper( preg_replace( '/[^A-Z]/', '', (string) $currency ) );
+		$date = self::norm_date( $date );
+		if ( '' === $cur || '' === $date || self::CURRENCY === $cur ) { return null; }
+		$ck = 'aq_books_fx_' . strtolower( $cur ) . '_' . $date;
+		$hit = get_option( $ck );
+		if ( is_array( $hit ) && ! empty( $hit['rate'] ) ) { return $hit; }
+
+		$series = 'FX' . $cur . 'CAD';
+		$from   = ( new \DateTimeImmutable( $date, new \DateTimeZone( self::TZ ) ) )->modify( '-10 days' )->format( 'Y-m-d' );
+		$url    = 'https://www.bankofcanada.ca/valet/observations/' . rawurlencode( $series ) . '/json?start_date=' . $from . '&end_date=' . $date;
+		$resp   = wp_remote_get( $url, [ 'timeout' => 8 ] );
+		if ( is_wp_error( $resp ) || 200 !== (int) wp_remote_retrieve_response_code( $resp ) ) { return null; }
+		$j = json_decode( (string) wp_remote_retrieve_body( $resp ), true );
+		$obs = is_array( $j ) && is_array( $j['observations'] ?? null ) ? $j['observations'] : [];
+		$best = null;
+		foreach ( $obs as $o ) {
+			$d = (string) ( $o['d'] ?? '' );
+			$v = (float) ( $o[ $series ]['v'] ?? 0 );
+			if ( $d && $v > 0 && $d <= $date && ( null === $best || $d > $best['date'] ) ) {
+				$best = [ 'rate' => (int) round( $v * 1000000 ), 'date' => $d,
+					'source' => 'Bank of Canada Valet ' . $series . ' (' . $d . ')' ];
+			}
+		}
+		if ( ! $best ) { return null; }
+		update_option( $ck, $best, false );
+		return $best;
+	}
+
+	// ── Genesis: the reset and the opening books ──────────────────────────────
+
+	/**
+	 * Wipe every ledger and open a clean set of books. Runs AT MOST ONCE, ever.
+	 *
+	 * GATED ON PRESENCE, NOT ON A VERSION. This block deletes data and then seeds; keying it to a
+	 * version constant would re-run it on every future bump. That exact mistake has already cost
+	 * this project a real gold reserve once, when a genesis seed keyed to Schema::VERSION deleted
+	 * and re-seeded the backing counter on every deploy.
+	 *
+	 * What is deleted: the coin, points and fund ledgers, the standing projection, and the money
+	 * counters. What is NOT: the R2 bandwidth counters, which are metering, not a ledger.
+	 *
+	 * TWO ALARMS WILL OTHERWISE FIRE, and both are silenced honestly rather than suppressed:
+	 *   - Watchdog::check_ledgers compares a rolling checkpoint and would report "append-only
+	 *     violated". Its checkpoints are cleared so it re-baselines against the new, empty ledger
+	 *     instead of alarming about a deletion the operator ordered.
+	 *   - Integrity::check_reserve pages when coins exceed gold. Coins ARE about to exceed gold,
+	 *     deliberately and permanently, so the authorised shortfall is recorded as a number. The
+	 *     alarm still fires if the real shortfall ever exceeds what was authorised — which is the
+	 *     only version of that alarm worth having.
+	 */
+	public static function genesis() {
+		global $wpdb;
+		if ( get_option( 'aq_books_genesis' ) ) { return 'already done'; }
+		self::ensure_tables();
+		if ( get_option( 'aq_books_table_version' ) !== self::TABLE_VERSION ) {
+			error_log( 'AQ Books: genesis refused — the books tables are not fully installed' );
+			return 'refused: tables incomplete';
+		}
+
+		foreach ( [ 'aq_coin_ledger', 'aq_points_ledger', 'aq_fund_ledger', 'aq_standing' ] as $t ) {
+			$wpdb->query( 'DELETE FROM ' . Data::t( $t ) );
+		}
+		$c = Data::t( 'aq_counters' );
+		$wpdb->query( $wpdb->prepare( "DELETE FROM $c WHERE name IN ('coins_issued','backing_mg')" ) );
+		$wpdb->query( $wpdb->prepare( "DELETE FROM $c WHERE name LIKE %s", $wpdb->esc_like( 'fund_' ) . '%' ) );
+
+		$st = get_option( 'aq_watchdog_state', [] );
+		if ( is_array( $st ) ) { unset( $st['ledgers'] ); update_option( 'aq_watchdog_state', $st, true ); }
+
+		update_option( 'aq_books_genesis', self::today(), true );
+		return 'reset';
+	}
+
+	/** How many coins have deliberately been issued without gold behind them. */
+	public static function authorised_shortfall() {
+		return max( 0, (int) get_option( 'aq_books_unbacked_coins', 0 ) );
+	}
+
+	/**
+	 * Settle a director's advance by issuing ArtaCoin, priced at the date the money actually left
+	 * their pocket. $basis carries the dated inputs and their sources so the conversion can be
+	 * re-run by anyone: gold in USD per troy ounce, USD→CAD, and the date each came from.
+	 *
+	 * Coins are whole milligrams, so a payment almost never converts exactly. The remainder is NOT
+	 * rounded away — it stays owed to the director, which is both the honest number and the one
+	 * that keeps the entry balanced.
+	 */
+	public static function settle_in_coin( $uid, $invoice_id, $cad_cents, $basis ) {
+		self::ensure_tables();
+		$uid       = (int) $uid;
+		$cad_cents = (int) $cad_cents;
+		$inv       = Data::one( 'SELECT * FROM ' . Data::t( 'aq_books_invoice' ) . ' WHERE id = %d', [ (int) $invoice_id ] );
+		if ( ! $inv || $uid < 1 || $cad_cents < 1 ) { return 0; }
+
+		$price = (float) $basis['price'];
+		if ( $price <= 0 ) { return 0; }
+		$coins = (int) floor( $cad_cents / ( $price * 100 ) );
+		if ( $coins < 1 ) { return 0; }
+		$value = (int) round( $coins * $price * 100 );
+		if ( $value > $cad_cents ) { return 0; }
+
+		$ref = 'coinsettle:' . $inv['number'];
+		$eid = self::journal( $ref, (string) $inv['paid'],
+			'ArtaCoin issued to settle the advance for ' . $inv['number'], [
+				[ 'account' => 'due_director',   'debit'  => $value, 'party_uid' => $uid, 'memo' => $coins . ' ₳ at ' . number_format( $price, 4 ) . ' CAD, priced ' . $basis['rate_date'] ],
+				[ 'account' => 'coin_liability', 'credit' => $value, 'party_uid' => $uid, 'memo' => $coins . ' ₳ issued, not gold-backed' ],
+			], 'coin', (int) $inv['id'] );
+		if ( ! $eid ) { return 0; }
+
+		// The coin ledger is the money record and stays the source of truth for balances. Its ref
+		// matches the books entry, so the two can be reconciled row for row forever.
+		if ( class_exists( '\\AQ\\Economy' ) && ! Data::col(
+			'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . ' WHERE reason = %s AND ref = %s LIMIT 1', [ 'reimb', $ref ] ) ) {
+			Economy::credit_coins( $uid, $coins, 'reimb', $ref );
+		}
+		// No add_backing() call, and that omission is the whole point: the cash went to a supplier,
+		// so there is no gold. Recording the shortfall is what makes the reserve page honest.
+		update_option( 'aq_books_unbacked_coins', self::authorised_shortfall() + $coins, true );
+
+		Data::update( 'aq_books_invoice', [
+			'coins'           => $coins,
+			'coin_price_1e6'  => (int) round( $price * 1000000 ),
+			'gold_oz_usd_1e4' => (int) round( (float) $basis['gold_oz_usd'] * 10000 ),
+			'usdcad_1e6'      => (int) round( (float) $basis['usdcad'] * 1000000 ),
+			'rate_date'       => (string) $basis['rate_date'],
+			'rate_source'     => substr( (string) $basis['source'], 0, 191 ),
+		], [ 'id' => (int) $inv['id'] ] );
+		return $coins;
+	}
+
+	// ── The founding costs ────────────────────────────────────────────────────
+
+	/** The coin spread in force when these conversions were struck. Pinned, not read from the
+	 *  option: a later change to aq_coin_spread must never retroactively reprice a booked entry. */
+	const SPREAD_AT_GENESIS = 0.05;
+
+	/** Milligrams in a troy ounce — the same divisor Economy::coin_price() uses, since 1 ₳ = 1 mg. */
+	const MG_PER_TROY_OUNCE = 31103.477;
+
+	/** The director whose personal cards paid these costs. Resolved by login so no user id is
+	 *  hardcoded; overridable with the aq_books_director_uid option. */
+	const DIRECTOR_LOGIN = 'artayab';
+
+	/**
+	 * Every cost the Foundation has incurred to date: three Anthropic Claude Max 20x subscriptions,
+	 * each invoiced in CAD and each paid personally by a director.
+	 *
+	 * The rate basis is PINNED rather than fetched. A migration that depends on a live HTTP call is
+	 * a migration that behaves differently depending on the weather, and these are historical facts
+	 * that will not change: the LBMA Gold Price PM benchmark and the Bank of Canada daily rate, both
+	 * permanently archived and free to re-read. Where the transaction fell on a day neither
+	 * publishes — 4 July 2026 was a Saturday, and 11 August 2026 had not yet been published when
+	 * these were booked — the rule is the most recent published fix at or before the date, and the
+	 * date actually used is recorded beside the value so the choice is visible rather than implied.
+	 */
+	const FOUNDING_COSTS = [
+		[
+			'number' => '6LNWF16Y-0007', 'vendor' => 'Anthropic, PBC',
+			'description' => 'Claude Max plan - 20x', 'account' => 'software',
+			'issued' => '2026-07-04', 'paid' => '2026-07-04',
+			'period_start' => '2026-07-04', 'period_end' => '2026-08-04',
+			'total' => 28000, 'tax' => 0, 'pay_method' => 'Link',
+			'gold_oz_usd' => 4164.15, 'gold_date' => '2026-07-03',
+			'usdcad' => 1.4201, 'fx_date' => '2026-07-03',
+			'invoice_file' => 'Invoice-6LNWF16Y-0007.pdf', 'receipt_file' => 'Receipt-2463-7753-0921.pdf',
+			'note' => 'Paid on a Saturday; priced on the last published fix before it (3 July 2026).',
+		],
+		[
+			'number' => 'DNY6QX8G-0001', 'vendor' => 'Anthropic, PBC',
+			'description' => 'Claude Max plan - 20x', 'account' => 'software',
+			'issued' => '2026-07-15', 'paid' => '2026-07-15',
+			'period_start' => '2026-07-15', 'period_end' => '2026-08-15',
+			'total' => 28000, 'tax' => 0, 'pay_method' => 'Visa ending 2178',
+			'gold_oz_usd' => 4062.20, 'gold_date' => '2026-07-15',
+			'usdcad' => 1.4049, 'fx_date' => '2026-07-15',
+			'invoice_file' => 'Invoice-DNY6QX8G-0001.pdf', 'receipt_file' => 'Receipt-2125-3142-1317.pdf',
+			'note' => 'A second concurrent subscription. This invoice shows the supplier\'s Turkish VAT registration rather than its Canadian one.',
+		],
+		[
+			'number' => '6LNWF16Y-0008', 'vendor' => 'Anthropic, PBC',
+			'description' => 'Claude Max plan - 20x', 'account' => 'software',
+			'issued' => '2026-08-11', 'paid' => '2026-08-11',
+			'period_start' => '2026-08-11', 'period_end' => '2026-09-11',
+			'total' => 28000, 'tax' => 0, 'pay_method' => 'Discover ending 5074',
+			'gold_oz_usd' => 4324.45, 'gold_date' => '2026-08-10',
+			'usdcad' => 1.3942, 'fx_date' => '2026-08-10',
+			'invoice_file' => 'Invoice-6LNWF16Y-0008.pdf', 'receipt_file' => 'Receipt-2803-8483-4716.pdf',
+			'note' => 'Booked on the day of payment, before either benchmark had published for 11 August; priced on the 10 August fix.',
+		],
+	];
+
+	/** The tax position every one of these invoices carries, recorded once rather than three times. */
+	const FOUNDING_TAX_NOTE = 'Invoiced at 0% on a reverse-charge basis against CA BN ' . self::BN . '. See the GST/HST contingency note.';
+
+	/** The director's user id, or 0. */
+	public static function director_uid() {
+		$set = (int) get_option( 'aq_books_director_uid', 0 );
+		if ( $set > 0 ) { return $set; }
+		$u = get_user_by( 'login', self::DIRECTOR_LOGIN );
+		return $u ? (int) $u->ID : 0;
+	}
+
+	/** The coin buy price for a dated gold/FX pair — Economy::coin_price()'s formula, dated inputs. */
+	public static function coin_price_at( $gold_oz_usd, $usdcad ) {
+		$spot = ( (float) $gold_oz_usd / self::MG_PER_TROY_OUNCE ) * (float) $usdcad;
+		return round( $spot * ( 1 + self::SPREAD_AT_GENESIS ), 4 );
+	}
+
+	/**
+	 * Record the founding costs and settle them in ArtaCoin. Runs at most once.
+	 *
+	 * Each cost becomes two balanced entries: the expense against the amount owed to the director,
+	 * and then the issue of coin against that same debt. The remainder that will not buy a whole
+	 * milligram stays owed — CA$0.36 across the three, which is the honest figure and not worth
+	 * rounding into either party's favour.
+	 */
+	public static function seed_founding_costs() {
+		self::ensure_tables();
+		if ( get_option( 'aq_books_seeded' ) ) { return 'already seeded'; }
+		$uid = self::director_uid();
+		if ( $uid < 1 ) { error_log( 'AQ Books: seed refused — cannot resolve the director user' ); return 'refused: no director'; }
+
+		$dir  = dirname( __DIR__ ) . '/data/books/';
+		$done = 0;
+		foreach ( self::FOUNDING_COSTS as $c ) {
+			if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_books_invoice' ) . ' WHERE number = %s', [ $c['number'] ] ) ) { continue; }
+			$price = self::coin_price_at( $c['gold_oz_usd'], $c['usdcad'] );
+			$id = (int) Data::insert( 'aq_books_invoice', [
+				'vendor' => $c['vendor'], 'number' => $c['number'], 'description' => $c['description'],
+				'issued' => $c['issued'], 'paid' => $c['paid'],
+				'period_start' => $c['period_start'], 'period_end' => $c['period_end'],
+				'currency' => self::CURRENCY,
+				'subtotal_cents' => $c['total'] - $c['tax'], 'tax_cents' => $c['tax'], 'total_cents' => $c['total'],
+				'fx_rate' => 1000000, 'fx_date' => $c['paid'], 'fx_source' => 'no conversion — invoiced in CAD',
+				'cad_cents' => $c['total'], 'account' => $c['account'],
+				'tax_note' => self::FOUNDING_TAX_NOTE, 'pay_method' => $c['pay_method'], 'payer_uid' => $uid,
+				'note' => $c['note'], 'created' => Data::now(),
+			] );
+			if ( ! $id ) { error_log( 'AQ Books: seed could not insert ' . $c['number'] ); continue; }
+
+			foreach ( [ 'invoice' => $c['invoice_file'], 'receipt' => $c['receipt_file'] ] as $kind => $fname ) {
+				$src = $dir . $fname;
+				if ( ! is_file( $src ) ) { error_log( 'AQ Books: seed missing evidence file ' . $fname ); continue; }
+				$sha = hash_file( 'sha256', $src );
+				if ( ! $sha ) { continue; }
+				$dest = trailingslashit( self::doc_dir() ) . $sha . '.pdf';
+				if ( ! is_file( $dest ) ) { @copy( $src, $dest ); }
+				Data::insert( 'aq_books_doc', [
+					'invoice_id' => $id, 'kind' => $kind, 'name' => $fname,
+					'file_key' => $sha . '.pdf', 'mime' => 'application/pdf',
+					'bytes' => (int) filesize( $src ), 'sha256' => $sha,
+					'uploaded_by' => $uid, 'created' => Data::now(),
+				] );
+			}
+
+			$eid = self::journal( 'inv:' . $c['number'], $c['paid'],
+				$c['vendor'] . ' — ' . $c['description'], [
+					[ 'account' => $c['account'],  'debit'  => $c['total'], 'memo' => $c['number'] . ' · ' . $c['period_start'] . ' to ' . $c['period_end'] ],
+					[ 'account' => 'due_director', 'credit' => $c['total'], 'party_uid' => $uid, 'memo' => 'Paid personally — ' . $c['pay_method'] ],
+				], 'invoice', $id );
+			if ( $eid ) { Data::update( 'aq_books_invoice', [ 'entry_id' => $eid ], [ 'id' => $id ] ); }
+
+			self::settle_in_coin( $uid, $id, $c['total'], [
+				'price'       => $price,
+				'gold_oz_usd' => $c['gold_oz_usd'],
+				'usdcad'      => $c['usdcad'],
+				'rate_date'   => $c['gold_date'],
+				'source'      => 'LBMA Gold Price PM ' . $c['gold_date'] . ' · Bank of Canada FXUSDCAD ' . $c['fx_date'],
+			] );
+			$done++;
+		}
+		update_option( 'aq_books_seeded', self::today(), true );
+		return 'seeded ' . $done;
+	}
+
+	/**
+	 * Run the reset and open the books, once, on the first request after deploy.
+	 * Wired from aquest.php so it fires through the same pathway production actually runs, rather
+	 * than from a function someone remembers to call.
+	 */
+	public static function bootstrap() {
+		self::ensure_tables();
+		if ( get_option( 'aq_books_genesis' ) && get_option( 'aq_books_seeded' ) ) { return; }
+		self::genesis();
+		self::seed_founding_costs();
+	}
+
+	// ── Accrual and the year end ──────────────────────────────────────────────
+
+	/**
+	 * The unconsumed part, at a year end, of any subscription whose period straddles it.
+	 *
+	 * With a 31 December year end and every current subscription period ending by 11 September,
+	 * this is nil — but it is computed rather than assumed, because the year end is still the
+	 * operator's to choose and moving it earlier would make a real prepaid balance appear. Split
+	 * pro rata by days, which is the ordinary treatment for a subscription that is consumed evenly.
+	 */
+	public static function prepaid_at( $end ) {
+		self::ensure_tables();
+		$rows = Data::all(
+			'SELECT id, number, cad_cents, period_start, period_end FROM ' . Data::t( 'aq_books_invoice' )
+			. " WHERE period_end > %s AND period_start <= %s AND period_start <> '' AND period_end <> ''",
+			[ $end, $end ] );
+		$total = 0;
+		$parts = [];
+		foreach ( $rows as $r ) {
+			$s = new \DateTimeImmutable( $r['period_start'], new \DateTimeZone( self::TZ ) );
+			$e = new \DateTimeImmutable( $r['period_end'], new \DateTimeZone( self::TZ ) );
+			$y = new \DateTimeImmutable( $end, new \DateTimeZone( self::TZ ) );
+			$span = (int) $s->diff( $e )->days;
+			$left = (int) $y->diff( $e )->days;
+			if ( $span < 1 || $left < 1 ) { continue; }
+			$cents = (int) round( (int) $r['cad_cents'] * ( $left / $span ) );
+			if ( $cents < 1 ) { continue; }
+			$total  += $cents;
+			$parts[] = [ 'invoice' => $r['number'], 'days_unused' => $left, 'days_total' => $span, 'cents' => $cents ];
+		}
+		return [ 'cents' => $total, 'parts' => $parts ];
+	}
+
+	/**
+	 * Post the year-end prepaid adjustment, then freeze the period.
+	 *
+	 * Freezing matters more than it looks: once a return has been prepared from a period, a later
+	 * entry dated into it would silently change a figure that has already been filed. journal()
+	 * refuses to post into a locked year, so the filed numbers stay the filed numbers.
+	 */
+	public static function close_year( $label ) {
+		$fy = null;
+		foreach ( self::fy_list() as $y ) { if ( $y['label'] === $label ) { $fy = $y; } }
+		if ( ! $fy ) { return 'no such period'; }
+		if ( in_array( $label, self::locked_years(), true ) ) { return 'already closed'; }
+		if ( self::today() <= $fy['end'] ) { return 'period has not ended'; }
+
+		$pre = self::prepaid_at( $fy['end'] );
+		if ( $pre['cents'] > 0 ) {
+			$by = [];
+			foreach ( $pre['parts'] as $p ) { $by[] = $p['invoice'] . ' (' . $p['days_unused'] . '/' . $p['days_total'] . ' days)'; }
+			self::journal( 'prepaid:' . $label, $fy['end'], 'Prepaid subscription time at the year end', [
+				[ 'account' => 'prepaid',  'debit'  => $pre['cents'], 'memo' => implode( ', ', $by ) ],
+				[ 'account' => 'software', 'credit' => $pre['cents'], 'memo' => 'Deferred to the next period' ],
+			], 'closing', 0 );
+		}
+		$locked = self::locked_years();
+		$locked[] = $label;
+		update_option( 'aq_books_locked_years', array_values( array_unique( $locked ) ), true );
+		return 'closed';
+	}
+
+	/**
+	 * Daily cron aq_books_year_end: publish the return package once a period has ended.
+	 *
+	 * "Publish" here means compute, freeze and expose — the package at /foundation/cra is generated
+	 * from the frozen ledger, so it is reproducible by anyone rather than a document only we hold.
+	 * It does NOT file anything with CRA, and it deliberately does not prepare a T1044 unless a
+	 * threshold is actually met.
+	 */
+	public static function year_end_tick() {
+		self::ensure_tables();
+		foreach ( self::fy_list() as $fy ) {
+			if ( self::today() <= $fy['end'] ) { continue; }
+			if ( in_array( $fy['label'], self::locked_years(), true ) ) { continue; }
+			self::close_year( $fy['label'] );
+			$pub = get_option( 'aq_books_published', [] );
+			if ( ! is_array( $pub ) ) { $pub = []; }
+			$pub[ $fy['label'] ] = self::today();
+			update_option( 'aq_books_published', $pub, true );
+			if ( class_exists( '\\AQ\\Watchdog' ) ) {
+				Watchdog::note( 'Books: ' . $fy['label'] . ' is closed and its CRA package is published at /foundation/cra?fy=' . $fy['label']
+					. ' — the T2 is due ' . self::filing_due( $fy['end'] ) . '.' );
+			}
+		}
+	}
+}

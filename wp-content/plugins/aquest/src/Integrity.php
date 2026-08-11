@@ -220,12 +220,23 @@ final class Integrity {
 	private static function check_reserve() {
 		if ( ! class_exists( 'AQ\\Economy' ) || ! method_exists( 'AQ\\Economy', 'verify_reserve' ) ) { return; }
 		$r = Economy::verify_reserve();
-		if ( isset( $r['ok'] ) && ! $r['ok'] ) {
-			Watchdog::alert( 'integrity_reserve', 'FULL-RESERVE INVARIANT BROKEN — coins exceed gold backing',
-				"Coins in circulation ({$r['issued']} ₳) now exceed the gold backing ({$r['backing']} mg) — ratio {$r['ratio']}.\n"
-				. 'Coins were minted that no value backs: either the coin ledger / backing counter was tampered with directly, '
-				. 'or a minting bug fired. FREEZE cash-outs (set AQ_CASHOUT_FROZEN) and audit the coin ledger now.', true );
-		}
+		if ( ! isset( $r['ok'] ) || $r['ok'] ) { return; }
+
+		// An alarm worth having says "something happened that nobody authorised", not "the ratio is
+		// below one". Since 2026-08-11 the Foundation deliberately holds an unbacked tranche — coin
+		// issued to settle costs a director paid out of pocket — and paging hourly about a state the
+		// operator chose would train everyone to ignore this alert, which is how the real one gets
+		// missed. So the authorised shortfall is subtracted, and the alarm fires on the EXCESS.
+		$authorised = class_exists( 'AQ\\Books' ) ? Books::authorised_shortfall() : 0;
+		$shortfall  = max( 0, (int) $r['issued'] - (int) $r['backing'] );
+		if ( $shortfall <= $authorised ) { return; }
+
+		Watchdog::alert( 'integrity_reserve', 'FULL-RESERVE INVARIANT BROKEN — coins exceed gold backing',
+			"Coins in circulation ({$r['issued']} ₳) exceed the gold backing ({$r['backing']} mg) — ratio {$r['ratio']}.\n"
+			. "Shortfall {$shortfall} mg, of which {$authorised} mg is the authorised unbacked tranche, so "
+			. ( $shortfall - $authorised ) . " mg is UNEXPLAINED.\n"
+			. 'Coins were minted that no value backs: either the coin ledger / backing counter was tampered with directly, '
+			. 'or a minting bug fired. FREEZE cash-outs (set AQ_CASHOUT_FROZEN) and audit the coin ledger now.', true );
 	}
 
 	/**

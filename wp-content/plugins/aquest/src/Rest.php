@@ -231,6 +231,18 @@ final class Rest {
 		// Donations are charged through the cart checkout (course-checkout → Stripe → fulfil_session); there
 		// is no direct /donate route, so no fund row or donate points can be written without captured fiat.
 
+		// ── The Foundation's books (Books.php) — a double-entry general ledger, published whole ──
+		// The fund ledger above answers "which bucket holds which donated cents"; it cannot express an
+		// expense, a liability or a deficit, and a corporate return needs all three. These read the
+		// general ledger. Everything is public, including the invoice PDFs, because a published figure
+		// with no retrievable evidence behind it is an assertion rather than a statement.
+		[ 'GET',  'foundation/statements',         'Books::statements',  'public' ], // ?fy= — position + operations + every entry
+		[ 'GET',  'foundation/invoices',           'Books::invoices',    'public' ], // the invoice register + document hashes
+		[ 'GET',  'foundation/invoices/(?P<id>[0-9]+)/file/(?P<doc>[0-9]+)', 'Books::invoice_file', 'public' ], // the PDF itself
+		[ 'GET',  'foundation/cra',                'Books::cra',         'public' ], // ?fy= — T2/GIFI schedules + the T1044 threshold test
+		[ 'GET',  'foundation/books/verify',       'Books::verify_rest', 'public' ], // the invariants, recomputed from the lines
+		[ 'POST', 'studio/books/invoice',          'Books::add_invoice', 'admin'  ], // operator: record a cost + its evidence
+
 		// ── ArtaCredits: a donor pays a stranger's challenge entry fee (Credits) ──
 		// Every write here is reached from the captured-payment fulfilment or from ch_enter — there is
 		// deliberately NO route that creates a gift or spends one directly.

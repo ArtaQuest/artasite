@@ -930,11 +930,29 @@ final class Economy {
 		// appear" placeholder. Nothing records a price series today, so we say so by serving [] rather
 		// than by querying a table that cannot answer. Restore the key's contents the day a writer exists.
 		$history = [];
+		// THE SHORTFALL IS STATED, NOT SMOOTHED OVER (operator order 2026-08-11).
+		// Coins issued to settle a director's advance are backed by nothing, and honestly so: the cash
+		// that gave rise to them went to a supplier, so no gold was bought. The alternative on offer was
+		// to call add_backing() anyway — the same move bursaries and topic sponsorships already make on
+		// CAD that was immediately spent — which would hold the ratio at 1.0 with milligrams nobody
+		// holds. A reserve claim that survives by counting imaginary gold is worth less than an honest
+		// number, so /reserve reports the real ratio and names the gap. `authorised` is what the
+		// operator knowingly issued unbacked; anything beyond it is a bug or a theft, and Integrity
+		// still pages for that.
+		$authorised = class_exists( '\\AQ\\Books' ) ? Books::authorised_shortfall() : 0;
+		$shortfall  = max( 0, $issued - $backing );
 		return [
 			'issued_coins' => $issued,
 			'backing_mg'   => $backing,
 			'ratio'        => $issued > 0 ? round( $backing / $issued, 4 ) : 1.0,
 			'backed'       => $backing >= $issued, // full-reserve proof: every circulating coin has ≥ 1 mg gold behind it
+			'shortfall_mg' => $shortfall,
+			'authorised_shortfall_mg' => $authorised,
+			'shortfall_note' => $shortfall > 0
+				? ( $shortfall . ' mg of the coin in circulation is NOT gold-backed. It was issued to settle costs a director '
+					. 'paid personally, and that money went to the supplier rather than into the reserve. The Foundation owes this '
+					. 'gold and says so; the books behind the figure are at /foundation/statements.' )
+				: '',
 			'unit'         => '1 ₳ = 1 mg gold',
 			'fiat'         => 'CAD',
 			'spot'         => round( $spot, 4 ),
