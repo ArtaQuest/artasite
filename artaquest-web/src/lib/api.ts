@@ -2492,6 +2492,9 @@ export async function cloudUpload(
 export type RoomMember = ChatUserCard & { role: string };
 export type Room = {
   id: number; title: string; personal: boolean; owner: number; epoch: number;
+  /** True when this room is bound to something that owns its guest list — a meeting. Leaving or
+   *  inviting from the room itself is refused, so the UI must not offer either. */
+  managed?: boolean;
   members: RoomMember[]; count: number; unread: number; muted: boolean; last_at: number;
   /** False until this epoch's room key has been sealed to me — I am in the room but cannot read it. */
   has_key: boolean;

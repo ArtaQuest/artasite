@@ -246,6 +246,10 @@ final class Rooms {
 		) : 0;
 		$has_key = self::has_usable_key( $rid, (int) $uid, (int) $room['key_epoch'] );
 		return [
+			// A room bound to a meeting is MANAGED — its guest list belongs to the meeting. The client
+			// needs to know, or it offers Leave and Invite on a room where one strands the member and
+			// the other now refuses with an error they cannot act on.
+			'managed'   => (int) ( $room['managed'] ?? 0 ) === 1,
 			'id'        => $rid,
 			'title'     => (string) $room['title'],
 			'personal'  => (int) $room['personal'] === 1,
@@ -440,7 +444,9 @@ final class Rooms {
 		if ( ! $room || ! self::member( $rid, $uid ) ) { return Rest::err( 'not_found', 'No such room.', 404 ); }
 		$for = Rest::pint( $req, 'for', 0 );
 		if ( ! $for || ! self::member( $rid, $for ) ) { return Rest::err( 'not_member', 'That member is not in this room.', 400 ); }
-		$epoch = Rest::pint( $req, 'epoch', (int) $room['key_epoch'] );
+		// THE ROOM'S EPOCH, never the caller's. A request that names its own epoch can write a row at
+		// an epoch nothing reads, or overwrite one at an epoch it was not sealed for.
+		$epoch = (int) $room['key_epoch'];
 		$iv    = trim( (string) Rest::p( $req, 'iv', '' ) );
 		$ct    = trim( (string) Rest::p( $req, 'ct', '' ) );
 		if ( $iv === '' || strlen( $iv ) > 32 || base64_decode( $iv, true ) === false ) {
@@ -457,6 +463,16 @@ final class Rooms {
 		$kb   = Chat::key_by_id( $bkid );
 		if ( ! $ka || ! $kb || (int) $ka['user_id'] !== $low || (int) $kb['user_id'] !== $high ) {
 			return Rest::err( 'bad_keys', 'Key ids do not match this pair.', 400 );
+		}
+		// FIRST SEAL WINS, for anyone but yourself. This was an unconditional upsert, so any member of
+		// the room could replace another member's sealed row with ciphertext their device cannot open
+		// — and because the replacement still NAMES that member's current key id, has_usable_key kept
+		// answering true: they vanished from rooms/pending, everyone was told they held the key, and
+		// nothing ever re-sealed. Locking someone out of a room they are in, silently and for good,
+		// must not be one ordinary request away. Re-sealing to YOURSELF stays legal: that is the mint
+		// path, and it can only ever lock out the person choosing to do it.
+		if ( $for !== $uid && self::has_usable_key( $rid, $for, $epoch ) ) {
+			return [ 'ok' => true, 'already' => true ];
 		}
 		Data::upsert( 'aq_room_keys', [ 'room_id' => $rid, 'user_id' => $for, 'epoch' => $epoch ], [
 			'from_uid' => $uid, 'akid' => $akid, 'bkid' => $bkid,

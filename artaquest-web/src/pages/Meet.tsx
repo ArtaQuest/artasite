@@ -7,7 +7,7 @@ import {
   type Meet as MeetRow, type MeetCal, type MeetGuest, type MeetLobby, type MeetRsvp,
 } from "../lib/api";
 import { isLoggedIn, localePath } from "../lib/wp";
-import { bootChat } from "../lib/chat-store";
+import { bootChat, getChatState, subscribeChat } from "../lib/chat-store";
 import { distributeRoomKey, roomKey } from "../lib/rooms";
 import { RoomThread } from "../components/chat/RoomThread";
 import { RoomCall } from "../components/chat/RoomCall";
@@ -747,6 +747,13 @@ function HostControls({ meet, busy, onInvite, onRetime, onCancel }: {
 function JoinPanel({ lobby, busy, now, opening, onOpen, guests }: {
   lobby: MeetLobby; guests: MeetGuest[]; busy: boolean; now: number; opening: boolean; onOpen: () => void;
 }) {
+  // WHAT bootChat MADE OF THIS BROWSER. It has three outcomes that publish NO device key — one
+  // needs the member's recovery code, two are hard failures — and all three are reported only on
+  // /messages/. Ignoring them left a member reading "Handing your device the key…" for the length of
+  // the meeting, about a key that was never coming, while this page advertised them to everyone else
+  // as somebody to seal to.
+  const [chatState, setChatState] = useState(getChatState);
+  useEffect(() => subscribeChat(() => setChatState(getChatState())), []);
   const { meet, phase } = lobby;
   // Never name MYSELF as the person I am waiting for. The server computes holders from the seals it
   // can see; this device's own view of whether it holds the key is the one that decided we are here.
@@ -805,6 +812,32 @@ function JoinPanel({ lobby, busy, now, opening, onOpen, guests }: {
         <Button className="mt-4 h-12 px-7 text-[15px]" disabled={busy || opening || !lobby.can_open} onClick={onOpen}>
           {opening ? "Opening…" : "Open the meeting"}
         </Button>
+      </div>
+    );
+  }
+
+  // Nothing below can happen without a device key, and these two states mean this browser has none.
+  // Say so where the member is, rather than letting them wait for something that is not coming.
+  if (chatState.fatal) {
+    return (
+      <div className="rounded-card border border-line bg-space-2 p-5">
+        <p className="text-[15px] font-semibold text-ink">This browser can’t hold the key</p>
+        <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-2" data-ay-skip="1">{chatState.fatal}</p>
+      </div>
+    );
+  }
+  if (chatState.recovery === "restore") {
+    return (
+      <div className="rounded-card border border-line bg-space-2 p-5">
+        <p className="text-[15px] font-semibold text-ink">Enter your recovery code first</p>
+        <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-2">
+          Your conversations are sealed to a key this browser doesn’t have yet, so nobody can hand it this
+          meeting’s key either. Restore it once and both work here.
+        </p>
+        <a href={localePath("/messages/")}
+          className="mt-3 inline-flex h-10 items-center rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent hover:opacity-90">
+          Restore this device
+        </a>
       </div>
     );
   }

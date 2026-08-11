@@ -523,7 +523,13 @@ final class Meetings {
 		$m   = $mid ? self::row( $mid ) : null;
 		if ( ! $m || ! self::guest_row( $mid, $uid ) ) { return Rest::err( 'not_found', 'No such meeting.', 404 ); }
 		if ( (int) $m['host_id'] !== $uid ) { return Rest::err( 'not_host', 'Only the host can invite people to this meeting.', 403 ); }
-		if ( 'scheduled' !== (string) $m['status'] ) { return Rest::err( 'closed', 'This meeting is no longer taking invitations.', 400 ); }
+		// LIVE COUNTS. The room binds at T-15m and flips the status to 'live', and 'Meet now' is live
+		// from its first instant — so gating invitations on 'scheduled' meant the fastest path in the
+		// product landed a host alone in a room nobody could be added to. Only a meeting that is over
+		// or called off stops taking guests.
+		if ( ! in_array( (string) $m['status'], [ 'scheduled', 'live' ], true ) ) {
+			return Rest::err( 'closed', 'This meeting is over.', 400 );
+		}
 
 		$r = self::add_guest( $m, (string) Rest::p( $req, 'user', '' ), $uid );
 		if ( ! empty( $r['error'] ) ) {
@@ -608,7 +614,11 @@ final class Meetings {
 		$m   = $mid ? self::row( $mid ) : null;
 		if ( ! $m || ! self::guest_row( $mid, $uid ) ) { return Rest::err( 'not_found', 'No such meeting.', 404 ); }
 		if ( (int) $m['host_id'] !== $uid ) { return Rest::err( 'not_host', 'Only the host can change this meeting.', 403 ); }
-		if ( 'scheduled' !== (string) $m['status'] ) { return Rest::err( 'closed', 'This meeting can no longer be changed.', 400 ); }
+		// Same reasoning as invitations: a meeting running late can be cancelled or retimed. An ENDED
+		// one cannot — that is history, and a SEQUENCE bump would rewrite it in everyone's calendar.
+		if ( ! in_array( (string) $m['status'], [ 'scheduled', 'live' ], true ) ) {
+			return Rest::err( 'closed', 'This meeting is over and can no longer be changed.', 400 );
+		}
 
 		$now    = Data::now();
 		$fields = [];
@@ -802,6 +812,8 @@ final class Meetings {
 			// The status is only wound back from 'live'. Writing 'scheduled' unconditionally meant any
 			// guest's read-only poll silently UN-CANCELLED a meeting the host had called off, and made
 			// it joinable again. A poll must never overturn a decision.
+			// The seating belongs to the room being let go, not to the meeting.
+			self::clear_seating( $mid );
 			$heal = [ 'room_id' => 0, 'opened_ts' => 0, 'updated' => Data::now() ];
 			if ( 'live' === (string) $m['status'] ) { $heal['status'] = 'scheduled'; }
 			Data::update( 'aq_meets', $heal, [ 'id' => $mid ] );
@@ -938,6 +950,15 @@ final class Meetings {
 	 * room can follow it with a seal. Idempotent, and called from the lobby poll by every present
 	 * key-holder, so a guest who registers a device key mid-meeting is seated within one tick.
 	 */
+	/** Forget who was seated. Called wherever a room is let go: the flag records membership of a
+	 *  room that no longer exists, and leaving it set is what used to lock a guest out of the next one. */
+	private static function clear_seating( $mid ) {
+		global $wpdb;
+		$wpdb->query( $wpdb->prepare(
+			'UPDATE ' . Data::t( 'aq_meet_guests' ) . ' SET seated = 0 WHERE meet_id = %d', (int) $mid
+		) );
+	}
+
 	/**
 	 * Put a guest into the meeting's room, and take one out again.
 	 *
@@ -995,7 +1016,12 @@ final class Meetings {
 		$in_room = self::room_member_ids( $rid );
 		foreach ( self::guests_of( $mid ) as $g ) {
 			$gid = (int) $g['user_id'];
-			if ( 'no' === (string) $g['rsvp'] || (int) $g['seated'] > 0 ) { continue; }
+			// ASK THE ROOM, NOT THE FLAG. `seated` was a one-way latch, so a guest who left the call —
+			// one tap in ArtaChat's Rooms tab — was skipped by every later seat() and could never get
+			// back into their own meeting. The same dead end swallowed everyone in a room that was
+			// emptied, healed away and re-bound. The flag is a record of what happened; the room is
+			// the fact.
+			if ( 'no' === (string) $g['rsvp'] ) { continue; }
 			if ( in_array( $gid, $in_room, true ) ) {
 				Data::update( 'aq_meet_guests', [ 'seated' => $now ], [ 'meet_id' => $mid, 'user_id' => $gid ] );
 				$seated[] = $gid;
@@ -1270,9 +1296,15 @@ final class Meetings {
 		// Anything this grant used to hold that it no longer wants — a released claim, a moved
 		// deadline that dropped a sitting, a deactivated grant — is cancelled, not deleted, so the
 		// cancellation reaches every subscribed calendar.
+		// ONLY WHAT IS STILL AHEAD. `$want` deliberately drops milestones already past, so without the
+		// time filter every sitting that had ALREADY BEEN HELD was cancelled the next time anyone
+		// claimed or released this grant: its SEQUENCE advanced, every attendee was rung to say a
+		// meeting they had sat in was called off, and both .ics feeds rewrote it as CANCELLED in
+		// their calendars. A session that has run is history; you cannot withdraw a promise that was
+		// already kept.
 		foreach ( Data::all(
-			'SELECT * FROM ' . Data::t( 'aq_meets' ) . " WHERE context_type = 'grant' AND context_id = %d AND status <> 'cancelled'",
-			[ $gid ]
+			'SELECT * FROM ' . Data::t( 'aq_meets' ) . " WHERE context_type = 'grant' AND context_id = %d AND status <> 'cancelled' AND start_ts > %d",
+			[ $gid, Data::now() ]
 		) as $old ) {
 			if ( isset( $want[ (string) $old['ctx_key'] ] ) ) { continue; }
 			self::cancel_row( $old, $old['title'] . ' was cancelled' );
@@ -1368,28 +1400,40 @@ final class Meetings {
 		// people's words is not a thing to be approximately right about. Emptying it is the disposal:
 		// Rooms deletes a room when its last member leaves, so removing each member in turn is what
 		// makes the sentence true.
-		foreach ( Data::all(
-			"SELECT id, room_id FROM $t WHERE status IN ('scheduled','live') AND room_id > 0 AND end_ts > 0 AND end_ts < %d LIMIT 100",
+		// THE TWO STATEMENTS MUST AGREE ON WHICH ROWS. The disposal was capped at 100 while the UPDATE
+		// below cleared room_id on EVERY expired meeting — so the hundred-and-first kept a live room,
+		// its members, their keys and every sealed message in it, with nothing left pointing at it
+		// from any code path. Both now run off the same id list, oldest first, so a backlog is worked
+		// through a hundred at a time instead of being silently abandoned.
+		$due = Data::all(
+			"SELECT id, room_id FROM $t WHERE status IN ('scheduled','live') AND end_ts > 0 AND end_ts < %d ORDER BY end_ts ASC LIMIT 100",
 			[ $now - self::GRACE_S ]
-		) as $r ) {
-			$rid = (int) $r['room_id'];
+		);
+		$ids = [];
+		foreach ( $due as $r ) {
+			$ids[] = (int) $r['id'];
+			$rid   = (int) $r['room_id'];
+			if ( ! $rid ) { continue; }
 			foreach ( self::room_member_ids( $rid ) as $uid ) {
-				// Each member removes THEMSELVES — Rooms::leave refuses anyone else unless the caller
-				// owns the room, and which member happened to bind it is not something to depend on.
+				// Each member removes THEMSELVES — Rooms::leave refuses anyone else in a managed room,
+				// and which member happened to bind it is not something to depend on.
 				self::rooms( 'leave', [ 'id' => $rid ], $uid );
 			}
 		}
 
-		// Anything past its grace window is over, whether or not anyone pressed anything.
-		$wpdb->query( $wpdb->prepare(
-			"UPDATE $t SET status = 'ended', room_id = 0, updated = %d WHERE status IN ('scheduled','live') AND end_ts > 0 AND end_ts < %d",
-			$now, $now - self::GRACE_S
-		) );
+		// Over, whether or not anyone pressed anything — and `seated` goes back to 0 with the room,
+		// because it means "in the room that exists now" and that room has just been thrown away.
+		if ( $ids ) {
+			$in = implode( ',', array_map( 'intval', $ids ) );
+			$wpdb->query( $wpdb->prepare( "UPDATE $t SET status = 'ended', room_id = 0, updated = %d WHERE id IN ($in)", $now ) );
+			$wpdb->query( "UPDATE " . Data::t( 'aq_meet_guests' ) . " SET seated = 0 WHERE meet_id IN ($in)" );
+		}
 
 		// A room whose last member left is deleted by Rooms, and a meeting pointing at one that no
 		// longer exists would offer a join button that can never work. lobby() heals on read too.
 		foreach ( Data::all( "SELECT id, room_id FROM $t WHERE room_id > 0 LIMIT 200" ) as $r ) {
 			if ( self::room_epoch( (int) $r['room_id'] ) ) { continue; }
+			self::clear_seating( (int) $r['id'] );
 			Data::update( 'aq_meets', [ 'room_id' => 0, 'opened_ts' => 0, 'updated' => $now ], [ 'id' => (int) $r['id'] ] );
 		}
 

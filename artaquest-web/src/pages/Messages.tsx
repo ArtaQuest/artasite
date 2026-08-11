@@ -1946,6 +1946,11 @@ export default function Messages() {
    *  member's own space, which is why "your room" is a room and not a separate concept. */
   const [rooms, setRooms] = useState<Room[] | null>(null);
   const [roomId, setRoomId] = useState<number>(() => Number(sp.get("room") || 0) || 0);
+  // A room bound to a meeting owns neither its guest list nor its exits, and RoomThread has always
+  // honoured a `managed` prop — nobody passed it. So a meeting's room appeared in this tab with live
+  // "Leave room" and "Invite someone" buttons: one stranded the member outside a meeting they were
+  // invited to, and the other now refuses with an error they can do nothing about.
+  const roomManaged = !!rooms?.find((r) => r.id === roomId)?.managed;
   const [makingRoom, setMakingRoom] = useState(false);
   // null until the server answers, so the toggle never flickers into the wrong position.
   const [emailOn, setEmailOn] = useState<boolean | null>(null);
@@ -2415,7 +2420,7 @@ export default function Messages() {
             </details>
           </aside>
           {roomId && me ? (
-            <RoomThread roomId={roomId} me={me} onLeave={closeRoom}
+            <RoomThread roomId={roomId} me={me} onLeave={closeRoom} managed={roomManaged}
               renderCall={(room, key, meId, leaveCall) => (room.in_call.includes(meId)
                 ? <RoomCall room={room} roomKey={key} me={meId} onLeft={leaveCall} />
                 : null)} />
