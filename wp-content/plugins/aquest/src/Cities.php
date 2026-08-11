@@ -43,6 +43,20 @@ final class Cities {
 	 */
 	public static function search( $req ) {
 		global $wpdb;
+		// ?tz= — the biggest city in an IANA zone, used to OFFER somebody their own city instead of
+		// making them type it. The browser knows its own timezone, so this needs no IP address, no
+		// third-party lookup and no guess about who is asking: Europe/Istanbul is a sharper signal
+		// than any country-level geo-IP would be, and it never leaves the member's device until they
+		// ask us to resolve it. It is a SUGGESTION — nothing is stored unless they pick it.
+		$tz = trim( (string) Rest::p( $req, 'tz', '' ) );
+		if ( $tz !== '' && preg_match( '~^[A-Za-z][A-Za-z0-9+/_-]{2,63}$~', $tz ) ) {
+			$rows = Data::all(
+				'SELECT name, country, admin1, lat, lon, tz FROM ' . Data::t( 'aq_cities' ) .
+				' WHERE tz = %s ORDER BY population DESC LIMIT 1',
+				[ $tz ]
+			);
+			return [ 'items' => $rows ? [ self::shape( $rows[0] ) ] : [] ];
+		}
 		$q = self::fold( Rest::p( $req, 'q', '' ) );
 		if ( mb_strlen( $q ) < 2 ) { return [ 'items' => [] ]; }
 		$t    = Data::t( 'aq_cities' );
@@ -55,17 +69,20 @@ final class Cities {
 			[ '%' . $like . '%', $like . '%', self::LIMIT ]
 		);
 		$out = [];
-		foreach ( $rows as $r ) {
-			$out[] = [
-				'name'    => (string) $r['name'],
-				'country' => (string) $r['country'],
-				'admin1'  => (string) $r['admin1'],
-				'lat'     => (float) $r['lat'],
-				'lon'     => (float) $r['lon'],
-				'tz'      => (string) $r['tz'],
-			];
-		}
+		foreach ( $rows as $r ) { $out[] = self::shape( $r ); }
 		return [ 'items' => $out, 'attribution' => 'GeoNames (CC BY 4.0)' ];
+	}
+
+	/** One gazetteer row as the picker consumes it. */
+	private static function shape( $r ) {
+		return [
+			'name'    => (string) $r['name'],
+			'country' => (string) $r['country'],
+			'admin1'  => (string) $r['admin1'],
+			'lat'     => (float) $r['lat'],
+			'lon'     => (float) $r['lon'],
+			'tz'      => (string) $r['tz'],
+		];
 	}
 
 	/** How many cities are loaded. 0 means the seed never ran — the picker then has nothing to offer. */

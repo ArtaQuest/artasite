@@ -2092,6 +2092,16 @@ export function searchCities(q: string) {
   return get<{ items: City[]; attribution?: string }>("/cities", { q });
 }
 
+/**
+ * The biggest city in an IANA timezone — used to OFFER somebody their own city rather than make
+ * them type it. The browser already knows its zone, so this needs no IP address and no third-party
+ * geo lookup, and it is sharper than country-level geo-IP would be (Europe/Istanbul, not "TR").
+ * It is only ever a suggestion: nothing is stored until the member picks it.
+ */
+export function cityForTimezone(tz: string) {
+  return get<{ items: City[] }>("/cities", { tz });
+}
+
 export function setGender(gender: string) { return post<{ ok: boolean; gender: string }>("/identity/gender", { gender }); }
 
 /* ── Certificate of Participation ────────────────────────────────────────────

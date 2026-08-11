@@ -5,6 +5,8 @@ import { BIRTHDAY_REQUIRED_EVENT } from "../lib/api";
 import { VerifyApi } from "../lib/verify";
 import { DobWheel } from "./DobWheel";
 import CitySelect from "./CitySelect";
+import { availableLangs } from "../lib/i18n";
+import { postProfileUpdate, RELATIONSHIPS, LANGS_MAX } from "../lib/wp";
 import { cityLabel } from "../lib/api";
 
 /* Date of birth must be a real date the server accepts (AQ\Verify: 13–120 years old). Bound the
@@ -72,6 +74,12 @@ export function IdentityGate() {
   // a half-typed "Teh" cannot be submitted as a place.
   const [pob, setPob] = useState("");
   const [geo, setGeo] = useState<{ lat: number; lon: number; tz: string } | null>(null);
+  // Asked for here so a member states them ONCE, at the only moment they are already filling a form.
+  // Optional — mandatory identity is name + date of birth + place of birth, and padding a sign-up
+  // gate with four more required fields is how you lose the person on the other side of it.
+  const [rel, setRel] = useState("");
+  const [lives, setLives] = useState("");
+  const [langs, setLangs] = useState<string[]>([]);
   const [refused, setRefused] = useState(false); // the server said birthday_required
 
   // The backend is the authority: any refusal opens the step, whatever the shell believed.
@@ -102,6 +110,12 @@ export function IdentityGate() {
     try {
       // Nationality intentionally blank — the server only writes it when non-empty.
       const r = await VerifyApi.setIdentity(name.trim(), bday, "", pob, geo ?? undefined);
+      // The optional half rides on the profile endpoint, and only when there is something to say.
+      // Deliberately AFTER identity and deliberately not awaited into the failure path: a member who
+      // filled the gate must get through it even if this second call is refused.
+      if (r?.ok && (rel || lives || langs.length)) {
+        try { await postProfileUpdate(name.trim(), "", undefined, undefined, rel, lives, langs); } catch { /* their profile, not their gate */ }
+      }
       // A full navigation refetches AQ_USER, so the gate clears rather than lingering on stale flags.
       if (r?.ok) window.location.assign(localePath("/"));
       else setErr(r?.message || r?.error || "Couldn't save — check your details.");
@@ -130,7 +144,10 @@ export function IdentityGate() {
             wants to fill it in, not read policy; all of it lives on /about and the Account page.
             What is left is a heading, two labels and the ONE line that appears when a date is
             actually wrong — feedback, not explanation. */}
-        <h2 id="aq-gate-title" className="text-[22px] font-bold leading-tight text-ink">Three things and you're in</h2>
+        <h2 id="aq-gate-title" className="text-[22px] font-bold leading-tight text-ink">Tell us who you are</h2>
+        {/* The gate got longer, so it now says which part is compulsory — otherwise a member reads
+            seven fields and assumes all seven are. Three are. */}
+        <p className="mt-1 text-[13px] text-ink-3">Name, date of birth and place of birth are required. The rest you can fill in now or later.</p>
 
         <div className="mt-4 space-y-3">
           <label className="block">
@@ -166,6 +183,50 @@ export function IdentityGate() {
               onClear={() => { setPob(""); setGeo(null); }}
               required
             />
+          </div>
+
+          {/* THE REST OF THE PROFILE, asked once. Every one of these is optional and says so, and the
+              button does not wait on them. They are here because a member who states them now never
+              has to find the settings page to do it — which is where all three sat unfilled. */}
+          <div className="block">
+            <span className="mb-1 block text-[13px] font-medium text-ink-2">Where you live <span className="font-normal text-ink-3">(optional)</span></span>
+            <CitySelect value={lives} suggestFromTimezone
+              onPick={(c) => setLives(cityLabel(c))} onClear={() => setLives("")}
+              placeholder="Start typing your city…" />
+          </div>
+          <div className="block">
+            <span className="mb-1 block text-[13px] font-medium text-ink-2">Relationship <span className="font-normal text-ink-3">(optional)</span></span>
+            <select value={rel} onChange={(e) => setRel(e.target.value)} aria-label="Relationship status" className={field}>
+              <option value="">Prefer not to say</option>
+              {RELATIONSHIPS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+            </select>
+          </div>
+          <div className="block">
+            <span className="mb-1 block text-[13px] font-medium text-ink-2">Languages you speak <span className="font-normal text-ink-3">(optional)</span></span>
+            {langs.length > 0 && (
+              <ul className="mb-1.5 flex list-none flex-wrap gap-1.5">
+                {langs.map((code) => {
+                  const l = availableLangs().find((x) => x.code === code);
+                  return (
+                    <li key={code}>
+                      <button type="button" onClick={() => setLangs((cur) => cur.filter((c) => c !== code))}
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-pill border border-yin bg-yin/15 px-3 text-[13px] text-ink">
+                        <bdi dir={l?.dir || "ltr"} data-ay-skip="1">{l?.native || code}</bdi>
+                        <span aria-hidden className="text-ink-3">×</span>
+                        <span className="sr-only">Remove</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <select value="" aria-label="Add a language" className={field}
+              onChange={(e) => { const c = e.target.value; if (c && !langs.includes(c) && langs.length < LANGS_MAX) setLangs((cur) => [...cur, c]); }}>
+              <option value="">{langs.length >= LANGS_MAX ? `That is ${LANGS_MAX}` : "Add a language…"}</option>
+              {availableLangs().filter((l) => !langs.includes(l.code)).map((l) => (
+                <option key={l.code} value={l.code}>{l.native} — {l.name}</option>
+              ))}
+            </select>
           </div>
         </div>
 

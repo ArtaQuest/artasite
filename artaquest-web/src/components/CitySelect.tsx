@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { cx } from "./ui";
-import { searchCities, type City } from "../lib/api";
+import { searchCities, cityForTimezone, type City } from "../lib/api";
 
 /** ISO 3166 alpha-2 → the reader's own name for that country, from the platform's active language. */
 const REGION = (() => {
@@ -29,7 +29,7 @@ const REGION = (() => {
   }
 })();
 
-export default function CitySelect({ value, onPick, onClear, id, required, invalid, placeholder = "Start typing a city…" }: {
+export default function CitySelect({ value, onPick, onClear, id, required, invalid, suggestFromTimezone, placeholder = "Start typing a city…" }: {
   /** The chosen city's display label, or "" when nothing is chosen. */
   value: string;
   onPick: (city: City) => void;
@@ -37,6 +37,9 @@ export default function CitySelect({ value, onPick, onClear, id, required, inval
   id?: string;
   required?: boolean;
   invalid?: boolean;
+  /** Offer the member their own city, derived from the browser's timezone. For WHERE THEY LIVE only
+   *  — a birthplace is not where you are now, and suggesting one would be inventing a fact. */
+  suggestFromTimezone?: boolean;
   placeholder?: string;
 }) {
   const [q, setQ] = useState("");
@@ -44,6 +47,7 @@ export default function CitySelect({ value, onPick, onClear, id, required, inval
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [active, setActive] = useState(0);
+  const [hint, setHint] = useState<City | null>(null);
   const box = useRef<HTMLDivElement | null>(null);
   const listId = useId();
   const seq = useRef(0);
@@ -62,6 +66,19 @@ export default function CitySelect({ value, onPick, onClear, id, required, inval
     }, 180);
     return () => clearTimeout(t);
   }, [q]);
+
+  // The one-tap suggestion. Asked for ONCE, only when the field is empty, and it changes nothing on
+  // its own — it renders a button the member may ignore. A silently prefilled location would be us
+  // stating where somebody lives on their behalf, into a database that is published in full.
+  useEffect(() => {
+    if (!suggestFromTimezone || value) { setHint(null); return; }
+    let live = true;
+    let tz = "";
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { /* no Intl */ }
+    if (!tz) return;
+    cityForTimezone(tz).then((r) => { if (live) setHint(r.items[0] ?? null); }).catch(() => { /* offer nothing */ });
+    return () => { live = false; };
+  }, [suggestFromTimezone, value]);
 
   // Close on an outside tap. Pointerdown rather than click: on iOS a click outside a focused input
   // arrives after the keyboard dismisses, which is late enough to look like the list ignored you.
@@ -129,6 +146,19 @@ export default function CitySelect({ value, onPick, onClear, id, required, inval
           invalid ? "border-yang" : "border-line focus:border-yin-light",
         )}
       />
+      {/* "You look like you are in Istanbul" — one tap to accept, and typing dismisses it by filling
+          the box. Never auto-applied. */}
+      {hint && !q.trim() && (
+        <button type="button" onClick={() => pick(hint)}
+          className="mt-1.5 inline-flex min-h-9 items-center gap-1.5 rounded-pill border border-line px-3 py-1 text-[13px] text-ink-2 transition-colors hover:border-yang hover:text-ink">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" aria-hidden>
+            <path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11z" /><circle cx="12" cy="10" r="2.6" />
+          </svg>
+          <span data-ay-skip="1">{hint.name}</span>
+          <span className="text-ink-3">— use this?</span>
+        </button>
+      )}
+
       {/* The live region says how many matches there are without stealing focus — otherwise a screen
           reader user types into silence. */}
       <span className="sr-only" role="status" aria-live="polite">

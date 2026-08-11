@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { DobWheel } from "../components/DobWheel";
-import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, LANGS_MAX, LOCATION_MAX, postProfileUpdate, PROFILE_LINKS, RELATIONSHIPS, type CourseCard, type Dashboard, type UsernameCheck } from "../lib/wp";
+import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, LANGS_MAX, postProfileUpdate, PROFILE_LINKS, RELATIONSHIPS, type CourseCard, type Dashboard, type UsernameCheck } from "../lib/wp";
 import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, KaggleIds, Passkeys, ShellAccount, UsageApi, myParticipation, setGender as setGender_, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type KaggleIdItem, type SessionItem, type ShellInfo, type ShellKey, type UsageInfo, type BursaryResult, type BursaryStatus, type ShareKit } from "../lib/api";
 import { signOut } from "../lib/auth";
 import { VerifyApi, fileToImage, type VerifyStatus } from "../lib/verify";
@@ -131,12 +131,15 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
                 options={[{ value: "", label: "Prefer not to say" }, ...RELATIONSHIPS.map(([k, label]) => ({ value: k, label }))]} />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-[12.5px] font-normal text-ink-3">Where you are</span>
-              {/* Typed, never detected. We do not read a location from an IP address or a timezone:
-                  this database is public, so a GUESSED location would be us publishing somebody's
-                  whereabouts for them. A city is the intended grain, not an address. */}
-              <Input value={location} maxLength={LOCATION_MAX} onChange={(e) => setLocation(e.target.value)}
-                placeholder="Istanbul" autoComplete="off" className="bg-space-1 px-3.5" />
+              <span className="text-[12.5px] font-normal text-ink-3">Where you live</span>
+              {/* The same gazetteer as place of birth — one control for one kind of fact, and a city
+                  we can resolve rather than four spellings of Istanbul. The browser's timezone offers
+                  a one-tap suggestion; it is NEVER applied on its own, because a location we filled in
+                  silently would be us stating somebody's whereabouts into a public database. */}
+              <CitySelect value={location} suggestFromTimezone
+                onPick={(c) => setLocation(cityLabel(c))}
+                onClear={() => setLocation("")}
+                placeholder="Start typing your city…" />
             </label>
           </div>
         </Field>
