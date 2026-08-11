@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.67.0';
+	const VERSION = '1.68.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -363,6 +363,24 @@ final class Schema {
 			// (user_id, context_id) bounds the section board's "my votes on this board" read to the votes
 			// the viewer cast on THAT lesson — not a scan of every comment vote they ever cast (a power
 			// voter's PK prefix (user_id, target_type) footprint is unbounded).
+
+			// The place-of-birth gazetteer (GeoNames cities15000, CC BY 4.0 — see AQ\Cities).
+			// Deliberately plain column types and one plain index per column: dbDelta silently emits
+			// NO TABLE AT ALL under Studio's SQLite for several perfectly valid MySQL constructs, and
+			// a gazetteer that fails to exist makes the sign-up field unfillable.
+			'aq_cities' => "
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				name VARCHAR(120) NOT NULL DEFAULT '',
+				search VARCHAR(200) NOT NULL DEFAULT '',
+				country CHAR(2) NOT NULL DEFAULT '',
+				admin1 VARCHAR(20) NOT NULL DEFAULT '',
+				lat DECIMAL(8,4) NOT NULL DEFAULT 0,
+				lon DECIMAL(9,4) NOT NULL DEFAULT 0,
+				population INT UNSIGNED NOT NULL DEFAULT 0,
+				tz VARCHAR(64) NOT NULL DEFAULT '',
+				PRIMARY KEY  (id),
+				KEY search (search),
+				KEY population (population)",
 
 			'aq_follows' => "
 				follower_id BIGINT UNSIGNED NOT NULL,
@@ -1146,6 +1164,7 @@ final class Schema {
 				'context_type' => "thread (public board) | section (competition board)", 'context_id' => 'the thread id, or the lesson id for a section', 'course_id' => 'set for section comments (for ranking)', 'parent_id' => 'parent comment for a reply, else 0',
 				'votes' => 'denormalized net score (= SUM of this comment\'s aq_votes.val)', 'reply_count' => 'denormalized direct replies', 'fear' => 'ArtaMod score 0-100 (hate/fear)', 'flagged' => '1 if fear ≥ 70 → upvotes excluded from the competition' ] ],
 			'aq_votes'          => [ 'desc' => 'One vote per (user, target). Reddit-style up/down. Source of truth for every score.', 'cols' => [ 'target_type' => 'thread | comment', 'target_id' => 'voted row id', 'val' => '+1 up | −1 down', 'course_id' => 'denormalized from the comment (0 for public votes)', 'context_id' => 'the section/lesson id (0 for public votes)' ] ],
+			'aq_cities'         => [ 'desc' => 'The place-of-birth gazetteer: every city over 15,000 people, with coordinates and timezone. GeoNames cities15000, CC BY 4.0.', 'cols' => [ 'name' => 'city name as GeoNames spells it', 'search' => 'accent-folded lowercase name(s), what the type-ahead matches', 'country' => 'ISO 3166-1 alpha-2', 'admin1' => 'GeoNames admin1 code (state/province)', 'lat' => 'latitude, 4dp (~11 m)', 'lon' => 'longitude, 4dp', 'population' => 'used to rank identically-named places', 'tz' => 'IANA timezone' ] ],
 			'aq_follows'        => [ 'desc' => 'Social follow graph, one row per (follower → target).', 'cols' => [] ],
 			'aq_translations'   => [ 'desc' => 'Content-addressed i18n cache: each (string-hash × language) translated once ever, then served to everyone. Also the ArtaTranslate upgrade queue: status auto (Google edge, pending) → arta (rewritten by the SOTA model + adversarial review rounds). Demand-aware: only rows people actually re-read (demand ≥ 1) or that an audiobook waits on (priority 2) are upgraded, most-read first.', 'cols' => [ 'source_hash' => 'md5 of the source string', 'lang' => 'target language', 'translated_text' => 'the cached translation', 'status' => 'auto (edge) | arta (upgraded)', 'quality' => 'ArtaTranslate critic score 0-100', 'priority' => '2 narration · 1 legacy fresh edge · 0 rest', 'demand' => 'cache-hit resolves — how many times visitors re-read this string in this language', 'read_at' => 'last time this row was SERVED anywhere (coarse, ≤1 write/week) — rows unused for months are purged by the nightly GC' ] ],
 			'aq_tr_rounds'      => [ 'desc' => 'ArtaTranslate public record: every adversarial improvement round (draft → critique → rewrite) behind each upgraded translation.', 'cols' => [ 'source_hash' => 'md5 of the source string', 'lang' => 'target language', 'round' => 'round number', 'engine' => 'who produced the candidate (google | HF model | claude critic)', 'candidate' => 'the round\'s translation', 'critique' => 'the adversarial critique', 'score' => 'critic score 0-100' ] ],
@@ -1682,6 +1701,18 @@ final class Schema {
 			&& \AQ\Typology::count() === 0 ) {
 			$r = \AQ\Typology::seed_from_file();
 			if ( empty( $r['error'] ) ) { update_option( 'aq_topics_seeded', self::VERSION, true ); }
+		}
+
+		// 1.68.0 — seed the place-of-birth gazetteer. Guarded THREE ways because it is 34k rows: the
+		// table must exist (dbDelta can silently skip it), the class must be loaded, and it must be
+		// empty. Cities::seed() is itself idempotent, so a re-run costs one COUNT(*). The option
+		// records the version that seeded it, which is also how a later dataset refresh is spotted.
+		if ( get_option( 'aq_cities_seeded' ) !== self::VERSION
+			&& self::table_exists( "{$p}aq_cities" )
+			&& class_exists( '\\AQ\\Cities' ) ) {
+			$loaded = \AQ\Cities::seed();
+			if ( \AQ\Cities::count() > 0 ) { update_option( 'aq_cities_seeded', self::VERSION, true ); }
+			if ( $loaded ) { error_log( '[aq] cities gazetteer seeded: ' . $loaded . ' rows' ); }
 		}
 
 		// 1.36.0 — GRANTS are now authored + editable in Studio: assign every author-less grant (existing

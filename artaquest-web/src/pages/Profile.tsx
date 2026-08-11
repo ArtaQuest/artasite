@@ -480,9 +480,15 @@ export default function Profile() {
           {/* The DATE only — no derived age (operator 2026-07-27). Anyone who wants the number can
               do the subtraction; printing it turns a fact the member stated into a label the site
               puts on them, and it re-renders differently every birthday. */}
-          {fmtBirthday(p.birthday) ? (
+          {/* Date and place in ONE fact, so five stated things still read as four columns and the row
+              reads like a sentence: "February 15, 1994 · Tehran, Iran". Either half may be missing —
+              the date predates the place being collected, and the place is mandatory only going
+              forward — so each is rendered only when present. */}
+          {(fmtBirthday(p.birthday) || p.birthplace?.trim()) ? (
             <Fact label="Born" icon={<svg {...FACT_SVG}><path d="M4 20h16v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2Zm0-3h16" /><path d="M12 12V8m0-4v1.5M8 12V9m8 3V9" /></svg>}>
               {fmtBirthday(p.birthday)}
+              {fmtBirthday(p.birthday) && p.birthplace?.trim() ? <span className="text-ink-3"> · </span> : null}
+              {p.birthplace?.trim() ? <span data-ay-skip="1">{p.birthplace.trim()}</span> : null}
             </Fact>
           ) : null}
         </section>

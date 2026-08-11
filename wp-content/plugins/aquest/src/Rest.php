@@ -152,6 +152,7 @@ final class Rest {
 
 		// ── Unified search (the Explore hub: notebooks + discussions + grants) ──
 		[ 'GET',  'search',                        'Search::all',       'public' ],
+		[ 'GET',  'cities',                        'Cities::search',    'public' ], // place-of-birth type-ahead (GeoNames gazetteer, CC BY)
 
 		// ── Bursary (Outreach-funded: covers the course entry fee for eligible groups) ──
 		[ 'GET',  'bursary',                       'Funds::bursary_list',  'user' ],

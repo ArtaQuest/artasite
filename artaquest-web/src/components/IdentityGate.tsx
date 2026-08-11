@@ -4,6 +4,8 @@ import { currentUser, isLoggedIn, localePath } from "../lib/wp";
 import { BIRTHDAY_REQUIRED_EVENT } from "../lib/api";
 import { VerifyApi } from "../lib/verify";
 import { DobWheel } from "./DobWheel";
+import CitySelect from "./CitySelect";
+import { cityLabel } from "../lib/api";
 
 /* Date of birth must be a real date the server accepts (AQ\Verify: 13–120 years old). Bound the
    picker to that range so the native control opens near a plausible year; the server is the final
@@ -66,6 +68,10 @@ export function IdentityGate() {
   const [bday, setBday] = useState(u?.birthday || "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // The picked city and its coordinates. `pob` is only ever set by CHOOSING from the gazetteer, so
+  // a half-typed "Teh" cannot be submitted as a place.
+  const [pob, setPob] = useState("");
+  const [geo, setGeo] = useState<{ lat: number; lon: number; tz: string } | null>(null);
   const [refused, setRefused] = useState(false); // the server said birthday_required
 
   // The backend is the authority: any refusal opens the step, whatever the shell believed.
@@ -84,7 +90,9 @@ export function IdentityGate() {
 
   const nameOk = name.trim().length >= 2;
   const dobOk = exactDate(bday);
-  const ready = nameOk && dobOk && !busy;
+  // Place of birth is mandatory server-side (Verify::has_identity), so the button must not promise
+  // otherwise — a member who cannot see WHY Continue is dead just meets a 400 after tapping it.
+  const ready = nameOk && dobOk && pob !== "" && !busy;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -93,7 +101,7 @@ export function IdentityGate() {
     setErr("");
     try {
       // Nationality intentionally blank — the server only writes it when non-empty.
-      const r = await VerifyApi.setIdentity(name.trim(), bday, "");
+      const r = await VerifyApi.setIdentity(name.trim(), bday, "", pob, geo ?? undefined);
       // A full navigation refetches AQ_USER, so the gate clears rather than lingering on stale flags.
       if (r?.ok) window.location.assign(localePath("/"));
       else setErr(r?.message || r?.error || "Couldn't save — check your details.");
@@ -122,7 +130,7 @@ export function IdentityGate() {
             wants to fill it in, not read policy; all of it lives on /about and the Account page.
             What is left is a heading, two labels and the ONE line that appears when a date is
             actually wrong — feedback, not explanation. */}
-        <h2 id="aq-gate-title" className="text-[22px] font-bold leading-tight text-ink">Two things and you're in</h2>
+        <h2 id="aq-gate-title" className="text-[22px] font-bold leading-tight text-ink">Three things and you're in</h2>
 
         <div className="mt-4 space-y-3">
           <label className="block">
@@ -149,6 +157,16 @@ export function IdentityGate() {
               <span id="aq-gate-dob-hint" role="alert" className="mt-1 block text-[12px] text-yin-ink">You must be at least 13</span>
             )}
           </label>
+          <div className="block">
+            <span className="mb-1 block text-[13px] font-medium text-ink-2">Place of birth</span>
+            {/* A picker, not a text box: 34,078 cities, and the row carries the coordinates. */}
+            <CitySelect
+              value={pob}
+              onPick={(c) => { setPob(cityLabel(c)); setGeo({ lat: c.lat, lon: c.lon, tz: c.tz }); }}
+              onClear={() => { setPob(""); setGeo(null); }}
+              required
+            />
+          </div>
         </div>
 
         {err && <p role="alert" className="mt-3 text-[13px] text-yin-ink">{err}</p>}

@@ -8,6 +8,8 @@ import { countryName, countryOptions, flagEmoji } from "../lib/flags";
 import { BlueCheck } from "../components/BlueCheck";
 import { Avatar, Button, Card, CertBadge, Chip, ErrorNote, Field, Input, Pill, Select, SignInGate, StatusNote, Textarea } from "../components/ui";
 import { availableLangs } from "../lib/i18n";
+import CitySelect from "../components/CitySelect";
+import { cityLabel } from "../lib/api";
 
 /** code → LangMeta, built once: the picker and the chips both resolve names, and availableLangs()
  *  rebuilds an array of 132 on every call. */
@@ -1046,6 +1048,10 @@ function IdentityVerification() {
   const [name, setName] = useState("");
   const [bday, setBday] = useState("");
   const [nat, setNat] = useState("");
+  // Mandatory identity info (Verify::has_identity). Prefilled from /verify/status so an existing
+  // member sees what is on record; the coordinates are only re-sent when they pick again.
+  const [pob, setPob] = useState("");
+  const [geo, setGeo] = useState<{ lat: number; lon: number; tz: string } | null>(null);
   const [idSaving, setIdSaving] = useState(false);
   const [idMsg, setIdMsg] = useState("");
   const [imgs, setImgs] = useState<{ profile_pic?: string; id_front?: string; id_back?: string; selfie?: string }>({});
@@ -1057,7 +1063,7 @@ function IdentityVerification() {
   const [gender, setGender] = useState("");
   const load = () => VerifyApi.status().then((s) => {
     if (s && !("error" in s && (s as { error?: string }).error)) {
-      setSt(s); setName(s.full_name || ""); setBday(s.birthday || ""); setNat(s.nationality || "");
+      setSt(s); setName(s.full_name || ""); setBday(s.birthday || ""); setNat(s.nationality || ""); setPob(s.birthplace || "");
       setGender(s.gender || "");
     }
   });
@@ -1076,7 +1082,7 @@ function IdentityVerification() {
     if (!name.trim()) { setIdMsg("Add your full legal name — it is required."); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(bday)) { setIdMsg("Add your date of birth — every member states one."); return; }
     setIdSaving(true); setIdMsg("");
-    const r = await VerifyApi.setIdentity(name.trim(), bday, nat);
+    const r = await VerifyApi.setIdentity(name.trim(), bday, nat, pob, geo ?? undefined);
     setIdSaving(false);
     if (r.ok) { setIdMsg("Saved"); load(); } else { setIdMsg(r.message || "Couldn't save — check your details."); }
   }
@@ -1119,6 +1125,12 @@ function IdentityVerification() {
             {/* Same three wheels as sign-up — one control for one fact, everywhere it is asked for. */}
             <DobWheel value={bday} onChange={setBday} minYear={new Date().getFullYear() - 120}
               maxYear={new Date().getFullYear() - 13} invalid={bday !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(bday)} />
+          </Field>
+          <Field label="Place of birth" required hint="Public on your profile, and required before you can post.">
+            {/* The same picker as sign-up — one control for one fact, everywhere it is asked for. */}
+            <CitySelect value={pob}
+              onPick={(c) => { setPob(cityLabel(c)); setGeo({ lat: c.lat, lon: c.lon, tz: c.tz }); }}
+              onClear={() => { setPob(""); setGeo(null); }} required />
           </Field>
           <Field label="Nationality" optional>
             <select value={nat} onChange={(e) => setNat(e.target.value)} aria-label="Nationality"

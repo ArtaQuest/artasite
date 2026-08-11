@@ -2068,6 +2068,26 @@ export function widenCredit(id: number) {
   return post<{ ok: boolean; moved_cents: number; entries: number; message: string }>("/credits/widen", { id });
 }
 /** State, change, or clear ("clear") your gender. Opt-in, revocable, never inferred. */
+/** One city from the gazetteer (AQ\Cities). `admin1` is a GeoNames code and is never shown. */
+export type City = { name: string; country: string; admin1: string; lat: number; lon: number; tz: string };
+
+/** "Tehran, Iran" — what a person recognises. `admin1` is a GeoNames code and is never shown.
+ *  Lives here rather than beside the picker because it formats an API type, and a non-component
+ *  export in a .tsx file breaks Fast Refresh for the whole module. */
+export function cityLabel(c: Pick<City, "name" | "country">): string {
+  let country = c.country;
+  try {
+    const dn = new Intl.DisplayNames([document.documentElement.lang || "en"], { type: "region" });
+    country = dn.of(c.country.toUpperCase()) || c.country;
+  } catch { /* older engine, or an unknown code — the ISO code is still meaningful */ }
+  return country ? `${c.name}, ${country}` : c.name;
+}
+
+/** Place-of-birth type-ahead. Public: the gazetteer is reference data, not member data. */
+export function searchCities(q: string) {
+  return get<{ items: City[]; attribution?: string }>("/cities", { q });
+}
+
 export function setGender(gender: string) { return post<{ ok: boolean; gender: string }>("/identity/gender", { gender }); }
 
 /* ── Certificate of Participation ────────────────────────────────────────────

@@ -49,7 +49,35 @@ final class Verify {
 	public static function full_name( $uid ) { return trim( (string) get_user_meta( (int) $uid, 'aq_full_name', true ) ); }
 	public static function birthday( $uid )  { return (string) get_user_meta( (int) $uid, 'aq_birthday', true ); }
 	public static function nationality( $uid ) { return strtoupper( trim( (string) get_user_meta( (int) $uid, 'aq_nationality', true ) ) ); }
-	public static function has_identity( $uid ) { return self::full_name( $uid ) !== '' && self::valid_birthday( self::birthday( $uid ) ); }
+	/** Where the member was BORN, in their own words ("Tehran"). Mandatory identity information
+	 *  (operator 2026-08-11), which is why it lives here beside the birthday and NOT in Auth with the
+	 *  optional profile fields: it is set through the identity form, gates posting, and is never
+	 *  inferred from anything. City-sized; cut by CHARACTERS so a multibyte name cannot be split. */
+	const BIRTHPLACE_MAX = 60;
+	public static function birthplace( $uid ) { return (string) get_user_meta( (int) $uid, 'aq_birthplace', true ); }
+
+	/** The picked city's coordinates + timezone, or null. What a natal chart needs; nothing else
+	 *  reads it yet, and it is stored ONLY because the member picked a real place from the gazetteer. */
+	public static function birthplace_geo( $uid ) {
+		$raw = get_user_meta( (int) $uid, 'aq_birthplace_geo', true );
+		$g   = is_array( $raw ) ? $raw : json_decode( (string) $raw, true );
+		return ( is_array( $g ) && isset( $g['lat'], $g['lon'] ) ) ? $g : null;
+	}
+
+	// Full name + a valid date of birth + a place of birth. Adding birthplace here is what makes it
+	// MANDATORY: require_identity() refuses posting, challenges and course enrolment until all three
+	// are on record, so an existing member who has never stated one is asked for it once and then
+	// carries on. The refusal below names all three, or the member cannot tell which is missing.
+	public static function has_identity( $uid ) {
+		if ( self::full_name( $uid ) === '' || ! self::valid_birthday( self::birthday( $uid ) ) ) { return false; }
+		if ( self::birthplace( $uid ) !== '' ) { return true; }
+		// NO BIRTHPLACE ON RECORD. Demand one only while we can actually OFFER one: the picker's whole
+		// list is the aq_cities gazetteer, so if that seed failed the member is asked for something no
+		// control on the page can give them — and since this gate governs posting, hearting and
+		// enrolling, a broken table of ours would silently lock every member out of the platform.
+		// An unusable gate abstains. It re-arms by itself the moment the gazetteer is there.
+		return class_exists( '\\AQ\\Cities' ) ? Cities::count() === 0 : true;
+	}
 	public static function is_verified( $uid ) { return (int) get_user_meta( (int) $uid, 'aq_verified', true ) > 0; }
 
 	/** True once this member has stated an EXACT, valid date of birth (operator 2026-07-25: every
@@ -111,7 +139,7 @@ final class Verify {
 	/** Gate for post creation: a real name + birthday are mandatory before anyone can post. */
 	public static function require_identity( $uid ) {
 		if ( self::has_identity( $uid ) ) { return null; }
-		return Rest::err( 'identity_required', 'Add your full name and birthday to your profile before posting.', 403 );
+		return Rest::err( 'identity_required', 'Add your full name, birthday and place of birth to your profile before posting.', 403 );
 	}
 
 	// ── status ────────────────────────────────────────────────────────────────
@@ -123,6 +151,7 @@ final class Verify {
 		return [
 			'full_name'    => self::full_name( $uid ),
 			'birthday'     => self::birthday( $uid ),
+			'birthplace'   => self::birthplace( $uid ),    // mandatory identity info, like the birthday
 			'nationality'  => self::nationality( $uid ),   // the CLAIM (flag only shows once verified)
 			'gender'       => self::gender( $uid ),        // '' unless the member chose to say (ArtaCredits matching only)
 			'has_identity' => self::has_identity( $uid ),
@@ -143,18 +172,38 @@ final class Verify {
 		$name = sanitize_text_field( (string) Rest::p( $req, 'full_name', '' ) );
 		$bday = self::norm_date( (string) Rest::p( $req, 'birthday', '' ) );
 		$nat  = strtoupper( trim( sanitize_text_field( (string) Rest::p( $req, 'nationality', '' ) ) ) );
+		$pob  = sanitize_text_field( (string) Rest::p( $req, 'birthplace', '' ) );
+		$pob  = function_exists( 'mb_substr' ) ? mb_substr( $pob, 0, self::BIRTHPLACE_MAX ) : substr( $pob, 0, self::BIRTHPLACE_MAX );
+		$pob  = trim( $pob );
 		if ( mb_strlen( $name ) < 2 ) { return Rest::err( 'bad_name', 'Enter your full name.' ); }
 		if ( ! self::valid_birthday( $bday ) ) { return Rest::err( 'bad_birthday', 'Enter a valid birthday (you must be at least ' . self::MIN_AGE . ').' ); }
+		if ( mb_strlen( $pob ) < 2 ) { return Rest::err( 'bad_birthplace', 'Enter your place of birth.' ); }
 		// 'CLEAR' is the revocation sentinel — it must pass the validator, which rejects anything that
 		// is not an ISO-3166 code. Without this exemption the revocation branch below is unreachable
 		// dead code and the claim stays write-only, which is exactly what it was before.
 		if ( $nat !== '' && $nat !== 'CLEAR' && ! self::valid_country( $nat ) ) { return Rest::err( 'bad_country', 'Pick your nationality from the list.' ); }
 		// Editing identity after being verified invalidates the check (the verified facts changed).
 		$nat_changed = $nat !== '' && $nat !== self::nationality( $uid );
-		if ( self::is_verified( $uid ) && ( $name !== self::full_name( $uid ) || $bday !== self::birthday( $uid ) || $nat_changed ) ) {
+		if ( self::is_verified( $uid ) && ( $name !== self::full_name( $uid ) || $bday !== self::birthday( $uid ) || $pob !== self::birthplace( $uid ) || $nat_changed ) ) {
 			delete_user_meta( $uid, 'aq_verified' );
 		}
 		update_user_meta( $uid, 'aq_full_name', $name );
+		update_user_meta( $uid, 'aq_birthplace', $pob );
+		// The COORDINATES that go with it, when the picker supplied them. Stored beside the label
+		// rather than derived later: the gazetteer can be rebuilt and a city can be renamed, but what
+		// this member picked on this day should not move afterwards. Bounds-checked because it
+		// arrives from the client, and dropped entirely if it does not look like a point on Earth.
+		$lat = Rest::p( $req, 'birth_lat', null );
+		$lon = Rest::p( $req, 'birth_lon', null );
+		$btz = sanitize_text_field( (string) Rest::p( $req, 'birth_tz', '' ) );
+		if ( null !== $lat && null !== $lon && is_numeric( $lat ) && is_numeric( $lon )
+			&& abs( (float) $lat ) <= 90 && abs( (float) $lon ) <= 180 ) {
+			update_user_meta( $uid, 'aq_birthplace_geo', wp_json_encode( [
+				'lat' => round( (float) $lat, 4 ),
+				'lon' => round( (float) $lon, 4 ),
+				'tz'  => mb_substr( $btz, 0, 64 ),
+			] ) );
+		}
 		if ( $bday !== self::birthday( $uid ) ) { self::stamp( $uid, 'aq_birthday' ); }
 		update_user_meta( $uid, 'aq_birthday', $bday );
 		// 'clear' REVOKES the nationality claim. Without it the claim was write-only: nothing anywhere
