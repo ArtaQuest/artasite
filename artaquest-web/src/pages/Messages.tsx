@@ -529,6 +529,25 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
    *  the previous answer — show them on EVERY bubble, always — put a full reaction bar and an
    *  Unsend button under every single message in the dock. Tapping a bubble opens its actions;
    *  tapping it again, or anything else, closes them. */
+  /**
+   * IS THIS A TOUCH DEVICE? Not "is this the dock".
+   *
+   * The reveal below was gated on `compact`, which says the thread is in the narrow dock — a
+   * CONTAINER fact standing in for an INPUT one. The consequence was that on a phone, on the page
+   * built for chatting, reply, react, edit and unsend were all unreachable: the bars resolve to
+   * `display:none` or to `group-hover`, which no finger ever produces, and the tap that would have
+   * revealed them was wired to `undefined`. All four worked in the AI dock the whole time.
+   * A pointer query is the thing that was meant, and it is what five other files here already use.
+   */
+  const [touch, setTouch] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches === true);
+  useEffect(() => {
+    const mq = window.matchMedia?.("(pointer: coarse)");
+    if (!mq) return;
+    const sync = () => setTouch(mq.matches);
+    mq.addEventListener?.("change", sync);
+    return () => mq.removeEventListener?.("change", sync);
+  }, []);
   const [openActions, setOpenActions] = useState(0);
   const [confirmUnsend, setConfirmUnsend] = useState(0);
   const [confirmBlock, setConfirmBlock] = useState(false);
@@ -1556,7 +1575,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                       <span data-actions="" className={`shrink-0 items-center gap-0.5 self-center transition-opacity ${
                         /* Touch has no hover, so these appear when the bubble is TAPPED — not on
                            every bubble at once, which is what "always show them" produced. */
-                        compact
+                        touch
                           ? (openActions === m.id ? "flex" : "hidden")
                           : "hidden opacity-0 group-hover:opacity-100 md:flex"}`}>
                         {p.t === "text" && (
@@ -1583,7 +1602,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                       /* On touch, the bubble itself is what reveals its actions. Ignored when the
                          member is selecting text, so tapping to copy does not open a toolbar. */
                       data-bubble=""
-                      onClick={compact && m.id > 0 && p ? () => {
+                      onClick={touch && m.id > 0 && p ? () => {
                         if ((window.getSelection()?.toString() || "").length) return;
                         setOpenActions((cur) => (cur === m.id ? 0 : m.id));
                         setConfirmUnsend(0);
@@ -1673,7 +1692,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                       {/* hover reaction + reply bar */}
                       {m.id > 0 && p && (
                         <div data-actions="" className={`z-10 items-center gap-0.5 rounded-pill border border-line bg-space-2 px-1.5 py-1 shadow-card ${
-                          compact ? (openActions === m.id ? "flex" : "hidden") : "hidden group-hover:flex"} ${
+                          touch ? (openActions === m.id ? "flex" : "hidden") : "hidden group-hover:flex"} ${
                           /* In the dock the panel root is overflow-hidden, so a bar floated ABOVE the
                              bubble is clipped away entirely — under it, in normal flow, it survives. */
                           compact ? "mt-1 flex-wrap" : "absolute -top-8"} ${mine ? "end-0" : "start-0"}`}>
