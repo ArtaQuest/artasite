@@ -881,6 +881,66 @@ export const I18n = {
 export type ShareKit = { message: string; url: string; links: { x: string; facebook: string; linkedin: string; whatsapp: string } };
 export type BursaryStatus = { available: boolean; fund_cents: number; currency: string; donate_url: string; share: ShareKit };
 export type BursaryResult = { ok: boolean; granted?: boolean; already?: boolean; free?: boolean; fund_empty?: boolean; course?: string; group?: string; amount?: number; symbol?: string; message?: string; error?: string; share?: ShareKit };
+// ── The Foundation's books (Books.php) ───────────────────────────────────────
+// The double-entry general ledger behind /finances. Every figure below is recomputed from the
+// ledger lines on each request, so the page can never show a total the entries disagree with.
+export type BookLine = { account: string; label: string; debit: number; credit: number; memo: string };
+export type BookEntry = { id: number; ref: string; date: string; memo: string; source: string; invoice_id: number; lines: BookLine[] };
+export type BookAmount = { account: string; label: string; gifi: string; gifi_short: string; cents: number };
+export type BookFy = { label: string; start: string; end: string; first: boolean };
+export type BookCheck = { check: string; ok: boolean; detail: string };
+export type Statements = {
+  entity: { name: string; bn: string; kind: string; incorporated: string; province: string; receipts: boolean; receipts_note: string };
+  currency: string;
+  fiscal: { year_end: string; max_first_end: string; note: string; years: BookFy[]; locked: string[]; filing_due: string };
+  statements: {
+    fy: BookFy;
+    position: { assets: BookAmount[]; total_assets: number; liabilities: BookAmount[]; total_liabilities: number; net_assets: number; balances: boolean };
+    operations: { revenue: BookAmount[]; total_revenue: number; expenses: BookAmount[]; total_expenses: number; result: number };
+  };
+  entries: BookEntry[];
+  checks: BookCheck[];
+};
+export type BookDoc = { id: number; kind: string; name: string; bytes: number; sha256: string; mime: string; url: string };
+export type BookInvoice = {
+  id: number; vendor: string; number: string; description: string; issued: string; paid: string;
+  period: { start: string; end: string }; currency: string;
+  subtotal_cents: number; tax_cents: number; total_cents: number;
+  fx: { rate: number; date: string; source: string }; cad_cents: number;
+  account: string; gifi: string; tax_note: string; pay_method: string; payer_uid: number;
+  coins: number; coin_basis: { price_cad: number; gold_oz_usd: number; usdcad: number; rate_date: string; source: string } | null;
+  entry_id: number; note: string; documents: BookDoc[];
+};
+export type GifiRow = { gifi: string; gifi_short?: string; label: string; account?: string; cents: number };
+export type CraPackage = {
+  fy: BookFy;
+  entity: { name: string; bn: string; incorporated: string; province: string };
+  currency: string;
+  t2: { required: boolean; why: string; form: string; form_why: string; due: string; schedules: string[]; gifi_short_eligible: boolean; gifi_short_note: string };
+  schedule_100: GifiRow[]; schedule_101: GifiRow[]; schedule_125: GifiRow[];
+  schedule_141: Record<string, unknown>;
+  t1044: { required: boolean; tests: { test: string; met: boolean; value_cents?: number; as_at?: string }[]; due: string; warning: string; note: string };
+  notes: { title: string; body: string }[];
+  generated: string; source: string;
+};
+
+export const Books = {
+  statements: (fy = "") => get<Statements>(`/foundation/statements${fy ? `?fy=${encodeURIComponent(fy)}` : ""}`),
+  invoices: () => get<{ items: BookInvoice[]; count: number; total_cad_cents: number; currency: string }>("/foundation/invoices"),
+  cra: (fy = "") => get<CraPackage>(`/foundation/cra${fy ? `?fy=${encodeURIComponent(fy)}` : ""}`),
+  verify: () => get<{ checks: BookCheck[]; ok: boolean }>("/foundation/books/verify"),
+  // Operator only. The figures are typed rather than parsed out of the PDF: in a PDF a space is
+  // usually positioning rather than a character, so a heuristic parser binds "Total" to the wrong
+  // number often enough to matter, and a bookkeeping total has to be right every time.
+  addInvoice: (fields: Record<string, string>, invoicePdf?: File, receiptPdf?: File) => {
+    const fd = new FormData();
+    Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
+    if (invoicePdf) fd.append("invoice_pdf", invoicePdf, invoicePdf.name);
+    if (receiptPdf) fd.append("receipt_pdf", receiptPdf, receiptPdf.name);
+    return postForm<{ ok: boolean; id: number; entry_id: number; cad_cents: number; documents: number }>("/studio/books/invoice", fd);
+  },
+};
+
 export const Funds = {
   finances: () => get<{ total_cents: number; buckets: Record<string, number>; recent: unknown[] }>("/foundation/finances"),
   // Donations are charged through the cart checkout (Cart/Checkout → course-checkout → Stripe), never a

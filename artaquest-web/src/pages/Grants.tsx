@@ -368,7 +368,7 @@ export default function Grants() {
 
       <p className="max-w-3xl text-[12px] leading-relaxed text-ink-3">
         Deadlines marked ≈ are estimated from prior cycles — always confirm on the funder's official page before applying.
-        Eligibility reflects the ArtaQuest Foundation as a Canadian registered charity; some funders fund only the platform / content work, not cash bursaries.
+        Eligibility reflects the ArtaQuest Foundation as a Canadian non-profit corporation WITHOUT charitable registration — several funders below require registered charity status, and some fund only the platform / content work rather than cash bursaries.
         Applications are reviewed by the foundation before any submission to a funder. Who has registered for each sponsor is public.
       </p>
     </div>

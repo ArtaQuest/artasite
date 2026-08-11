@@ -43,6 +43,7 @@ const ArtaRead = lazy(() => import("./pages/ArtaRead")); // read/translate/liste
 const Page = lazy(() => import("./pages/Page"));
 const Grants = lazy(() => import("./pages/Grants"));
 const Reserve = lazy(() => import("./pages/Reserve"));
+const Finances = lazy(() => import("./pages/Finances"));
 const Issues = lazy(() => import("./pages/Issues"));
 const Careers = lazy(() => import("./pages/Careers"));
 // The CEO posting (operator 2026-07-30) — its own URL so it can be linked and shared.
@@ -111,6 +112,7 @@ function langBasename(): string | undefined {
 // own <title> server-side, so they don't belong here — keep this in sync with STATIC_ROUTES.
 const ROUTE_TITLES: Record<string, string> = {
   "/about": "About", "/donate": "Donate",
+  "/finances": "The Foundation’s books",
   "/wallet": "Your wallet", "/faq-contact": "FAQ & contact", "/user-account": "Your account",
   "/developers": "Developers",
   "/my-library": "My Library",
@@ -166,6 +168,7 @@ const STATIC_ROUTES = new Set([
   "/", "/about", "/wallet", "/faq-contact", "/developers",
   "/my-library", "/library", "/ceo",
   "/user-account", "/login", "/donate", "/messages", "/meet", "/calendar",
+  "/finances",
   "/sponsors", "/offline", "/studio", "/console", "/fearometer",
   "/works", "/challenges", "/rankings", "/topics", "/lab",
   "/surveys", "/datasets", "/models", "/articles",
@@ -503,6 +506,8 @@ export default function App() {
           <Route path="/outreach/" element={<Navigate to="/sponsors" replace />} />
           <Route path="/reserve" element={<Reserve />} />
           <Route path="/reserve/" element={<Reserve />} />
+          <Route path="/finances" element={<Finances />} />
+          <Route path="/finances/" element={<Finances />} />
           <Route path="/issues" element={<Issues />} />
           <Route path="/issues/" element={<Issues />} />
           {/* /ceo is the canonical URL: a real top-level WP page, so it is a 200 to a crawler and

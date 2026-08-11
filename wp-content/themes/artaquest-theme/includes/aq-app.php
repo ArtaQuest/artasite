@@ -1390,6 +1390,12 @@ function aq_app_route_seo( $slug ) {
 				'Every Arta Coin is backed one-for-one by a milligram of real gold. This page shows the live price, the reserve, and the backing ratio — proof, not promises, refreshed continuously.',
 			),
 		),
+		'finances'    => array(
+			'The ' . $b . ' Foundation\'s books',
+			array(
+				'Every cent the Foundation has spent or received, as a double-entry ledger anyone can check: the statements, the invoice register with every supporting PDF, and the year-end return prepared straight from the numbers.',
+			),
+		),
 		'wallet'      => array(
 			'Your wallet',
 			array(
@@ -1547,7 +1553,7 @@ function aq_faq_items() {
 		array( 'What is Arta Coin (₳)?', "Arta Coin (₳) is ArtaQuest's currency. Each coin is a claim on one milligram of real gold, and the Reserve page publishes the live ratio of gold held to coins issued — so you can check the backing yourself instead of taking our word for it. A coin is worth the same in every country. You win coins by taking challenge pools, and you can buy or cash them out at the live gold rate from your Wallet." ),
 		array( 'Why is the donation in CAD?', 'The foundation banks in Canada, so checkout is denominated in Canadian dollars. Card payments convert your local currency automatically; Interac is for Canadian bank accounts.' ),
 		array( 'What can I do with Arta Coins?', 'Found or enter challenges, donate them to the member fund (which also earns you donor points), or cash them out for ordinary money at the live gold rate from your Wallet. Every coin is a claim on one milligram of gold; the live backing ratio is on the Reserve page.' ),
-		array( 'Can I get a tax receipt?', 'Every donation triggers an email confirmation that doubles as a record. For gifts above CAD 500 we issue a formal receipt on letterhead — email support@artaquest.org with your order number.' ),
+		array( 'Can I get a tax receipt?', 'Not an official one, and we would rather say so plainly than leave you to find out at tax time. ArtaQuest Foundation is a Canadian non-profit corporation, not a registered charity, and CRA does not permit a non-profit to issue official donation receipts — so a gift to us is not tax-deductible. Every donation does trigger an email confirmation you can keep as a record, and every cent of it appears in the public books at /finances.' ),
 		array( 'Can I get my donation back?', 'Donations are non-refundable in general (see the Refund Policy), except for duplicate or unauthorised payments. Coins minted for a refunded donation are reversed.' ),
 		array( 'What is a bursary for?', 'So that cost never decides who takes part. Through the Sponsors programme, donors earmark Arta Coins to a community, and bursaries draw on that fund. Where it stands today: the bursary form still covers the retired course fee, not a challenge entry, so it cannot pay a challenge fee yet — we would rather say so than send you to a form that cannot help. Every coin in the fund is public in the ledgers meanwhile.' ),
 		array( 'What proof of income do I need for a bursary?', 'One document is enough: a CRA Notice of Assessment, a government benefit letter (AISH, Alberta Works, Income Support, or equivalent), a credit rating report classifying your income as Low, or another means-tested document.' ),
@@ -1555,7 +1561,7 @@ function aq_faq_items() {
 		array( "What is ArtaQuest's position on AI?", 'An AI is trained to give you its single most likely answer — to collapse a world of possibilities into one. As a tool, that is powerful. As a substitute for thinking, it quietly narrows what people believe is possible, and rewards accepting the average answer over working one out. It also burns a great deal of energy. ArtaQuest was built in response — not against the technology, but for the human faculty it cannot replace: the ability to think for yourself, and to widen a question the machine has narrowed.' ),
 		array( 'Does ArtaQuest promote a particular ideology or worldview?', 'No. We do not advocate for any tradition, denomination, or political position, and we accept no funding that would pull us toward one. We bring you the best free knowledge we can find, present the strongest honest case for competing positions, and let you reach your own conclusion rather than handing you one. No fear-mongering, no hate speech, no propaganda.' ),
 		array( "Where does ArtaQuest's funding come from?", 'Donations. Submitting, checking and publishing are all free, and challenge pools are never touched: 100% of entry fees returns to the winning entrants. Every gift, every coin and every gold figure is in the open ledgers — see the live Reserve and the Data explorer.' ),
-		array( 'Does ArtaQuest have charitable status for tax receipts?', 'Not yet. We are a registered non-profit but have not yet obtained charitable registration from the Canada Revenue Agency (CRA). We are working toward it and will notify all donors when official tax receipts become available.' ),
+		array( 'Does ArtaQuest have charitable status for tax receipts?', 'No. We are incorporated as a Canadian non-profit and rely on the paragraph 149(1)(l) income-tax exemption; we have not obtained charitable registration from the Canada Revenue Agency, and until we do we cannot issue official donation receipts. If that ever changes, this page will say so first.' ),
 	);
 }
 
@@ -2046,6 +2052,9 @@ add_action(
 		// below; both need a real published page for the same reason, so heal both or the two halves
 		// of one document drift apart on a fresh site. Noindex via aq_app_noindex_page_slugs().
 		aq_ensure_app_page( 'certificate', 'Certificate of Participation' );
+		// The Foundation's books — the double-entry general ledger, the invoice register with every
+		// supporting PDF, and the year-end CRA package (React: pages/Finances.tsx, 2026-08-11).
+		aq_ensure_app_page( 'finances', 'The Foundation\'s books' );
 	},
 	20
 );
