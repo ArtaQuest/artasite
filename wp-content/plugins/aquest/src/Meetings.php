@@ -564,10 +564,14 @@ final class Meetings {
 		if ( ! $g ) { return [ 'ok' => true, 'already' => true, 'guests' => self::guest_cards( $mid ) ]; }
 
 		$wpdb->delete( Data::t( 'aq_meet_guests' ), [ 'meet_id' => $mid, 'user_id' => $target ] );
+		// REMOVED DIRECTLY, not through rooms/leave. That route only lets a non-self target be removed
+		// by the room's OWNER, and the owner of a meeting's room is whoever arrived first — so a host
+		// removing a guest from a room a different guest had bound got a silent 403, and this endpoint
+		// answered ok while the person stayed in the sealed room they had just been told they were out
+		// of. `left_room` is now the truth rather than the absence of an error.
 		$left = false;
-		if ( (int) $m['room_id'] > 0 && (int) $g['seated'] > 0 ) {
-			$r    = self::rooms( 'leave', [ 'id' => (int) $m['room_id'], 'user' => $target ] );
-			$left = empty( $r['error'] );
+		if ( (int) $m['room_id'] > 0 ) {
+			$left = self::unseat_from_room( (int) $m['room_id'], $target );
 		}
 		return [ 'ok' => true, 'removed' => $target, 'left_room' => $left, 'guests' => self::guest_cards( $mid ) ];
 	}
@@ -881,7 +885,7 @@ final class Meetings {
 			if ( (int) $m['room_id'] > 0 ) {
 				return self::open_result( $m, $uid, false );
 			}
-			$made = self::rooms( 'create', [ 'title' => (string) $m['title'], 'personal' => 0 ] );
+			$made = self::rooms( 'create', [ 'title' => (string) $m['title'], 'personal' => 0, 'managed' => 1 ] );
 			if ( ! empty( $made['error'] ) || empty( $made['room']['id'] ) ) {
 				return Rest::err( 'room_failed', $made['message'] ?? 'Could not open a room for this meeting.', 500 );
 			}
@@ -934,6 +938,43 @@ final class Meetings {
 	 * room can follow it with a seal. Idempotent, and called from the lobby poll by every present
 	 * key-holder, so a guest who registers a device key mid-meeting is seated within one tick.
 	 */
+	/**
+	 * Put a guest into the meeting's room, and take one out again.
+	 *
+	 * ArtaMeet does its own seating because the room is MANAGED: Rooms refuses member-initiated
+	 * invites there, which is exactly the point — a seated guest used to be able to call rooms/invite
+	 * on the meeting's room and put a stranger inside a sealed meeting, going around the host-only
+	 * rule by not using it. The checks below are the ones Rooms::invite makes for an ordinary room,
+	 * kept because they are about whether the seating can WORK, not about who is allowed to ask.
+	 *
+	 * Returns true when the member is in the room afterwards.
+	 */
+	private static function seat_in_room( $rid, $target ) {
+		$rid    = (int) $rid;
+		$target = (int) $target;
+		if ( ! $rid || ! $target ) { return false; }
+		if ( in_array( $target, self::room_member_ids( $rid ), true ) ) { return true; }
+		if ( count( self::room_member_ids( $rid ) ) >= Rooms::MAX_MEMBERS ) { return false; }
+		// Nobody can seal a room key to a member who has never registered a device key.
+		if ( ! self::has_device( $target ) ) { return false; }
+		return (bool) Data::insert( 'aq_room_members', [
+			'room_id' => $rid, 'user_id' => $target, 'role' => 'member', 'joined' => Data::now(),
+		] );
+	}
+
+	/** Take a member out of the meeting's room, and out of its key list with them. */
+	private static function unseat_from_room( $rid, $target ) {
+		global $wpdb;
+		$rid    = (int) $rid;
+		$target = (int) $target;
+		if ( ! $rid || ! $target ) { return false; }
+		$wpdb->delete( Data::t( 'aq_room_members' ), [ 'room_id' => $rid, 'user_id' => $target ] );
+		// Their sealed copy of the room key goes with them. It is worthless without their device key,
+		// but leaving it behind would say they are still expected in a room they are not in.
+		$wpdb->delete( Data::t( 'aq_room_keys' ), [ 'room_id' => $rid, 'user_id' => $target ] );
+		return ! in_array( $target, self::room_member_ids( $rid ), true );
+	}
+
 	public static function seat( $req ) {
 		if ( Rest::throttle( 'aq_meet_seat', 60, 60 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$uid = Rest::uid();
@@ -963,8 +1004,7 @@ final class Meetings {
 			// A guest with no device key is not a failure — they are simply early. Leave seated = 0 and
 			// the next tick retries; opening /meet/<id> registers a key on its own.
 			if ( ! self::has_device( $gid ) ) { $needs[] = $gid; continue; }
-			$r = self::rooms( 'invite', [ 'id' => $rid, 'user' => (string) $gid ] );
-			if ( ! empty( $r['error'] ) ) { $needs[] = $gid; continue; }
+			if ( ! self::seat_in_room( $rid, $gid ) ) { $needs[] = $gid; continue; }
 			Data::update( 'aq_meet_guests', [ 'seated' => $now ], [ 'meet_id' => $mid, 'user_id' => $gid ] );
 			$in_room[] = $gid;
 			$seated[]  = $gid;

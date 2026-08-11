@@ -37,7 +37,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Rooms {
 
-	const TABLE_VERSION = '1';
+	const TABLE_VERSION = '2';
 
 	/** Sealed room-key blob (base64) — a 32-byte key sealed with AES-GCM is tiny; this is slack. */
 	const KEY_CT_MAX = 2000;
@@ -71,6 +71,7 @@ final class Rooms {
 			owner_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			title VARCHAR(96) NOT NULL DEFAULT '',
 			personal TINYINT UNSIGNED NOT NULL DEFAULT 0,
+			managed TINYINT UNSIGNED NOT NULL DEFAULT 0,
 			key_epoch INT UNSIGNED NOT NULL DEFAULT 1,
 			last_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			last_at INT UNSIGNED NOT NULL DEFAULT 0,
@@ -131,13 +132,31 @@ final class Rooms {
 			KEY room_id_id (room_id, id)
 		) {$charset};" );
 
+		// A COLUMN ADDED TO AN EXISTING TABLE NEEDS AN EXPLICIT ALTER. dbDelta is documented to add
+		// one, and under the SQLite dev integration it simply does not — `managed` was written into
+		// the CREATE above, the version bumped, and the column never appeared. Chat::ensure_tables
+		// already carries this loop for the same reason; every column added after a table's first
+		// release belongs in it.
+		foreach ( [ [ 'aq_rooms', 'managed', 'TINYINT UNSIGNED NOT NULL DEFAULT 0' ] ] as [ $t, $col, $def ] ) {
+			$cols = (array) $wpdb->get_col( "SHOW COLUMNS FROM {$p}{$t}" );
+			if ( $cols && ! in_array( $col, $cols, true ) ) {
+				$wpdb->query( "ALTER TABLE {$p}{$t} ADD COLUMN `$col` $def" );
+			}
+		}
+
 		// SQLite (dev) can skip ALTERs dbDelta emits; verify rather than assume, and only record the
 		// version when the tables really exist — the same rule Chat::ensure_tables follows after a
 		// migration that claimed success it could not honour.
 		$missing = [];
-		foreach ( [ 'aq_rooms', 'aq_room_members', 'aq_room_keys', 'aq_room_msgs' ] as $t ) {
-			$cols = $wpdb->get_col( "SHOW COLUMNS FROM {$p}{$t}" );
-			if ( ! $cols ) { $missing[] = $t; }
+		foreach ( [ 'aq_rooms' => [ 'managed' ], 'aq_room_members' => [], 'aq_room_keys' => [], 'aq_room_msgs' => [] ] as $t => $want ) {
+			$cols = (array) $wpdb->get_col( "SHOW COLUMNS FROM {$p}{$t}" );
+			if ( ! $cols ) { $missing[] = $t; continue; }
+			// The version option is a "do not run this again" guard, so recording it is a promise the
+			// columns are there. A missing `managed` would leave every room unmanaged and silently
+			// reopen the hole this version was cut to close.
+			foreach ( $want as $col ) {
+				if ( ! in_array( $col, $cols, true ) ) { $missing[] = $t . '.' . $col; }
+			}
 		}
 		if ( $missing ) {
 			error_log( 'AQ Rooms: schema incomplete, not recording the version — missing ' . implode( ', ', $missing ) );
@@ -279,9 +298,14 @@ final class Rooms {
 			$title = $personal ? ( ( $u ? $u->display_name : 'My' ) . '’s room' ) : 'New room';
 		}
 		$now = Data::now();
+		// MANAGED rooms belong to something else — ArtaMeet binds one to a meeting at T-15m — and
+		// their membership is that thing's business, not their members'. Ordinary rooms are
+		// unaffected (managed defaults to 0), which is the point: the rules below only tighten for
+		// a room whose guest list somebody else is answerable for.
+		$managed = (int) Rest::p( $req, 'managed', 0 ) === 1;
 		$rid = Data::insert( 'aq_rooms', [
 			'owner_id' => $uid, 'title' => $title, 'personal' => $personal ? 1 : 0,
-			'key_epoch' => 1, 'created' => $now,
+			'managed' => $managed ? 1 : 0, 'key_epoch' => 1, 'created' => $now,
 		] );
 		if ( ! $rid ) { return Rest::err( 'server_error', 'Could not create the room.', 500 ); }
 		Data::insert( 'aq_room_members', [
@@ -327,6 +351,14 @@ final class Rooms {
 		$rid  = Rest::pint( $req, 'id', 0 );
 		$room = $rid ? self::room( $rid ) : null;
 		if ( ! $room || ! self::member( $rid, $uid ) ) { return Rest::err( 'not_found', 'No such room.', 404 ); }
+		// THE HOLE THIS CLOSES: a meeting's room is an ordinary room, so a guest who had been seated
+		// in it could call rooms/invite DIRECTLY and put a stranger inside a sealed meeting — walking
+		// straight around ArtaMeet's host-only invite rule by not using it. Membership of a managed
+		// room is decided by whatever manages it, which does its own seating rather than coming
+		// through here.
+		if ( (int) $room['managed'] === 1 ) {
+			return Rest::err( 'managed', 'This room belongs to a meeting — its guest list is the meeting’s.', 403 );
+		}
 		$who = (string) Rest::p( $req, 'user', '' );
 		$u   = ctype_digit( $who ) ? get_userdata( (int) $who ) : get_user_by( 'slug', sanitize_title( $who ) );
 		if ( ! $u ) { return Rest::err( 'no_member', 'No member with that username.', 404 ); }
@@ -364,6 +396,12 @@ final class Rooms {
 		$mine = $room ? self::member( $rid, $uid ) : null;
 		if ( ! $room || ! $mine ) { return Rest::err( 'not_found', 'No such room.', 404 ); }
 		$target = Rest::pint( $req, 'user', 0 ) ?: $uid;
+		// Leaving is always yours. Removing SOMEONE ELSE from a managed room is not: the room's owner
+		// is whoever happened to bind it first, which for a meeting is an accident of arrival order
+		// and no basis for authority over the guest list.
+		if ( $target !== $uid && (int) $room['managed'] === 1 ) {
+			return Rest::err( 'managed', 'This room belongs to a meeting — remove people from the meeting instead.', 403 );
+		}
 		if ( $target !== $uid && (int) $room['owner_id'] !== $uid ) {
 			return Rest::err( 'not_owner', 'Only the room’s owner can remove someone.', 403 );
 		}

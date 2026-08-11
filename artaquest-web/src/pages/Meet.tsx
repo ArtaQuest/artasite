@@ -419,7 +419,12 @@ function NewMeetingForm({ seatsMax, onDone, onClose }: {
         </Field>
       </div>
 
-      <Field label="Time zone" hint={start ? `That is $<span data-ay-skip="1">{longWhen(start)}</span> where you are` : undefined}>
+      {/* JSX, not a template literal. This was written as a backtick string containing JSX SOURCE, so
+          the form rendered the characters `$<span data-ay-skip="1">{longWhen(start)}</span>` at a
+          member scheduling a meeting. Field takes a ReactNode, and the skip wrapper is load-bearing:
+          a formatted date is a live value the i18n mesh would otherwise persist into the PUBLIC
+          translations table. */}
+      <Field label="Time zone" hint={start ? <>That is <span data-ay-skip="1">{longWhen(start)}</span> where you are</> : undefined}>
         <Select value={tz} onChange={setTz} label="Time zone" options={ZONES} />
       </Field>
 
