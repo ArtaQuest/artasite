@@ -28,14 +28,27 @@ const listByAuthor = (author: string, cursor?: number) =>
 
 // ── little pieces ─────────────────────────────────────────────────────────────
 
-function Stat({ label, value }: { label: string; value: React.ReactNode }) {
+/**
+ * One stated fact in the About grid: a glyph, a quiet label, and the value in reading weight.
+ *
+ * A LABEL, not a bare icon. The old header ran eight different kinds of fact together in one
+ * wrapping line — a status, a city, a list of languages, a birthday, two currencies and two dates —
+ * and a reader had to decode each from its glyph. On a page someone is reading to decide whether
+ * they want to know this person, that is the whole content of the page, so it gets named rows.
+ */
+function Fact({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col">
-      <span className="text-[22px] font-bold leading-none text-ink tabular-nums">{value}</span>
-      <span className="mt-1 text-[12.5px] text-ink-3">{label}</span>
+    <div className="flex min-w-0 items-start gap-2.5">
+      <span aria-hidden className="mt-0.5 shrink-0 text-yang">{icon}</span>
+      <span className="min-w-0">
+        <span className="block text-[11.5px] font-semibold uppercase tracking-wider text-ink-3">{label}</span>
+        <span className="mt-0.5 block text-[14.5px] leading-snug text-ink">{children}</span>
+      </span>
     </div>
   );
 }
+
+const FACT_SVG = { viewBox: "0 0 24 24", width: 16, height: 16, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
 
 /** Header placeholder while the profile payload loads — holds the layout, no jumps. */
 function HeaderSkeleton() {
@@ -287,123 +300,109 @@ export default function Profile() {
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6">
       {/* ── Identity header ── */}
       {!p ? <HeaderSkeleton /> : (
-        <header className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-          {/* The avatar carries the verified-nationality flag and the opt-in palm flip — both
-              already on the wire, neither previously passed through. */}
-          {/* priority: this is above the fold and is normally the profile page's LCP element —
-              lazy-loading it made the browser wait for layout before even starting the request. */}
-          <Avatar priority src={p.avatar} name={p.name} country={p.country} palm={p.palm || undefined}
-            className="h-24 w-24 shrink-0 text-2xl ring-2 ring-line" />
-          <div className="min-w-0 flex-1">
-            {/* THE REAL NAME IS THE HEADING. `p.name` is display_name — the handle a member is
-                addressed by, and on this platform frequently not a name at all ("Arash" for Arash
-                Ashrafnejad, "Eceergun10" for Ece Ergün). full_name is what the identity gate
-                collected and what the page's title, description and Person schema now say, so the
-                visible heading agreeing with them is both the honest label and the one a visitor
-                arriving from a name search expects to see. Falls back when a member has no full
-                name on record. */}
-            <h1 className="flex items-center gap-2 text-[28px] font-extrabold leading-tight tracking-tight">
-              <span className="truncate">{p.fullName?.trim() || p.name}</span>
-              {p.verified && <BlueCheck size={20} className="shrink-0" />}
-            </h1>
-            {/* THE HANDLE, which the profile never showed. It is how you are addressed here and the
-                only thing /messages/?with= accepts, so "what is this person's handle" was a question
-                their own profile could not answer. Shown whenever it adds something the heading has
-                not already said. */}
-            {(p.fullName?.trim() && p.fullName.trim() !== p.name ? p.name : p.slug) && (
-              <p className="mt-0.5 truncate text-[14px] text-ink-3">
-                @{p.slug}
-                {p.fullName?.trim() && p.fullName.trim() !== p.name && p.name !== p.slug && (
-                  <span className="text-ink-3"> · goes by {p.name}</span>
+        <header className="overflow-hidden rounded-card border border-line bg-space-2">
+          {/* THE COVER. Gold on one side, blue on the other, meeting in the middle — the platform's
+              own thesis rendered as a band, because gold and blue here are exact additive
+              complements that sum to white. No third hue, no photograph to moderate, and it costs
+              nothing to load. It is the one element that turns this page from a record into
+              somebody's page at a glance. */}
+          <div className="relative h-20 w-full sm:h-32" aria-hidden>
+            <div className="absolute inset-0 bg-gradient-to-r from-yang/80 via-yang/20 to-yin/80" />
+            <div className="absolute inset-0 bg-[radial-gradient(120%_150%_at_18%_-30%,rgba(255,255,255,0.22),transparent_62%)]" />
+            <div className="absolute inset-x-0 bottom-0 h-px bg-line" />
+          </div>
+
+          <div className="px-4 pb-5 sm:px-6">
+            {/* The avatar STRADDLES the cover's edge — the pattern every profile uses, because it
+                anchors the eye and makes the portrait the largest thing on the page. The ring is the
+                card's own background, so the circle punches cleanly out of the gradient in both
+                themes. */}
+            <div className="-mt-10 flex flex-col gap-3 sm:-mt-14 sm:flex-row sm:items-end sm:gap-5">
+              {/* priority: above the fold and normally this page's LCP element — lazy-loading it
+                  made the browser wait for layout before even starting the request. Carries the
+                  verified-nationality flag and the opt-in palm flip. */}
+              <Avatar priority src={p.avatar} name={p.name} country={p.country} palm={p.palm || undefined}
+                className="h-24 w-24 shrink-0 text-3xl ring-4 ring-space-2 sm:h-32 sm:w-32" />
+              <div className="min-w-0 flex-1 sm:pb-1">
+                {/* THE REAL NAME IS THE HEADING. `p.name` is display_name — the handle a member is
+                    addressed by, and frequently not a name at all ("Arash" for Arash Ashrafnejad).
+                    full_name is what the identity gate collected and what the page title, description
+                    and Person schema say, so the visible heading agreeing with them is both the
+                    honest label and the one a visitor arriving from a name search expects. */}
+                <h1 className="flex items-center gap-2 text-[26px] font-extrabold leading-tight tracking-tight sm:text-[30px]">
+                  <span className="truncate">{p.fullName?.trim() || p.name}</span>
+                  {p.verified && <BlueCheck size={20} className="shrink-0" />}
+                </h1>
+                {/* THE HANDLE. It is how you are addressed here and the only thing /messages/?with=
+                    accepts, so "what is this person's handle" was a question their own profile could
+                    not answer. Shown whenever it adds something the heading has not already said. */}
+                {(p.fullName?.trim() && p.fullName.trim() !== p.name ? p.name : p.slug) && (
+                  <p className="mt-0.5 truncate text-[14px] text-ink-3">
+                    @{p.slug}
+                    {p.fullName?.trim() && p.fullName.trim() !== p.name && p.name !== p.slug && (
+                      <span className="text-ink-3"> · goes by {p.name}</span>
+                    )}
+                  </p>
                 )}
-              </p>
-            )}
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-ink-3">
+              </div>
+              {/* The actions sit WITH the name rather than at the far end of a wide empty row, which
+                  is where a 1440px header had been putting them. */}
+              {isOwn ? (
+                <a href={localePath("/user-account/?settings=1")} className="shrink-0 self-start text-[13.5px] font-semibold text-ink-3 transition-colors hover:text-yang sm:self-auto sm:pb-1">
+                  Edit profile →
+                </a>
+              ) : isLoggedIn() ? (
+                /* Follow + Message. Until this existed the ONLY way to open a conversation was typing
+                   a member's exact @handle into the ArtaChat sidebar — this is the entry point the
+                   /messages/?with= deep link was always built for. */
+                <div className="flex shrink-0 flex-wrap gap-2 sm:pb-1">
+                  <Button type="button" onClick={toggleFollow} disabled={followBusy}
+                    variant={following ? "outline" : "primaryYin"}
+                    className="h-10 px-6 text-[14px] disabled:opacity-60">
+                    {following ? "Following" : "Follow"}
+                  </Button>
+                  <Button href={localePath(`/messages/?with=${encodeURIComponent(p.slug)}`)} variant="outline"
+                    className="h-10 px-5 text-[14px]" title="Send an encrypted message">
+                    Message
+                  </Button>
+                  <SendCoins slug={p.slug} name={p.fullName?.trim() || p.name} onSent={() => undefined} />
+                </div>
+              ) : (
+                <Button href={loginHref} variant="primaryYin" className="h-10 shrink-0 self-start px-6 text-[14px] sm:self-auto sm:pb-1">Follow</Button>
+              )}
+            </div>
+
+            {/* THE BIO, directly under the name where it is read. It used to sit below two rows of
+                counters and a wall of chips. */}
+            {p.bio && <p className="mt-4 max-w-2xl whitespace-pre-wrap text-[15px] leading-relaxed text-ink-2">{p.bio}</p>}
+
+            {/* STANDING + ACTIVITY. Kept as chips and kept together, because they are one category —
+                what this member has earned and when they were last around — and deliberately NOT
+                mixed in with the stated facts below, which are a different kind of claim entirely. */}
+            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-ink-3">
               {p.tier && <Pill className="px-3 py-0.5 text-[13px]">{p.tier}</Pill>}
               <span className="inline-flex items-center gap-1 rounded-pill bg-yang/15 px-3 py-0.5 font-semibold text-yang" title="Lifetime points">
                 <Points n={p.points} /> points
               </span>
               {/* THE WALLET, in the open. The whole coin ledger is already published — every entry of
                   it is downloadable from /data/ — so a balance was public in fact while being absent
-                  from the one page about this member, which is the worst of both: transparent to
-                  anyone who reads tables, opaque to everyone else. Blue, because points are gold and
-                  the two currencies must never read as one number (points are a lifetime score and
-                  are never spent; coins are money and move). */}
+                  from the one page about this member. Blue, because points are gold and the two
+                  currencies must never read as one number (points are a lifetime score and are never
+                  spent; coins are money and move). */}
               <span className="inline-flex items-center gap-1 rounded-pill bg-yin/15 px-3 py-0.5 font-semibold text-yin-ink"
                 title="Coins in their wallet — every entry in the coin ledger is public">
                 <Coins n={p.coins ?? 0} />
               </span>
               {p.joined && <span>Joined {p.joined}</span>}
               {/* Last seen, to the DAY — the server never records finer, because this database is
-                  published and an exact activity log for every member is not something anybody
-                  asked to publish. lastSeenLabel says only what that granularity supports; relAgo
-                  would render the same value as "9h ago" and invent precision. Omitted entirely
-                  when never recorded, rather than printed as "never". */}
+                  published and an exact activity log for every member is not something anybody asked
+                  to publish. lastSeenLabel says only what that granularity supports; relAgo would
+                  render the same value as "9h ago" and invent precision. */}
               {p.lastSeen ? <span>{lastSeenLabel(p.lastSeen)}</span> : null}
-              {/* Two facts the member STATED about themselves. Both omitted entirely when unset — no
-                  "Prefer not to say" on a public page, because a silent field and a field announcing
-                  its own silence are different things, and only one of them was asked for. The
-                  location is whatever they typed; it is never inferred from an IP address. */}
-              {relationshipLabel(p.relationship) ? (
-                <span className="inline-flex items-center gap-1.5" title="Relationship status, as stated by this member">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" aria-hidden>
-                    <path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9z" />
-                  </svg>
-                  {relationshipLabel(p.relationship)}
-                </span>
-              ) : null}
-              {/* Languages, resolved from the same registry the interface is translated into. Native
-                  name, because that is how LanguageSelector names a language and how a speaker
-                  recognises their own; each one in <bdi dir> with data-ay-skip so an RTL endonym
-                  (فارسی, العربية) cannot reorder the Latin line around it and the mesh does not try
-                  to translate a proper noun. Nothing at all when the member has said nothing. */}
-              {(p.languages?.length ?? 0) > 0 ? (
-                <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5" title="Languages this member says they speak">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                    <path d="M4 6h10M9 4v2c0 4-2.2 7-5 8" /><path d="M7 11c1.3 2.3 3.3 4 6 5" />
-                    <path d="M13 20l4-9 4 9M14.8 17h4.4" />
-                  </svg>
-                  {p.languages!.map((l, i) => (
-                    <span key={l.code}>
-                      <bdi dir={l.dir} data-ay-skip="1">{l.native}</bdi>{i < p.languages!.length - 1 ? "," : ""}
-                    </span>
-                  ))}
-                </span>
-              ) : null}
-              {p.location?.trim() ? (
-                <span className="inline-flex min-w-0 items-center gap-1.5" title="Where this member says they are">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" aria-hidden>
-                    <path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11z" /><circle cx="12" cy="10" r="2.6" />
-                  </svg>
-                  <span data-ay-skip="1" className="truncate">{p.location.trim()}</span>
-                </span>
-              ) : null}
             </div>
-            {/* Public identity facts. Every member states an exact date of birth when they join,
-                and ArtaQuest is radically transparent — the whole database is public — so the
-                birthday is shown here rather than hidden behind a table nobody reads. */}
-            {(() => {
-              // The DATE only — no derived age (operator 2026-07-27). Anyone who wants the number
-              // can do the subtraction; printing it turns a fact the member stated into a label
-              // the site puts on them, and it re-renders differently every birthday.
-              const born = fmtBirthday(p.birthday);
-              if (!born) return null;
-              return (
-                <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-ink-3">
-                  <span className="inline-flex items-center gap-1.5">
-                    {/* birthday-cake glyph, currentColor — no third accent */}
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
-                      strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                      <path d="M4 20h16v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2Zm0-3h16" />
-                      <path d="M12 12V8m0-4v1.5M8 12V9m8 3V9" />
-                    </svg>
-                    <span className="text-ink-2">Born {born}</span>
-                  </span>
-                </p>
-              );
-            })()}
-            <div className="mt-1.5 text-[13.5px] text-ink-3">
-              {/* Each count is a live control: tap it to open the respective list below. */}
+
+            {/* Each count is a live control: tap it to open the respective list below. */}
+            <div className="mt-2.5 text-[13.5px] text-ink-3">
               <button type="button" onClick={() => setListDir((d) => (d === "followers" ? null : "followers"))}
                 aria-expanded={listDir === "followers"} title="Show the followers list"
                 className="group -my-2 py-2 transition-colors hover:text-yang">
@@ -416,7 +415,7 @@ export default function Profile() {
                 <b className="text-ink-2 tabular-nums transition-colors group-hover:text-yang">{(p.stats?.following ?? 0).toLocaleString()}</b> following
               </button>
             </div>
-            {p.bio && <p className="mt-2.5 max-w-2xl text-[14.5px] leading-relaxed text-ink-2">{p.bio}</p>}
+
             {/* WHERE ELSE THEY ARE. Text, not brand logos: seven third-party marks would be seven
                 trademarks to keep current and the only place on this site with colours outside the
                 two. Every href was host-checked server-side (AQ\Auth::LINKS) before it was stored.
@@ -424,7 +423,7 @@ export default function Profile() {
                 markup a human-readable indexer reads; "nofollow ugc" because these are member-supplied
                 and there must be no ranking to farm by putting a link here. */}
             {p.links && Object.keys(p.links).length > 0 && (
-              <ul className="mt-2.5 flex flex-wrap items-center gap-1.5">
+              <ul className="mt-3 flex flex-wrap items-center gap-1.5">
                 {PROFILE_LINKS.filter(([k]) => p.links?.[k]).map(([k, label]) => (
                   <li key={k}>
                     <a href={p.links![k]} target="_blank" rel="me nofollow ugc noopener noreferrer"
@@ -442,33 +441,53 @@ export default function Profile() {
               </ul>
             )}
           </div>
-          {isOwn ? (
-            <a href={localePath("/user-account/?settings=1")} className="shrink-0 text-[13.5px] font-semibold text-ink-3 transition-colors hover:text-yang sm:ml-auto">
-              Edit profile →
-            </a>
-          ) : isLoggedIn() ? (
-            /* Follow + Message. Until now the ONLY way to open a conversation was typing a
-               member's exact @handle into the ArtaChat sidebar — this is the entry point the
-               /messages/?with= deep link was always built for. */
-            <div className="flex shrink-0 gap-2 sm:ml-auto">
-              <Button type="button" onClick={toggleFollow} disabled={followBusy}
-                variant={following ? "outline" : "primaryYin"}
-                className="h-10 px-6 text-[14px] disabled:opacity-60">
-                {following ? "Following" : "Follow"}
-              </Button>
-              <Button href={localePath(`/messages/?with=${encodeURIComponent(p.slug)}`)} variant="outline"
-                className="h-10 px-5 text-[14px]" title="Send an encrypted message">
-                Message
-              </Button>
-              <SendCoins slug={p.slug} name={p.fullName?.trim() || p.name} onSent={() => undefined} />
-            </div>
-          ) : (
-            <Button href={loginHref} variant="primaryYin" className="h-10 shrink-0 px-6 text-[14px] sm:ml-auto">Follow</Button>
-          )}
         </header>
       )}
 
       {/* ── Follower / following list (inline, opened from the counts above) ── */}
+      {/* ── WHAT THEY SAY ABOUT THEMSELVES ──
+          Every value here was typed or picked by this member: nothing is inferred, and nothing is
+          derived from an IP address or a header. Rows appear only when there is something to say —
+          a member who has filled none of this in gets no card at all, rather than a grid of blanks
+          advertising what they declined to answer. */}
+      {p && (relationshipLabel(p.relationship) || p.location?.trim() || (p.languages?.length ?? 0) > 0 || fmtBirthday(p.birthday)) ? (
+        <section className="grid gap-x-8 gap-y-5 rounded-card border border-line bg-space-2 px-5 py-5 sm:grid-cols-2 lg:grid-cols-4" aria-label="About">
+          {relationshipLabel(p.relationship) ? (
+            <Fact label="Relationship" icon={<svg {...FACT_SVG}><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9z" /></svg>}>
+              {relationshipLabel(p.relationship)}
+            </Fact>
+          ) : null}
+          {p.location?.trim() ? (
+            <Fact label="Lives in" icon={<svg {...FACT_SVG}><path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11z" /><circle cx="12" cy="10" r="2.6" /></svg>}>
+              <span data-ay-skip="1">{p.location.trim()}</span>
+            </Fact>
+          ) : null}
+          {(p.languages?.length ?? 0) > 0 ? (
+            /* Endonyms, because that is how LanguageSelector names a language and how a speaker
+               recognises their own. Each in <bdi dir> with data-ay-skip, or an RTL name (فارسی,
+               العربية) reorders the Latin punctuation around it and the translation mesh tries to
+               translate a proper noun. */
+            <Fact label="Speaks" icon={<svg {...FACT_SVG}><path d="M4 6h10M9 4v2c0 4-2.2 7-5 8" /><path d="M7 11c1.3 2.3 3.3 4 6 5" /><path d="M13 20l4-9 4 9M14.8 17h4.4" /></svg>}>
+              <span className="flex flex-wrap gap-x-1.5">
+                {p.languages!.map((l, i) => (
+                  <span key={l.code}>
+                    <bdi dir={l.dir} data-ay-skip="1">{l.native}</bdi>{i < p.languages!.length - 1 ? "," : ""}
+                  </span>
+                ))}
+              </span>
+            </Fact>
+          ) : null}
+          {/* The DATE only — no derived age (operator 2026-07-27). Anyone who wants the number can
+              do the subtraction; printing it turns a fact the member stated into a label the site
+              puts on them, and it re-renders differently every birthday. */}
+          {fmtBirthday(p.birthday) ? (
+            <Fact label="Born" icon={<svg {...FACT_SVG}><path d="M4 20h16v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2Zm0-3h16" /><path d="M12 12V8m0-4v1.5M8 12V9m8 3V9" /></svg>}>
+              {fmtBirthday(p.birthday)}
+            </Fact>
+          ) : null}
+        </section>
+      ) : null}
+
       {p && listDir && (
         <FollowPanel slug={p.slug} dir={listDir}
           count={listDir === "followers" ? followers : p.stats?.following ?? 0}
@@ -476,22 +495,22 @@ export default function Profile() {
       )}
 
       {/* ── Stats over their posts ── */}
-      <section className="grid grid-cols-2 gap-4 rounded-card border border-line bg-space-2 px-5 py-4" aria-label="Post stats">
-        {postsState === "loading" ? (
-          <div className="col-span-2 h-10 animate-pulse rounded bg-veil/[0.06]" aria-hidden />
-        ) : (
-          <>
-            <Stat label="posts" value={partial ? `${items.length.toLocaleString()}+` : items.length.toLocaleString()} />
-            <Stat label={partial ? "hearts on recent posts" : "hearts"}
-              value={<span className="inline-flex items-center gap-1.5 text-yang-ink"><HeartGlyph size={15} /> <span className="text-ink">{heartsTotal.toLocaleString()}</span></span>} />
-          </>
-        )}
-      </section>
-
       {/* ── The posts ── */}
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-[19px] font-bold tracking-tight">Posts</h2>
+          {/* The two counts, ON the heading they describe. They used to be a full-width bordered band
+              holding two numbers — on a 1440px page that is a thousand pixels of empty card to say
+              "3" and "0". Beside the word Posts they read as what they are: a caption. */}
+          {postsState !== "loading" && (
+            <span className="inline-flex items-center gap-2.5 text-[13px] text-ink-3">
+              <span><b className="tabular-nums text-ink-2">{partial ? `${items.length.toLocaleString()}+` : items.length.toLocaleString()}</b> {items.length === 1 && !partial ? "post" : "posts"}</span>
+              <span className="inline-flex items-center gap-1" title={partial ? "Hearts on the posts loaded so far" : "Hearts across every post"}>
+                <span className="text-yang-ink"><HeartGlyph size={13} /></span>
+                <b className="tabular-nums text-ink-2">{heartsTotal.toLocaleString()}</b>
+              </span>
+            </span>
+          )}
           {/* What they make, at a glance — one chip per kind across the loaded posts. */}
           {kinds.map((k) => (
             <Pill key={k} className={cx("px-2.5 py-0.5 text-[12px]", "text-ink-2")}>
