@@ -2074,13 +2074,17 @@ export type City = { name: string; country: string; admin1: string; lat: number;
 /** "Tehran, Iran" — what a person recognises. `admin1` is a GeoNames code and is never shown.
  *  Lives here rather than beside the picker because it formats an API type, and a non-component
  *  export in a .tsx file breaks Fast Refresh for the whole module. */
-export function cityLabel(c: Pick<City, "name" | "country">): string {
+export function cityLabel(c: Pick<City, "name" | "country" | "admin1">): string {
   let country = c.country;
   try {
     const dn = new Intl.DisplayNames([document.documentElement.lang || "en"], { type: "region" });
     country = dn.of(c.country.toUpperCase()) || c.country;
   } catch { /* older engine, or an unknown code — the ISO code is still meaningful */ }
-  return country ? `${c.name}, ${country}` : c.name;
+  // GeoNames admin1 is the STATE CODE where a country uses letters (US "MO", "MA") and a bare
+  // number where it does not (Tehran province is "26"). A number tells a reader nothing, so it is
+  // dropped — but without the letters, five American Springfields are five identical rows.
+  const region = c.admin1 && /^[A-Za-z]/.test(c.admin1) ? c.admin1 : "";
+  return [c.name, region, country].filter(Boolean).join(", ");
 }
 
 /** Place-of-birth type-ahead. Public: the gazetteer is reference data, not member data. */

@@ -154,7 +154,12 @@ export default function CitySelect({ value, onPick, onClear, id, required, inval
                     className={cx("flex min-h-11 w-full items-center gap-2 px-3.5 py-2 text-left transition-colors",
                       i === active ? "bg-veil/[0.08]" : "hover:bg-veil/[0.05]")}
                   >
-                    <span data-ay-skip="1" className="min-w-0 flex-1 truncate text-[14.5px] text-ink">{c.name}</span>
+                    <span data-ay-skip="1" className="min-w-0 flex-1 truncate text-[14.5px] text-ink">
+                      {c.name}
+                      {/* The state, ONLY where the code is letters — otherwise five Springfields in
+                          five different states are five identical rows a member cannot choose between. */}
+                      {c.admin1 && /^[A-Za-z]/.test(c.admin1) ? <span className="text-ink-3">, {c.admin1}</span> : null}
+                    </span>
                     <span data-ay-skip="1" className="shrink-0 text-[12.5px] text-ink-3">{REGION(c.country)}</span>
                   </button>
                 </li>
