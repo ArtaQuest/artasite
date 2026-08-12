@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import {
   ApiError, bookPage, bookRuleOff, bookRules, bookSetRule, bookSlots, bookTake,
@@ -6,8 +6,8 @@ import {
 } from "../lib/api";
 import { currentUser, isLoggedIn, localePath } from "../lib/wp";
 import {
-  Avatar, Button, EmptyState, ErrorNote, Field, Input, PageHero, Pill, Segmented,
-  Select, StatusNote, Textarea, cx,
+  Avatar, Button, EmptyState, ErrorNote, Field, IconButton, Input, LinkButton, PageHero, Pill,
+  Segmented, Select, SkeletonCard, StatusNote, Textarea, cx,
 } from "../components/ui";
 
 /**
@@ -19,7 +19,7 @@ import {
  *     whose page this is, what is offered and WHEN THAT PERSON IS FREE, with no account at all.
  *     That is the competitive part: somebody deciding whether to ask for your time should not have
  *     to register to find out whether you have any. Signing in is asked for once, at the moment a
- *     time is actually claimed — and the page says so before they invest a single click.
+ *     time is actually claimed — and the page says so three times before they invest a single click.
  *
  *   /book — the OWNER. Their own availability as a RULE (which days, which hours of THEIR day, how
  *     long, how much notice, how far ahead) and the one link they hand out.
@@ -34,17 +34,27 @@ import {
  * guests, which is why the success card can simply link to /meet/<id> and why ArtaCalendar and the
  * .ics feed carry a booking without knowing this page exists.
  *
- * ⚠️ TIMEZONES ARE THE WHOLE PROBLEM. Slots arrive as UTC instants and are rendered in the VIEWER's
- * zone with the zone NAMED — an unlabelled clock time is the wrong-zone bug wearing a disguise. The
- * owner's zone is shown too, and can be switched to, because "2pm his time" is what the visitor is
- * really agreeing to. The owner's own hours are stored as minutes from midnight IN THEIR ZONE and
- * are never converted on the way out: "I am free from two" is a statement about their afternoon,
- * and it has to survive their DST as well as yours.
+ * ⚠️ ONE REQUEST HOLDS THE WHOLE HORIZON. bookSlots answers with every free instant to the rule's
+ * horizon, so the month grid, the density bars, the "is there anything in September" question and
+ * the whole timezone switch are CLIENT-SIDE DERIVATIONS of one list. Never fetch per month, per
+ * zone, or on a zone change: the other booking pages click because their data is not already here.
  *
- * ⚠️ `data-ay-skip="1"` on the wrapper around every formatted date, every member name and every
- * member-authored word. Not for secrecy — but the i18n mesh walks document.body and PERSISTS what
- * it finds into the public aq_translations table, which would republish a member's wording and
- * machine-translate a clock time in place. Mark wrappers, never leaves.
+ * ⚠️ TIMEZONES ARE THE WHOLE PROBLEM. Slots arrive as UTC instants and are rendered in the chosen
+ * display zone with the zone NAMED — an unlabelled clock time is the wrong-zone bug wearing a
+ * disguise. The owner's zone is shown too, and can be switched to, because "2pm his time" is what
+ * the visitor is really agreeing to. The owner's own hours are stored as minutes from midnight IN
+ * THEIR ZONE and are never converted on the way out: "I am free from two" is a statement about
+ * their afternoon, and it has to survive their DST as well as yours. The INSTANT is the truth and
+ * the day key is derived from it, which is why a pick survives a zone switch that moves it onto a
+ * neighbouring date. We deliberately do NOT persist a zone — VIEWER_TZ is re-read on every load, so
+ * the "your saved zone has drifted" problem cannot exist here. Only the clock FORMAT is persisted.
+ *
+ * ⚠️ `data-ay-skip="1"` on the wrapper around every formatted date, every clock face, every zone
+ * id, every count, every member name and every member-authored word (title, blurb, the visitor's
+ * own note). Not for secrecy — but the i18n mesh walks document.body and PERSISTS what it finds
+ * into the public aq_translations table, which would republish a member's wording and
+ * machine-translate a clock time in place. Mark wrappers, never leaves: write
+ * `<span data-ay-skip="1">8</span> times free`, never `<span data-ay-skip="1">8 times free</span>`.
  */
 
 const VIEWER_TZ = (() => {
@@ -52,7 +62,8 @@ const VIEWER_TZ = (() => {
 })();
 
 /** Every IANA zone the engine knows, for the owner who lives somewhere other than the machine they
- *  happen to be typing on. Falls back to the two zones we can always name. */
+ *  happen to be typing on — and for the visitor reading this in an airport. Falls back to the two
+ *  zones we can always name. */
 const ZONES: string[] = (() => {
   try {
     const f = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf;
@@ -81,6 +92,23 @@ const WEEKDAY_NAMES = MON_FIRST.map((i) =>
    into a shared module all three should move together — one surface reading an instant differently
    from another is exactly the confusion the zone label exists to prevent. */
 
+/** "" = whatever the reader's locale does; "12"/"24" = the reader has said, and it then governs
+ *  EVERY clock face on the page (slot buttons, both zone clocks, the confirm restatement) and no
+ *  date part, which stays locale-shaped. */
+type Clock = "" | "12" | "24";
+const CLOCK_KEY = "aq_book_clock";
+/** What the locale itself does, so the visible switch can show the default as a chosen segment
+ *  rather than as two unlit buttons. */
+const LOCALE_24 = (() => {
+  try { return new Intl.DateTimeFormat(undefined, { hour: "numeric" }).resolvedOptions().hour12 === false; }
+  catch { return false; }
+})();
+
+/** hour12 and hourCycle fight each other when both are given, so give exactly one. */
+function hourOpts(c: Clock): Intl.DateTimeFormatOptions {
+  return c === "24" ? { hourCycle: "h23" } : c === "12" ? { hour12: true } : {};
+}
+
 function fmt(ts: number, opts: Intl.DateTimeFormatOptions, tz?: string): string {
   const d = new Date(Number(ts) * 1000);
   if (!Number.isFinite(d.getTime())) return "";
@@ -96,10 +124,15 @@ function zoneName(ts: number, tz: string): string {
   return parts.find((p) => p.type === "timeZoneName")?.value || "";
 }
 
-const clockOnly = (ts: number, tz: string) => fmt(ts, { hour: "2-digit", minute: "2-digit" }, tz);
+const clockOnly = (ts: number, tz: string, c: Clock = "") =>
+  fmt(ts, { hour: "2-digit", minute: "2-digit", ...hourOpts(c) }, tz);
+
+/** The whole instant, spelled out, with the zone NAMED — the one shape allowed on a confirmation. */
+const longInstant = (ts: number, tz: string, c: Clock = "") =>
+  fmt(ts, { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZoneName: "short", ...hourOpts(c) }, tz);
 
 /** YYYY-MM-DD for an instant in a named zone — en-CA writes that order natively, and it is what the
- *  day grouping and the Today/Tomorrow comparison are both keyed on. */
+ *  day grouping, the month grid and the Today comparison are all keyed on. */
 function dayKey(ts: number, tz: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" })
     .format(new Date(Number(ts) * 1000));
@@ -110,6 +143,62 @@ function dayKey(ts: number, tz: string): string {
 function dayHeading(key: string, withYear: boolean): string {
   const noon = Math.round(Date.parse(key + "T12:00:00Z") / 1000);
   return fmt(noon, { weekday: "short", day: "numeric", month: "short", ...(withYear ? { year: "numeric" } : {}) }, "UTC");
+}
+
+/** The same day at full length ("Monday, 17 August"). The phone keeps the short form above, so the
+ *  heading changes FORMAT between breakpoints and never size. */
+function dayHeadingLong(key: string): string {
+  const noon = Math.round(Date.parse(key + "T12:00:00Z") / 1000);
+  return fmt(noon, { weekday: "long", day: "numeric", month: "long" }, "UTC");
+}
+
+/* ── the month grid is a CALENDAR, not an instant ──
+   Every function below is civil-date arithmetic on UTC Dates: a grid of numbered squares has no
+   zone, and doing it on local Dates is how a month grid ends up starting on the wrong square for
+   readers west of Greenwich. */
+
+const monthOf = (key: string) => key.slice(0, 7);
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+function addMonths(month: string, n: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + n, 1));
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}`;
+}
+
+function addDays(key: string, n: number): string {
+  const [y, m, d] = key.split("-").map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d + n));
+  return `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-${pad2(t.getUTCDate())}`;
+}
+
+/** Monday-first weekday index of a day key, 0–6. */
+const weekIndex = (key: string) => (new Date(key + "T12:00:00Z").getUTCDay() + 6) % 7;
+
+function monthLabel(month: string, withYear = true): string {
+  const [y, m] = month.split("-").map(Number);
+  return fmt(Math.round(Date.UTC(y, m - 1, 1, 12) / 1000), { month: "long", ...(withYear ? { year: "numeric" } : {}) }, "UTC");
+}
+
+/** The 42 cells of a Monday-first month, '' for the leading and trailing blanks. ALWAYS six rows:
+ *  a five-row month and a six-row month must measure the same, or the times below them move. */
+function monthCells(month: string): string[] {
+  const [y, m] = month.split("-").map(Number);
+  const lead = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7;
+  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const out: string[] = [];
+  for (let i = 0; i < 42; i++) {
+    const d = i - lead + 1;
+    out.push(d >= 1 && d <= days ? `${month}-${pad2(d)}` : "");
+  }
+  return out;
+}
+
+/** Same day-of-month in another month, or that month's last day. */
+function sameDayIn(month: string, key: string): string {
+  const [y, m] = month.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return `${month}-${pad2(Math.min(Number(key.slice(8, 10)) || 1, last))}`;
 }
 
 /** The zone's offset in seconds at one instant, read back out of the formatter — the only source
@@ -139,9 +228,9 @@ function wallToTs(iso: string, min: number, tz: string): number {
 
 /** Minutes from midnight → the clock face the reader's locale writes ("2:00 pm" or "14:00"). Built
  *  on a fixed UTC day so the number is shown as itself, in nobody's zone. */
-function minuteClock(min: number): string {
+function minuteClock(min: number, c: Clock = ""): string {
   const m = Math.max(0, Math.min(1439, Math.round(min)));
-  return fmt(Math.round(Date.UTC(1970, 0, 1, 0, m) / 1000), { hour: "2-digit", minute: "2-digit" }, "UTC");
+  return fmt(Math.round(Date.UTC(1970, 0, 1, 0, m) / 1000), { hour: "2-digit", minute: "2-digit", ...hourOpts(c) }, "UTC");
 }
 
 /** The 24-hour "HH:MM" an <input type="time"> speaks, and back. Never shown to a reader — that is
@@ -169,6 +258,37 @@ function noticeLabel(h: number): string {
 function errText(e: unknown, fallback: string): string {
   return e instanceof ApiError && e.message ? e.message : fallback;
 }
+
+/* ───────────────────────── glyphs ─────────────────────────
+   Six line glyphs, drawn here. A dependency for six paths is still a dependency, and these have to
+   inherit `currentColor` so ArtaContrast can mute them with the text beside them. */
+
+const STROKE = { fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round" } as const;
+
+const ClockGlyph = ({ size = 16 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden className="mt-px shrink-0" {...STROKE}><circle cx="12" cy="12" r="9" /><path d="M12 7v5.2l3.2 1.9" /></svg>
+);
+const CameraGlyph = ({ size = 16 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden className="mt-px shrink-0" {...STROKE}><rect x="3" y="6" width="12" height="12" rx="3" /><path d="m15 11.2 5-3.2v8l-5-3.2z" /></svg>
+);
+const PeopleGlyph = ({ size = 16 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden className="mt-px shrink-0" {...STROKE}><circle cx="9" cy="8" r="3.2" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 6.2a3 3 0 0 1 0 5.6" /><path d="M17 14.6A5.4 5.4 0 0 1 20.5 19" /></svg>
+);
+const BellGlyph = ({ size = 16 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden className="mt-px shrink-0" {...STROKE}><path d="M18 9.5a6 6 0 1 0-12 0c0 4.5-2 5.5-2 5.5h16s-2-1-2-5.5" /><path d="M13.7 19a2 2 0 0 1-3.4 0" /></svg>
+);
+const CalGlyph = ({ size = 16 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden className="mt-px shrink-0" {...STROKE}><rect x="3.5" y="5.5" width="17" height="15" rx="3" /><path d="M8 3.5v4M16 3.5v4M3.5 10.5h17" /></svg>
+);
+const GlobeGlyph = ({ size = 14 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden className="shrink-0" {...STROKE}><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18" /></svg>
+);
+const CheckGlyph = ({ size = 28 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden className="shrink-0 text-yang" {...STROKE}><circle cx="12" cy="12" r="9" /><path d="m8 12.4 2.6 2.6L16 9.6" /></svg>
+);
+const ChevronGlyph = ({ back }: { back?: boolean }) => (
+  <svg viewBox="0 0 24 24" width={18} height={18} aria-hidden {...STROKE}><path d={back ? "m14 6-6 6 6 6" : "m10 6 6 6-6 6"} /></svg>
+);
 
 /* ───────────────────────── what a rule says ───────────────────────── */
 
@@ -202,63 +322,322 @@ function localWindow(r: BookRule, tz: string): string {
 
 /* ───────────────────────── sign-in ─────────────────────────
    The visitor half is readable signed out, so the ONE place a session is needed carries the return
-   trip with it: the slot they chose is in the URL before we leave, and the page picks it back up on
-   the way in. Coming back to the top of a page you had already worked your way down is the quiet
-   way to lose somebody. */
+   trip with it: the slot they chose is in the URL before we leave, their note is in sessionStorage
+   beside it, and the page picks both back up on the way in. Coming back to the top of a page you
+   had already worked your way down is the quiet way to lose somebody.
+
+   The NOTE is deliberately not a query parameter. A visitor's sentence about why they want to talk
+   is theirs, and a URL leaks into referrers, server logs and browser history. */
 
 function signInTo(path: string) {
   window.location.assign(`${localePath("/login/")}?redirect_to=${encodeURIComponent(path)}`);
+}
+
+const noteKey = (handle: string, t: number) => `book:${handle}:${t}`;
+
+function stashNote(handle: string, t: number, note: string) {
+  try {
+    if (note.trim()) window.sessionStorage.setItem(noteKey(handle, t), note);
+    else window.sessionStorage.removeItem(noteKey(handle, t));
+  } catch { /* a browser that refuses session storage loses a sentence, never the booking */ }
+}
+function takeNote(handle: string, t: number): string {
+  try { return window.sessionStorage.getItem(noteKey(handle, t)) || ""; } catch { return ""; }
+}
+function dropNote(handle: string, t: number) {
+  try { window.sessionStorage.removeItem(noteKey(handle, t)); } catch { /* nothing to clean up */ }
 }
 
 /* ───────────────────────── the visitor ───────────────────────── */
 
 type DayGroup = { key: string; starts: number[] };
 
-function OwnerLine({ owner, rule, tz }: { owner: BookOwner; rule: BookRule | null; tz: string }) {
-  if (!rule) return null;
-  const local = localWindow(rule, tz);
+/** The one place the grid's geometry is written down. Both the real grid and the skeleton use these,
+ *  so a loading month and a loaded month cannot measure differently:
+ *    1440px → 6 × 64 + 5 × 8 = 424px      393px → 6 × 52 + 5 × 4 = 332px
+ *  Cells are 83 × 64 on desktop and 43.6 × 52 on a phone — both well over the 40px floor. */
+const GRID_ROWS = "grid grid-cols-7 gap-1 md:gap-2";
+const CELL_H = "h-[52px] md:h-16";
+
+/** A text link is still a TARGET. Every quiet LinkButton on this page — "Not your zone?", "Choose
+ *  another time", "See September" — is a real step in the flow, and a 13px line of text is an 18px
+ *  box. These two classes carry the 40px floor to the controls that are text rather than buttons,
+ *  and are written once so an audit can measure the page rather than argue about it.
+ *  Segmented's own segments are h-8 in the shared component; this page needs them thumb-sized. */
+const LINK_HIT = "inline-flex min-h-[40px] items-center";
+const SEG_HIT = "[&>button]:h-10";
+
+function WeekdayStrip() {
   return (
-    <p className="text-[13px] leading-relaxed text-ink-3">
-      <span data-ay-skip="1">{owner.name}</span> takes bookings{" "}
-      <span data-ay-skip="1">{daysLabel(rule.days).toLowerCase()}</span>, between{" "}
-      <span data-ay-skip="1">{minuteClock(rule.from_min)}</span> and{" "}
-      <span data-ay-skip="1">{minuteClock(rule.to_min)}</span> in{" "}
-      <span data-ay-skip="1">{rule.tz}</span>
-      {local && <> — which is <span data-ay-skip="1">{local}</span> where you are</>}
-    </p>
+    // The row carries the skip, not the leaves: these are formatted names, and the mesh would
+    // otherwise persist seven abbreviations into the public translations table.
+    <div data-ay-skip="1" aria-hidden className={cx(GRID_ROWS, "mt-3 text-[11px] uppercase tracking-[0.14em] text-ink-3")}>
+      {MON_FIRST.map((i) => <span key={i} className="text-center">{WEEKDAY_NAMES[i]}</span>)}
+    </div>
+  );
+}
+
+/** The six-row skeleton — the FINAL geometry, so nothing moves when the data lands. */
+function GridSkeleton() {
+  return (
+    <div aria-hidden className={cx(GRID_ROWS, "mt-2")}>
+      {Array.from({ length: 42 }, (_, i) => (
+        <div key={i} className={cx(CELL_H, "animate-pulse rounded-card bg-veil/5")} />
+      ))}
+    </div>
+  );
+}
+
+function DayGrid({ month, dayMap, todayKey, horizonKey, selected, onChoose, onMonth }: {
+  month: string;
+  dayMap: Map<string, number[]>;
+  todayKey: string;
+  horizonKey: string;
+  selected: string;
+  onChoose: (key: string) => void;
+  onMonth: (m: string) => void;
+}) {
+  const cells = useMemo(() => monthCells(month), [month]);
+  const [focusKey, setFocusKey] = useState(selected || cells.find(Boolean) || "");
+  // Focus is moved ONLY when the keyboard asked for it. A grid that focuses itself on every re-render
+  // steals the caret from whatever the member was actually typing in.
+  const want = useRef("");
+  const boxes = useRef<Record<string, HTMLElement | null>>({});
+
+  // The roving stop follows the month and the selection; the keyboard then moves it independently,
+  // which is why it is state rather than a derivation.
+  useEffect(() => {
+    setFocusKey((k) => (k && monthOf(k) === month ? k
+      : selected && monthOf(selected) === month ? selected
+      : cells.find(Boolean) || ""));
+  }, [month, selected, cells]);
+
+  useEffect(() => {
+    if (!want.current) return;
+    const el = boxes.current[want.current];
+    want.current = "";
+    el?.focus();
+  }, [focusKey, month]);
+
+  // The busiest day in THIS month is the density bar's full mark, so the bars compare days a visitor
+  // is actually looking at rather than against a horizon they cannot see.
+  const busiest = useMemo(() => {
+    let n = 0;
+    for (const key of cells) if (key) n = Math.max(n, dayMap.get(key)?.length || 0);
+    return n;
+  }, [cells, dayMap]);
+
+  function move(to: string) {
+    if (!to) return;
+    // Clamped by the RULE — today at one end, the horizon at the other — so the keyboard can never
+    // walk into a month that cannot be booked.
+    const next = to < todayKey ? todayKey : to > horizonKey ? horizonKey : to;
+    want.current = next;
+    if (monthOf(next) !== month) onMonth(monthOf(next));
+    setFocusKey(next);
+  }
+
+  /** The whole keyboard contract of a month grid, as a lookup: a day, a week, the ends of the week,
+   *  a month. Anything else belongs to the page — Tab must still leave, and Escape must still reach
+   *  the handler that gives a picked time back. */
+  function keyTarget(key: string, k: string): string {
+    switch (key) {
+      case "ArrowLeft": return addDays(k, -1);
+      case "ArrowRight": return addDays(k, 1);
+      case "ArrowUp": return addDays(k, -7);
+      case "ArrowDown": return addDays(k, 7);
+      case "Home": return addDays(k, -weekIndex(k));
+      case "End": return addDays(k, 6 - weekIndex(k));
+      case "PageUp": return sameDayIn(addMonths(month, -1), k);
+      case "PageDown": return sameDayIn(addMonths(month, 1), k);
+      default: return "";
+    }
+  }
+
+  function onKey(e: KeyboardEvent<HTMLDivElement>) {
+    const k = focusKey;
+    if (!k) return;
+    const next = keyTarget(e.key, k);
+    if (!next) return;
+    e.preventDefault();
+    move(next);
+  }
+
+  return (
+    <div role="grid" aria-label="Days" className={cx(GRID_ROWS, "mt-2")} onKeyDown={onKey}>
+      {[0, 1, 2, 3, 4, 5].map((row) => (
+        // `contents` keeps one CSS grid for the geometry while giving assistive tech real rows.
+        <div key={row} role="row" className="contents">
+          {cells.slice(row * 7, row * 7 + 7).map((key, i) => {
+            // A blank still occupies a CELL. Without the height the sixth row of a five-row month
+            // collapses to nothing and the block measures 360px instead of 424 — which moves every
+            // time below it as the visitor pages between months. Measured, not assumed.
+            if (!key) return <div key={`b${row}-${i}`} aria-hidden="true" className={CELL_H} />;
+            const free = dayMap.get(key)?.length || 0;
+            const on = key === selected;
+            const isToday = key === todayKey;
+            const roving = key === focusKey ? 0 : -1;
+            const setRef = (el: HTMLElement | null) => { boxes.current[key] = el; };
+            if (!free) {
+              // NOT decorated. Only availability gets a border, a fill or a bar, so the eye lands on
+              // what can be done rather than on what cannot — no grey-out, no strike-through.
+              return (
+                <div key={key} role="gridcell" aria-disabled="true" tabIndex={roving} ref={setRef}
+                  {...(isToday ? { "aria-current": "date" as const } : {})}
+                  className={cx("grid place-items-center rounded-card text-[15px] font-normal tabular-nums text-ink-3 outline-none md:text-[17px]",
+                    CELL_H, isToday && "ring-1 ring-inset ring-yin-light/60")}>
+                  {/* The numeral is the DECORATION and the sr-only line is the NAME: a reader who
+                      cannot see which column a square is in gets the weekday, not a bare "17". The
+                      formatted date is skip-wrapped, the words beside it are not. */}
+                  <span aria-hidden data-ay-skip="1">{Number(key.slice(8, 10))}</span>
+                  <span className="sr-only"><span data-ay-skip="1">{dayHeadingLong(key)}</span> — nothing free</span>
+                </div>
+              );
+            }
+            const pct = busiest ? Math.max(12, Math.round((free / busiest) * 100)) : 0;
+            return (
+              <button key={key} type="button" role="gridcell" ref={setRef} tabIndex={roving}
+                aria-selected={on} {...(isToday ? { "aria-current": "date" as const } : {})}
+                onClick={() => onChoose(key)}
+                className={cx("flex flex-col items-center justify-center gap-1.5 rounded-card border text-ink transition-colors duration-150 outline-none",
+                  CELL_H,
+                  on ? "border-yang bg-yang text-on-accent" : "border-line bg-space-2 hover:border-yin-light focus-visible:border-yin-light",
+                  // Blue marks where you STAND, gold marks what you CHOSE. The two brand colours never
+                  // do the same job, and no third mark is invented for "today".
+                  isToday && !on && "ring-1 ring-inset ring-yin-light/60")}>
+                <span aria-hidden data-ay-skip="1" className="text-[15px] font-semibold tabular-nums md:text-[17px]">{Number(key.slice(8, 10))}</span>
+                {/* A 3px METER, not a state: how much room this day has, so a visitor scanning a
+                    five-hour window can see where the space is without opening four days. */}
+                <span aria-hidden className={cx("h-[3px] w-6 overflow-hidden rounded-pill md:w-8", on ? "bg-on-accent/25" : "bg-veil/10")}>
+                  <span className={cx("block h-full rounded-pill", on ? "bg-on-accent" : "bg-yang/50")} style={{ width: `${pct}%` }} />
+                </span>
+                <span className="sr-only">
+                  <span data-ay-skip="1">{dayHeadingLong(key)}</span>, <span data-ay-skip="1">{free}</span> times free
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** The type chooser. One offer is a heading; several are a vertical radiogroup of full rows — never
+ *  a row of gold pills, which fought the day cells for the same colour and the same meaning. */
+function TypeChooser({ offered, current, onPick }: { offered: BookRule[]; current: BookRule | null; onPick: (slug: string) => void }) {
+  if (offered.length < 2) return null;
+  return (
+    <div role="radiogroup" aria-label="What kind of meeting" className="flex flex-col gap-2">
+      {offered.map((t) => {
+        const on = current?.slug === t.slug;
+        return (
+          <button key={t.slug} type="button" role="radio" aria-checked={on} onClick={() => onPick(t.slug)}
+            className={cx("flex min-h-[56px] w-full items-center justify-between gap-3 rounded-field border p-3 text-left transition-colors duration-150",
+              on ? "border-yang bg-yang/12" : "border-line hover:border-yin-light")}>
+            <span className="min-w-0 text-[14px] font-semibold text-ink" data-ay-skip="1">{t.title}</span>
+            <span className="shrink-0 text-[12.5px] text-ink-3" data-ay-skip="1">{durationLabel(Number(t.minutes) || 30)}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** What the meeting actually IS — the five facts a stranger needs and today's page never told them.
+ *  `seats` in particular is filled in by every owner and has never been shown to a visitor. */
+function MetaList({ type, className }: { type: BookRule; className?: string }) {
+  const seats = Number(type.seats) || 2;
+  const notice = Number(type.notice_h) || 0;
+  const horizon = Number(type.horizon_d) || 21;
+  return (
+    <ul className={cx("flex flex-col gap-2 text-[13px] text-ink-2", className)}>
+      <li className="flex items-start gap-2.5"><span className="text-ink-3"><ClockGlyph /></span>
+        <span data-ay-skip="1">{durationLabel(Number(type.minutes) || 30)}</span></li>
+      <li className="flex items-start gap-2.5"><span className="text-ink-3"><CameraGlyph /></span>
+        <span>A video call on ArtaMeet, encrypted end to end</span></li>
+      <li className="flex items-start gap-2.5"><span className="text-ink-3"><PeopleGlyph /></span>
+        <span>{seats <= 2 ? "Just the two of you" : <>Up to <span data-ay-skip="1">{seats}</span> people</>}</span></li>
+      {notice > 0 && (
+        <li className="flex items-start gap-2.5"><span className="text-ink-3"><BellGlyph /></span>
+          <span>Book at least <span data-ay-skip="1">{noticeLabel(notice)}</span> ahead</span></li>
+      )}
+      <li className="flex items-start gap-2.5"><span className="text-ink-3"><CalGlyph /></span>
+        <span>Open for the next <span data-ay-skip="1">{horizon} days</span></span></li>
+    </ul>
+  );
+}
+
+function HowRows({ className }: { className?: string }) {
+  const rows: { label: string; body: string }[] = [
+    { label: "You pick, they're told", body: "It becomes an ordinary meeting straight away — nobody has to write back" },
+    { label: "Nobody sees their diary", body: "You can see when they're free, never what they're doing" },
+    { label: "You'll need an account", body: "Free, asked for once, at the last step" },
+  ];
+  return (
+    <section className={cx("rounded-card border border-line bg-space-2 p-4", className)} aria-label="How this goes">
+      <h2 className="text-[14px] font-semibold text-ink">How this goes</h2>
+      <ul className="mt-3 flex flex-col gap-3">
+        {rows.map((r) => (
+          <li key={r.label}>
+            <p className="text-[13px] font-semibold text-ink">{r.label}</p>
+            <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-3">{r.body}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
 function VisitorPage({ handle }: { handle: string }) {
   // Read ONCE, at mount: after a sign-in trip this is a fresh page load, and these are the crumbs
-  // that trip left behind.
+  // that trip left behind — the slot in the address bar, the note beside it in session storage.
   const [entry] = useState(() => {
     const sp = new URLSearchParams(typeof window === "undefined" ? "" : window.location.search);
-    return { type: sp.get("type") || "", t: Number(sp.get("t")) || 0 };
+    const t = Number(sp.get("t")) || 0;
+    return { type: sp.get("type") || "", t, note: t ? takeNote(handle, t) : "" };
   });
 
   const [owner, setOwner] = useState<BookOwner | null>(null);
   const [types, setTypes] = useState<BookRule[] | null>(null);
   const [pageErr, setPageErr] = useState("");
   const [typeSlug, setTypeSlug] = useState(entry.type);
-  const [showTheirs, setShowTheirs] = useState(false);
+  const [displayTz, setDisplayTz] = useState(VIEWER_TZ);
+  const [zonePicker, setZonePicker] = useState(false);
+  const [clock, setClock] = useState<Clock>(() => {
+    try { const v = window.localStorage.getItem(CLOCK_KEY); return v === "12" || v === "24" ? v : ""; } catch { return ""; }
+  });
   const [starts, setStarts] = useState<number[] | null>(null);
+  // Instants this page HAD on screen that a re-read no longer offers. Held separately from `starts`
+  // because they are no longer free and must not colour a density bar or count towards a day.
+  const [vanished, setVanished] = useState<number[]>([]);
   const [slotsFailed, setSlotsFailed] = useState(false);
+  const [month, setMonth] = useState(() => monthOf(dayKey(Math.round(Date.now() / 1000), VIEWER_TZ)));
   const [day, setDay] = useState("");
   const [picked, setPicked] = useState(0);
-  const [allDays, setAllDays] = useState(false);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(entry.note);
+  const [noteOpen, setNoteOpen] = useState(!!entry.note);
   const [busy, setBusy] = useState(false);
   const [takeErr, setTakeErr] = useState("");
   const [gone, setGone] = useState(false);
-  const [booked, setBooked] = useState<{ id: number; start: number } | null>(null);
-  // Read once and ticked, never called during a render: "Today" has to stop meaning today when
+  const [booked, setBooked] = useState<{ id: number; start: number; note: string } | null>(null);
+  // Read once and ticked, never called during a render: "today" has to stop meaning today when
   // midnight passes under an open page, and a clock read mid-render is a different answer every
-  // time React happens to re-run the component.
+  // time React happens to re-run the component. It also drives both live zone clocks.
   const [now, setNow] = useState(() => Math.round(Date.now() / 1000));
   const seq = useRef(0);
   const restored = useRef(false);
+  // What the times region is showing right now, so a re-read can diff against it. A ref rather than
+  // state: it is read inside the fetch callback and must never itself cause a render.
+  const shownRef = useRef<number[]>([]);
   const confirmBtn = useRef<HTMLButtonElement | null>(null);
+  const timesHead = useRef<HTMLHeadingElement | null>(null);
+  const timesBox = useRef<HTMLDivElement | null>(null);
+  const noteBox = useRef<HTMLTextAreaElement | null>(null);
+  const doneHead = useRef<HTMLHeadingElement | null>(null);
+  // The first selection is a PRESELECTION, and the restore trip owns its own focus — neither should
+  // yank the caret to the times heading.
+  const skipFocus = useRef(true);
 
   useEffect(() => {
     const t = window.setInterval(() => setNow(Math.round(Date.now() / 1000)), 60000);
@@ -279,31 +658,48 @@ function VisitorPage({ handle }: { handle: string }) {
     return () => { stop = true; };
   }, [handle]);
 
-  const type = useMemo(() => {
-    const list = (types || []).filter((t) => Number(t.active) !== 0);
-    return list.find((t) => t.slug === typeSlug) || list[0] || null;
-  }, [types, typeSlug]);
+  const offered = useMemo(() => (types || []).filter((t) => Number(t.active) !== 0), [types]);
+  const type = useMemo(() => offered.find((t) => t.slug === typeSlug) || offered[0] || null, [offered, typeSlug]);
 
-  const loadSlots = useCallback(() => {
+  /**
+   * Read the whole horizon.
+   *
+   * `quiet` is the difference between a FIRST read and a RE-read. A first read has nothing to
+   * protect, so it blanks to the skeleton. A re-read happens because a take was just refused —
+   * almost always because somebody else got there first — and blanking then would sweep the whole
+   * day away and drop the visitor back at a fresh grid holding the news that something went wrong
+   * but not which thing. A quiet read leaves the times exactly where they are and lets the diff
+   * below mark the one that has gone.
+   */
+  const loadSlots = useCallback((quiet = false) => {
     if (!type) return;
     const mine = ++seq.current;
     const from = Math.round(Date.now() / 1000);
     // Ask for the rule's own horizon and let the server clamp it. The window is computed here, once
     // per load, rather than from a ticking clock — a tick must never re-fetch the grid out from
-    // under a hand that is already reaching for it.
+    // under a hand that is already reaching for it. ONE call covers the whole page: every month,
+    // every zone and every density bar is derived from this list.
     const to = from + Math.max(1, Math.min(90, Number(type.horizon_d) || 21)) * 86400;
-    setStarts(null);
+    if (!quiet) { setStarts(null); setVanished([]); }
     setSlotsFailed(false);
     bookSlots({ user: handle, type: type.slug, from, to })
-      .then((r) => { if (mine === seq.current) setStarts(r.starts); })
+      .then((r) => {
+        if (mine !== seq.current) return;
+        // Anything the visitor could see a moment ago and the server no longer offers. It stays on
+        // screen, disabled and labelled, rather than disappearing from under a cursor that was
+        // already travelling towards it — the list must never renumber itself mid-reach.
+        if (quiet) {
+          const fresh = new Set(r.starts);
+          setVanished(shownRef.current.filter((ts) => !fresh.has(ts)));
+        }
+        setStarts(r.starts);
+      })
       // A FAILED request is not an empty diary. Falling through to "no free times" would tell a
       // visitor this person is booked solid on exactly the request that never came back.
       .catch(() => { if (mine === seq.current) { setStarts(null); setSlotsFailed(true); } });
   }, [handle, type]);
 
   useEffect(() => { loadSlots(); }, [loadSlots]);
-
-  const displayTz = showTheirs && owner?.tz ? owner.tz : VIEWER_TZ;
 
   const groups = useMemo<DayGroup[]>(() => {
     const out: DayGroup[] = [];
@@ -316,19 +712,27 @@ function VisitorPage({ handle }: { handle: string }) {
     return out;
   }, [starts, displayTz]);
 
+  const dayMap = useMemo(() => new Map(groups.map((g) => [g.key, g.starts])), [groups]);
+  const monthsWithSlots = useMemo(() => new Set(groups.map((g) => monthOf(g.key))), [groups]);
+
   // Pick the slot the sign-in trip was for, once, as soon as there is a grid to find it in.
   useEffect(() => {
     if (restored.current || !entry.t || !starts) return;
     restored.current = true;
+    skipFocus.current = true;
+    const key = dayKey(entry.t, displayTz);
+    setDay(key);
     if (starts.includes(entry.t)) {
       setPicked(entry.t);
       // Focus rather than scroll: focus takes the keyboard there as well as the eye, and a member
-      // who signed in with a keyboard is exactly who this matters to.
+      // who signed in with a keyboard is exactly who this matters to. One press finishes.
       window.requestAnimationFrame(() => confirmBtn.current?.focus());
     } else {
+      // The slot died while they were signing in. Keep the same DAY selected so its neighbours are
+      // already on screen, and never pick one on their behalf.
       setGone(true);
     }
-  }, [entry.t, starts]);
+  }, [entry.t, starts, displayTz]);
 
   // Keep the chosen slot in the address bar. It is what makes a sign-in trip — or a reload, or a
   // link sent to a colleague — come back to the same time rather than to the top of the page.
@@ -341,296 +745,607 @@ function VisitorPage({ handle }: { handle: string }) {
   }, [type, picked]);
 
   const todayKey = dayKey(now, displayTz);
-  const tomorrowKey = dayKey(now + 86400, displayTz);
-  const activeKey = picked ? dayKey(picked, displayTz) : (day || groups[0]?.key || "");
-  const active = groups.find((g) => g.key === activeKey) || groups[0] || null;
-  const shownDays = allDays ? groups : groups.slice(0, 10);
+  const horizonD = Math.max(1, Math.min(90, Number(type?.horizon_d) || 21));
+  const horizonKey = dayKey(now + horizonD * 86400, displayTz);
+  // The instant is the truth; the day is derived from it. That is what lets a zone switch move a
+  // pick onto a neighbouring date without losing it. With nothing chosen the nearest open day is
+  // already selected — we hold the whole horizon, so a mandatory first click would be theatre.
+  const activeKey = (picked ? dayKey(picked, displayTz) : day) || groups[0]?.key || "";
+  const active = dayMap.get(activeKey) || null;
+  const effClock: "12" | "24" = clock || (LOCALE_24 ? "24" : "12");
+
+  /** The times actually rendered for the chosen day: what is free, plus anything that has GONE since
+   *  this visitor last looked, folded back in at its own place in the day. The set of free instants
+   *  is what decides which of the two a button is. */
+  const freeSet = useMemo(() => new Set(starts || []), [starts]);
+  const dayTimes = useMemo(() => {
+    if (!activeKey) return [];
+    const dead = vanished.filter((ts) => dayKey(ts, displayTz) === activeKey && !freeSet.has(ts));
+    return dead.length ? [...(active || []), ...dead].sort((a, b) => a - b) : (active || []);
+  }, [active, vanished, activeKey, displayTz, freeSet]);
+
+  // The diff a quiet re-read runs is against what was ON SCREEN, so record that and nothing wider.
+  useEffect(() => { shownRef.current = dayTimes.filter((ts) => freeSet.has(ts)); }, [dayTimes, freeSet]);
+
+  // The browsed month always contains the chosen day — including after a zone switch has moved that
+  // instant onto a neighbouring date, and after the sign-in trip restored one.
+  useEffect(() => { if (activeKey) setMonth(monthOf(activeKey)); }, [activeKey]);
+
+  // Keyed on the DAY, never fired from a one-shot ref: a scroll that works exactly once and then
+  // silently stops is the single most-reported bug in every other booking page.
+  useEffect(() => {
+    if (!activeKey) return;
+    if (skipFocus.current) { skipFocus.current = false; return; }
+    const h = timesHead.current;
+    if (!h) return;
+    h.focus({ preventScroll: true });
+    const still = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Scroll the times REGION, not the heading. `nearest` on the heading alone satisfies itself the
+    // moment its top edge clears the fold — measured on a 393×852 phone that leaves the heading on
+    // the last 16px of the screen with every time button still below it, which is a scroll that
+    // technically ran and showed the visitor nothing.
+    (timesBox.current || h).scrollIntoView({ block: "nearest", behavior: still ? "auto" : "smooth" });
+  }, [activeKey]);
+
+  // Escape gives the time back. A picked slot is a commitment on screen, and there has to be a way
+  // out of it that is not "find the small grey link".
+  useEffect(() => {
+    if (!picked) return;
+    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === "Escape") { setPicked(0); setTakeErr(""); } };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [picked]);
+
+  function setClockPref(v: "12" | "24") {
+    setClock(v);
+    try { window.localStorage.setItem(CLOCK_KEY, v); } catch { /* a refused store costs a preference, not a booking */ }
+  }
 
   function chooseDay(key: string) {
     setDay(key);
     setTakeErr("");
+    setGone(false);
+    // "Taken" is news about the day you were looking at, not a permanent label. Moving on clears it.
+    if (vanished.length) setVanished([]);
     // Their pick lives on another day; keeping it selected while its times are off screen is how a
     // person ends up confirming a slot they can no longer see.
     if (picked && dayKey(picked, displayTz) !== key) setPicked(0);
   }
 
+  function openNote() {
+    setNoteOpen(true);
+    // NEVER on a coarse pointer: raising the keyboard over the bar a visitor has just tapped hides
+    // the very button they were reaching for.
+    const coarse = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+    if (!coarse) window.requestAnimationFrame(() => noteBox.current?.focus());
+  }
+
   async function take() {
     if (!picked || !type) return;
     const back = `${window.location.pathname}?type=${encodeURIComponent(type.slug)}&t=${picked}`;
-    if (!isLoggedIn()) { signInTo(back); return; }
+    if (!isLoggedIn()) { stashNote(handle, picked, note); signInTo(back); return; }
     setBusy(true);
     setTakeErr("");
     try {
       const r = await bookTake({ user: handle, type: type.slug, start: picked, note });
-      setBooked({ id: Number(r.meet?.id || r.id || 0), start: picked });
+      dropNote(handle, picked);
+      setBooked({ id: Number(r.meet?.id || r.id || 0), start: picked, note });
       setPicked(0);
       setNote("");
     } catch (e) {
       // The commonest refusal by far is that somebody took it while this page was open, so the
       // window is re-read as part of the failure rather than left showing a slot that has gone.
       setTakeErr(errText(e, "That time couldn’t be taken — it may have just gone. Here is what is still free."));
-      loadSlots();
+      // QUIET: the day stays exactly where it is and the slot that went is marked in place, rather
+      // than the whole grid blanking to a skeleton and coming back one button shorter.
+      loadSlots(true);
     } finally {
       setBusy(false);
     }
   }
 
+  // Focus the confirmation, not the top of the page: the one thing that changed is what should be
+  // read out.
+  useEffect(() => { if (booked) window.requestAnimationFrame(() => doneHead.current?.focus()); }, [booked]);
+
   if (pageErr) {
     return (
-      <div className="mx-auto flex w-full max-w-[860px] flex-col gap-6 pb-12">
-        <PageHero eyebrow="Booking" title="Nothing to book here" />
+      <div className="mx-auto flex w-full max-w-[1076px] flex-col gap-6 pb-12">
+        <PageHero eyebrow="Time with" title="Nothing to book here" />
         <EmptyState title="This page isn’t open" body={pageErr}
           action={<Button href="/meet/">Meet</Button>} />
       </div>
     );
   }
 
-  if (!owner || types === null) {
-    return (
-      <div className="mx-auto w-full max-w-[860px] pb-12">
-        <StatusNote>Loading…</StatusNote>
-      </div>
-    );
-  }
+  const ownerName = owner?.name || "";
+  const ownerTz = owner?.tz || "";
+  const bothZones = !!ownerTz && ownerTz !== displayTz;
+  const me = currentUser();
 
-  const offered = types.filter((t) => Number(t.active) !== 0);
+  /* ── the rail's zone card, and its phone twin ──
+     A visitor verifies a zone by RECOGNISING the clock in it, not by decoding an offset — so both
+     zones are shown running. Switching is a pure regroup of instants already in memory: instant,
+     offline-safe, and never a request. */
+  const zoneRow = (
+    <p className="flex items-center gap-2 text-[13px] font-semibold text-ink">
+      <span className="text-ink-3"><GlobeGlyph /></span>
+      <span className="min-w-0 break-words" data-ay-skip="1">{displayTz} · {clockOnly(now, displayTz, effClock)}</span>
+    </p>
+  );
 
-  if (booked) {
-    return (
-      <div className="mx-auto flex w-full max-w-[860px] flex-col gap-6 pb-12">
-        <PageHero eyebrow="Booking" title="That time is yours"
-          lede={<>It is an ordinary meeting now — it is already in your calendar, and in <span data-ay-skip="1">{owner.name}</span>’s.</>} />
-        <section className="rounded-card border border-line bg-space-2 p-5">
-          <p className="text-[15px] font-semibold text-ink" data-ay-skip="1">
-            {fmt(booked.start, { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZoneName: "short" }, VIEWER_TZ)}
-          </p>
-          <p className="mt-1 text-[13px] text-ink-3">
-            <span data-ay-skip="1">{VIEWER_TZ}</span> — your time
-            {owner.tz && owner.tz !== VIEWER_TZ && (
-              <> · <span data-ay-skip="1">{clockOnly(booked.start, owner.tz)}</span> in{" "}
-                <span data-ay-skip="1">{owner.tz}</span>, theirs</>
-            )}
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {booked.id > 0 && <Button href={`/meet/${booked.id}`}>Open the meeting</Button>}
-            <Button href="/calendar/" variant="outline">See it in your calendar</Button>
-          </div>
-        </section>
-      </div>
-    );
-  }
-
-  // Whether the person reading this is the person it is about — the same emptiness needs a
-  // different next step for each of them.
-  const viewerIsOwner = !!owner.slug && currentUser()?.slug === owner.slug;
-  return (
-    <div className="mx-auto flex w-full max-w-[860px] flex-col gap-5 pb-12">
-      <PageHero
-        eyebrow="Booking"
-        title={<><span data-ay-skip="1">{owner.name}</span></>}
-        lede={type ? <span data-ay-skip="1">{type.title}</span> : undefined}
-        aside={<Avatar src={owner.avatar} name={owner.name} className="h-16 w-16" priority />}
-      />
-
-      {offered.length === 0 ? (
-        /* THE OWNER IS NOT A VISITOR. Reading "Arash isn't taking bookings" on your own page tells
-           you what is wrong and nothing about how to fix it — and this is the exact screen somebody
-           lands on the first time they follow their own link, before they have set anything. Same
-           emptiness, two different readers, two different next steps. */
-        viewerIsOwner ? (
-          <EmptyState
-            title="Your booking page is ready — it just has no hours yet"
-            body="Say when you are open to being booked and this page starts offering those times to anyone with the link. You can change or pause it whenever you like."
-            action={<Button href={localePath("/book")}>Set your hours</Button>}
-          />
+  const zoneControls = (
+    <>
+      {!!ownerTz && ownerTz !== VIEWER_TZ && (
+        <Segmented className={cx("mt-2", SEG_HIT)} label="Show times in"
+          value={displayTz === ownerTz ? "them" : "you"}
+          onChange={(v) => setDisplayTz(v === "them" ? ownerTz : VIEWER_TZ)}
+          options={[{ value: "you", label: "Yours" }, { value: "them", label: "Theirs" }]} />
+      )}
+      <div className="mt-1">
+        {zonePicker ? (
+          <Select className="mt-1 h-11 w-full" label="Show times in this zone" value={displayTz} onChange={setDisplayTz} options={ZONES} />
         ) : (
-          <EmptyState
-            title={<><span data-ay-skip="1">{owner.name}</span> isn’t taking bookings</>}
-            body="No times are being offered here at the moment. Nothing has gone wrong — this page only shows what somebody has chosen to offer."
-            action={<Button href="/meet/" variant="outline">Schedule a meeting instead</Button>}
-          />
-        )
+          <LinkButton className={cx("text-[12.5px]", LINK_HIT)} onClick={() => setZonePicker(true)}>Not your zone?</LinkButton>
+        )}
+      </div>
+    </>
+  );
+
+  /* ── the confirm surface: ONE instance, two positions ──
+     A second copy would fork the note and the button ref. On a phone it becomes a fixed bar once a
+     time is chosen (parked above AppShell's own bottom quick-nav, whose height lives in
+     --aq-bottom-bar); at rest it stays in flow so a permanent bar is not sitting on the times. */
+  const signedIn = isLoggedIn();
+  const confirmSurface = (
+    <section
+      aria-label="The time you pick"
+      className={cx(
+        "rounded-card border border-line bg-space-2 p-4 md:sticky md:top-[76px] md:bg-space-2 md:p-4 md:backdrop-blur-none",
+        // `fixed` is unprefixed and `md:sticky` lives in a media query, so the media rule is emitted
+        // later and wins from md up: one element, a bar on a phone and the rail card on a desktop.
+        // `md:order-first` is what makes the desktop visibility STRUCTURAL rather than lucky. Sitting
+        // fourth in the rail, this card's top depends on the three above it, so a member with a
+        // longer title, a blurb or several types pushes the confirm button back below the fold —
+        // collapsing the note only bought 66px. First in the rail, `sticky top-[76px]` pins it for
+        // the whole scroll range, so the action is on screen at any rail height and any window.
+        picked > 0 && "fixed inset-x-0 bottom-[var(--aq-bottom-bar)] z-30 rounded-none border-x-0 border-b-0 border-t border-line bg-space-2/95 p-3 backdrop-blur md:inset-x-auto md:bottom-auto md:order-first md:rounded-card md:border md:p-4",
+      )}>
+      {/* The heading is the rail card's title and stays on a wide screen. On a phone the same
+          element has become a one-line bar above the thumb, where a title is a wasted row — so it
+          is hidden by CLASS, not by the `hidden` attribute, whose UA rule a `md:block` would
+          silently outrank. */}
+      <h2 className={cx("text-[14px] font-semibold text-ink", picked > 0 && "hidden md:block")}>The time you pick</h2>
+      {picked > 0 && type ? (
+        <>
+          <p className="text-[14px] font-semibold text-ink md:text-[15px]" data-ay-skip="1">
+            {longInstant(picked, displayTz, effClock)}
+          </p>
+          {bothZones && (
+            <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">
+              which is <span data-ay-skip="1">{clockOnly(picked, ownerTz, effClock)}</span> for{" "}
+              <span data-ay-skip="1">{ownerName}</span> in <span data-ay-skip="1">{ownerTz}</span>
+            </p>
+          )}
+
+          {/* The note is one tap away at EVERY width, not just on a phone. Held open on a wide
+              screen it added ~110px above the button, which put the one action this page exists for
+              at y=943 in a 1440x900 viewport — measured, not guessed. The optional sentence is worth
+              a click; the confirm button being below the fold is not. A note carried back from
+              signing in re-opens itself (`useState(!!entry.note)`), so nothing is ever hidden. */}
+          <div className={cx("mt-3", noteOpen ? "block" : "hidden")}>
+            <Field label="What would you like to talk about?" optional hint="They’ll see this before the call">
+              <Textarea ref={noteBox} rows={3} value={note} maxLength={500}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="A sentence is plenty" />
+            </Field>
+          </div>
+          {!noteOpen && <div className="mt-2"><LinkButton className={LINK_HIT} onClick={openNote}>Add a line about it</LinkButton></div>}
+
+          {takeErr && <div className="mt-3"><ErrorNote>{takeErr}</ErrorNote></div>}
+
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            {/* A plain element rather than <Button>: this is the one control the page has to be able
+                to FOCUS on the way back from signing in, and Button owns its own ref. */}
+            <button ref={confirmBtn} type="button" onClick={() => void take()} disabled={busy}
+              className="inline-flex h-11 w-full items-center justify-center rounded-pill bg-yang px-6 text-[14px] font-bold text-on-accent shadow-card transition-colors duration-150 hover:bg-yin hover:text-white disabled:cursor-not-allowed disabled:opacity-50 md:w-auto">
+              {busy ? "Asking…" : signedIn ? "Book this time" : "Sign in and book this time"}
+            </button>
+            <LinkButton className={LINK_HIT} onClick={() => { setPicked(0); setTakeErr(""); }}>Choose another time</LinkButton>
+          </div>
+
+          {signedIn ? (
+            // Knowing WHICH identity lands in the owner's calendar is the other half of "requires an
+            // account".
+            <p className="mt-2 flex items-center gap-2 text-[12.5px] text-ink-3">
+              <Avatar src={me?.avatar} name={me?.name} className="h-5 w-5 text-[10px]" />
+              <span>Booking as <span data-ay-skip="1">{me?.name || "you"}</span></span>
+            </p>
+          ) : (
+            <p className="mt-2 text-[12.5px] leading-relaxed text-ink-3">
+              New here? The same step creates your free account — and your time and your note are kept
+            </p>
+          )}
+        </>
       ) : (
         <>
-          {/* Said BEFORE any effort, not after a time has been chosen. Someone who will have to sign
-              in eventually is owed that fact while it still costs them nothing. */}
-          {!isLoggedIn() && (
-            <p className="rounded-card border border-line bg-space-2 px-4 py-3 text-[13px] leading-relaxed text-ink-2">
-              You don’t need an account to see these times. Signing in is asked for once, at the last step, when you
-              ask for one — and you’ll come straight back to the time you chose
+          <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-3">Pick a day, then a time</p>
+          {!signedIn && (
+            <p className="mt-2 text-[12.5px] leading-relaxed text-ink-2">
+              You don’t need an account to look. You’ll sign in once, at the last step — and land back on the
+              exact time you chose
+            </p>
+          )}
+        </>
+      )}
+    </section>
+  );
+
+  /* ── the frame ──
+     The house row: a 1076px band, a 672px main column, a 330px rail. Identical to Meet and Messages,
+     which is the whole reason this page stops looking like a stranger's page. */
+  const frame = (hero: ReactNode, main: ReactNode, rail: ReactNode) => (
+    <div className={cx("flex flex-col gap-5 pb-12", picked > 0 && "pb-44 md:pb-12")}>
+      <div className="mx-auto w-full max-w-[1076px]">{hero}</div>
+      <div className="mx-auto flex w-full max-w-[1076px] flex-col gap-4 md:flex-row md:items-start lg:gap-7">
+        <main className="flex w-full min-w-0 flex-col gap-4 md:max-w-2xl md:flex-1">{main}</main>
+        <aside className="flex w-full flex-col gap-3 md:order-2 md:w-[300px] md:shrink-0 lg:w-[330px]"
+          aria-label="Who you’d be meeting, and in whose clock">
+          {rail}
+        </aside>
+      </div>
+    </div>
+  );
+
+  // PHASE 1 — nothing known yet. An <h1> from the FIRST frame: the shell focuses the page heading on
+  // every route change, and a loading screen with no heading breaks that for everyone using it.
+  if (!owner || types === null) {
+    return frame(
+      <PageHero eyebrow="Time with" title="Booking a time" lede="Fetching what this member is offering, and when they’re free" />,
+      <section role="status" aria-label="Loading this booking page" className="rounded-card border border-line bg-space-2 p-4 md:p-5">
+        <div className="flex h-10 items-center justify-between">
+          <span className="h-5 w-36 animate-pulse rounded bg-veil/10" />
+          <span className="flex gap-2"><span className="h-10 w-10 animate-pulse rounded-card bg-veil/5" /><span className="h-10 w-10 animate-pulse rounded-card bg-veil/5" /></span>
+        </div>
+        <WeekdayStrip />
+        <GridSkeleton />
+        <div className="mt-4 min-h-[224px] border-t border-line pt-4">
+          <p className="text-[13px] text-ink-3">Loading this booking page…</p>
+        </div>
+      </section>,
+      <SkeletonCard media={false} />,
+    );
+  }
+
+  const viewerIsOwner = !!owner.slug && me?.slug === owner.slug;
+
+  if (booked) {
+    return frame(
+      <PageHero eyebrow="Time with" title="That’s arranged"
+        lede={<>It’s an ordinary meeting now — it’s in your calendar, and in <span data-ay-skip="1">{owner.name}</span>’s</>} />,
+      <section role="status" className="rounded-card border border-line bg-space-2 p-5">
+        <CheckGlyph />
+        <h2 ref={doneHead} tabIndex={-1} className="mt-3 text-[18px] font-bold text-ink outline-none">Booked</h2>
+        <p className="mt-2 text-[15px] font-semibold text-ink" data-ay-skip="1">
+          {longInstant(booked.start, displayTz, effClock)}
+        </p>
+        {!!ownerTz && ownerTz !== displayTz && (
+          <p className="mt-1 text-[13px] text-ink-3">
+            <span data-ay-skip="1">{clockOnly(booked.start, ownerTz, effClock)}</span> for{" "}
+            <span data-ay-skip="1">{owner.name}</span> in <span data-ay-skip="1">{ownerTz}</span>
+          </p>
+        )}
+        {booked.note.trim() && (
+          <p className="mt-4 border-l-2 border-yang/40 pl-3 text-[14px] italic leading-relaxed text-ink-2" data-ay-skip="1">
+            {booked.note}
+          </p>
+        )}
+        <div className="mt-5 flex flex-wrap gap-2">
+          {booked.id > 0 && <Button href={`/meet/${booked.id}`}>Open the meeting</Button>}
+          <Button href="/calendar/" variant="outline">See it in your calendar</Button>
+        </div>
+      </section>,
+      <section className="rounded-card border border-line bg-space-2 p-4" aria-label="Who you’d be meeting">
+        <h2 className="text-[14px] font-semibold text-ink">Who you’re meeting</h2>
+        <div className="mt-3 flex items-center gap-3">
+          <Avatar src={owner.avatar} name={owner.name} className="h-14 w-14" priority />
+          <div className="min-w-0">
+            <p className="text-[15px] font-semibold text-ink" data-ay-skip="1">{owner.name}</p>
+            {owner.slug && <p className="text-[12.5px] text-ink-3" data-ay-skip="1">@{owner.slug}</p>}
+          </div>
+        </div>
+      </section>,
+    );
+  }
+
+  /* ── nothing offered ── */
+  if (offered.length === 0) {
+    return frame(
+      <PageHero eyebrow="Time with" title={<span data-ay-skip="1">{owner.name}</span>} />,
+      /* THE OWNER IS NOT A VISITOR. Reading "Arash isn't taking bookings" on your own page tells you
+         what is wrong and nothing about how to fix it — and this is the exact screen somebody lands
+         on the first time they follow their own link, before they have set anything. Same emptiness,
+         two different readers, two different next steps. */
+      viewerIsOwner ? (
+        <EmptyState
+          title="Your booking page is ready — it just has no hours yet"
+          body="Say when you are open to being booked and this page starts offering those times to anyone with the link. You can change or pause it whenever you like."
+          action={<Button href={localePath("/book")}>Set your hours</Button>}
+        />
+      ) : (
+        <EmptyState
+          title={<><span data-ay-skip="1">{owner.name}</span> isn’t taking bookings</>}
+          body="No times are being offered here at the moment. Nothing has gone wrong — this page only shows what somebody has chosen to offer."
+          action={<Button href="/meet/" variant="outline">Schedule a meeting instead</Button>}
+        />
+      ),
+      null,
+    );
+  }
+
+  const soonest = groups[0]?.starts[0] || 0;
+  const nextMonth = addMonths(month, 1);
+  const laterMonth = Array.from(monthsWithSlots).sort().find((m) => m > month) || "";
+  const prevBlocked = month <= monthOf(todayKey);
+  // Disabled from the RULE, never from the data: `${nextMonth}-01` is beyond the horizon or it is
+  // not. An arrow is never dead and never lies.
+  const nextBlocked = `${nextMonth}-01` > horizonKey;
+  const emptyHorizon = starts !== null && !slotsFailed && groups.length === 0;
+
+  const heroLede = type?.blurb
+    ? <span data-ay-skip="1">{type.blurb}</span>
+    : "Pick a time that suits you — it becomes an encrypted ArtaMeet in both calendars";
+
+  return frame(
+    <PageHero eyebrow="Time with" title={<span data-ay-skip="1">{owner.name}</span>} lede={heroLede} />,
+    <>
+      {viewerIsOwner && (
+        <p className="rounded-card border border-yin/40 bg-yin/10 px-4 py-3 text-[13px] leading-relaxed text-ink-2">
+          This is your own page — exactly what a visitor sees.{" "}
+          <LinkButton className={cx("text-[13px]", LINK_HIT)} onClick={() => { window.location.assign(localePath("/book")); }}>Edit your hours</LinkButton>
+        </p>
+      )}
+
+      {/* PHONE HEADER. The face and the offer above the fold, then the times. It is a second copy of
+          the rail's first two cards, not a second instance: only ever one of the pair is display:block,
+          so nothing is announced twice and no state is forked (it all lives here). */}
+      <section className="rounded-card border border-line bg-space-2 p-4 md:hidden" aria-label="Who you’d be meeting">
+        <div className="flex items-start gap-3">
+          <Avatar src={owner.avatar} name={owner.name} className="h-11 w-11" priority />
+          <div className="min-w-0 flex-1">
+            <p className="text-[15px] font-semibold text-ink" data-ay-skip="1">{owner.name}</p>
+            {type && (
+              <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[13px] text-ink-2">
+                <span data-ay-skip="1">{type.title}</span>
+                <Pill><span data-ay-skip="1">{durationLabel(Number(type.minutes) || 30)}</span></Pill>
+              </p>
+            )}
+          </div>
+        </div>
+        {type?.blurb && <p className="mt-2 line-clamp-2 text-[13px] leading-relaxed text-ink-2" data-ay-skip="1">{type.blurb}</p>}
+        {type && <MetaList type={type} className="mt-3 gap-1.5 text-[12.5px]" />}
+        {offered.length > 1 && (
+          <div className="mt-3">
+            <TypeChooser offered={offered} current={type} onPick={(s) => { setTypeSlug(s); setPicked(0); setDay(""); }} />
+          </div>
+        )}
+        {zoneControls}
+      </section>
+
+      {/* The zone stays legible while a long list scrolls — one compact strip, parked under the
+          60px topbar. Never truncated: a half-hidden zone name is the wrong-zone bug again. */}
+      {/* Full-bleed on the SHELL's own gutter token, never a guessed -mx-4: AppShell pads every route
+          with px-gutter (24px), so a hand-picked 16px leaves an 8px sliver of page down each edge and
+          misaligns this strip's contents with the cards above it. */}
+      <div className="sticky top-topbar z-10 -mx-gutter border-b border-line bg-space-1/85 px-gutter py-2 backdrop-blur md:hidden">
+        {zoneRow}
+      </div>
+
+      {slotsFailed && (
+        <ErrorNote>
+          Couldn’t load the free times.{" "}
+          <button type="button" className="-my-2 inline-flex min-h-[40px] items-center py-2 font-semibold underline" onClick={() => loadSlots()}>Try again</button>
+        </ErrorNote>
+      )}
+
+      {gone && (
+        <ErrorNote>
+          That time went while you were signing in. Everything below is still free
+          {note.trim() ? <> — your note is still here</> : null}
+        </ErrorNote>
+      )}
+
+      {emptyHorizon ? (
+        <EmptyState
+          title={<>No free times in the next <span data-ay-skip="1">{horizonD} days</span></>}
+          body={<>
+            <span data-ay-skip="1">{owner.name}</span> has nothing open that far ahead. It is worth looking again in a
+            day or two — a slot frees the moment something moves
+          </>}
+          action={<Button variant="outline" onClick={() => loadSlots()}>Look again</Button>}
+        />
+      ) : (
+        <>
+          {soonest > 0 && (
+            <p className="text-[13px] text-ink-3">
+              Soonest free:{" "}
+              <span data-ay-skip="1">{dayHeading(groups[0].key, false)}, {clockOnly(soonest, displayTz, effClock)}</span>
             </p>
           )}
 
-          {offered.length > 1 && (
-            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="What kind of meeting">
-              {offered.map((t) => {
-                const on = type?.slug === t.slug;
-                return (
-                  <button key={t.slug} type="button" role="radio" aria-checked={on}
-                    onClick={() => { setTypeSlug(t.slug); setPicked(0); setDay(""); }}
-                    className={cx("h-11 rounded-pill border px-4 text-[13.5px] font-semibold transition-colors",
-                      on ? "border-yang bg-yang text-on-accent" : "border-line text-ink-2 hover:border-yin-light hover:text-ink")}>
-                    <span data-ay-skip="1">{t.title}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          <section className="rounded-card border border-line bg-space-2 p-4 sm:p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                {type?.blurb && (
-                  <p className="max-w-prose text-[14px] leading-relaxed text-ink-2" data-ay-skip="1">{type.blurb}</p>
-                )}
-                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-ink-3">
-                  <Pill><span data-ay-skip="1">{durationLabel(type?.minutes || 30)}</span></Pill>
-                  {type && Number(type.notice_h) > 0 && (
-                    <span>book at least <span data-ay-skip="1">{noticeLabel(Number(type.notice_h))}</span> ahead</span>
-                  )}
-                </p>
-                <div className="mt-2">
-                  <OwnerLine owner={owner} rule={type} tz={VIEWER_TZ} />
-                </div>
+          <section className="rounded-card border border-line bg-space-2 p-4 md:p-5" aria-label="Choose a day and a time">
+            <div className="flex h-10 items-center justify-between">
+              <h2 className="text-[18px] font-bold text-ink">
+                <time dateTime={month} data-ay-skip="1">{monthLabel(month)}</time>
+              </h2>
+              <div className="flex items-center gap-1">
+                <IconButton label="Previous month" className="h-10 w-10" disabled={prevBlocked}
+                  onClick={() => setMonth(addMonths(month, -1))}
+                  aria-disabled={prevBlocked} ><ChevronGlyph back /></IconButton>
+                <IconButton label="Next month" className="h-10 w-10" disabled={nextBlocked}
+                  onClick={() => setMonth(nextMonth)}
+                  aria-disabled={nextBlocked}><ChevronGlyph /></IconButton>
               </div>
-              {owner.tz && owner.tz !== VIEWER_TZ && (
-                <Segmented
-                  label="Whose clock"
-                  value={showTheirs ? "them" : "you"}
-                  onChange={(v) => setShowTheirs(v === "them")}
-                  options={[{ value: "you", label: "Your time" }, { value: "them", label: "Their time" }]}
-                />
-              )}
             </div>
-            {/* The zone, named once and plainly. A clock time whose zone is left to be guessed is the
-                wrong-zone bug wearing a disguise. */}
-            <p className="mt-3 border-t border-line pt-3 text-[12.5px] text-ink-3">
-              Times below are shown in{" "}
-              <span data-ay-skip="1">{displayTz} ({zoneName(now, displayTz)})</span>
-              {displayTz !== VIEWER_TZ && <> — not your own zone</>}
-            </p>
-          </section>
 
-          {gone && (
-            <ErrorNote>
-              The time you’d chosen has just been taken. Everything below is still free
-            </ErrorNote>
-          )}
+            <WeekdayStrip />
 
-          {slotsFailed ? (
-            <ErrorNote>
-              Couldn’t load the free times.{" "}
-              <button type="button" className="-my-1 inline-block py-1 font-semibold underline" onClick={loadSlots}>Try again</button>
-            </ErrorNote>
-          ) : starts === null ? (
-            <StatusNote>Looking for free times…</StatusNote>
-          ) : groups.length === 0 ? (
-            <EmptyState
-              title="No free times ahead"
-              body={<>
-                <span data-ay-skip="1">{owner.name}</span> has nothing open in the next{" "}
-                <span data-ay-skip="1">{Number(type?.horizon_d) || 21}</span> days. It is worth looking again in a
-                day or two — a slot frees up the moment something moves
-              </>}
-              action={<Button variant="outline" onClick={loadSlots}>Look again</Button>}
-            />
-          ) : (
-            <>
-              <section aria-label="Which day">
-                <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-3">Pick a day</h2>
-                <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label="Which day">
-                  {shownDays.map((g) => {
-                    const on = g.key === active?.key;
-                    const literal = g.key === todayKey ? "Today" : g.key === tomorrowKey ? "Tomorrow" : "";
-                    return (
-                      <button key={g.key} type="button" role="radio" aria-checked={on} onClick={() => chooseDay(g.key)}
-                        className={cx("flex h-12 min-w-[104px] flex-col items-center justify-center rounded-card border px-3 text-[13px] font-semibold transition-colors",
-                          on ? "border-yang bg-yang/15 text-yang" : "border-line text-ink-2 hover:border-yin-light hover:text-ink")}>
-                        <span>{literal || <span data-ay-skip="1">{dayHeading(g.key, g.key.slice(0, 4) !== todayKey.slice(0, 4))}</span>}</span>
-                        <span className="text-[11.5px] font-normal text-ink-3">
-                          <span data-ay-skip="1">{g.starts.length}</span> free
-                        </span>
-                      </button>
-                    );
-                  })}
-                  {!allDays && groups.length > shownDays.length && (
-                    <button type="button" onClick={() => setAllDays(true)}
-                      className="h-12 rounded-card border border-line px-4 text-[13px] font-semibold text-ink-3 transition-colors hover:border-yin-light hover:text-ink">
-                      More days
-                    </button>
-                  )}
-                </div>
-              </section>
+            {starts === null && !slotsFailed ? (
+              <>
+                <GridSkeleton />
+                <p className="mt-3 text-[13px] text-ink-3">Finding their free times…</p>
+              </>
+            ) : (
+              <div className="relative">
+                {/* A failed fetch and an empty month both keep the grid at FULL height with plain
+                    numerals. Rendering either as a collapsed diary tells a visitor something about
+                    this person's week that we do not actually know. */}
+                <DayGrid month={month} dayMap={dayMap} todayKey={todayKey} horizonKey={horizonKey}
+                  selected={activeKey} onChoose={chooseDay} onMonth={setMonth} />
+                {!slotsFailed && !monthsWithSlots.has(month) && (
+                  <div className="pointer-events-none absolute inset-0 grid place-items-center">
+                    <div className="pointer-events-auto rounded-card border border-line bg-space-2/95 px-4 py-3 text-center backdrop-blur">
+                      <p className="text-[13px] text-ink-2">
+                        Nothing free in <span data-ay-skip="1">{monthLabel(month, false)}</span>
+                      </p>
+                      {/* Only ever offered when that month is KNOWN to hold something — we hold the
+                          whole horizon, so this is never a guess and never a dead link. */}
+                      {laterMonth && (
+                        <LinkButton className={LINK_HIT} onClick={() => setMonth(laterMonth)}>
+                          See <span data-ay-skip="1">{monthLabel(laterMonth, false)}</span>
+                        </LinkButton>
+                      )}
+                      {!laterMonth && (
+                        <p className="mt-1 text-[12.5px] text-ink-3">
+                          <span data-ay-skip="1">{owner.name}</span> takes bookings up to{" "}
+                          <span data-ay-skip="1">{horizonD} days</span> ahead
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
-              {active && (
-                <section aria-label="Which time">
-                  <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-3">
-                    Pick a time on{" "}
-                    <span data-ay-skip="1">{dayHeading(active.key, false)}</span>
-                  </h2>
-                  <div className="mt-2 grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-2">
-                    {active.starts.map((ts) => {
+            <div ref={timesBox} className="mt-4 min-h-[224px] scroll-mt-topbar border-t border-line pt-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 ref={timesHead} tabIndex={-1} className="text-[14px] font-semibold text-ink outline-none">
+                  {activeKey
+                    ? <>
+                        <span className="md:hidden" data-ay-skip="1">{dayHeading(activeKey, false)}</span>
+                        <span className="hidden md:inline" data-ay-skip="1">{dayHeadingLong(activeKey)}</span>
+                      </>
+                    : <>Pick a day</>}
+                </h2>
+                {/* Beside the numbers it governs. Buried inside a timezone menu is where every other
+                    booking page puts it, and it is their most-reported friction. */}
+                <Segmented className={SEG_HIT} label="Clock" value={effClock} onChange={(v) => setClockPref(v === "24" ? "24" : "12")}
+                  options={[{ value: "12", label: "am/pm" }, { value: "24", label: "24h" }]} />
+              </div>
+
+              <div className="mt-3">
+                {dayTimes.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-2 md:grid-cols-[repeat(auto-fill,minmax(104px,1fr))]">
+                    {dayTimes.map((ts) => {
                       const on = ts === picked;
+                      // A slot a re-read says has gone stays PUT, disabled and labelled — it must
+                      // never vanish from under the cursor that was travelling towards it, and the
+                      // rest of the row must not shuffle along one place to fill the gap.
+                      const dead = !freeSet.has(ts);
                       return (
-                        <button key={ts} type="button" aria-pressed={on}
+                        <button key={ts} type="button" aria-pressed={on} disabled={dead}
                           onClick={() => { setPicked(ts); setTakeErr(""); setGone(false); }}
-                          className={cx("h-11 rounded-field border text-[14px] font-semibold tabular-nums transition-colors",
-                            on ? "border-yang bg-yang text-on-accent" : "border-line text-ink-2 hover:border-yin-light hover:text-ink")}>
-                          <span data-ay-skip="1">{clockOnly(ts, displayTz)}</span>
+                          className={cx("h-12 rounded-field border text-[15px] font-semibold tabular-nums transition-colors duration-150",
+                            dead ? "cursor-not-allowed border-line text-ink-3"
+                              : on ? "border-yang bg-yang text-on-accent"
+                              : "border-line text-ink-2 hover:border-yin-light hover:text-ink")}>
+                          {dead
+                            ? <>Taken <span className="sr-only">— <span data-ay-skip="1">{clockOnly(ts, displayTz, effClock)}</span></span></>
+                            : <span data-ay-skip="1">{clockOnly(ts, displayTz, effClock)}</span>}
                         </button>
                       );
                     })}
                   </div>
-                </section>
-              )}
-
-              {picked > 0 && type && (
-                <section className="rounded-card border border-yang/40 bg-space-2 p-4 sm:p-5" aria-label="Confirm">
-                  <h2 className="text-[15px] font-bold text-ink">Ask for this time</h2>
-                  <p className="mt-2 text-[15px] font-semibold text-ink" data-ay-skip="1">
-                    {fmt(picked, { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZoneName: "short" }, VIEWER_TZ)}
+                ) : slotsFailed ? (
+                  <p className="rounded-card border border-line p-4 text-[13px] text-ink-3">
+                    The free times couldn’t be loaded — nothing here is a statement about this week
                   </p>
-                  <p className="mt-1 text-[13px] leading-relaxed text-ink-3">
-                    <span data-ay-skip="1">{durationLabel(type.minutes)}</span> in your own zone,{" "}
-                    <span data-ay-skip="1">{VIEWER_TZ}</span>
-                    {owner.tz && owner.tz !== VIEWER_TZ && (
-                      <> — which is <span data-ay-skip="1">{clockOnly(picked, owner.tz)}</span> for{" "}
-                        <span data-ay-skip="1">{owner.name}</span> in <span data-ay-skip="1">{owner.tz}</span></>
-                    )}
-                  </p>
-
-                  <Field className="mt-4" label="What is it about?" optional
-                    hint="They will see this with the invitation. A line is plenty">
-                    <Textarea rows={3} value={note} maxLength={500} onChange={(e) => setNote(e.target.value)}
-                      placeholder="A sentence about what you’d like to talk about" />
-                  </Field>
-
-                  {takeErr && <div className="mt-3"><ErrorNote>{takeErr}</ErrorNote></div>}
-
-                  <div className="mt-4 flex flex-wrap items-center gap-3">
-                    {/* A plain element rather than <Button>: this is the one control the page has to
-                        be able to FOCUS on the way back from signing in, and Button owns its own ref. */}
-                    <button ref={confirmBtn} type="button" onClick={() => void take()} disabled={busy}
-                      className="inline-flex h-11 items-center justify-center rounded-pill bg-yang px-6 text-[14px] font-bold text-on-accent shadow-card transition-colors hover:bg-yin hover:text-white disabled:cursor-not-allowed disabled:opacity-50">
-                      {busy ? "Asking…" : isLoggedIn() ? "Book this time" : "Sign in and book this time"}
-                    </button>
-                    <button type="button" onClick={() => setPicked(0)}
-                      className="inline-flex h-11 items-center px-2 text-[13.5px] font-semibold text-ink-3 hover:text-ink">
-                      Choose another
-                    </button>
-                  </div>
-                  {!isLoggedIn() && (
-                    <p className="mt-2 text-[12.5px] text-ink-3">
-                      You’ll be brought straight back to this time
-                    </p>
-                  )}
-                </section>
-              )}
-            </>
-          )}
+                ) : starts === null ? null : (
+                  <p className="rounded-card border border-line p-4 text-[13px] text-ink-3">All taken — try another day</p>
+                )}
+              </div>
+            </div>
+          </section>
         </>
       )}
-    </div>
+
+      {/* One polite region for the whole calendar: which month, which day, how much is in it. */}
+      <p aria-live="polite" className="sr-only">
+        <span data-ay-skip="1">{monthLabel(month)}</span>
+        {activeKey ? <>. <span data-ay-skip="1">{dayHeadingLong(activeKey)}</span>, <span data-ay-skip="1">{active?.length || 0}</span> times free</> : null}
+      </p>
+
+      <HowRows className="md:hidden" />
+    </>,
+    <>
+      <section className="hidden rounded-card border border-line bg-space-2 p-4 md:block" aria-label="Who you’d be meeting">
+        <h2 className="text-[14px] font-semibold text-ink">Who you’d be meeting</h2>
+        <div className="mt-3 flex items-center gap-3">
+          <Avatar src={owner.avatar} name={owner.name} className="h-14 w-14" priority />
+          <div className="min-w-0">
+            <p className="text-[15px] font-semibold text-ink" data-ay-skip="1">{owner.name}</p>
+            {owner.slug && <p className="text-[12.5px] text-ink-3" data-ay-skip="1">@{owner.slug}</p>}
+          </div>
+        </div>
+        {owner.slug && (
+          <div className="mt-3">
+            <Button variant="outline" className="h-10" href={`/u/${owner.slug}`}>Their profile</Button>
+          </div>
+        )}
+      </section>
+
+      {type && (
+        <section className="hidden rounded-card border border-line bg-space-2 p-4 md:block" aria-label="What you’re asking for">
+          <h2 className="text-[14px] font-semibold text-ink">What you’re asking for</h2>
+          {offered.length > 1 ? (
+            <div className="mt-3">
+              <TypeChooser offered={offered} current={type} onPick={(s) => { setTypeSlug(s); setPicked(0); setDay(""); }} />
+            </div>
+          ) : (
+            <div className="mt-3">
+              <p className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-ink">
+                <span data-ay-skip="1">{type.title}</span>
+                <Pill><span data-ay-skip="1">{durationLabel(Number(type.minutes) || 30)}</span></Pill>
+              </p>
+              {type.blurb && <p className="mt-1.5 line-clamp-3 text-[13px] leading-relaxed text-ink-2" data-ay-skip="1">{type.blurb}</p>}
+            </div>
+          )}
+          <MetaList type={type} className="mt-3.5 border-t border-line pt-3.5" />
+        </section>
+      )}
+
+      <section className="hidden rounded-card border border-line bg-space-2 p-4 md:block" aria-label="Times are shown in">
+        <h2 className="text-[14px] font-semibold text-ink">Times are shown in</h2>
+        <div className="mt-2">{zoneRow}</div>
+        {bothZones && (
+          <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-3">
+            <span data-ay-skip="1">{ownerName}</span> is in <span data-ay-skip="1">{ownerTz}</span> —{" "}
+            <span data-ay-skip="1">{clockOnly(now, ownerTz, effClock)}</span> there now
+          </p>
+        )}
+        <p className="mt-1.5 text-[12.5px] text-ink-3">
+          {displayTz === VIEWER_TZ
+            ? "Times below are in your own zone"
+            : <>Times below are in <span data-ay-skip="1">{ownerName}</span>’s zone</>}
+          {" · "}<span data-ay-skip="1">{zoneName(now, displayTz)}</span>
+        </p>
+        {zoneControls}
+      </section>
+
+      {confirmSurface}
+
+      <HowRows className="hidden md:block" />
+    </>,
   );
 }
 
@@ -765,14 +1480,21 @@ function RuleForm({ rule, onSaved, onCancel }: { rule: BookRule; onSaved: (r: Bo
         </div>
 
         {/* The rule read back as a sentence, in the owner's zone and in their browser's, because the
-            single commonest way to offer the wrong hours is to type them into the wrong zone. */}
-        <p className="rounded-card border border-line bg-space-1/40 px-4 py-3 text-[13px] leading-relaxed text-ink-2">
-          Anyone with your link can book <span data-ay-skip="1">{durationLabel(minutes)}</span> with you,{" "}
-          <span data-ay-skip="1">{daysLabel(days).toLowerCase()}</span>, between{" "}
-          <span data-ay-skip="1">{minuteClock(fromMin)}</span> and <span data-ay-skip="1">{minuteClock(toMin)}</span> in{" "}
-          <span data-ay-skip="1">{tz}</span>
-          {local && <> — which is <span data-ay-skip="1">{local}</span> on the clock you are reading this on</>}
-        </p>
+            single commonest way to offer the wrong hours is to type them into the wrong zone. The
+            second line is the VISITOR's phrasing, so what a stranger will read is on this screen. */}
+        <div className="rounded-card border border-line bg-space-1/40 px-4 py-3 text-[13px] leading-relaxed text-ink-2">
+          <p>
+            Anyone with your link can book <span data-ay-skip="1">{durationLabel(minutes)}</span> with you,{" "}
+            <span data-ay-skip="1">{daysLabel(days).toLowerCase()}</span>, between{" "}
+            <span data-ay-skip="1">{minuteClock(fromMin)}</span> and <span data-ay-skip="1">{minuteClock(toMin)}</span> in{" "}
+            <span data-ay-skip="1">{tz}</span>
+            {local && <> — which is <span data-ay-skip="1">{local}</span> on the clock you are reading this on</>}
+          </p>
+          <p className="mt-1.5 text-ink-3">
+            Anyone with your link sees{" "}
+            <span data-ay-skip="1">{daysLabel(days)}, {minuteClock(fromMin)} – {minuteClock(toMin)}</span>, your time
+          </p>
+        </div>
 
         {(error || problem) && <ErrorNote>{error || problem}</ErrorNote>}
 
@@ -790,7 +1512,7 @@ function RuleForm({ rule, onSaved, onCancel }: { rule: BookRule; onSaved: (r: Bo
   );
 }
 
-function RuleCard({ rule, onEdit, onOff, busy }: { rule: BookRule; onEdit: () => void; onOff: () => void; busy: boolean }) {
+function RuleCard({ rule, onEdit, onOff, onOn, busy }: { rule: BookRule; onEdit: () => void; onOff: () => void; onOn: () => void; busy: boolean }) {
   const off = Number(rule.active) === 0;
   const local = localWindow(rule, VIEWER_TZ);
   return (
@@ -822,7 +1544,14 @@ function RuleCard({ rule, onEdit, onOff, busy }: { rule: BookRule; onEdit: () =>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button variant="outline" onClick={onEdit} className="h-10">Edit</Button>
-        {!off && (
+        {off ? (
+          /* Withdrawing was one-way unless you opened the form — a visible dead end on your own
+             page. The row survives a withdrawal precisely so the same link works again. */
+          <button type="button" onClick={onOn} disabled={busy}
+            className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink disabled:opacity-50">
+            Offer this again
+          </button>
+        ) : (
           <button type="button" onClick={onOff} disabled={busy}
             className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-3 transition-colors hover:border-yin-light hover:text-ink disabled:opacity-50">
             Stop offering it
@@ -833,10 +1562,12 @@ function RuleCard({ rule, onEdit, onOff, busy }: { rule: BookRule; onEdit: () =>
   );
 }
 
-function ShareCard({ handle }: { handle: string }) {
+function ShareCard({ handle, url: given }: { handle: string; url?: string }) {
   const [copied, setCopied] = useState(false);
   const [note, setNote] = useState("");
-  const url = typeof window === "undefined" ? "" : `${window.location.origin}/book/${handle}`;
+  // The server already composes the link it considers canonical — recomposing it from
+  // window.location.origin is how a page hands out a link from whatever host it happens to be on.
+  const url = given || (typeof window === "undefined" ? "" : `${window.location.origin}/book/${handle}`);
 
   async function copy() {
     try {
@@ -896,13 +1627,14 @@ function OwnerPage() {
   const [items, setItems] = useState<BookRule[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [handle, setHandle] = useState(me?.slug || "");
+  const [shareUrl, setShareUrl] = useState("");
   const [editing, setEditing] = useState<BookRule | null>(null);
   const [busyId, setBusyId] = useState(0);
 
   const load = useCallback(() => {
     setFailed(false);
     bookRules()
-      .then((r) => { setItems(r.items || []); if (r.handle) setHandle(r.handle); })
+      .then((r) => { setItems(r.items || []); if (r.handle) setHandle(r.handle); if (r.url) setShareUrl(r.url); })
       // An unanswered request is not "you offer nothing" — that would invite somebody to create a
       // second copy of a rule they already have.
       .catch(() => { setItems(null); setFailed(true); });
@@ -914,6 +1646,18 @@ function OwnerPage() {
     setBusyId(rule.id);
     try {
       await bookRuleOff(rule.id);
+      load();
+    } catch { setFailed(true); } finally { setBusyId(0); }
+  }
+
+  async function startOffering(rule: BookRule) {
+    setBusyId(rule.id);
+    try {
+      // Absent fields keep what the row already said, so this switches the one column it names.
+      await bookSetRule({
+        id: rule.id, title: rule.title, minutes: rule.minutes, tz: rule.tz, days: rule.days,
+        from_min: rule.from_min, to_min: rule.to_min, active: 1,
+      });
       load();
     } catch { setFailed(true); } finally { setBusyId(0); }
   }
@@ -944,7 +1688,7 @@ function OwnerPage() {
           {failed ? (
             <ErrorNote>
               Couldn’t load your availability.{" "}
-              <button type="button" className="-my-1 inline-block py-1 font-semibold underline" onClick={load}>Try again</button>
+              <button type="button" className="-my-2 inline-flex min-h-[40px] items-center py-2 font-semibold underline" onClick={load}>Try again</button>
             </ErrorNote>
           ) : items === null ? (
             <StatusNote>Loading your availability…</StatusNote>
@@ -969,7 +1713,7 @@ function OwnerPage() {
 
           {items?.map((r) => (
             <RuleCard key={r.id} rule={r} busy={busyId === r.id}
-              onEdit={() => setEditing(r)} onOff={() => void stopOffering(r)} />
+              onEdit={() => setEditing(r)} onOff={() => void stopOffering(r)} onOn={() => void startOffering(r)} />
           ))}
 
           {items !== null && items.length > 0 && !editing && (
@@ -981,7 +1725,7 @@ function OwnerPage() {
 
         <aside className="flex w-full flex-col gap-3 md:order-2 md:w-[300px] md:shrink-0 lg:w-[330px]"
           aria-label="Your link and how booking works">
-          {handle ? <ShareCard handle={handle} /> : null}
+          {handle ? <ShareCard handle={handle} url={shareUrl} /> : null}
           <HowPanel />
         </aside>
       </div>

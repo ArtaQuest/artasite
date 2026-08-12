@@ -3010,6 +3010,10 @@ export function bookSetRule(b: {
   id?: number; slug?: string; title: string; blurb?: string; minutes: number; tz: string;
   days: string; from_min: number; to_min: number;
   buffer_min?: number; notice_h?: number; horizon_d?: number; seats?: number;
+  /** 1 offers it again, 0 withdraws it. OMITTED keeps whatever the row already said — which is what
+   *  every ordinary edit wants, and why this is optional rather than defaulted here. Withdrawing has
+   *  its own call (bookRuleOff); this is the way BACK, so an owner is not left at a dead end. */
+  active?: number;
 }) {
   return post<{ ok: boolean; rule?: BookRule }>("/book/rules", b as unknown as Json);
 }
