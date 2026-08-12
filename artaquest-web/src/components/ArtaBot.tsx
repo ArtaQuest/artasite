@@ -800,7 +800,7 @@ function DockBody({ view, setView }: {
     try {
       const k = await chatGetKey(slug);
       setView({ k: "dm", peer: k.user });
-      if (!k.key) setNote(`${k.user.name} hasn’t opened ArtaChat yet, so they can’t receive one until they do.`);
+      if (!k.key) setNote(`${k.user.name} hasn’t opened Chat yet, so they can’t receive one until they do.`);
     } catch { setNote("Couldn’t open that conversation."); }
   }
 
@@ -903,7 +903,7 @@ function DockBody({ view, setView }: {
                 <p className="px-3 pb-1 pt-3 text-[11px] font-bold uppercase tracking-wider text-ink-3">Members</p>
                 {newPeople.map((m) => (
                   <button key={m.id} type="button" data-ay-skip="1" onClick={() => void openBySlug(m.slug)}
-                    title={m.has_key ? "Send an encrypted message" : "Hasn’t opened ArtaChat yet"}
+                    title={m.has_key ? "Send an encrypted message" : "Hasn’t opened Chat yet"}
                     className="flex w-full items-center gap-3 border-b border-line px-3 py-2.5 text-start transition-colors hover:bg-veil/[0.05]">
                     <span className="relative shrink-0">
                       <Avatar src={m.avatar} name={m.name} country={m.country} className="h-10 w-10" />
@@ -1104,13 +1104,13 @@ export function ArtaBot() {
   const hideDock = onChatPage || (!open && ((fieldFocused && (vvSupported ? kbShrunk : true)) || scrolledAway));
 
   const inThread = dockView.k !== "list";
-  const title = dockView.k === "bot" ? "ArtaBot" : dockView.k === "dm" ? dockView.peer.name : "ArtaChat";
+  const title = dockView.k === "bot" ? "ArtaBot" : dockView.k === "dm" ? dockView.peer.name : "Chat";
   const toggle = () => setOpen((o) => !o);
   const me = currentUser();
 
   /* A DRAWER, not a popup (operator, 2026-07-30: "like LinkedIn, opens up and down like a drawer
      that says messaging"). The bar is ALWAYS on screen, welded to the bottom edge; only the body
-     slides. That is the whole point of the pattern — the collapsed state still says "ArtaChat" and
+     slides. That is the whole point of the pattern — the collapsed state still says "Chat" and
      carries the unread count, so the member never has to remember where messages live. The old
      floating circle mounted and unmounted the entire panel, which is a popup wearing a chat's
      clothes: nothing persisted, and the label existed only once you had already opened it.
@@ -1195,11 +1195,11 @@ export function ArtaBot() {
             </>
           )}
           {!inThread && (
-            <a href={localePath("/messages/")} aria-label="Open ArtaChat"
+            <a href={localePath("/messages/")} aria-label="Open Chat"
               className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-veil/[0.07] hover:text-ink"><Ico d={COMPOSE} size={17} /></a>
           )}
           <button type="button" onClick={toggle} aria-expanded={open} aria-controls="aq-dock-body"
-            aria-label={open ? "Collapse ArtaChat" : "Expand ArtaChat"}
+            aria-label={open ? "Collapse Chat" : "Expand Chat"}
             className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-veil/[0.07] hover:text-ink">
             <Ico d={CHEVRON} size={18} className={open ? "" : "rotate-180"} />
           </button>

@@ -385,7 +385,7 @@ final class Rooms {
 		// to them — say so now rather than letting them sit in a room they cannot read.
 		$has_key = (bool) Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_chat_keys' ) . ' WHERE user_id = %d LIMIT 1', [ $target ] );
 		if ( ! $has_key ) {
-			return Rest::err( 'no_device_key', $u->display_name . ' hasn’t opened ArtaChat yet, so there’s no key to seal this room to.', 400 );
+			return Rest::err( 'no_device_key', $u->display_name . ' hasn’t opened Chat yet, so there’s no key to seal this room to.', 400 );
 		}
 		Data::insert( 'aq_room_members', [
 			'room_id' => $rid, 'user_id' => $target, 'role' => 'member', 'joined' => Data::now(),

@@ -1183,7 +1183,7 @@ final class Meetings {
 			'ORGANIZER;CN=ArtaQuest:mailto:support@artaquest.org',
 		];
 		if ( ! $cancel ) {
-			foreach ( [ '-P1D' => 'ArtaMeet tomorrow — ' . $r['title'], '-PT30M' => 'ArtaMeet in 30 minutes — ' . $r['title'] ] as $trigger => $text ) {
+			foreach ( [ '-P1D' => 'Meeting tomorrow — ' . $r['title'], '-PT30M' => 'Meeting in 30 minutes — ' . $r['title'] ] as $trigger => $text ) {
 				$out[] = 'BEGIN:VALARM';
 				$out[] = 'TRIGGER:' . $trigger;
 				$out[] = 'ACTION:DISPLAY';

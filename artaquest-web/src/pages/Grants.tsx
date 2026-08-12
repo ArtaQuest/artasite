@@ -109,7 +109,7 @@ function GrantDetail({ g, loggedIn, onChanged }: { g: OutreachGrant; loggedIn: b
         {/* scheduled working sessions — ArtaMeet, on ArtaQuest, end-to-end encrypted */}
         {g.meetings.length > 0 && (
           <div>
-            <h4 className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-ink-3">Working sessions (1 hr · ArtaMeet)</h4>
+            <h4 className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-ink-3">Working sessions (1 hr · Meet)</h4>
             <ul className="flex flex-col gap-1.5">
               {g.meetings.map((mt) => (
                 <li key={mt.reminder_key} className="flex flex-wrap items-center gap-2 text-[13px] text-ink-2">
@@ -248,7 +248,7 @@ export default function Grants() {
       <PageHero
         eyebrow="Win funding" glyph={<DomainGlyph domain="grant" />}
         title="Sponsors"
-        lede={<>ArtaQuest is funded by sponsors. We research funding programmes and industry partners worldwide — for the open-education platform, for paying creators to produce learning content, and for learner bursaries — and post every deadline here. <strong className="text-ink">Claim a sponsor to help us apply</strong>, and earn <strong className="text-ink">points equal to the sponsorship amount</strong> in the <a href={localePath("/rankings/")} className="text-yang hover:underline">rankings</a>. Registered members are invited to <strong className="text-ink">ArtaMeet working sessions</strong> before each deadline.</>}
+        lede={<>ArtaQuest is funded by sponsors. We research funding programmes and industry partners worldwide — for the open-education platform, for paying creators to produce learning content, and for learner bursaries — and post every deadline here. <strong className="text-ink">Claim a sponsor to help us apply</strong>, and earn <strong className="text-ink">points equal to the sponsorship amount</strong> in the <a href={localePath("/rankings/")} className="text-yang hover:underline">rankings</a>. Registered members are invited to <strong className="text-ink">working sessions on Meet</strong> before each deadline.</>}
       />
 
       <div className="grid gap-3 rounded-card border border-line bg-space-2 p-4 text-[13.5px] leading-relaxed text-ink-2 sm:grid-cols-3">

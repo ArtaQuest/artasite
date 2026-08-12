@@ -278,7 +278,7 @@ function SubscribePanel({ cal }: { cal: CalendarCal | null }) {
 
   return (
     <section className="rounded-card border border-line bg-space-2 p-4" aria-label="Calendar subscription">
-      <h2 className="text-[14px] font-semibold text-ink">Subscribe to ArtaCalendar</h2>
+      <h2 className="text-[14px] font-semibold text-ink">Subscribe to Calendar</h2>
       <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-3">
         Your meetings, your deadlines and the challenges you entered — kept up to date wherever you keep the
         rest of your life
@@ -313,7 +313,7 @@ function SubscribePanel({ cal }: { cal: CalendarCal | null }) {
  *  three sources are not obvious from the outside, and a page that only says "nothing here" leaves
  *  someone with no idea which door to knock on. */
 const SOURCES: { label: string; body: string; href: string; cta: string }[] = [
-  { label: "Meetings", body: "Every ArtaMeet you host or are invited to, from the moment you are invited", href: "/meet/", cta: "ArtaMeet" },
+  { label: "Meetings", body: "Every meeting you host or are invited to, from the moment you are invited", href: "/meet/", cta: "Meet" },
   { label: "Deadlines", body: "The grants you registered to help us apply for, plus their working sessions", href: "/sponsors/", cta: "Sponsors" },
   { label: "Challenges", body: "The ones you entered, dated by their full-moon deadline", href: "/challenges/", cta: "Challenges" },
 ];
@@ -422,7 +422,7 @@ export default function Calendar() {
     return (
       <div className="flex flex-col gap-6 pb-12">
         <div className="mx-auto w-full max-w-[1076px]">
-          <PageHero eyebrow="Community" title="ArtaCalendar"
+          <PageHero eyebrow="Community" title="Calendar"
             lede="Your meetings, your deadlines and the challenges you entered — one page, your own time zone." />
         </div>
         <EmptyState className="mx-auto w-full max-w-[1076px]" title="Sign in to see your calendar"
@@ -435,7 +435,7 @@ export default function Calendar() {
   return (
     <div className="flex flex-col gap-5 pb-12">
       <div className="mx-auto w-full max-w-[1076px]">
-        <PageHero eyebrow="Community" title="ArtaCalendar"
+        <PageHero eyebrow="Community" title="Calendar"
           lede="Everything you are dated for, in one place and in your own time zone — meetings, deadlines and the challenges you entered." />
       </div>
 

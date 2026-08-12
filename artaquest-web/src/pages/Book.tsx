@@ -380,7 +380,7 @@ function VisitorPage({ handle }: { handle: string }) {
       <div className="mx-auto flex w-full max-w-[860px] flex-col gap-6 pb-12">
         <PageHero eyebrow="Booking" title="Nothing to book here" />
         <EmptyState title="This page isn’t open" body={pageErr}
-          action={<Button href="/meet/">ArtaMeet</Button>} />
+          action={<Button href="/meet/">Meet</Button>} />
       </div>
     );
   }
@@ -858,7 +858,7 @@ function ShareCard({ handle }: { handle: string }) {
 function HowPanel() {
   const rows: { label: string; body: ReactNode }[] = [
     { label: "Nobody sees your diary", body: "A visitor is told which times are free and nothing else — never what you are busy with, never who with, never how much of it there is" },
-    { label: "A booking is a meeting", body: "When somebody takes a time it becomes an ordinary ArtaMeet with both of you on it: in your calendar, in your subscription feed, in the encrypted room when it starts" },
+    { label: "A booking is a meeting", body: "When somebody takes a time it becomes an ordinary meeting with both of you on it: in your calendar, in your subscription feed, in the encrypted room when it starts" },
     { label: "It is a rule, not a diary", body: "You are describing hours of your own week. Anything already in your calendar takes those hours out of it automatically" },
   ];
   return (

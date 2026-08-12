@@ -250,7 +250,7 @@ function GuestList({ guests, seats, hostId, isHost, bound, busy, onRemove }: {
 function PrivacyNote() {
   return (
     <p className="rounded-card border border-line bg-space-2 p-4 text-[12.5px] leading-relaxed text-ink-3">
-      ArtaMeet holds five people on a call. There’s no server in the middle, so nothing is recorded and nobody,
+      Meet holds five people on a call. There’s no server in the middle, so nothing is recorded and nobody,
       including ArtaQuest, can listen in.
     </p>
   );
@@ -290,7 +290,7 @@ function CalendarPanel({ cal, onRotate }: { cal: MeetCal | null; onRotate: (c: M
 
   return (
     <section className="rounded-card border border-line bg-space-2 p-4" aria-label="Calendar subscription">
-      <h2 className="text-[14px] font-semibold text-ink">Add ArtaMeet to your calendar</h2>
+      <h2 className="text-[14px] font-semibold text-ink">Add Meet to your calendar</h2>
       <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-3">
         Every meeting you’re invited to, kept up to date — retimed, cancelled and all
       </p>
@@ -562,7 +562,7 @@ function MeetList() {
     return (
       <div className="flex flex-col gap-6 pb-12">
         <div className="mx-auto w-full max-w-[1076px]">
-          <PageHero eyebrow="Community" title="ArtaMeet"
+          <PageHero eyebrow="Community" title="Meet"
             lede="Meetings you can put in your calendar, held in a room nobody else can listen to." />
         </div>
         <EmptyState className="mx-auto w-full max-w-[1076px]" title="Sign in to see your meetings"
@@ -575,7 +575,7 @@ function MeetList() {
   return (
     <div className="flex flex-col gap-5 pb-12">
       <div className="mx-auto w-full max-w-[1076px]">
-        <PageHero eyebrow="Community" title="ArtaMeet"
+        <PageHero eyebrow="Community" title="Meet"
           lede="Meetings you can put in your calendar, held in a room nobody else can listen to — not even us." />
       </div>
 
@@ -645,7 +645,7 @@ function MeetList() {
         </main>
 
         <aside className="flex w-full flex-col gap-3 md:order-2 md:w-[300px] md:shrink-0 lg:w-[330px]"
-          aria-label="Calendar and what ArtaMeet is">
+          aria-label="Calendar and what Meet is">
           <CalendarPanel cal={cal} onRotate={setCal} />
           <PrivacyNote />
         </aside>
@@ -1149,7 +1149,7 @@ function MeetingPage({ id }: { id: number }) {
   if (gone || (!meet && !loading) || (loading && !meet)) {
     return (
       <div className="mx-auto flex w-full max-w-[1076px] flex-col gap-6 pb-12">
-        <PageHero eyebrow="Community" title="ArtaMeet" />
+        <PageHero eyebrow="Community" title="Meet" />
         {gone ? (
           <EmptyState title="This meeting isn’t open to you"
             body="Either it doesn’t exist or you’re not on its guest list. Ask the host to invite you."

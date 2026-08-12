@@ -1794,7 +1794,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
             ) : (
               <p>
                 <span data-ay-skip="1" className="font-semibold text-ink-2">{peer.name}</span>{" "}
-                <span>hasn’t opened ArtaChat yet, so there is no device key to seal anything to. Once they open it once, you can write.</span>
+                <span>hasn’t opened Chat yet, so there is no device key to seal anything to. Once they open it once, you can write.</span>
               </p>
             )}
           </div>
@@ -2071,7 +2071,7 @@ export default function Messages() {
       setPeer(k.user);
       setFilter("");
       setSp((cur) => { cur.set("with", k.user.slug); return cur; }, { replace: true });
-      if (!k.key) setNote(`${k.user.name} hasn’t opened ArtaChat yet, so they can’t receive encrypted messages until they do.`);
+      if (!k.key) setNote(`${k.user.name} hasn’t opened Chat yet, so they can’t receive encrypted messages until they do.`);
     } catch {
       setNote("No member found with that username.");
     }
@@ -2112,8 +2112,8 @@ export default function Messages() {
   if (!isLoggedIn()) {
     return (
       <div className="flex flex-col gap-6 pb-12">
-        <PageHero eyebrow="Community" title="ArtaChat" lede="Private, end-to-end encrypted conversations between members." />
-        <EmptyState title="Sign in to use ArtaChat" body="Your messages are sealed on your own device — sign in and this browser will create its encryption key."
+        <PageHero eyebrow="Community" title="Chat" lede="Private, end-to-end encrypted conversations between members." />
+        <EmptyState title="Sign in to use Chat" body="Your messages are sealed on your own device — sign in and this browser will create its encryption key."
           action={<Button href="/login/">Sign in</Button>} />
       </div>
     );
@@ -2132,7 +2132,7 @@ export default function Messages() {
       {/* The hero shares the row's measure. At full container width it began 75px to the start of
           the columns beneath it, so the page had two different left edges. */}
       <div className={`mx-auto w-full max-w-[1076px] ${peer ? "hidden md:block" : ""}`}>
-        <PageHero eyebrow="Community" title="ArtaChat"
+        <PageHero eyebrow="Community" title="Chat"
           lede="Private conversations, sealed on your own device — nobody else can read them, not even us." />
       </div>
       {fatal ? (
@@ -2272,7 +2272,7 @@ export default function Messages() {
                          ATTRIBUTES as well as text, so a title built from a member's name would
                          otherwise publish the whole membership into the public translations table. */
                       <button key={m.id} type="button" onClick={() => void openNew(m.slug)} data-ay-skip="1"
-                        title={m.has_key ? "Send an encrypted message" : "Hasn’t opened ArtaChat yet"}
+                        title={m.has_key ? "Send an encrypted message" : "Hasn’t opened Chat yet"}
                         className={`flex items-center gap-3 border-b border-line px-3 py-2.5 text-start last:border-b-0 hover:bg-veil/[0.05] ${peer?.id === m.id ? "bg-veil/[0.08]" : ""}`}>
                         <span className="relative shrink-0">
                           <Avatar src={m.avatar} name={m.name} country={m.country} className="h-10 w-10" />

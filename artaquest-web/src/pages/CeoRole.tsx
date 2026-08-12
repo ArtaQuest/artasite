@@ -173,7 +173,7 @@ function ApplyCard() {
         CV to it — the paperclip in the composer takes a PDF or a document.
       </p>
       <p className="text-[14px] leading-relaxed text-ink-2">
-        ArtaChat is end-to-end encrypted, so your CV is sealed to your device and mine.
+        Chat is end-to-end encrypted, so your CV is sealed to your device and mine.
         That matters more than usual on this platform: every other table is public on purpose,
         and the chat is the one place your file is not.
       </p>

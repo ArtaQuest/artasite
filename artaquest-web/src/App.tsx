@@ -119,9 +119,9 @@ const ROUTE_TITLES: Record<string, string> = {
   "/my-library": "My Library",
   "/ceo": "CEO",
   "/library": "Library",
-  "/messages": "ArtaChat",
-  "/meet": "ArtaMeet",
-  "/calendar": "ArtaCalendar",
+  "/messages": "Chat",
+  "/meet": "Meet",
+  "/calendar": "Calendar",
   // Every /book/<handle> too — this is the one URL in the product designed to be handed to a
   // stranger, and a tab reading "Page not found" is the first thing they would see.
   "/book": "Book a meeting",
