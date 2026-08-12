@@ -161,7 +161,7 @@ function NbBlock({ nb, compact }: { nb: NotebookCard; compact?: boolean }) {
         {nb.doi_link ? <span className="rounded-pill border border-line px-1.5">DOI</span> : null}
         {nb.calm < 100 ? <span className="rounded-pill border border-line px-1.5" title="Measured change rate — higher is calmer">Calm {nb.calm}/100</span> : null}
       </div>
-      <h3 className="mt-0.5 text-[15px] font-semibold leading-snug text-ink">{nb.title}</h3>
+      <h2 className="mt-0.5 text-[15px] font-semibold leading-snug text-ink">{nb.title}</h2>
 
       {!compact && nb.abstract ? <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-ink-2">{nb.abstract}</p> : null}
       {/* THE uniform feed hero: the standard teaser pair (alpha, transparent background — blends
@@ -859,7 +859,7 @@ function Composer({ onPosted }: { onPosted: (p: FeedPostT) => void }) {
                 <span className="hidden min-[400px]:flex min-w-0 items-center gap-1.5 overflow-hidden">
                   {EMOJI.map((e) => (
                     <button key={e} type="button" onClick={() => { setText((t) => t + e); box.current?.focus(); }}
-                      aria-label={`Insert ${e}`} className="shrink-0 rounded-md px-0.5 text-[16px] transition-transform hover:scale-125">{e}</button>
+                      aria-label={`Insert ${e}`} className="min-h-6 shrink-0 rounded-md px-1 py-0.5 text-[16px] transition-transform hover:scale-125">{e}</button>
                   ))}
                 </span>
                 <span aria-live="polite" className={cx("ms-auto shrink-0 text-[12px] tabular-nums",

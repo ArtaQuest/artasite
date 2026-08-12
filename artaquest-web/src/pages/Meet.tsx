@@ -620,7 +620,7 @@ function MeetList() {
           )}
 
           {failed ? (
-            <ErrorNote>Couldn’t load your meetings. <button type="button" className="font-semibold underline" onClick={() => load()}>Try again</button></ErrorNote>
+            <ErrorNote>Couldn’t load your meetings. <button type="button" className="-my-1 inline-block py-1 font-semibold underline" onClick={() => load()}>Try again</button></ErrorNote>
           ) : items === null ? (
             <StatusNote>Loading your meetings…</StatusNote>
           ) : items.length === 0 ? (

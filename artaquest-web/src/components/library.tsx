@@ -438,7 +438,7 @@ function TextPreview({ item, className }: { item: LibraryItem; className?: strin
     return (
       <span className={cx(BOX, className, "flex-col gap-1 p-2 text-center")}>
         <span aria-hidden className="text-ink-2"><ClassGlyph cls={item.class} /></span>
-        <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-[12px] text-yin-ink hover:underline">Open the file</a>
+        <a href={item.url} target="_blank" rel="noopener noreferrer" className="inline-block py-1 text-[12px] text-yin-ink hover:underline">Open the file</a>
       </span>
     );
   }

@@ -1057,7 +1057,7 @@ export async function getProfile(slug: string): Promise<Profile | null> {
   try {
     const pr = await get<ProfileR>(`${AQ}/profile?slug=${encodeURIComponent(slug)}`);
     return {
-      id: pr.id, name: pr.name, slug: pr.slug, avatar: pr.avatar, palm: pr.palm || "", country: pr.country || "", nationality: pr.nationality || "", email: pr.email || "", bio: pr.bio || "", links: pr.links || undefined, lastSeen: pr.last_seen || 0,
+      id: pr.id, name: pr.name, slug: pr.slug, avatar: pr.avatar, palm: pr.palm || "", email: pr.email || "", bio: pr.bio || "", links: pr.links || undefined, lastSeen: pr.last_seen || 0,
       // Public identity facts the endpoint has always emitted but the SPA used to drop on the floor.
       birthday: pr.birthday || "", fullName: pr.full_name || "", season: pr.season ?? 0, verified: !!pr.verified,
       relationship: pr.relationship || "", location: pr.location || "", languages: pr.languages ?? [],

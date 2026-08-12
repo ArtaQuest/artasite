@@ -329,7 +329,7 @@ export default function Profile() {
               {/* priority: above the fold and normally this page's LCP element — lazy-loading it
                   made the browser wait for layout before even starting the request. Carries the
                   verified-nationality flag and the opt-in palm flip. */}
-              <Avatar priority src={p.avatar} name={p.name} country={p.country} palm={p.palm || undefined}
+              <Avatar priority src={p.avatar} name={p.name} palm={p.palm || undefined}
                 className="h-24 w-24 shrink-0 bg-space-2 text-3xl ring-4 ring-space-2 sm:h-32 sm:w-32" />
               <div className="min-w-0 flex-1 sm:pb-1">
                 {/* THE REAL NAME IS THE HEADING. `p.name` is display_name — the handle a member is

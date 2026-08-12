@@ -87,7 +87,7 @@ export function WorkRail({ nb }: { nb: NotebookFull }) {
           <ul className="flex list-none flex-col gap-1.5 p-0">
             {nb.files.map((f) => (
               <li key={f.id}>
-                <a href={f.url} target="_blank" rel="noopener noreferrer nofollow" className="flex items-baseline gap-2 text-sm text-yin-ink hover:underline">
+                <a href={f.url} target="_blank" rel="noopener noreferrer nofollow" className="flex items-baseline gap-2 py-1 text-sm text-yin-ink hover:underline">
                   <span className="truncate" data-ay-skip="1">{f.label}</span>
                   <span className="ml-auto shrink-0 text-xs text-ink-3" data-ay-skip="1">{fmtBytes(f.bytes)}</span>
                 </a>

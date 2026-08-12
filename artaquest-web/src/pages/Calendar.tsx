@@ -444,7 +444,7 @@ export default function Calendar() {
           {failed ? (
             <ErrorNote>
               Couldn’t load your calendar.{" "}
-              <button type="button" className="font-semibold underline" onClick={() => load(days)}>Try again</button>
+              <button type="button" className="-my-1 inline-block py-1 font-semibold underline" onClick={() => load(days)}>Try again</button>
             </ErrorNote>
           ) : items === null ? (
             <StatusNote>Loading your calendar…</StatusNote>

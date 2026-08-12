@@ -200,8 +200,8 @@ function PeerRail({ followedIds, onFollowed }: { followedIds: number[]; onFollow
           return (
             <li key={p.id} className="flex items-center gap-2.5">
               {profile
-                ? <a href={profile} aria-label={p.name}><Avatar src={p.avatar} name={p.name} country={p.country} className="h-9 w-9 text-sm ring-1 ring-line" /></a>
-                : <Avatar src={p.avatar} name={p.name} country={p.country} className="h-9 w-9 text-sm ring-1 ring-line" />}
+                ? <a href={profile} aria-label={p.name}><Avatar src={p.avatar} name={p.name} className="h-9 w-9 text-sm ring-1 ring-line" /></a>
+                : <Avatar src={p.avatar} name={p.name} className="h-9 w-9 text-sm ring-1 ring-line" />}
               <div className="min-w-0 flex-1">
                 {profile
                   ? <a href={profile} data-ay-skip="1" className="block truncate text-[14px] font-semibold text-ink transition-colors hover:text-yang">{p.name}</a>

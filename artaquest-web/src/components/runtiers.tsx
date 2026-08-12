@@ -52,7 +52,9 @@ export function RunTiers({ id, slug, kaggleUrl, colabUrl, className }: Props) {
 
   const rung = "flex flex-wrap items-baseline gap-x-2 gap-y-1";
   const num = "grid h-5 w-5 shrink-0 place-items-center rounded-full border border-line text-[11px] font-bold text-ink-3";
-  const act = "text-[13px] font-semibold text-yin-ink underline-offset-2 hover:underline";
+  // inline-block + py-1: these were 20px-tall text runs, and running the work is the whole point
+  // of the page — the primary action should not be the hardest thing on it to tap.
+  const act = "inline-block py-1 text-[13px] font-semibold text-yin-ink underline-offset-2 hover:underline";
 
   return (
     <aside className={cx("flex flex-col gap-3 rounded-card border border-line bg-space-2 p-4", className)}>

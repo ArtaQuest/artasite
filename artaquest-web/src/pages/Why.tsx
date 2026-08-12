@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { chart, natalChart, natalHouses, transits, julianDayUT, type BirthPlace, type Body } from "../lib/astro";
+import { chart, natalChart, natalHouses, transits, type Body } from "../lib/astro";
 import { HOUSES, SIGN_APPROACH, PLANET_TIMESCALE } from "../lib/curriculum-astro";
 import { STYLE_LABEL } from "../lib/typology-meta";
 import { SYSTEMS, loadTypologies, typologiesReady } from "../lib/typologies";
 import { currentUser, localePath, getCourseCards, type CourseCard } from "../lib/wp";
-import { capitalOf } from "../lib/capitals";
 import { Card, PageHero, OrbitRings } from "../components/ui";
 import { DomainGlyph } from "../components/catalogue";
 import TrendChart from "../components/TrendChart";
@@ -168,19 +167,24 @@ const CYCLES: Cycle[] = [
 ];
 const BY_SLUG: Record<string, Cycle> = Object.fromEntries(CYCLES.map((c) => [c.slug, c]));
 
-// The member's natal houses (from birthday + nationality-capital), or null when no birthday is set.
+/**
+ * The member's natal houses, from their date of birth alone.
+ *
+ * This used to derive a BIRTH LOCATION by taking the capital city of the member's stated
+ * nationality — a crude proxy, but a location. Nationality stopped being collected on 2026-08-11
+ * (operator), so that lookup could only ever resolve nothing, and place-of-birth — which would have
+ * been the accurate input — was removed the same day. So: whole-sign houses off the Sun, which is
+ * what natalHouses() falls back to without a place. Coarser, and honest about it. If a birth
+ * location is ever collected again, pass it here and Placidus houses come back for free.
+ */
 function useNatalHouses() {
   const birth = currentUser()?.birthday || ls("aq_almanac_birth");
-  const nationality = currentUser()?.nationality || "";
   return useMemo(() => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(birth)) return null;
     const natal = natalChart(birth);
     if (!natal) return null;
-    let place: BirthPlace | null = null;
-    const c = capitalOf(nationality);
-    if (c) { const [Y, M, D] = birth.split("-").map(Number); place = { jdUT: julianDayUT(Y, M, D, 10 - c[2]), lat: c[0], lon: c[1] }; }
-    return natalHouses(natal, place);
-  }, [birth, nationality]);
+    return natalHouses(natal, null);
+  }, [birth]);
 }
 
 // What this cycle's body lights up RIGHT NOW for this member: the field (its natal house) × style (its

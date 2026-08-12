@@ -505,7 +505,7 @@ function VisitorPage({ handle }: { handle: string }) {
           {slotsFailed ? (
             <ErrorNote>
               Couldn’t load the free times.{" "}
-              <button type="button" className="font-semibold underline" onClick={loadSlots}>Try again</button>
+              <button type="button" className="-my-1 inline-block py-1 font-semibold underline" onClick={loadSlots}>Try again</button>
             </ErrorNote>
           ) : starts === null ? (
             <StatusNote>Looking for free times…</StatusNote>
@@ -929,7 +929,7 @@ function OwnerPage() {
           {failed ? (
             <ErrorNote>
               Couldn’t load your availability.{" "}
-              <button type="button" className="font-semibold underline" onClick={load}>Try again</button>
+              <button type="button" className="-my-1 inline-block py-1 font-semibold underline" onClick={load}>Try again</button>
             </ErrorNote>
           ) : items === null ? (
             <StatusNote>Loading your availability…</StatusNote>

@@ -69,7 +69,7 @@ function AssetStage({ nb }: { nb: NotebookFull }) {
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-3">
         <span data-ay-skip="1">{hero.label}</span>
         <span data-ay-skip="1">{fmtBytes(hero.bytes)}</span>
-        <a href={hero.url} target="_blank" rel="noopener noreferrer nofollow" className="text-yin-ink hover:underline">
+        <a href={hero.url} target="_blank" rel="noopener noreferrer nofollow" className="inline-block py-1 text-yin-ink hover:underline">
           Open the file
         </a>
         <SaveOffline item={hero} />
@@ -87,7 +87,7 @@ function AssetStage({ nb }: { nb: NotebookFull }) {
                 <LibraryMedia item={f} className={f.class === "audio" ? "p-3" : "h-full w-full"}
                   still={f.class !== "audio" && f.class !== "image"} />
               </div>
-              <a href={f.url} target="_blank" rel="noopener noreferrer nofollow" className="truncate text-[12px] text-ink-3 hover:text-yin-ink" title={f.name}>
+              <a href={f.url} target="_blank" rel="noopener noreferrer nofollow" className="block truncate py-1 text-[12px] text-ink-3 hover:text-yin-ink" title={f.name}>
                 <span data-ay-skip="1">{f.label}</span>
               </a>
             </li>
@@ -293,7 +293,7 @@ export function PostThread({ id, count }: { id: number; count: number }) {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span className="flex gap-1" role="toolbar" aria-label="Insert emoji">
               {EMOJI.map((e) => (
-                <button key={e} type="button" onClick={() => addEmoji(e)} aria-label={`Insert ${e}`}
+                <button key={e} type="button" onClick={() => addEmoji(e)} aria-label={`Insert ${e}`} style={{ minHeight: 24 }}
                   className="rounded-md px-1 text-[15px] transition-transform hover:scale-125">{e}</button>
               ))}
             </span>
@@ -402,7 +402,7 @@ export default function NotebookPage() {
             <EditLink own={own} onClick={() => setEditing(true)} />
             <p className="text-[12px] text-ink-3">
               <span data-ay-skip="1">{nb.kaggle?.author || nb.author.name}</span> · published <span data-ay-skip="1">{new Date((nb.published_at || nb.created) * 1000).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}</span>
-              {nb.doi_link ? <> · <a href={nb.doi_link} className="text-yin-ink hover:underline">{nb.doi_link.replace(/^https?:\/\//, "")}</a></> : null}
+              {nb.doi_link ? <> · <a href={nb.doi_link} className="inline-block py-1 text-yin-ink hover:underline">{nb.doi_link.replace(/^https?:\/\//, "")}</a></> : null}
             </p>
           </>
         ) : (
