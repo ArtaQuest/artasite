@@ -225,6 +225,17 @@ else
   [ $n -eq 0 ] && ok "$c files parse" || mark
 fi
 
+# ── 5b. Every aq_*() / AQ method call resolves ─────────────────────────────────────────────────
+# php -l parses a file; it cannot see a call to something that does not exist. That is a RUNTIME
+# fatal, and it took the public profile down twice on 2026-08-11 — once on a deleted method whose
+# last caller survived a comment-filtered grep, once on a helper whose defining edit was discarded
+# by a script that aborted after printing "added". Both files parsed perfectly.
+step "Every aq_*() and AQ method call resolves"
+if [ -f tools/undefined-calls.php ]; then
+  if out=$("$PHP" tools/undefined-calls.php 2>&1); then ok "$(printf '%s' "$out" | tail -1)"
+  else printf '%s\n' "$out" | sed 's/^/    /'; fail "undefined call(s) — a page load would fatal"; mark; fi
+else skip "tools/undefined-calls.php missing"; fi
+
 # ── 6. Typecheck, lint, build ──────────────────────────────────────────────────────────────────
 step "Typecheck, lint, build"
 if [ ! -d artaquest-web/node_modules ]; then
