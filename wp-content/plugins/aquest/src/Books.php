@@ -88,6 +88,8 @@ final class Books {
 			'Other current liabilities — member-held tokens the Foundation is obliged to honour' ],
 		'deferred' => [ 'Deferred income', 'liability', '2770', '2960',
 			'Amounts received for a period that has not yet run' ],
+		'gst_payable' => [ 'GST self-assessed on imported services', 'liability', '2960', '2960',
+			'Other current liabilities. Tax the Foundation owes CRA directly on services bought from a non-resident supplier, not tax collected from anyone' ],
 
 		'net_assets' => [ 'Accumulated surplus / (deficit)', 'equity', '3600', '3600',
 			'Retained earnings/deficit. Derived from the ledger, never posted to directly' ],
@@ -965,8 +967,8 @@ final class Books {
 					'note' => 'The published statements carry notes — see the notes block of this package.' ],
 				[ 'line' => '104', 'q' => 'Did the corporation have any subsequent events?', 'a' => 'Operator to confirm' ],
 				[ 'line' => '105', 'q' => 'Did the corporation re-evaluate its assets during the tax year?', 'a' => 'No' ],
-				[ 'line' => '106', 'q' => 'Did the corporation have any contingent liabilities during the tax year?', 'a' => 'Yes',
-					'note' => 'See the GST/HST self-assessment note.' ],
+				[ 'line' => '106', 'q' => 'Did the corporation have any contingent liabilities during the tax year?', 'a' => 'No',
+					'note' => 'The self-assessed GST is measurable and accrued as a liability, so it is not a contingency.' ],
 				[ 'line' => '107', 'q' => 'Did the corporation have any commitments during the tax year?', 'a' => 'Operator to confirm' ],
 				[ 'line' => '108', 'q' => 'Does the corporation have investments in joint ventures or partnerships?', 'a' => 'No' ],
 			],
@@ -1041,11 +1043,16 @@ final class Books {
 				. 'The reserve shortfall is stated openly on the reserve page rather than smoothed over.',
 		];
 		$notes[] = [
-			'title' => 'GST/HST — contingency, unresolved',
-			'body'  => 'Vendor invoices were issued with 0% tax on a reverse-charge basis because a Canadian business number was '
-				. 'supplied. If the Foundation is not registered for GST/HST, tax on these imported taxable supplies may be '
-				. 'self-assessable rather than avoided. This is disclosed as a contingency and is not accrued: it has not been '
-				. 'confirmed, and it should be put to a professional adviser before the return is filed.',
+			'title' => 'GST self-assessed on imported services',
+			'body'  => 'The supplier is registered under CRA\'s simplified regime for non-resident digital suppliers and charged '
+				. '0% because a Canadian business number was supplied. That relief is for a recipient who provides a GST/HST '
+				. 'REGISTRATION number, and the Foundation is not a registrant — so the tax was not extinguished, it moved. A '
+				. 'non-registrant acquiring an imported taxable supply of services self-assesses the tax and remits it on form '
+				. 'GST59. It is accrued here at ' . self::GST_RATE_PCT . '% (' . self::GST_JURISDICTION . ') and is NOT '
+				. 'recoverable, because an input tax credit requires a registration the Foundation does not hold — which makes '
+				. 'it part of the cost of the subscriptions rather than a balance to net off. Two things follow for the '
+				. 'operator: stop giving this supplier the business number as though it were a GST/HST registration, and put '
+				. 'both the rate and the remittance deadline to an adviser before filing.',
 		];
 		$notes[] = [
 			'title' => 'GIFI balance-sheet subtotals are not asserted here',
@@ -1381,7 +1388,26 @@ final class Books {
 	];
 
 	/** The tax position every one of these invoices carries, recorded once rather than three times. */
-	const FOUNDING_TAX_NOTE = 'Invoiced at 0% on a reverse-charge basis against CA BN ' . self::BN . '. See the GST/HST contingency note.';
+	const FOUNDING_TAX_NOTE = 'Invoiced at 0% on a reverse-charge basis against CA BN ' . self::BN . '. The Foundation is NOT a GST/HST registrant, so the tax is self-assessed here rather than avoided.';
+
+	/**
+	 * GST self-assessed on the founding costs.
+	 *
+	 * Anthropic is registered under CRA's simplified regime for non-resident digital suppliers and
+	 * charged 0% because a Canadian business number was supplied. That relief is for a recipient who
+	 * gives a GST/HST REGISTRATION number, and a plain BN with no RT programme account is not one —
+	 * the Foundation is not a registrant (operator, 2026-08-12). So the tax was not extinguished, it
+	 * moved: a non-registrant acquiring an imported taxable supply of services self-assesses it and
+	 * remits on form GST59.
+	 *
+	 * 5% GST — Alberta has no provincial component, so there is no HST or PST leg. It is NOT
+	 * recoverable, because an input tax credit needs a registration the Foundation does not have,
+	 * which makes the tax part of the COST of the subscriptions rather than a balance to net off.
+	 * Booked as a real liability rather than disclosed as a maybe: the rate is fixed, the base is
+	 * three invoices we hold, and a number this determinable does not belong in a footnote.
+	 */
+	const GST_RATE_PCT   = 5;
+	const GST_JURISDICTION = 'Alberta — 5% GST, no provincial component';
 
 	/** The director's user id, or 0. */
 	public static function director_uid() {
@@ -1458,6 +1484,19 @@ final class Books {
 				'rate_date'   => $c['gold_date'],
 				'source'      => 'LBMA Gold Price PM ' . $c['gold_date'] . ' · Bank of Canada FXUSDCAD ' . $c['fx_date'],
 			] );
+
+			// Self-assessed GST on the imported supply. Source 'tax', NOT 'invoice': the register
+			// records what the vendor billed (CA$280), the ledger records what the cost actually was
+			// (CA$280 plus non-recoverable tax), and invoices_tie_to_expenses compares the register
+			// only against invoice-sourced entries, so both stay true at once.
+			$gst = (int) round( $c['total'] * self::GST_RATE_PCT / 100 );
+			if ( $gst > 0 ) {
+				self::journal( 'gst:' . $c['number'], $c['paid'],
+					'GST self-assessed on ' . $c['number'], [
+						[ 'account' => 'software',    'debit'  => $gst, 'memo' => self::GST_RATE_PCT . '% of ' . self::cad( $c['total'] ) . ' — not recoverable without a registration' ],
+						[ 'account' => 'gst_payable', 'credit' => $gst, 'memo' => 'Owed to CRA on form GST59 · ' . self::GST_JURISDICTION ],
+					], 'tax', $id );
+			}
 			$done++;
 		}
 		// Stamp ONLY when every founding cost is on the books. Stamping unconditionally would freeze
@@ -1557,6 +1596,64 @@ final class Books {
 	}
 
 	/**
+	 * Bring the coin liability back down as the coins it represents leave circulation.
+	 *
+	 * The Foundation issued 4,230 ₳ to settle a director's advance and owes whoever holds them. That
+	 * obligation does NOT end when a member pays another member — the coins simply change hands — so
+	 * it cannot be derecognised on a transfer. It ends when the coins are DESTROYED, which is what a
+	 * platform charge does: Economy::credit_coins with a negative delta drops coins_issued, and the
+	 * service the member bought is the Foundation's to keep. Booked as revenue for exactly that
+	 * reason — the obligation was discharged by supplying something, which is what revenue is.
+	 *
+	 * Without this the liability only ever grew, and the balance sheet would have gone on reporting
+	 * an CA$839.64 obligation after the coins behind it had been spent to nothing.
+	 *
+	 * Valued at the WEIGHTED AVERAGE price of the issued tranche. The three tranches were struck at
+	 * different gold fixes, and picking one of them to unwind against would be arbitrary; the average
+	 * is the only choice that returns the liability to exactly zero when the last coin goes.
+	 *
+	 * At most one adjusting entry per day (the ref carries the date), and it only ever REDUCES: a
+	 * rise in circulating supply is other people's coins being minted, not the Foundation's debt
+	 * growing.
+	 */
+	public static function reconcile_coin_liability() {
+		self::ensure_tables();
+		if ( ! class_exists( '\\AQ\\Economy' ) ) { return 0; }
+		$booked_coins = (int) Data::col( 'SELECT COALESCE(SUM(coins),0) FROM ' . Data::t( 'aq_books_invoice' ) );
+		if ( $booked_coins < 1 ) { return 0; }
+
+		$mv           = self::movement();
+		$booked_value = (int) ( $mv['coin_liability'] ?? 0 );
+		if ( $booked_value < 1 ) { return 0; }
+
+		// The unit price must come from what was ORIGINALLY issued, never from the current balance.
+		// Dividing the already-reduced liability by the full coin count re-derives a cheaper coin
+		// every time, so the balance halves again on the next run and the one after — it converges
+		// on zero whether or not another coin is ever spent. The issued value is a fact about the
+		// invoice rows and does not move.
+		$issued_coins = 0;
+		$issued_value = 0;
+		foreach ( Data::all( 'SELECT coins, coin_price_1e6 FROM ' . Data::t( 'aq_books_invoice' ) . ' WHERE coins > 0' ) as $r ) {
+			$c = (int) $r['coins'];
+			$issued_coins += $c;
+			$issued_value += (int) round( $c * ( (int) $r['coin_price_1e6'] / 1000000 ) * 100 );
+		}
+		if ( $issued_coins < 1 || $issued_value < 1 ) { return 0; }
+
+		// Only OUR tranche can be outstanding, so cap by it: coins beyond it were minted elsewhere.
+		$outstanding = min( $issued_coins, max( 0, (int) Economy::counter( 'coins_issued' ) ) );
+		$target      = (int) round( $outstanding * $issued_value / $issued_coins );
+		$release     = $booked_value - $target;
+		if ( $release < 1 ) { return 0; }
+
+		return self::journal( 'coinspent:' . self::today(), self::today(),
+			'ArtaCoin spent on platform services', [
+				[ 'account' => 'coin_liability',   'debit'  => $release, 'memo' => ( $booked_coins - $outstanding ) . ' ₳ no longer in circulation' ],
+				[ 'account' => 'activity_revenue', 'credit' => $release, 'memo' => 'Obligation discharged by supplying the service' ],
+			], 'coin', 0 );
+	}
+
+	/**
 	 * Daily cron aq_books_year_end: publish the return package once a period has ended.
 	 *
 	 * "Publish" here means compute, freeze and expose — the package at /foundation/cra is generated
@@ -1566,6 +1663,7 @@ final class Books {
 	 */
 	public static function year_end_tick() {
 		self::ensure_tables();
+		self::reconcile_coin_liability();
 		foreach ( self::fy_list() as $fy ) {
 			if ( self::today() <= $fy['end'] ) { continue; }
 			if ( in_array( $fy['label'], self::locked_years(), true ) ) { continue; }

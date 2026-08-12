@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Books, type Statements, type BookInvoice, type CraPackage, type BookAmount, type GifiRow } from "../lib/api";
-import { Card } from "../components/ui";
+import { getCreatorStatus } from "../lib/wp";
+import { isLoggedIn } from "../lib/auth";
+import { Button, Card, Field, Input, Select } from "../components/ui";
 
 /* Money on a financial statement always carries both decimal places, including on a round number —
    "CA$840" in a column of cents reads as a rounded figure rather than an exact one. formatFiat drops
@@ -30,6 +32,102 @@ function Row({ label, cents, gifi, cur, strong }: { label: string; cents: number
   );
 }
 
+/**
+ * Operator-only: record a cost and its evidence.
+ *
+ * The figures are TYPED rather than read out of the PDF. In a PDF a space is usually positioning
+ * rather than a character, so a parser recovers the glyphs but not the adjacency that binds the
+ * word "Total" to the number beside it — and a bookkeeping total that is right most of the time
+ * manufactures errors nobody finds until the year end. Three numbers a month is the cheaper price.
+ */
+function RecordCost({ onSaved }: { onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [f, setF] = useState({
+    vendor: "", number: "", description: "", paid: "", issued: "",
+    period_start: "", period_end: "", currency: "CAD", total: "", tax: "",
+    account: "software", pay_method: "", note: "", payer_uid: "",
+  });
+  const [invoicePdf, setInvoicePdf] = useState<File | null>(null);
+  const [receiptPdf, setReceiptPdf] = useState<File | null>(null);
+  const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((p) => ({ ...p, [k]: e.target.value }));
+
+  async function submit() {
+    setBusy(true); setMsg("");
+    try {
+      const r = await Books.addInvoice(f as unknown as Record<string, string>, invoicePdf || undefined, receiptPdf || undefined);
+      setMsg(`Recorded — CA$${(r.cad_cents / 100).toFixed(2)}, ${r.documents} document(s) attached.`);
+      setF({ vendor: "", number: "", description: "", paid: "", issued: "", period_start: "", period_end: "", currency: "CAD", total: "", tax: "", account: "software", pay_method: "", note: "", payer_uid: "" });
+      setInvoicePdf(null); setReceiptPdf(null);
+      onSaved();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "That cost could not be recorded.");
+    } finally { setBusy(false); }
+  }
+
+  if (!open) {
+    return (
+      <div className="mt-8">
+        <Button variant="outline" onClick={() => setOpen(true)}>Record a cost</Button>
+      </div>
+    );
+  }
+  return (
+    <Card className="mt-8 p-5">
+      <p className="text-[15px] font-semibold text-ink">Record a cost</p>
+      <p className="mt-1 max-w-[70ch] text-[13px] leading-relaxed text-ink-3">
+        Type the figures from the invoice and attach it. A cost that will not post to the ledger is not
+        recorded at all — the register and the books move together or neither moves.
+      </p>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <Field label="Vendor" required><Input value={f.vendor} onChange={set("vendor")} placeholder="Anthropic, PBC" /></Field>
+        <Field label="Invoice number" required><Input value={f.number} onChange={set("number")} placeholder="6LNWF16Y-0009" /></Field>
+        <Field label="Description"><Input value={f.description} onChange={set("description")} placeholder="Claude Max plan - 20x" /></Field>
+        <Field label="Expense account">
+          <Select value={f.account} onChange={(v) => setF((p) => ({ ...p, account: v }))}
+            options={[
+              { value: "software", label: "Computer and software subscriptions" },
+              { value: "office", label: "Office expenses" },
+              { value: "professional_fees", label: "Professional fees" },
+              { value: "bank_charges", label: "Bank and payment charges" },
+              { value: "grants_out", label: "Bursaries and grants paid" },
+            ]} />
+        </Field>
+        <Field label="Date paid" required hint="YYYY-MM-DD"><Input value={f.paid} onChange={set("paid")} placeholder="2026-09-11" /></Field>
+        <Field label="Date issued" optional hint="Defaults to the payment date"><Input value={f.issued} onChange={set("issued")} placeholder="2026-09-11" /></Field>
+        <Field label="Service period start" optional><Input value={f.period_start} onChange={set("period_start")} placeholder="2026-09-11" /></Field>
+        <Field label="Service period end" optional hint="Used for the year-end accrual"><Input value={f.period_end} onChange={set("period_end")} placeholder="2026-10-11" /></Field>
+        <Field label="Currency" hint="Anything but CAD converts at the Bank of Canada rate for the payment date">
+          <Input value={f.currency} onChange={set("currency")} placeholder="CAD" />
+        </Field>
+        <Field label="Total" required hint="As billed, in the invoice's own currency"><Input value={f.total} onChange={set("total")} placeholder="280.00" /></Field>
+        <Field label="Tax included in the total" optional><Input value={f.tax} onChange={set("tax")} placeholder="0.00" /></Field>
+        <Field label="Payment method" optional><Input value={f.pay_method} onChange={set("pay_method")} placeholder="Visa ending 2178" /></Field>
+        <Field label="Paid personally by (user id)" optional hint="Leave empty if the Foundation paid it directly">
+          <Input value={f.payer_uid} onChange={set("payer_uid")} placeholder="138324856" />
+        </Field>
+        <Field label="Note" optional><Input value={f.note} onChange={set("note")} /></Field>
+      </div>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <Field label="Invoice PDF" optional>
+          <input type="file" accept="application/pdf" onChange={(e) => setInvoicePdf(e.target.files?.[0] ?? null)}
+            className="block w-full text-[13px] text-ink-2 file:mr-3 file:rounded file:border file:border-line file:bg-space-1 file:px-3 file:py-1.5 file:text-[13px] file:text-ink-2" />
+        </Field>
+        <Field label="Receipt PDF" optional>
+          <input type="file" accept="application/pdf" onChange={(e) => setReceiptPdf(e.target.files?.[0] ?? null)}
+            className="block w-full text-[13px] text-ink-2 file:mr-3 file:rounded file:border file:border-line file:bg-space-1 file:px-3 file:py-1.5 file:text-[13px] file:text-ink-2" />
+        </Field>
+      </div>
+      <div className="mt-5 flex items-center gap-3">
+        <Button onClick={submit} disabled={busy || !f.vendor || !f.number || !f.paid || !f.total}>{busy ? "Recording…" : "Record it"}</Button>
+        <Button variant="outline" onClick={() => setOpen(false)}>Close</Button>
+        {msg ? <span className="text-[13px] text-ink-2">{msg}</span> : null}
+      </div>
+    </Card>
+  );
+}
+
 function Section({ title, children, note }: { title: string; children: React.ReactNode; note?: string }) {
   return (
     <section className="mt-10">
@@ -49,6 +147,16 @@ export default function Finances() {
   /* The period being viewed. Without this the page would only ever show the CURRENT one, so on
      1 January 2027 the journal and the statements would go blank while the ledger was still full. */
   const [fy, setFy] = useState("");
+  /* Operator-only affordances hang off a PER-USER route, never off the public payload: the books
+     GETs are edge-cacheable, so a capability flag baked into one of them would be served to whoever
+     asked next. */
+  const [operator, setOperator] = useState(false);
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    if (!isLoggedIn()) return;
+    getCreatorStatus().then((s) => setOperator(Boolean(s?.operator))).catch(() => setOperator(false));
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -62,7 +170,7 @@ export default function Finances() {
       }
     })();
     return () => { live = false; };
-  }, [fy]);
+  }, [fy, reload]);
 
   if (err) return <div className="mx-auto max-w-4xl px-4 py-16 text-[15px] text-ink-2">{err}</div>;
   if (!st) return <div className="mx-auto max-w-4xl px-4 py-16 text-[15px] text-ink-3">Opening the books…</div>;
@@ -197,11 +305,17 @@ export default function Finances() {
                     <span data-ay-skip="1" className="text-[12px] text-ink-3">{e.date} · {e.ref}</span>
                   </div>
                   <div className="mt-2 grid gap-1">
+                    {/* Indentation alone tells a sighted reader which side a line is on; a screen
+                        reader just hears two amounts. The Dr/Cr marker is the actual information. */}
                     {e.lines.map((l, i) => (
                       <div key={i} className="flex items-baseline justify-between gap-4 text-[13px]">
-                        <span className={l.debit ? "text-ink-2" : "pl-6 text-ink-3"}>{l.label}</span>
-                        <span data-ay-skip="1" className="shrink-0 tabular-nums text-ink-2">
-                          {l.debit ? money(l.debit, cur) : <span className="text-ink-3">{money(l.credit, cur)}</span>}
+                        <span className={l.debit ? "text-ink-2" : "pl-6 text-ink-3"}>
+                          <span className="mr-2 inline-block w-5 text-[11px] font-semibold tracking-wide text-ink-3">{l.debit ? "Dr" : "Cr"}</span>
+                          {l.label}
+                        </span>
+                        <span className={`shrink-0 tabular-nums ${l.debit ? "text-ink-2" : "text-ink-3"}`}>
+                          <span className="sr-only">{l.debit ? "debit" : "credit"} </span>
+                          <span data-ay-skip="1">{money(l.debit || l.credit, cur)}</span>
                         </span>
                       </div>
                     ))}
@@ -230,6 +344,18 @@ export default function Finances() {
                   <div><dt className="text-ink-3">Paid</dt><dd data-ay-skip="1" className="mt-0.5 text-ink-2">{r.paid}</dd></div>
                   <div><dt className="text-ink-3">Service period</dt><dd data-ay-skip="1" className="mt-0.5 text-ink-2">{r.period.start} → {r.period.end}</dd></div>
                   <div><dt className="text-ink-3">Method</dt><dd data-ay-skip="1" className="mt-0.5 text-ink-2">{r.pay_method || "—"}</dd></div>
+                  {/* A foreign-currency invoice cannot be reconciled to the PDF beside it unless the
+                      page shows what was actually billed and the rate used to get to CAD. */}
+                  {r.currency !== cur ? (
+                    <>
+                      <div><dt className="text-ink-3">Billed</dt><dd data-ay-skip="1" className="mt-0.5 text-ink-2">{money(r.total_cents, r.currency)}</dd></div>
+                      <div>
+                        <dt className="text-ink-3">Rate used</dt>
+                        <dd data-ay-skip="1" className="mt-0.5 text-ink-2">{r.fx.rate.toFixed(4)} on {r.fx.date}</dd>
+                      </div>
+                    </>
+                  ) : null}
+                  {r.tax_cents ? <div><dt className="text-ink-3">Tax on the invoice</dt><dd data-ay-skip="1" className="mt-0.5 text-ink-2">{money(r.tax_cents, r.currency)}</dd></div> : null}
                 </dl>
                 {r.tax_note ? <p className="mt-3 text-[12.5px] leading-relaxed text-ink-3">{r.tax_note}</p> : null}
                 {r.coin_basis ? (
@@ -259,6 +385,7 @@ export default function Finances() {
             ))}
             {inv && inv.length === 0 ? <p className="text-[14px] text-ink-3">No invoices recorded yet.</p> : null}
           </div>
+          {operator ? <RecordCost onSaved={() => setReload((n) => n + 1)} /> : null}
         </Section>
       )}
 
