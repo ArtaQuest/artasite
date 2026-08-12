@@ -603,7 +603,13 @@ export const Learn = {
 export const Economy = {
   wallet: () => get<Wallet>("/wallet"),
   leaderboard: (track = "all") => get<Page<LeaderRow>>("/leaderboard", { track }),
-  reserve: () => get<{ issued_coins: number; backing_mg: number; ratio: number; unit: string }>("/reserve"),
+  // shortfall_* are the honest half: coin issued to settle a director's advance is backed by
+  // nothing, because that cash went to a supplier rather than into the reserve.
+  reserve: () => get<{
+    issued_coins: number; backing_mg: number; ratio: number; backed: boolean; unit: string;
+    shortfall_mg: number; authorised_shortfall_mg: number; shortfall_note: string;
+    spot: number; buy: number; sell: number; fiat: string;
+  }>("/reserve"),
 };
 
 // ── Notifications (the account-drawer bell) ───────────────────────────────────

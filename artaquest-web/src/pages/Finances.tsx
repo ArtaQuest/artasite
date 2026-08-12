@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import { Books, type Statements, type BookInvoice, type CraPackage, type BookAmount, type GifiRow } from "../lib/api";
+import { Books, Economy, type Statements, type BookInvoice, type CraPackage, type BookAmount, type GifiRow } from "../lib/api";
 import { getCreatorStatus } from "../lib/wp";
 import { isLoggedIn } from "../lib/auth";
 import { Button, Card, Field, Input, Select } from "../components/ui";
 
 /* Money on a financial statement always carries both decimal places, including on a round number —
-   "CA$840" in a column of cents reads as a rounded figure rather than an exact one. formatFiat drops
-   them on integers, which is right for a price and wrong here. */
+   "CA$840" in a column of cents reads as a rounded figure rather than an exact one. */
 const money = (cents: number, cur = "CAD") => {
   const v = (cents || 0) / 100;
   try {
@@ -17,17 +16,64 @@ const money = (cents: number, cur = "CAD") => {
 };
 /* A negative figure on a statement is written in parentheses, not with a minus sign. */
 const acct = (cents: number, cur = "CAD") => (cents < 0 ? `(${money(-cents, cur)})` : money(cents, cur));
-
 const bytes = (n: number) => (n > 1024 * 1024 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`);
 
-function Row({ label, cents, gifi, cur, strong }: { label: string; cents: number; gifi?: string; cur: string; strong?: boolean }) {
+/**
+ * What each ledger account means, said without accounting words.
+ *
+ * A published ledger only an accountant can read is not transparency, it is compliance with extra
+ * steps. Every line on this page carries its plain meaning next to its number.
+ */
+const PLAIN: Record<string, string> = {
+  cash: "Money in a Foundation bank account.",
+  prepaid: "Subscription time already paid for but not yet used up at the year end.",
+  due_director: "Money the Foundation owes a director who paid its bills out of their own pocket.",
+  coin_liability: "ArtaCoin the Foundation has issued and is obliged to honour. A debt, not income.",
+  deferred: "Money received for a period that has not run yet.",
+  gst_payable: "Sales tax the Foundation owes CRA directly on services bought from abroad.",
+  donations: "Gifts received.",
+  grants_in: "Grants and subsidies received.",
+  activity_revenue: "Earned by supplying something — including ArtaCoin spent on platform services.",
+  software: "Subscriptions the platform runs on, including any tax that cannot be reclaimed.",
+  office: "Office costs.",
+  professional_fees: "Accountants, lawyers, auditors.",
+  bank_charges: "Bank and payment-processing fees.",
+  grants_out: "Bursaries and grants the Foundation has paid out.",
+};
+
+function Row({ label, cents, gifi, cur, strong, plain }: { label: string; cents: number; gifi?: string; cur: string; strong?: boolean; plain?: string }) {
   return (
-    <div className={`flex items-baseline justify-between gap-4 border-b border-line/60 py-2 last:border-0 ${strong ? "font-semibold text-ink" : "text-ink-2"}`}>
-      <span className="flex min-w-0 items-baseline gap-2">
-        <span className="truncate">{label}</span>
-        {gifi ? <span data-ay-skip="1" className="shrink-0 rounded bg-space-1 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-ink-3">GIFI {gifi}</span> : null}
-      </span>
-      <span data-ay-skip="1" className="shrink-0 tabular-nums">{acct(cents, cur)}</span>
+    <div className={`border-b border-line/60 py-2.5 last:border-0 ${strong ? "font-semibold text-ink" : "text-ink-2"}`}>
+      <div className="flex items-baseline justify-between gap-4">
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span className="truncate">{label}</span>
+          {gifi ? <span data-ay-skip="1" className="shrink-0 rounded bg-space-1 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-ink-3">GIFI {gifi}</span> : null}
+        </span>
+        <span data-ay-skip="1" className="shrink-0 tabular-nums">{acct(cents, cur)}</span>
+      </div>
+      {plain ? <p className="mt-0.5 max-w-[60ch] text-[12px] font-normal leading-snug text-ink-3">{plain}</p> : null}
+    </div>
+  );
+}
+
+function Section({ title, children, note }: { title: string; children: React.ReactNode; note?: string }) {
+  return (
+    <section className="mt-10">
+      <h2 className="text-[19px] font-semibold text-ink">{title}</h2>
+      {note ? <p className="mt-1 max-w-[70ch] text-[13.5px] leading-relaxed text-ink-3">{note}</p> : null}
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
+/** One of the three headline figures. */
+function BigNumber({ label, value, tone, plain }: { label: string; value: string; tone: "neutral" | "yang" | "yin"; plain: string }) {
+  const colour = tone === "yang" ? "text-yang" : tone === "yin" ? "text-yin-light" : "text-ink";
+  return (
+    <div className="rounded-card border border-line bg-space-1 p-4">
+      <p className="text-[12px] font-medium uppercase tracking-[0.1em] text-ink-3">{label}</p>
+      <p data-ay-skip="1" className={`mt-1 text-[26px] font-semibold tabular-nums ${colour}`}>{value}</p>
+      <p className="mt-1 text-[12.5px] leading-snug text-ink-3">{plain}</p>
     </div>
   );
 }
@@ -38,7 +84,7 @@ function Row({ label, cents, gifi, cur, strong }: { label: string; cents: number
  * The figures are TYPED rather than read out of the PDF. In a PDF a space is usually positioning
  * rather than a character, so a parser recovers the glyphs but not the adjacency that binds the
  * word "Total" to the number beside it — and a bookkeeping total that is right most of the time
- * manufactures errors nobody finds until the year end. Three numbers a month is the cheaper price.
+ * manufactures errors nobody finds until the year end.
  */
 function RecordCost({ onSaved }: { onSaved: () => void }) {
   const [open, setOpen] = useState(false);
@@ -67,11 +113,7 @@ function RecordCost({ onSaved }: { onSaved: () => void }) {
   }
 
   if (!open) {
-    return (
-      <div className="mt-8">
-        <Button variant="outline" onClick={() => setOpen(true)}>Record a cost</Button>
-      </div>
-    );
+    return <div className="mt-8"><Button variant="outline" onClick={() => setOpen(true)}>Record a cost</Button></div>;
   }
   return (
     <Card className="mt-8 p-5">
@@ -128,28 +170,19 @@ function RecordCost({ onSaved }: { onSaved: () => void }) {
   );
 }
 
-function Section({ title, children, note }: { title: string; children: React.ReactNode; note?: string }) {
-  return (
-    <section className="mt-10">
-      <h2 className="text-[19px] font-semibold text-ink">{title}</h2>
-      {note ? <p className="mt-1 max-w-[70ch] text-[13.5px] leading-relaxed text-ink-3">{note}</p> : null}
-      <div className="mt-4">{children}</div>
-    </section>
-  );
-}
+type Reserve = Awaited<ReturnType<typeof Economy.reserve>>;
 
 export default function Finances() {
   const [st, setSt] = useState<Statements | null>(null);
   const [inv, setInv] = useState<BookInvoice[] | null>(null);
   const [cra, setCra] = useState<CraPackage | null>(null);
+  const [res, setRes] = useState<Reserve | null>(null);
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"statements" | "invoices" | "cra">("statements");
-  /* The period being viewed. Without this the page would only ever show the CURRENT one, so on
-     1 January 2027 the journal and the statements would go blank while the ledger was still full. */
+  const [tab, setTab] = useState<"overview" | "statements" | "invoices" | "cra">("overview");
   const [fy, setFy] = useState("");
   /* Operator-only affordances hang off a PER-USER route, never off the public payload: the books
-     GETs are edge-cacheable, so a capability flag baked into one of them would be served to whoever
-     asked next. */
+     GETs are edge-cacheable, so a capability flag baked into one of them would be handed to
+     whoever asked next. */
   const [operator, setOperator] = useState(false);
   const [reload, setReload] = useState(0);
 
@@ -168,6 +201,8 @@ export default function Finances() {
       } catch {
         if (live) setErr("The books could not be loaded just now. Please try again shortly.");
       }
+      // The reserve is a separate concern; a failure there must not blank the books.
+      Economy.reserve().then((r) => { if (live) setRes(r); }).catch(() => {});
     })();
     return () => { live = false; };
   }, [fy, reload]);
@@ -179,6 +214,8 @@ export default function Finances() {
   const pos = st.statements.position;
   const ops = st.statements.operations;
   const failed = st.checks.filter((c) => !c.ok);
+  const owed = pos.liabilities.filter((l) => l.cents !== 0);
+  const totalCosts = inv ? inv.reduce((n, r) => n + r.cad_cents, 0) : 0;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:py-14">
@@ -186,117 +223,154 @@ export default function Finances() {
         <p className="text-[12.5px] font-semibold uppercase tracking-[0.14em] text-yang">Radical transparency</p>
         <h1 className="mt-2 text-[30px] font-semibold leading-tight text-ink sm:text-[36px]">The Foundation&rsquo;s books</h1>
         <p className="mt-3 max-w-[68ch] text-[15px] leading-relaxed text-ink-2">
-          Every cent the Foundation has spent or received, kept as double entry and published whole — the statements,
-          the invoice register with every supporting document, and the year-end return prepared straight from the same
-          numbers. Nothing here is a summary you have to take on trust: each figure is the sum of ledger lines you can
-          read yourself.
+          Every cent the Foundation has received or spent, published in full and in plain words. You do not
+          have to take any figure here on trust: each one is the sum of ledger entries you can read, and every
+          cost has the supplier&rsquo;s own invoice attached to it.
         </p>
-        <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-3 text-[13.5px] sm:grid-cols-4">
-          <div><dt className="text-ink-3">Entity</dt><dd data-ay-skip="1" className="mt-0.5 font-semibold text-ink-2">{st.entity.name}</dd></div>
-          <div><dt className="text-ink-3">Business number</dt><dd data-ay-skip="1" className="mt-0.5 font-semibold text-ink-2">{st.entity.bn}</dd></div>
-          <div><dt className="text-ink-3">Incorporated</dt><dd data-ay-skip="1" className="mt-0.5 font-semibold text-ink-2">{st.entity.incorporated}</dd></div>
-          <div>
-            <dt className="text-ink-3">Fiscal period</dt>
-            <dd className="mt-0.5 font-semibold text-ink-2">
-              {st.fiscal.years.length > 1 ? (
-                <select
-                  value={st.statements.fy.label}
-                  onChange={(e) => setFy(e.target.value)}
-                  aria-label="Fiscal period"
-                  className="rounded border border-line bg-space-1 px-1.5 py-0.5 text-[13px] font-semibold text-ink-2"
-                >
-                  {st.fiscal.years.map((y) => <option key={y.label} value={y.label}>{y.label}</option>)}
-                </select>
-              ) : (
-                <span data-ay-skip="1">{st.statements.fy.label}</span>
-              )}
-              {/* bdi keeps the two dates in written order — without it the bidi algorithm swaps them
-                  around the arrow in every RTL locale, so the period reads end-first. */}
-              <bdi data-ay-skip="1" className="ml-2 font-normal text-ink-3">{st.statements.fy.start} → {st.statements.fy.end}</bdi>
-            </dd>
-          </div>
-        </dl>
       </header>
 
-      {/* The single most important thing a reader of a public ledger wants to know is whether it
-          adds up. So it goes first, and it says which check failed rather than only that one did. */}
+      {/* Whether a public ledger adds up is the first thing a sceptic wants and the last thing a
+          summary usually tells them, so it goes at the top — and names what failed, not just that
+          something did. */}
       <div className={`mt-8 rounded-card border p-4 ${failed.length ? "border-yang/50 bg-yang/5" : "border-line bg-space-1"}`}>
         <p className="text-[14px] font-semibold text-ink">
-          {failed.length ? `${failed.length} of ${st.checks.length} checks did not pass` : `All ${st.checks.length} checks pass`}
+          {failed.length
+            ? `${failed.length} of ${st.checks.length} arithmetic checks did not pass`
+            : `All ${st.checks.length} arithmetic checks pass`}
         </p>
-        <ul className="mt-2 grid gap-1 text-[13px] text-ink-3 sm:grid-cols-2">
-          {st.checks.map((c) => (
-            <li key={c.check} className="flex items-baseline gap-2">
-              <span className={c.ok ? "text-yin-light" : "text-yang"}>{c.ok ? "✓" : "✕"}</span>
-              <span data-ay-skip="1">{c.check.replace(/_/g, " ")}</span>
-            </li>
-          ))}
-        </ul>
-        {failed.length ? <p className="mt-2 text-[13px] text-ink-2">{failed.map((f) => f.detail).join(" · ")}</p> : null}
+        <p className="mt-1 max-w-[70ch] text-[12.5px] leading-relaxed text-ink-3">
+          Recomputed from the raw ledger every time this page loads: every entry balances, the statements tie
+          to the entries, and the invoice register ties to the costs.
+        </p>
+        {failed.length ? <p className="mt-2 text-[13px] text-ink-2">{failed.map((f) => `${f.check.replace(/_/g, " ")}: ${f.detail}`).join(" · ")}</p> : null}
       </div>
 
-      <nav className="mt-8 flex gap-1 border-b border-line" role="tablist">
-        {([["statements", "Statements"], ["invoices", "Invoices"], ["cra", "Year-end return"]] as const).map(([k, label]) => (
-          <button
-            key={k}
-            role="tab"
-            aria-selected={tab === k}
-            onClick={() => setTab(k)}
-            className={`-mb-px border-b-2 px-3 py-2 text-[14px] font-medium transition-colors ${tab === k ? "border-yang text-ink" : "border-transparent text-ink-3 hover:text-yin-light"}`}
-          >
+      <nav className="mt-8 flex flex-wrap gap-1 border-b border-line" role="tablist">
+        {([["overview", "In plain words"], ["statements", "Statements"], ["invoices", "Costs & invoices"], ["cra", "Year-end return"]] as const).map(([k, label]) => (
+          <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+            className={`-mb-px border-b-2 px-3 py-2 text-[14px] font-medium transition-colors ${tab === k ? "border-yang text-ink" : "border-transparent text-ink-3 hover:text-yin-light"}`}>
             {label}
           </button>
         ))}
       </nav>
 
+      {tab === "overview" && (
+        <>
+          <div className="mt-8 grid gap-3 sm:grid-cols-3">
+            <BigNumber label="What it owns" value={money(pos.total_assets, cur)} tone="neutral"
+              plain={pos.total_assets === 0 ? "No bank balance, no property, nothing." : "Cash, and anything paid for in advance."} />
+            <BigNumber label="What it owes" value={money(pos.total_liabilities, cur)} tone="yang"
+              plain="Debts the Foundation has to settle one day." />
+            <BigNumber label="The difference" value={acct(pos.net_assets, cur)} tone="yin"
+              plain={pos.net_assets < 0 ? "It owes more than it holds. That gap is the deficit." : "What would be left over."} />
+          </div>
+
+          <Section title="What this means">
+            <Card className="p-5">
+              <p className="max-w-[72ch] text-[15px] leading-relaxed text-ink-2">
+                The Foundation holds <strong className="text-ink">{money(pos.total_assets, cur)}</strong>. It has spent{" "}
+                <strong className="text-ink">{money(ops.total_expenses, cur)}</strong> running the platform and received{" "}
+                <strong className="text-ink">{money(ops.total_revenue, cur)}</strong> in income, leaving{" "}
+                <strong className="text-ink">{money(pos.total_liabilities, cur)}</strong> owed in total.
+                {ops.total_revenue === 0
+                  ? " No donation has ever been recorded — everything so far has been paid for personally by a director, who is owed it back."
+                  : ""}
+              </p>
+              <ul className="mt-4 grid gap-3">
+                {owed.map((l) => (
+                  <li key={l.account} className="flex items-baseline justify-between gap-4 border-b border-line/60 pb-3 last:border-0 last:pb-0">
+                    <span className="min-w-0">
+                      <span className="text-[14px] font-medium text-ink-2">{l.label}</span>
+                      <span className="mt-0.5 block max-w-[58ch] text-[12.5px] leading-snug text-ink-3">{PLAIN[l.account] || ""}</span>
+                    </span>
+                    <span data-ay-skip="1" className="shrink-0 tabular-nums text-[15px] font-semibold text-ink">{money(l.cents, cur)}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          </Section>
+
+          {res ? (
+            <Section title="The coins, and the gold behind them"
+              note="ArtaCoin is meant to be one milligram of gold each. Where it is not, this page says so rather than rounding the claim up.">
+              <Card className="p-5">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div><p className="text-[12px] uppercase tracking-wide text-ink-3">Coins issued</p><p data-ay-skip="1" className="mt-1 text-[20px] font-semibold text-ink">{res.issued_coins.toLocaleString()} ₳</p></div>
+                  <div><p className="text-[12px] uppercase tracking-wide text-ink-3">Gold held</p><p data-ay-skip="1" className="mt-1 text-[20px] font-semibold text-ink">{res.backing_mg.toLocaleString()} mg</p></div>
+                  <div><p className="text-[12px] uppercase tracking-wide text-ink-3">Backed</p><p className={`mt-1 text-[20px] font-semibold ${res.backed ? "text-yin-light" : "text-yang"}`}>{res.backed ? "Fully" : "Not fully"}</p></div>
+                </div>
+                {res.shortfall_note ? <p className="mt-4 max-w-[72ch] text-[13.5px] leading-relaxed text-ink-2">{res.shortfall_note}</p> : null}
+              </Card>
+            </Section>
+          ) : null}
+
+          <Section title="Can I check this myself?" note="Yes, and without asking us for anything.">
+            <Card className="p-5">
+              <ul className="grid gap-3 text-[13.5px] leading-relaxed text-ink-2">
+                <li><strong className="text-ink">Open the invoices.</strong> Every cost has the supplier&rsquo;s own PDF attached, published with the SHA-256 of its bytes, so you can confirm the file you downloaded is the file we recorded.</li>
+                <li><strong className="text-ink">Read the ledger.</strong> The Statements tab shows every entry with both of its sides. Nothing is entered as a total; each total is the sum of the entries above it.</li>
+                <li><strong className="text-ink">Re-run the arithmetic.</strong> <span data-ay-skip="1" className="text-ink-3">/wp-json/aq/v1/foundation/books/verify</span> recomputes every check from the raw lines, on demand.</li>
+                <li><strong className="text-ink">Query the raw tables.</strong> The whole database is public at <a href="/data/" className="text-yin-light hover:underline">/data</a>, including the four tables behind this page.</li>
+              </ul>
+            </Card>
+          </Section>
+        </>
+      )}
+
       {tab === "statements" && (
         <>
-          <Section title="Statement of financial position" note={`What the Foundation owns and owes at ${st.statements.fy.end}.`}>
+          <div className="mt-8 flex flex-wrap items-center gap-3 text-[13px] text-ink-3">
+            <span>Fiscal period</span>
+            {st.fiscal.years.length > 1 ? (
+              <select value={st.statements.fy.label} onChange={(e) => setFy(e.target.value)} aria-label="Fiscal period"
+                className="rounded border border-line bg-space-1 px-2 py-1 text-[13px] font-semibold text-ink-2">
+                {st.fiscal.years.map((y) => <option key={y.label} value={y.label}>{y.label}</option>)}
+              </select>
+            ) : <span data-ay-skip="1" className="font-semibold text-ink-2">{st.statements.fy.label}</span>}
+            {/* bdi keeps the two dates in written order — the bidi algorithm otherwise swaps them
+                around the arrow in every RTL locale, so the period reads end-first. */}
+            <bdi data-ay-skip="1">{st.statements.fy.start} → {st.statements.fy.end}</bdi>
+            <span>· return due <bdi data-ay-skip="1">{st.fiscal.filing_due}</bdi></span>
+          </div>
+
+          <Section title="What it owns and owes" note={`At ${st.statements.fy.end}.`}>
             <Card className="p-5">
               <h3 className="text-[13px] font-semibold uppercase tracking-wide text-ink-3">Assets</h3>
               <div className="mt-2">
-                {pos.assets.filter((a) => a.cents !== 0).map((a: BookAmount) => <Row key={a.account} label={a.label} cents={a.cents} gifi={a.gifi} cur={cur} />)}
+                {pos.assets.filter((a) => a.cents !== 0).map((a: BookAmount) => <Row key={a.account} label={a.label} cents={a.cents} gifi={a.gifi} cur={cur} plain={PLAIN[a.account]} />)}
                 {pos.assets.every((a) => a.cents === 0) ? <p className="py-2 text-[13.5px] text-ink-3">None. The Foundation holds no cash — its costs have been met personally by a director.</p> : null}
                 <Row label="Total assets" cents={pos.total_assets} cur={cur} strong />
               </div>
-
               <h3 className="mt-6 text-[13px] font-semibold uppercase tracking-wide text-ink-3">Liabilities</h3>
               <div className="mt-2">
-                {pos.liabilities.filter((a) => a.cents !== 0).map((a) => <Row key={a.account} label={a.label} cents={a.cents} gifi={a.gifi} cur={cur} />)}
+                {owed.map((a) => <Row key={a.account} label={a.label} cents={a.cents} gifi={a.gifi} cur={cur} plain={PLAIN[a.account]} />)}
                 <Row label="Total liabilities" cents={pos.total_liabilities} cur={cur} strong />
               </div>
-
-              <div className="mt-6">
-                <Row label="Accumulated surplus / (deficit)" cents={pos.net_assets} gifi="3600" cur={cur} strong />
-              </div>
+              <div className="mt-6"><Row label="Accumulated surplus / (deficit)" cents={pos.net_assets} gifi="3600" cur={cur} strong /></div>
               <p className="mt-3 text-[12.5px] text-ink-3">
-                {pos.balances
-                  ? "Assets equal liabilities plus accumulated surplus, to the cent."
-                  : "These figures do not balance — that is a defect, and it is shown rather than hidden."}
+                {pos.balances ? "Assets equal liabilities plus accumulated surplus, to the cent." : "These figures do not balance — that is a defect, and it is shown rather than hidden."}
               </p>
             </Card>
           </Section>
 
-          <Section title="Statement of operations" note={`Income and costs for ${st.statements.fy.label}.`}>
+          <Section title="What came in and went out" note={`For ${st.statements.fy.label}.`}>
             <Card className="p-5">
-              <h3 className="text-[13px] font-semibold uppercase tracking-wide text-ink-3">Revenue</h3>
+              <h3 className="text-[13px] font-semibold uppercase tracking-wide text-ink-3">Income</h3>
               <div className="mt-2">
-                {ops.revenue.filter((a) => a.cents !== 0).map((a) => <Row key={a.account} label={a.label} cents={a.cents} gifi={a.gifi} cur={cur} />)}
-                {ops.revenue.every((a) => a.cents === 0) ? <p className="py-2 text-[13.5px] text-ink-3">No revenue this period.</p> : null}
-                <Row label="Total revenue" cents={ops.total_revenue} gifi="8299" cur={cur} strong />
+                {ops.revenue.filter((a) => a.cents !== 0).map((a) => <Row key={a.account} label={a.label} cents={a.cents} gifi={a.gifi} cur={cur} plain={PLAIN[a.account]} />)}
+                {ops.revenue.every((a) => a.cents === 0) ? <p className="py-2 text-[13.5px] text-ink-3">Nothing received this period.</p> : null}
+                <Row label="Total income" cents={ops.total_revenue} gifi="8299" cur={cur} strong />
               </div>
-              <h3 className="mt-6 text-[13px] font-semibold uppercase tracking-wide text-ink-3">Expenses</h3>
+              <h3 className="mt-6 text-[13px] font-semibold uppercase tracking-wide text-ink-3">Costs</h3>
               <div className="mt-2">
-                {ops.expenses.filter((a) => a.cents !== 0).map((a) => <Row key={a.account} label={a.label} cents={a.cents} gifi={a.gifi} cur={cur} />)}
-                <Row label="Total expenses" cents={ops.total_expenses} gifi="9368" cur={cur} strong />
+                {ops.expenses.filter((a) => a.cents !== 0).map((a) => <Row key={a.account} label={a.label} cents={a.cents} gifi={a.gifi} cur={cur} plain={PLAIN[a.account]} />)}
+                <Row label="Total costs" cents={ops.total_expenses} gifi="9368" cur={cur} strong />
               </div>
-              <div className="mt-6">
-                <Row label={ops.result < 0 ? "Deficit for the period" : "Surplus for the period"} cents={ops.result} gifi="9970" cur={cur} strong />
-              </div>
+              <div className="mt-6"><Row label={ops.result < 0 ? "Deficit for the period" : "Surplus for the period"} cents={ops.result} gifi="9970" cur={cur} strong /></div>
             </Card>
           </Section>
 
-          <Section title="The journal" note="Every entry, with both sides. This is the ledger itself, not a rendering of it.">
+          <Section title="Every entry" note="The ledger itself. Dr is what a figure was added to, Cr is where it came from, and the two always match.">
             <div className="grid gap-3">
               {st.entries.map((e) => (
                 <Card key={e.id} className="p-4">
@@ -305,8 +379,6 @@ export default function Finances() {
                     <span data-ay-skip="1" className="text-[12px] text-ink-3">{e.date} · {e.ref}</span>
                   </div>
                   <div className="mt-2 grid gap-1">
-                    {/* Indentation alone tells a sighted reader which side a line is on; a screen
-                        reader just hears two amounts. The Dr/Cr marker is the actual information. */}
                     {e.lines.map((l, i) => (
                       <div key={i} className="flex items-baseline justify-between gap-4 text-[13px]">
                         <span className={l.debit ? "text-ink-2" : "pl-6 text-ink-3"}>
@@ -328,10 +400,8 @@ export default function Finances() {
       )}
 
       {tab === "invoices" && (
-        <Section
-          title="Invoice register"
-          note="Every cost, with the document behind it. Each file is published with the SHA-256 of its bytes, so you can check that what you downloaded is what we recorded."
-        >
+        <Section title="Costs and their invoices"
+          note={`${inv?.length ?? 0} cost(s), ${money(totalCosts, cur)} in total. Every one carries the supplier's own document, published with the SHA-256 of its bytes.`}>
           <div className="grid gap-3">
             {(inv || []).map((r) => (
               <Card key={r.id} className="p-5">
@@ -342,17 +412,12 @@ export default function Finances() {
                 <dl className="mt-3 grid grid-cols-2 gap-x-5 gap-y-2 text-[12.5px] sm:grid-cols-4">
                   <div><dt className="text-ink-3">Invoice</dt><dd data-ay-skip="1" className="mt-0.5 text-ink-2">{r.number}</dd></div>
                   <div><dt className="text-ink-3">Paid</dt><dd data-ay-skip="1" className="mt-0.5 text-ink-2">{r.paid}</dd></div>
-                  <div><dt className="text-ink-3">Service period</dt><dd data-ay-skip="1" className="mt-0.5 text-ink-2">{r.period.start} → {r.period.end}</dd></div>
-                  <div><dt className="text-ink-3">Method</dt><dd data-ay-skip="1" className="mt-0.5 text-ink-2">{r.pay_method || "—"}</dd></div>
-                  {/* A foreign-currency invoice cannot be reconciled to the PDF beside it unless the
-                      page shows what was actually billed and the rate used to get to CAD. */}
+                  <div><dt className="text-ink-3">Covers</dt><dd className="mt-0.5 text-ink-2"><bdi data-ay-skip="1">{r.period.start} → {r.period.end}</bdi></dd></div>
+                  <div><dt className="text-ink-3">Paid with</dt><dd data-ay-skip="1" className="mt-0.5 text-ink-2">{r.pay_method || "—"}</dd></div>
                   {r.currency !== cur ? (
                     <>
                       <div><dt className="text-ink-3">Billed</dt><dd data-ay-skip="1" className="mt-0.5 text-ink-2">{money(r.total_cents, r.currency)}</dd></div>
-                      <div>
-                        <dt className="text-ink-3">Rate used</dt>
-                        <dd data-ay-skip="1" className="mt-0.5 text-ink-2">{r.fx.rate.toFixed(4)} on {r.fx.date}</dd>
-                      </div>
+                      <div><dt className="text-ink-3">Rate used</dt><dd data-ay-skip="1" className="mt-0.5 text-ink-2">{r.fx.rate.toFixed(4)} on {r.fx.date}</dd></div>
                     </>
                   ) : null}
                   {r.tax_cents ? <div><dt className="text-ink-3">Tax on the invoice</dt><dd data-ay-skip="1" className="mt-0.5 text-ink-2">{money(r.tax_cents, r.currency)}</dd></div> : null}
@@ -360,9 +425,8 @@ export default function Finances() {
                 {r.tax_note ? <p className="mt-3 text-[12.5px] leading-relaxed text-ink-3">{r.tax_note}</p> : null}
                 {r.coin_basis ? (
                   <p className="mt-3 rounded-card border border-line bg-space-1 p-3 text-[12.5px] leading-relaxed text-ink-3">
-                    Settled with <span data-ay-skip="1" className="font-semibold text-ink-2">{r.coins.toLocaleString()} ₳</span> at{" "}
-                    <span data-ay-skip="1">{r.coin_basis.price_cad.toFixed(4)} {cur}</span> each — the coin price on{" "}
-                    <span data-ay-skip="1">{r.coin_basis.rate_date}</span>, from gold at{" "}
+                    Repaid with <span data-ay-skip="1" className="font-semibold text-ink-2">{r.coins.toLocaleString()} ₳</span> at{" "}
+                    <span data-ay-skip="1">{r.coin_basis.price_cad.toFixed(4)} {cur}</span> each — the coin price on the day this was paid, from gold at{" "}
                     <span data-ay-skip="1">${r.coin_basis.gold_oz_usd.toLocaleString()}/oz</span> and USD/CAD{" "}
                     <span data-ay-skip="1">{r.coin_basis.usdcad.toFixed(4)}</span>. <span data-ay-skip="1">{r.coin_basis.source}</span>
                   </p>
@@ -370,11 +434,8 @@ export default function Finances() {
                 {r.note ? <p className="mt-2 text-[12.5px] leading-relaxed text-ink-3">{r.note}</p> : null}
                 <div className="mt-3 flex flex-wrap gap-2">
                   {r.documents.map((d) => (
-                    <a
-                      key={d.id}
-                      href={d.url}
-                      className="group inline-flex items-baseline gap-2 rounded-card border border-line px-3 py-2 text-[12.5px] text-ink-2 transition-colors hover:border-yin-light hover:text-yin-light"
-                    >
+                    <a key={d.id} href={d.url}
+                      className="group inline-flex items-baseline gap-2 rounded-card border border-line px-3 py-2 text-[12.5px] text-ink-2 transition-colors hover:border-yin-light hover:text-yin-light">
                       <span className="font-medium capitalize">{d.kind}</span>
                       <span data-ay-skip="1" className="text-ink-3 group-hover:text-yin-light">{bytes(d.bytes)}</span>
                       <span data-ay-skip="1" className="hidden font-mono text-[10px] text-ink-3 sm:inline">{d.sha256.slice(0, 12)}…</span>
@@ -383,7 +444,7 @@ export default function Finances() {
                 </div>
               </Card>
             ))}
-            {inv && inv.length === 0 ? <p className="text-[14px] text-ink-3">No invoices recorded yet.</p> : null}
+            {inv && inv.length === 0 ? <p className="text-[14px] text-ink-3">No costs recorded yet.</p> : null}
           </div>
           {operator ? <RecordCost onSaved={() => setReload((n) => n + 1)} /> : null}
         </Section>
@@ -391,10 +452,8 @@ export default function Finances() {
 
       {tab === "cra" && cra && (
         <>
-          <Section
-            title="Year-end return"
-            note="Prepared from the ledger above, automatically, as soon as a fiscal period closes. This prepares a return; it does not file one."
-          >
+          <Section title="Year-end return"
+            note="Prepared from the ledger above, automatically, as soon as a fiscal period closes. This prepares a return; it does not file one.">
             <Card className="p-5">
               <p className="text-[14px] font-semibold text-ink">T2 Corporation Income Tax Return — required</p>
               <p className="mt-1 max-w-[70ch] text-[13.5px] leading-relaxed text-ink-2">{cra.t2.why}</p>
@@ -404,15 +463,10 @@ export default function Finances() {
                 <div><dt className="text-ink-3">Due</dt><dd data-ay-skip="1" className="mt-0.5 font-semibold text-ink-2">{cra.t2.due}</dd></div>
               </dl>
               <p className="mt-3 text-[12.5px] leading-relaxed text-ink-3">{cra.t2.form_why}</p>
-              <ul className="mt-3 grid gap-1 text-[13px] text-ink-2">
-                {cra.t2.schedules.map((s) => <li key={s}>· {s}</li>)}
-              </ul>
+              <ul className="mt-3 grid gap-1 text-[13px] text-ink-2">{cra.t2.schedules.map((s) => <li key={s}>· {s}</li>)}</ul>
             </Card>
-
             <Card className="mt-3 p-5">
-              <p className="text-[14px] font-semibold text-ink">
-                T1044 NPO Information Return — {cra.t1044.required ? "required" : "not required for this period"}
-              </p>
+              <p className="text-[14px] font-semibold text-ink">T1044 NPO Information Return — {cra.t1044.required ? "required" : "not required for this period"}</p>
               <ul className="mt-3 grid gap-2 text-[13px]">
                 {cra.t1044.tests.map((t) => (
                   <li key={t.test} className="flex items-baseline gap-2">
@@ -425,7 +479,7 @@ export default function Finances() {
             </Card>
           </Section>
 
-          <Section title="GIFI schedules" note="The financial statements in the coded form CRA requires with the T2. Every code is the official one from Guide RC4088.">
+          <Section title="The same figures, in CRA's codes" note="What the return actually carries. Every code is the official one from Guide RC4088.">
             <Card className="p-5">
               <h3 className="text-[13px] font-semibold uppercase tracking-wide text-ink-3">Schedule 100 — balance sheet</h3>
               <div className="mt-2">{cra.schedule_100.map((r: GifiRow, i) => <Row key={`${r.gifi}-${i}`} label={r.label} cents={r.cents} gifi={r.gifi} cur={cur} />)}</div>
@@ -434,7 +488,7 @@ export default function Finances() {
             </Card>
           </Section>
 
-          <Section title="Notes to the financial statements">
+          <Section title="Notes to the accounts">
             <div className="grid gap-3">
               {cra.notes.map((n) => (
                 <Card key={n.title} className="p-5">
@@ -448,9 +502,9 @@ export default function Finances() {
       )}
 
       <p className="mt-12 max-w-[72ch] border-t border-line pt-6 text-[12.5px] leading-relaxed text-ink-3">
-        {st.entity.receipts_note} The underlying tables are published row by row at{" "}
-        <a href="/data/" className="text-yin-light hover:underline">/data</a>, and the invariants above can be
-        re-run at any time against <span data-ay-skip="1">/wp-json/aq/v1/foundation/books/verify</span>.
+        <span data-ay-skip="1">{st.entity.name}</span> is a Canadian non-profit corporation, registered as{" "}
+        <span data-ay-skip="1">BN {st.entity.bn}</span> and incorporated on <span data-ay-skip="1">{st.entity.incorporated}</span>.{" "}
+        {st.entity.receipts_note}
       </p>
     </div>
   );
