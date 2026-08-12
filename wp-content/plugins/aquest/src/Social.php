@@ -734,7 +734,6 @@ final class Social {
 			'links'      => (object) Auth::links( $id ),        // where else this member is, key => https URL
 			'relationship' => Auth::relationship( $id ),       // '' = not saying; the profile then renders nothing
 			'location'     => Auth::location( $id ),           // what the MEMBER typed; never inferred from an IP
-			'birthplace'   => Verify::birthplace( $id ),       // mandatory identity info; self-declared, never inferred
 			// RESOLVED here, not in the browser: the page must not depend on window.AQ_I18N being
 			// present to name a language it was just handed (see I18n::language_meta).
 			'languages'    => array_values( array_filter( array_map(
