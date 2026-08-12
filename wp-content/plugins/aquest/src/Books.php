@@ -1485,18 +1485,6 @@ final class Books {
 				'source'      => 'LBMA Gold Price PM ' . $c['gold_date'] . ' · Bank of Canada FXUSDCAD ' . $c['fx_date'],
 			] );
 
-			// Self-assessed GST on the imported supply. Source 'tax', NOT 'invoice': the register
-			// records what the vendor billed (CA$280), the ledger records what the cost actually was
-			// (CA$280 plus non-recoverable tax), and invoices_tie_to_expenses compares the register
-			// only against invoice-sourced entries, so both stay true at once.
-			$gst = (int) round( $c['total'] * self::GST_RATE_PCT / 100 );
-			if ( $gst > 0 ) {
-				self::journal( 'gst:' . $c['number'], $c['paid'],
-					'GST self-assessed on ' . $c['number'], [
-						[ 'account' => 'software',    'debit'  => $gst, 'memo' => self::GST_RATE_PCT . '% of ' . self::cad( $c['total'] ) . ' — not recoverable without a registration' ],
-						[ 'account' => 'gst_payable', 'credit' => $gst, 'memo' => 'Owed to CRA on form GST59 · ' . self::GST_JURISDICTION ],
-					], 'tax', $id );
-			}
 			$done++;
 		}
 		// Stamp ONLY when every founding cost is on the books. Stamping unconditionally would freeze
@@ -1518,9 +1506,58 @@ final class Books {
 	 */
 	public static function bootstrap() {
 		self::ensure_tables();
-		if ( get_option( 'aq_books_genesis' ) && get_option( 'aq_books_seeded' ) ) { return; }
-		self::genesis();
-		self::seed_founding_costs();
+		// Each step carries its OWN presence gate rather than sharing one. A combined gate means a
+		// step added later can never run on a site that already passed the earlier ones — which is
+		// every site that has already deployed, i.e. the only one that matters.
+		if ( ! get_option( 'aq_books_genesis' ) )     { self::genesis(); }
+		if ( ! get_option( 'aq_books_seeded' ) )      { self::seed_founding_costs(); }
+		if ( ! get_option( 'aq_books_gst_accrued' ) ) { self::accrue_founding_gst(); }
+	}
+
+	/**
+	 * Accrue the self-assessed GST on the founding costs. Runs once, and separately from the seed
+	 * because the seed had already run in production before this was known.
+	 *
+	 * Source 'tax', NOT 'invoice': the register records what the vendor billed (CA$280 each), the
+	 * ledger records what the cost actually was (that plus non-recoverable tax), and
+	 * invoices_tie_to_expenses compares the register only against invoice-sourced entries — so both
+	 * statements stay true at the same time instead of one of them having to be wrong.
+	 */
+	public static function accrue_founding_gst() {
+		self::ensure_tables();
+		$posted = 0;
+		foreach ( self::FOUNDING_COSTS as $c ) {
+			$inv = Data::one( 'SELECT id, cad_cents, paid FROM ' . Data::t( 'aq_books_invoice' ) . ' WHERE number = %s', [ $c['number'] ] );
+			if ( ! $inv ) { continue; }
+			$gst = (int) round( (int) $inv['cad_cents'] * self::GST_RATE_PCT / 100 );
+			if ( $gst < 1 ) { continue; }
+			$eid = self::journal( 'gst:' . $c['number'], (string) $inv['paid'],
+				'GST self-assessed on ' . $c['number'], [
+					[ 'account' => 'software',    'debit'  => $gst, 'memo' => self::GST_RATE_PCT . '% of ' . self::cad( (int) $inv['cad_cents'] ) . ' — not recoverable without a registration' ],
+					[ 'account' => 'gst_payable', 'credit' => $gst, 'memo' => 'Owed to CRA on form GST59 · ' . self::GST_JURISDICTION ],
+				], 'tax', (int) $inv['id'] );
+			if ( $eid ) { $posted++; }
+		}
+		// Same rule as the seed: only claim it is done when every one of them is on the books.
+		if ( $posted < count( self::FOUNDING_COSTS ) ) {
+			// One exception, or this retries on every request forever and logs on every one of them:
+			// if the period it must post into has been FILED AND LOCKED, no future attempt can
+			// succeed either. Stop, and say loudly what is now missing — a backfill that cannot land
+			// is an accounting problem for a human, not something to keep quietly grinding at.
+			$locked = self::locked_years();
+			foreach ( self::FOUNDING_COSTS as $c ) {
+				if ( in_array( self::fy_of( $c['paid'] )['label'], $locked, true ) ) {
+					update_option( 'aq_books_gst_accrued', 'blocked:' . self::today(), true );
+					error_log( 'AQ Books: GST accrual BLOCKED — ' . $c['paid'] . ' falls in a filed, locked period. '
+						. $posted . '/' . count( self::FOUNDING_COSTS ) . ' posted. This needs a human: either the tax belongs in an open period, or the filed return needs amending.' );
+					return 'blocked';
+				}
+			}
+			error_log( 'AQ Books: GST accrual incomplete (' . $posted . '/' . count( self::FOUNDING_COSTS ) . ') — not recording it as done' );
+			return 'incomplete ' . $posted;
+		}
+		update_option( 'aq_books_gst_accrued', self::today(), true );
+		return 'accrued ' . $posted;
 	}
 
 	// ── Accrual and the year end ──────────────────────────────────────────────
