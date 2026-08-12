@@ -46,7 +46,10 @@ function Row({ label, cents, gifi, cur, strong, plain }: { label: string; cents:
     <div className={`border-b border-line/60 py-2.5 last:border-0 ${strong ? "font-semibold text-ink" : "text-ink-2"}`}>
       <div className="flex items-baseline justify-between gap-4">
         <span className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate">{label}</span>
+          {/* Wrap rather than truncate. At 360px a GIFI row rendered as "Net inc…" next to a code
+              and a figure, and on the year-end tab that label is the only thing carrying the
+              meaning — there is no second copy of it anywhere on the page to recover it from. */}
+          <span className="min-w-0 break-words">{label}</span>
           {gifi ? <span data-ay-skip="1" className="shrink-0 rounded bg-space-1 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-ink-3">GIFI {gifi}</span> : null}
         </span>
         <span data-ay-skip="1" className="shrink-0 tabular-nums">{acct(cents, cur)}</span>
@@ -216,6 +219,11 @@ export default function Finances() {
   const failed = st.checks.filter((c) => !c.ok);
   const owed = pos.liabilities.filter((l) => l.cents !== 0);
   const totalCosts = inv ? inv.reduce((n, r) => n + r.cad_cents, 0) : 0;
+  /* Income since incorporation, reported by the server. NOT derivable from the balance sheet:
+     net assets is cumulative revenue less cumulative costs, so one figure cannot be recovered
+     without the other. Deciding "nothing has ever come in" from the selected period would make
+     the sentence reappear in the first year donations happen to stop. */
+  const everReceived = st.statements.cumulative.revenue;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:py-14">
@@ -239,8 +247,10 @@ export default function Finances() {
             : `All ${st.checks.length} arithmetic checks pass`}
         </p>
         <p className="mt-1 max-w-[70ch] text-[12.5px] leading-relaxed text-ink-3">
-          Recomputed from the raw ledger every time this page loads: every entry balances, the statements tie
-          to the entries, and the invoice register ties to the costs.
+          Recomputed on the server from the raw ledger entries — never stored as a total that could drift.
+          Every entry balances, the statements tie to the entries, and the invoice register ties to the costs.
+          These figures are cached at the edge for up to five minutes, so a change you have just made may take
+          that long to appear here.
         </p>
         {failed.length ? <p className="mt-2 text-[13px] text-ink-2">{failed.map((f) => `${f.check.replace(/_/g, " ")}: ${f.detail}`).join(" · ")}</p> : null}
       </div>
@@ -267,12 +277,17 @@ export default function Finances() {
 
           <Section title="What this means">
             <Card className="p-5">
+              {/* The liability is cumulative since incorporation; revenue and costs are this period
+                  only. Narrating them in one breath reads as cause and effect and stops being true
+                  the moment a second period exists — so the period is named, and the "nothing has
+                  ever come in" claim is decided by the CUMULATIVE position, not by one year. */}
               <p className="max-w-[72ch] text-[15px] leading-relaxed text-ink-2">
-                The Foundation holds <strong className="text-ink">{money(pos.total_assets, cur)}</strong>. It has spent{" "}
+                The Foundation holds <strong className="text-ink">{money(pos.total_assets, cur)}</strong> and owes{" "}
+                <strong className="text-ink">{money(pos.total_liabilities, cur)}</strong> in total, counting everything
+                since it was incorporated. In <span data-ay-skip="1">{st.statements.fy.label}</span> alone it spent{" "}
                 <strong className="text-ink">{money(ops.total_expenses, cur)}</strong> running the platform and received{" "}
-                <strong className="text-ink">{money(ops.total_revenue, cur)}</strong> in income, leaving{" "}
-                <strong className="text-ink">{money(pos.total_liabilities, cur)}</strong> owed in total.
-                {ops.total_revenue === 0
+                <strong className="text-ink">{money(ops.total_revenue, cur)}</strong> in income.
+                {everReceived === 0
                   ? " No donation has ever been recorded — everything so far has been paid for personally by a director, who is owed it back."
                   : ""}
               </p>
@@ -309,7 +324,7 @@ export default function Finances() {
               <ul className="grid gap-3 text-[13.5px] leading-relaxed text-ink-2">
                 <li><strong className="text-ink">Open the invoices.</strong> Every cost has the supplier&rsquo;s own PDF attached, published with the SHA-256 of its bytes, so you can confirm the file you downloaded is the file we recorded.</li>
                 <li><strong className="text-ink">Read the ledger.</strong> The Statements tab shows every entry with both of its sides. Nothing is entered as a total; each total is the sum of the entries above it.</li>
-                <li><strong className="text-ink">Re-run the arithmetic.</strong> <span data-ay-skip="1" className="text-ink-3">/wp-json/aq/v1/foundation/books/verify</span> recomputes every check from the raw lines, on demand.</li>
+                <li><strong className="text-ink">Re-run the arithmetic.</strong> <span data-ay-skip="1" className="text-ink-3">/wp-json/aq/v1/foundation/books/verify</span> recomputes every check from the raw lines. Add a unique query string to bypass the cache and force a fresh computation.</li>
                 <li><strong className="text-ink">Query the raw tables.</strong> The whole database is public at <a href="/data/" className="text-yin-light hover:underline">/data</a>, including the four tables behind this page.</li>
               </ul>
             </Card>

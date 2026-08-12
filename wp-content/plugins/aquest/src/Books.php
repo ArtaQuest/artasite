@@ -28,8 +28,15 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *
  * EVERYTHING HERE IS PUBLIC. Extra::db enumerates with SHOW TABLES, so these four tables publish
  * themselves at /data the moment they exist. That is deliberate — the point of the exercise is
- * that a stranger can check the books — and it is also why no personal data lands in them: the
- * ledger holds amounts, dates, codes and vendor names, never an address or a card number.
+ * that a stranger can check the books.
+ *
+ * Be precise about what that publishes, because "no personal data" would be too comfortable to be
+ * true. The ledger itself holds amounts, dates, account codes and vendor names. The invoice register
+ * additionally holds `pay_method`, which carries a card brand and its last four digits ("Visa ending
+ * 2178") — published knowingly, on the same operator decision that publishes the invoice PDFs, which
+ * print the same thing. A last-four is not a credential and cannot be transacted on, but it IS
+ * personal data and should be named rather than glossed over. Never add a full card number, a
+ * billing address or a bank detail to these tables.
  *
  * Money is INTEGER CENTS, CAD, everywhere. Dates are 'YYYY-MM-DD' strings, never timestamps: a
  * fiscal period is a calendar fact about Edmonton, and string dates compare and sort correctly
@@ -580,6 +587,10 @@ final class Books {
 				'total_expenses' => $total_exp,
 				'result'        => $total_rev - $total_exp,
 			],
+			// Since incorporation, not this period. Already computed above for the deficit; exposed
+			// because "nothing has ever come in" is a claim about all time, and deciding it from one
+			// period's revenue would make it reappear the first year donations stop.
+			'cumulative' => [ 'revenue' => $cum_rev, 'expenses' => $cum_exp ],
 		];
 	}
 
@@ -1271,7 +1282,26 @@ final class Books {
 	 */
 	public static function authorised_shortfall() {
 		if ( get_option( 'aq_books_table_version' ) !== self::TABLE_VERSION ) { return 0; }
-		return max( 0, (int) Data::col( 'SELECT COALESCE(SUM(coins),0) FROM ' . Data::t( 'aq_books_invoice' ) ) );
+		// Derived from the liability the books STILL CARRY, not from what was once issued. Σ(coins) is
+		// a record of the issue and nothing ever decrements it, so using it left the alarm's tolerance
+		// pinned at its high-water mark forever: spend the whole tranche and a fresh unbacked mint of
+		// the same size would still slip under the ceiling. coin_liability is written down by
+		// reconcile_coin_liability as the coins leave circulation, so a ceiling derived from it falls
+		// to zero with them. It must NOT be derived from coins_issued either — a bug's mint raises
+		// that counter and would raise its own tolerance with it.
+		$issued_coins = 0;
+		$issued_value = 0;
+		foreach ( Data::all( 'SELECT coins, coin_price_1e6 FROM ' . Data::t( 'aq_books_invoice' ) . ' WHERE coins > 0' ) as $r ) {
+			$c = (int) $r['coins'];
+			$issued_coins += $c;
+			$issued_value += (int) round( $c * ( (int) $r['coin_price_1e6'] / 1000000 ) * 100 );
+		}
+		if ( $issued_coins < 1 || $issued_value < 1 ) { return 0; }
+		$mv = self::movement();
+		$outstanding_value = max( 0, (int) ( $mv['coin_liability'] ?? 0 ) );
+		// Up to one reconcile cycle (a day) of lag between a coin being spent and the ceiling
+		// following it down. That errs toward the behaviour we already had, never below it.
+		return (int) round( $outstanding_value * $issued_coins / $issued_value );
 	}
 
 	/**
@@ -1512,6 +1542,30 @@ final class Books {
 		if ( ! get_option( 'aq_books_genesis' ) )     { self::genesis(); }
 		if ( ! get_option( 'aq_books_seeded' ) )      { self::seed_founding_costs(); }
 		if ( ! get_option( 'aq_books_gst_accrued' ) ) { self::accrue_founding_gst(); }
+		if ( ! get_option( 'aq_books_taxnote_v2' ) )   { self::refresh_founding_tax_note(); }
+	}
+
+	/**
+	 * Bring the seeded rows' tax note into step with the constant.
+	 *
+	 * The note was stored while the tax was still an open question and still sends readers to a
+	 * "GST/HST contingency note" that no longer exists under that name. These rows are a PUBLISHED
+	 * register, so a dangling cross-reference in them is a defect in the register, not a cosmetic
+	 * one. Its own gate, because every site that matters has already run the steps above — a fix
+	 * folded into one of them could never reach production.
+	 */
+	public static function refresh_founding_tax_note() {
+		self::ensure_tables();
+		$n = 0;
+		foreach ( self::FOUNDING_COSTS as $c ) {
+			if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_books_invoice' ) . ' WHERE number = %s', [ $c['number'] ] ) ) {
+				Data::update( 'aq_books_invoice', [ 'tax_note' => self::FOUNDING_TAX_NOTE ], [ 'number' => $c['number'] ] );
+				$n++;
+			}
+		}
+		if ( $n < count( self::FOUNDING_COSTS ) ) { return 'incomplete ' . $n; }
+		update_option( 'aq_books_taxnote_v2', self::today(), true );
+		return 'refreshed ' . $n;
 	}
 
 	/**
@@ -1573,7 +1627,7 @@ final class Books {
 	public static function prepaid_at( $end ) {
 		self::ensure_tables();
 		$rows = Data::all(
-			'SELECT id, number, cad_cents, period_start, period_end FROM ' . Data::t( 'aq_books_invoice' )
+			'SELECT id, number, account, cad_cents, period_start, period_end FROM ' . Data::t( 'aq_books_invoice' )
 			. " WHERE period_end > %s AND period_start <= %s AND period_start <> '' AND period_end <> ''",
 			[ $end, $end ] );
 		$total = 0;
@@ -1588,7 +1642,8 @@ final class Books {
 			$cents = (int) round( (int) $r['cad_cents'] * ( $left / $span ) );
 			if ( $cents < 1 ) { continue; }
 			$total  += $cents;
-			$parts[] = [ 'invoice' => $r['number'], 'days_unused' => $left, 'days_total' => $span, 'cents' => $cents ];
+			$acct    = isset( self::ACCOUNTS[ (string) $r['account'] ] ) ? (string) $r['account'] : 'software';
+			$parts[] = [ 'invoice' => $r['number'], 'account' => $acct, 'days_unused' => $left, 'days_total' => $span, 'cents' => $cents ];
 		}
 		return [ 'cents' => $total, 'parts' => $parts ];
 	}
@@ -1609,22 +1664,33 @@ final class Books {
 
 		$pre = self::prepaid_at( $fy['end'] );
 		if ( $pre['cents'] > 0 ) {
-			$by = [];
-			foreach ( $pre['parts'] as $p ) { $by[] = $p['invoice'] . ' (' . $p['days_unused'] . '/' . $p['days_total'] . ' days)'; }
-			self::journal( 'prepaid:' . $label, $fy['end'], 'Prepaid subscription time at the year end', [
-				[ 'account' => 'prepaid',  'debit'  => $pre['cents'], 'memo' => implode( ', ', $by ) ],
-				[ 'account' => 'software', 'credit' => $pre['cents'], 'memo' => 'Deferred to the next period' ],
-			], 'closing', 0 );
+			// Group by the account each cost was actually booked to. Crediting `software` for all of
+			// them moved money out of an account that never held it the moment anything other than a
+			// subscription straddled a year end — understating one expense line and overstating
+			// another, while the totals still footed and hid it.
+			$by_account = [];
+			$by         = [];
+			foreach ( $pre['parts'] as $p ) {
+				$by_account[ $p['account'] ] = ( $by_account[ $p['account'] ] ?? 0 ) + (int) $p['cents'];
+				$by[] = $p['invoice'] . ' (' . $p['days_unused'] . '/' . $p['days_total'] . ' days)';
+			}
+			$defer = [ [ 'account' => 'prepaid', 'debit' => $pre['cents'], 'memo' => implode( ', ', $by ) ] ];
+			foreach ( $by_account as $acct => $cents ) {
+				$defer[] = [ 'account' => $acct, 'credit' => $cents, 'memo' => 'Deferred to the next period' ];
+			}
+			self::journal( 'prepaid:' . $label, $fy['end'], 'Prepaid subscription time at the year end', $defer, 'closing', 0 );
 			// AND RELEASE IT AGAIN on the first day of the new period. A deferral without a reversal
 			// is not an accrual, it is a disappearing expense: the cost would leave this year's
 			// operations and never arrive in any other, while `prepaid` sat on the balance sheet as
 			// an asset the Foundation does not own. Dated into the NEXT period, so the year being
 			// locked below still shows the deferral and the new year picks the cost up.
-			$next = ( new \DateTimeImmutable( $fy['end'], new \DateTimeZone( self::TZ ) ) )->modify( '+1 day' )->format( 'Y-m-d' );
-			self::journal( 'prepaid-release:' . $label, $next, 'Prepaid subscription time released into the new period', [
-				[ 'account' => 'software', 'debit'  => $pre['cents'], 'memo' => 'Released from ' . $label ],
-				[ 'account' => 'prepaid',  'credit' => $pre['cents'], 'memo' => implode( ', ', $by ) ],
-			], 'closing', 0 );
+			$next    = ( new \DateTimeImmutable( $fy['end'], new \DateTimeZone( self::TZ ) ) )->modify( '+1 day' )->format( 'Y-m-d' );
+			$release = [];
+			foreach ( $by_account as $acct => $cents ) {
+				$release[] = [ 'account' => $acct, 'debit' => $cents, 'memo' => 'Released from ' . $label ];
+			}
+			$release[] = [ 'account' => 'prepaid', 'credit' => $pre['cents'], 'memo' => implode( ', ', $by ) ];
+			self::journal( 'prepaid-release:' . $label, $next, 'Prepaid subscription time released into the new period', $release, 'closing', 0 );
 		}
 		$locked = self::locked_years();
 		$locked[] = $label;
@@ -1683,11 +1749,29 @@ final class Books {
 		$release     = $booked_value - $target;
 		if ( $release < 1 ) { return 0; }
 
-		return self::journal( 'coinspent:' . self::today(), self::today(),
-			'ArtaCoin spent on platform services', [
-				[ 'account' => 'coin_liability',   'debit'  => $release, 'memo' => ( $booked_coins - $outstanding ) . ' ₳ no longer in circulation' ],
-				[ 'account' => 'activity_revenue', 'credit' => $release, 'memo' => 'Obligation discharged by supplying the service' ],
-			], 'coin', 0 );
+		// WHY THE COINS LEFT decides where the credit goes, and the two are not the same event.
+		// A coin spent on a platform service discharges the obligation by SUPPLYING something — that
+		// is revenue. A coin CASHED OUT discharges it by paying real money out — that is cash
+		// leaving, and booking it as revenue would report a payout as income. The coin ledger
+		// separates them: 'sell' (cash-out) and 'refund' (a reversed purchase) are the only reasons
+		// that also release gold backing; every other negative delta is a service burn.
+		$redeemed_coins = (int) Data::col(
+			'SELECT COALESCE(SUM(-delta),0) FROM ' . Data::t( 'aq_coin_ledger' )
+			. " WHERE delta < 0 AND reason IN ('sell','refund')" );
+		$gone           = max( 0, $issued_coins - $outstanding );
+		$redeemed_coins = max( 0, min( $redeemed_coins, $gone ) );
+		$unit           = $issued_value / $issued_coins;
+		$redeemed_value = min( $release, (int) round( $redeemed_coins * $unit ) );
+		$service_value  = $release - $redeemed_value;
+
+		$lines = [ [ 'account' => 'coin_liability', 'debit' => $release, 'memo' => $gone . ' ₳ no longer in circulation' ] ];
+		if ( $service_value > 0 ) {
+			$lines[] = [ 'account' => 'activity_revenue', 'credit' => $service_value, 'memo' => 'Obligation discharged by supplying the service' ];
+		}
+		if ( $redeemed_value > 0 ) {
+			$lines[] = [ 'account' => 'cash', 'credit' => $redeemed_value, 'memo' => $redeemed_coins . ' ₳ cashed out — money paid to the holder' ];
+		}
+		return self::journal( 'coinspent:' . self::today(), self::today(), 'ArtaCoin leaving circulation', $lines, 'coin', 0 );
 	}
 
 	/**

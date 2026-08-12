@@ -903,6 +903,7 @@ export type Statements = {
     fy: BookFy;
     position: { assets: BookAmount[]; total_assets: number; liabilities: BookAmount[]; total_liabilities: number; net_assets: number; balances: boolean };
     operations: { revenue: BookAmount[]; total_revenue: number; expenses: BookAmount[]; total_expenses: number; result: number };
+    cumulative: { revenue: number; expenses: number };
   };
   entries: BookEntry[];
   checks: BookCheck[];
