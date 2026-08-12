@@ -561,7 +561,7 @@ function aq_profile_works( $uid, $limit = 50 ) {
 	if ( null === $ok ) { $ok = ( (string) $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $t ) ) === $t ); }
 	if ( ! $ok ) { return array(); }
 	return (array) $wpdb->get_results( $wpdb->prepare(
-		"SELECT id, slug, title, kind, abstract, published_at FROM {$t} WHERE author_id = %d AND status = 'published' ORDER BY id DESC LIMIT %d",
+		"SELECT id, slug, title, published_at FROM {$t} WHERE author_id = %d AND status = 'published' ORDER BY id DESC LIMIT %d",
 		(int) $uid,
 		max( 1, (int) $limit )
 	) );
@@ -598,40 +598,9 @@ function aq_app_seo_html() {
 			if ( $works ) {
 				$html .= '<h2>' . esc_html( sprintf( 'Work %s brought to %s', $name, get_bloginfo( 'name' ) ) ) . '</h2><ul>';
 				foreach ( $works as $w ) {
-					// KIND + ABSTRACT, not just a title. A list of bare titles is a list of names: it
-					// gives a crawler nothing to understand the page by, and a profile competing for a
-					// person's own name against their LinkedIn and GitHub needs something to be ABOUT.
-					// The abstract is the author's own words on their own published work — the most
-					// relevant text this page can honestly carry.
-					$line = '<li><a href="' . esc_url( aq_notebook_url( $w ) ) . '">' . esc_html( (string) $w->title ) . '</a>';
-					$kind = isset( $w->kind ) ? aq_kind_label( (string) $w->kind ) : '';
-					if ( $kind ) { $line .= ' <span>' . esc_html( $kind ) . '</span>'; }
-					$abs = isset( $w->abstract ) ? trim( wp_strip_all_tags( (string) $w->abstract ) ) : '';
-					if ( $abs !== '' ) {
-						if ( function_exists( 'mb_strimwidth' ) ) { $abs = mb_strimwidth( $abs, 0, 300, '…' ); }
-						$line .= '<p>' . esc_html( $abs ) . '</p>';
-					}
-					$html .= $line . '</li>';
+					$html .= '<li><a href="' . esc_url( aq_notebook_url( $w ) ) . '">' . esc_html( (string) $w->title ) . '</a></li>';
 				}
 				$html .= '</ul>';
-			}
-			// WHERE ELSE THEY ARE, as real links carrying rel="me". The same claim the Person schema
-			// makes in sameAs, in the markup a human-readable indexer reads — two independent
-			// statements that this page and those accounts are one person, which is exactly what a
-			// search engine needs to attach a name to an entity rather than to a string.
-			// Deliberately NOT here: relationship status, date of birth, city, email. They render in
-			// the app for a signed-in reader; putting them in the no-JS body would publish a
-			// harvestable dossier to every scraper that never runs JavaScript, for no ranking gain.
-			if ( class_exists( 'AQ\Auth' ) && method_exists( 'AQ\Auth', 'links' ) ) {
-				$links = \AQ\Auth::links( $u->ID );
-				if ( $links ) {
-					$html .= '<h2>' . esc_html( sprintf( '%s elsewhere', $name ) ) . '</h2><ul>';
-					foreach ( $links as $k => $url ) {
-						$label = ucfirst( (string) $k );
-						$html .= '<li><a rel="me nofollow ugc" href="' . esc_url( (string) $url ) . '">' . esc_html( $label ) . '</a></li>';
-					}
-					$html .= '</ul>';
-				}
 			}
 			return $html;
 		}
