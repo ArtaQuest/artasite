@@ -373,6 +373,13 @@ export default function Profile() {
                     className="h-10 px-5 text-[14px]" title="Send an encrypted message">
                     Message
                   </Button>
+                  {/* Beside Message, because they are the same act at two speeds: say something now,
+                      or take some of their time later. The page itself says plainly when somebody is
+                      not offering any, so this never leads anywhere embarrassing. */}
+                  <Button href={localePath(`/book/${encodeURIComponent(p.slug)}`)} variant="outline"
+                    className="h-10 px-5 text-[14px]" title="See when they are free and take a time">
+                    Book a time
+                  </Button>
                   <SendCoins slug={p.slug} name={p.fullName?.trim() || p.name} onSent={() => undefined} />
                 </div>
               ) : (

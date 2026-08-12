@@ -15,10 +15,7 @@
  * Keys are cached per room for the tab's lifetime and never persisted: this is a session's working
  * copy, and an unwrapped group key sitting in IndexedDB is a worse trade than unwrapping it again.
  */
-import {
-  roomsGetKey, roomsPending, roomsPutKey,
-  type Room,
-} from "./api";
+import { chatRegisterKey, roomsGetKey, roomsPending, roomsPutKey, type Room } from "./api";
 import { deriveChatKey, ensureIdentity, importPeerPub, newRoomKey, openRoomKey, privForKid, sealRoomKey } from "./e2ee";
 
 
@@ -66,7 +63,23 @@ export async function roomKey(room: Room, me: number): Promise<CryptoKey | null>
         // is a new room (or my own), so mint it here and seal it to myself.
         if (room.count === 1 && room.members[0]?.id === me) {
           const key = await newRoomKey();
-          const mine = await myDeviceKid(room.id, me);
+          // MINT WITH THIS BROWSER'S OWN KEY, resolved from the identity rather than from the
+          // server's idea of my newest one.
+          //
+          // myDeviceKid answers "which registered key should I seal WITH", and it correctly refuses
+          // to name a kid whose private half this browser does not hold — that refusal is what fixed
+          // a permanent lockout. But for the MINT it was fatal: a member with more than one device
+          // (a second browser, a phone, or anyone who has been through key recovery) has a newest
+          // registered kid belonging to some OTHER device, so the lookup found nothing usable and
+          // returned null — and the mint then bailed SILENTLY, leaving a bound room with no key at
+          // all while the page told the member to "stay on this page, the first key-holder to arrive
+          // seals it to you". There are no key-holders. There never will be. The room is dead and
+          // nothing says so.
+          //
+          // Minting is the one case with no ambiguity: the key to seal with is THIS browser's, and
+          // registering our own public half returns its kid — idempotently, because Chat::set_key
+          // returns the existing id for a public key already in this member's history.
+          const mine = await myMintKid();
           if (!mine) return null;
           const ok = await sealUsing(room.id, r.epoch, me, mine.kid, mine.priv, me, mine.kid, mine.pub, key);
           if (!ok) return null;
@@ -86,6 +99,24 @@ export async function roomKey(room: Room, me: number): Promise<CryptoKey | null>
   })();
   loading.set(room.id, job);
   return job;
+}
+
+
+/**
+ * The kid for THIS browser's own key, for minting.
+ *
+ * Deliberately not myDeviceKid: that one asks the server which key it thinks is current, which is a
+ * question about the MEMBER. Minting is a question about this DEVICE — we are about to derive with a
+ * private key we hold, and the row must name the public half of that exact key or nobody, including
+ * us, can ever open it. Registering is how we learn the id, and doing so is safe to repeat.
+ */
+async function myMintKid(): Promise<{ kid: number; pub: string; priv: CryptoKey } | null> {
+  try {
+    const mine = await ensureIdentity();
+    const reg = await chatRegisterKey(mine.pubB64);
+    const kid = reg?.key?.kid ?? 0;
+    return kid ? { kid, pub: mine.pubB64, priv: mine.priv } : null;
+  } catch { return null; }
 }
 
 /**

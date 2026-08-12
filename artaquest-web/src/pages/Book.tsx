@@ -420,6 +420,9 @@ function VisitorPage({ handle }: { handle: string }) {
     );
   }
 
+  // Whether the person reading this is the person it is about — the same emptiness needs a
+  // different next step for each of them.
+  const viewerIsOwner = !!owner.slug && currentUser()?.slug === owner.slug;
   return (
     <div className="mx-auto flex w-full max-w-[860px] flex-col gap-5 pb-12">
       <PageHero
@@ -430,11 +433,23 @@ function VisitorPage({ handle }: { handle: string }) {
       />
 
       {offered.length === 0 ? (
-        <EmptyState
-          title={<><span data-ay-skip="1">{owner.name}</span> isn’t taking bookings</>}
-          body="No times are being offered here at the moment. Nothing has gone wrong — this page only shows what somebody has chosen to offer."
-          action={<Button href="/meet/" variant="outline">Schedule a meeting instead</Button>}
-        />
+        /* THE OWNER IS NOT A VISITOR. Reading "Arash isn't taking bookings" on your own page tells
+           you what is wrong and nothing about how to fix it — and this is the exact screen somebody
+           lands on the first time they follow their own link, before they have set anything. Same
+           emptiness, two different readers, two different next steps. */
+        viewerIsOwner ? (
+          <EmptyState
+            title="Your booking page is ready — it just has no hours yet"
+            body="Say when you are open to being booked and this page starts offering those times to anyone with the link. You can change or pause it whenever you like."
+            action={<Button href={localePath("/book")}>Set your hours</Button>}
+          />
+        ) : (
+          <EmptyState
+            title={<><span data-ay-skip="1">{owner.name}</span> isn’t taking bookings</>}
+            body="No times are being offered here at the moment. Nothing has gone wrong — this page only shows what somebody has chosen to offer."
+            action={<Button href="/meet/" variant="outline">Schedule a meeting instead</Button>}
+          />
+        )
       ) : (
         <>
           {/* Said BEFORE any effort, not after a time has been chosen. Someone who will have to sign
