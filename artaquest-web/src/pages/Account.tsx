@@ -1,10 +1,9 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { DobWheel } from "../components/DobWheel";
 import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, LANGS_MAX, postProfileUpdate, PROFILE_LINKS, RELATIONSHIPS, type CourseCard, type Dashboard, type UsernameCheck } from "../lib/wp";
 import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, KaggleIds, Passkeys, ShellAccount, UsageApi, myParticipation, setGender as setGender_, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type KaggleIdItem, type SessionItem, type ShellInfo, type ShellKey, type UsageInfo, type BursaryResult, type BursaryStatus, type ShareKit } from "../lib/api";
 import { signOut } from "../lib/auth";
 import { VerifyApi, fileToImage, type VerifyStatus } from "../lib/verify";
-import { countryName, countryOptions, flagEmoji } from "../lib/flags";
 import { BlueCheck } from "../components/BlueCheck";
 import { Avatar, Button, Card, CertBadge, Chip, ErrorNote, Field, Input, Pill, Select, SignInGate, StatusNote, Textarea } from "../components/ui";
 import { availableLangs } from "../lib/i18n";
@@ -1050,23 +1049,17 @@ function IdentityVerification() {
   const [st, setSt] = useState<VerifyStatus | null>(null);
   const [name, setName] = useState("");
   const [bday, setBday] = useState("");
-  const [nat, setNat] = useState("");
-  // Mandatory identity info (Verify::has_identity). Prefilled from /verify/status so an existing
-  // member sees what is on record; the coordinates are only re-sent when they pick again.
-  const [pob, setPob] = useState("");
-  const [geo, setGeo] = useState<{ lat: number; lon: number; tz: string } | null>(null);
   const [idSaving, setIdSaving] = useState(false);
   const [idMsg, setIdMsg] = useState("");
   const [imgs, setImgs] = useState<{ profile_pic?: string; id_front?: string; id_back?: string; selfie?: string }>({});
   const [busy, setBusy] = useState(false);
   const [vmsg, setVmsg] = useState<{ ok: boolean; text: string } | null>(null);
   // Every country, localized + sorted for the active language (no allow-list — see lib/flags.ts).
-  const countries = useMemo(() => countryOptions(), []);
 
   const [gender, setGender] = useState("");
   const load = () => VerifyApi.status().then((s) => {
     if (s && !("error" in s && (s as { error?: string }).error)) {
-      setSt(s); setName(s.full_name || ""); setBday(s.birthday || ""); setNat(s.nationality || ""); setPob(s.birthplace || "");
+      setSt(s); setName(s.full_name || ""); setBday(s.birthday || "");
       setGender(s.gender || "");
     }
   });
@@ -1085,7 +1078,7 @@ function IdentityVerification() {
     if (!name.trim()) { setIdMsg("Add your full legal name — it is required."); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(bday)) { setIdMsg("Add your date of birth — every member states one."); return; }
     setIdSaving(true); setIdMsg("");
-    const r = await VerifyApi.setIdentity(name.trim(), bday, nat, pob, geo ?? undefined);
+    const r = await VerifyApi.setIdentity(name.trim(), bday);
     setIdSaving(false);
     if (r.ok) { setIdMsg("Saved"); load(); } else { setIdMsg(r.message || "Couldn't save — check your details."); }
   }
@@ -1129,23 +1122,6 @@ function IdentityVerification() {
             <DobWheel value={bday} onChange={setBday} minYear={new Date().getFullYear() - 120}
               maxYear={new Date().getFullYear() - 13} invalid={bday !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(bday)} />
           </Field>
-          <Field label="Place of birth" required hint="Public on your profile, and required before you can post.">
-            {/* The same picker as sign-up — one control for one fact, everywhere it is asked for. */}
-            <CitySelect value={pob}
-              onPick={(c) => { setPob(cityLabel(c)); setGeo({ lat: c.lat, lon: c.lon, tz: c.tz }); }}
-              onClear={() => { setPob(""); setGeo(null); }} required />
-          </Field>
-          <Field label="Nationality" optional>
-            <select value={nat} onChange={(e) => setNat(e.target.value)} aria-label="Nationality"
-              className="h-11 w-full rounded-field border border-line bg-space-1 px-3.5 text-[15px] text-ink outline-none focus:border-yin-light">
-              <option value="">Choose your nationality…</option>
-              {/* Revocable: CLEAR is the sentinel Verify::set_identity deletes on. Without a way to
-                  take it back the claim was write-only, which matters now that a donor's ArtaCredit
-                  can be aimed at a nationality. */}
-              {st?.nationality && <option value="CLEAR">Remove my nationality</option>}
-              {countries.map((c) => <option key={c.code} value={c.code}>{`${flagEmoji(c.code)} ${c.name}`}</option>)}
-            </select>
-          </Field>
           {/* GENDER — the only axis of a donor's ArtaCredit that ArtaQuest does not otherwise know.
               Opt-in, revocable, never inferred, and useless for anything else: it is read by exactly
               one thing (Credits::buckets_for_user). Saying nothing is a complete answer. */}
@@ -1171,20 +1147,15 @@ function IdentityVerification() {
         {st?.verified ? (
           <div className="flex items-center gap-2 text-[15px] font-semibold text-yin-light">
             <BlueCheck size={18} /> Verified{st.verified_at ? ` · ${new Date(st.verified_at * 1000).toLocaleDateString()}` : ""}
-            {flagEmoji(st.nationality) && (
-              <span role="img" aria-label={countryName(st.nationality)} title={`${countryName(st.nationality)} — shown on your profile picture`} className="text-[17px] leading-none">
-                {flagEmoji(st.nationality)}
-              </span>
-            )}
           </div>
         ) : !st?.configured ? (
           <p className="text-[14px] text-ink-3">Identity verification is temporarily unavailable. Please check back soon.</p>
-        ) : !st?.has_identity || !st?.nationality ? (
-          <p className="text-[14px] text-ink-3">Save your full name, birthday and nationality above first, then verify your ID.</p>
+        ) : !st?.has_identity ? (
+          <p className="text-[14px] text-ink-3">Save your full name and date of birth above first, then verify your ID.</p>
         ) : (
           <>
             <h3 className="text-[16px] font-bold">Get the blue check</h3>
-            <p className="text-[13px] text-ink-3">Verifying is free. Add a clear photo of your face (becomes your profile picture), the front and back of a government ID from any country, and a selfie. Claude confirms the ID is genuine and that the name, birthday, nationality, and face all match. Once verified, your country's flag appears on your profile picture across ArtaQuest. Your ID and selfie are used only for this check and are never stored.</p>
+            <p className="text-[13px] text-ink-3">Verifying is free. Add a clear photo of your face (it becomes your profile picture), the front and back of any government photo ID — passport, national ID, driver licence, residence permit, from any country — and a selfie. Claude confirms the ID is genuine and that the NAME and DATE OF BIRTH on it are yours, and that the same face appears on the ID, the selfie and your photo. Nothing else is read off the ID: not your nationality, not where you were born. Your ID and selfie are used only for this check and are never stored.</p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <PhotoTile label="Profile photo" hint="your face" value={imgs.profile_pic} onPick={(f) => pick("profile_pic", f)} />
               <PhotoTile label="ID front" hint="government ID" value={imgs.id_front} onPick={(f) => pick("id_front", f)} />

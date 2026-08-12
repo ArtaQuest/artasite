@@ -202,7 +202,6 @@ final class Extra {
 				'slug'   => $c['user_nicename'],
 				'name'   => $c['display_name'] ?: 'Quester',
 				'avatar' => Verify::avatar_url( (int) $c['user_id'], 64 ),
-				'country' => Verify::badge_country( (int) $c['user_id'] ), // verified nationality → avatar flag
 				'status' => $c['status'],
 				'at'     => (int) $c['claimed_ts'],
 			];

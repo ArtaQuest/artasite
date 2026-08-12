@@ -12,9 +12,7 @@ const NONCE =
   (typeof window !== "undefined" && (window as unknown as { AQ_WP_NONCE?: string }).AQ_WP_NONCE) || "";
 
 export type VerifyStatus = {
-  full_name: string; birthday: string; nationality: string; has_identity: boolean;
-  /** Mandatory identity info since 2026-08-11 — has_identity is false without it. */
-  birthplace?: string;
+  full_name: string; birthday: string; has_identity: boolean;
   /** '' unless the member chose to say. Read by exactly one thing — ArtaCredits matching. */
   gender?: string;
   verified: boolean; verified_at: number; last_note: string;
@@ -55,16 +53,11 @@ export const VerifyApi = {
   status: () => req<VerifyStatus>("/verify/status", "GET"),
   // `nationality` (ISO alpha-2) is optional — posting never needs it, the blue check does; an
   // omitted/empty value leaves the stored claim untouched server-side.
-  // `birthplace` is MANDATORY server-side (Verify::has_identity gates posting on it), so every
-  // caller must send it. The coordinates ride along when the member picked from the gazetteer.
-  setIdentity: (full_name: string, birthday: string, nationality?: string, birthplace?: string, geo?: { lat: number; lon: number; tz: string }) =>
-    req<{ ok?: boolean; error?: string; message?: string; full_name?: string; birthday?: string; nationality?: string; birthplace?: string }>(
-      "/identity", "POST", {
-        full_name, birthday,
-        ...(nationality ? { nationality } : {}),
-        ...(birthplace !== undefined ? { birthplace } : {}),
-        ...(geo ? { birth_lat: geo.lat, birth_lon: geo.lon, birth_tz: geo.tz } : {}),
-      }),
+  // Name + date of birth. Nationality and place of birth were removed on 2026-08-11 — the server
+  // no longer reads either, and sending them would be a no-op that reads like a live field.
+  setIdentity: (full_name: string, birthday: string) =>
+    req<{ ok?: boolean; error?: string; message?: string; full_name?: string; birthday?: string }>(
+      "/identity", "POST", { full_name, birthday }),
   // Save the "fine-tune" birth time (minutes past local midnight) that positions the member's long-term goal.
   setBirthTime: (min: number) => req<{ ok?: boolean; min?: number }>("/identity/birthtime", "POST", { min }),
   verify: (imgs: { profile_pic: string; id_front: string; id_back: string; selfie: string }) =>

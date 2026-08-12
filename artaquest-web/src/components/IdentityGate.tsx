@@ -72,8 +72,6 @@ export function IdentityGate() {
   const [err, setErr] = useState("");
   // The picked city and its coordinates. `pob` is only ever set by CHOOSING from the gazetteer, so
   // a half-typed "Teh" cannot be submitted as a place.
-  const [pob, setPob] = useState("");
-  const [geo, setGeo] = useState<{ lat: number; lon: number; tz: string } | null>(null);
   // Asked for here so a member states them ONCE, at the only moment they are already filling a form.
   // Optional — mandatory identity is name + date of birth + place of birth, and padding a sign-up
   // gate with four more required fields is how you lose the person on the other side of it.
@@ -100,7 +98,7 @@ export function IdentityGate() {
   const dobOk = exactDate(bday);
   // Place of birth is mandatory server-side (Verify::has_identity), so the button must not promise
   // otherwise — a member who cannot see WHY Continue is dead just meets a 400 after tapping it.
-  const ready = nameOk && dobOk && pob !== "" && !busy;
+  const ready = nameOk && dobOk && !busy;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -109,7 +107,7 @@ export function IdentityGate() {
     setErr("");
     try {
       // Nationality intentionally blank — the server only writes it when non-empty.
-      const r = await VerifyApi.setIdentity(name.trim(), bday, "", pob, geo ?? undefined);
+      const r = await VerifyApi.setIdentity(name.trim(), bday);
       // The optional half rides on the profile endpoint, and only when there is something to say.
       // Deliberately AFTER identity and deliberately not awaited into the failure path: a member who
       // filled the gate must get through it even if this second call is refused.
@@ -147,7 +145,7 @@ export function IdentityGate() {
         <h2 id="aq-gate-title" className="text-[22px] font-bold leading-tight text-ink">Tell us who you are</h2>
         {/* The gate got longer, so it now says which part is compulsory — otherwise a member reads
             seven fields and assumes all seven are. Three are. */}
-        <p className="mt-1 text-[13px] text-ink-3">Name, date of birth and place of birth are required. The rest you can fill in now or later.</p>
+        <p className="mt-1 text-[13px] text-ink-3">Your name and date of birth are required. The rest you can fill in now or later.</p>
 
         <div className="mt-4 space-y-3">
           <label className="block">
@@ -174,17 +172,6 @@ export function IdentityGate() {
               <span id="aq-gate-dob-hint" role="alert" className="mt-1 block text-[12px] text-yin-ink">You must be at least 13</span>
             )}
           </label>
-          <div className="block">
-            <span className="mb-1 block text-[13px] font-medium text-ink-2">Place of birth</span>
-            {/* A picker, not a text box: 34,078 cities, and the row carries the coordinates. */}
-            <CitySelect
-              value={pob}
-              onPick={(c) => { setPob(cityLabel(c)); setGeo({ lat: c.lat, lon: c.lon, tz: c.tz }); }}
-              onClear={() => { setPob(""); setGeo(null); }}
-              required
-            />
-          </div>
-
           {/* THE REST OF THE PROFILE, asked once. Every one of these is optional and says so, and the
               button does not wait on them. They are here because a member who states them now never
               has to find the settings page to do it — which is where all three sat unfilled. */}

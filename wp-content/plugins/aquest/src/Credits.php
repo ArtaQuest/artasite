@@ -6,7 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 /**
  * ARTACREDITS (2026-08-03) — a donor pays a stranger's challenge entry fee.
  *
- * A donor gives to a SLICE of the membership (nationality · gender · age band). The gift lands in
+ * A donor gives to a SLICE of the membership (gender · age band). The gift lands in
  * the public fund as a `crd_<cty>_<g>_<band>` earmark. When a member of that slice tries to enter a
  * challenge and is short the fee, we OFFER them the credit — naming the donor and the slice — and
  * they accept, or don't. Accepting pays their fee from the fund and puts the donor's name on their
@@ -42,7 +42,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *   3. A credit is never offered to an API TOKEN. Publication-grade consent is a human act, and a
  *      token cannot see the donor's name it would be accepting (Api::via_token).
  *   4. Nationality / gender / birthday are freely-rewritable self-claims (Verify::set_identity), so
- *      a facet only matches once it has been SETTLED for SETTLE_DAYS. Rewriting your nationality to
+ *      a facet only matches once it has been SETTLED for SETTLE_DAYS. Rewriting your gender to
  *      reach a waiting gift buys you a month's wait, not a gift.
  * Plus MOON_CAP credit-funded entries per member per synodic month, and FEE_CAP on any one entry.
  *
@@ -51,7 +51,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * A reader who follows gift_id learns the slice the gift was given for, which is a fact about the
  * member. That is disclosed in the offer, before they accept, in words. The `bucket` is deliberately
  * NOT duplicated onto the grant row: it stays one hop away on the gift, so no single public row
- * states a member's nationality, gender and age together beside their user id.
+ * states a member's gender and age together beside their user id.
  * Nothing anywhere records that a member WANTS to be sponsored — there is no standing flag to read.
  */
 final class Credits {
@@ -179,7 +179,12 @@ final class Credits {
 		$band = self::age_band( $uid );
 		if ( $band === '13' ) { return [ self::bucket( self::ANY, self::ANY, self::ANY ) ]; }
 
-		$cty = self::settled( $uid, 'aq_nationality' ) ? strtolower( Verify::badge_country( $uid ) ) : '';
+		// NATIONALITY IS NO LONGER A FACET (operator 2026-08-11). The platform stopped collecting a
+		// citizenship, so nobody can be matched by one and no gift can name one — the country axis is
+		// pinned to ANY on both sides. The key KEEPS its three segments: aq_credit_gifts was empty when
+		// this changed, so nothing needed migrating, and re-shaping a fund earmark is not worth doing
+		// for a segment that is now always 'x'.
+		$cty = '';
 		$gen = self::settled( $uid, 'aq_gender' ) ? self::gender( $uid ) : '';
 		if ( ! self::settled( $uid, 'aq_birthday' ) ) { $band = ''; }
 
@@ -491,13 +496,13 @@ final class Credits {
 	 * buckets_for_user() on each — a per-user meta lookup, ~5,000 round trips, on a PUBLIC unthrottled
 	 * GET with thousands of distinct cacheable parameter combinations. It is now a set of joins over
 	 * (meta_key, meta_value), and it encodes the SAME three rules buckets_for_user does: a facet only
-	 * counts once SETTLED, `aq_nationality` only counts once verified (badge_country), and a member
-	 * under 18 is reachable ONLY by a gift that names nothing.
+	 * counts once SETTLED, and a member under 18 is reachable ONLY by a gift that names nothing.
+	 * (The nationality facet was removed 2026-08-11 — see buckets_for_user.)
 	 */
 	public static function reach( $req ) {
 		global $wpdb;
 		if ( Rest::throttle( 'credits_reach', 120, 60 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
-		$cty  = strtolower( sanitize_key( (string) Rest::p( $req, 'country', '' ) ) );
+		$cty  = ''; // nationality is not collected any more — a gift can never name one (see buckets_for_user)
 		$gen  = sanitize_key( (string) Rest::p( $req, 'gender', '' ) );
 		$band = sanitize_key( (string) Rest::p( $req, 'band', '' ) );
 		$want = self::bucket( $cty, $gen, $band );
@@ -522,13 +527,6 @@ final class Credits {
 		};
 		$settled( 'bs', 'aq_birthday' );
 
-		if ( $wcty !== self::ANY ) {
-			// badge_country() only reports a VERIFIED nationality, so the join must require both.
-			$joins  .= " JOIN $um nt ON nt.user_id = bd.user_id AND nt.meta_key = 'aq_nationality' AND UPPER(nt.meta_value) = %s"
-				. " JOIN $um vf ON vf.user_id = bd.user_id AND vf.meta_key = 'aq_verified' AND vf.meta_value <> ''";
-			$jargs[] = strtoupper( $wcty );
-			$settled( 'ns', 'aq_nationality' );
-		}
 		if ( $wgen !== self::ANY ) {
 			$joins  .= " JOIN $um gn ON gn.user_id = bd.user_id AND gn.meta_key = 'aq_gender' AND gn.meta_value = %s";
 			$jargs[] = $wgen;

@@ -1,6 +1,4 @@
 import { type FormEvent, useMemo, useState } from "react";
-import CitySelect from "../CitySelect";
-import { cityLabel } from "../../lib/api";
 import { Avatar, Button, RichText, VoteControl, cx } from "../ui";
 import { Composer } from "../Composer";
 import { VerifyApi } from "../../lib/verify";
@@ -12,18 +10,13 @@ import type { BoardCapabilities, BoardComment, BoardWriteState } from "./types";
 function IdentityPrompt() {
   const [name, setName] = useState("");
   const [bday, setBday] = useState("");
-  // Place of birth became mandatory identity info (Verify::has_identity, 2026-08-11). Without it
-  // this inline prompt posts a request the server refuses, and the member reads "Enter your place of
-  // birth" beside a form that never asked for one.
-  const [pob, setPob] = useState("");
-  const [geo, setGeo] = useState<{ lat: number; lon: number; tz: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   async function save() {
-    if (!name.trim() || !bday || !pob || busy) return;
+    if (!name.trim() || !bday || busy) return;
     setBusy(true); setErr("");
     try {
-      const r = await VerifyApi.setIdentity(name.trim(), bday, "", pob, geo ?? undefined);
+      const r = await VerifyApi.setIdentity(name.trim(), bday);
       if (r?.ok) window.location.reload();
       else setErr(r?.message || r?.error || "Couldn't save — check your details.");
     } catch { setErr("Couldn't save — please try again."); }
@@ -34,19 +27,10 @@ function IdentityPrompt() {
     <div data-goal="needs-identity" className="rounded-card border border-yin/30 bg-yin/5 px-4 py-3.5">
       <p className="text-[14px] font-semibold text-ink">Add your name to post</p>
       <p className="mt-0.5 text-[13px] text-ink-2">Replies are public and signed with your real name and age. It takes a few seconds — and you keep your place here.</p>
-      <div className="mt-3 flex flex-col gap-2">
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" maxLength={80} className={f} />
-          <input value={bday} onChange={(e) => setBday(e.target.value)} type="date" aria-label="Birthday" className={f} />
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <span className="min-w-0 flex-1">
-            <CitySelect value={pob} placeholder="Place of birth"
-              onPick={(c) => { setPob(cityLabel(c)); setGeo({ lat: c.lat, lon: c.lon, tz: c.tz }); }}
-              onClear={() => { setPob(""); setGeo(null); }} required />
-          </span>
-          <Button onClick={save} disabled={busy || !name.trim() || !bday || !pob} className="h-10 shrink-0 px-5 text-[14px] disabled:opacity-50">{busy ? "Saving…" : "Save & post"}</Button>
-        </div>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" maxLength={80} className={f} />
+        <input value={bday} onChange={(e) => setBday(e.target.value)} type="date" aria-label="Date of birth" className={f} />
+        <Button onClick={save} disabled={busy || !name.trim() || !bday} className="h-10 shrink-0 px-5 text-[14px] disabled:opacity-50">{busy ? "Saving…" : "Save & post"}</Button>
       </div>
       {err && <p className="mt-1.5 text-[12px] text-yin-light">{err}</p>}
     </div>

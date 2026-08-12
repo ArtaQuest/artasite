@@ -269,7 +269,6 @@ final class Social {
 			'name'     => $u ? $u->display_name : 'Quester',
 			'slug'     => $u ? $u->user_nicename : '',
 			'avatar'   => $u ? Verify::avatar_url( $uid, 48 ) : '',
-			'country'  => $u ? Verify::badge_country( $uid ) : '',
 			'verified' => $u ? Verify::is_verified( $uid ) : false,
 			'at'       => (int) $at,
 		];
@@ -324,7 +323,6 @@ final class Social {
 				'name'     => $m ? $m->display_name : 'Quester',
 				'slug'     => $m ? $m->user_nicename : '',
 				'avatar'   => $m ? Verify::avatar_url( $mid, 96 ) : '',
-				'country'  => $m ? Verify::badge_country( $mid ) : '',
 				'verified' => $m ? Verify::is_verified( $mid ) : false,
 				'at'       => (int) $r['created'],
 			];
@@ -364,7 +362,6 @@ final class Social {
 				'name'      => $m->display_name,
 				'slug'      => $m->user_nicename,
 				'avatar'    => Verify::avatar_url( $mid, 96 ),
-				'country'   => Verify::badge_country( $mid ),
 				'verified'  => Verify::is_verified( $mid ),
 				'hearts'    => (int) $r['hearts'],
 				'works'     => (int) $r['works'],
@@ -557,7 +554,6 @@ final class Social {
 				'name'    => $u ? $u->display_name : 'Quester',
 				'slug'    => $u ? $u->user_nicename : '',
 				'avatar'  => Verify::avatar_url( $aid, 96 ),
-				'country' => Verify::badge_country( $aid ), // verified nationality → avatar flag
 			];
 		}
 		// The viewer's existing casts on the page's votable targets (one IN() per target type,
@@ -751,8 +747,6 @@ final class Social {
 			'full_name'  => Verify::full_name( $id ),           // public (radical transparency)
 			'birthday'   => Verify::birthday( $id ),            // public on every profile
 			'season'     => Seasons::of_user( $id ),            // the ONE season this member follows (0 = none on record)
-			'country'    => Verify::badge_country( $id ),       // verified nationality → avatar flag ('' until verified)
-			'nationality' => Verify::claimed_country( $id ),    // self-entered nationality → header detail (shown unverified, like birthday)
 			'typologies' => array_values( $tags ),
 			'endorsements' => Extra::endorsements_for( $id ),   // public peer-endorsement counts per tag
 			'stats'      => $stats,
@@ -1015,7 +1009,6 @@ final class Social {
 			'author'   => $u ? $u->display_name : 'Quester',
 			'slug'     => $u ? $u->user_nicename : '',
 			'avatar'   => Verify::avatar_url( (int) $t['author_id'], 48 ),
-			'country'  => Verify::badge_country( (int) $t['author_id'] ), // verified nationality → avatar flag
 			'mine'     => (int) $t['author_id'] === Rest::uid(), // strict authorship (drives the no-self-vote state)
 			'edited'   => ! empty( $t['edited'] ),
 			'comments' => (int) $t['comment_count'],
@@ -1034,7 +1027,6 @@ final class Social {
 			'author'  => $deleted ? '[deleted]' : ( $u ? $u->display_name : 'Quester' ),
 			'slug'    => $u ? $u->user_nicename : '',
 			'avatar'  => $deleted ? '' : Verify::avatar_url( (int) $c['author_id'], 48 ),
-			'country' => $deleted ? '' : Verify::badge_country( (int) $c['author_id'] ), // verified nationality → avatar flag
 			'mine'    => ! $deleted && (int) $c['author_id'] === Rest::uid(), // strict authorship
 			'score'   => (int) $c['votes'],
 			'replies' => (int) ( $c['reply_count'] ?? 0 ),

@@ -256,7 +256,6 @@ final class Learn {
 			'author'  => $u ? $u->display_name : 'Quester',
 			'slug'    => $u ? $u->user_nicename : '',
 			'avatar'  => Verify::avatar_url( (int) $r['author_id'], 48 ),
-			'country' => Verify::badge_country( (int) $r['author_id'] ), // verified nationality → avatar flag
 			'at'      => (int) $r['created'],
 			// A referenced YouTube top comment on an ArtaBot seed (author name + pic + live likes) →
 			// the board renders a "from YouTube" card. null on every ordinary comment.
@@ -639,7 +638,6 @@ final class Learn {
 				$items[] = [
 					'rank' => $rank, 'medal' => $medals[ $rank ] ?? '',
 					'name' => $u->display_name, 'slug' => $u->user_nicename, 'avatar' => Verify::avatar_url( $u->ID, 96 ),
-					'country' => Verify::badge_country( $u->ID ), // verified nationality → avatar flag
 					'votes' => (int) $r['votes'], 'questions' => 0,
 					'certified' => true, 'prize' => (int) $r['prize'], 'reward' => (int) $r['prize'], // archived = final, prizes settled
 				];
@@ -666,7 +664,6 @@ final class Learn {
 				'name'      => $u->display_name,
 				'slug'      => $u->user_nicename,
 				'avatar'    => Verify::avatar_url( $u->ID, 96 ),
-				'country'   => Verify::badge_country( $u->ID ), // verified nationality → avatar flag
 				'votes'     => $row['votes'],
 				'questions' => $row['questions'],
 				'certified' => isset( $certified[ $row['user_id'] ] ),

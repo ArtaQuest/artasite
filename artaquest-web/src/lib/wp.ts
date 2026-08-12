@@ -956,8 +956,6 @@ export type Profile = {
    *  whatever the member typed and is NEVER inferred from an IP address (see AQ\Auth::location). */
   relationship?: string;
   location?: string;
-  /** Where they were born. Mandatory identity info, so a profile normally has one. */
-  birthplace?: string;
   /** Languages the member says they speak, RESOLVED SERVER-SIDE (AQ\I18n::language_meta) so the
    *  page never depends on window.AQ_I18N to name one. Member's own order; we collect no fluency,
    *  so the order implies nothing. */
@@ -1013,7 +1011,6 @@ type ProfileR = {
   // getProfile below, or the SPA silently drops them exactly as it once dropped the birthday.
   relationship?: string;
   location?: string;
-  birthplace?: string;
   languages?: ProfileLang[];
   coins?: number; joined?: string; bio?: string; completed?: number; breakdown?: TrackPoints;
   typologies?: TypologyTag[]; endorsements?: Record<string, number>; stats?: ProfileStats; is_following?: boolean;
@@ -1063,7 +1060,7 @@ export async function getProfile(slug: string): Promise<Profile | null> {
       id: pr.id, name: pr.name, slug: pr.slug, avatar: pr.avatar, palm: pr.palm || "", country: pr.country || "", nationality: pr.nationality || "", email: pr.email || "", bio: pr.bio || "", links: pr.links || undefined, lastSeen: pr.last_seen || 0,
       // Public identity facts the endpoint has always emitted but the SPA used to drop on the floor.
       birthday: pr.birthday || "", fullName: pr.full_name || "", season: pr.season ?? 0, verified: !!pr.verified,
-      relationship: pr.relationship || "", location: pr.location || "", birthplace: pr.birthplace || "", languages: pr.languages ?? [],
+      relationship: pr.relationship || "", location: pr.location || "", languages: pr.languages ?? [],
       coins: pr.coins ?? 0, points: pr.points, completed: pr.completed ?? 0,
       breakdown: { ...ZERO_TRACKS, ...pr.breakdown, total: pr.points },
       tier: pr.tier, joined: pr.joined || "",

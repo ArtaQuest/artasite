@@ -961,7 +961,6 @@ final class Chat {
 				'name'    => (string) $u->display_name,
 				'slug'    => (string) $u->user_nicename,
 				'avatar'  => Verify::avatar_url( $id, 96 ),
-				'country' => Verify::badge_country( $id ),
 				'online'  => $is_online( $id ),
 				'has_key' => isset( $keyed[ $id ] ),
 			];

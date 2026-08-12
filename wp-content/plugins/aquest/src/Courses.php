@@ -257,7 +257,6 @@ final class Courses {
 				$u = get_userdata( (int) $r['user_id'] );
 				return [ 'author' => $u ? $u->display_name : 'Quester', 'slug' => $u ? $u->user_nicename : '',
 					'avatar' => Verify::avatar_url( (int) $r['user_id'], 64 ),
-					'country' => Verify::badge_country( (int) $r['user_id'] ), // verified nationality → avatar flag
 					'rating' => (int) $r['rating'], 'body' => (string) $r['body'], 'at' => (int) $r['created'] ];
 			}, $rows ),
 		];

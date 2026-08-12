@@ -889,7 +889,6 @@ final class Economy {
 				// a real avatar + join date instead of the bridge's hardcoded blanks (the "Joined"
 				// column existed but was always empty).
 				'avatar' => Verify::avatar_url( $u->ID, 96 ),
-				'country' => Verify::badge_country( $u->ID ), // verified nationality → avatar flag
 				'joined' => Verify::joined_label( $u->user_registered ), // clamped to the platform launch (ticket #103)
 			];
 		}

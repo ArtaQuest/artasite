@@ -235,7 +235,6 @@ export default function Profile() {
     relationshipLabel(p.relationship) ? "" : "Relationship",
     p.location?.trim() ? "" : "Where you live",
     (p.languages?.length ?? 0) > 0 ? "" : "Languages you speak",
-    p.birthplace?.trim() ? "" : "Place of birth",
   ].filter(Boolean);
   const [missing, setMissing] = useState(false);
   useEffect(() => {
@@ -459,7 +458,7 @@ export default function Profile() {
           derived from an IP address or a header. Rows appear only when there is something to say —
           a member who has filled none of this in gets no card at all, rather than a grid of blanks
           advertising what they declined to answer. */}
-      {p && (isOwn || relationshipLabel(p.relationship) || p.location?.trim() || (p.languages?.length ?? 0) > 0 || fmtBirthday(p.birthday) || p.birthplace?.trim()) ? (
+      {p && (isOwn || relationshipLabel(p.relationship) || p.location?.trim() || (p.languages?.length ?? 0) > 0 || fmtBirthday(p.birthday)) ? (
         <section className="grid gap-x-8 gap-y-5 rounded-card border border-line bg-space-2 px-5 py-5 sm:grid-cols-2 lg:grid-cols-4" aria-label="About">
           {relationshipLabel(p.relationship) ? (
             <Fact label="Relationship" icon={<svg {...FACT_SVG}><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9z" /></svg>}>
@@ -489,15 +488,9 @@ export default function Profile() {
           {/* The DATE only — no derived age (operator 2026-07-27). Anyone who wants the number can
               do the subtraction; printing it turns a fact the member stated into a label the site
               puts on them, and it re-renders differently every birthday. */}
-          {/* Date and place in ONE fact, so five stated things still read as four columns and the row
-              reads like a sentence: "February 15, 1994 · Tehran, Iran". Either half may be missing —
-              the date predates the place being collected, and the place is mandatory only going
-              forward — so each is rendered only when present. */}
-          {(fmtBirthday(p.birthday) || p.birthplace?.trim()) ? (
+          {fmtBirthday(p.birthday) ? (
             <Fact label="Born" icon={<svg {...FACT_SVG}><path d="M4 20h16v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2Zm0-3h16" /><path d="M12 12V8m0-4v1.5M8 12V9m8 3V9" /></svg>}>
               {fmtBirthday(p.birthday)}
-              {fmtBirthday(p.birthday) && p.birthplace?.trim() ? <span className="text-ink-3"> · </span> : null}
-              {p.birthplace?.trim() ? <span data-ay-skip="1">{p.birthplace.trim()}</span> : null}
             </Fact>
           ) : null}
           {/* YOUR OWN profile, and something is unsaid. A card holding one lonely row reads as broken

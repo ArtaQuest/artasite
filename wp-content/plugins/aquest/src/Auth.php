@@ -262,7 +262,6 @@ final class Auth {
 			'has_identity' => Verify::has_identity( $uid ),  // name + birthday set (gates posting)
 			'full_name'    => Verify::full_name( $uid ),
 			'birthday'     => Verify::birthday( $uid ),
-			'country'      => Verify::badge_country( $uid ), // verified nationality → avatar flag ('' until verified)
 			'palm'         => Verify::palm_url( $uid ),      // opt-in palm "back photo" → the avatar flips to it (ticket #94)
 		] ];
 	}
@@ -785,7 +784,6 @@ final class Auth {
 				'name'    => $user->display_name,
 				'slug'    => $user->user_nicename,
 				'avatar'  => Verify::avatar_url( $user->ID, 96 ),
-				'country' => Verify::badge_country( $user->ID ), // verified nationality → avatar flag
 			],
 		];
 	}
