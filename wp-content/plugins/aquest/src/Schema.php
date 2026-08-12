@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.68.0';
+	const VERSION = '1.69.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -896,6 +896,37 @@ final class Schema {
 			// Scheduled group meetings for a grant's registrants (1-hour Google Meet working sessions
 			// at deadline-reminder milestones). reminder_key = e.g. 't-14' / 't-1'. meet_url + the
 			// Calendar event id come from the Calendar API (Meet); empty when Meet is not configured.
+			// ── ArtaMeet booking — "here is when I am free, take a slot" ───────
+			// A RULE, not a diary. It says which weekdays and which hours of the owner's own day are
+			// offered, how long a slot is, and how much notice is needed; the free/busy answer is
+			// computed against aq_meets at read time. Nothing here duplicates a meeting, because a
+			// booking IS a meeting (context_type='book') the moment somebody takes a slot — the same
+			// reason ArtaCalendar owns no data.
+			// `days` is a 7-character mask, Monday first: "1111100" is weekdays.
+			// `from_min`/`to_min` are minutes from midnight IN `tz`, the owner's own zone, because
+			// "I am free from nine" is a statement about their morning, not about UTC.
+			'aq_meet_rules' => "
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				slug VARCHAR(48) NOT NULL DEFAULT '',
+				title VARCHAR(255) NOT NULL DEFAULT '',
+				blurb TEXT NULL,
+				minutes SMALLINT UNSIGNED NOT NULL DEFAULT 30,
+				tz VARCHAR(64) NOT NULL DEFAULT 'UTC',
+				days VARCHAR(7) NOT NULL DEFAULT '1111100',
+				from_min SMALLINT UNSIGNED NOT NULL DEFAULT 540,
+				to_min SMALLINT UNSIGNED NOT NULL DEFAULT 1020,
+				buffer_min SMALLINT UNSIGNED NOT NULL DEFAULT 10,
+				notice_h SMALLINT UNSIGNED NOT NULL DEFAULT 4,
+				horizon_d SMALLINT UNSIGNED NOT NULL DEFAULT 21,
+				seats TINYINT UNSIGNED NOT NULL DEFAULT 2,
+				active TINYINT UNSIGNED NOT NULL DEFAULT 1,
+				created INT UNSIGNED NOT NULL DEFAULT 0,
+				updated INT UNSIGNED NOT NULL DEFAULT 0,
+				PRIMARY KEY  (id),
+				UNIQUE KEY user_slug (user_id, slug),
+				KEY user_active (user_id, active)",
+
 			// ── ArtaMeet — scheduled meetings ─────────────────────────────────
 			// A meeting is a PROMISE about a future time; the end-to-end encrypted room that
 			// carries it is bound at T-15m and thrown away after, so a week-old invitation never
@@ -1182,6 +1213,7 @@ final class Schema {
 			'aq_season_results' => [ 'desc' => 'Frozen leaderboard snapshot for a closed (season, course): podium + prizes.', 'cols' => [ 'place' => 'finishing position (1=🥇)', 'votes' => 'final season upvotes', 'prize' => 'coins awarded' ] ],
 			'aq_grants'         => [ 'desc' => 'Community-sourced grant catalogue (Outreach program).', 'cols' => [ 'fit' => 'relevance score', 'deadline' => 'YYYY-MM-DD (empty = rolling)', 'allows_regranting' => 'whether the funder permits bursary re-granting' ] ],
 			'aq_grant_claims'   => [ 'desc' => 'A member committing to draft a grant application.', 'cols' => [ 'status' => 'claimed → submitted → verified' ] ],
+			'aq_meet_rules' => [ 'desc' => 'When a member is open to being booked. A rule, not a diary — the free/busy answer is computed against aq_meets at read time, and a booking becomes an ordinary meeting.', 'cols' => [ 'days' => '7-char mask, Monday first', 'from_min' => 'minutes from midnight in the owner\'s own tz', 'notice_h' => 'how little warning is acceptable' ] ],
 			'aq_meets' => [ 'desc' => 'ArtaMeet — a scheduled meeting. The E2EE room that carries it is bound at T-15m and released after, so room_id is 0 for almost all of a meeting\'s life.', 'cols' => [ 'room_id' => 'the ArtaRooms room, only while live', 'seq' => 'iCalendar SEQUENCE — clients ignore an updated event without it', 'sort_key' => 'start_ts*1e7+id, a unique keyset cursor (start_ts alone ties)', 'ctx_key' => 'idempotency handle, e.g. grant:12:t-14' ] ],
 			'aq_meet_guests' => [ 'desc' => 'Who is invited to an ArtaMeet, and whether they have been seated in its room yet.', 'cols' => [ 'rsvp' => 'none|yes|no|maybe', 'seated' => 'when they were added to the live room (0 = not yet)' ] ],
 			'aq_grant_meetings' => [ 'desc' => 'Scheduled group working sessions for a grant\'s registrants.', 'cols' => [ 'reminder_key' => 'milestone (e.g. t-14, t-1)', 'meet_url' => 'RETIRED — the Google Meet link these sessions used before ArtaMeet; kept for the record, read by nothing' ] ],

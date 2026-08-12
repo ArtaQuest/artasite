@@ -535,6 +535,17 @@ final class Rest {
 		// ── ArtaCalendar — everything dated, in one place (src/Calendar.php) ────
 		[ 'GET',  'calendar/agenda',               'Calendar::agenda',    'user' ], // ?from=&to= → meetings + deadlines + challenges
 		[ 'GET',  'calendar/cal',                  'Calendar::cal',       'user' ], // my signed subscription URLs
+		// ── Booking — a member's own "when am I free" page (src/Booking.php) ────
+		// The first two are PUBLIC on purpose: someone deciding whether to ask for your time should
+		// not need an account to see when you are free. They return FREE/BUSY ONLY and never a
+		// meeting's title. Taking a slot needs a session, because the meeting it creates is
+		// end-to-end encrypted and a room has to be sealed to somebody.
+		[ 'GET',  'book/page',                     'Booking::page',       'public' ], // ?user=<slug> → their bookable types
+		[ 'GET',  'book/slots',                    'Booking::slots',      'public' ], // ?user=&type=&from=&to= → free starts
+		[ 'POST', 'book/take',                     'Booking::take',       'user'   ], // claim one → becomes an ArtaMeet
+		[ 'GET',  'book/rules',                    'Booking::my_rules',   'user'   ], // my own availability
+		[ 'POST', 'book/rules',                    'Booking::set_rule',   'user'   ], // create or update one
+		[ 'POST', 'book/rule-off',                 'Booking::drop_rule',  'user'   ], // stop offering it
 		[ 'GET',  'meet/list',                     'Meetings::list_mine', 'user' ], // ?scope=upcoming|past
 		[ 'GET',  'meet/get',                      'Meetings::get',       'user' ], // ?id= → one meeting + its guests
 		[ 'POST', 'meet/create',                   'Meetings::create',    'user' ], // {title, start, minutes, tz, guests[]}

@@ -2870,3 +2870,145 @@ export function calendarAgenda(b: { from: number; to: number }) {
  *  else's server. */
 export function calendarCal() { return get<CalendarCal & { ok: boolean }>("/calendar/cal"); }
 
+
+// ── ArtaMeet booking — "here is when I am free, take a slot" (src/Booking.php) ──
+//
+// A RULE, not a diary (aq_meet_rules). It says which weekdays and which hours of the OWNER's own
+// day are offered, how long a slot is and how much notice they want; the free/busy answer is
+// computed against aq_meets at read time. Nothing here duplicates a meeting, because taking a slot
+// IS creating an ordinary meeting (context_type='book') — which is why ArtaCalendar and the .ics
+// feed carry a booking without knowing this feature exists.
+//
+// ⚠️ THE PUBLIC HALF ANSWERS FREE/BUSY AND NOTHING ELSE. book/page and book/slots are readable by
+// a stranger with no account, on purpose: somebody deciding whether to ask for your time should not
+// have to register to find out when you are free. What they get back is a list of START INSTANTS —
+// never a meeting's title, never who it is with, never how many there are. Meetings are separately
+// public rows at /data/; that is a different argument and not a licence to leak them through this
+// door. If a field ever appears on this wire that names a busy meeting, it is a bug, not a feature.
+//
+// There is no cursor on book/slots, deliberately, and that is not an OFFSET in disguise: like the
+// calendar agenda it is read as a WINDOW ("the next fortnight"), bounded by construction and
+// clamped server-side to the rule's own horizon. Read `from`/`to` back rather than assuming the
+// window you asked for is the window you got.
+
+/** One offered meeting type — a row of aq_meet_rules, as both halves of the page read it. The
+ *  public half sees exactly these fields too: they describe an OFFER, not a diary. */
+export type BookRule = {
+  id: number;
+  /** URL-safe name, unique per owner. This is the `type` every other booking call names. */
+  slug: string;
+  title: string;
+  blurb: string;
+  minutes: number;
+  /** The OWNER's own zone, and the zone `from_min`/`to_min` are counted in. Shown to a visitor
+   *  beside their own — "2pm his time" is what they are really agreeing to. */
+  tz: string;
+  /** 7-character mask, MONDAY FIRST: "1111100" is weekdays, "1111111" is any day. */
+  days: string;
+  /** Minutes from midnight in `tz` — 840 is 2pm there, whatever that is where you are. */
+  from_min: number;
+  to_min: number;
+  /** Quiet time kept clear either side of a booking. */
+  buffer_min: number;
+  /** How little warning is acceptable, in hours. */
+  notice_h: number;
+  /** How far ahead the offer reaches, in days. */
+  horizon_d: number;
+  /** How many people can sit in one slot — 2 is the pair, host included. */
+  seats: number;
+  /** 0 once withdrawn. Withdrawn types never reach the public page. */
+  active: number;
+  created?: number;
+  updated?: number;
+};
+
+/** Whose page this is. A name and a face, and the zone they keep their day in — nothing that is
+ *  not already on their public profile. */
+export type BookOwner = { id: number; slug: string; name: string; avatar: string; tz: string };
+
+/** A member's public booking page: who they are and what they offer. Answers for a signed-out
+ *  stranger; `types` is empty when they are not open to bookings, which is a real answer and not
+ *  an error. */
+export function bookPage(user: string) {
+  return get<{ ok: boolean; owner: BookOwner; types: BookRule[]; now: number }>("/book/page", { user });
+}
+
+/** Free starts, normalised. `starts` are UTC instants and are the WHOLE answer — one number per
+ *  bookable start, in order, with the busy ones simply absent. */
+export type BookSlots = {
+  starts: number[];
+  /** The slot length, echoed so a page that deep-linked into slots need not have loaded the type. */
+  minutes: number;
+  /** The owner's zone, echoed for the same reason. */
+  tz: string;
+  /** The window actually answered, after the server clamped it to the rule's horizon. */
+  from: number;
+  to: number;
+  now: number;
+};
+
+/**
+ * When this member is free, between two instants. Public — no account needed.
+ *
+ * The wire is normalised here, in the one module allowed to know the wire: a start may arrive as a
+ * bare instant or as an object carrying one, and the list under `slots`, `starts` or `items`. The
+ * page sees one shape either way, and — this is the point — sees ONLY instants, so there is no
+ * shape in which a busy meeting's details could reach it.
+ */
+export async function bookSlots(b: { user: string; type: string; from: number; to: number }): Promise<BookSlots> {
+  const r = await get<{
+    ok?: boolean;
+    slots?: unknown[]; starts?: unknown[]; items?: unknown[];
+    minutes?: number; tz?: string; from?: number; to?: number; now?: number;
+  }>("/book/slots", { user: b.user, type: b.type, from: Math.round(b.from), to: Math.round(b.to) });
+  const raw = r.slots || r.starts || r.items || [];
+  const starts = raw
+    .map((s) => (typeof s === "number" ? s : Number((s as { start?: number; start_ts?: number })?.start ?? (s as { start_ts?: number })?.start_ts ?? 0)))
+    .filter((n) => Number.isFinite(n) && n > 0)
+    .sort((a, b2) => a - b2);
+  return {
+    starts,
+    minutes: Number(r.minutes) || 0,
+    tz: r.tz || "",
+    from: Number(r.from) || Math.round(b.from),
+    to: Number(r.to) || Math.round(b.to),
+    now: Number(r.now) || Math.round(Date.now() / 1000),
+  };
+}
+
+/**
+ * Take one free start. Needs a session — the one thing on the visitor's half that does.
+ *
+ * What comes back is an ORDINARY meeting: the booking is not a second kind of thing, it is an
+ * aq_meets row with both people as guests, so ArtaCalendar, the .ics feed and the meeting page all
+ * work on it without knowing where it came from. A slot taken while you were reading the page is a
+ * refusal, not a double booking — re-read the window and pick again.
+ */
+export function bookTake(b: { user: string; type: string; start: number; note?: string }) {
+  return post<{ ok: boolean; meet?: Meet; id?: number }>("/book/take", {
+    user: b.user, type: b.type, start: Math.round(b.start), note: b.note || "",
+  });
+}
+
+/** My own availability, every type including the withdrawn ones. `handle` is the name my share
+ *  link is built on; `url` is that link already composed, when the server offers it. */
+export function bookRules() {
+  return get<{ ok: boolean; items: BookRule[]; handle?: string; url?: string }>("/book/rules");
+}
+
+/** Create or update one type. With `id` it edits that row; without, it opens a new one. Hours are
+ *  minutes from midnight IN `tz` — never converted to UTC on the way out, because "I am free from
+ *  two" is a statement about the owner's afternoon and must survive their own DST. */
+export function bookSetRule(b: {
+  id?: number; slug?: string; title: string; blurb?: string; minutes: number; tz: string;
+  days: string; from_min: number; to_min: number;
+  buffer_min?: number; notice_h?: number; horizon_d?: number; seats?: number;
+}) {
+  return post<{ ok: boolean; rule?: BookRule }>("/book/rules", b as unknown as Json);
+}
+
+/** Stop offering one type. It stops appearing on the public page; meetings already taken through
+ *  it are meetings, and are not touched. */
+export function bookRuleOff(id: number) {
+  return post<{ ok: boolean; rule?: BookRule }>("/book/rule-off", { id });
+}

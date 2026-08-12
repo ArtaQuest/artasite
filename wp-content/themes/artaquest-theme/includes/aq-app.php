@@ -467,7 +467,10 @@ function aq_app_is_private_soft_path() {
 		// WordPress sends a 404 header and titles the tab "Page not found". Verified against prod before
 		// writing this: GET /meet/ returned 404 with the SPA shell inside it.
 		|| 'meet' === $path || 0 === strpos( $path, 'meet/' )
-		|| 'calendar' === $path; // ArtaCalendar — a member's own dated things (200 + noindex)
+		|| 'calendar' === $path // ArtaCalendar — a member's own dated things
+		// A member's booking page. Shared by link and noindex: when somebody is free is theirs to
+		// hand out, not something to publish to a search engine.
+		|| 'book' === $path || 0 === strpos( $path, 'book/' );
 }
 
 function aq_app_is_dashboard() {

@@ -38,6 +38,7 @@ import { PlayerProvider } from "./components/player"; // the member's OWN device
 const Messages = lazy(() => import("./pages/Messages")); // ArtaChat — end-to-end encrypted DMs
 const Meet = lazy(() => import("./pages/Meet")); // ArtaMeet — scheduled meetings on ArtaChat rooms
 const Calendar = lazy(() => import("./pages/Calendar")); // ArtaCalendar — everything dated, in one place
+const Book = lazy(() => import("./pages/Book")); // a member's booking page — take a slot from their week
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ArtaRead = lazy(() => import("./pages/ArtaRead")); // read/translate/listen to ANY PDF, on-device
 const Page = lazy(() => import("./pages/Page"));
@@ -121,6 +122,9 @@ const ROUTE_TITLES: Record<string, string> = {
   "/messages": "ArtaChat",
   "/meet": "ArtaMeet",
   "/calendar": "ArtaCalendar",
+  // Every /book/<handle> too — this is the one URL in the product designed to be handed to a
+  // stranger, and a tab reading "Page not found" is the first thing they would see.
+  "/book": "Book a meeting",
   "/login": "Sign in", "/sponsors": "Sponsors",
   "/fearometer": "ArtaMod",
   "/works": "Home", "/challenges": "Challenges", "/rankings": "Rankings", "/studio": "Your Studio", "/console": "Operator console",
@@ -167,7 +171,7 @@ function stripLang(pathname: string): string {
 const STATIC_ROUTES = new Set([
   "/", "/about", "/wallet", "/faq-contact", "/developers",
   "/my-library", "/library", "/ceo",
-  "/user-account", "/login", "/donate", "/messages", "/meet", "/calendar",
+  "/user-account", "/login", "/donate", "/messages", "/meet", "/calendar", "/book",
   "/finances",
   "/sponsors", "/offline", "/studio", "/console", "/fearometer",
   "/works", "/challenges", "/rankings", "/topics", "/lab",
@@ -413,6 +417,9 @@ export default function App() {
           <Route path="/about/" element={<About />} />
           <Route path="/wallet" element={<Wallet />} />
           <Route path="/wallet/" element={<Wallet />} />
+          <Route path="/book" element={<Book />} />
+          <Route path="/book/" element={<Book />} />
+          <Route path="/book/:handle" element={<Book />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/calendar/" element={<Calendar />} />
           <Route path="/meet" element={<Meet />} />

@@ -869,6 +869,14 @@ final class Extra {
 
 	/** Per-table, per-column masks: the cells we know by name (prefix-relative table => column => why). */
 	const REDACT_COLUMNS = [
+		// WHAT A MEETING IS CALLED IS THE MEMBER'S WORDS. The row itself is ordinary platform
+		// activity and belongs in the public record — when it is, who is in it, how many seats — but
+		// the title and agenda are things a person typed about their own business, and the product
+		// tells them the room is sealed. Publishing "Divorce settlement, 3pm, with these two people"
+		// beside that promise is the promise being false. Masking is only a mask: the real fix is to
+		// seal these into the room payload so the server never holds them at all, and it is named as
+		// the next step rather than implied by this line.
+		'aq_meets'      => [ 'title' => 'meeting title', 'agenda' => 'meeting agenda' ],
 		// A public reset key is inert while password login is disabled, but it would become a takeover
 		// vector the moment the AQ_ALLOW_PASSWORD_LOGIN escape hatch were set — so it stays masked.
 		'users'         => [ 'user_activation_key' => 'password-reset key' ],
