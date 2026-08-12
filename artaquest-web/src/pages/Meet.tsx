@@ -9,6 +9,7 @@ import {
 import { isLoggedIn, localePath } from "../lib/wp";
 import { bootChat, getChatState, subscribeChat } from "../lib/chat-store";
 import { distributeRoomKey, roomKey } from "../lib/rooms";
+import { shouldAnchor } from "../lib/anchor";
 import { RoomThread } from "../components/chat/RoomThread";
 import { RoomCall } from "../components/chat/RoomCall";
 import { CallModeChoice } from "../components/chat/CallPanel";
@@ -949,6 +950,8 @@ function MeetingPage({ id }: { id: number }) {
   const [opening, setOpening] = useState(false);
   const [now, setNow] = useState(() => Math.round(Date.now() / 1000));
   const joinedRoom = useRef(0);
+  /** Poll ticks, so a non-anchor still seals occasionally — see the distribution loop. */
+  const ticks = useRef(0);
   /** The poll's own tick, so an action can pull the next one forward instead of waiting out the
    *  interval — opening a meeting and then watching a spinner for five seconds reads as broken. */
   const tickNow = useRef<() => void>(() => {});
@@ -994,6 +997,7 @@ function MeetingPage({ id }: { id: number }) {
     let inFlight = false;
 
     async function tick() {
+      ticks.current += 1;
       if (inFlight || dead) return;
       inFlight = true;
       timer = undefined;
@@ -1028,7 +1032,17 @@ function MeetingPage({ id }: { id: number }) {
           setHasKey(!!k);
           if (k) {
             if (L.unseated.length) await meetSeat(id).catch(() => undefined);
-            await distributeRoomKey(L.room, L.me);
+            // PREFER THE ANCHOR, NEVER DEPEND ON IT. Every key-holder used to seal on every tick,
+            // which is what heals a guest who arrives late or re-registers mid-meeting — so this
+            // does not gate on the election, it DEFERS to it: the steadiest link keeps doing it
+            // every tick, everyone else drops to roughly one in four. The healing property is
+            // untouched (a newcomer still waits at most a few ticks even if the anchor has gone
+            // silent), and the redundant sealing that used to scale with the size of the room does
+            // not. Do not turn this into a hard gate — an election that has not resolved must never
+            // mean nobody lets anybody in.
+            if (shouldAnchor(L.room.id, L.me) || ticks.current % 4 === 0) {
+              await distributeRoomKey(L.room, L.me);
+            }
           }
         }
       } catch (e) {

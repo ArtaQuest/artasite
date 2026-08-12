@@ -147,3 +147,29 @@ export function elect(
   const next = held + 1;
   return next >= HOLD ? { anchor: best.uid, held: 0 } : { anchor: incumbent, held: next };
 }
+
+/* ── WHERE THE ANSWER IS PUBLISHED ──────────────────────────────────────────────────────────────
+ *
+ * The election runs inside the call component, but the work it places — sealing the room key to
+ * whoever has just arrived — is driven by the meeting page's own poll. Rather than thread a prop
+ * through a boundary that runs the other way (the page renders the call), the result is left here,
+ * in the module both already import. One value, one writer, read wherever it is needed.
+ */
+let anchored: { room: number; uid: number } = { room: 0, uid: 0 };
+
+/** Called by the call component each time it re-elects. */
+export function publishAnchor(room: number, uid: number): void {
+  anchored = { room, uid };
+}
+
+/**
+ * Should THIS device do the shared work for this room right now?
+ *
+ * Answers true when we are the anchor, and — importantly — also when there is no anchor at all.
+ * An election that has not resolved must never mean nobody lets a newcomer in: duplicated work is
+ * a cost, an unjoinable room is a failure.
+ */
+export function shouldAnchor(room: number, me: number): boolean {
+  if (!anchored.uid || anchored.room !== room) return true;
+  return anchored.uid === me;
+}

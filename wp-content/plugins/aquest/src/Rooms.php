@@ -56,6 +56,16 @@ final class Rooms {
 	const MESH_MAX = 5;
 	/** How long a member's "I am in this call" beacon lives without a refresh. */
 	const PRESENCE_S = 25;
+	/**
+	 * How long a CALL SEAT survives without a beacon — far longer than presence, deliberately.
+	 *
+	 * Presence answers "is this member looking at the room", and 25s is right for that. A seat in a
+	 * live call answers something else entirely: whether to tear down a working peer connection. A
+	 * phone in a tunnel, or one whose screen has locked, stops beaconing for much longer than 25
+	 * seconds while its media path is still perfectly good — and expiring the seat is what turns a
+	 * recoverable interruption into everybody rebuilding a connection that never needed rebuilding.
+	 */
+	const CALL_PRESENCE_S = 70;
 	/** Room titles are member-authored and land in other people's sidebars. */
 	const TITLE_MAX = 60;
 
@@ -651,7 +661,7 @@ final class Rooms {
 		if ( ! in_array( $uid, $roster, true ) && count( $roster ) >= self::MESH_MAX ) {
 			return Rest::err( 'call_full', 'This call is full — ' . self::MESH_MAX . ' people is the limit for a call with no server in the middle.', 400 );
 		}
-		set_transient( 'aq_room_in_' . $rid . '_' . $uid, 1, self::PRESENCE_S );
+		set_transient( 'aq_room_in_' . $rid . '_' . $uid, 1, self::CALL_PRESENCE_S );
 		// Tell the room somebody started a call — once per member per minute, and never the mutes.
 		if ( count( $roster ) === 0 ) {
 			$me = get_userdata( $uid );

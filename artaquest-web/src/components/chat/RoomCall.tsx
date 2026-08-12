@@ -8,7 +8,7 @@ import {
   Call, callSupported, mediaErrorMessage, newCallSid, openCallMedia,
   type CallMode, type LinkReport,
 } from "../../lib/webrtc";
-import { WINDOW, elect, score as linkScore, type Sample, type ScoreTable } from "../../lib/anchor";
+import { WINDOW, elect, publishAnchor, score as linkScore, type Sample, type ScoreTable } from "../../lib/anchor";
 import { Avatar } from "../ui";
 import { CallModeChoice, LinkNote } from "./CallPanel";
 import { callModePref, deviceSuggestedMode, rememberCallMode, useVideoLive } from "./callmode";
@@ -64,6 +64,9 @@ const RUNG: Record<Exclude<CallMode, "auto">, number> = { audio: 0, low: 1, full
 /** Root-mean-square level above which a voice counts as talking, and how long a new voice has to
  *  hold the floor before it takes the big tile. A picture that swaps on every syllable is worse
  *  than one that does not move at all. */
+/** Older than this and the roster is UNKNOWN rather than unchanged — three missed 4s polls. */
+const ROSTER_STALE_MS = 12000;
+
 const SPEAK_MIN = 0.045;
 const SPEAK_HOLD_MS = 1200;
 
@@ -223,11 +226,14 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
   const modeRef = useRef(mode);
   const [links, setLinks] = useState<Record<number, LinkReport>>({});
   /** What every participant says about their own link, including us. The table an election reads. */
-  const [scores, setScores] = useState<ScoreTable>({});
+  /** What every participant says about their own link. A REF, not state: nothing on screen shows
+   *  it, so a score arriving from a fifth peer has no business re-rendering the call. */
+  const scores = useRef<ScoreTable>({});
   /** Our own recent samples, which is what we publish a score from. */
   const samples = useRef<Sample[]>([]);
   /** Who carries the shared work, and how long a challenger has been ahead — see lib/anchor.ts. */
-  const [anchor, setAnchor] = useState(0);
+  /** The incumbent. A ref, so re-electing does not tear down and rebuild the beat it runs on. */
+  const anchorRef = useRef(0);
   const held = useRef(0);
   // Is a picture actually leaving this device? Every peer connection agrees on this, so any of
   // them can answer; with no connections yet, nothing has been shed.
@@ -263,6 +269,10 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
 
   // The roster from OUR OWN refresh takes precedence over the parent's slower poll.
   const [roster, setRoster] = useState<number[]>(room.in_call);
+  /** When the roster last actually ANSWERED — not when we last asked. See the prune loop. */
+  const rosterOkAt = useRef(Date.now());
+  /** What we were sending before the tab hid, so returning restores the member's pick. */
+  const hiddenFrom = useRef<CallMode | null>(null);
   useEffect(() => { setRoster((cur) => (cur.join() === room.in_call.join() ? cur : room.in_call)); }, [room.in_call]);
   const others = roster.filter((u) => u !== me);
 
@@ -282,23 +292,26 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
     const beat = window.setInterval(() => {
       if (stop) return;
       const mine = linkScore(samples.current);
-      setScores((cur) => ({ ...cur, [me]: { score: mine, at: Date.now() } }));
+      scores.current[me] = { score: mine, at: Date.now() };
       if (mine > 0) void signal({ v: 2, t: "link", score: mine });
-      setScores((cur) => {
-        const r = elect(cur, anchor, held.current, Date.now());
-        held.current = r.held;
-        if (r.anchor !== anchor) setAnchor(r.anchor);
-        return cur;
-      });
-    }, 5000);
+      const r = elect(scores.current, anchorRef.current, held.current, Date.now());
+      held.current = r.held;
+      anchorRef.current = r.anchor;
+      // Published for the meeting page's distribution loop — see lib/anchor.ts.
+      publishAnchor(room.id, r.anchor);
+      // TWENTY SECONDS, NOT FIVE. The election deliberately moves slowly — a challenger must lead
+      // for three rounds — so sampling four times as often buys no faster a decision, and every beat
+      // is a sealed write competing for the same per-minute room budget as whiteboard strokes and
+      // the call handshake itself.
+    }, 20000);
     return () => { stop = true; window.clearInterval(beat); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomKey, me, anchor]);
+  }, [roomKey, me, room.id]);
 
-  /** True when this device is the one that should be sealing the room key to newcomers. Nobody
-   *  being anchor yet must never mean nobody does it — an empty election falls through to everyone,
-   *  because a room that cannot admit anyone is worse than a little duplicated work. */
-  const isAnchor = !anchor || anchor === me;
+  /* NOTHING IS SHOWN ABOUT THE ANCHOR, deliberately. Who carries the shared work is not a fact a
+     member needs on screen — it changes on its own, it means nothing they can act on, and a line
+     naming somebody invites the reading that the others are somehow lesser. It is published to
+     lib/anchor.ts, where the code that does the work reads it, and that is the whole of its job. */
 
   /** Seal one signalling payload into the room, addressed at one participant. */
   async function signal(p: ChatPayload) {
@@ -338,6 +351,10 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
    * is kept so stopping the share can put it straight back; the browser's own "stop sharing" button
    * fires `onended`, which must be honoured or the call would keep claiming to share a dead track.
    */
+  /** Whether this browser can share a screen at all — false on every iPhone. */
+  const canShare = typeof navigator !== "undefined"
+    && typeof navigator.mediaDevices?.getDisplayMedia === "function";
+
   async function toggleShare() {
     if (sharing) { await stopShare(); return; }
     try {
@@ -354,7 +371,13 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
       }
       screen.onended = () => { void stopShare(); };
       setSharing(true);
-    } catch { /* the picker was dismissed — not an error */ }
+    } catch (e) {
+      // ONLY A DISMISSAL IS NOT AN ERROR. Everything used to be swallowed here, so a browser that
+      // cannot share at all — every iPhone — gave a button that did nothing, forever, with no
+      // explanation, and a genuine failure looked exactly the same as a change of mind. A swallowed
+      // error hiding a real refusal is a wound this codebase already carries once.
+      if ((e as { name?: string })?.name !== "NotAllowedError") setErr(mediaErrorMessage(e));
+    }
   }
 
   async function stopShare() {
@@ -408,6 +431,30 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
    * `replaceTrack` into the sendrecv video transceiver the engine negotiates up front for exactly
    * this. Even a member who joined with sound only has that sender waiting.
    */
+  /**
+   * A HIDDEN TAB SENDS NO PICTURE.
+   *
+   * Holding a phone's screen awake through a call is only defensible if we stop encoding N−1 copies
+   * of a camera nobody is looking at. Dropping to the audio rung costs no renegotiation — the
+   * quality ladder already swaps the track for null — and coming back restores the member's OWN
+   * stored choice, never the device suggestion, or somebody who picked full video would be quietly
+   * demoted every time they checked a notification.
+   */
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "hidden") {
+        if (modeRef.current !== "audio") { hiddenFrom.current = modeRef.current; applyMode("audio"); }
+      } else if (hiddenFrom.current) {
+        const back = hiddenFrom.current;
+        hiddenFrom.current = null;
+        applyMode(back);
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function applyMode(next: CallMode) {
     if (next === modeRef.current) { setQuality(false); return; }
     modeRef.current = next;
@@ -452,14 +499,43 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
   }
 
   // Join the roster, and keep it warm — the beacon expires, so it must be refreshed.
+  /**
+   * KEEP THE SCREEN AWAKE, AND TAKE THE LOCK BACK.
+   *
+   * A phone that locks mid-call suspends its timers, drops the roster poll and the presence beacon
+   * with it, and returns to peers that have expired it and a roster it could not read. The lock is
+   * the cheapest half of that fix. The browser RELEASES it whenever the page hides, so it must be
+   * re-requested on the way back — requested once, it is a lock held only until the first
+   * notification. Absent on older iOS Safari, where it must degrade in silence rather than announce
+   * a capability nobody asked about.
+   */
+  useEffect(() => {
+    type Sentinel = { release: () => Promise<void> };
+    const nav = navigator as Navigator & { wakeLock?: { request: (t: "screen") => Promise<Sentinel> } };
+    if (!nav.wakeLock) return;
+    let held: Sentinel | null = null;
+    let dead = false;
+    const take = () => {
+      if (dead || document.visibilityState !== "visible") return;
+      nav.wakeLock?.request("screen").then((sn) => { if (dead) void sn.release(); else held = sn; }).catch(() => undefined);
+    };
+    take();
+    document.addEventListener("visibilitychange", take);
+    return () => {
+      dead = true;
+      document.removeEventListener("visibilitychange", take);
+      void held?.release().catch(() => undefined);
+    };
+  }, []);
+
   useEffect(() => {
     if (!callSupported()) { setErr("This browser can’t make calls."); return; }
     void localMedia();
-    void roomsCall(room.id, "join").then((r) => setRoster(r.in_call)).catch(() => undefined);
+    void roomsCall(room.id, "join").then((r) => { rosterOkAt.current = Date.now(); setRoster(r.in_call); }).catch(() => undefined);
     // Every 4s, not 12: this both refreshes the beacon AND returns the roster, which is what tells
     // us there is somebody new to offer a connection to. At 12s a third person joining a call took
     // long enough to look broken.
-    const t = setInterval(() => { void roomsCall(room.id, "join").then((r) => setRoster(r.in_call)).catch(() => undefined); }, 4000);
+    const t = setInterval(() => { void roomsCall(room.id, "join").then((r) => { rosterOkAt.current = Date.now(); setRoster(r.in_call); }).catch(() => undefined); }, 4000);
     // Captured here rather than read in the cleanup: by teardown the ref may point somewhere else,
     // and closing the WRONG map would leave a camera running.
     const open = calls.current;
@@ -491,8 +567,14 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
         } catch (e) { setErr(mediaErrorMessage(e)); }
       })();
     }
-    // Somebody left: drop their connection rather than holding a dead one open.
-    for (const [uid, c] of calls.current) {
+    // SOMEBODY LEFT — or we simply could not ask. Both roster reads swallow their failure, so a
+    // phone that locks its screen for thirty seconds comes back with a roster that is not merely
+    // stale but IDENTICAL, and this loop would tear down every peer on the strength of an answer
+    // nobody gave. A gate that cannot read its signal must abstain rather than assume the cheerful
+    // case: holding a dead connection a few seconds longer costs a tile, dropping a live one costs
+    // the call.
+    const rosterFresh = Date.now() - rosterOkAt.current < ROSTER_STALE_MS;
+    for (const [uid, c] of rosterFresh ? calls.current : []) {
       if (!others.includes(uid)) {
         c.close();
         calls.current.delete(uid);
@@ -535,7 +617,7 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
           if (p.t === "point") { setPings((cur) => [...cur.slice(-6), { x: p.x, y: p.y, at: Date.now(), by: m.sender }]); continue; }
           if (p.t === "hand") { setHands((cur) => ({ ...cur, [m.sender]: p.up })); continue; }
           if (p.t === "timer") { setTimerEnds(p.ends); continue; }
-          if (p.t === "link") { setScores((cur) => ({ ...cur, [m.sender]: { score: p.score, at: Date.now() } })); continue; }
+          if (p.t === "link") { scores.current[m.sender] = { score: p.score, at: Date.now() }; continue; }
           if (p.t !== "rtc" || p.to !== me) continue;   // in a mesh, an offer is for ONE person
           if (p.kind === "offer" && p.sdp) {
             // A DIFFERENT session id from the same person means the connection we hold for them is
@@ -667,9 +749,6 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
   const total = tiles.length + 1;
   /** Who the measurement chose, said out loud — a call that quietly appoints somebody is a call
    *  nobody can reason about when it goes wrong. */
-  const anchorNote = !anchor || total < 2 ? ""
-    : isAnchor ? "Your connection is the steadiest here, so this device is letting people in"
-    : `${nameOf(anchor)?.name || "Someone"} has the steadiest connection and is letting people in`;
   const gridCols = view === "screen" || total <= 1 ? "grid-cols-1"
     : total === 2 ? "grid-cols-1 sm:grid-cols-2"
     : total <= 4 ? "grid-cols-2"
@@ -690,12 +769,6 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
       </p>
       {/* SAID OUT LOUD. A call that quietly appoints somebody is a call nobody can reason about when
           it goes wrong — and this one is chosen by measurement, so the measurement is worth showing. */}
-      {anchorNote && (
-        <p className="text-[11.5px] leading-relaxed text-ink-3" data-ay-skip="1"
-          title={Object.entries(scores).map(([u, v]) => `${nameOf(Number(u))?.name || u}: ${v.score}`).join("   ")}>
-          {anchorNote}
-        </p>
-      )}
 
       {/* The truth about the link, in one sentence and never a dialog. */}
       <LinkNote link={worst} mode={mode} />
@@ -741,9 +814,14 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
           className={`${btn} ${myHand ? "bg-yang text-on-accent" : "border border-line text-ink-2"}`}>
           {myHand ? "Lower hand" : "Raise hand"}
         </button>
-        <button type="button" onClick={() => { void toggleShare(); if (!sharing) setView("screen"); }}
-          className={`${btn} ${sharing ? "bg-yang text-on-accent" : "border border-line text-ink-2"}`}>
-          {sharing ? "Stop sharing" : "Share screen"}
+        {/* A CONTROL THAT CANNOT WORK SHOULD SAY SO. getDisplayMedia does not exist on iOS, so this
+            was an inert button on the platform most of these calls happen on. Disabled with its
+            reason is honest; disabled and silent is just a broken button with better manners. */}
+        <button type="button" disabled={!canShare}
+          title={canShare ? undefined : "Your browser can’t share a screen — the whiteboard works here"}
+          onClick={() => { void toggleShare(); if (!sharing) setView("screen"); }}
+          className={`${btn} ${sharing ? "bg-yang text-on-accent" : "border border-line text-ink-2"} disabled:opacity-40`}>
+          {sharing ? "Stop sharing" : canShare ? "Share screen" : "Share screen (not here)"}
         </button>
         <button type="button" onClick={() => setFocus((f) => !f)}
           className={`${btn} border border-line text-ink-2`}>{focus ? "Exit focus" : "Focus"}</button>

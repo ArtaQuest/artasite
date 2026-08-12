@@ -40,7 +40,11 @@ function fmtTime(ts: number) {
 }
 
 /** Payload kinds that are call machinery rather than something a member said. */
-const SIGNAL_ONLY = new Set(["rtc", "draw", "point", "hand", "timer"]);
+// Machinery, not conversation. "link" joins this list for the reason the others are on it: a call
+// publishes a link score into the room, and RoomThread loads the newest 50 rows and never pages
+// back — so a minute into a four-way call every one of those 50 rows was a beacon, all filtered
+// here, and the transcript beside the call rendered EMPTY. A message stream is for what people said.
+const SIGNAL_ONLY = new Set(["rtc", "draw", "point", "hand", "timer", "link"]);
 
 export function RoomThread({
   roomId, me: meProp, onLeave, compact = false, managed = false, renderCall,
