@@ -834,7 +834,7 @@ function DockBody({ view, setView }: {
             <span className="text-ink-3" aria-hidden><Ico d={SEARCH} size={15} /></span>
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search messages or members"
               aria-label="Search messages or members"
-              className="min-w-0 flex-1 bg-transparent text-[13.5px] text-ink outline-none placeholder:text-ink-3" />
+              className="min-w-0 flex-1 bg-transparent text-[13.5px] text-ink outline-none placeholder:text-ink-2" />
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">

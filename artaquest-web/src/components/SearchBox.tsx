@@ -88,7 +88,7 @@ export function SearchBox({ autoFocus = false }: { autoFocus?: boolean } = {}) {
             autoFocus={autoFocus}
             placeholder="Search posts…"
             aria-label="Search ArtaQuest"
-            className="h-full w-full bg-transparent text-[14px] text-ink placeholder:text-ink-3 focus:outline-none"
+            className="h-full w-full bg-transparent text-[14px] text-ink placeholder:text-ink-2 focus:outline-none"
           />
         </div>
       </form>

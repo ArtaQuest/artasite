@@ -75,7 +75,7 @@ function EmojiTab({ onPick }: { onPick: (c: string) => void }) {
     <div className="flex flex-col">
       <div className="px-2 pt-2">
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search emoji" aria-label="Search emoji"
-          className="w-full rounded-field border border-line bg-space-2 px-3 py-1.5 text-[13px] text-ink outline-none placeholder:text-ink-3 focus:border-yin-light" />
+          className="w-full rounded-field border border-line bg-space-2 px-3 py-1.5 text-[13px] text-ink outline-none placeholder:text-ink-2 focus:border-yin-light" />
       </div>
       {!q.trim() && recents.length > 0 && (
         <div className="px-2 pt-2">
@@ -127,7 +127,7 @@ function StickerTab({ onPick }: { onPick: (id: string) => void }) {
     <div className="flex flex-col">
       <div className="px-2 pt-2">
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search stickers" aria-label="Search stickers"
-          className="w-full rounded-field border border-line bg-space-2 px-3 py-1.5 text-[13px] text-ink outline-none placeholder:text-ink-3 focus:border-yin-light" />
+          className="w-full rounded-field border border-line bg-space-2 px-3 py-1.5 text-[13px] text-ink outline-none placeholder:text-ink-2 focus:border-yin-light" />
       </div>
       {/* FOUR columns at every width, deliberately. A `sm:`/`md:` breakpoint resolves against the
           WINDOW, not this container — and this panel also mounts inside the 400px chat dock, where
@@ -201,7 +201,7 @@ function GifTab({ onPick }: { onPick: (bytes: ArrayBuffer, mime: string) => void
         <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…/something.gif"
           aria-label="GIF link" inputMode="url" dir="ltr"
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void fromUrl(); } }}
-          className="min-w-0 flex-1 rounded-field border border-line bg-space-2 px-3 py-1.5 text-[13px] text-ink outline-none placeholder:text-ink-3 focus:border-yin-light" />
+          className="min-w-0 flex-1 rounded-field border border-line bg-space-2 px-3 py-1.5 text-[13px] text-ink outline-none placeholder:text-ink-2 focus:border-yin-light" />
         <button type="button" onClick={() => void fromUrl()} disabled={busy || !url.trim()}
           className="shrink-0 rounded-pill bg-yang px-3.5 py-1.5 text-[12.5px] font-bold text-on-accent transition-opacity hover:opacity-90 disabled:opacity-40">
           {busy ? "Fetching…" : "Add"}

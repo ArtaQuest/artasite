@@ -485,7 +485,7 @@ export function SearchPill({ placeholder, className, value, onChange, autoFocus,
     <label className={cx(box, "focus-within:border-ink-3", className)}>
       <SearchIcon size={icon} />
       <input value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} aria-label={placeholder} type="search" autoFocus={autoFocus}
-        className={cx("min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-3", txt)} />
+        className={cx("min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-2", txt)} />
     </label>
   );
 }
@@ -736,8 +736,14 @@ export function Field({ label, optional, required, hint, className, children }: 
   );
 }
 
+/* `placeholder:text-ink-2` is NOT decoration. Without it the placeholder falls back to the
+   browser's own colour, which is neither theme-aware nor contrast-aware — on the dark canvas
+   Chrome renders it far dimmer than any token we ship, which is what made "Search or type a
+   @username" nearly unreadable in ArtaChat. ink-3 is the token that exists for exactly this
+   (5.5:1 on space-2 at the default level, and it rises with the contrast slider like everything
+   else). SearchPill had it right; the two primitives everything else is built from did not. */
 export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={cx("h-11 rounded-field border border-line bg-space-2 px-4 text-[15px] text-ink outline-none transition-colors focus:border-yin-light", className)} {...rest} />;
+  return <input className={cx("h-11 rounded-field border border-line bg-space-2 px-4 text-[15px] text-ink outline-none transition-colors placeholder:text-ink-2 focus:border-yin-light", className)} {...rest} />;
 }
 
 /** Native <select> matching the Input look (border-line / space-2 / focus:yin-light). Accepts plain
@@ -817,7 +823,7 @@ export function GatewayPicker({ gateways, value, onChange, descriptions, labelId
 }
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(
   function Textarea({ className, ...rest }, ref) {
-    return <textarea ref={ref} className={cx("rounded-card border border-line bg-space-2 px-4 py-2.5 text-[15px] leading-relaxed text-ink outline-none focus:border-yin-light", className)} {...rest} />;
+    return <textarea ref={ref} className={cx("rounded-card border border-line bg-space-2 px-4 py-2.5 text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-2 focus:border-yin-light", className)} {...rest} />;
   },
 );
 

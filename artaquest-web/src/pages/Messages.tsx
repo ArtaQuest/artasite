@@ -189,7 +189,7 @@ function GrowingTextarea({ value, onChange, onKeyDown, onPaste, placeholder, dis
     <textarea ref={ref} value={value} rows={1} maxLength={12000} placeholder={placeholder} disabled={disabled}
       aria-label="Encrypted message" dir="auto"
       onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} onPaste={onPaste}
-      className="max-h-[152px] min-h-[42px] flex-1 resize-none rounded-field border border-line bg-space-1 px-3.5 py-2.5 text-[14.5px] leading-snug text-ink outline-none transition-colors placeholder:text-ink-3 focus:border-yin-light" />
+      className="max-h-[152px] min-h-[42px] flex-1 resize-none rounded-field border border-line bg-space-1 px-3.5 py-2.5 text-[14.5px] leading-snug text-ink outline-none transition-colors placeholder:text-ink-2 focus:border-yin-light" />
   );
 }
 

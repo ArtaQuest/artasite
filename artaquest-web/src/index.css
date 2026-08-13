@@ -56,7 +56,11 @@
      The brand pair now SCALES with the slider (symmetric about 127.5, sum stays white; Standard=canonical) via
      applyContrast() keeps them in lock-step with the active theme. */
   --color-yang-ink: #e8b923;
-  --color-yin-ink: #1746dc;
+  /* #9CB6FF, not the canonical #1746DC — this is the DARK canvas, and the note above says so.
+     Every html[data-contrast=1..5] override already sets the brightened value, so this base
+     was reachable only in the moment before applyContrast() stamps the attribute: brand blue
+     on the near-black cosmos measures 2.53:1, which is a link nobody can read, flashing. */
+  --color-yin-ink: #9cb6ff;
 
   /* Icon ink — the two colours used INSIDE the background-less typology/topic SVGs (ticket
      #97). The marks are now transparent (no dark disc), rendered inline so these tokens reach

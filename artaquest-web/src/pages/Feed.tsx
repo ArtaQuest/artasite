@@ -795,7 +795,7 @@ function Composer({ onPosted }: { onPosted: (p: FeedPostT) => void }) {
           <textarea ref={box} value={text} onChange={(e) => setText(e.currentTarget.value)} onFocus={() => setOpen(true)}
             rows={open ? 3 : 1} maxLength={CHAR_LIMIT + 60} placeholder={quote ? "Say something about this…" : "What's happening?"}
             aria-label="Compose a post"
-            className="w-full resize-none bg-transparent pt-1.5 text-[17px] leading-snug text-ink outline-none placeholder:text-ink-3" />
+            className="w-full resize-none bg-transparent pt-1.5 text-[17px] leading-snug text-ink outline-none placeholder:text-ink-2" />
           {quote ? (
             <div className="mb-2 rounded-xl border border-line bg-space-2/60 px-3 py-2 text-[13px] text-ink-3">
               Quoting <span className="font-semibold text-ink-2">{quote.author.name}</span>: {quote.body || quote.nb?.title}

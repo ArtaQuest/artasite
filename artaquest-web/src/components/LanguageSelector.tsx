@@ -140,7 +140,7 @@ export function LanguageSelector({ compact = false }: { compact?: boolean } = {}
               aria-controls={listId}
               aria-autocomplete="list"
               aria-activedescendant={ordered[activeIdx] ? optId(activeIdx) : undefined}
-              className="h-8 w-full rounded-field border border-line bg-space-1 px-2.5 text-[13px] text-ink placeholder:text-ink-3 focus:border-yin-light focus:outline-none"
+              className="h-8 w-full rounded-field border border-line bg-space-1 px-2.5 text-[13px] text-ink placeholder:text-ink-2 focus:border-yin-light focus:outline-none"
             />
           </div>
           <ul ref={listRef} id={listId} role="listbox" aria-label="Select your language" className="max-h-[50vh] overflow-y-auto">

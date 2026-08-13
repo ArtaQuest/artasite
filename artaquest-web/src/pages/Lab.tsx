@@ -106,7 +106,7 @@ function CodeArea({ cell, onChange, onKeyDown, onFocus }: {
         data-ay-skip="1"
         aria-label="Cell source"
         placeholder={isCode ? "# python — runs on your device (start with %%js for JavaScript)" : "Write text (markdown)…"}
-        className={`absolute inset-0 h-full w-full resize-none overflow-hidden bg-transparent text-transparent caret-yang outline-none placeholder:text-ink-3/70 ${ED_FONT}`}
+        className={`absolute inset-0 h-full w-full resize-none overflow-hidden bg-transparent text-transparent caret-yang outline-none placeholder:text-ink-2 ${ED_FONT}`}
       />
     </div>
   );

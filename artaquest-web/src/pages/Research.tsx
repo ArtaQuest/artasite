@@ -457,7 +457,7 @@ function SubmitView({ onClose, reviseId, onDone, journals, journalSlug, backLabe
   }, [reviseId]);
   const chosen = journals.find((j) => j.slug === journal);
   const targetName = chosen?.name || "the journal";
-  const field = "w-full rounded-field border border-line bg-space-2 px-3.5 py-2 text-[14px] text-ink placeholder:text-ink-3 focus:border-yin-light focus:outline-none";
+  const field = "w-full rounded-field border border-line bg-space-2 px-3.5 py-2 text-[14px] text-ink placeholder:text-ink-2 focus:border-yin-light focus:outline-none";
   async function go() {
     setErr(""); setBusy(true);
     try {
@@ -563,7 +563,7 @@ function ArtefactField({ label, hint, accept, value, setValue, placeholder }: { 
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState("");
   const [uerr, setUerr] = useState("");
-  const field = "w-full rounded-field border border-line bg-space-2 px-3.5 py-2 text-[14px] text-ink placeholder:text-ink-3 focus:border-yin-light focus:outline-none";
+  const field = "w-full rounded-field border border-line bg-space-2 px-3.5 py-2 text-[14px] text-ink placeholder:text-ink-2 focus:border-yin-light focus:outline-none";
   const ok = /^https?:\/\/[^\s]{4,}$/i.test(value.trim());
   async function onFile(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f) return;
@@ -600,7 +600,7 @@ function ArtifactPicker({ kind, selected, onSelect, hint, accept, placeholder }:
   const [nUrl, setNUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const field = "w-full rounded-field border border-line bg-space-2 px-3.5 py-2 text-[14px] text-ink placeholder:text-ink-3 focus:border-yin-light focus:outline-none";
+  const field = "w-full rounded-field border border-line bg-space-2 px-3.5 py-2 text-[14px] text-ink placeholder:text-ink-2 focus:border-yin-light focus:outline-none";
   useEffect(() => {
     let ok = true;
     if (!me?.id) { setMine([]); return; }

@@ -878,7 +878,7 @@ function ChantSubmit({ slug, onSubmitted }: { slug: string; onSubmitted: () => v
   }
 
   const inputCls = (bad: boolean) =>
-    "mt-1 block w-full rounded-card border bg-space-2 px-3 py-2 text-[14px] text-ink placeholder:text-ink-3/60 focus:outline-none focus:ring-2 focus:ring-yin-light/60 " +
+    "mt-1 block w-full rounded-card border bg-space-2 px-3 py-2 text-[14px] text-ink placeholder:text-ink-2 focus:outline-none focus:ring-2 focus:ring-yin-light/60 " +
     (bad ? "border-rose-400/60" : "border-line");
 
   return (

@@ -369,7 +369,7 @@ export function RoomThread({
               placeholder={alone ? "Leave yourself a note…" : "Message the room…"}
               aria-label="Room message" dir="auto"
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !insideFence(draft)) { e.preventDefault(); void send(); } }}
-              className="max-h-[120px] min-h-[42px] flex-1 resize-none rounded-field border border-line bg-space-1 px-3.5 py-2.5 text-[14.5px] leading-snug text-ink outline-none placeholder:text-ink-3 focus:border-yin-light" />
+              className="max-h-[120px] min-h-[42px] flex-1 resize-none rounded-field border border-line bg-space-1 px-3.5 py-2.5 text-[14.5px] leading-snug text-ink outline-none placeholder:text-ink-2 focus:border-yin-light" />
             <button type="button" onClick={() => void send()} disabled={busy || !draft.trim()} aria-label="Send"
               className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-yang text-on-accent disabled:opacity-40">→</button>
           </div>
