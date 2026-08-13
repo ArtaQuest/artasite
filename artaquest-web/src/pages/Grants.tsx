@@ -236,8 +236,13 @@ export default function Grants() {
   const Th = ({ k, children, className }: { k?: SortKey; children: ReactNode; className?: string }) => (
     <th className={cx("px-3 py-2 text-left font-semibold", className)}>
       {k ? (
-        <button onClick={() => setSortKey(k)} className="inline-flex items-center gap-1 hover:text-ink">
-          {children}<span className="text-[10px] text-ink-2">{sort.key === k ? (sort.dir === 1 ? "▲" : "▼") : "↕"}</span>
+        /* -my-1 py-1: these were 18px-tall targets, and sorting is the main thing anyone does to a
+           table of 166 funders. The negative margin absorbs the padding so the header row does not
+           grow. type=button because a bare <button> defaults to submit, which is a live hazard the
+           day this table lands inside a form. The glyph goes to 11px, the platform's meta size —
+           10px was the smallest type on the page and it is a control, not a footnote. */
+        <button type="button" onClick={() => setSortKey(k)} className="-my-1 inline-flex items-center gap-1 py-1 hover:text-ink">
+          {children}<span className="text-[11px] text-ink-2">{sort.key === k ? (sort.dir === 1 ? "▲" : "▼") : "↕"}</span>
         </button>
       ) : children}
     </th>
@@ -311,11 +316,11 @@ export default function Grants() {
                         className={cx("cursor-pointer border-b border-line/60 align-top transition hover:bg-veil/[0.03]", isOpen && "bg-veil/[0.04]")}>
                       <td className="px-3 py-2.5">
                         <div className="flex items-start gap-2">
-                          <span className={cx("mt-1 text-[10px] text-ink-2 transition", isOpen && "rotate-90")}>▶</span>
+                          <span className={cx("mt-1 text-[11px] text-ink-2 transition", isOpen && "rotate-90")}>▶</span>
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-1.5">
                               <span className="font-semibold leading-tight text-ink">{g.title}</span>
-                              {g.is_sponsor && <span className="rounded-full bg-yang/15 px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-yang" title="An industry partner, not a charitable grant">Industry partner</span>}
+                              {g.is_sponsor && <span className="rounded-full bg-yang/15 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-yang" title="An industry partner, not a charitable grant">Industry partner</span>}
                             </div>
                             <div className="text-[12.5px] text-ink-3">{g.funder}{g.country ? ` · ${g.country}` : ""}</div>
                           </div>
