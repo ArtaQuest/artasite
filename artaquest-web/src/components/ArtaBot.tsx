@@ -1151,6 +1151,29 @@ export function ArtaBot() {
      focus guard above self-excludes on `closest(".aq-bot-panel")` so typing in here cannot fade
      out the control that closes it. Renaming the class breaks both, silently. */
   return (
+    <>
+      {/* THE RING LIVES OUTSIDE THE DRAWER, and that is the whole point. The drawer hides itself on
+          ArtaChat — it is a shortcut to the page you are already on — with
+          `pointer-events-none invisible opacity-0` and aria-hidden. The comment there says an
+          incoming call "still rings" because the drawer stays MOUNTED, but visibility:hidden paints
+          nothing and takes Answer out of the tab order too, so the one page where members sit
+          waiting for a call was the one page where the call could not be seen, clicked or tabbed to.
+          Mounted is not the same as visible. Its own fixed layer, above the drawer, unconditional. */}
+      {ring && (
+        <div className="aq-bot-ring fixed bottom-[calc(var(--aq-bottom-bar,0px)+0.5rem)] z-[70] w-[min(400px,calc(100vw-2.5rem))] end-4">
+          <IncomingCall name={ring.from.name} avatar={ring.from.avatar}
+            onDismiss={() => clearRing()}
+            /* Arm the intent BEFORE opening: the thread is what holds the offer, and it answers
+               the moment it sees one (see takeAutoAnswer). Otherwise "Answer" only navigated, and
+               the member arrived at a second Answer button having already answered. */
+            onAnswer={() => {
+              armAutoAnswer(ring.from.id);
+              clearRing();
+              setOpen(true);
+              setDockView({ k: "dm", peer: ring.from });
+            }} />
+        </div>
+      )}
     <div
       /* aq-bot-above-tabs: signed-in phones carry AppShell's fixed bottom tab bar, and the drawer is
          welded to the bottom edge — so without this it opens ON TOP of that bar, covering the nav.
@@ -1171,21 +1194,6 @@ export function ArtaBot() {
           Chat::RING_S is longer so no ring can fall between two polls), and "Answer" OPENS THE
           CONVERSATION rather than dialling: the beacon deliberately carries no room name — that
           exists only inside the sealed invite, which is what makes a public database safe here. */}
-      {ring && (
-        <div className="mb-2">
-          <IncomingCall name={ring.from.name} avatar={ring.from.avatar}
-            onDismiss={() => clearRing()}
-            /* Arm the intent BEFORE opening: the thread is what holds the offer, and it answers
-               the moment it sees one (see takeAutoAnswer). Otherwise "Answer" only navigated, and
-               the member arrived at a second Answer button having already answered. */
-            onAnswer={() => {
-              armAutoAnswer(ring.from.id);
-              clearRing();
-              setOpen(true);
-              setDockView({ k: "dm", peer: ring.from });
-            }} />
-        </div>
-      )}
       <div className="flex flex-col overflow-hidden rounded-t-2xl border border-b-0 border-line bg-space-1 shadow-2xl shadow-black/50">
         {/* The pinned bar. Hoisted out of DockBody so it survives collapse; its title still tracks
             the view, so opening a conversation renames the bar exactly as LinkedIn's does. */}
@@ -1268,5 +1276,6 @@ export function ArtaBot() {
         </div>
       </div>
     </div>
+    </>
   );
 }
