@@ -110,6 +110,64 @@ class Mailer {
 			'vars'     => [ 'where', 'device', 'when', 'ip' ],
 			'sample'   => [ 'where' => 'London, GB', 'device' => 'Safari on macOS', 'when' => 'Jun 11, 2026 · 14:05', 'ip' => '203.0.113.7' ],
 		],
+		/*
+		 * ── Meetings ──
+		 * A meeting is a PROMISE between two people, and until now the only place it was ever
+		 * announced was the bell inside the site: someone could take an hour of your week and you
+		 * would not know unless you happened to visit. These four are the letters that go with the
+		 * bells, and they share the bell's `ref`, so each is sent exactly once (see Notify::push_mail).
+		 *
+		 * NONE OF THEM QUOTES THE AGENDA. The booking page invites a visitor — often a stranger — to
+		 * write what they would like to talk about, and copying that sentence into somebody's mail
+		 * provider spreads it into a system neither party chose. The email says a note exists and
+		 * links to the meeting, where it is read once, in one place. That also keeps this templated
+		 * copy true after the agenda is sealed and the server can no longer read it at all.
+		 *
+		 * Times are always given in the MEETING's own zone and the zone is NAMED (Meetings::when_line),
+		 * because the one thing an email cannot know is what o'clock it is where the reader is sitting.
+		 */
+		'meet_booked' => [
+			'label'    => 'Somebody booked one of your published hours',
+			'audience' => 'member',
+			'subject'  => '{{who}} booked you — {{when_short}}',
+			'body'     => "{{who}} took one of the hours you publish on your booking page, so it is now an ordinary meeting in your calendar.\n\nWhat: {{title}}\nWhen: {{when}}\n\n{{note_line}}You do not need to reply or confirm anything — you offered the time and they took it. If it no longer suits, open the meeting and cancel it; they are told straight away.\n\nTo stop these emails, turn off \"Email me about meetings\" in your account. The bell inside ArtaQuest keeps working either way.",
+			'cta'      => [ 'Open the meeting', '{{meet_url}}' ],
+			'vars'     => [ 'who', 'title', 'when', 'when_short', 'note_line', 'meet_url' ],
+			'sample'   => [
+				'who' => 'Cara', 'title' => 'A chat with Arash', 'when' => 'Thu 20 Aug, 14:00 Europe/Istanbul (the meeting’s own timezone). The room opens 15 minutes before it starts.',
+				'when_short' => 'Thu 20 Aug, 14:00', 'note_line' => "They left a note about what they would like to talk about. It is on the meeting page.\n\n",
+			],
+		],
+		'meet_confirmed' => [
+			'label'    => 'Your booking is confirmed',
+			'audience' => 'member',
+			'subject'  => 'Booked: {{when_short}} with {{host}}',
+			'body'     => "That is arranged. It is an ordinary meeting now — in your calendar and in {{host}}'s.\n\nWhat: {{title}}\nWhen: {{when}}\nWith: {{host}}\n\nThe call happens on ArtaMeet, in your browser, and it is encrypted end to end — there is no bridge in the middle holding your video. Nobody has to write back to make this happen; the time is yours.\n\nIf you cannot make it, open the meeting and cancel, so the hour goes back on offer for somebody else.",
+			'cta'      => [ 'Open the meeting', '{{meet_url}}' ],
+			'vars'     => [ 'title', 'host', 'when', 'when_short', 'meet_url' ],
+			'sample'   => [
+				'title' => 'A chat with Arash', 'host' => 'Arash', 'when_short' => 'Thu 20 Aug, 14:00',
+				'when' => 'Thu 20 Aug, 14:00 Europe/Istanbul (the meeting’s own timezone). The room opens 15 minutes before it starts.',
+			],
+		],
+		'meet_reminder' => [
+			'label'    => 'A meeting is about to start',
+			'audience' => 'member',
+			'subject'  => '{{head}}',
+			'body'     => "{{body}}\n\nYou can arrive early and check your camera without anybody watching.\n\nTo stop these, turn off \"Email me about meetings\" in your account.",
+			'cta'      => [ 'Open the meeting', '{{meet_url}}' ],
+			'vars'     => [ 'head', 'body', 'meet_url' ],
+			'sample'   => [ 'head' => 'Starting soon: A chat with Arash', 'body' => 'Starts in 30 minutes — Thu 20 Aug, 14:00 Europe/Istanbul (the meeting’s own timezone).' ],
+		],
+		'meet_changed' => [
+			'label'    => 'A meeting was moved or called off',
+			'audience' => 'member',
+			'subject'  => '{{head}}',
+			'body'     => "{{head}}.\n\n{{when}}\n\nNothing is expected of you — this is the notice, not a question. Open the meeting to see where it stands.\n\nTo stop these, turn off \"Email me about meetings\" in your account.",
+			'cta'      => [ 'Open the meeting', '{{meet_url}}' ],
+			'vars'     => [ 'head', 'when', 'meet_url' ],
+			'sample'   => [ 'head' => 'A chat with Arash was cancelled', 'when' => 'It was going to be Thu 20 Aug, 14:00 Europe/Istanbul.' ],
+		],
 		'cdn_quota' => [
 			'label'    => 'Media CDN approaching its free tier',
 			'audience' => 'operator',

@@ -711,12 +711,21 @@ final class Meetings {
 	 *  retry does not. $skip_rsvp drops the people who already said they were not coming. */
 	private static function tell_guests( $m, $kind, $headline, $skip_rsvp = '' ) {
 		$mid = (int) $m['id'];
+		// A move or a cancellation is the one kind of meeting news that is USELESS late: somebody
+		// can clear an afternoon for a meeting that is no longer happening. It goes to the inbox as
+		// well as the bell, on the same `ref`, so the sequence that already stops a retry ringing
+		// twice stops it writing twice.
+		$when = 'cancelled' === $kind
+			? 'It was going to be ' . self::when_line( $m, false )
+			: 'It is now ' . self::when_line( $m );
 		foreach ( self::guests_of( $mid ) as $g ) {
 			$uid = (int) $g['user_id'];
 			if ( '' !== $skip_rsvp && $skip_rsvp === (string) $g['rsvp'] ) { continue; }
-			Notify::push(
+			Notify::push_mail(
 				$uid, 'meeting', $headline, '', '/meet/' . $mid,
-				'mt' . $kind . $mid . '-' . (int) $m['seq'] . '-' . $uid
+				'mt' . $kind . $mid . '-' . (int) $m['seq'] . '-' . $uid,
+				'meet_changed',
+				[ 'head' => $headline, 'when' => $when, 'meet_url' => '/meet/' . $mid ]
 			);
 		}
 	}
@@ -1050,6 +1059,25 @@ final class Meetings {
 		// `url` and `ics` are the same string under two names: the calendar panel asks this route for
 		// a `url`, and every list payload carries a `cal` object keyed `ics`. One value, both spellings.
 		return [ 'ok' => true, 'url' => $c['ics'] ] + $c;
+	}
+
+	/**
+	 * GET/POST meet/email-prefs {on?} — is this member emailed about their meetings?
+	 *
+	 * Modelled on Chat::email_prefs, including the sense of the stored value: the meta holds the
+	 * NEGATIVE (`aq_meet_email_off`), so every account that has never touched this — no row at all —
+	 * is emailed. A booking is somebody taking an hour of your week, and defaulting that to silence
+	 * would make the feature useless for exactly the people who have not gone looking for a setting.
+	 */
+	public static function email_prefs( $req ) {
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+		if ( $req->get_method() === 'POST' ) {
+			if ( Rest::throttle( 'aq_meet_mailpref', 20, 60 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
+			if ( (int) Rest::p( $req, 'on', 1 ) === 1 ) { delete_user_meta( $uid, 'aq_meet_email_off' ); }
+			else { update_user_meta( $uid, 'aq_meet_email_off', 1 ); }
+		}
+		return [ 'ok' => true, 'email_on' => ! get_user_meta( $uid, 'aq_meet_email_off', true ) ];
 	}
 
 	/** POST meet/cal — revoke every calendar URL ever issued to this member and mint the next one.
@@ -1496,9 +1524,14 @@ final class Meetings {
 			$body = 'Starts ' . self::in_words( $left ) . ' — ' . self::when_line( $m );
 			foreach ( self::guests_of( $mid ) as $g ) {
 				if ( 'no' === (string) $g['rsvp'] ) { continue; }
-				Notify::push(
+				// The bucket ref carries the email too, so the cron's "fires five times inside one
+				// bucket" property covers the inbox as well as the bell — which matters far more for
+				// mail, where a duplicate is not a repeated row but a second letter.
+				Notify::push_mail(
 					(int) $g['user_id'], 'meeting', $head, $body, '/meet/' . $mid,
-					'mtrem' . $mid . '-' . (int) $g['user_id'] . '-' . $bucket
+					'mtrem' . $mid . '-' . (int) $g['user_id'] . '-' . $bucket,
+					'meet_reminder',
+					[ 'head' => $head, 'body' => $body, 'meet_url' => '/meet/' . $mid ]
 				);
 			}
 		}
@@ -1527,11 +1560,19 @@ final class Meetings {
 	 * it is theirs. The same guard vevent() uses: a zone the database no longer recognises costs a
 	 * line of prose, never the notification.
 	 */
-	private static function when_line( $m ) {
+	/** PUBLIC because Booking's confirmation letters must say the time in the SAME words the bell,
+	 *  the reminder and the meeting page say it. A second phrasing is how two surfaces come to
+	 *  disagree about when something starts. */
+	public static function when_line( $m, $room_note = true ) {
 		$tz  = (string) ( $m['tz'] ?? '' );
 		$tz  = ( '' !== $tz && in_array( $tz, timezone_identifiers_list(), true ) ) ? $tz : 'UTC';
 		$abs = wp_date( 'D j M, H:i', (int) $m['start_ts'], new \DateTimeZone( $tz ) );
 		if ( ! $abs ) { $abs = gmdate( 'D j M, H:i', (int) $m['start_ts'] ); $tz = 'UTC'; }
-		return $abs . ' ' . $tz . ' (the meeting’s own timezone). The room opens 15 minutes before it starts.';
+		// The room sentence is true of a meeting that is going to happen, and false of one that is
+		// not: "It was going to be Thursday 14:00. The room opens 15 minutes before it starts" is
+		// telling somebody to turn up to a meeting just cancelled. Callers announcing an ending say
+		// no to it.
+		return $abs . ' ' . $tz . ' (the meeting’s own timezone).'
+			. ( $room_note ? ' The room opens 15 minutes before it starts.' : '' );
 	}
 }

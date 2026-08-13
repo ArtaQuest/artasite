@@ -556,6 +556,43 @@ final class Booking {
 			// where they need to go. A "somebody booked you" notification beside it would be two
 			// bells for one event, and an inbox that rings twice teaches people to ignore it.
 
+			// TWO LETTERS, THOUGH — one each way, and this is the whole point of a booking page.
+			// The bell above lives INSIDE ArtaQuest, and the person whose week just lost an hour has
+			// no reason to be looking at it: until now somebody could take your Thursday afternoon
+			// and you would find out by chance. The booker needs the other half — a confirmation is
+			// what makes a booking feel taken rather than sent.
+			//
+			// Mail only, no bell: `Notify::mail` deliberately does not push, so the owner is told
+			// twice by two CHANNELS rather than twice on one. Best effort throughout — the meeting
+			// is already made and committed, and an unreachable mail host must never undo it.
+			// Composed from what this call already holds — the instant and the rule's zone — rather
+			// than re-read from the row it just wrote. `when_line` is ArtaMeet's own wording, so the
+			// letter and the meeting page cannot come to describe the same moment differently.
+			$mtz      = in_array( (string) $r['tz'], timezone_identifiers_list(), true ) ? (string) $r['tz'] : 'UTC';
+			$when     = Meetings::when_line( [ 'tz' => $mtz, 'start_ts' => $start ] );
+			$when_s   = (string) wp_date( 'D j M, H:i', (int) $start, new \DateTimeZone( $mtz ) );
+			$meet_url = '/meet/' . $mid;
+			// The note itself is NOT carried into either letter. A visitor writes it to the person
+			// they are meeting, not to that person's mail provider, and the meeting page is where it
+			// belongs — one copy, in one place. See the meet_* templates for the rest of that reasoning.
+			Notify::mail( $owner, 'meet_booked', [
+				'who'        => self::card( $uid )['name'],
+				'title'      => $title,
+				'when'       => $when,
+				'when_short' => $when_s,
+				'note_line'  => '' !== $note
+					? "They left a note about what they would like to talk about. It is on the meeting page.\n\n"
+					: '',
+				'meet_url'   => $meet_url,
+			] );
+			Notify::mail( $uid, 'meet_confirmed', [
+				'title'      => $title,
+				'host'       => self::card( $owner )['name'],
+				'when'       => $when,
+				'when_short' => $when_s,
+				'meet_url'   => $meet_url,
+			] );
+
 			// The meeting as ArtaMeet itself describes it — read back through meet/get rather than
 			// composed here, so the booker lands on a payload identical to the one /meet/<id> will
 			// serve them a moment later. Composing a second version of it here is how the two come

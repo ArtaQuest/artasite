@@ -45,14 +45,22 @@ final class Notify {
 		update_option( 'aq_notify_table_version', self::TABLE_VERSION, true );
 	}
 
-	/** Push a notification to a member. Idempotent per (user, ref) when a ref is given. */
+	/**
+	 * Push a notification to a member. Idempotent per (user, ref) when a ref is given.
+	 *
+	 * RETURNS TRUE ONLY WHEN A ROW WAS ACTUALLY WRITTEN — false when the ref had already rung, or
+	 * when there is no member. That single bit is what lets a caller hang an EMAIL off the same
+	 * `ref` without inventing a sent-flag column: the bell and the letter then share one delivery
+	 * record, so a cron that fires five times inside a reminder bucket sends one of each. Callers
+	 * that only want the bell can carry on ignoring the return.
+	 */
 	public static function push( $uid, $type, $title, $body = '', $url = '', $ref = '' ) {
 		$uid = (int) $uid;
-		if ( ! $uid ) { return; }
+		if ( ! $uid ) { return false; }
 		if ( $ref !== '' && Data::col(
 			'SELECT 1 FROM ' . Data::t( 'aq_notifications' ) . ' WHERE user_id = %d AND ref = %s LIMIT 1',
 			[ $uid, $ref ]
-		) ) { return; }
+		) ) { return false; }
 		Data::insert( 'aq_notifications', [
 			'user_id' => $uid,
 			'type'    => substr( (string) $type, 0, 24 ),
@@ -63,6 +71,44 @@ final class Notify {
 			'read'    => 0,
 			'created' => Data::now(),
 		] );
+		return true;
+	}
+
+	/**
+	 * The bell AND the letter, sharing one delivery record.
+	 *
+	 * The email goes only when `push` actually wrote the row, so the ref that already makes the bell
+	 * exactly-once makes the email exactly-once too — no sent-flag column, no second table, and no
+	 * possibility of the two channels disagreeing about whether this member has been told.
+	 *
+	 * Mail is BEST EFFORT and never the caller's problem: an outbound failure must not roll back a
+	 * booking that has already happened, so a throw is swallowed here. That is a deliberate exception
+	 * to "never swallow an error" and it is safe for exactly one reason — this is delivery, never
+	 * authorisation. Anything that decides whether an action is ALLOWED must still surface its errors.
+	 *
+	 * `$off_meta` is the member's own opt-out; an empty string means the mail cannot be turned off
+	 * (used for nothing yet, and deliberately awkward to reach for).
+	 */
+	public static function push_mail( $uid, $type, $title, $body, $url, $ref, $tpl, $vars = [], $off_meta = 'aq_meet_email_off' ) {
+		if ( ! self::push( $uid, $type, $title, $body, $url, $ref ) ) { return false; }
+		self::mail( $uid, $tpl, $vars, $off_meta );
+		return true;
+	}
+
+	/**
+	 * The letter WITHOUT a bell — for the events that have already rung by another route.
+	 *
+	 * A booking rings the owner through the ordinary invitation (`add_guest`), and a second bell
+	 * beside it would be two for one event. The inbox still needs telling, so the mail leg is
+	 * separable. Best effort, exactly as in push_mail: delivery, never authorisation.
+	 */
+	public static function mail( $uid, $tpl, $vars = [], $off_meta = 'aq_meet_email_off' ) {
+		$uid = (int) $uid;
+		if ( ! $uid ) { return false; }
+		if ( '' !== $off_meta && get_user_meta( $uid, $off_meta, true ) ) { return false; }
+		$u = get_userdata( $uid );
+		if ( ! $u || ! is_email( (string) $u->user_email ) ) { return false; }
+		try { return (bool) Mailer::send( $tpl, $u->user_email, $vars ); } catch ( \Throwable $e ) { return false; }
 	}
 
 	/** GET /notifications — the signed-in member's recent notifications + unread count. */

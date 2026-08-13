@@ -560,6 +560,8 @@ final class Rest {
 		[ 'POST', 'meet/seat',                     'Meetings::seat',      'user' ], // add me to the bound room
 		[ 'GET',  'meet/cal',                      'Meetings::cal',       'user' ], // my calendar subscription URLs
 		[ 'POST', 'meet/cal',                      'Meetings::cal_rotate','user' ], // rotate the key in those URLs
+		[ 'GET',  'meet/email-prefs',              'Meetings::email_prefs','user' ], // am I emailed about my meetings?
+		[ 'POST', 'meet/email-prefs',              'Meetings::email_prefs','user' ], // …and turn it off/on
 		[ 'GET',  'chat/vault',                    'Chat::get_vault',  'user'   ], // my own sealed key blob (restores history on a new device)
 		[ 'POST', 'chat/vault',                    'Chat::set_vault',  'user'   ], // store it — sealed in the browser under a code we never see
 		[ 'GET',  'chat/list',                     'Chat::list_chats', 'user'   ], // ?box=chats|requests|archived|blocked → conversations + unread counts
@@ -750,6 +752,9 @@ final class Rest {
 		// rule can still be messaged (it already has a device key), so it can still be emailed —
 		// and blocking the opt-out would mean receiving mail you are not allowed to stop.
 		'Chat::email_prefs',
+		// A booking is somebody taking an hour of your week, so it is emailed by default — which
+		// means the switch that stops it has to be reachable by anyone who can receive one.
+		'Meetings::email_prefs',
 		// Same asymmetry, and the sharper case: DECLINING or BLOCKING is withdrawal, not capability.
 		// A DOB-less account can still be MESSAGED — Chat::send is the sender's action, gated on the
 		// sender — so gating this route meant a member who had not finished onboarding could receive
