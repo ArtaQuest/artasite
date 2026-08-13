@@ -239,7 +239,14 @@ else skip "tools/undefined-calls.php missing"; fi
 # ── 6. Typecheck, lint, build ──────────────────────────────────────────────────────────────────
 step "Typecheck, lint, build"
 if [ ! -d artaquest-web/node_modules ]; then
-  ( cd artaquest-web && npm ci --no-audit --fund=false >/dev/null 2>&1 ) || { fail "npm ci failed"; mark; }
+  # Keep npm's own words. Discarding them cost a deploy: `npm ci` failed on the runner, every step
+  # after it failed too for want of node_modules, and the log said only "npm ci failed" — so nothing
+  # distinguished a broken lockfile from a registry hiccup, and the same lockfile installed cleanly
+  # on the laptop seconds later. The output is printed ONLY on failure, so a green run stays quiet.
+  if ! npm_out=$( cd artaquest-web && npm ci --no-audit --fund=false 2>&1 ); then
+    printf '%s\n' "$npm_out" | tail -30 | sed 's/^/    /'
+    fail "npm ci failed"; mark
+  fi
 fi
 # -p tsconfig.app.json IS REQUIRED. A bare `tsc --noEmit` resolves the solution-style root config,
 # which references projects and checks NOTHING — it exits 0 on a tree full of errors.
