@@ -1336,8 +1336,17 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
               {live.online && <span className="absolute -bottom-0.5 -end-0.5 h-3 w-3 rounded-full border-2 border-space-2 bg-yang" title="Active now" />}
             </span>
             <span className="flex min-w-0 flex-1 flex-col leading-tight">
-              <a href={localePath(`/u/${peer.slug}/`)} data-ay-skip="1" className="truncate text-[15px] font-semibold text-ink hover:text-yin-light">{peer.name}</a>
-              <span className="truncate text-[11.5px] text-ink-3" aria-live="polite">
+              {/* The name is the way to the other person's page, and on a phone it measured 19px
+                  tall — half the 40px touch floor, with a status line immediately under it to
+                  mistap. `py-3 -my-3` grows the HIT AREA to ~43px and takes the space back with the
+                  negative margin, so nothing on the header moves. */}
+              <a href={localePath(`/u/${peer.slug}/`)} data-ay-skip="1"
+                title="See their profile"
+                className="-my-3 truncate py-3 text-[15px] font-semibold text-ink hover:text-yin-light">{peer.name}</a>
+              {/* ink-2, not ink-3: at 11.5px this is the line that says whether the conversation is
+                  encrypted, muted, or the other person is typing — text a member reads, and ink-3 is
+                  the 3.0:1 tier the contrast engine reserves for non-text marks. */}
+              <span className="truncate text-[11.5px] text-ink-2" aria-live="polite">
                 {live.typing ? "typing…" : live.online ? "Active now" : rel.muted ? "Muted" : "End-to-end encrypted"}
               </span>
             </span>
