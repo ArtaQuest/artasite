@@ -295,6 +295,16 @@ export default function Profile() {
     ? `${localePath("/login/")}?redirect_to=${encodeURIComponent(window.location.pathname)}`
     : localePath("/login/");
 
+  /** Shown to a signed-in visitor beside Message, and to a signed-out one beside Follow — the same
+   *  element either way, so the two branches cannot drift. Never gated on a session: the booking
+   *  page it points at is public on purpose. */
+  const bookButton = p ? (
+    <Button href={localePath(`/book/${encodeURIComponent(p.slug)}`)} variant="outline"
+      className="h-10 px-5 text-[14px]" title="See when they are free and take a time">
+      Book a time
+    </Button>
+  ) : null;
+
   // Stats over the loaded pages. When more pages remain the hearts figure is a floor,
   // so it's labelled as covering recent posts only.
   const partial = next != null;
@@ -354,7 +364,14 @@ export default function Profile() {
                 )}
               </div>
               {/* The actions sit WITH the name rather than at the far end of a wide empty row, which
-                  is where a 1440px header had been putting them. */}
+                  is where a 1440px header had been putting them.
+
+                  ONE definition, rendered from two branches. Beside Message it reads as the same act
+                  at two speeds — say something now, or take some of their time later — and on its own
+                  it is the only thing a signed-out reader can actually do with this person. Written
+                  once because the last time it existed in only one branch, that was the bug. The
+                  booking page says plainly when somebody is not offering any time, so it never leads
+                  anywhere embarrassing. */}
               {isOwn ? (
                 <a href={localePath("/user-account/?settings=1")} className="shrink-0 self-start text-[13.5px] font-semibold text-ink-3 transition-colors hover:text-yang sm:self-auto sm:pb-1">
                   Edit profile →
@@ -373,17 +390,20 @@ export default function Profile() {
                     className="h-10 px-5 text-[14px]" title="Send an encrypted message">
                     Message
                   </Button>
-                  {/* Beside Message, because they are the same act at two speeds: say something now,
-                      or take some of their time later. The page itself says plainly when somebody is
-                      not offering any, so this never leads anywhere embarrassing. */}
-                  <Button href={localePath(`/book/${encodeURIComponent(p.slug)}`)} variant="outline"
-                    className="h-10 px-5 text-[14px]" title="See when they are free and take a time">
-                    Book a time
-                  </Button>
+                  {bookButton}
                   <SendCoins slug={p.slug} name={p.fullName?.trim() || p.name} onSent={() => undefined} />
                 </div>
               ) : (
-                <Button href={loginHref} variant="primaryYin" className="h-10 shrink-0 self-start px-6 text-[14px] sm:self-auto sm:pb-1">Follow</Button>
+                /* SIGNED OUT — and a booking link belongs HERE most of all. Every other action on
+                   this page needs an account, so they were all correctly behind one, and "Book a
+                   time" got swept along with them. It should not have been: book/page and book/slots
+                   are deliberately public, the booking page is built to be readable by a stranger,
+                   and this profile is the thing a member actually shares. Hiding the link from
+                   signed-out visitors meant the one audience it exists for could not see it. */
+                <div className="flex shrink-0 flex-wrap gap-2 sm:pb-1">
+                  <Button href={loginHref} variant="primaryYin" className="h-10 px-6 text-[14px]">Follow</Button>
+                  {bookButton}
+                </div>
               )}
             </div>
 
