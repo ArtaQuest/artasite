@@ -1179,7 +1179,18 @@ function VisitorPage({ handle }: { handle: string }) {
         <EmptyState
           title={<><span data-ay-skip="1">{owner.name}</span> isn’t taking bookings</>}
           body="No times are being offered here at the moment. Nothing has gone wrong — this page only shows what somebody has chosen to offer."
-          action={<Button href="/meet/" variant="outline">Schedule a meeting instead</Button>}
+          /* The way OUT of a dead end has to be a door the reader can actually open. Every profile
+             now offers "Book a time" to signed-out visitors — which is the point — so a stranger
+             reaching this state is the common case, not the rare one, and "Schedule a meeting" sends
+             them to a page that asks them to sign in to do something nobody invited them to do.
+             Their real next step is the member: public, and where the ways to reach them live.
+             (`localePath` on both, which the /meet/ link had been missing — a bare path drops a
+             reader out of their language.) */
+          action={isLoggedIn()
+            ? <Button href={localePath("/meet/")} variant="outline">Schedule a meeting instead</Button>
+            : owner.slug
+              ? <Button href={localePath(`/u/${encodeURIComponent(owner.slug)}`)} variant="outline">See their profile</Button>
+              : null}
         />
       ),
       null,
