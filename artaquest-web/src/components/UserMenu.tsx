@@ -45,6 +45,17 @@ function Row({ icon, label, href, onClick, danger }: { icon: IconKey; label: str
  *  only while signed in; signed-out visitors get Sign in / Register in its place. */
 export function UserMenu() {
   const [open, setOpen] = useState(false);
+
+  /* MARK THE DOCUMENT WHILE THE DRAWER IS UP, the same way the player bar marks it with
+     data-aq-player. The ArtaChat dock is fixed to the bottom edge at z-60 and does not belong on top
+     of — or behind the scrim of — a modal account menu. Raising the drawer above it fixed the
+     overlap; this stops the dock showing through the dim as well. Cleaned up on close AND on
+     unmount, or a drawer that unmounts while open would leave the dock hidden for good. */
+  useEffect(() => {
+    const el = document.documentElement;
+    if (open) { el.setAttribute("data-aq-modal", "1"); } else { el.removeAttribute("data-aq-modal"); }
+    return () => el.removeAttribute("data-aq-modal");
+  }, [open]);
   const [d, setD] = useState<Dashboard | null>(null);
   const panelRef = useRef<HTMLElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -150,7 +161,7 @@ export function UserMenu() {
         <>
       {/* backdrop */}
       <div
-        className={`fixed inset-0 z-50 bg-black/50 transition-opacity duration-200 ${open ? "opacity-100" : "pointer-events-none opacity-0"}`}
+        className={`fixed inset-0 z-[80] bg-black/50 transition-opacity duration-200 ${open ? "opacity-100" : "pointer-events-none opacity-0"}`}
         aria-hidden
         onClick={() => setOpen(false)}
       />
@@ -175,7 +186,7 @@ export function UserMenu() {
         // open", ticket #17). Delegated on the panel so it covers every current + future link; gated on
         // closest("a") so the non-navigating controls (close button, "Mark all read") never trip it.
         onClick={(e) => { if ((e.target as HTMLElement).closest("a")) setOpen(false); }}
-        className={`fixed inset-y-0 end-0 z-50 flex w-[320px] max-w-[88vw] flex-col border-s border-line bg-space-1 shadow-2xl transition-transform duration-200 ${open ? "translate-x-0" : "ltr:translate-x-full rtl:-translate-x-full"}`}
+        className={`fixed inset-y-0 end-0 z-[80] flex w-[320px] max-w-[88vw] flex-col border-s border-line bg-space-1 shadow-2xl transition-transform duration-200 ${open ? "translate-x-0" : "ltr:translate-x-full rtl:-translate-x-full"}`}
       >
         {/* header: avatar + name + close */}
         <div className="flex items-center gap-3 px-4 py-3.5">

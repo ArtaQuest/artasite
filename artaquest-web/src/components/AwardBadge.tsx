@@ -348,7 +348,7 @@ function AwardDialog({ award, onClose }: { award: Award; onClose: () => void }) 
     return () => trigger?.focus?.();
   }, []);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label={award.label} onClick={onClose}>
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label={award.label} onClick={onClose}>
       <div ref={panelRef} tabIndex={-1} className="w-full max-w-md rounded-2xl border border-line bg-space-2 p-6 shadow-2xl outline-none" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start gap-4">
           <div className="shrink-0">

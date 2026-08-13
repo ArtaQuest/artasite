@@ -123,7 +123,7 @@ function SvgPicker({ onPick, onClose }: { onPick: (name: string) => void; onClos
   const shown = matches.slice(0, PICKER_LIMIT);
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={onClose}>
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={onClose}>
       <div ref={panelRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}
         className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl border border-line bg-space-2 shadow-2xl outline-none">
         <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">

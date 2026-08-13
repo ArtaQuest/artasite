@@ -1603,6 +1603,12 @@ html[data-theme="dark"] .aq-pdf-crop[data-invert] svg { filter: invert(1) hue-ro
    ArtaBot launcher clear of it (hit-testing proved the launcher was swallowing the Next-track click). */
 .aq-pl-bar { z-index: 61; }
 html[data-aq-player="1"] .aq-bot-panel { bottom: calc(4.25rem + var(--aq-safe-bottom)); }
+
+/* A MODAL OWNS THE SCREEN. The dock is welded to the bottom edge at z-60, which put it on top of the
+   account drawer (z-50 until 2026-08-13) — and Sign out is that drawer's bottom row, so logging out
+   was not possible on a phone. The drawer now outranks it, and this takes the dock out of the
+   picture entirely rather than leaving it glowing through the scrim. Set by UserMenu. */
+html[data-aq-modal="1"] .aq-bot-panel { visibility: hidden; opacity: 0; pointer-events: none; }
 @media (max-width: 560px) { html[data-aq-player="1"] .aq-bot-panel { bottom: calc(4.75rem + var(--aq-safe-bottom)); } }
 /* cloud shelf panel */
 .aq-lib-cloud { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.7rem;
