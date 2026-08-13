@@ -478,7 +478,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   // MEMBER — a signed-out visitor gets the landing page there, and a marketing page is exactly where
   // About, Privacy and Terms belong. Dropping the footer from both would have taken the legal links
   // off the one page most likely to be a stranger's first.
-  const onFeed = (active === "/" && isLoggedIn()) || active === "/works";
   // ArtaChat is an APP PANE, not a document: it sizes itself to the viewport so the composer
   // stays put while the messages scroll under it. A marketing footer below that is 295px of
   // page nobody can see without scrolling PAST a pane that is already the height of the screen
@@ -552,10 +551,19 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className="overflow-x-clip">
           <div className="mx-auto max-w-content px-gutter py-7">{children}</div>
         </main>
-        {/* The feed is a stream, not a document. A marketing footer under an endless column of
-            posts is furniture nobody scrolled for, and it lands directly beneath the right rail
-            where it reads as part of it. Every link in it also lives in the left rail. */}
-        {onFeed || onAppPane ? null : <Footer />}
+        {/* The feed used to be excluded here on the grounds that it is a stream, not a document,
+            and that a footer under an endless column of posts is furniture nobody scrolled for.
+            That held while the timeline was endless. It is not yet: with a handful of posts the
+            column ends well above the fold and the page simply STOPS — a wide band of empty canvas
+            with the dock floating in it, which reads as a page that failed to finish loading rather
+            than as a deliberate absence (operator, 2026-08-13).
+
+            App PANES stay excluded, and for a different reason that still stands: ArtaChat and Meet
+            size themselves to the viewport so the composer stays put while messages scroll under it.
+            A footer below that is a screen's worth of page nobody can reach without scrolling past a
+            pane already as tall as the window — and its existence is what made the whole page scroll
+            instead of just the conversation. That is layout mechanics, not editorial. */}
+        {onAppPane ? null : <Footer />}
       <BottomTabs />
       {/*
         THE SPACE ARTA OCCUPIES, RESERVED BY THE PAGE.
