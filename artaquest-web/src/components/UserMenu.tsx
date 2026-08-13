@@ -239,7 +239,7 @@ export function UserMenu() {
               {unread > 0 && <span className="rounded-full bg-yang/15 px-1.5 py-0.5 text-[11px] font-bold leading-none text-yang">{unread}</span>}
             </span>
             {notes.some((n) => !n.read) && (
-              <button type="button" onClick={markAll} className="text-[12px] font-semibold text-ink-3 transition-colors hover:text-yang">Mark all read</button>
+              <button type="button" onClick={markAll} className="text-[12px] font-semibold text-ink-2 transition-colors hover:text-yang">Mark all read</button>
             )}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">

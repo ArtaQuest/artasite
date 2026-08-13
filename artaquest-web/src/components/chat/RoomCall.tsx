@@ -978,7 +978,13 @@ function Tile({ stream, label, muted, mirror, name, avatar, state, hand, video, 
         <div className="absolute inset-0 grid place-items-center px-2" data-ay-skip="1">
           <div className="text-center">
             <Avatar src={avatar} name={name} className="mx-auto h-10 w-10" />
-            <p className="mt-1 text-[11px] leading-tight text-ink-3">
+            {/* A FIXED light ink, not a canvas token. This sits on the tile's own bg-black/70,
+               which is black in BOTH themes — but ink-3 is solved against the page canvas, so
+               in light theme it is a mid grey on a mid grey: 2.24:1 at the default contrast,
+               and 1.74:1 at the highest — raising the contrast setting made it vanish faster.
+               This is the one line that says WHY you cannot see someone. The name chip two
+               lines below already solved it the right way, with text-white on bg-black/60. */}
+            <p className="mt-1 text-[11px] leading-tight text-white/85">
               {!stream ? (state === "failed" ? "Couldn’t connect" : "Connecting…") : !video ? note : "Camera off"}
             </p>
           </div>

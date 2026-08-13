@@ -264,7 +264,7 @@ function Activity({ steps, open }: { steps: LiveStep[]; open?: boolean }) {
                 {/* Three states, three shapes — never colour alone. */}
                 <span className="mt-[3px] shrink-0 text-[11px] leading-none">
                   {st.state === "run" ? <span className="aq-think-dots aq-think-dots--tiny" aria-hidden="true"><i /><i /><i /></span>
-                    : st.state === "fail" ? <span className="text-yin">✕</span>
+                    : st.state === "fail" ? <span className="text-yin-ink">✕</span>
                       : <span className="text-yang">✓</span>}
                 </span>
                 <span className="min-w-0 flex-1">
@@ -824,8 +824,20 @@ function DockBody({ view, setView }: {
           {me ? (
             <DmThread compact me={me} identity={chat.identity!} myKey={chat.myKey!} peer={view.peer}
               onBack={() => setView({ k: "list" })} />
+          ) : chat.recovery === "restore" ? (
+            /* Same state, reached by answering a call or opening a conversation: say the same
+               true thing rather than a progress line that never progresses. */
+            <div className="p-6 text-center">
+              <p className="text-[13px] leading-relaxed text-ink-2">
+                Your messages are sealed to a key this browser doesn’t have yet.
+              </p>
+              <a href={localePath("/messages/")}
+                className="mt-3 inline-flex h-9 items-center rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent transition-colors hover:bg-yin hover:text-white">
+                Restore this device
+              </a>
+            </div>
           ) : (
-            <p className="p-6 text-center text-[13px] text-ink-3">Preparing this device’s key…</p>
+            <p className="p-6 text-center text-[13px] text-ink-2">Preparing this device’s key…</p>
           )}
         </Suspense>
       )}
@@ -870,8 +882,25 @@ function DockBody({ view, setView }: {
               <p className="px-4 py-6 text-center text-[13px] text-ink-3">{chat.fatal}</p>
             ) : chat.listError ? (
               <p className="px-4 py-6 text-center text-[13px] text-ink-3">Couldn’t load your conversations — check your connection.</p>
+            ) : chat.recovery === "restore" ? (
+/* NOT "preparing". bootChat() finds an escrow blob with no local identity, sets
+    recovery:"restore" and returns WITHOUT minting a key — so `ready` never becomes true and
+    nothing is being prepared or ever will be. The full page has branched on this since the
+    lockout audit (Messages.tsx); the dock kept showing a progress line for a key that was
+    never coming, on the one surface that is always on screen. The restore itself needs the
+    recovery code and a panel, which belong on the page — so this says what is true and
+    points there. */
+              <div className="px-4 py-6 text-center">
+                <p className="text-[13px] leading-relaxed text-ink-2">
+                  Your messages are sealed to a key this browser doesn’t have yet.
+                </p>
+                <a href={localePath("/messages/")}
+                  className="mt-3 inline-flex h-9 items-center rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent transition-colors hover:bg-yin hover:text-white">
+                  Restore this device
+                </a>
+              </div>
             ) : !chat.ready ? (
-              <p className="px-4 py-6 text-center text-[13px] text-ink-3">Preparing this device’s key…</p>
+              <p className="px-4 py-6 text-center text-[13px] text-ink-2">Preparing this device’s key…</p>
             ) : shown.length === 0 && newPeople.length === 0 ? (
               <p className="px-4 py-6 text-center text-[13px] text-ink-3">
                 {q.trim() ? "Nobody matches that search." : "No conversations yet — search for a member above."}

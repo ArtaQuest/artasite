@@ -142,8 +142,10 @@ html[data-theme="light"] {
   --color-ink-3: #646a78;
   --color-line: #e2e4ea;
 
-  /* Brand ink for the light canvas — gold deepens to an AA amber, blue stays canonical (see @theme). */
-  --color-yang-ink: #e8b923;
+  /* Brand ink for the light canvas — gold deepens to an AA amber, blue stays canonical (see @theme).
+     #8A6300, not #E8B923: contrast.ts already resolves it to this on light, and the raw gold it
+     used to hold measures ~1.8:1 on white — unreadable for the moment before applyContrast runs. */
+  --color-yang-ink: #8a6300;
   --color-yin-ink: #1746dc;
 
 

@@ -1671,7 +1671,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                         )}
                         {/* per-message meta (WhatsApp-style, inside every bubble): time · edited ·
                             failed, plus the sent/delivered/read tick on each of my messages */}
-                        <p className={`mt-0.5 flex items-center gap-1 text-[10.5px] text-ink-3 ${mine ? "justify-end" : ""}`}>
+                        <p className={`mt-0.5 flex items-center gap-1 text-[10.5px] text-ink-2 ${mine ? "justify-end" : ""}`}>
                           <span>{fmtTime(m.at)}</span>
                           {view.edits.has(m.id) && <span>· edited</span>}
                           {m.failed && (
