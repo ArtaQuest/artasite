@@ -225,6 +225,13 @@ $aq_html_dir  = ( $aq_i18n && 'rtl' === $aq_i18n['dir'] ) ? 'rtl' : 'ltr';
 	<?php // Branded first-paint loader — covers the canvas (and any SEO fallback) with the Aquest
 	// A-in-ring mark + wordmark + an indeterminate gold→blue bar until React mounts and fades it
 	// out. No JS needed to show it; main.tsx removes it once the app has painted. ?>
+	<?php // THE LAST NET, and the only one that does not depend on the bundle it is hiding.
+	// The SPA lifts this screen itself (BootGate), and arms its own 10s timer at the top of main.tsx.
+	// Neither helps if the bundle never EXECUTES — a chunk that 404s after a bad deploy, a parse error,
+	// a CSP refusal — and then this screen covers the whole site with nothing left running to remove it,
+	// which a visitor reads as "artaquest.com is down". 12s, so the app's own net wins every normal race
+	// and this only ever fires when the app is not there to fire its own. ?>
+	<script>(function(){setTimeout(function(){var b=document.getElementById('aq-boot-screen');if(!b)return;b.className+=' aqb-hide';setTimeout(function(){if(b.parentNode)b.parentNode.removeChild(b);},600);},12000);})();</script>
 	<div id="aq-boot-screen" aria-hidden="true">
 		<div class="aqb-wrap">
 			<svg class="aqb-mark" viewBox="0 0 100 100" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">

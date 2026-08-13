@@ -6,6 +6,14 @@ import { dismissBootScreen } from './lib/boot'
 import { applyContrast } from './lib/contrast'
 import { installModelHost } from './lib/model-host'
 
+// ARM THE SAFETY NET FIRST. Everything below this line can throw — installModelHost() and
+// applyContrast() both touch the DOM and storage, and render() runs the whole app — and until 2026-08-13
+// the net was armed AFTER all of it. A throw in any of them left the branded boot screen covering the
+// site with nothing left running to lift it, which reads to a visitor as "the site is down". The
+// shell arms its own, later net too (template-aq-app.php), for the case where this bundle never
+// executes at all; this one is for a bundle that starts and then falls over.
+setTimeout(dismissBootScreen, 10000)
+
 // Point every on-device model download at Kaggle (artafather) BEFORE anything can import a model
 // loader — kokoro-js and @huggingface/transformers build HuggingFace URLs inside their own bundles,
 // so this has to be in place first or their first fetch escapes to a host the CSP no longer allows.
@@ -26,13 +34,10 @@ if (mount) {
     </StrictMode>,
   )
 
-  // The branded loader is now lifted by <BootGate> (App.tsx) the moment the matched route's lazy
-  // chunk has loaded AND painted — so it covers the whole chunk-load gap instead of fading after
-  // React's first commit (the bare <Suspense> "Loading…" line). This timer is only a safety net: if
-  // that chunk never resolves (offline, a 404'd asset) and the error boundary doesn't fire either, it
-  // still clears the loader so nobody is trapped. dismissBootScreen() is idempotent — the normal path
-  // (BootGate) always wins the race.
-  setTimeout(dismissBootScreen, 10000)
+  // The branded loader is normally lifted by <BootGate> (App.tsx) the moment the matched route's
+  // lazy chunk has loaded AND painted — covering the whole chunk-load gap rather than fading after
+  // React's first commit (the bare <Suspense> "Loading…" line). The safety net is armed at the top of
+  // this file instead of here, so it survives a throw on the way to this point.
 }
 
 // Register the PWA service worker so the app is installable and boots offline (the shell + assets
