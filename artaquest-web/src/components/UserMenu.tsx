@@ -251,11 +251,19 @@ export function UserMenu() {
                 const inner = (
                   <>
                     <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.read ? "bg-transparent" : "bg-yang"}`} aria-hidden />
-                    <span className="min-w-0 flex-1">
+                    {/* A notification is composed SERVER-SIDE out of other people's words — a member's
+                        display name, a meeting's title, a course a peer commented on. Unmarked, the
+                        i18n mesh walks document.body, sends every one of those strings to a
+                        translation service and PERSISTS the result in the public aq_translations
+                        table: a private-ish meeting title republished onto a second public surface,
+                        via a third party, because somebody happened to view their own bell in
+                        French. The wrapper carries the marker, so the whole composed line is
+                        excluded — there is no translatable UI text in here to lose. */}
+                    <span className="min-w-0 flex-1" data-ay-skip="1">
                       <span className="block text-[13.5px] font-semibold leading-snug text-ink">{n.title}</span>
                       {n.body && <span className="mt-0.5 block text-[12.5px] leading-snug text-ink-3">{n.body}</span>}
                     </span>
-                    <span className="shrink-0 text-[11px] tabular-nums text-ink-2">{ago(n.at)}</span>
+                    <span className="shrink-0 text-[11px] tabular-nums text-ink-2" data-ay-skip="1">{ago(n.at)}</span>
                   </>
                 );
                 return n.url ? (
