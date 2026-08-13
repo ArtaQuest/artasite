@@ -341,8 +341,18 @@ export default function Profile() {
             {/* The avatar STRADDLES the cover's edge — the pattern every profile uses, because it
                 anchors the eye and makes the portrait the largest thing on the page. The ring is the
                 card's own background, so the circle punches cleanly out of the gradient in both
-                themes. */}
-            <div className="-mt-10 flex flex-col gap-3 sm:-mt-14 sm:flex-row sm:items-end sm:gap-5">
+                themes.
+
+                `relative z-10` is LOAD-BEARING, not decoration. The cover above is
+                `position: relative`, and a positioned element paints in a LATER step than
+                non-positioned block content regardless of DOM order — so while this row was static,
+                the cover's white radial-gradient overlay painted straight over the avatar's top
+                40px. The portrait's upper half was visibly washed out, with a hard seam exactly at
+                the cover's bottom edge, which reads as a badly centred sigil rather than as an
+                overlay. Measured on prod: elementFromPoint at the avatar's centre-x, 18% down,
+                returned the cover's gradient div. Positioning this row puts it in the same paint
+                step, where later-in-DOM wins. */}
+            <div className="relative z-10 -mt-10 flex flex-col gap-3 sm:-mt-14 sm:flex-row sm:items-end sm:gap-5">
               {/* priority: above the fold and normally this page's LCP element — lazy-loading it
                   made the browser wait for layout before even starting the request. Carries the
                   verified-nationality flag and the opt-in palm flip. */}
