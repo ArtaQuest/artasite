@@ -956,8 +956,15 @@ function VisitorPage({ handle }: { handle: string }) {
     return (
       <div className="mx-auto flex w-full max-w-[1076px] flex-col gap-6 pb-12">
         <PageHero eyebrow="Time with" title="Nothing to book here" />
+        {/* The SAME correction as the "isn't taking bookings" state below, and this branch needs it
+            more: it is what a stranger sees when a shared booking link is mistyped or its owner has
+            gone, which is the likeliest way somebody arrives here at all. "Meet" sent them to a page
+            that only asks them to sign in. There is no member to point at from here — the handle did
+            not resolve — so the honest door is the front of the site. */}
         <EmptyState title="This page isn’t open" body={pageErr}
-          action={<Button href="/meet/">Meet</Button>} />
+          action={isLoggedIn()
+            ? <Button href={localePath("/meet/")}>Meet</Button>
+            : <Button href={localePath("/works")} variant="outline">Look around ArtaQuest</Button>} />
       </div>
     );
   }
