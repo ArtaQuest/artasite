@@ -370,7 +370,17 @@ class Engine {
     // whatever resolves within the budget, then reveal — the remainder keeps
     // translating in the background and streams into place. A page-language with a
     // slow/huge first translation never traps the visitor behind the loader.
-    await Promise.race([this.pass(true), new Promise((r) => setTimeout(r, GATE_TIMEOUT_MS))]);
+    // .catch on the PASS, not on the race. Promise.race settles on whichever promise settles first
+    // INCLUDING A REJECTION — so a first pass that throws (a 5xx from the translate endpoint, a
+    // dropped connection, anything) rejected the race, skipped both lines below, and left a
+    // non-English visitor behind the loader with no timeout able to save them: the timeout only wins
+    // a race against a HANG, never against a throw. start() is called as `void eng.start()`, so the
+    // rejection went nowhere and said nothing. Swallowing it here is right — an untranslated page is
+    // a far better outcome than a covered one, and the observer keeps translating in the background.
+    await Promise.race([
+      this.pass(true).catch(() => {}),
+      new Promise((r) => setTimeout(r, GATE_TIMEOUT_MS)),
+    ]);
     this.revealed = true;
     this.setBusy(false);
     if (!SOURCE) void this.saveSeo();
@@ -378,7 +388,10 @@ class Engine {
 
   /** Re-translate after a client-side route change; gate if the page is new here. */
   async route(): Promise<void> {
-    await this.pass(false);
+    // Same reasoning as start(): the caller does `void eng.route()`, so a throw here is an unhandled
+    // rejection nobody sees. pass(false) clears busy in its own finally, so the page is not trapped —
+    // but the failure should not take the SEO save down with it either.
+    await this.pass(false).catch(() => {});
     if (!SOURCE) void this.saveSeo();
   }
 
