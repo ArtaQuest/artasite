@@ -42,7 +42,7 @@ final class Seasons {
 		12 => [ 's12', 'Nest',   'the Guardian',     'J',  'yin',     7,  16, 'audiobook',    'Audiobook',    'tenderness, shelter, loyalty',        'Cage',     'clinging, the love that smothers' ],
 	];
 
-	const SIGIL_REV = 4; // busts the year-long edge cache on every art redesign — keep in sync with seasons.ts
+	const SIGIL_REV = 5; // busts the year-long edge cache on every art redesign — keep in sync with seasons.ts
 
 	/** The season's rank emblem URL (the avatar bundled with the SPA). */
 	public static function sigil_url( $n ) {

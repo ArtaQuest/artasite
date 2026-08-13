@@ -321,11 +321,18 @@ export default function Profile() {
         <header className="overflow-hidden rounded-card border border-line bg-space-2">
           {/* THE COVER. Gold on one side, blue on the other, meeting in the middle — the platform's
               own thesis rendered as a band, because gold and blue here are exact additive
-              complements that sum to white. No third hue, no photograph to moderate, and it costs
-              nothing to load. It is the one element that turns this page from a record into
-              somebody's page at a glance. */}
+              complements. No third hue, no photograph to moderate, and it costs nothing to load.
+
+              TWO STOPS, NOT THREE. It used to fade through `via-yang/20`, which was checked on the
+              light canvas where 20% gold over near-white is a pale cream and reads as a graceful
+              fade. Composited over the DARK card it is rgb(64,55,27) — luminance 55, against 151 at
+              the gold end and 61 at the blue — so the middle of the band was a dark olive DIP,
+              darker than either end, and the whole cover read as a smeared, muddy photograph.
+              Straight gold to blue passes through a near-neutral grey instead, which is not a
+              compromise but the point: these two are complements, and muted they meet at the true
+              neutral midpoint. Verified in both themes. */}
           <div className="relative h-20 w-full sm:h-32" aria-hidden>
-            <div className="absolute inset-0 bg-gradient-to-r from-yang/80 via-yang/20 to-yin/80" />
+            <div className="absolute inset-0 bg-gradient-to-r from-yang/80 to-yin/80" />
             <div className="absolute inset-0 bg-[radial-gradient(120%_150%_at_18%_-30%,rgba(255,255,255,0.22),transparent_62%)]" />
             <div className="absolute inset-x-0 bottom-0 h-px bg-line" />
           </div>

@@ -103,7 +103,7 @@ export const seasonByN = (n?: number | null): Season | null =>
  * `/seasons/…` in dev, `…/artaquest-theme/app/seasons/…` in prod, same pattern as topic-art).
  * SIGIL_REV busts the year-long edge cache whenever the art is redesigned — bump it in BOTH
  * mirrors (Seasons.php sigil_url) on every art change. */
-export const SIGIL_REV = 4;
+export const SIGIL_REV = 5;
 export const seasonAvatar = (n: number): string => (import.meta.env.BASE_URL || "/") + `seasons/s${n}.svg?v=${SIGIL_REV}`;
 
 /* The fitted-phase families in research.json still carry the analysis engine's internal 12 phase
