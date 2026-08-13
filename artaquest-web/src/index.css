@@ -417,6 +417,17 @@ html[data-theme="light"] .aq-grad {
    outline follows whatever radius the element already has. */
 :focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 
+/* KEYBOARD PARITY FOR THE MESSAGE ACTION BARS.
+   Both bars in a chat bubble are revealed by :hover, which a keyboard does not have. Without this,
+   the reactions and Reply are `display:none` — removed from the tab order entirely, so a
+   keyboard-only member cannot react or reply-quote at all — while Edit and Unsend are `opacity:0`
+   and STILL tabbable, so focus lands on a hard delete that paints nothing, focus ring included.
+   Written here rather than as a Tailwind `group-focus-within:` variant because that variant did not
+   take effect on these elements (verified in the browser: the class was present, the .group matched
+   :focus-within, and the computed opacity stayed 0). An explicit rule is also the one a future
+   reader can find by searching for the attribute. */
+/* (Both bars are revealed from React state now — see focusedActions in Messages.tsx.) */
+
 /* NO RING ON FORM CONTROLS (operator, 2026-07-30: "remove this blue rings anywhere on site").
    A drawn ring is wrong here twice over. It stacked a second box on top of each control's own
    focus border; and on a COMPOSED control — the search pill, where the visible shape is the

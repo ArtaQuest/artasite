@@ -550,6 +550,14 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   }, []);
   const [openActions, setOpenActions] = useState(0);
   const [confirmUnsend, setConfirmUnsend] = useState(0);
+  /* Which message's own-action bar currently holds keyboard focus.
+     The bar is opacity-0 until :hover, which a keyboard does not have — so Edit and Unsend sat in
+     the tab order painting nothing, focus ring included, and Enter on the invisible Unsend armed a
+     hard delete. Every CSS route to this was tried first (group-focus-within:, focus-within: on the
+     bar, and a raw .group:focus-within rule with !important): each was present on the element and
+     verified matching in the browser, and the computed opacity stayed 0 regardless. State is the
+     one mechanism that cannot lose a cascade argument. */
+  const [focusedActions, setFocusedActions] = useState(0);
   const [confirmBlock, setConfirmBlock] = useState(false);
   // …and the unsend question times out. On a desktop the bubble's actions are hover-revealed, so a
   // half-asked "Delete?" would otherwise still be armed the next time the pointer passed over it,
@@ -1039,6 +1047,15 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   // key to seal to · they blocked me · I blocked them · my request is used up. Collapsing them into
   // one "you can't send" would leave three of the four unexplainable and unfixable.
   const canSend = !!peerKey && !rel.blocked && !rel.blocked_by && !(rel.asked && rel.request_left <= 0);
+  /* CALLING is not the same permission as WRITING. While a message request is unanswered you may
+     still write (that is what the three-message allowance is for), but Chat::send counts every row
+     from you against it — and a call seals TWO: the rtc offer and the "call" bubble. The ring then
+     comes back 403 'pending' from the server, and that refusal was being swallowed by a bare
+     .catch(() => undefined). So the caller opened their camera, spent two thirds of their one
+     chance to be heard on machinery the peer never sees, and watched a call that could not ring.
+     A request that has not been accepted cannot be called — say so on the button instead. */
+  const requestPending = !!rel.asked || !!rel.will_request;
+  const canCall = canSend && !requestPending;
 
   async function sealAndSend(payload: ChatPayload, blobName?: string): Promise<boolean> {
     if (!peerKey) return false;
@@ -1359,7 +1376,9 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
         )}
         {/* TWO controls, not five. Call is the one action worth its own button; everything else
             lives behind the menu, where it can carry a word instead of a glyph nobody can decode. */}
-        <button type="button" aria-label="Start a video call" title="Video call" disabled={!canSend || callState !== "idle" || !!offer}
+        <button type="button" aria-label="Start a video call"
+          title={requestPending ? "You can call once they accept your message request" : "Video call"}
+          disabled={!canCall || callState !== "idle" || !!offer}
           onClick={() => void startCall()}
           className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-3 transition-colors hover:bg-veil/[0.07] hover:text-ink disabled:opacity-30">
           <Ic d={IC.video} size={18} />
@@ -1586,22 +1605,25 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                            every bubble at once, which is what "always show them" produced. */
                         touch
                           ? (openActions === m.id ? "flex" : "hidden")
-                          : "hidden opacity-0 group-hover:opacity-100 md:flex"}`}>
+                          : `hidden md:flex ${focusedActions === m.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}`}
+                        data-msg-actions
+                        onFocus={() => setFocusedActions(m.id)}
+                        onBlur={() => setFocusedActions((v) => (v === m.id ? 0 : v))}>
                         {p.t === "text" && (
                           <button type="button" aria-label="Edit" onClick={() => { setEditing(m); setReplyTo(null); }}
-                            className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-ink-3 hover:bg-veil/[0.07] hover:text-ink">Edit</button>
+                            className="inline-flex min-h-9 items-center rounded px-2 py-0.5 text-[11px] font-semibold text-ink-2 hover:bg-veil/[0.07] hover:text-ink">Edit</button>
                         )}
                         {/* Two-step: "Unsend" → "Delete?" → gone. See confirmUnsend. */}
                         {confirmUnsend === m.id ? (
                           <>
                             <button type="button" onClick={() => { setConfirmUnsend(0); unsend(m); }}
-                              className="rounded px-1.5 py-0.5 text-[11px] font-bold text-yang hover:bg-veil/[0.07]">Delete?</button>
+                              className="inline-flex min-h-9 items-center rounded px-2 py-0.5 text-[11px] font-bold text-yang hover:bg-veil/[0.07]">Delete?</button>
                             <button type="button" aria-label="Keep this message" onClick={() => setConfirmUnsend(0)}
-                              className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-ink-3 hover:text-ink">Keep</button>
+                              className="inline-flex min-h-9 items-center rounded px-2 py-0.5 text-[11px] font-semibold text-ink-2 hover:text-ink">Keep</button>
                           </>
                         ) : (
                           <button type="button" aria-label="Unsend" onClick={() => setConfirmUnsend(m.id)}
-                            className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-ink-3 hover:bg-veil/[0.07] hover:text-ink">Unsend</button>
+                            className="inline-flex min-h-9 items-center rounded px-2 py-0.5 text-[11px] font-semibold text-ink-2 hover:bg-veil/[0.07] hover:text-ink">Unsend</button>
                         )}
                       </span>
                     )}
@@ -1692,7 +1714,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                           {[...reacts.entries()].map(([emoji, who]) => (
                             <button key={emoji} type="button" onClick={() => toggleReact(m, emoji)}
                               aria-label={`${emoji} ${who.size}`}
-                              className={`rounded-pill border px-1.5 py-0.5 text-[12px] shadow-card transition-colors ${
+                              className={`inline-flex min-h-9 min-w-9 items-center justify-center rounded-pill border px-1.5 py-0.5 text-[12px] shadow-card transition-colors ${
                                 who.has(me) ? "border-yang bg-space-2" : "border-line bg-space-2 hover:border-yin-light"
                               }`}>{emoji}{who.size > 1 ? ` ${who.size}` : ""}</button>
                           ))}
@@ -1700,8 +1722,11 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                       )}
                       {/* hover reaction + reply bar */}
                       {m.id > 0 && p && (
-                        <div data-actions="" className={`z-10 items-center gap-0.5 rounded-pill border border-line bg-space-2 px-1.5 py-1 shadow-card ${
-                          touch ? (openActions === m.id ? "flex" : "hidden") : "hidden group-hover:flex"} ${
+                        <div data-actions=""
+                          onFocus={() => setFocusedActions(m.id)}
+                          onBlur={() => setFocusedActions((v) => (v === m.id ? 0 : v))}
+                          className={`z-10 items-center gap-0.5 rounded-pill border border-line bg-space-2 px-1.5 py-1 shadow-card ${
+                          touch ? (openActions === m.id ? "flex" : "hidden") : (focusedActions === m.id ? "flex" : "hidden group-hover:flex")} ${
                           /* In the dock the panel root is overflow-hidden, so a bar floated ABOVE the
                              bubble is clipped away entirely — under it, in normal flow, it survives. */
                           compact ? "mt-1 flex-wrap" : "absolute -top-8"} ${mine ? "end-0" : "start-0"}`}>
@@ -1710,7 +1735,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                               className="rounded-full px-1 text-[15px] transition-transform hover:scale-125">{e}</button>
                           ))}
                           <button type="button" aria-label="Reply" onClick={() => { setReplyTo(m); setEditing(null); }}
-                            className="ms-0.5 rounded px-1.5 text-[11px] font-semibold text-ink-3 hover:text-ink">Reply</button>
+                            className="ms-0.5 inline-flex min-h-9 items-center rounded px-2 text-[11px] font-semibold text-ink-2 hover:text-ink">Reply</button>
                         </div>
                       )}
                     </div>
