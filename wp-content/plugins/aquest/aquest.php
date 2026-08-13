@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 // disagree will send the next person chasing a production divergence that is not there: the
 // header is what get_plugin_data() reads, AQ_VERSION is what /version reports and what the
 // integrity sweep keys on. Bump them together, always.
-define( 'AQ_VERSION', '1.20.668' );
+define( 'AQ_VERSION', '1.20.669' );
 define( 'AQ_DIR', __DIR__ );
 define( 'AQ_URL', plugins_url( '', __FILE__ ) );
 
