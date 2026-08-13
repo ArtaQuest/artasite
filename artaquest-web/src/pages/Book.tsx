@@ -323,15 +323,25 @@ const isEveryDay = (days: string) => /^1{7}$/.test(days);
    The string helpers stay: <Select> option labels are plain prose the mesh should translate whole,
    and an option cannot carry an element. */
 
+/* Each returns ONE inline element, never a fragment. The space between the numeral and the word is
+   its own text node, and a fragment drops it straight into whatever the parent is — inside a Pill or
+   the meta list, both flex, a whitespace-only node is a flex ITEM and gets collapsed away, which
+   rendered "1hour" in the pill and "1  hour" in the list. An inline wrapper keeps the pair as a
+   single item and lets normal inline whitespace do its job. */
+
 function DurationText({ m }: { m: number }) {
   const n = m < 60 ? m : m === 60 ? 1 : Math.round(m / 6) / 10;
-  return <><span data-ay-skip="1">{n}</span> {m < 60 ? "minutes" : m === 60 ? "hour" : "hours"}</>;
+  return (
+    <span><span data-ay-skip="1">{n}</span> {m < 60 ? "minutes" : m === 60 ? "hour" : "hours"}</span>
+  );
 }
 
 function NoticeText({ h }: { h: number }) {
   const days = h >= 24;
   const n = days ? Math.round(h / 24) : h;
-  return <><span data-ay-skip="1">{n}</span> {days ? (n === 1 ? "day" : "days") : n === 1 ? "hour" : "hours"}</>;
+  return (
+    <span><span data-ay-skip="1">{n}</span> {days ? (n === 1 ? "day" : "days") : n === 1 ? "hour" : "hours"}</span>
+  );
 }
 
 /** `lower` is for the middle of a sentence. It is a SEPARATE English string rather than
