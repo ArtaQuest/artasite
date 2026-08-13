@@ -34,20 +34,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 function aq_social_profiles() {
 	return array_filter( array(
 		'youtube'   => get_option( 'aq_social_youtube', 'https://www.youtube.com/@ArtaQuest' ),
-		'x'         => get_option( 'aq_social_x', 'https://x.com/arta_quest' ),
 		'linkedin'  => get_option( 'aq_social_linkedin', 'https://www.linkedin.com/company/artaquest' ),
 		// GitHub is not decoration here: it is the source-code CDN every submitted notebook is
 		// mirrored to as a public gist, which is what makes the one-click Colab link possible
 		// (src/Gist.php). Verified 2026-07-30: the account resolves and holds the gists.
 		'github'    => get_option( 'aq_social_github', 'https://github.com/ArtaQuest' ),
 		// Kaggle is the least decorative link on this list (operator 2026-08-02). Every submission IS
-		// a public Kaggle notebook that has been run, and `artafather` is the account that hosts the
-		// platform's own heavy data — the model weights and dataset files the site serves. It is the
-		// provenance of the whole substrate, so it belongs in `sameAs` as much as in the footer.
-		'kaggle'    => get_option( 'aq_social_kaggle', 'https://www.kaggle.com/artafather' ),
+		// a public Kaggle notebook that has been run, so this is the provenance of the whole substrate
+		// and belongs in `sameAs` as much as in the footer. Points at the FOUNDATION'S ORGANISATION
+		// rather than the artafather account it used to (operator 2026-08-13): the org is the entity
+		// this schema is about, and a personal account is a different one.
+		'kaggle'    => get_option( 'aq_social_kaggle', 'https://www.kaggle.com/organizations/artaquest-foundation' ),
 		/*
-		 * PARKED, 2026-07-31 (operator: "only keep ista, x, linked, github for now", then "replace
-		 * insta with youtube"). These are OUT of both the footer and `sameAs` together, per the sync
+		 * PARKED. 2026-07-31 (operator: "only keep ista, x, linked, github for now", then "replace
+		 * insta with youtube"); X removed 2026-08-13 (operator). These are OUT of both the footer and `sameAs` together, per the sync
 		 * rule above — a schema link the footer dropped is a claim about an account nobody can find.
 		 * "For now": the handles are kept here so restoring one is a single uncommented line, and so
 		 * the next person does not have to go and rediscover them.
