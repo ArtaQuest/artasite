@@ -2349,6 +2349,14 @@ export function chatEmailPrefs(on?: boolean) {
     ? get<{ ok: boolean; email_on: boolean }>("/chat/email-prefs")
     : post<{ ok: boolean; email_on: boolean }>("/chat/email-prefs", { on: on ? 1 : 0 });
 }
+/** Whether this member is emailed about their meetings — booked, reminded, moved, called off —
+ *  (GET), and the switch to turn it off/on (POST). On unless they have turned it off: somebody
+ *  taking an hour of your week is exactly the news you cannot be expected to go looking for. */
+export function meetEmailPrefs(on?: boolean) {
+  return on === undefined
+    ? get<{ ok: boolean; email_on: boolean }>("/meet/email-prefs")
+    : post<{ ok: boolean; email_on: boolean }>("/meet/email-prefs", { on: on ? 1 : 0 });
+}
 /** Store one already-sealed attachment; the returned name goes into chatSend's `blob`. */
 export function chatUploadBlob(sealed: Blob) {
   const fd = new FormData();

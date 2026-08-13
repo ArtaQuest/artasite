@@ -211,6 +211,19 @@ final class Chat {
 		return $u1 < $u2 ? [ (int) $u1, (int) $u2 ] : [ (int) $u2, (int) $u1 ];
 	}
 
+	/**
+	 * Has $uid blocked $other?
+	 *
+	 * A block is a property of a CONVERSATION, not a global list, so no conversation means no
+	 * block — which is right: you cannot have blocked somebody you have never spoken to. Public
+	 * because blocking has to mean the same thing everywhere a person can reach you, and since
+	 * the booking page went live that includes your diary.
+	 */
+	public static function blocks( $uid, $other ) {
+		$c = self::chat_row( (int) $uid, (int) $other );
+		return $c ? self::flag( $c, (int) $uid, 'block' ) : false;
+	}
+
 	private static function chat_row( $u1, $u2 ) {
 		[ $a, $b ] = self::pair( $u1, $u2 );
 		return Data::one( 'SELECT * FROM ' . Data::t( 'aq_chats' ) . ' WHERE a_uid = %d AND b_uid = %d', [ $a, $b ] );

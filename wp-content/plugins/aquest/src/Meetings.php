@@ -622,7 +622,12 @@ final class Meetings {
 
 		$now    = Data::now();
 		$fields = [];
-		$notify = false;
+		$notify  = false;
+		// Renaming a meeting and MOVING one are different pieces of news. Both bump seq and both are
+		// worth telling people about, but only one of them is a reschedule — and now that this goes to
+		// an inbox, saying "was rescheduled" over a typo fix is a letter that makes somebody re-check
+		// their calendar for a change that never happened.
+		$retimed = false;
 
 		if ( null !== Rest::p( $req, 'title', null ) ) {
 			$title = mb_substr( wp_strip_all_tags( trim( (string) Rest::p( $req, 'title', '' ) ) ), 0, self::TITLE_MAX );
@@ -647,23 +652,34 @@ final class Meetings {
 
 		$start = (int) $m['start_ts'];
 		$mins  = max( 1, (int) round( ( (int) $m['end_ts'] - $start ) / 60 ) );
-		$timed = false;
+		// PRESENT is not the same as CHANGED, and the difference now costs real letters. The edit
+		// panel refills date/time/length from the meeting it is editing, so the SPA posts `start` and
+		// `minutes` on every save whether or not the host touched them — a host who opens "Change the
+		// time", decides against it and presses save was writing a new seq and telling every guest the
+		// meeting "was rescheduled" to the time it already had. seq advances each time, so the ref
+		// idempotency that stops a repeat cannot help: press it twice, two letters each. The title
+		// branch above has always compared before notifying; these two never did.
+		$was_start = (int) $m['start_ts'];
+		$was_mins  = $mins;
+		$timed     = false;
 		if ( null !== Rest::p( $req, 'start', null ) ) {
 			$start = Rest::pint( $req, 'start', 0 );
 			if ( $start < $now + 300 )      { return Rest::err( 'too_soon', 'Schedule a meeting at least five minutes out.', 400 ); }
 			if ( $start > $now + 31536000 ) { return Rest::err( 'too_far', 'Meetings can be scheduled up to a year ahead.', 400 ); }
-			$timed = true;
 		}
 		if ( null !== Rest::p( $req, 'minutes', null ) ) {
 			$mins = Rest::pint( $req, 'minutes', $mins );
 			if ( $mins < 15 || $mins > 480 ) { return Rest::err( 'bad_duration', 'A meeting runs between 15 minutes and 8 hours.', 400 ); }
-			$timed = true;
 		}
+		// Still written when only the LENGTH moved — that is a real change to the promise — but the
+		// word "rescheduled" and the letter are earned by an actual difference, not by a form submit.
+		if ( $start !== $was_start || $mins !== $was_mins ) { $timed = true; }
 		if ( $timed ) {
 			$fields['start_ts'] = $start;
 			$fields['end_ts']   = $start + ( $mins * 60 );
 			$fields['sort_key'] = self::sort_key( $start, $mid );
 			$notify = true;
+			$retimed = true;
 		}
 
 		if ( ! $fields ) { return [ 'ok' => true, 'unchanged' => true, 'meet' => self::meet_payload( $m ), 'guests' => self::guest_cards( $mid ) ]; }
@@ -672,7 +688,13 @@ final class Meetings {
 		Data::update( 'aq_meets', $fields, [ 'id' => $mid ] );
 
 		$after = self::row( $mid );
-		if ( $notify ) { self::tell_guests( $after, 'changed', $after['title'] . ' was rescheduled', 'no' ); }
+		if ( $notify ) {
+			self::tell_guests(
+				$after, 'changed',
+				$after['title'] . ( $retimed ? ' was rescheduled' : ' was updated' ),
+				'no'
+			);
+		}
 		return [ 'ok' => true, 'meet' => self::meet_payload( $after ), 'guests' => self::guest_cards( $mid ) ];
 	}
 
@@ -725,7 +747,7 @@ final class Meetings {
 				$uid, 'meeting', $headline, '', '/meet/' . $mid,
 				'mt' . $kind . $mid . '-' . (int) $m['seq'] . '-' . $uid,
 				'meet_changed',
-				[ 'head' => $headline, 'when' => $when, 'meet_url' => '/meet/' . $mid ]
+				[ 'head' => Mailer::safe_var( $headline, 120 ), 'when' => $when, 'meet_url' => '/meet/' . $mid ]
 			);
 		}
 	}
@@ -1529,9 +1551,15 @@ final class Meetings {
 				// mail, where a duplicate is not a repeated row but a second letter.
 				Notify::push_mail(
 					(int) $g['user_id'], 'meeting', $head, $body, '/meet/' . $mid,
-					'mtrem' . $mid . '-' . (int) $g['user_id'] . '-' . $bucket,
+					// KEYED ON THE START INSTANT, not just the bucket. A reminder is a statement about
+					// WHEN something begins, so moving the meeting must re-arm it: without start_ts in
+					// the ref, a meeting reminded at T-24h and then pushed a week later would never be
+					// reminded again, because that bucket had already 'rung'. Keying on the instant also
+					// means a rename — which bumps seq but moves nothing — sends no second reminder.
+					'mtrem' . $mid . '-' . (int) $g['user_id'] . '-' . $bucket . '-' . (int) $m['start_ts'],
 					'meet_reminder',
-					[ 'head' => $head, 'body' => $body, 'meet_url' => '/meet/' . $mid ]
+					// $head embeds the meeting title, which on a booking carries the booker's chosen name.
+					[ 'head' => Mailer::safe_var( $head, 120 ), 'body' => $body, 'meet_url' => '/meet/' . $mid ]
 				);
 			}
 		}

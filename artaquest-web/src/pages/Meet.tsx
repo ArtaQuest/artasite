@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ApiError,
-  meetCalRotate, meetCancel, meetCreate, meetGet, meetInvite, meetList, meetLobby,
+  meetCalRotate, meetEmailPrefs, meetCancel, meetCreate, meetGet, meetInvite, meetList, meetLobby,
   meetNow, meetOpen, meetRsvp, meetSeat, meetUninvite, meetUpdate, roomsCall,
   type Meet as MeetRow, type MeetCal, type MeetGuest, type MeetLobby, type MeetRsvp,
 } from "../lib/api";
@@ -331,7 +331,36 @@ function CalendarPanel({ cal, onRotate }: { cal: MeetCal | null; onRotate: (c: M
         </>
       )}
       {note && <p className="mt-2 text-[12.5px] text-ink-2">{note}</p>}
+      <MeetEmailToggle />
     </section>
+  );
+}
+
+/**
+ * The switch the meeting emails tell people about.
+ *
+ * Four templates end with "turn off Email me about meetings in your account", and until this existed
+ * that sentence pointed at nothing — an instruction a member could follow only by guessing at a REST
+ * route. An email that tells you how to stop it, and then cannot, is worse than one that says nothing.
+ *
+ * It lives beside the calendar subscription because that is the one place on this page already about
+ * how meetings reach you when you are not looking at ArtaQuest. On unless turned off: the person who
+ * has never opened a settings panel is exactly the one who needs telling that their week just changed.
+ */
+function MeetEmailToggle() {
+  const [on, setOn] = useState<boolean | null>(null);
+  useEffect(() => { meetEmailPrefs().then((r) => setOn(!!r.email_on)).catch(() => setOn(null)); }, []);
+  if (on === null) return null;
+  return (
+    <label className="mt-3 flex cursor-pointer items-start gap-2 border-t border-line pt-3 text-[12.5px] leading-relaxed text-ink-3">
+      <input type="checkbox" checked={on} className="mt-0.5 accent-yang"
+        onChange={(e) => {
+          const next = e.target.checked;
+          setOn(next);
+          meetEmailPrefs(next).catch(() => setOn(!next)); // put it back if the server disagrees
+        }} />
+      <span>Email me about my meetings — booked, moved, cancelled, and before they start</span>
+    </label>
   );
 }
 

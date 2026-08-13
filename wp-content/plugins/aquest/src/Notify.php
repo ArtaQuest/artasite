@@ -106,9 +106,39 @@ final class Notify {
 		$uid = (int) $uid;
 		if ( ! $uid ) { return false; }
 		if ( '' !== $off_meta && get_user_meta( $uid, $off_meta, true ) ) { return false; }
+		if ( ! self::mail_allowed( $uid, $tpl ) ) { return false; }
 		$u = get_userdata( $uid );
 		if ( ! $u || ! is_email( (string) $u->user_email ) ) { return false; }
 		try { return (bool) Mailer::send( $tpl, $u->user_email, $vars ); } catch ( \Throwable $e ) { return false; }
+	}
+
+	/** At most this many of ONE KIND of letter to ONE member per hour. */
+	const MAIL_CAP    = 10;
+	const MAIL_WINDOW = 3600;
+
+	/**
+	 * A ceiling on how much mail one member can be made to receive.
+	 *
+	 * The booking page is PUBLIC and its whole point is that people you do not know can take your
+	 * published hours. `book/take` allows 8 per five minutes and cancelling allows 30, and each
+	 * produces a letter — so one determined account could book-and-cancel roughly 190 emails an hour
+	 * into an owner's inbox. Nothing about that is a bug in booking; it is the cost of the feature
+	 * being open, and it has to be paid here rather than by making booking harder.
+	 *
+	 * PER TEMPLATE, not per member: a flood of "somebody booked you" must not be able to suppress the
+	 * cancellation or the reminder for a DIFFERENT meeting that same hour. Each kind of news gets its
+	 * own budget, so drowning one cannot silence the others. Ten an hour is far above any honest use
+	 * — a person with ten bookings in one hour has a different problem — and far below a flood.
+	 *
+	 * The counter is a transient, deliberately: losing it on a cache flush re-opens the budget, which
+	 * is the safe direction to fail for something whose job is to stop noise, not to guard access.
+	 */
+	private static function mail_allowed( $uid, $tpl ) {
+		$k = 'aq_nmail_' . md5( (string) $tpl . '|' . (int) $uid );
+		$n = (int) get_transient( $k );
+		if ( $n >= self::MAIL_CAP ) { return false; }
+		set_transient( $k, $n + 1, self::MAIL_WINDOW );
+		return true;
 	}
 
 	/** GET /notifications — the signed-in member's recent notifications + unread count. */

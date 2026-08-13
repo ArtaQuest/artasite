@@ -428,6 +428,16 @@ final class Booking {
 		// in it, and Meetings would invite you to a meeting you are already hosting.
 		if ( $owner === $uid ) { return Rest::err( 'own_page', 'This is your own booking page.', 400 ); }
 
+		// A BLOCK HAS TO MEAN THE DIARY TOO. Blocking somebody in ArtaChat stopped them writing to
+		// you; it never stopped them taking an hour of your week, and now that a booking sends you
+		// a letter it would put them back in your inbox and your calendar by a route you had no way
+		// to close. The refusal is deliberately NEUTRAL — telling somebody they are blocked is
+		// information they can act on, and the point of a block is to end the conversation, not to
+		// start one about itself.
+		if ( class_exists( '\\AQ\\Chat' ) && Chat::blocks( $owner, $uid ) ) {
+			return Rest::err( 'unavailable', 'That time isn’t available.', 409 );
+		}
+
 		$r = self::rule_row( $owner, sanitize_title( (string) Rest::p( $req, 'type', '' ) ) );
 		if ( ! $r ) { return Rest::err( 'not_offered', 'That is not on offer.', 404 ); }
 		if ( ! (int) $r['active'] ) { return Rest::err( 'not_offered', 'This member is no longer offering that.', 409 ); }
@@ -563,35 +573,43 @@ final class Booking {
 			// what makes a booking feel taken rather than sent.
 			//
 			// Mail only, no bell: `Notify::mail` deliberately does not push, so the owner is told
-			// twice by two CHANNELS rather than twice on one. Best effort throughout — the meeting
-			// is already made and committed, and an unreachable mail host must never undo it.
-			// Composed from what this call already holds — the instant and the rule's zone — rather
-			// than re-read from the row it just wrote. `when_line` is ArtaMeet's own wording, so the
-			// letter and the meeting page cannot come to describe the same moment differently.
+			// twice by two CHANNELS rather than twice on one.
+			//
+			// PREPARED HERE, POSTED AFTER THE LOCK. Composing needs this call's own values (the
+			// instant, the rule's zone); SENDING must not happen while the per-owner mutex is held.
+			// wp_mail is synchronous and can sit on a slow or hanging SMTP host for as long as the
+			// socket timeout allows, and every other person trying to book this same owner queues
+			// behind that — a mail server's bad afternoon would become a booking outage. The letters
+			// are handed out below, once the lock is gone.
+			//
+			// The note itself is NOT carried into either letter. A visitor writes it to the person
+			// they are meeting, not to that person's mail provider, and the meeting page is where it
+			// belongs — one copy, in one place. See the meet_* templates for the rest of that reasoning.
 			$mtz      = in_array( (string) $r['tz'], timezone_identifiers_list(), true ) ? (string) $r['tz'] : 'UTC';
 			$when     = Meetings::when_line( [ 'tz' => $mtz, 'start_ts' => $start ] );
 			$when_s   = (string) wp_date( 'D j M, H:i', (int) $start, new \DateTimeZone( $mtz ) );
 			$meet_url = '/meet/' . $mid;
-			// The note itself is NOT carried into either letter. A visitor writes it to the person
-			// they are meeting, not to that person's mail provider, and the meeting page is where it
-			// belongs — one copy, in one place. See the meet_* templates for the rest of that reasoning.
-			Notify::mail( $owner, 'meet_booked', [
-				'who'        => self::card( $uid )['name'],
-				'title'      => $title,
-				'when'       => $when,
-				'when_short' => $when_s,
-				'note_line'  => '' !== $note
-					? "They left a note about what they would like to talk about. It is on the meeting page.\n\n"
-					: '',
-				'meet_url'   => $meet_url,
-			] );
-			Notify::mail( $uid, 'meet_confirmed', [
-				'title'      => $title,
-				'host'       => self::card( $owner )['name'],
-				'when'       => $when,
-				'when_short' => $when_s,
-				'meet_url'   => $meet_url,
-			] );
+			$post     = [
+				[ $owner, 'meet_booked', [
+					// Attacker-controlled: anybody may book a published hour, and this lands in a subject line.
+					'who'        => Mailer::safe_var( self::card( $uid )['name'] ),
+					// The title is the owner's own words PLUS the booker's name, so it carries the same risk.
+					'title'      => Mailer::safe_var( $title, 90 ),
+					'when'       => $when,
+					'when_short' => $when_s,
+					'note_line'  => '' !== $note
+						? "They left a note about what they would like to talk about. It is on the meeting page.\n\n"
+						: '',
+					'meet_url'   => $meet_url,
+				] ],
+				[ $uid, 'meet_confirmed', [
+					'title'      => Mailer::safe_var( $title, 90 ),
+					'host'       => Mailer::safe_var( self::card( $owner )['name'] ),
+					'when'       => $when,
+					'when_short' => $when_s,
+					'meet_url'   => $meet_url,
+				] ],
+			];
 
 			// The meeting as ArtaMeet itself describes it — read back through meet/get rather than
 			// composed here, so the booker lands on a payload identical to the one /meet/<id> will
@@ -603,7 +621,7 @@ final class Booking {
 			$full = Meetings::get( $show );
 			$full = is_array( $full ) ? $full : [];
 
-			return [
+			$out = [
 				'ok'       => true,
 				// `id` and `meet_id` are one value under two names: the meeting's id is what every
 				// caller wants next, and it should not matter which of the two they reach for.
@@ -623,6 +641,11 @@ final class Booking {
 		} finally {
 			Economy::release_lock( $lock );
 		}
+
+		// OUTSIDE THE MUTEX. Every refusal above returns from inside the try and therefore never
+		// reaches this line, so a letter is only ever posted for a booking that actually happened.
+		foreach ( $post as $p ) { Notify::mail( $p[0], $p[1], $p[2] ); }
+		return $out;
 	}
 
 	// ── The owner's own side ────────────────────────────────────────────────

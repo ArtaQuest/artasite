@@ -130,23 +130,24 @@ class Mailer {
 			'label'    => 'Somebody booked one of your published hours',
 			'audience' => 'member',
 			'subject'  => '{{who}} booked you — {{when_short}}',
-			'body'     => "{{who}} took one of the hours you publish on your booking page, so it is now an ordinary meeting in your calendar.\n\nWhat: {{title}}\nWhen: {{when}}\n\n{{note_line}}You do not need to reply or confirm anything — you offered the time and they took it. If it no longer suits, open the meeting and cancel it; they are told straight away.\n\nTo stop these emails, turn off \"Email me about meetings\" in your account. The bell inside ArtaQuest keeps working either way.",
+			'body'     => "{{who}} took one of the hours you publish on your booking page, so it is now an ordinary meeting in your calendar.\n\nWhat: {{title}}\nWhen: {{when}}\n\n{{note_line}}You do not need to reply or confirm anything — you offered the time and they took it. If it no longer suits, open the meeting and cancel it; they are told straight away.\n\nTo stop these emails, turn off \"Email me about my meetings\" on the Meet page. The bell inside ArtaQuest keeps working either way.",
 			'cta'      => [ 'Open the meeting', '{{meet_url}}' ],
 			'vars'     => [ 'who', 'title', 'when', 'when_short', 'note_line', 'meet_url' ],
 			'sample'   => [
 				'who' => 'Cara', 'title' => 'A chat with Arash', 'when' => 'Thu 20 Aug, 14:00 Europe/Istanbul (the meeting’s own timezone). The room opens 15 minutes before it starts.',
 				'when_short' => 'Thu 20 Aug, 14:00', 'note_line' => "They left a note about what they would like to talk about. It is on the meeting page.\n\n",
+				'meet_url' => '/meet/1',
 			],
 		],
 		'meet_confirmed' => [
 			'label'    => 'Your booking is confirmed',
 			'audience' => 'member',
 			'subject'  => 'Booked: {{when_short}} with {{host}}',
-			'body'     => "That is arranged. It is an ordinary meeting now — in your calendar and in {{host}}'s.\n\nWhat: {{title}}\nWhen: {{when}}\nWith: {{host}}\n\nThe call happens on ArtaMeet, in your browser, and it is encrypted end to end — there is no bridge in the middle holding your video. Nobody has to write back to make this happen; the time is yours.\n\nIf you cannot make it, open the meeting and cancel, so the hour goes back on offer for somebody else.",
+			'body'     => "That is arranged. It is an ordinary meeting now — in your calendar and in {{host}}'s.\n\nWhat: {{title}}\nWhen: {{when}}\nWith: {{host}}\n\nThe call happens on ArtaMeet, in your browser, and it is encrypted end to end — there is no bridge in the middle holding your video. Nobody has to write back to make this happen; the time is yours.\n\nIf you cannot make it, tell {{host}} as soon as you can — the hour can then go back on offer for somebody else.",
 			'cta'      => [ 'Open the meeting', '{{meet_url}}' ],
 			'vars'     => [ 'title', 'host', 'when', 'when_short', 'meet_url' ],
 			'sample'   => [
-				'title' => 'A chat with Arash', 'host' => 'Arash', 'when_short' => 'Thu 20 Aug, 14:00',
+				'title' => 'A chat with Arash', 'host' => 'Arash', 'when_short' => 'Thu 20 Aug, 14:00', 'meet_url' => '/meet/1',
 				'when' => 'Thu 20 Aug, 14:00 Europe/Istanbul (the meeting’s own timezone). The room opens 15 minutes before it starts.',
 			],
 		],
@@ -154,19 +155,19 @@ class Mailer {
 			'label'    => 'A meeting is about to start',
 			'audience' => 'member',
 			'subject'  => '{{head}}',
-			'body'     => "{{body}}\n\nYou can arrive early and check your camera without anybody watching.\n\nTo stop these, turn off \"Email me about meetings\" in your account.",
+			'body'     => "{{body}}\n\nYou can arrive early and check your camera without anybody watching.\n\nTo stop these, turn off \"Email me about my meetings\" on the Meet page.",
 			'cta'      => [ 'Open the meeting', '{{meet_url}}' ],
 			'vars'     => [ 'head', 'body', 'meet_url' ],
-			'sample'   => [ 'head' => 'Starting soon: A chat with Arash', 'body' => 'Starts in 30 minutes — Thu 20 Aug, 14:00 Europe/Istanbul (the meeting’s own timezone).' ],
+			'sample'   => [ 'head' => 'Starting soon: A chat with Arash', 'body' => 'Starts in 30 minutes — Thu 20 Aug, 14:00 Europe/Istanbul (the meeting’s own timezone).', 'meet_url' => '/meet/1' ],
 		],
 		'meet_changed' => [
 			'label'    => 'A meeting was moved or called off',
 			'audience' => 'member',
 			'subject'  => '{{head}}',
-			'body'     => "{{head}}.\n\n{{when}}\n\nNothing is expected of you — this is the notice, not a question. Open the meeting to see where it stands.\n\nTo stop these, turn off \"Email me about meetings\" in your account.",
+			'body'     => "{{head}}.\n\n{{when}}\n\nNothing is expected of you — this is the notice, not a question. Open the meeting to see where it stands.\n\nTo stop these, turn off \"Email me about my meetings\" on the Meet page.",
 			'cta'      => [ 'Open the meeting', '{{meet_url}}' ],
 			'vars'     => [ 'head', 'when', 'meet_url' ],
-			'sample'   => [ 'head' => 'A chat with Arash was cancelled', 'when' => 'It was going to be Thu 20 Aug, 14:00 Europe/Istanbul.' ],
+			'sample'   => [ 'head' => 'A chat with Arash was cancelled', 'when' => 'It was going to be Thu 20 Aug, 14:00 Europe/Istanbul.', 'meet_url' => '/meet/1' ],
 		],
 		'cdn_quota' => [
 			'label'    => 'Media CDN approaching its free tier',
@@ -368,6 +369,37 @@ class Mailer {
 			'Content-Type: text/html; charset=UTF-8',
 			'From: ' . self::FROM_NAME . ' <' . self::FROM_EMAIL . '>',
 		] );
+	}
+
+	/**
+	 * A member-supplied name or title, made safe to put in a letter.
+	 *
+	 * Two things go wrong when somebody else's chosen text reaches an email. A newline in a SUBJECT
+	 * is header injection. And a URL anywhere in the BODY becomes a live hyperlink, because the
+	 * renderer auto-links — so a display name of "Free money at evil.example" arrives in a stranger's
+	 * inbox as a clickable link that ArtaQuest sent them. The booking page makes this reachable by
+	 * design: anybody may take a member's published hour, and their name goes into the letter.
+	 *
+	 * Deliberately the same treatment Chat::safe_sender_name gives a message sender, for the same
+	 * reason — this is the other place where a person who is not your correspondent can put words in
+	 * front of you. Escaping is NOT enough on its own: esc_html renders the link inert as markup, and
+	 * the auto-linker then makes it live again.
+	 */
+	public static function safe_var( $text, $max = 60 ) {
+		$n = wp_specialchars_decode( (string) $text, ENT_QUOTES ); // WP stores display names encoded
+		$n = str_replace( [ "\r", "\n", "\t" ], ' ', (string) $n );   // header injection, first
+		$n = preg_replace( '#\b(?:https?://|www\.)\S*#i', '', $n );   // explicit links
+		$n = preg_replace( '#\S+@\S+#', '', $n );                     // anything shaped like an address
+		// Any dotted host, WITHOUT a list of TLDs to keep current: a list is a promise to have thought
+		// of every suffix, and the first test of this stripped "evil.example" straight through because
+		// `.example` was not on it. Two-character labels or longer, so ordinary initials ("A. B.")
+		// are left alone.
+		$n = preg_replace( '#\b[\w-]{2,}(?:\.[\w-]{2,})+\b#', '', $n );
+		// Header NAMES are inert once the newlines are gone, but "Bcc:" sitting in a subject line
+		// still reads as a message that has been tampered with.
+		$n = preg_replace( '#\b(?:bcc|cc|to|from|subject|reply-to|content-type)\s*:#i', '', $n );
+		$n = trim( preg_replace( '/\s+/', ' ', $n ) );
+		return '' !== $n ? mb_substr( $n, 0, (int) $max ) : 'A member';
 	}
 
 	/** Template by key with any operator override applied (subject/body only). */
