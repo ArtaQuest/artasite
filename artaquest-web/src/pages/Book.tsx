@@ -134,8 +134,24 @@ const longInstant = (ts: number, tz: string, c: Clock = "") =>
 /** YYYY-MM-DD for an instant in a named zone — en-CA writes that order natively, and it is what the
  *  day grouping, the month grid and the Today comparison are all keyed on. */
 function dayKey(ts: number, tz: string): string {
+  const d = new Date(Number(ts) * 1000);
+  // `t` in the address bar is visitor-controlled and is read back at mount, so this runs on whatever
+  // a crafted link supplies. `?t=99999999999999` is finite but outside the Date range, and
+  // Intl.format THROWS RangeError on it — inside an effect, which the route error boundary catches
+  // by replacing the whole booking page. An owner's link then looks broken to whoever was sent it.
+  // An unreadable instant has no day; "" is a value every caller already handles by falling back to
+  // the first free day. `fmt` guards itself the same way, for the same reason.
+  if (!Number.isFinite(d.getTime())) return "";
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" })
-    .format(new Date(Number(ts) * 1000));
+    .format(d);
+}
+
+/** The earlier of two day keys. They are YYYY-MM-DD, so ordering them is ordering the strings; an
+ *  empty key means "unknown", and an unknown bound must never be the one that wins. */
+function minKey(a: string, b: string): string {
+  if (!a) return b;
+  if (!b) return a;
+  return a < b ? a : b;
 }
 
 /** A day heading from its key. Parsed back at UTC noon purely so it can be formatted: no zone can
@@ -296,13 +312,40 @@ const isEveryDay = (days: string) => /^1{7}$/.test(days);
 
 /** The mask in words. "Any day" and "Weekdays" are the two shapes people actually choose, so they
  *  are named rather than spelled out as seven abbreviations. */
-function daysLabel(days: string): string {
+/* The same three facts as ELEMENTS rather than strings.
+   The string helpers above build sentences out of our own English nouns — "minutes", "hours",
+   "day", "Weekdays" — and every place that SHOWS one wrapped the whole return value in
+   data-ay-skip="1". That marker excludes the entire subtree from the mesh, so those words could
+   never be translated: a French visitor read "Ouvert pour les 21 days" and an owner's rule card
+   said "Weekdays" in every one of the ~133 languages. The rule is that the marker goes around the
+   formatted VALUE and nothing else, so these hold the numeral (or the weekday names, which are
+   formatted by Intl and are not ours to translate) inside the wrapper and leave the words outside.
+   The string helpers stay: <Select> option labels are plain prose the mesh should translate whole,
+   and an option cannot carry an element. */
+
+function DurationText({ m }: { m: number }) {
+  const n = m < 60 ? m : m === 60 ? 1 : Math.round(m / 6) / 10;
+  return <><span data-ay-skip="1">{n}</span> {m < 60 ? "minutes" : m === 60 ? "hour" : "hours"}</>;
+}
+
+function NoticeText({ h }: { h: number }) {
+  const days = h >= 24;
+  const n = days ? Math.round(h / 24) : h;
+  return <><span data-ay-skip="1">{n}</span> {days ? (n === 1 ? "day" : "days") : n === 1 ? "hour" : "hours"}</>;
+}
+
+/** `lower` is for the middle of a sentence. It is a SEPARATE English string rather than
+ *  `.toLowerCase()` on the translated one, because lowercasing a translation is a different
+ *  operation in half the world's scripts and a wrong one in German. */
+function DaysText({ days, lower }: { days: string; lower?: boolean }) {
   const mask = (days || "").padEnd(7, "0").slice(0, 7);
-  if (isEveryDay(mask)) return "Any day";
-  if (mask === "1111100") return "Weekdays";
-  if (mask === "0000011") return "Weekends";
+  if (isEveryDay(mask)) return <>{lower ? "any day" : "Any day"}</>;
+  if (mask === "1111100") return <>{lower ? "weekdays" : "Weekdays"}</>;
+  if (mask === "0000011") return <>{lower ? "weekends" : "Weekends"}</>;
   const on = MON_FIRST.filter((i) => mask[i] === "1").map((i) => WEEKDAY_NAMES[i]);
-  return on.length ? on.join(", ") : "No days";
+  // Weekday names come from Intl, so they are already in the reader's language — a formatted value,
+  // and one the mesh must not touch.
+  return on.length ? <span data-ay-skip="1">{on.join(", ")}</span> : <>{lower ? "no days" : "No days"}</>;
 }
 
 /** The rule's hours as the OWNER keeps them — the sentence the visitor is really agreeing to. */
@@ -536,7 +579,7 @@ function TypeChooser({ offered, current, onPick }: { offered: BookRule[]; curren
             className={cx("flex min-h-[56px] w-full items-center justify-between gap-3 rounded-field border p-3 text-left transition-colors duration-150",
               on ? "border-yang bg-yang/12" : "border-line hover:border-yin-light")}>
             <span className="min-w-0 text-[14px] font-semibold text-ink" data-ay-skip="1">{t.title}</span>
-            <span className="shrink-0 text-[12.5px] text-ink-3" data-ay-skip="1">{durationLabel(Number(t.minutes) || 30)}</span>
+            <span className="shrink-0 text-[12.5px] text-ink-3"><DurationText m={Number(t.minutes) || 30} /></span>
           </button>
         );
       })}
@@ -553,17 +596,17 @@ function MetaList({ type, className }: { type: BookRule; className?: string }) {
   return (
     <ul className={cx("flex flex-col gap-2 text-[13px] text-ink-2", className)}>
       <li className="flex items-start gap-2.5"><span className="text-ink-3"><ClockGlyph /></span>
-        <span data-ay-skip="1">{durationLabel(Number(type.minutes) || 30)}</span></li>
+        <DurationText m={Number(type.minutes) || 30} /></li>
       <li className="flex items-start gap-2.5"><span className="text-ink-3"><CameraGlyph /></span>
         <span>A video call on ArtaMeet, encrypted end to end</span></li>
       <li className="flex items-start gap-2.5"><span className="text-ink-3"><PeopleGlyph /></span>
         <span>{seats <= 2 ? "Just the two of you" : <>Up to <span data-ay-skip="1">{seats}</span> people</>}</span></li>
       {notice > 0 && (
         <li className="flex items-start gap-2.5"><span className="text-ink-3"><BellGlyph /></span>
-          <span>Book at least <span data-ay-skip="1">{noticeLabel(notice)}</span> ahead</span></li>
+          <span>Book at least <NoticeText h={notice} /> ahead</span></li>
       )}
       <li className="flex items-start gap-2.5"><span className="text-ink-3"><CalGlyph /></span>
-        <span>Open for the next <span data-ay-skip="1">{horizon} days</span></span></li>
+        <span>Open for the next <span data-ay-skip="1">{horizon}</span> days</span></li>
     </ul>
   );
 }
@@ -612,6 +655,11 @@ function VisitorPage({ handle }: { handle: string }) {
   // because they are no longer free and must not colour a density bar or count towards a day.
   const [vanished, setVanished] = useState<number[]>([]);
   const [slotsFailed, setSlotsFailed] = useState(false);
+  // The furthest instant the server actually ANSWERED for, which is its own clamp (SPAN_MAX_S = 62
+  // days) and can be nearer than the horizon the rule advertises. The month grid is bounded by this
+  // rather than by the rule, so it cannot page into a month nobody was asked about and then report
+  // that month as empty. 0 until the first answer lands.
+  const [answered, setAnswered] = useState(0);
   const [month, setMonth] = useState(() => monthOf(dayKey(Math.round(Date.now() / 1000), VIEWER_TZ)));
   const [day, setDay] = useState("");
   const [picked, setPicked] = useState(0);
@@ -677,26 +725,60 @@ function VisitorPage({ handle }: { handle: string }) {
     const from = Math.round(Date.now() / 1000);
     // Ask for the rule's own horizon and let the server clamp it. The window is computed here, once
     // per load, rather than from a ticking clock — a tick must never re-fetch the grid out from
-    // under a hand that is already reaching for it. ONE call covers the whole page: every month,
-    // every zone and every density bar is derived from this list.
+    // under a hand that is already reaching for it.
     const to = from + Math.max(1, Math.min(90, Number(type.horizon_d) || 21)) * 86400;
-    if (!quiet) { setStarts(null); setVanished([]); }
+    if (!quiet) { setStarts(null); setVanished([]); setAnswered(0); }
     setSlotsFailed(false);
-    bookSlots({ user: handle, type: type.slug, from, to })
-      .then((r) => {
+
+    /* Follow the cursor to the end of the window.
+       `Booking::slots` walks the offered grid only as far as MAX_SLOTS (400) instants — counted
+       BEFORE the busy filter — and returns `next` for the remainder. One request is therefore not
+       the horizon, and treating it as one does not merely shorten the page: the days past the cap
+       arrive indistinguishable from days with nothing free, so the grid draws them as inert cells
+       reading "nothing free" and the month overlay states it outright, over time the server will
+       happily book. Measured against a real rule — 15-minute slots, any day, 09:00–17:00, 30 days —
+       one call answered 396 starts ending 25 Aug for a horizon running to 11 Sept.
+       PAGE_MAX bounds the walk: 12 pages is ~4,800 offered instants, past any rule this form can
+       express, so a server that kept returning a cursor could never spin this loop. */
+    const PAGE_MAX = 12;
+    const all: number[] = [];
+    const walk = (cursor: number, page: number): Promise<number> =>
+      bookSlots({ user: handle, type: type.slug, from: cursor, to }).then((r) => {
+        if (mine !== seq.current) return 0;
+        all.push(...r.starts);
+        // `to` is the window the server ANSWERED, which is its own clamp (SPAN_MAX_S = 62 days) and
+        // may be nearer than the horizon the rule advertises. The grid is bounded by this, not by
+        // the rule, so it never opens a month nothing was asked about.
+        const reached = r.to;
+        return r.next && r.next > cursor && page + 1 < PAGE_MAX
+          ? walk(r.next, page + 1)
+          : reached;
+      });
+
+    walk(from, 0)
+      .then((reached) => {
         if (mine !== seq.current) return;
+        const fresh = all.slice().sort((a, b) => a - b);
         // Anything the visitor could see a moment ago and the server no longer offers. It stays on
         // screen, disabled and labelled, rather than disappearing from under a cursor that was
         // already travelling towards it — the list must never renumber itself mid-reach.
         if (quiet) {
-          const fresh = new Set(r.starts);
-          setVanished(shownRef.current.filter((ts) => !fresh.has(ts)));
+          const now = new Set(fresh);
+          setVanished(shownRef.current.filter((ts) => !now.has(ts)));
         }
-        setStarts(r.starts);
+        setStarts(fresh);
+        setAnswered(reached);
       })
       // A FAILED request is not an empty diary. Falling through to "no free times" would tell a
-      // visitor this person is booked solid on exactly the request that never came back.
-      .catch(() => { if (mine === seq.current) { setStarts(null); setSlotsFailed(true); } });
+      // visitor this person is booked solid on exactly the request that never came back. A QUIET
+      // read is a re-read that already has a good grid on screen, so a failure there must leave it
+      // alone — blanking is precisely what `quiet` exists to prevent, and doing it here stranded a
+      // visitor holding a chosen time with no diary around it.
+      .catch(() => {
+        if (mine !== seq.current || quiet) return;
+        setStarts(null);
+        setSlotsFailed(true);
+      });
   }, [handle, type]);
 
   useEffect(() => { loadSlots(); }, [loadSlots]);
@@ -746,7 +828,13 @@ function VisitorPage({ handle }: { handle: string }) {
 
   const todayKey = dayKey(now, displayTz);
   const horizonD = Math.max(1, Math.min(90, Number(type?.horizon_d) || 21));
-  const horizonKey = dayKey(now + horizonD * 86400, displayTz);
+  // What the RULE advertises, and what the SERVER answered, are two different dates: `Booking::slots`
+  // clamps its own window to SPAN_MAX_S (62 days), so a 90-day rule is answered for 62. The grid is
+  // bounded by the nearer of the two, because a month the server was never asked about must not be
+  // reachable — paging into one and being told "nothing free" is a lie about a diary nobody read.
+  // Before the first answer lands `answered` is 0 and the rule's own horizon stands.
+  const ruleHorizonKey = dayKey(now + horizonD * 86400, displayTz);
+  const horizonKey = answered > 0 ? minKey(ruleHorizonKey, dayKey(answered, displayTz)) : ruleHorizonKey;
   // The instant is the truth; the day is derived from it. That is what lets a zone switch move a
   // pick onto a neighbouring date without losing it. With nothing chosen the nearest open day is
   // already selected — we hold the whole horizon, so a mandatory first click would be theatre.
@@ -839,6 +927,12 @@ function VisitorPage({ handle }: { handle: string }) {
       // QUIET: the day stays exactly where it is and the slot that went is marked in place, rather
       // than the whole grid blanking to a skeleton and coming back one button shorter.
       loadSlots(true);
+      // And let the dead instant GO. The re-read above marks it "Taken" in the grid, but the confirm
+      // surface renders on `picked` alone — so leaving it set kept a primary action pointed at a
+      // slot the same render had just declared gone, and every further press re-posted it for the
+      // same refusal. On a phone that action is the fixed bar over the thumb. The error stays; the
+      // pick does not. The day is untouched, so the times they were looking at are still there.
+      setPicked(0);
     } finally {
       setBusy(false);
     }
@@ -884,7 +978,7 @@ function VisitorPage({ handle }: { handle: string }) {
       )}
       <div className="mt-1">
         {zonePicker ? (
-          <Select className="mt-1 h-11 w-full" label="Show times in this zone" value={displayTz} onChange={setDisplayTz} options={ZONES} />
+          <Select className="mt-1 h-11 w-full" label="Show times in this zone" value={displayTz} onChange={setDisplayTz} options={ZONES} skipOptions />
         ) : (
           <LinkButton className={cx("text-[12.5px]", LINK_HIT)} onClick={() => setZonePicker(true)}>Not your zone?</LinkButton>
         )}
@@ -942,7 +1036,6 @@ function VisitorPage({ handle }: { handle: string }) {
           </div>
           {!noteOpen && <div className="mt-2"><LinkButton className={LINK_HIT} onClick={openNote}>Add a line about it</LinkButton></div>}
 
-          {takeErr && <div className="mt-3"><ErrorNote>{takeErr}</ErrorNote></div>}
 
           <div className="mt-3 flex flex-wrap items-center gap-3">
             {/* A plain element rather than <Button>: this is the one control the page has to be able
@@ -1117,7 +1210,7 @@ function VisitorPage({ handle }: { handle: string }) {
             {type && (
               <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[13px] text-ink-2">
                 <span data-ay-skip="1">{type.title}</span>
-                <Pill><span data-ay-skip="1">{durationLabel(Number(type.minutes) || 30)}</span></Pill>
+                <Pill><DurationText m={Number(type.minutes) || 30} /></Pill>
               </p>
             )}
           </div>
@@ -1157,7 +1250,7 @@ function VisitorPage({ handle }: { handle: string }) {
 
       {emptyHorizon ? (
         <EmptyState
-          title={<>No free times in the next <span data-ay-skip="1">{horizonD} days</span></>}
+          title={<>No free times in the next <span data-ay-skip="1">{horizonD}</span> days</>}
           body={<>
             <span data-ay-skip="1">{owner.name}</span> has nothing open that far ahead. It is worth looking again in a
             day or two — a slot frees the moment something moves
@@ -1218,7 +1311,7 @@ function VisitorPage({ handle }: { handle: string }) {
                       {!laterMonth && (
                         <p className="mt-1 text-[12.5px] text-ink-3">
                           <span data-ay-skip="1">{owner.name}</span> takes bookings up to{" "}
-                          <span data-ay-skip="1">{horizonD} days</span> ahead
+                          <span data-ay-skip="1">{horizonD}</span> days ahead
                         </p>
                       )}
                     </div>
@@ -1242,6 +1335,14 @@ function VisitorPage({ handle }: { handle: string }) {
                 <Segmented className={SEG_HIT} label="Clock" value={effClock} onChange={(v) => setClockPref(v === "24" ? "24" : "12")}
                   options={[{ value: "12", label: "am/pm" }, { value: "24", label: "24h" }]} />
               </div>
+
+              {/* A refused take is reported HERE, beside the times, and not on the confirm surface:
+                  the refusal releases the pick (otherwise the page keeps offering an instant it has
+                  just marked "Taken"), and the confirm surface only renders while a pick is held —
+                  so a note living there would be cleared by the very thing that caused it. This is
+                  also where the visitor is looking: the slot that went is marked in place one line
+                  below, among the times that are still free. */}
+              {takeErr && <div className="mt-3" role="status"><ErrorNote>{takeErr}</ErrorNote></div>}
 
               <div className="mt-3">
                 {dayTimes.length > 0 ? (
@@ -1315,7 +1416,7 @@ function VisitorPage({ handle }: { handle: string }) {
             <div className="mt-3">
               <p className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-ink">
                 <span data-ay-skip="1">{type.title}</span>
-                <Pill><span data-ay-skip="1">{durationLabel(Number(type.minutes) || 30)}</span></Pill>
+                <Pill><DurationText m={Number(type.minutes) || 30} /></Pill>
               </p>
               {type.blurb && <p className="mt-1.5 line-clamp-3 text-[13px] leading-relaxed text-ink-2" data-ay-skip="1">{type.blurb}</p>}
             </div>
@@ -1362,10 +1463,17 @@ function RuleForm({ rule, onSaved, onCancel }: { rule: BookRule; onSaved: (r: Bo
   const [minutes, setMinutes] = useState(Number(rule.minutes) || 30);
   const [tz, setTz] = useState(rule.tz || VIEWER_TZ);
   const [days, setDays] = useState((rule.days || "1111100").padEnd(7, "0").slice(0, 7));
-  const [fromMin, setFromMin] = useState(Number(rule.from_min) || 540);
-  const [toMin, setToMin] = useState(Number(rule.to_min) || 1020);
-  const [buffer, setBuffer] = useState(Number(rule.buffer_min) || 0);
-  const [notice, setNotice] = useState(Number(rule.notice_h) || 4);
+  // `??` against a NUMBER, not `||`: midnight is 0, and 0 is a value this very form can produce
+  // (`<input type="time">` at 00:00) and the server stores (`from_min < 0` is its only floor). With
+  // `||` the form read a saved 00:00 back as 09:00 and Save wrote that, silently withdrawing nine
+  // published hours the owner never touched; with From 00:00 / Until 06:00 it read back as 540/360
+  // and the "finishing time" check disabled Save, locking the owner out of their own rule. Same
+  // shape for notice_h, where 0 means "no notice at all" and is equally legal.
+  const num = (v: unknown, fallback: number) => (Number.isFinite(Number(v)) ? Number(v) : fallback);
+  const [fromMin, setFromMin] = useState(() => num(rule.from_min, 540));
+  const [toMin, setToMin] = useState(() => num(rule.to_min, 1020));
+  const [buffer, setBuffer] = useState(() => num(rule.buffer_min, 0));
+  const [notice, setNotice] = useState(() => num(rule.notice_h, 4));
   const [horizon, setHorizon] = useState(Number(rule.horizon_d) || 21);
   const [seats, setSeats] = useState(Number(rule.seats) || 2);
   const [busy, setBusy] = useState(false);
@@ -1417,7 +1525,7 @@ function RuleForm({ rule, onSaved, onCancel }: { rule: BookRule; onSaved: (r: Bo
               options={DURATIONS.map((m) => ({ value: String(m), label: durationLabel(m) }))} />
           </Field>
           <Field label="Your time zone" hint="The hours below are hours of YOUR day, in this zone">
-            <Select value={tz} onChange={setTz} options={ZONES} />
+            <Select value={tz} onChange={setTz} options={ZONES} skipOptions />
           </Field>
         </div>
 
@@ -1484,15 +1592,15 @@ function RuleForm({ rule, onSaved, onCancel }: { rule: BookRule; onSaved: (r: Bo
             second line is the VISITOR's phrasing, so what a stranger will read is on this screen. */}
         <div className="rounded-card border border-line bg-space-1/40 px-4 py-3 text-[13px] leading-relaxed text-ink-2">
           <p>
-            Anyone with your link can book <span data-ay-skip="1">{durationLabel(minutes)}</span> with you,{" "}
-            <span data-ay-skip="1">{daysLabel(days).toLowerCase()}</span>, between{" "}
+            Anyone with your link can book <DurationText m={minutes} /> with you,{" "}
+            <DaysText days={days} lower />, between{" "}
             <span data-ay-skip="1">{minuteClock(fromMin)}</span> and <span data-ay-skip="1">{minuteClock(toMin)}</span> in{" "}
             <span data-ay-skip="1">{tz}</span>
             {local && <> — which is <span data-ay-skip="1">{local}</span> on the clock you are reading this on</>}
           </p>
           <p className="mt-1.5 text-ink-3">
             Anyone with your link sees{" "}
-            <span data-ay-skip="1">{daysLabel(days)}, {minuteClock(fromMin)} – {minuteClock(toMin)}</span>, your time
+            <DaysText days={days} />, <span data-ay-skip="1">{minuteClock(fromMin)} – {minuteClock(toMin)}</span>, your time
           </p>
         </div>
 
@@ -1527,13 +1635,13 @@ function RuleCard({ rule, onEdit, onOff, onOn, busy }: { rule: BookRule; onEdit:
 
       <dl className="mt-3 grid gap-x-6 gap-y-1.5 text-[13px] sm:grid-cols-2">
         <div className="flex gap-2"><dt className="text-ink-3">Length</dt>
-          <dd className="text-ink-2" data-ay-skip="1">{durationLabel(rule.minutes)}</dd></div>
+          <dd className="text-ink-2"><DurationText m={Number(rule.minutes) || 30} /></dd></div>
         <div className="flex gap-2"><dt className="text-ink-3">Days</dt>
-          <dd className="text-ink-2" data-ay-skip="1">{daysLabel(rule.days)}</dd></div>
+          <dd className="text-ink-2"><DaysText days={rule.days} /></dd></div>
         <div className="flex gap-2"><dt className="text-ink-3">Hours</dt>
           <dd className="text-ink-2" data-ay-skip="1">{hoursLabel(rule)} · {rule.tz}</dd></div>
         <div className="flex gap-2"><dt className="text-ink-3">Notice</dt>
-          <dd className="text-ink-2" data-ay-skip="1">{noticeLabel(Number(rule.notice_h) || 0)}</dd></div>
+          <dd className="text-ink-2"><NoticeText h={Number(rule.notice_h) || 0} /></dd></div>
         <div className="flex gap-2"><dt className="text-ink-3">Ahead</dt>
           <dd className="text-ink-2" data-ay-skip="1">{Number(rule.horizon_d) || 21} days</dd></div>
         {local && (

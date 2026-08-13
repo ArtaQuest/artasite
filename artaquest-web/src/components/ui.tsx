@@ -743,10 +743,22 @@ export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputEleme
 /** Native <select> matching the Input look (border-line / space-2 / focus:yin-light). Accepts plain
  *  string options or {value,label} pairs; pass `label` to give it an accessible name when it isn't
  *  already wrapped in a <Field>. One source of truth shared by the catalogue sort + the Studio editors. */
-export function Select({ value, onChange, options, label, className }: {
+export function Select({ value, onChange, options, label, className, skipOptions }: {
   value: string; onChange: (v: string) => void;
   options: ReadonlyArray<string | { value: string; label: ReactNode }>;
   label?: string; className?: string;
+  /**
+   * The options are IDENTIFIERS, not prose — IANA zone ids, codes, handles — so keep the i18n mesh
+   * off them. Without this a zone picker hands ~400 strings like "Europe/Istanbul" to the
+   * translator, which publishes every one into the public aq_translations table and then rewrites
+   * the labels in place, leaving the reader hunting for a name that no longer appears in a list
+   * still sorted by the English id.
+   *
+   * The marker goes on each OPTION rather than on the select or a wrapper on purpose: a skipped
+   * ancestor also excludes its own aria-label, which would cost this control its translated
+   * accessible name to protect its options.
+   */
+  skipOptions?: boolean;
 }) {
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}
@@ -754,7 +766,7 @@ export function Select({ value, onChange, options, label, className }: {
       {options.map((o) => {
         const v = typeof o === "string" ? o : o.value;
         const l = typeof o === "string" ? o : o.label;
-        return <option key={v} value={v}>{l}</option>;
+        return <option key={v} value={v} {...(skipOptions ? { "data-ay-skip": "1" } : {})}>{l}</option>;
       })}
     </select>
   );

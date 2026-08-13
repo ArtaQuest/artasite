@@ -2951,6 +2951,15 @@ export type BookSlots = {
   /** The window actually answered, after the server clamped it to the rule's horizon. */
   from: number;
   to: number;
+  /**
+   * Where to resume, or null when this answer reached the end of the window.
+   *
+   * `Booking::slots` caps the grid it walks at MAX_SLOTS (400) OFFERED instants — before the busy
+   * filter — and hands back a keyset cursor for the rest. A caller that ignores it does not get a
+   * short answer, it gets a WRONG one: the days past the cap are indistinguishable from days with
+   * nothing free. Follow it until null.
+   */
+  next: number | null;
   now: number;
 };
 
@@ -2966,7 +2975,7 @@ export async function bookSlots(b: { user: string; type: string; from: number; t
   const r = await get<{
     ok?: boolean;
     slots?: unknown[]; starts?: unknown[]; items?: unknown[];
-    minutes?: number; tz?: string; from?: number; to?: number; now?: number;
+    minutes?: number; tz?: string; from?: number; to?: number; next?: number | null; now?: number;
   }>("/book/slots", { user: b.user, type: b.type, from: Math.round(b.from), to: Math.round(b.to) });
   const raw = r.slots || r.starts || r.items || [];
   const starts = raw
@@ -2979,6 +2988,10 @@ export async function bookSlots(b: { user: string; type: string; from: number; t
     tz: r.tz || "",
     from: Number(r.from) || Math.round(b.from),
     to: Number(r.to) || Math.round(b.to),
+    // Only a finite instant strictly after the window's start is a cursor worth following; anything
+    // else (absent, null, 0, a string) ends the walk, so a server that stops sending it cannot spin
+    // a caller forever.
+    next: Number.isFinite(Number(r.next)) && Number(r.next) > 0 ? Number(r.next) : null,
     now: Number(r.now) || Math.round(Date.now() / 1000),
   };
 }
