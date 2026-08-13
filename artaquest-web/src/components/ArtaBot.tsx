@@ -745,6 +745,8 @@ const SEARCH = <><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></>;
    rolls the drawer up and down — pointing UP when collapsed (rotate-180), DOWN when open. */
 const COMPOSE = <><path d="M4 20h4l10-10a2.1 2.1 0 0 0-3-3L5 17v3z" /><path d="M13.5 6.5l4 4" /></>;
 const CHEVRON = <path d="M6 9.5l6 6 6-6" />;
+/* The person the dock is talking to — links to their profile from inside a conversation. */
+const PERSON = <><circle cx="12" cy="8.5" r="3.5" /><path d="M5.5 19a6.5 6.5 0 0 1 13 0" /></>;
 
 function relTime(ts: number): string {
   if (!ts) return "";
@@ -1197,6 +1199,17 @@ export function ArtaBot() {
           {!inThread && (
             <a href={localePath("/messages/")} aria-label="Open Chat"
               className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-veil/[0.07] hover:text-ink"><Ico d={COMPOSE} size={17} /></a>
+          )}
+          {/* WHO AM I TALKING TO? In the dock there was no way to find out beyond the name: the left
+              slot is the Back arrow (not an avatar, unlike the list view), and the name itself is the
+              collapse toggle, so neither could carry the link the full-page thread has had all along.
+              Somebody deciding how to answer a stranger — or just placing a half-remembered name —
+              had to leave the conversation to look. This is the same act as the list view's "Open
+              Chat" button in the same slot: one glyph, one destination, only where it applies. */}
+          {inThread && dockView.k === "dm" && dockView.peer.slug && (
+            <a href={localePath(`/u/${encodeURIComponent(dockView.peer.slug)}/`)}
+              aria-label="See their profile" title="See their profile"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-veil/[0.07] hover:text-ink"><Ico d={PERSON} size={17} /></a>
           )}
           <button type="button" onClick={toggle} aria-expanded={open} aria-controls="aq-dock-body"
             aria-label={open ? "Collapse Chat" : "Expand Chat"}
