@@ -157,8 +157,14 @@ final class Meetings {
 		if ( $start <= 0 || $end <= $start || 'cancelled' === (string) $m['status'] ) { return ''; }
 		$join    = home_url( '/meet/' . (int) $m['id'] );
 		$details = trim( (string) ( $m['agenda'] ?? '' ) );
+		// TRUE OF THE CALL, AND ONLY OF THE CALL. This sentence sits directly beneath a plaintext
+		// title and agenda in a payload we are handing to Google, where a reader takes it as a
+		// statement about the whole entry. The room really is unbridgeable; the words about the
+		// meeting are stored in the clear and are published at /data/. Say both, or the true half
+		// does the work of a claim we cannot keep.
 		$details .= ( '' !== $details ? "\n\n" : '' ) . 'Join: ' . $join . "\n"
-			. 'Up to ' . (int) $m['seats'] . ' people, end-to-end encrypted: nothing is recorded and nobody, including ArtaQuest, can listen in.';
+			. 'Up to ' . (int) $m['seats'] . ' people. The CALL is end-to-end encrypted — nothing is recorded and '
+			. 'nobody, including ArtaQuest, can listen in. This entry’s title and agenda are not encrypted.';
 		return 'https://calendar.google.com/calendar/render?' . http_build_query( [
 			'action'   => 'TEMPLATE',
 			'text'     => (string) $m['title'],
@@ -1215,7 +1221,10 @@ final class Meetings {
 		if ( 'UTC' !== $where && in_array( $where, timezone_identifiers_list(), true ) ) {
 			$desc .= "\n" . 'Scheduled for ' . wp_date( 'H:i', (int) $r['start_ts'], new \DateTimeZone( $where ) ) . ' ' . $where . '.';
 		}
-		$desc .= "\n" . 'Up to ' . (int) $r['seats'] . ' people, end-to-end encrypted: nothing is recorded and nobody, including ArtaQuest, can listen in.';
+		// Same correction as gcal_url above, and it matters more here: this line follows the agenda
+		// verbatim in a file any subscribed calendar has already fetched over plain HTTPS.
+		$desc .= "\n" . 'Up to ' . (int) $r['seats'] . ' people. The CALL is end-to-end encrypted — nothing is '
+			. 'recorded and nobody, including ArtaQuest, can listen in. This entry’s title and agenda are not encrypted.';
 
 		$out = [
 			'BEGIN:VEVENT',
