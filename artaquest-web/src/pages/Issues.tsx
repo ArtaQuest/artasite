@@ -529,7 +529,15 @@ export default function Issues() {
           ) : (
             <Card className="flex flex-col items-start gap-3 p-6">
               <h2 className="text-[18px] font-bold">Sign in to contribute</h2>
-              <p className="text-[14px] leading-relaxed text-ink-2">Anyone can browse every contribution. Sign in to open one of your own — an account links it to you and lets ArtaBot follow up. Or skip the form entirely: tell ArtaBot (bottom-right) and it will file the issue for you, signed in or not.</p>
+              {/* The sentence that used to end this paragraph — "tell ArtaBot (bottom-right) and it
+                  will file the issue for you, signed in or not" — was false for the only people who
+                  ever read it. ArtaBot is mounted as `{isLoggedIn() && <ArtaBot />}`, so there is no
+                  launcher bottom-right for a signed-out reader, and POST artabot is auth 'user' and
+                  refuses anyway. The anonymous path it described was real once (Assistant::ask_anon)
+                  and still compiles, but nothing has called it since ArtaBot became a reason to sign
+                  up rather than a public service — the code was disconnected and the promise was
+                  left standing. Do not restore the sentence without restoring a caller. */}
+              <p className="text-[14px] leading-relaxed text-ink-2">Anyone can browse every contribution. Sign in to open one of your own — an account links it to you, lets ArtaBot follow up, and is how you hear back.</p>
               <Button href="/login/?redirect_to=/issues/" size="md">Sign in</Button>
             </Card>
           )}

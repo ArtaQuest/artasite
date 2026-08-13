@@ -173,6 +173,11 @@ const NAV: { label: string; href: string; icon: IconKey; divider?: boolean; exte
   { label: "Reserve", href: "/reserve/", icon: "coins", external: true },
   { label: "Wallet", href: "/wallet/", icon: "wallet", external: true },
   { label: "Data", href: "/data/", icon: "database", external: true },
+  // The Foundation's published books had a route, a page title and a working page, and no link
+  // anywhere in the product — the only mention was the FAQ naming "/finances" as plain text a
+  // reader had to retype. It sits with Reserve and Data because those three are the same
+  // promise: everything we hold, everything we owe, everything we know, in public.
+  { label: "Finances", href: "/finances/", icon: "coins", external: true },
   { label: "Careers", href: "/careers/", icon: "briefcase", external: true, divider: true },
   { label: "Offline", href: "/offline/", icon: "download", external: true },
   { label: "About", href: "/about/", icon: "info", external: true },

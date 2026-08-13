@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { participationCert, verifyParticipation, type PartCert } from "../lib/api";
-import { isLoggedIn } from "../lib/auth";
 import { Button, StatusNote } from "../components/ui";
 import { ParticipationDoc } from "../components/participation";
 
@@ -14,6 +13,46 @@ function useLandscapePrint() {
     document.head.appendChild(el);
     return () => { el.remove(); };
   }, []);
+}
+
+/**
+ * Paste the verification address; we pull the three values out of it and go.
+ *
+ * Deliberately accepts the WHOLE address rather than asking for three fields — what a person has is
+ * a line of text they copied or typed off a document, not three labelled values, and asking them to
+ * take it apart is asking them to do the parsing. A bare code alone cannot work: the check is an
+ * HMAC over (challenge, member, code), so it needs all three, which is exactly why the certificate
+ * now shows the full address instead of its first half.
+ */
+function VerifyPaste() {
+  const [raw, setRaw] = useState("");
+  const [bad, setBad] = useState(false);
+  function go(e: React.FormEvent) {
+    e.preventDefault();
+    // Tolerant on purpose: a full URL, a path, or just the query — anything that carries the three
+    // values. Somebody retyping this from paper will not reproduce the scheme and host exactly.
+    const s = raw.trim();
+    const qs = s.includes("?") ? s.slice(s.indexOf("?") + 1) : s;
+    const q = new URLSearchParams(qs);
+    const p = Number(q.get("p") || 0), u = Number(q.get("u") || 0), k = (q.get("k") || "").trim();
+    if (!p || !u || !k) { setBad(true); return; }
+    window.location.href = `/verify/?p=${p}&u=${u}&k=${encodeURIComponent(k)}`;
+  }
+  return (
+    <form onSubmit={go} className="mt-5 flex flex-col gap-2 text-left">
+      <label htmlFor="aq-cert-paste" className="text-[13px] font-semibold text-ink">Verification address</label>
+      <input id="aq-cert-paste" value={raw} onChange={(e) => { setRaw(e.target.value); setBad(false); }}
+        placeholder="artaquest.com/verify/?p=…&u=…&k=…" spellCheck={false} autoCapitalize="off"
+        className="h-11 w-full rounded-field border border-line bg-space-2 px-4 text-[15px] text-ink outline-none transition-colors focus:border-yin-light" />
+      {bad && (
+        <p className="text-[12.5px] leading-relaxed text-ink-2">
+          That address is missing part of the code. Copy the whole line from the certificate — it ends
+          with three values after the question mark.
+        </p>
+      )}
+      <Button type="submit" className="h-11 self-start px-6">Check it</Button>
+    </form>
+  );
 }
 
 /**
@@ -48,15 +87,20 @@ export default function Participation() {
     return (
       <div className="mx-auto max-w-lg py-20 text-center">
         <h1 className="text-[24px] font-bold tracking-tight">
-          {isVerify ? "We can’t confirm this certificate" : "Certificate unavailable"}
+          {isVerify ? "We can’t confirm this certificate" : "Check a certificate"}
         </h1>
         <p className="mt-2 text-[15px] leading-relaxed text-ink-2">
           {isVerify
             ? "The code on this certificate doesn’t match anything we issued. Check you’ve copied it exactly — every character matters."
-            : "Sign in to see a certificate you hold, or check the link. You hold one for every challenge you have entered."}
+            : "Paste the full verification address from the certificate and we’ll check it against what we issued. You don’t need an account — that is the point of this page."}
         </p>
+        {/* THE FORM THIS PAGE ALWAYS NEEDED. `participation/verify` is a 'public' route whose entire
+            reason to exist is a stranger holding a certificate somebody else earned, checking it
+            against an HMAC they cannot forge. Bare /verify answered that person with "Sign in to see
+            a certificate you hold" — the one thing they neither have nor want. Signed-in members
+            reach their own certificate from the challenge, not from here. */}
+        {!isVerify && <VerifyPaste />}
         <div className="mt-6 flex justify-center gap-3">
-          {!isLoggedIn() && !isVerify && <Button href="/login/" size="lg">Sign in</Button>}
           <Button variant="outline" href="/challenges/" size="lg">See the challenges</Button>
         </div>
       </div>
@@ -76,10 +120,15 @@ export default function Participation() {
         {cert.work_url && <Button variant="outline" href={cert.work_url} className="h-10 px-5 text-[14px]">See the work</Button>}
       </div>
       {!isVerify && cert.verify_url && (
-        <p className="aq-no-print text-center text-[12px] text-ink-3">
+        /* THE WHOLE URL, including its query. The link had always carried ?p=&u=&k=, but the visible
+           text was `verify_url.split("?")[0]` — so what a reader could copy, read down a phone or
+           type from a printout was "artaquest.com/verify", which is precisely the part that does not
+           work: bare /verify has no certificate to check and used to answer a stranger by asking them
+           to sign in. The address is long; being able to act on what you can see matters more. */
+        <p className="aq-no-print break-all text-center text-[12px] text-ink-3">
           Anyone can confirm this is genuine at{" "}
           <a href={cert.verify_url} className="text-yin-light underline-offset-2 hover:underline" data-ay-skip="1">
-            artaquest.com{cert.verify_url.split("?")[0]}
+            artaquest.com{cert.verify_url}
           </a>
         </p>
       )}
