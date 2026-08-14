@@ -1668,8 +1668,16 @@ final class Notebook {
 		] );
 		if ( ! $rid ) { return Rest::err( 'server_error', 'Could not queue', 500 ); }
 		if ( $cost > 0 ) {
-			// Charged to the OWNER (an admin poking a member draft pays the member nothing).
-			Economy::credit_coins( $uid, -$cost, 'nbdev', 'nbdev:' . $r['id'] . ':' . $rid );
+			// Charged to the OWNER (an admin poking a member draft pays the member nothing). Under the
+			// wallet lock: the affordability check above is otherwise just a read, and concurrent runs
+			// on different notebooks all passed it against one balance. A run that cannot be paid for
+			// is dropped rather than left queued for free.
+			$paid = Economy::spend( $uid, $cost, 'nbdev', 'nbdev:' . $r['id'] . ':' . $rid );
+			if ( $paid !== '' ) {
+				global $wpdb;
+				$wpdb->delete( Data::t( 'aq_nb_runs' ), [ 'id' => (int) $rid ] );
+				return Economy::spend_error( $paid, $cost, 'This run' );
+			}
 		}
 		return [ 'ok' => true, 'run_id' => (int) $rid, 'cost' => $cost, 'queued' => true ];
 	}

@@ -196,8 +196,16 @@ final class Narrate {
 		if ( ! $segs ) { return Rest::err( 'empty', 'There is nothing to narrate in this work' ); }
 		$words = self::count_words( implode( ' ', $segs ) );
 		$cost  = self::cost_for_words( $words );
+		// Friendly pre-check keeps the exact figure; the authoritative one is inside Economy::spend.
 		$bal   = Economy::coin_balance( $uid );
 		if ( $bal < $cost ) { return Rest::err( 'insufficient', 'Narrating this ' . number_format( $words ) . '-word work costs ₳' . $cost . ' — you have ₳' . $bal . '.', 402 ); }
+		// Charge BEFORE inserting the narration row. The old order inserted first and debited after,
+		// so a wallet that could not pay still got the narration queued, and two concurrent
+		// commissions both passed one balance. The ref is the natural key of what is being
+		// commissioned (target + voice), which exists before the row id does.
+		$sref = 'narration:' . $type . ':' . $tid . ':' . $voice;
+		$paid = Economy::spend( $uid, $cost, 'narrate', $sref );
+		if ( $paid !== '' ) { return Economy::spend_error( $paid, $cost, 'Narrating this work' ); }
 		$now = Data::now();
 		$id  = Data::insert( 'aq_narrations', [
 			'author_id'   => $uid,
@@ -210,8 +218,10 @@ final class Narrate {
 			'created'     => $now,
 			'updated'     => $now,
 		] );
-		if ( ! $id ) { return Rest::err( 'failed', 'Could not start the narration', 500 ); }
-		Economy::credit_coins( $uid, -$cost, 'narrate', 'narration:' . $id ); // charge by length, once, on publish
+		if ( ! $id ) {
+			Economy::refund_spend( $uid, $cost, 'narrate-void', $sref ); // nothing queued → nothing owed
+			return Rest::err( 'failed', 'Could not start the narration', 500 );
+		}
 		return self::detail_row( self::row( $id ) );
 	}
 

@@ -153,6 +153,86 @@ final class Economy {
 		$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name = %s", 'aq_lock_' . $name ) );
 	}
 
+	/** The one per-member lock name every coin debit must serialise on. */
+	public static function wallet_lock( $uid ) { return 'wallet_u' . (int) $uid; }
+
+	/**
+	 * TAKE COINS OFF A MEMBER. The only correct way to do it.
+	 *
+	 * A debit is two statements — read the balance, then append a negative row — and between them any
+	 * number of other requests can read the same balance. Every spend site in this codebase wrote
+	 * those two statements itself, and only four of them (sell, Shop::order, Learn::ensure_enrolled,
+	 * the challenge entry) took the per-member lock that makes the pair atomic. The comment above
+	 * Economy::sell asserted that ONE lock name was "shared by every user-initiated debit path"; it
+	 * was shared by six of about fifteen. Media::buy, the five studio publish paths, the nbdev run and
+	 * both challenge writers checked and debited with nothing serialising them, and aq_coin_ledger's
+	 * (reason, ref) index is deliberately NON-unique, so the database did not stop it either. Five
+	 * concurrent requests could each see the same ₳1000 and each spend it.
+	 *
+	 * The affordability check therefore belongs INSIDE the lock, with the debit, in one primitive that
+	 * a new studio cannot forget to use. Callers get a code back and map it to their own copy:
+	 *
+	 *   ''            — charged; $coins are gone and the ledger row is written
+	 *   'busy'        — another debit for this member is in flight (retryable; answer 429)
+	 *   'insufficient'— the wallet does not hold $coins (answer 402)
+	 *   'failed'      — the ledger write itself did not land; nothing was charged (answer 500)
+	 *
+	 * ORDER OF OPERATIONS AT THE CALL SITE. Charge first, then grant the goods, and if granting fails
+	 * append a compensating credit with the same ref. The reverse order — grant, then charge — hands
+	 * over the goods even when the charge is refused, which is how coins get created from nothing.
+	 */
+	public static function spend( $uid, $coins, $reason, $ref ) {
+		$uid   = (int) $uid;
+		$coins = (int) $coins;
+		if ( $uid < 1 || $coins < 1 ) { return 'failed'; }
+		$lock = self::wallet_lock( $uid );
+		if ( ! self::acquire_lock( $lock, 30 ) ) { return 'busy'; }
+		try {
+			if ( self::coin_balance( $uid ) < $coins ) { return 'insufficient'; }
+			$id = Data::insert( 'aq_coin_ledger', [
+				'user_id' => $uid, 'delta' => -$coins, 'reason' => (string) $reason,
+				'ref' => (string) $ref, 'created' => Data::now(),
+			] );
+			// Mirror credit_coins exactly: the counter moves only when the row actually landed, because
+			// the row IS the money. A bumped counter behind a failed insert desyncs coins_issued from
+			// Σ ledger permanently (observed on prod 2026-07-10).
+			if ( ! $id ) {
+				error_log( "AQ spend: ledger INSERT FAILED u{$uid} -{$coins} '{$reason}' ref={$ref} — nothing charged" );
+				return 'failed';
+			}
+			self::counter_add( 'coins_issued', -$coins );
+			return '';
+		} finally {
+			self::release_lock( $lock );
+		}
+	}
+
+	/**
+	 * Give back coins a spend() took when the thing it paid for could not be delivered. Append-only:
+	 * this is a NEW positive row carrying the same ref, never an edit of the debit. Credits need no
+	 * lock — only the check-then-debit pair races.
+	 */
+	public static function refund_spend( $uid, $coins, $reason, $ref ) {
+		if ( (int) $coins < 1 ) { return; }
+		self::credit_coins( (int) $uid, (int) $coins, (string) $reason, (string) $ref );
+	}
+
+	/** Turn a non-empty spend() code into the REST refusal for it, so every debit site answers the
+	 *  same status for the same cause. $what names the purchase, e.g. 'Publishing this track'. */
+	public static function spend_error( $code, $coins, $what = 'This' ) {
+		if ( 'busy' === $code ) {
+			return Rest::err( 'busy', 'Another payment on your wallet is in progress. Please try again in a moment.', 429 );
+		}
+		if ( 'insufficient' === $code ) {
+			// Deliberately no balance figure here. The payer is not always the caller (an operator can
+			// publish a member's draft, and the member is charged), so Rest::uid() would quote the
+			// wrong wallet. Each site's own pre-check already carries the exact number in the ordinary
+			// case; reaching this branch means the balance moved underneath us anyway.
+			return Rest::err( 'insufficient', $what . ' costs ₳' . (int) $coins . ', which is more than the wallet holds.', 402 );
+		}
+		return Rest::err( 'charge_failed', 'The charge could not be recorded, so nothing was taken. Please try again.', 500 );
+	}
+
 	// ── Materialized projections of the ledgers (read accelerators; see Schema aq_standing/aq_counters) ──
 
 	/** Atomically add to a (track, user) standing row, creating it on first touch. The increment is a
@@ -1221,9 +1301,12 @@ final class Economy {
 		// reads the balance THEN moves money, so two in-flight sells must be serialised. ATOMIC claim
 		// (acquire_lock) — the old transient get→set had a read/write race two simultaneous sells with
 		// DIFFERENT amounts could both slip through (same-amount replays were already caught by the
-		// Stripe idempotency key below; different-amount pairs were not). ONE lock name — wallet_u<id> —
-		// is shared by every user-initiated debit path (sell / shop order / enrol), so a cash-out can
-		// never race a purchase past both balance checks either.
+		// Stripe idempotency key below; different-amount pairs were not). ONE lock name — wallet_u<id>.
+		// This comment used to assert that name was "shared by every user-initiated debit path"; it was
+		// shared by six of about fifteen, and the other nine (Media::buy, the five studio publish
+		// paths, the nbdev run, both challenge writers, both competition writers) checked and debited
+		// with nothing serialising them. They now all go through Economy::spend(), which takes this
+		// same lock, so a cash-out genuinely cannot race a purchase past both balance checks.
 		$lock = 'wallet_u' . $uid;
 		if ( ! self::acquire_lock( $lock, 30 ) ) { return Rest::err( 'busy', 'Another payment is in progress. Please wait a moment.', 429 ); }
 		try {

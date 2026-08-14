@@ -173,11 +173,21 @@ final class Illustration {
 		$cost = self::cost(); $ref = 'illust:' . $id;
 		if ( $row['status'] === 'draft' ) {
 			if ( $err = Challenges::quota_gate( $uid ) ) { return $err; } // shelf quota: prune before publishing more
+			// Friendly pre-check only — it keeps the exact figure in the refusal copy. The
+			// AUTHORITATIVE check is inside Economy::spend below, which holds this member's
+			// wallet lock across the check and the debit together.
 			$bal = Economy::coin_balance( $uid );
 			if ( $bal < $cost ) { return Rest::err( 'insufficient', 'Publishing an illustration costs ₳' . $cost . ' — you have ₳' . $bal . '.', 402 ); }
+			// Charge BEFORE claiming the row. Claim-then-charge publishes the work even when the
+			// charge is refused, which mints the goods for free.
+			$paid = Economy::spend( $uid, $cost, 'publish', $ref );
+			if ( $paid !== '' ) { return Economy::spend_error( $paid, $cost, 'Publishing an illustration' ); }
 			$claimed = (bool) Data::update( 'aq_illustrations', [ 'status' => 'published', 'art_state' => 'live', 'updated' => Data::now() ], [ 'id' => $id, 'status' => 'draft' ] );
+			if ( ! $claimed ) {
+				// Another request published it first — give the money straight back, append-only.
+				Economy::refund_spend( $uid, $cost, 'publish-void', $ref );
+			}
 			if ( $claimed ) {
-				Economy::credit_coins( $uid, -$cost, 'publish', $ref );
 				Economy::content_points( $uid, $cost, $ref );
 				Challenges::enter( 'illustration', $id, $uid, $cost ); // fee → the season's Illustration Challenge pool
 			}
