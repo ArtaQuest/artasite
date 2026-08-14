@@ -721,7 +721,17 @@ final class Social {
 			// picture is served at its own size, so nothing else pays for it.
 			'avatar'     => Verify::avatar_url( $id, 320 ),
 			'palm'       => Verify::palm_url( $id ),         // opt-in palm "back photo" → the avatar flips to it (ticket #94)
-			'email'      => $u->user_email,                 // public by design (radical transparency)
+			// EMAIL IS NOT A RESEARCH ARTEFACT — it is this platform's account identifier. Sign-in is
+			// an emailed one-time code (Auth::harden disables password login entirely), so the address
+			// IS half of every member's credential, and it is collected mandatorily. It was emitted
+			// here to every anonymous caller under the transparency principle, which the principle
+			// never actually asked for: nothing about a reproducibility claim, a ledger entry or a
+			// moderation decision needs a member's inbox. The SPA had ZERO consumers of this field
+			// (checked across the whole of artaquest-web) — it was pure exposure.
+			// Own profile and operators keep it; strangers get ''. Safe to vary by viewer on a GET:
+			// Rest.php's response wrapper sends `private, no-store` for every logged-in read and only
+			// caches the ANONYMOUS one, so an own-view can never be filled into a shared edge cache.
+			'email'      => ( $viewer === $id || current_user_can( 'manage_options' ) ) ? $u->user_email : '',
 			'points'     => $points,
 			'coins'      => Economy::coin_balance( $id ),   // wallet balance is public, same as /data/
 			'tier'       => Economy::tier( $points ),
@@ -744,7 +754,13 @@ final class Social {
 			'joined'     => Verify::joined_label( $u->user_registered ), // clamped to the platform launch (ticket #103)
 			'verified'   => Verify::is_verified( $id ),         // the blue check
 			'full_name'  => Verify::full_name( $id ),           // public (radical transparency)
-			'birthday'   => Verify::birthday( $id ),            // public on every profile
+			// The exact DATE goes only to the member themselves (and operators); everyone else gets the
+			// AGE. See Verify::age() for the whole argument — briefly: full name + city + exact date of
+			// birth is the identity-verification triplet, the date is now mandatory rather than
+			// volunteered, and age is strictly less information while being the datum a dating profile
+			// is actually read for. Revert by restoring Verify::birthday( $id ) here.
+			'birthday'   => ( $viewer === $id || current_user_can( 'manage_options' ) ) ? Verify::birthday( $id ) : '',
+			'age'        => Verify::age( $id ),                 // 0 = no valid date on record
 			'season'     => Seasons::of_user( $id ),            // the ONE season this member follows (0 = none on record)
 			'typologies' => array_values( $tags ),
 			'endorsements' => Extra::endorsements_for( $id ),   // public peer-endorsement counts per tag

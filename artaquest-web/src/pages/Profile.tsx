@@ -502,7 +502,7 @@ export default function Profile() {
           derived from an IP address or a header. Rows appear only when there is something to say —
           a member who has filled none of this in gets no card at all, rather than a grid of blanks
           advertising what they declined to answer. */}
-      {p && (isOwn || relationshipLabel(p.relationship) || p.location?.trim() || (p.languages?.length ?? 0) > 0 || fmtBirthday(p.birthday)) ? (
+      {p && (isOwn || relationshipLabel(p.relationship) || p.location?.trim() || (p.languages?.length ?? 0) > 0 || (p.age ?? 0) > 0 || fmtBirthday(p.birthday)) ? (
         <section className="grid gap-x-8 gap-y-5 rounded-card border border-line bg-space-2 px-5 py-5 sm:grid-cols-2 lg:grid-cols-4" aria-label="About">
           {relationshipLabel(p.relationship) ? (
             <Fact label="Relationship" icon={<svg {...FACT_SVG}><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9z" /></svg>}>
@@ -529,12 +529,25 @@ export default function Profile() {
               </span>
             </Fact>
           ) : null}
-          {/* The DATE only — no derived age (operator 2026-07-27). Anyone who wants the number can
-              do the subtraction; printing it turns a fact the member stated into a label the site
-              puts on them, and it re-renders differently every birthday. */}
-          {fmtBirthday(p.birthday) ? (
+          {/* AGE to everyone; the exact DATE only to the member themselves.
+              Operator 2026-07-27 chose the date and no derived age, because "printing it turns a fact
+              the member stated into a label the site puts on them". That was a citation profile. This
+              is now a dating profile (operator 2026-08-11), where age is the datum a reader is here
+              for and an exact date of birth beside a real legal name and a city is the identity-
+              verification triplet a bank asks for — published, indexable, and no longer volunteered
+              now that a date of birth is mandatory at sign-up. Age is strictly less information than
+              the date, so this narrows the harvest without hiding the fact.
+              `p.birthday` is '' for every viewer but the member and operators (Social::profile), so
+              the second branch is own-only by construction rather than by an isOwn check here. */}
+          {p.birthday && fmtBirthday(p.birthday) ? (
             <Fact label="Born" icon={<svg {...FACT_SVG}><path d="M4 20h16v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2Zm0-3h16" /><path d="M12 12V8m0-4v1.5M8 12V9m8 3V9" /></svg>}>
               {fmtBirthday(p.birthday)}
+              {/* Only you see this row, so say why it is not what a visitor sees. */}
+              <span className="mt-0.5 block text-[11px] text-ink-3">Visitors see your age, not the date</span>
+            </Fact>
+          ) : (p.age ?? 0) > 0 ? (
+            <Fact label="Age" icon={<svg {...FACT_SVG}><path d="M4 20h16v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2Zm0-3h16" /><path d="M12 12V8m0-4v1.5M8 12V9m8 3V9" /></svg>}>
+              {p.age}
             </Fact>
           ) : null}
           {/* YOUR OWN profile, and something is unsaid. A card holding one lonely row reads as broken

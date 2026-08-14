@@ -469,8 +469,38 @@ final class Verify {
 		if ( ! checkdate( (int) $m[2], (int) $m[3], (int) $m[1] ) ) { return false; }
 		$ts = strtotime( $s );
 		if ( $ts === false || $ts > time() ) { return false; }
+		$age = self::age_of( $s );
+		return $age >= self::MIN_AGE && $age <= 120;
+	}
+
+	/** Years elapsed since a YYYY-MM-DD date, or 0 if it is not one. The ONE place this arithmetic
+	 *  lives: valid_birthday() bounds it, and age() publishes it. */
+	private static function age_of( $s ) {
+		if ( ! preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', (string) $s, $m ) ) { return 0; }
 		$age = (int) gmdate( 'Y', time() ) - (int) $m[1];
 		if ( gmdate( 'md', time() ) < $m[2] . $m[3] ) { $age--; }
-		return $age >= self::MIN_AGE && $age <= 120;
+		return $age;
+	}
+
+	/**
+	 * The member's AGE IN YEARS — what the public profile publishes instead of the exact date of
+	 * birth, and 0 when no valid date is on record.
+	 *
+	 * Operator 2026-07-27 chose the DATE and explicitly no derived age, reasoning that "printing it
+	 * turns a fact the member stated into a label the site puts on them". That was decided for a
+	 * CITATION profile. On 2026-08-11 the operator made /u/<slug> a DATING surface, and that inverts
+	 * the calculus in both directions at once: age is the datum a viewer actually wants, while an
+	 * exact date of birth beside a real legal name and a city is the standard identity-verification
+	 * triplet — the thing a bank, a telco or a government office asks for. A date of birth is also
+	 * now MANDATORY at sign-up, so it is no longer a fact a member volunteered and can withhold.
+	 *
+	 * Age is strictly LESS information than the date (a date yields the age; an age never yields the
+	 * date), so this narrows what a stranger can harvest without hiding the fact itself. The exact
+	 * date still renders on the member's OWN profile, and still backs the blue check against a photo
+	 * ID. Reverting is one line in Social::profile().
+	 */
+	public static function age( $uid ) {
+		$b = self::birthday( $uid );
+		return self::valid_birthday( $b ) ? self::age_of( $b ) : 0;
 	}
 }

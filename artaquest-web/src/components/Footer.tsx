@@ -115,7 +115,12 @@ export function Footer() {
               <ul role="list" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
                 {LEGAL.map((l) => (
                   <li key={l.href}>
-                    <a href={localePath(l.href)} className="inline-block py-1 text-[13px] text-ink-2 transition-colors hover:text-yang">{l.label}</a>
+                    {/* py-2.5 = a 40px hit area (13px text ≈ 20px line + 2×10px). Measured at 28px
+                        before, which is under the touch floor for three stacked links a thumb has to
+                        pick between — and these are the legal pages, the ones somebody taps
+                        deliberately. `-my-1.5` gives the extra height back so the footer rhythm is
+                        unchanged. */}
+                    <a href={localePath(l.href)} className="-my-1.5 inline-block py-2.5 text-[13px] text-ink-2 transition-colors hover:text-yang">{l.label}</a>
                   </li>
                 ))}
               </ul>

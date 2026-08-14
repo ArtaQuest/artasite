@@ -945,7 +945,12 @@ export type Profile = {
   lastSeen?: number;
   country?: string; // verified nationality (ISO alpha-2) → avatar flag; '' until verified
   // Public identity facts (radical transparency — the same values the /data/ explorer serves, and
-  // required of every member at signup). `birthday` is the EXACT date, `YYYY-MM-DD`; '' if unset.
+  // required of every member at signup).
+  //
+  // `age` is the PUBLIC one — whole years, from the server. `birthday` is the EXACT date and now
+  // arrives ONLY on your own profile (and for operators); it is '' for every other viewer, so a
+  // component that renders it is automatically own-only. See Verify::age() for why.
+  age?: number;
   birthday?: string;
   fullName?: string;
   verified?: boolean; // the blue check (Verify::is_verified)
@@ -1004,6 +1009,9 @@ export type ProfileCourse = { id: number; slug: string; title: string; image: st
 export type ProfileTopic = { key: string; name: string; category: string; status: string; image: string };
 type ProfileR = {
   id: number; name: string; slug: string; avatar: string; palm?: string; country?: string; nationality?: string; email?: string; points: number; tier: string;
+  /** Whole years, computed server-side (Verify::age). The public profile publishes THIS; the
+   *  exact `birthday` below now arrives only on your OWN profile. 0 = no valid date on record. */
+  age?: number;
   birthday?: string; full_name?: string; season?: number; verified?: boolean;
   links?: Partial<Record<ProfileLinkKey, string>>;
   last_seen?: number;
@@ -1051,15 +1059,16 @@ export async function endorseTag(targetId: number, tag: string, on: boolean): Pr
   return post(`${AQ}/typology/endorse`, { target_id: targetId, tag, on: on ? 1 : 0 });
 }
 export async function getProfile(slug: string): Promise<Profile | null> {
-  // The public /profile endpoint carries the full public picture — identity, email, standing,
-  // wallet balance, typology tags, activity stats, recent threads, follow state. ArtaQuest is
-  // radically transparent (the whole DB is public via /data/), so the wallet is public too.
+  // The public /profile endpoint carries the full public picture — identity, standing, wallet
+  // balance, typology tags, activity stats, recent threads, follow state. ArtaQuest is radically
+  // transparent (the whole DB is public via /data/), so the wallet is public too. Two fields are
+  // NOT: `email` and the exact `birthday` come back only on your own profile — see Verify::age().
   try {
     const pr = await get<ProfileR>(`${AQ}/profile?slug=${encodeURIComponent(slug)}`);
     return {
       id: pr.id, name: pr.name, slug: pr.slug, avatar: pr.avatar, palm: pr.palm || "", email: pr.email || "", bio: pr.bio || "", links: pr.links || undefined, lastSeen: pr.last_seen || 0,
       // Public identity facts the endpoint has always emitted but the SPA used to drop on the floor.
-      birthday: pr.birthday || "", fullName: pr.full_name || "", season: pr.season ?? 0, verified: !!pr.verified,
+      age: pr.age ?? 0, birthday: pr.birthday || "", fullName: pr.full_name || "", season: pr.season ?? 0, verified: !!pr.verified,
       relationship: pr.relationship || "", location: pr.location || "", languages: pr.languages ?? [],
       coins: pr.coins ?? 0, points: pr.points, completed: pr.completed ?? 0,
       breakdown: { ...ZERO_TRACKS, ...pr.breakdown, total: pr.points },

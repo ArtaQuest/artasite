@@ -879,7 +879,20 @@ final class Extra {
 		'aq_meets'      => [ 'title' => 'meeting title', 'agenda' => 'meeting agenda' ],
 		// A public reset key is inert while password login is disabled, but it would become a takeover
 		// vector the moment the AQ_ALLOW_PASSWORD_LOGIN escape hatch were set — so it stays masked.
-		'users'         => [ 'user_activation_key' => 'password-reset key' ],
+		//
+		// user_email: THE ACCOUNT IDENTIFIER, not a research artefact. Sign-in is an emailed one-time
+		// code, so the address is half of every member's credential — and `?table=wp_users` handed the
+		// complete set to any anonymous caller in ONE request, which is the difference between a
+		// transparent record and a mailing list. Nothing the explorer exists to prove — a
+		// reproducibility claim, a ledger entry, a moderation decision — is checked against a member's
+		// inbox. This is the same line PRIVATE_TABLES already draws for aq_order_ship ("where a member
+		// physically lives is promised private"): the database is public; a private person's contact
+		// details are not what it is a record OF. Masking cannot un-publish what has already been
+		// scraped and an address cannot be rotated — this stops the next harvest, not the last one.
+		'users'         => [
+			'user_activation_key' => 'password-reset key',
+			'user_email'          => 'member email address — the sign-in identifier',
+		],
 		// The verifier for a LIVE publication secret. The raw secret is 20 random bytes and
 		// unrecoverable from sha256, so publication was never forgeable from this cell; masking keeps a
 		// standing credential's verifier out of the public record on principle, and stops the row
@@ -908,6 +921,24 @@ final class Extra {
 	 *  fully public while `jetpack_private_options`, `session_tokens`, `recovery_keys`, `auth_key` and
 	 *  `nonce_salt` do not. */
 	const REDACT_NAME_RE = '/(^|_)(tokens?|secrets?|keys?|salt|passwords?|private|credentials?|auth)(_|$)/i';
+
+	/** Meta keys holding a private person's PRECISE IDENTITY — masked by name, in every key/value
+	 *  store, because no credential-shaped rule can see them: `aq_birthday` looks exactly like the
+	 *  ordinary public profile facts sitting beside it.
+	 *
+	 *  Only the EXACT DATE is withheld, and the fact is not hidden — the public profile publishes the
+	 *  member's AGE (Verify::age), so a reader still learns how old somebody is. What a stranger loses
+	 *  is the precision that makes a birth date an identity-VERIFICATION datum rather than a fact
+	 *  about a person: full legal name + city + exact date of birth is what a bank or a telco asks
+	 *  for, all three are published together on a profile the operator has designated a dating
+	 *  surface, and the date is now mandatory at sign-up rather than volunteered.
+	 *
+	 *  Deliberately NOT here, and each for a reason: `aq_full_name` (the operator wants a profile to
+	 *  rank for a member's real name), `aq_location`, `aq_relationship`, `aq_languages` (self-declared,
+	 *  freely blankable, and the entire point of the dating surface), `aq_last_seen` (already coarsened
+	 *  to UTC midnight of the last active day). Add to this list only for data a member cannot decline
+	 *  to give AND cannot blank. */
+	const REDACT_IDENTITY = [ 'aq_birthday' ];
 
 	/** Credential-SHAPED names that hold nothing secret, so default-deny must not withhold them.
 	 *  `disallowed_keys` and `moderation_keys` are WordPress's comment word-lists — publishing what is
@@ -963,6 +994,8 @@ final class Extra {
 		// known-secrets that failed against Jetpack: anything not named here is still masked by default,
 		// so a new credential can never be published by omission. Add to it only with evidence.
 		if ( in_array( $key, self::REDACT_PUBLIC, true ) ) { return ''; }
+		// Private identity — masked by name, since nothing about its SHAPE says "withhold me".
+		if ( in_array( $key, self::REDACT_IDENTITY, true ) ) { return 'exact date of birth — the age is public on the profile'; }
 		if ( preg_match( '/^_(site_)?transient(_timeout)?_aq_code(try)?_/', $key ) ) { return 'sign-in code'; }
 		if ( 'session_tokens' === $key ) { return 'active sign-in sessions'; }
 		if ( preg_match( self::REDACT_NAME_RE, $key ) ) { return 'credential-shaped key — masked by default'; }
