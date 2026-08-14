@@ -2252,7 +2252,7 @@ export default function Messages() {
               document, which is what a screen reader and a phone should meet first — on a phone this
               is one pane at a time anyway, and the rail is a rail only from `md` up.
               Hidden on phones while a thread is open (single-pane). */}
-          <aside className={`w-full flex-col gap-3 md:order-2 md:flex md:w-[300px] md:shrink-0 md:min-h-0 md:overflow-y-auto lg:w-[330px] ${peer ? "hidden" : "flex"}`} aria-label="Conversations">
+          <aside className={`w-full flex-col gap-3 md:order-2 md:flex md:w-[300px] md:shrink-0 md:min-h-0 md:overflow-y-auto lg:w-[330px] ${peer || roomId > 0 ? "hidden" : "flex"}`} aria-label="Conversations">
             {/* THREE tabs, not two lists and a form. Chats · Requests · People covers everything
                 the sidebar is for, and the two rarely-wanted boxes (archived, blocked) hang off the
                 end where they don't compete for attention with the inbox. */}

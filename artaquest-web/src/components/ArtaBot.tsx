@@ -552,18 +552,20 @@ export function BotChat() {
       {sessions && sessions.length > 0 && (
         <div data-ay-skip="1" className="flex items-center gap-1 overflow-x-auto border-b border-line px-2 py-1.5">
           {sessions.map((x) => (
-            <button key={x.id} type="button" onClick={() => setSid(x.id)}
-              title={`${tiers?.[x.tier]?.label ?? x.tier} · ${Number(x.coins).toFixed(3)} ₳ so far`}
-              className={"group flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] transition-colors "
+            <span key={x.id}
+              className={"group flex shrink-0 items-center gap-1.5 rounded-full border pe-1 ps-2.5 text-[12px] transition-colors "
                 + (x.id === sid ? "border-yang/50 bg-yang/10 text-ink" : "border-line text-ink-3 hover:text-ink")}>
-              <span className="max-w-[9rem] truncate">{x.title || `Chat ${x.id}`}</span>
-              <span className="text-[10px] uppercase tracking-wide opacity-70">{tiers?.[x.tier]?.label ?? x.tier}</span>
-              <span className="tabular-nums opacity-70">{Number(x.coins).toFixed(2)} ₳</span>
-              <span role="button" tabIndex={0} aria-label="Close this conversation"
-                onClick={(e) => { e.stopPropagation(); void closeSession(x.id); }}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); void closeSession(x.id); } }}
-                className="opacity-0 transition-opacity hover:text-rose-300 group-hover:opacity-60">×</span>
-            </button>
+              <button type="button" onClick={() => setSid(x.id)}
+                title={`${tiers?.[x.tier]?.label ?? x.tier} · ${Number(x.coins).toFixed(3)} ₳ so far`}
+                className="flex min-h-9 items-center gap-1.5 py-1">
+                <span className="max-w-[9rem] truncate">{x.title || `Chat ${x.id}`}</span>
+                <span className="text-[10px] uppercase tracking-wide opacity-70">{tiers?.[x.tier]?.label ?? x.tier}</span>
+                <span className="tabular-nums opacity-70">{Number(x.coins).toFixed(2)} ₳</span>
+              </button>
+              <button type="button" aria-label="Close this conversation"
+                onClick={() => void closeSession(x.id)}
+                className="grid min-h-9 min-w-9 place-items-center rounded-full opacity-0 transition-opacity hover:text-rose-300 focus-visible:opacity-100 group-hover:opacity-60">×</button>
+            </span>
           ))}
           <select aria-label="Start another conversation" value=""
             onChange={(e) => { if (e.target.value) void newSession(e.target.value); }}

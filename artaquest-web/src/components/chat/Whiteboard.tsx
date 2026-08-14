@@ -114,7 +114,7 @@ export function Whiteboard({ strokes, pings, onStroke, onClear, onUndo, onPoint,
     return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
   }
 
-  const btn = "rounded-pill px-2.5 py-0.5 text-[11.5px] font-semibold";
+  const btn = "inline-flex min-h-9 items-center rounded-pill px-3 py-0.5 text-[11.5px] font-semibold";
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-wrap items-center gap-1.5 border-b border-line px-2 py-1.5">
@@ -127,12 +127,12 @@ export function Whiteboard({ strokes, pings, onStroke, onClear, onUndo, onPoint,
         <span className="mx-1 h-4 w-px bg-line" aria-hidden />
         {COLORS.map((c) => (
           <button key={c} type="button" onClick={() => { setColor(c); setTool("pen"); }} aria-label={`Colour ${c}`}
-            className={`h-6 w-6 rounded-full border-2 ${color === c ? "border-ink" : "border-line"}`}
-            style={{ background: c }} />
+            className={`grid h-9 w-9 place-items-center rounded-full ${color === c ? "ring-2 ring-ink" : ""}`}
+            ><span className="h-6 w-6 rounded-full border-2 border-line" style={{ background: c }} /></button>
         ))}
         {[2, 4, 8].map((w) => (
           <button key={w} type="button" onClick={() => { setWidth(w); setTool("pen"); }} aria-label={`Pen ${w}`}
-            className={`grid h-6 w-6 place-items-center rounded-full ${width === w ? "bg-veil/[0.14]" : "hover:bg-veil/[0.07]"}`}>
+            className={`grid h-9 w-9 place-items-center rounded-full ${width === w ? "bg-veil/[0.14]" : "hover:bg-veil/[0.07]"}`}>
             <span className="rounded-full bg-ink-2" style={{ width: w + 2, height: w + 2 }} />
           </button>
         ))}
