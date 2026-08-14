@@ -25,7 +25,8 @@ import { RoomThread } from "../components/chat/RoomThread";
 import { RoomCall } from "../components/chat/RoomCall";
 import { roomsCreate, roomsList, type Room } from "../lib/api";
 import { CallPanel, CallPrivacyNote } from "../components/chat/CallPanel";
-import { Call, callSupported, mediaErrorMessage, newCallSid, type CallState } from "../lib/webrtc";
+import { Call, callSupported, mediaErrorMessage, newCallSid, type CallState, type CallMode, type LinkReport } from "../lib/webrtc";
+import { callModePref, rememberCallMode } from "../components/chat/callmode";
 import { QUICK_REACTIONS } from "../components/chat/emoji";
 import { MessageBody } from "../components/chat/MessageBody";
 import { insideFence } from "../components/chat/fence";
@@ -953,16 +954,27 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   // Keep the poll scheduler's view of "busy" in step with the UI's.
   useEffect(() => { callActive.current = callState !== "idle" || !!offer; }, [callState, offer]);
 
-  /** Wire a fresh Call to this component's state. */
+  /** Wire a fresh Call to this component's state.
+   *
+   *  THE MODE GOES IN AT CONSTRUCTION, and the member's saved choice is what it is. callmode.ts
+   *  states the preference is remembered per DEVICE and names the 1:1 panel as one of the three
+   *  surfaces that share it — but this was the one caller passing nothing, so Call defaulted to
+   *  "auto" and offer() opened the camera. Somebody who chose "Sound only" in a room or a meeting,
+   *  for a reason of their own, had a DM call switch their camera on anyway. A preference that only
+   *  some surfaces honour is worse than none: it teaches people the setting does not work.
+   *
+   *  onLink is passed for the same reason the room passes it: when the engine sheds video to save a
+   *  failing link, the picture vanishes, and LinkNote is the one sentence that says why. */
   function newCall(sid: string) {
     const c = new Call(sid, {
       onState: setCallState,
       onLocal: setLocalStream,
       onRemote: setRemoteStream,
-    });
+      onLink: setLink,
+    }, mode);
     callRef.current = c;
     setMicOn(true);
-    setCamOn(true);
+    setCamOn(mode !== "audio");
     return c;
   }
 
@@ -971,6 +983,9 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   // decided against it and clicked back into the conversation was left with a menu covering their
   // messages. Scoped to the dropdown; the inline panels (search/timer/safety code) are part of the
   // conversation and stay until dismissed on purpose.
+  /* The saved per-device call mode, and the last link report behind LinkNote. */
+  const [mode, setMode] = useState<CallMode>(callModePref);
+  const [link, setLink] = useState<LinkReport | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (panel !== "menu") return;
@@ -984,6 +999,24 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
       document.removeEventListener("keydown", esc, true);
     };
   }, [panel]);
+
+  /* A LIVE CALL CLAIMS ESCAPE, so nothing above it can act on the key.
+     The dock treats an unclaimed Escape as "close me" — its comment calls the gesture a stack and
+     says it must never destroy a half-typed message. It destroyed something larger: closing the dock
+     unmounts DockBody, which unmounts this thread, whose cleanup hangs up. So Escape, pressed out of
+     habit or to dismiss anything at all, ended a live call for both people — with no confirmation,
+     and the peer simply saw it drop. Nothing else claims the key at that moment: CallPanel only
+     registers its handler in full-screen focus mode, the conversation menu only while open, and the
+     composer only while a reply or picker is up AND the textarea has focus.
+
+     Claimed and deliberately inert: leaving a call is the Hang up button, which is always on screen.
+     Capture phase, like the menu handler above, so it lands before the dock's document listener. */
+  useEffect(() => {
+    if (callState === "idle") return;
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); } };
+    document.addEventListener("keydown", esc, true);
+    return () => document.removeEventListener("keydown", esc, true);
+  }, [callState]);
 
   // In-chat search over the DECRYPTED texts (never leaves the device).
   const matches = useMemo(() => {
@@ -1451,6 +1484,8 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
         <CallPanel
           state={callState} local={localStream} remote={remoteStream}
           peerName={peer.name} peerAvatar={peer.avatar}
+          link={link} mode={mode}
+          onMode={(m) => { setMode(m); rememberCallMode(m); callRef.current?.setMode(m); }}
           micOn={micOn} camOn={camOn}
           onMic={() => { const on = callRef.current?.toggleMic(); setMicOn(!!on); }}
           onCam={() => { const on = callRef.current?.toggleCam(); setCamOn(!!on); }}
@@ -1605,7 +1640,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                            every bubble at once, which is what "always show them" produced. */
                         touch
                           ? (openActions === m.id ? "flex" : "hidden")
-                          : `hidden md:flex ${focusedActions === m.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}`}
+                          : `flex ${focusedActions === m.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}`}
                         data-msg-actions
                         onFocus={() => setFocusedActions(m.id)}
                         onBlur={() => setFocusedActions((v) => (v === m.id ? 0 : v))}>
