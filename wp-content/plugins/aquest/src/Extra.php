@@ -3803,8 +3803,10 @@ final class Extra {
 	/**
 	 * POST /stripe/webhook — Stripe's server-to-server confirmation, the RELIABLE fulfilment path (fires
 	 * even if the buyer closes the tab). Verifies the Stripe-Signature against STRIPE_WEBHOOK_SECRET on
-	 * the RAW body, then fulfils a completed+paid checkout via the shared idempotent path. Always 200s a
-	 * verified event (so Stripe stops retrying); 400 on a bad signature; no-op 200 when unconfigured.
+	 * the RAW body, then fulfils a completed+paid checkout via the shared idempotent path. 200s a
+	 * verified event it has FINISHED with (so Stripe stops retrying); 409 when the payment is not yet
+	 * recorded, which asks Stripe to redeliver rather than losing it; 400 on a bad signature; no-op
+	 * 200 when unconfigured.
 	 */
 	public static function stripe_webhook( $req ) {
 		if ( ! Secrets::has( 'STRIPE_WEBHOOK_SECRET' ) ) { return new \WP_REST_Response( [ 'ok' => true, 'skipped' => true ], 200 ); }

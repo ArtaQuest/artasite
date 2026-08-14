@@ -2674,14 +2674,51 @@ final class Notebook {
 				$n    = count( $winners );
 				$each = intdiv( $pool, $n );
 				$odd  = $pool - $each * $n;
-				foreach ( $winners as $i => $w ) {
-					$share = $each + ( $i < $odd ? 1 : 0 );
-					$ref = 'chprize:' . $c['id'] . ':' . $w['author']['id'];
-					if ( $share > 0 && ! Data::col( 'SELECT id FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'chprize' AND ref = %s LIMIT 1", [ $ref ] ) ) {
-						Economy::credit_coins( (int) $w['author']['id'], $share, 'chprize', $ref );
-						Notify::push( (int) $w['author']['id'], 'prize', 'You won ₳' . $share . ' — "' . $c['title'] . '"' . ( count( $winners ) > 1 ? ' (tie, split)' : ' (winner takes all)' ), '', '/challenges/', $ref );
+
+				// A SIGNED-DELTA REBALANCE, not a one-shot payment — the same shape Challenges::settle
+				// and Economy::settle_window already use, and for the same reason.
+				//
+				// The per-winner ref made a REPEAT payment to the SAME member safe. It did not bound
+				// the TOTAL. settle_due runs on every /challenges read, the board is recomputed from
+				// aq_notebooks.hearts, and Notebook::heart is not deadline-gated — so hearts keep
+				// moving after the full moon. The flip to 'settled' happens only after every winner is
+				// paid and notified, and the nbsettle lock has a 120s TTL that acquire_lock will
+				// happily steal once stale. A pass killed part-way (max_execution_time, a fatal) left
+				// state='open' with some winners paid, and the next read re-split the SAME pool across
+				// a DIFFERENT winner set — paying out more than the pool ever held, minting coins no
+				// fee backs.
+				//
+				// Reading what each member already holds and moving only the difference makes the
+				// total converge on exactly $pool however many passes run, and claws back anyone the
+				// board no longer ranks. It is idempotent because it is a correction, not an event.
+				global $wpdb;
+				$prefix  = 'chprize:' . (int) $c['id'] . ':';
+				$held    = [];
+				foreach ( Data::all(
+					'SELECT ref, COALESCE(SUM(delta),0) d FROM ' . Data::t( 'aq_coin_ledger' )
+					. " WHERE reason = 'chprize' AND ref LIKE %s GROUP BY ref",
+					[ $wpdb->esc_like( $prefix ) . '%' ]
+				) as $r ) {
+					$held[ (int) substr( (string) $r['ref'], strlen( $prefix ) ) ] = (int) $r['d'];
+				}
+				$targets = [];
+				foreach ( $winners as $i => $w ) { $targets[ (int) $w['author']['id'] ] = $each + ( $i < $odd ? 1 : 0 ); }
+				// Everyone who holds prize coins on this challenge but is no longer ranked settles to 0.
+				$settle = $targets + array_fill_keys( array_keys( $held ), 0 );
+				foreach ( $settle as $wuid => $target ) {
+					$delta = (int) $target - (int) ( $held[ $wuid ] ?? 0 );
+					if ( 0 === $delta ) { continue; }
+					$ref = $prefix . (int) $wuid;
+					Economy::credit_coins( (int) $wuid, $delta, 'chprize', $ref );
+					// Notify::push dedupes on the ref, so a member is told once — by the pass that first
+					// paid them — and a later correction does not announce itself twice.
+					if ( $delta > 0 ) {
+						Notify::push( (int) $wuid, 'prize', 'You won ₳' . (int) $target . ' — "' . $c['title'] . '"' . ( $n > 1 ? ' (tie, split)' : ' (winner takes all)' ), '', '/challenges/', $ref );
 					}
-					$paid += $share;
+				}
+				foreach ( $winners as $i => $w ) {
+					$share  = $each + ( $i < $odd ? 1 : 0 );
+					$paid  += $share;
 					$results[] = [ 'place' => 1, 'prize' => $share ] + $w;
 				}
 				// FREEZE the whole board, not just the podium. `hearts` keeps moving after the moon, so a
