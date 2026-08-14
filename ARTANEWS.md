@@ -42,10 +42,25 @@ with 11 Missiles and 100 Drones"*, a post about a city in **Ukraine**, matched o
 alone. Each reference therefore carries its own match strength (`settlement` beats `country`, and
 sorts above it) instead of relying on one blanket caveat a reader may not carry down the list.
 
-Measured limits, live 2026-08-09, none worked around: plain subreddit RSS (`/r/<sub>/new/.rss`) is
-the last keyless surface; it 429s roughly half of requests even 30 s apart; and a subreddit can be
-silently dead — r/earthquake's newest post was two years old. Everything fails soft, records health
-per subreddit, and a detection with no context renders exactly as before: the measurement, alone.
+⚠️ **The keyless path is dead server-side, and shipping it that way is the mistake to learn from.**
+The first implementation read plain subreddit RSS. It worked perfectly from a laptop and produced
+**0 of 40** live detections on production, because Reddit 403s every datacenter egress regardless of
+user-agent and its `robots.txt` disallows the path outright. `Extra.php` had already recorded exactly
+this, verified 2026-07-23, alongside a working OAuth client — a sibling nobody looked for. Testing on
+residential egress proved the *function*, not the *pathway*.
+
+The compliant route is app-only OAuth (`REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` in the Vault),
+and the bearer is minted **once per request** by `Extra::reddit_token()` and shared — never
+persisted, because the whole DB is public. OAuth also buys real *search*, so ArtaNews asks the
+question directly (one query per event, ≤12 an hour) instead of scanning subreddits hoping a place
+name appears in the last 25 posts.
+
+**Dormant is a STATE, not a silence.** Without the credential there is no context, which is fine —
+but it must be legible, because a silent empty result is indistinguishable from a collector that
+matched nothing, and that ambiguity hid the failure above for a whole deploy. The tick names the
+dormant state in `src_health`, and a tick whose every request failed **keeps the previous context**
+rather than blanking it: a transient outage must not become a visible regression on every page at
+once. A detection with no context renders exactly as before — the measurement, alone.
 
 ---
 

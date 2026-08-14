@@ -71,8 +71,11 @@ final class News {
 	const DETECTORS = [
 		'quake'   => [ 'label' => 'Seismic event',             'fn' => 'detect_quake', 'svg' => 'seismic_svg' ],
 		'thermal' => [ 'label' => 'Satellite thermal anomaly', 'fn' => 'detect_thermal', 'svg' => 'extent_svg' ],
-		'netloss' => [ 'label' => 'Internet connectivity loss', 'fn' => 'detect_netloss', 'svg' => '' ], // no figure yet — see detection_svg()
-		'blackout' => [ 'label' => 'National traffic collapse',  'fn' => 'detect_blackout', 'svg' => '' ], // no figure yet — see detection_svg()
+		// Both of these measure the SAME physical quantity — how far a country's connectivity has
+		// fallen below its own recent normal — so they share one renderer rather than getting a
+		// near-identical copy each. Differing labels are not differing measurements.
+		'netloss' => [ 'label' => 'Internet connectivity loss', 'fn' => 'detect_netloss', 'svg' => 'connectivity_svg' ],
+		'blackout' => [ 'label' => 'National traffic collapse',  'fn' => 'detect_blackout', 'svg' => 'connectivity_svg' ],
 		'price'   => [ 'label' => 'Commodity price move',      'fn' => 'detect_price', 'svg' => '' ], // no figure yet — see detection_svg()
 		'claude'  => [ 'label' => 'Claude service disruption', 'fn' => 'detect_claude', 'svg' => '' ], // no figure yet — see detection_svg()
 	];
@@ -907,24 +910,34 @@ final class News {
 	 * a detection an instrument already made, which can never raise a confidence tier and can never
 	 * supply a number. Every constraint in ARTANEWS.md §2 (the juxtaposition trap) applies unchanged.
 	 *
-	 * ⚠️ THE MATCH IS BY PLACE NAME, NOT BY POSITION, and the payload says so on every panel. Reddit's
-	 * search endpoint answers 429 to unauthenticated clients without exception (measured 2026-08-09),
-	 * so there is no way to ask "what was posted near this coordinate" — only "what did these
-	 * subreddits post recently", filtered by the place name appearing in the title. That is a much
-	 * weaker claim than the geolocated distance a wire citation carries, and printing it next to a
+	 * ⚠️ THE MATCH IS BY PLACE NAME, NOT BY POSITION, and the payload says so on every panel. A Reddit
+	 * post carries no coordinate, so "what was posted near this measurement" is unanswerable by any
+	 * route — searching the place name is the closest honest approximation. That is a much weaker
+	 * claim than the geolocated distance a wire citation carries, and printing it next to a
 	 * measurement without saying so is precisely the trap: a post mentioning a country is not a
 	 * report about a spot in it, and layout alone would assert that it is.
 	 *
-	 * Measured limits, all live 2026-08-09, none of them worked around: plain subreddit RSS is the
-	 * only keyless surface left (`/r/<sub>/new/.rss`); it answers 429 to roughly half of requests
-	 * even spaced 30 s apart; and a subreddit can be silently dead — r/earthquake's newest post was
-	 * two years old. So this fails soft everywhere, records its health, and a detection with no
-	 * context renders exactly as it did before: the measurement, alone, which is the whole story.
+	 * ⚠️ THE KEYLESS PATH IS DEAD SERVER-SIDE, and this is the mistake that shipped here first. The
+	 * first implementation read plain subreddit RSS. It worked perfectly from a laptop and returned
+	 * NOTHING from production — 0 of 40 live detections carried context — because Reddit 403s every
+	 * datacenter egress regardless of user-agent, and its robots.txt disallows the path outright.
+	 * Extra.php had already recorded exactly this, verified 2026-07-23, in the sibling crawler I
+	 * failed to look at. Testing the function on residential egress proved the function, not the
+	 * pathway. The only compliant route is app-only OAuth, and the bearer is now minted ONCE per
+	 * request by Extra::reddit_token() and shared, rather than copied to a second place that could
+	 * drift on the never-persist-it rule.
+	 *
+	 * DORMANT IS A STATE, NOT A SILENCE. Without REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET in the Vault
+	 * there is no bearer and no context — which is fine, but it must be *legible*, because a silent
+	 * empty result is indistinguishable from a working collector that matched nothing, and that
+	 * ambiguity is what hid the failure above for a whole deploy. The tick records the dormant state
+	 * by name, and leaves any existing context alone rather than blanking it.
 	 */
-	const REDDIT_SUBS   = [ 'worldnews', 'news', 'CredibleDefense', 'geopolitics', 'TropicalWeather' ];
+	const REDDIT_SUBS   = 'worldnews+news+CredibleDefense+geopolitics+TropicalWeather+anime_titties';
 	const REDDIT_CACHE  = 'aq_news_social';  // one option holding id => refs; capped, never a per-view fetch
 	const REDDIT_MAX    = 4;                 // references shown per detection
 	const REDDIT_TTL    = 43200;             // 12 h — context ages out rather than going stale forever
+	const REDDIT_UA     = 'web:org.artaquest.artanews:v1.0 (by /u/artaquest)';
 
 	/** Cached Tier-2 references for one detection. Reads only — never fetches. */
 	public static function social_context( $event_id ) {
@@ -943,22 +956,27 @@ final class News {
 	}
 
 	/**
-	 * Populate that cache (cron aq_news_social). ONE pass over the allow-list per tick, not one per
-	 * event: the feeds are the same whoever is asking, and hitting Reddit once per detection would
-	 * both waste the rate limit this barely fits inside and scale with the news, which is backwards.
-	 * Nothing here can create, promote, revise or rank a detection — it only ever writes an option.
+	 * Populate that cache (cron aq_news_social). ONE authenticated search PER EVENT, which the OAuth
+	 * path makes both possible and affordable: MAX_EVENTS is 12, so a tick costs at most a dozen
+	 * requests an hour against a 100/min app-only budget. The earlier keyless design could not search
+	 * at all and had to scan whole subreddits hoping a place name turned up in the last 25 posts —
+	 * asking the question directly is strictly better matching for strictly less traffic.
+	 *
+	 * Nothing here can create, promote, revise or rank a detection. It reads the ledger and writes
+	 * exactly one option; there is no code path from this method to aq_news_events.
 	 */
 	public static function social_tick() {
-		$posts = [];
-		foreach ( self::REDDIT_SUBS as $sub ) {
-			$t0  = microtime( true );
-			$got = self::reddit_feed( $sub );
-			// A dead or throttled subreddit is recorded, not hidden: half of these calls are expected
-			// to fail, and a source that starts failing ALWAYS is the thing worth seeing in health.
-			Extra::src_health( 'news:reddit:' . $sub, (bool) $got, ( microtime( true ) - $t0 ) * 1000, count( $got ) );
-			$posts = array_merge( $posts, $got );
+		$t0  = microtime( true );
+		$tok = Extra::reddit_token();
+		if ( '' === $tok ) {
+			// DORMANT, SAID OUT LOUD. Returning quietly here is what made the previous failure
+			// invisible for a whole deploy, so the state is named — and existing context is left
+			// untouched rather than blanked, because "we cannot ask right now" is not "there is
+			// nothing to show".
+			Extra::src_health( 'news:reddit', false, ( microtime( true ) - $t0 ) * 1000, 0,
+				'dormant: REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET absent from the Vault' );
+			return;
 		}
-		if ( ! $posts ) { return; }
 		// Only live, newsworthy detections get context — matching against the whole ledger would
 		// attach today's headlines to months-old events, which is the juxtaposition trap with a
 		// time axis instead of a distance one.
@@ -968,37 +986,86 @@ final class News {
 			[ time() - self::FEED_MAX_AGE, self::MAX_EVENTS ]
 		);
 		$out = [];
+		$asked = 0;
+		$failed = 0;
 		foreach ( (array) $rows as $r ) {
 			if ( ! self::newsworthy( $r ) ) { continue; }
-			$refs = self::match_posts( $posts, $r );
+			// The settlement is the stronger question, so it is the one asked; the country is the
+			// fallback, and only when they differ. Searching both every time would double the traffic
+			// to weaken the average result.
+			$names = self::place_terms( $r );
+			$posts = [];
+			foreach ( $names as $term ) {
+				$asked++;
+				$got = self::reddit_search( $term, $tok );
+				if ( null === $got ) { $failed++; continue; }
+				$posts = array_merge( $posts, $got );
+				if ( $posts ) { break; }   // the settlement answered; no need to widen to the country
+			}
+			$refs = $posts ? self::match_posts( $posts, $r ) : [];
 			if ( $refs ) { $out[ (int) $r['id'] ] = [ 'fetched' => time(), 'refs' => $refs ]; }
 		}
+		// A tick where every request failed must not wipe good context: that would turn a transient
+		// Reddit outage into a visible regression on every page at once.
+		if ( $asked > 0 && $failed === $asked ) {
+			Extra::src_health( 'news:reddit', false, ( microtime( true ) - $t0 ) * 1000, 0,
+				'all ' . $asked . ' searches failed — keeping previous context' );
+			return;
+		}
+		Extra::src_health( 'news:reddit', true, ( microtime( true ) - $t0 ) * 1000, count( $out ),
+			$failed ? ( $failed . ' of ' . $asked . ' searches failed' ) : '' );
 		update_option( self::REDDIT_CACHE, $out, false );
 	}
 
-	/** One subreddit's recent posts via the last keyless surface: plain Atom. [] on any failure. */
-	private static function reddit_feed( $sub ) {
-		$xml = self::fetch( 'https://www.reddit.com/r/' . rawurlencode( $sub ) . '/new/.rss', 15 );
-		if ( ! $xml ) { return []; }
-		// libxml is told to keep its errors to itself: a 429 body or a truncated read is an ordinary
-		// outcome here, not something to raise into a PHP warning on a cron tick.
-		$prev = libxml_use_internal_errors( true );
-		$feed = simplexml_load_string( $xml );
-		libxml_clear_errors();
-		libxml_use_internal_errors( $prev );
-		if ( ! $feed || ! isset( $feed->entry ) ) { return []; }
+	/** The place names worth asking about, strongest first. Short tokens are dropped — a three-letter
+	 *  name matches half the language and produces coincidence rather than context. */
+	private static function place_terms( $ev ) {
+		$out   = [];
+		$place = trim( (string) ( $ev['place'] ?? '' ) );
+		$ctry  = trim( (string) ( $ev['country'] ?? '' ) );
+		if ( mb_strlen( $place ) >= 4 ) { $out[] = $place; }
+		if ( mb_strlen( $ctry ) >= 4 && 0 !== strcasecmp( $ctry, $place ) ) { $out[] = $ctry; }
+		return $out;
+	}
+
+	/**
+	 * Search the curated subreddits for one place name, via the authenticated Data API.
+	 *
+	 * Returns NULL on a transport or credential failure and [] on a genuine no-results, and the
+	 * difference matters: the caller must be able to tell "Reddit would not answer" from "Reddit
+	 * answered, there is nothing", because only the first should preserve stale context.
+	 */
+	private static function reddit_search( $term, $tok ) {
+		$url = 'https://oauth.reddit.com/r/' . self::REDDIT_SUBS . '/search'
+			. '?q=' . rawurlencode( '"' . $term . '"' )
+			. '&restrict_sr=1&sort=new&t=week&limit=25&raw_json=1&include_over_18=off';
+		$res = wp_remote_get( $url, [
+			'timeout' => 15, 'redirection' => 0,
+			'headers' => [ 'Authorization' => 'Bearer ' . $tok ],
+			'user-agent' => self::REDDIT_UA,
+		] );
+		if ( is_wp_error( $res ) ) { return null; }
+		if ( 200 !== (int) wp_remote_retrieve_response_code( $res ) ) { return null; }
+		$body = json_decode( (string) wp_remote_retrieve_body( $res ), true );
+		if ( ! is_array( $body ) ) { return null; }
 		$out = [];
-		foreach ( $feed->entry as $e ) {
-			$ts = strtotime( (string) $e->updated );
-			// Stale is worse than absent: r/earthquake's newest post was two years old when this was
-			// written, and an ancient thread printed beside a measurement from this morning reads as
-			// contemporaneous. Anything older than the feed window is simply not context for it.
-			if ( ! $ts || $ts < time() - self::FEED_MAX_AGE ) { continue; }
+		foreach ( (array) ( $body['data']['children'] ?? [] ) as $c ) {
+			$d = is_array( $c['data'] ?? null ) ? $c['data'] : [];
+			if ( ! empty( $d['over_18'] ) || ! empty( $d['spoiler'] ) ) { continue; }
+			$title = trim( wp_strip_all_tags( (string) ( $d['title'] ?? '' ) ) );
+			$perma = (string) ( $d['permalink'] ?? '' );
+			$ts    = (int) ( $d['created_utc'] ?? 0 );
+			if ( '' === $title || '' === $perma || ! $ts ) { continue; }
+			// esc_url_raw is not decoration here: this string reaches an href in the SPA, and a
+			// javascript: or data: URL arriving from a third party would be stored XSS. It is applied
+			// at the boundary where the untrusted value enters, not left to whoever renders it.
+			$url_abs = esc_url_raw( 'https://www.reddit.com' . $perma, [ 'http', 'https' ] );
+			if ( '' === $url_abs ) { continue; }
 			$out[] = [
 				'source'    => 'reddit',
-				'community' => 'r/' . $sub,
-				'title'     => trim( (string) $e->title ),
-				'url'       => (string) ( $e->link['href'] ?? '' ),
+				'community' => 'r/' . (string) ( $d['subreddit'] ?? '' ),
+				'title'     => $title,
+				'url'       => $url_abs,
 				'posted'    => $ts,
 				'posted_iso'=> gmdate( 'c', $ts ),
 			];
@@ -1021,20 +1088,29 @@ final class News {
 		// reader reads references one at a time, so each one carries its own strength and the
 		// stronger kind sorts first. Country-level matches stay because for most of this ledger the
 		// country is all there is — they are just never allowed to look like more than they are.
-		$names = [];
+		// The terms come from place_terms() so the question asked of Reddit and the test applied to
+		// its answer can never disagree — they did not share a source at first, and two copies of
+		// "which names are worth using" is exactly the kind of pair that drifts.
+		$terms = self::place_terms( $ev );
+		if ( ! $terms ) { return []; }
 		$place = trim( (string) ( $ev['place'] ?? '' ) );
-		$ctry  = trim( (string) ( $ev['country'] ?? '' ) );
-		if ( '' !== $place ) { $names[] = [ $place, 'settlement' ]; }
-		if ( '' !== $ctry && 0 !== strcasecmp( $ctry, $place ) ) { $names[] = [ $ctry, 'country' ]; }
-		if ( ! $names ) { return []; }
+		$names = [];
+		foreach ( $terms as $t ) { $names[] = [ $t, 0 === strcasecmp( $t, $place ) ? 'settlement' : 'country' ]; }
 		$from = (int) $ev['first_ts'] - 86400;   // a day either side: reporting lags a measurement,
 		$to   = (int) $ev['last_ts'] + 86400;    // and a warning can precede one
 		$hits = [];
+		$seen = [];
 		foreach ( $posts as $p ) {
 			if ( $p['posted'] < $from || $p['posted'] > $to ) { continue; }
+			// Two searches (settlement, then country) can return the same post; without this the page
+			// would print it twice, and React would warn on the duplicate key.
+			if ( isset( $seen[ $p['url'] ] ) ) { continue; }
 			foreach ( $names as list( $n, $kind ) ) {
-				if ( mb_strlen( $n ) < 4 ) { continue; }   // 3-letter tokens match half the language
+				// The search matches a post's BODY as well as its title; only a title mention is shown.
+				// Reddit deciding a term appears somewhere in a long thread is not the same claim as
+				// the post being about that place, and the weaker one must not be displayed as context.
 				if ( preg_match( '/\b' . preg_quote( $n, '/' ) . '\b/iu', $p['title'] ) ) {
+					$seen[ $p['url'] ] = true;
 					$hits[] = $p + [
 						'matched_name' => $n,
 						'match_kind'   => $kind,
@@ -1226,6 +1302,64 @@ final class News {
 	 * page, which is the same line the thermal view holds when it refuses to call its extent a blast
 	 * radius. Depth and magnitude are measured; that is what appears.
 	 */
+	/**
+	 * CONNECTIVITY AGAINST THIS COUNTRY'S OWN NORMAL — the figure for netloss and blackout.
+	 *
+	 * Both detectors measure one thing: how far a country has fallen below its own recent baseline,
+	 * stored as `severity` in percent. So the whole figure is derived from that ONE stored number and
+	 * nothing is parsed out of a display string — "316 vs recent normal 711" is prose for a reader,
+	 * and a renderer that reverse-engineered numbers from it would break the first time the wording
+	 * changed. Remaining connectivity is exactly 100 − severity, by the detector's own definition.
+	 *
+	 * The baseline is drawn at full width and labelled as the country's OWN normal, never as a global
+	 * or expected level: this measurement says nothing about how connected a country ought to be, only
+	 * that it is far below where it just was. The bar animates down from the baseline so the collapse
+	 * reads as an event in time rather than a static ratio.
+	 */
+	private static function connectivity_svg( $ev, $w = 640, $h = 210 ) {
+		$drop = (float) ( $ev['severity'] ?? 0 );
+		// A renderer owns its preconditions: outside 0–100 this is not a percentage of anything, and
+		// drawing it would invent a measurement. No figure is the honest output.
+		if ( $drop <= 0 || $drop > 100 ) { return ''; }
+		$left  = 150.0;                       // room for the row labels
+		$right = $w - 92.0;                   // room for the value at the bar's end
+		$full  = $right - $left;
+		$now   = max( 0.0, 100.0 - $drop );   // % of its own normal still reachable
+		$wnow  = round( $full * ( $now / 100.0 ), 1 );
+		$txt   = static fn( $x ) => esc_html( (string) $x );
+		$ctry  = (string) ( $ev['country'] ?? '' );
+		$o  = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . $w . ' ' . $h . '" role="img" '
+			. 'font-family="system-ui,sans-serif" '
+			. 'aria-label="' . esc_attr( 'Connectivity ' . round( $now ) . '% of this country\'s own recent normal, '
+				. round( $drop ) . '% below it' ) . '" '
+			. 'style="width:100%;height:auto;background:#06121E;border-radius:10px">';
+		$o .= '<title>' . $txt( (string) ( $ev['headline'] ?? 'Connectivity loss' ) ) . '</title>';
+		$o .= '<desc>' . $txt( 'Two bars. The upper is this country\'s own recent normal level of '
+			. 'connectivity; the lower is what was reachable when the measurement was taken. The '
+			. 'comparison is against its own baseline only — it says nothing about how connected the '
+			. 'country should be, and nothing about why the level fell.' ) . '</desc>';
+		// The baseline: gold, full width, the thing being compared against.
+		$o .= '<text x="' . ( $left - 12 ) . '" y="66" fill="#8fa3b8" font-size="12" text-anchor="end">its own normal</text>'
+			. '<rect x="' . $left . '" y="50" width="' . round( $full, 1 ) . '" height="22" rx="4" fill="#E8B923" opacity="0.30"/>'
+			. '<rect x="' . $left . '" y="50" width="' . round( $full, 1 ) . '" height="22" rx="4" fill="none" stroke="#E8B923" stroke-width="1.5"/>'
+			. '<text x="' . ( $right + 10 ) . '" y="66" fill="#E8B923" font-size="12">100%</text>';
+		// What was actually reachable: blue, animating down from the baseline so the fall is visible.
+		$o .= '<text x="' . ( $left - 12 ) . '" y="116" fill="#8fa3b8" font-size="12" text-anchor="end">when measured</text>'
+			. '<rect x="' . $left . '" y="100" width="' . $wnow . '" height="22" rx="4" fill="#1746DC">'
+			. '<animate attributeName="width" values="' . round( $full, 1 ) . ';' . $wnow . ';' . $wnow
+			. '" keyTimes="0;0.45;1" dur="3.2s" repeatCount="indefinite"/></rect>'
+			. '<text x="' . ( $right + 10 ) . '" y="116" fill="#1746DC" font-size="12">' . round( $now ) . '%</text>';
+		// The drop itself, stated as the measurement rather than left for the reader to subtract.
+		$o .= '<text x="' . $left . '" y="160" fill="#E8B923" font-size="15" font-weight="600">'
+			. $txt( round( $drop ) . '% below' ) . '</text>'
+			. '<text x="' . ( $left + 96 ) . '" y="160" fill="#8fa3b8" font-size="12">'
+			. $txt( ( '' !== $ctry ? $ctry . '’s' : 'this country’s' ) . ' own recent normal' ) . '</text>';
+		$o .= '<text x="' . $left . '" y="186" fill="#8fa3b8" font-size="11">'
+			. $txt( 'Measured from outside the country. The figure shows how far connectivity fell, not why.' )
+			. '</text>';
+		return $o . '</svg>';
+	}
+
 	private static function seismic_svg( $ev, $w = 640, $h = 340 ) {
 		$mag = (float) ( $ev['severity'] ?? 0 );
 		if ( $mag <= 0 ) { return ''; }

@@ -2594,7 +2594,14 @@ final class Extra {
 	/** Reddit app-only OAuth bearer, held in a PER-REQUEST static — NEVER a transient/option. The
 	 *  whole DB is public via the Data explorer, so a persisted bearer would be a world-readable
 	 *  live secret. A cron tick is one PHP request, so this mints at most once per hourly tick
-	 *  (well within Reddit's limits). '' while dormant. */
+	 *  (well within Reddit's limits). '' while dormant.
+	 *
+	 *  PUBLIC because ArtaNews needs the same bearer for its Tier-2 context lookups, and a second
+	 *  copy of this would mean two mints per tick, two user-agents to keep compliant, and two places
+	 *  to get the "never persist it" rule wrong. The per-request static is what makes sharing free:
+	 *  the first caller mints, the second gets the same string. */
+	public static function reddit_token() { return self::soc_reddit_token(); }
+
 	private static function soc_reddit_token() {
 		static $tok = null;
 		if ( is_string( $tok ) ) { return $tok; } // already resolved (minted or dormant) this request
