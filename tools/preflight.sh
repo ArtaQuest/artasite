@@ -236,6 +236,21 @@ if [ -f tools/undefined-calls.php ]; then
   else printf '%s\n' "$out" | sed 's/^/    /'; fail "undefined call(s) — a page load would fatal"; mark; fi
 else skip "tools/undefined-calls.php missing"; fi
 
+# ── 5c. What the public database may and may not publish ───────────────────────────────────────
+# The whole DB is published on purpose, so Extra::redact_row is the one place deciding what a
+# stranger may read about a member — and widening that decision looks exactly like ordinary work.
+# On 2026-08-14 a live sweep found every member's email address downloadable in bulk (against the
+# operator's own 2026-05-22 "emails should be private"), their exact date of birth, a cached IP, and
+# an email embedded in a WP.com blob no name-shape rule could match. This asserts BOTH directions:
+# what must be masked, and what must STAY public — the password hashes (inert), the Watchdog decoy
+# traps (masking one disarms a live trap silently), and every self-declared profile fact. A privacy
+# fix that quietly unpublishes the product is also a bug. Proven to fail in both directions.
+step "Public DB publishes only what it may"
+if [ -f tools/redaction-gate.php ]; then
+  if out=$("$PHP" tools/redaction-gate.php 2>&1); then ok "$(printf '%s' "$out" | tail -1 | sed 's/^[^0-9✓]*//')"
+  else printf '%s\n' "$out" | grep -E '^(FAIL|redaction-gate)' | sed 's/^/    /'; fail "redaction changed — a member datum is published, or the product was unpublished"; mark; fi
+else skip "tools/redaction-gate.php missing"; fi
+
 # ── 6. Typecheck, lint, build ──────────────────────────────────────────────────────────────────
 step "Typecheck, lint, build"
 if [ ! -d artaquest-web/node_modules ]; then

@@ -889,9 +889,22 @@ final class Extra {
 		// physically lives is promised private"): the database is public; a private person's contact
 		// details are not what it is a record OF. Masking cannot un-publish what has already been
 		// scraped and an address cannot be rotated — this stops the next harvest, not the last one.
+		//
+		// user_login: MASKING user_email ALONE SHIPS DEFEATED. Auth::unique_login builds the login as
+		// `strstr( $email, '@', true )` — the address's local part, by construction, not coincidence.
+		// Live on production: every human member's user_login IS their local part, and every one of
+		// those addresses is @gmail.com, so appending the domain reconstructs the address exactly from
+		// the column sitting beside the masked one. Nothing public consumes it: the handle is
+		// `user_nicename` (the /u/<slug> key), password login is off, and every remaining reference is
+		// an internal Watchdog/Sessions/Vault audit line.
+		// This narrows the leak rather than sealing it — `user_nicename` is derived the same way and
+		// stays deliberately public, so a determined guesser can still try `<nicename>@gmail.com`
+		// (lossy: nicename turns `.` into `-`). Sealing that would mean renaming existing handles,
+		// which changes every profile URL — flagged to the operator, not decided here.
 		'users'         => [
 			'user_activation_key' => 'password-reset key',
 			'user_email'          => 'member email address — the sign-in identifier',
+			'user_login'          => 'derived from the email local part — see user_email',
 		],
 		// The verifier for a LIVE publication secret. The raw secret is 20 random bytes and
 		// unrecoverable from sha256, so publication was never forgeable from this cell; masking keeps a
@@ -937,8 +950,36 @@ final class Extra {
 	 *  rank for a member's real name), `aq_location`, `aq_relationship`, `aq_languages` (self-declared,
 	 *  freely blankable, and the entire point of the dating surface), `aq_last_seen` (already coarsened
 	 *  to UTC midnight of the last active day). Add to this list only for data a member cannot decline
-	 *  to give AND cannot blank. */
-	const REDACT_IDENTITY = [ 'aq_birthday' ];
+	 *  to give AND cannot blank.
+	 *
+	 *  The rest of this list is not about precision but about COPIES AND PROMISES — each was found by
+	 *  a live sweep of all 164 usermeta rows, and each is a datum with no public consumer at all:
+	 *
+	 *  • `wpcom_user_data` — a WordPress.com platform blob holding `s:5:"email";s:27:"…"` in a
+	 *    serialised value. A per-COLUMN mask on wp_users structurally cannot see an address embedded
+	 *    in a VALUE in a key/value store, and REDACT_NAME_RE cannot match `wpcom_user_data` (no
+	 *    credential segment). This is the Jetpack shape exactly: a platform plugin we do not control
+	 *    writing member data under a name nobody classified. An email mask is only as strong as its
+	 *    least-guarded copy.
+	 *  • `community-events-location` — WordPress core caches the member's IP here for the dashboard
+	 *    events widget. An IP address locates a person, and this project's standing rule is to publish
+	 *    the NAME or nothing, never the thing that locates someone.
+	 *  • `aq_google_sub` — the Google account subject id. Stable, permanent, and the same value
+	 *    identifies this person to every other service using Google sign-in: a cross-service identity
+	 *    linkage, published for a member who only ever chose "sign in with Google".
+	 *  • `aq_birth_min` — birth time to the MINUTE. An astrology input (Verify::set_birthtime), and
+	 *    beside a date of birth it is the most precise identifier a person has.
+	 *  • `aq_gender` — Verify::set_gender documents this as "opt-in … ArtaCredits matching only", and
+	 *    no public route emits it. The DB export published it anyway, which makes it a broken promise
+	 *    rather than a transparency decision. */
+	const REDACT_IDENTITY = [
+		'aq_birthday'               => 'exact date of birth — the age is public on the profile',
+		'wpcom_user_data'           => 'platform account blob — carries the sign-in email address',
+		'community-events-location' => 'cached IP address',
+		'aq_google_sub'             => 'Google account identifier',
+		'aq_birth_min'              => 'exact birth time',
+		'aq_gender'                 => 'opt-in, for ArtaCredits matching only',
+	];
 
 	/** Credential-SHAPED names that hold nothing secret, so default-deny must not withhold them.
 	 *  `disallowed_keys` and `moderation_keys` are WordPress's comment word-lists — publishing what is
@@ -995,7 +1036,7 @@ final class Extra {
 		// so a new credential can never be published by omission. Add to it only with evidence.
 		if ( in_array( $key, self::REDACT_PUBLIC, true ) ) { return ''; }
 		// Private identity — masked by name, since nothing about its SHAPE says "withhold me".
-		if ( in_array( $key, self::REDACT_IDENTITY, true ) ) { return 'exact date of birth — the age is public on the profile'; }
+		if ( isset( self::REDACT_IDENTITY[ $key ] ) ) { return self::REDACT_IDENTITY[ $key ]; }
 		if ( preg_match( '/^_(site_)?transient(_timeout)?_aq_code(try)?_/', $key ) ) { return 'sign-in code'; }
 		if ( 'session_tokens' === $key ) { return 'active sign-in sessions'; }
 		if ( preg_match( self::REDACT_NAME_RE, $key ) ) { return 'credential-shaped key — masked by default'; }
