@@ -347,6 +347,15 @@ export default function Finances() {
             <bdi data-ay-skip="1">{st.statements.fy.start} → {st.statements.fy.end}</bdi>
             <span>· return due <bdi data-ay-skip="1">{st.fiscal.filing_due}</bdi></span>
           </div>
+          {/* A year end is fixed by the first T2 filed, so until then it is a choice on the record
+              rather than a settled fact. Saying which it is stops a reader assuming the stronger one. */}
+          <p className="mt-2 max-w-[70ch] text-[12.5px] leading-relaxed text-ink-3">
+            The financial year ends <strong className="text-ink-2">31 December</strong>
+            {st.fiscal.year_end_chosen ? <> — chosen on <bdi data-ay-skip="1">{st.fiscal.year_end_chosen}</bdi></> : null}.{" "}
+            {st.fiscal.year_end_settled
+              ? "It became permanent when the first corporate return was filed."
+              : "It becomes permanent when the first corporate return is filed; until then it can still be changed."}
+          </p>
 
           <Section title="What it owns and owes" note={`At ${st.statements.fy.end}.`}>
             <Card className="p-5">

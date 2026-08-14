@@ -619,6 +619,7 @@ final class Books {
 			'currency'    => self::CURRENCY,
 			'fiscal'      => [
 				'year_end'          => self::fy_end_md(),
+				'year_end_chosen'   => (string) get_option( 'aq_books_fy_end_chosen', '' ),
 				'year_end_settled'  => (bool) get_option( 'aq_books_fy_filed_once', false ),
 				'max_first_end'     => self::max_first_year_end(),
 				'note'              => 'The first fiscal period must end within 53 weeks of incorporation, and is fixed by the first T2 filed.',
@@ -1543,6 +1544,33 @@ final class Books {
 		if ( ! get_option( 'aq_books_seeded' ) )      { self::seed_founding_costs(); }
 		if ( ! get_option( 'aq_books_gst_accrued' ) ) { self::accrue_founding_gst(); }
 		if ( ! get_option( 'aq_books_taxnote_v2' ) )   { self::refresh_founding_tax_note(); }
+		if ( ! get_option( 'aq_books_fy_end' ) )       { self::record_year_end( self::FY_END_DEFAULT, '2026-08-14' ); }
+	}
+
+	/**
+	 * Persist the fiscal year end as a DECISION rather than leaving it to the constant.
+	 *
+	 * FY_END_DEFAULT is what the code does in the absence of a choice; it is not a choice. Leaving
+	 * the Foundation on it means a later edit to that constant — a refactor, a copied class, someone
+	 * tidying — silently moves a year end that CRA treats as fixed once the first T2 is filed. The
+	 * operator settled on 31 December on 2026-08-14, so that is written down, with the date it was
+	 * taken, and read back in preference to the constant thereafter.
+	 *
+	 * Refuses a date that would put the first period beyond the 53-week limit, exactly as fy_end_md()
+	 * does. Worth knowing that for THIS incorporation date the guard cannot actually fire: any MM-DD
+	 * has an occurrence within twelve months of 2026-05-20, and the ceiling is 371 days out, so every
+	 * well-formed value is legal. It is kept because it stops being vacuous the moment the
+	 * incorporation date changes, and a guard that only matters for someone else's entity is still
+	 * worth having in a class this one is likely to be copied from.
+	 */
+	public static function record_year_end( $md, $on = '' ) {
+		$md = (string) $md;
+		if ( ! preg_match( '/^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/', $md ) ) { return 'bad format'; }
+		$first = self::first_period_end( $md );
+		if ( '' === $first || $first > self::max_first_year_end() ) { return 'refused: beyond the 53-week limit'; }
+		update_option( 'aq_books_fy_end', $md, true );
+		update_option( 'aq_books_fy_end_chosen', ( self::norm_date( $on ) ?: self::today() ), true );
+		return 'recorded ' . $md;
 	}
 
 	/**
