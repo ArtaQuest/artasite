@@ -23,7 +23,7 @@ import { Avatar, Button, EmptyState, ErrorNote, Input, PageHero, StatusNote } fr
 import { Pickers, type PickerResult } from "../components/chat/Pickers";
 import { RoomThread } from "../components/chat/RoomThread";
 import { RoomCall } from "../components/chat/RoomCall";
-import { roomsCreate, roomsList, type Room } from "../lib/api";
+import { ApiError, roomsCreate, roomsList, type Room } from "../lib/api";
 import { CallPanel, CallPrivacyNote } from "../components/chat/CallPanel";
 import { Call, callSupported, mediaErrorMessage, newCallSid, type CallState, type CallMode, type LinkReport } from "../lib/webrtc";
 import { callModePref, rememberCallMode } from "../components/chat/callmode";
@@ -195,7 +195,7 @@ function GrowingTextarea({ value, onChange, onKeyDown, onPaste, placeholder, dis
 }
 
 /** WhatsApp-style voice recorder button: tap to record, tap to send, × to discard. */
-function VoiceButton({ disabled, onDone }: { disabled?: boolean; onDone: (blob: Blob, mime: string, dur: number) => void }) {
+function VoiceButton({ disabled, onDone, onError }: { disabled?: boolean; onDone: (blob: Blob, mime: string, dur: number) => void; onError?: (m: string) => void }) {
   const [rec, setRec] = useState<MediaRecorder | null>(null);
   const [secs, setSecs] = useState(0);
   const chunks = useRef<BlobPart[]>([]);
@@ -223,7 +223,11 @@ function VoiceButton({ disabled, onDone }: { disabled?: boolean; onDone: (blob: 
       };
       r.start(250);
       setRec(r);
-    } catch { /* mic refused — leave the button idle */ }
+    } catch (e) {
+      // Silence is the worst answer here: nothing moves, so the member cannot tell the press
+      // from a dead button. The same sentence the call path shows for the same three errors.
+      onError?.(mediaErrorMessage(e));
+    }
   }
   if (rec) {
     return (
@@ -324,9 +328,11 @@ function Media({ att, url, onZoom }: { att: SealedAttachment; url: string | null
  */
 function Composer({
   peerId, peerName, compact, editing, replyTo, replyPreview, busy, asked, willRequest, requestLeft,
-  initialText, onSend, onCancel, onPick, onFile,
+  initialText, onSend, onCancel, onPick, onFile, onNote,
 }: {
   peerId: number; peerName: string; compact: boolean;
+  /** Say something the member needs to hear — a blocked microphone, for one. */
+  onNote?: (m: string) => void;
   editing: boolean; replyTo: boolean; replyPreview: string; busy: boolean;
   asked: boolean; willRequest: boolean; requestLeft: number;
   initialText: string;
@@ -453,7 +459,8 @@ function Composer({
           <button type="button" aria-label={editing ? "Save edit" : "Send"} onClick={send} disabled={busy}
             className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-yang text-on-accent transition-opacity hover:opacity-90 disabled:opacity-50"><Ic d={IC.send} size={18} /></button>
         ) : (
-          <VoiceButton disabled={busy} onDone={(b, mime, dur) => onFile(b, mime, { dur, voice: true })} />
+          <VoiceButton disabled={busy} onDone={(b, mime, dur) => onFile(b, mime, { dur, voice: true })}
+            onError={(m) => onNote?.(m)} />
         )}
       </div>
     </div>
@@ -485,6 +492,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   const [editing, setEditing] = useState<Item | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [failMsg, setFailMsg] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const [code, setCode] = useState<string | null>(null);
   const [panel, setPanel] = useState<"" | "code" | "timer" | "search" | "menu">("");
@@ -1130,11 +1138,19 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
         return u !== undefined ? { ...rest, [r.id]: u } : rest;
       });
       return true;
-    } catch {
+    } catch (e) {
       // Keep the payload (and any uploaded blob) on the stranded bubble so "Retry" can re-send it
       // without re-sealing or re-uploading. Without this the bubble sat there dimmed forever and the
       // only "recovery" was the banner claiming a retry that never happened for the send path.
       if (isBubble) setItems((cur) => cur.map((m) => (m.id === temp ? { ...m, pending: false, failed: true, blob: blobName } : m)));
+      /* KEEP THE SERVER'S OWN SENTENCE. The upload path surfaces refusals a member can act on —
+         "Daily attachment budget reached — try again tomorrow", the per-minute throttle, "Could not
+         store the attachment" — and every one of them was thrown away here and re-told as
+         "Couldn't reach the server — retrying". Nothing retries the upload; only the message poll
+         does. So somebody over their budget re-picked the same file, waited, and got the same
+         sentence, with no way to learn the real reason. A connection story is the fallback for an
+         error that carries no words of its own, not a replacement for one that does. */
+      setFailMsg(e instanceof ApiError && e.message ? e.message : "");
       setFailed(true);
       return false;
     }
@@ -1803,7 +1819,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
 
       {/* composer */}
       <footer className={`border-t border-line ${compact ? "p-2.5" : "p-2.5 md:p-3"}`}>
-        {failed && <ErrorNote className="mb-2">Couldn’t reach the server — retrying.</ErrorNote>}
+        {failed && <ErrorNote className="mb-2">{failMsg || "Couldn’t reach the server — retrying."}</ErrorNote>}
         {note && <ErrorNote className="mb-2">{note}</ErrorNote>}
         {/* THE REQUEST BAR. A conversation somebody opened with me is answered here, in the place a
             reply would go, because accepting is the same decision as replying — and because a bar
@@ -1826,6 +1842,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
           <Composer
             key={editing ? `edit-${editing.id}` : `chat-${peer.id}`}
             peerId={peer.id} peerName={peer.name} compact={compact}
+            onNote={setNote}
             editing={!!editing} replyTo={!!replyTo}
             replyPreview={replyTo ? (view.textOf.get(replyTo.id) || "message") : ""}
             busy={busy} asked={rel.asked} willRequest={rel.will_request} requestLeft={rel.request_left}

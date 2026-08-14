@@ -80,6 +80,14 @@ export function RoomThread({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  /* WHOSE NOTE IS IT? The poll ends every successful tick by clearing this slot, and every refusal a
+     member needs to read is written to the same slot: "This call is full — 5 people is the limit for
+     a call with no server in the middle", the room-full and no-device-key answers from adding a
+     member, and "That didn't send". At a 4s tick — 1.5s during a call — the explanation was gone
+     before it could be read, leaving a button that looked simply broken. The poll may now clear only
+     what the POLL wrote; a refusal stays until the member does something else. */
+  const pollNote = useRef(false);
+  const say = (m: string) => { pollNote.current = false; setNote(m); };
   const [panel, setPanel] = useState<"" | "people" | "invite">("");
   const [invite, setInvite] = useState("");
   const lastId = useRef(0);
@@ -150,9 +158,9 @@ export function RoomThread({
             return fresh.length ? [...cur.filter((r) => r.id > 0), ...fresh] : cur;
           });
         }
-        setNote(null);
+        if (pollNote.current) { pollNote.current = false; setNote(null); }
       } catch {
-        if (!stop) setNote("Couldn’t reach the room — retrying.");
+        if (!stop) { pollNote.current = true; setNote("Couldn’t reach the room — retrying."); }
       }
       inFlight = false;
       if (!stop && !timer && !document.hidden) {
@@ -200,7 +208,7 @@ export function RoomThread({
       setRows((cur) => [...cur, { id: r.id, sender: me, at: r.at, payload }]);
       setDraft("");
     } catch {
-      setNote("That didn’t send — try again.");
+      say("That didn’t send — try again.");
     }
     setBusy(false);
   }
@@ -217,7 +225,7 @@ export function RoomThread({
       // Hand them the key immediately — they are in the room but cannot read it until somebody does.
       if (key) void distributeRoomKey(r.room, me);
     } catch (e) {
-      setNote(e instanceof Error && e.message ? e.message : "Couldn’t add that member.");
+      say(e instanceof Error && e.message ? e.message : "Couldn’t add that member.");
     }
     setBusy(false);
   }
@@ -235,7 +243,7 @@ export function RoomThread({
       const r = await roomsCall(roomId, inCall ? "leave" : "join");
       setRoom((cur) => (cur ? { ...cur, in_call: r.in_call } : cur));
     } catch (e) {
-      setNote(e instanceof Error && e.message ? e.message : "Couldn’t join the call.");
+      say(e instanceof Error && e.message ? e.message : "Couldn’t join the call.");
     }
   }
 
