@@ -926,7 +926,19 @@ final class Books {
 	 */
 	public static function cra( $req ) {
 		self::ensure_tables();
-		$want  = sanitize_text_field( (string) Rest::p( $req, 'fy', '' ) );
+		return self::cra_package( sanitize_text_field( (string) Rest::p( $req, 'fy', '' ) ) );
+	}
+
+	/**
+	 * The package itself, from a fiscal-year LABEL rather than a request.
+	 *
+	 * Split out because return_pdf() and the year-end cron have no request to hand, and calling the
+	 * REST wrapper with null reached Rest::p → $req->get_param() and fatalled. The harness never saw
+	 * it: its Rest::p stub returns the default and never touches the argument, so the test proved the
+	 * function and not the pathway. Anything callable from cron takes data, not a request.
+	 */
+	public static function cra_package( $want = '' ) {
+		self::ensure_tables();
 		$years = self::fy_list();
 		$fy    = $years ? $years[ count( $years ) - 1 ] : self::fy_of( self::today() );
 		foreach ( $years as $y ) { if ( $y['label'] === $want ) { $fy = $y; } }
@@ -1463,7 +1475,7 @@ final class Books {
 		$st   = self::period_statements( $fy );
 		$pos  = $st['position'];
 		$ops  = $st['operations'];
-		$cra  = self::cra( null );
+		$cra  = self::cra_package( $fy['label'] );
 		$t1044 = self::t1044_test( $fy, $years );
 		$due  = self::filing_due( $fy['end'] );
 		$sign = self::signer();
