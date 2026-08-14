@@ -225,6 +225,10 @@ final class Rest {
 		[ 'GET',  'translate/rounds',              'Translate::rounds_for', 'public' ], // ?hash=&lang= → the full round-by-round record for one string
 		[ 'POST', 'relay/translate/poll',          'Translate::poll',       'worker' ], // relay claims one single-language batch of pending rows
 		[ 'POST', 'relay/translate/complete',      'Translate::complete',   'worker' ], // …returns the adversarially-improved translations + rounds
+		// The curated override — the ONE way an already-upgraded ('arta') row can be rewritten. Kept off
+		// complete() on purpose: that handler's auto-only guard is what makes a duplicate relay POST
+		// harmless, so the relay must have no path to this behaviour at all.
+		[ 'POST', 'relay/translate/curate',        'Translate::curate',     'worker' ], // hand-verified text over any row, whatever its status
 
 		// ── Funds / transparency ──────────────────────────────────────────────
 		[ 'GET',  'foundation/finances',           'Funds::finances',   'public' ],

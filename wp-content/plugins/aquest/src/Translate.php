@@ -269,6 +269,80 @@ final class Translate {
 		return [ 'ok' => true, 'saved' => $saved ];
 	}
 
+	/**
+	 * POST relay/translate/curate {lang, engine, items:[{hash, text, quality, rounds:[…]}]}
+	 * — the CURATED override: write a hand-verified translation over whatever the row holds now,
+	 * INCLUDING a row an earlier adversarial pass already flipped to 'arta'.
+	 *
+	 * complete() is deliberately monotonic — it touches `status='auto'` and nothing else — so a
+	 * duplicate or out-of-order relay POST can never undo an upgrade. That guard is exactly what
+	 * makes the automatic pipeline safe to run unattended, and relaxing it in place would put every
+	 * upgraded row back at the mercy of a stale retry. So this is a SEPARATE route: the relay has no
+	 * code path that reaches it, and an override is only ever a deliberate act by whoever holds the
+	 * worker token. Curated writes are as public as automatic ones — the rounds record is replaced,
+	 * not appended, so /translate/rounds shows why the text changed.
+	 *
+	 * UPDATE ONLY, never INSERT. A curated correction fixes a string the mesh already serves; a
+	 * string with no row yet enters through the ordinary public path (i18n/save) first and can be
+	 * curated on the next call. That keeps this route unable to invent mesh content of its own.
+	 *
+	 * Returns { saved, unchanged, missing } — an UPDATE that matches a row already holding the exact
+	 * text reports 0 affected, so counting it as saved would overstate the work. The caller needs to
+	 * tell "already correct" apart from "no such row" to know whether a seed step is still owed.
+	 */
+	public static function curate( $req ) {
+		self::ensure_tables();
+		global $wpdb;
+		$lang  = strtolower( trim( (string) Rest::p( $req, 'lang', '' ) ) );
+		$items = Rest::p( $req, 'items', [] );
+		$items = is_array( $items ) ? array_slice( $items, 0, self::BATCH * 2 ) : [];
+		if ( $lang === '' || $lang === 'en' || ! $items ) { return [ 'ok' => true, 'saved' => 0, 'unchanged' => 0, 'missing' => 0 ]; }
+		$engine = trim( (string) Rest::p( $req, 'engine', '' ) );
+		if ( $engine !== '' ) { update_option( 'aq_tr_engine', mb_substr( $engine, 0, 120 ), false ); }
+		$t         = Data::t( 'aq_translations' );
+		$rt        = Data::t( 'aq_tr_rounds' );
+		$now       = time();
+		$saved     = 0;
+		$unchanged = 0;
+		$missing   = 0;
+		foreach ( $items as $it ) {
+			$hash = isset( $it['hash'] ) ? (string) $it['hash'] : '';
+			if ( ! preg_match( '/^[a-f0-9]{32}$/', $hash ) ) { continue; }
+			$text = isset( $it['text'] ) ? trim( (string) $it['text'] ) : '';
+			// An empty override would BLANK a served string (resolve() reads '' as missing), which is a
+			// worse outcome than any translation it could replace. Refuse it here rather than trusting
+			// the caller — this route exists precisely to write where the monotonic guard would not.
+			if ( $text === '' || mb_strlen( $text ) > 2 * self::MAX_SRC_LEN ) { continue; }
+			$cur = Data::one( "SELECT translated_text FROM {$t} WHERE source_hash = %s AND lang = %s", [ $hash, $lang ] );
+			if ( ! $cur ) { $missing++; continue; }
+			if ( (string) $cur['translated_text'] === $text ) { $unchanged++; continue; }
+			$quality = max( 0, min( 100, (int) ( $it['quality'] ?? 0 ) ) );
+			$wpdb->query( $wpdb->prepare(
+				"UPDATE {$t} SET translated_text = %s, status = 'arta', quality = %d, claimed_at = 0, updated_at = %s
+				 WHERE source_hash = %s AND lang = %s",
+				$text, $quality, current_time( 'mysql' ), $hash, $lang
+			) );
+			$saved++;
+			$wpdb->query( $wpdb->prepare( "DELETE FROM {$rt} WHERE source_hash = %s AND lang = %s", $hash, $lang ) );
+			$rounds = isset( $it['rounds'] ) && is_array( $it['rounds'] ) ? array_slice( $it['rounds'], 0, 12 ) : [];
+			$n = 0;
+			foreach ( $rounds as $r ) {
+				Data::insert( 'aq_tr_rounds', [
+					'source_hash' => $hash,
+					'lang'        => $lang,
+					'round'       => ++$n,
+					'engine'      => mb_substr( (string) ( $r['engine'] ?? '' ), 0, 40 ),
+					'candidate'   => mb_substr( (string) ( $r['candidate'] ?? '' ), 0, 2 * self::MAX_SRC_LEN ),
+					'critique'    => mb_substr( (string) ( $r['critique'] ?? '' ), 0, 4000 ),
+					'score'       => max( 0, min( 100, (int) ( $r['score'] ?? 0 ) ) ),
+					'created'     => $now,
+				] );
+			}
+		}
+		if ( $saved ) { self::bump_epoch( $lang ); }
+		return [ 'ok' => true, 'saved' => $saved, 'unchanged' => $unchanged, 'missing' => $missing ];
+	}
+
 	// ── narration gate (ArtaVoice audiobook translation) ─────────────────────
 
 	/**
