@@ -108,7 +108,12 @@ export default function NewsDetectionPage() {
               <dd className="mt-0.5 text-[15px]">{place}</dd>
             </div>
           ) : null}
-          {Number.isFinite(d.lat) && Number.isFinite(d.lon) ? (
+          {/* 0/0 is the backend's "no coordinate" sentinel for country-level detections (netloss,
+              blackout, price) — and Number.isFinite(0) is true, so finiteness alone published
+              "Coordinates 0.000, 0.000" on every one of them: a point in the Gulf of Guinea presented
+              as a measured position. The same sentinel already makes locator_svg() return no map, so
+              the two now agree. */}
+          {Number.isFinite(d.lat) && Number.isFinite(d.lon) && (d.lat !== 0 || d.lon !== 0) ? (
             <div>
               <dt className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Coordinates</dt>
               <dd className="mt-0.5 font-mono text-[14px]">{d.lat.toFixed(3)}, {d.lon.toFixed(3)}</dd>
