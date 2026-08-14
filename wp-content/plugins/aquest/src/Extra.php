@@ -3492,12 +3492,12 @@ final class Extra {
 	 * donation/coin writers each no-op if that ref is already present). Returns [ kind, amount_total_cents ].
 	 */
 	public static function fulfil_session( $session ) {
-		if ( ! is_array( $session ) ) { return [ '', 0 ]; }
+		if ( ! is_array( $session ) ) { return [ '', 0, false ]; }
 		$sid   = (string) ( $session['id'] ?? '' );
 		$meta  = is_array( $session['metadata'] ?? null ) ? $session['metadata'] : [];
 		$total = (int) ( $session['amount_total'] ?? 0 );
 		$kind  = (string) ( $meta['aq_kind'] ?? '' );
-		if ( $sid === '' ) { return [ $kind, $total ]; }
+		if ( $sid === '' ) { return [ $kind, $total, false ]; }
 		$ref = 'stripe:' . $sid;
 		self::remember_payment( $session ); // so a refund months from now can find these rows again
 
@@ -3517,7 +3517,10 @@ final class Extra {
 			$done = ( $kind === 'coins' )
 				? Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'buy' AND ref = %s LIMIT 1", [ $ref ] )
 				: Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_fund_ledger' ) . ' WHERE ref = %s LIMIT 1', [ $ref ] );
-			if ( $done || ( $age && time() - $age < 120 ) ) { return [ $kind, $total ]; } // already fulfilled, or in flight
+			// $done means the money is recorded. A young claim means another request is MID-FLIGHT with
+			// it — which is not the same thing, and used to be reported to the caller identically.
+			if ( $done ) { return [ $kind, $total, true ]; }
+			if ( $age && time() - $age < 120 ) { return [ $kind, $total, false ]; } // in flight — NOT done
 			$wpdb->update( $F, [ 'created' => time() ], [ 'session_id' => $sid ] ); // stale claim from a crash → reclaim + finish
 		}
 
@@ -3560,7 +3563,7 @@ final class Extra {
 		} elseif ( $kind === 'coins' ) {
 			Economy::fulfil_coin_purchase( (int) ( $meta['aq_uid'] ?? 0 ), (int) ( $meta['aq_coins'] ?? 0 ), $ref ); // idempotent
 		}
-		return [ $kind, $total ];
+		return [ $kind, $total, true ];
 	}
 
 	/** A member's registered email, or '' — used to prefill Stripe Checkout. Never invents one. */
@@ -3710,7 +3713,51 @@ final class Extra {
 		// than was awarded, and never below zero. award_points is itself idempotent per (user, track, ref).
 		$giveback = min( $awarded, (int) floor( $cents / 100 ) );
 		if ( $uid > 0 && $giveback > 0 ) { Economy::award_points( $uid, -$giveback, 'donate', (string) $rev ); }
+		if ( $cents > 0 ) { self::retire_refunded_credits( $ref, $rev, $charge ); }
 		return [ $cents, $buckets ];
+	}
+
+	/**
+	 * A REFUNDED CREDIT GIFT MUST STOP BEING SPENDABLE.
+	 *
+	 * Reversing the cents in the slice earmark left the aq_credit_gifts row exactly as it was:
+	 * `entries` unchanged, `widened` still 0, and no refunded flag anywhere. Credits::match selects
+	 * live gifts on `used < entries AND widened = 0` plus a BUCKET-LEVEL balance test — a counter
+	 * shared by every donor who chose the same slice — and orders oldest-first. So the refunded gift
+	 * was not merely still live, it was PREFERRED over the honest gift behind it: it spent another
+	 * donor's money, and Credits::notify_donor printed the refunded donor's name on the entrant's
+	 * permanent Certificate of Participation.
+	 *
+	 * `widened` is the existing "this gift is no longer claimable" stamp that both match() and widen()
+	 * already honour, so retiring the gift needs no new column and no new state to reason about. Any
+	 * entry ALREADY granted against it stays granted — the entrant did nothing wrong and their
+	 * certificate is theirs — but an operator is told, because a printed plate now names someone whose
+	 * money went back.
+	 */
+	private static function retire_refunded_credits( $ref, $rev, $charge ) {
+		$gifts = Data::all(
+			'SELECT id, bucket, entries, donor_name FROM ' . Data::t( 'aq_credit_gifts' ) . ' WHERE ref = %s AND widened = 0',
+			[ (string) $ref ]
+		);
+		if ( ! $gifts ) { return; }
+		$stamp = Data::now();
+		$spent = [];
+		foreach ( $gifts as $g ) {
+			// Compare-and-swap, exactly as widen() does, so a concurrent release cannot double-handle it.
+			if ( 1 !== (int) Data::update( 'aq_credit_gifts', [ 'widened' => $stamp ], [ 'id' => (int) $g['id'], 'widened' => 0 ] ) ) { continue; }
+			$used = (int) Data::col(
+				'SELECT COUNT(*) FROM ' . Data::t( 'aq_credit_grants' ) . ' WHERE gift_id = %d', [ (int) $g['id'] ]
+			);
+			if ( $used > 0 ) { $spent[] = '#' . (int) $g['id'] . ' (' . $used . ' already granted)'; }
+		}
+		if ( $spent ) {
+			Watchdog::alert( 'stripe_refund_credits_' . $charge, 'A refunded gift had already paid for entries',
+				'Charge ' . $charge . " was refunded, and its ArtaCredits gift had already been redeemed:\n - "
+				. implode( "\n - ", $spent ) . "\n\n"
+				. "The gift is now retired so it cannot be spent again (ref {$rev}). The entries already granted STAY granted —\n"
+				. 'the entrant did nothing wrong — but their Certificate of Participation carries the refunded donor’s name, '
+				. 'so decide whether the plate should be corrected.', false );
+		}
 	}
 
 	/**
@@ -3769,7 +3816,26 @@ final class Extra {
 		$type = (string) ( $event['type'] ?? '' );
 		if ( $type === 'checkout.session.completed' ) {
 			$session = $event['data']['object'] ?? null;
-			if ( is_array( $session ) && ( $session['payment_status'] ?? '' ) === 'paid' ) { self::fulfil_session( $session ); }
+			if ( is_array( $session ) && ( $session['payment_status'] ?? '' ) === 'paid' ) {
+				[ , , $done ] = self::fulfil_session( $session );
+				// A PAYMENT THAT IS NOT RECORDED MUST NOT BE ACKNOWLEDGED.
+				//
+				// fulfil_session claims the session before doing any work, and a caller that loses the
+				// claim to an in-flight winner returns without crediting anything. This branch then fell
+				// through to a flat 200, so Stripe marked checkout.session.completed as delivered and
+				// never retried. If the winner — normally the returning browser's /stripe-verify, which
+				// fires within a second of the redirect and so is squarely inside the 120s window — died
+				// after claiming (fatal, OOM, the edge cutting a slow request), nothing ever finished
+				// the job: the SPA strips ?session= with replaceState so a reload will not retry, and the
+				// webhook had just given up. Money captured, nothing recorded, no alert.
+				//
+				// 409 puts it back on Stripe's retry schedule, which redelivers after the winner has
+				// either finished (the ref guards make the retry a no-op) or gone stale (the claim is
+				// reclaimed and completed).
+				if ( ! $done ) {
+					return new \WP_REST_Response( [ 'ok' => false, 'retry' => true ], 409 );
+				}
+			}
 		} elseif ( $type === 'charge.refunded' || $type === 'charge.dispute.created' || $type === 'charge.dispute.closed' ) {
 			// Money going BACK is as much a fulfilment as money coming in — see reverse_charge.
 			self::reverse_charge( $type, $event );

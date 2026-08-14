@@ -2592,7 +2592,15 @@ final class Notebook {
 				if ( ! $new ) { return Rest::err( 'entered', 'You are already in — one entry per member', 409 ); }
 				$ref = 'chfee:' . $c['id'] . ':' . $uid;
 				if ( ! Data::col( 'SELECT id FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'chfee' AND ref = %s LIMIT 1", [ $ref ] ) ) {
-					Economy::credit_coins( $uid, -$fee, 'chfee', $ref );
+					// THE POOL MAY ONLY GROW BY A FEE THAT ACTUALLY LANDED. credit_coins writes a failed
+					// INSERT off with an error_log (the exact failure observed on prod 2026-07-10), and
+					// this bump used to be unconditional — so a pool could hold fees nobody was charged,
+					// and at settlement it mints coins that no debit offsets and no backing covers.
+					if ( ! Economy::credit_coins( $uid, -$fee, 'chfee', $ref ) ) {
+						global $wpdb;
+						$wpdb->delete( Data::t( 'aq_nb_entries' ), [ 'ch_id' => (int) $c['id'], 'user_id' => $uid ] );
+						return Rest::err( 'payment_failed', 'Your entry fee could not be taken, so nothing was charged and you are not entered. Please try again.', 502 );
+					}
 					Data::bump( 'aq_nb_challenges', [ 'id' => (int) $c['id'] ], 'pool', $fee );
 				}
 			}

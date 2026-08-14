@@ -92,8 +92,10 @@ final class Economy {
 		if ( 'welcome' !== $track ) { Extra::nudge_tag_slot( (int) $uid, $before, $before + (int) $delta ); }
 	}
 
+	/** Returns the ledger row id, or 0 when nothing moved — callers that record a CONSEQUENCE of the
+	 *  movement (a prize pool growing, a seat being held) must gate on it. */
 	public static function credit_coins( $uid, $delta, $reason = '', $ref = '' ) {
-		if ( ! $uid || ! $delta ) { return; }
+		if ( ! $uid || ! $delta ) { return 0; }
 		$id = Data::insert( 'aq_coin_ledger', [
 			'user_id' => $uid, 'delta' => (int) $delta, 'reason' => $reason, 'ref' => $ref, 'created' => Data::now(),
 		] );
@@ -103,7 +105,7 @@ final class Economy {
 		// row is the money; a write that failed simply didn't happen.
 		if ( ! $id ) {
 			error_log( "AQ credit_coins: ledger INSERT FAILED u{$uid} {$delta} '{$reason}' ref={$ref} — no coins moved" );
-			return;
+			return 0;
 		}
 		// Keep the circulating-supply counter in lockstep so reserve()/Funds read one row, not Σ ledger.
 		self::counter_add( 'coins_issued', (int) $delta );
@@ -118,6 +120,7 @@ final class Economy {
 				. 'debits raced past their checks or a check was bypassed. The ledger is append-only — audit the refs and '
 				. 'reconcile with a compensating entry; if it repeats, suspect deliberate race abuse.', true );
 		}
+		return (int) $id;
 	}
 
 	/**

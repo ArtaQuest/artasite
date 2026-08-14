@@ -25,6 +25,16 @@ final class Funds {
 		'indigenous'     => 'Indigenous communities',
 	];
 
+	/** Is this a real, active topic? The allow-list behind a `typ_` sponsorship earmark — the same
+	 *  table sponsor_topic resolves the live course from, so a key that passes here can actually be
+	 *  honoured rather than becoming a bucket that names nothing. */
+	private static function topic_exists( $key ) {
+		return (bool) Data::col(
+			'SELECT 1 FROM ' . Data::t( 'aq_topics' ) . ' WHERE topic_key = %s AND active = 1 LIMIT 1',
+			[ (string) $key ]
+		);
+	}
+
 	/** A readable label for an earmark bucket key: grp_<group> · cty_<iso> · typ_<system>_<type>. */
 	private static function earmark_label( $kind, $key ) {
 		if ( $kind === 'grp' ) { return self::GROUPS[ $key ] ?? ucwords( str_replace( [ '_', '-' ], ' ', $key ) ); }
@@ -219,10 +229,37 @@ final class Funds {
 		if ( $cents < 1 ) { return; }
 		// Each target is [kind, key]: a group/country just RECORDS an earmark (bursary money); a topic
 		// (typ) is a SPONSORSHIP that flows into that topic's live course prize pool (sponsor_topic).
-		$targets = [];
-		foreach ( (array) $groups as $g )    { $g = sanitize_key( (string) $g ); if ( $g ) { $targets[] = [ 'grp', $g ]; } }
-		foreach ( (array) $countries as $c ) { $c = sanitize_key( (string) $c ); if ( $c ) { $targets[] = [ 'cty', $c ]; } }
-		foreach ( (array) $topics as $t )    { $t = sanitize_key( (string) $t ); if ( $t ) { $targets[] = [ 'typ', $t ]; } }
+		//
+		// AN EARMARK KEY IS PUBLISHED PROSE, SO IT MUST COME FROM AN ALLOW-LIST.
+		//
+		// These three lists used to be sanitize_key() and nothing else, so any key the donor sent
+		// became a permanent bucket in aq_fund_ledger, a permanent fund_<bucket> counter, and a
+		// LABELLED LINE on GET /foundation/finances — earmark_label() falls through to ucwords() of the
+		// key itself, which renders the donor's own words as an official earmark on the Foundation's
+		// published financial statement and on the /donate books panel. A second effect was quieter:
+		// bursary_fund_cents('') sums every fund_grp_% counter, so invented grp_ buckets inflated the
+		// bursary availability figure published at GET /bursary/status.
+		//
+		// An unrecognised target is not dropped — that would silently keep money the donor directed
+		// somewhere. It falls back to the general bursary fund, and the donor's money is still theirs.
+		$targets = []; $unknown = 0;
+		foreach ( (array) $groups as $g ) {
+			$g = sanitize_key( (string) $g );
+			if ( $g && isset( self::GROUPS[ $g ] ) ) { $targets[] = [ 'grp', $g ]; } elseif ( $g ) { $unknown++; }
+		}
+		foreach ( (array) $countries as $c ) {
+			$c = sanitize_key( (string) $c );
+			// ISO 3166-1 alpha-2, which is the entire vocabulary the donate picker can emit.
+			if ( $c && preg_match( '/^[a-z]{2}$/', $c ) ) { $targets[] = [ 'cty', $c ]; } elseif ( $c ) { $unknown++; }
+		}
+		foreach ( (array) $topics as $t ) {
+			$t = sanitize_key( (string) $t );
+			if ( $t && self::topic_exists( $t ) ) { $targets[] = [ 'typ', $t ]; } elseif ( $t ) { $unknown++; }
+		}
+		if ( $unknown > 0 ) {
+			Watchdog::note( 'record_gift: ' . $unknown . ' unrecognised earmark target(s) on ref ' . (string) $ref
+				. ' — that share went to the general bursary fund rather than creating a bucket' );
+		}
 		if ( ! $targets ) { self::record_donation( $uid, $cents, 'bursary', 'General donation', $ref ); return; }
 		$n    = count( $targets );
 		$each = intdiv( $cents, $n );
