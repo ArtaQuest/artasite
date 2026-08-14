@@ -213,7 +213,14 @@ export default function Donate() {
   useEffect(() => {
     if (!logged) return;
     myCredits().then((r) => setGifts(r.items)).catch(() => {});
-    setDonorName((me?.name || "").trim());
+    // A FALLBACK, NOT AN ASSIGNMENT. This effect and the rehydrate above share the [logged]
+    // dependency and both run in the same flush; React applies the setState calls in call order, so
+    // an unconditional write here landed LAST and discarded the name restored from the stash — the
+    // one choice the sign-in round trip most needed to keep, and already deleted from sessionStorage
+    // by then. It can also be actively wrong: AQ_USER.name is display_name || user_login, so it may
+    // be a handle, and when AQ_USER is absent it is empty — which would blank a name the donor typed
+    // and print "A friend of ArtaQuest" on the certificate instead.
+    setDonorName((prev) => (prev.trim() ? prev : (me?.name || "").trim()));
   }, [logged]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Returning from Stripe: confirm the payment and thank the donor HERE, where they gave.

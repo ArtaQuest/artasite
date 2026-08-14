@@ -199,13 +199,16 @@ final class Narrate {
 		// Friendly pre-check keeps the exact figure; the authoritative one is inside Economy::spend.
 		$bal   = Economy::coin_balance( $uid );
 		if ( $bal < $cost ) { return Rest::err( 'insufficient', 'Narrating this ' . number_format( $words ) . '-word work costs ₳' . $cost . ' — you have ₳' . $bal . '.', 402 ); }
-		// Charge BEFORE inserting the narration row. The old order inserted first and debited after,
-		// so a wallet that could not pay still got the narration queued, and two concurrent
-		// commissions both passed one balance. The ref is the natural key of what is being
-		// commissioned (target + voice), which exists before the row id does.
-		$sref = 'narration:' . $type . ':' . $tid . ':' . $voice;
-		$paid = Economy::spend( $uid, $cost, 'narrate', $sref );
-		if ( $paid !== '' ) { return Economy::spend_error( $paid, $cost, 'Narrating this work' ); }
+		// THE LEDGER REF MUST STAY 'narration:<row id>'. Narrate::refund() — the compensating credit on
+		// a translation timeout or an empty-audio failure — looks the charge up by exactly that string,
+		// so a ref computed from the natural key (target + voice) makes every refund a silent no-op:
+		// the member keeps a failed narration, loses the coins and is never notified. The points award
+		// in complete() reads the same ref and would likewise collapse to the minimum.
+		//
+		// So the row is inserted FIRST, purely to mint its id, and the charge follows under the wallet
+		// lock. That is not the old grant-then-charge ordering it replaced: nothing has been delivered
+		// at this point — the row is only a queue slot — and a charge that cannot be taken deletes it
+		// before the relay can claim it.
 		$now = Data::now();
 		$id  = Data::insert( 'aq_narrations', [
 			'author_id'   => $uid,
@@ -218,9 +221,12 @@ final class Narrate {
 			'created'     => $now,
 			'updated'     => $now,
 		] );
-		if ( ! $id ) {
-			Economy::refund_spend( $uid, $cost, 'narrate-void', $sref ); // nothing queued → nothing owed
-			return Rest::err( 'failed', 'Could not start the narration', 500 );
+		if ( ! $id ) { return Rest::err( 'failed', 'Could not start the narration', 500 ); }
+		$paid = Economy::spend( $uid, $cost, 'narrate', 'narration:' . (int) $id );
+		if ( $paid !== '' ) {
+			global $wpdb;
+			$wpdb->delete( Data::t( 'aq_narrations' ), [ 'id' => (int) $id ] ); // unpaid → never queued
+			return Economy::spend_error( $paid, $cost, 'Narrating this work' );
 		}
 		return self::detail_row( self::row( $id ) );
 	}

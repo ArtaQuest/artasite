@@ -111,17 +111,39 @@ final class Funds {
 		);
 		$total = 0;
 		foreach ( $rows as $r ) { $total += (int) $r['cents']; }
-		$target = (int) round( $total * $frac ) - (int) $already;
-		if ( $target < 1 ) { return [ 0, [], [] ]; }
+		// $goal is the CUMULATIVE amount that should have been reversed once this refund is applied;
+		// $already is what earlier refunds on the same charge took.
+		$goal = (int) round( $total * $frac );
+		if ( $goal - (int) $already < 1 ) { return [ 0, [], [] ]; }
 
+		// THE WALK MUST SKIP WHAT EARLIER REFUNDS ALREADY TOOK, ROW BY ROW.
+		//
+		// Netting $already out of the target alone is not enough: the loop still restarts at the first
+		// row with that row's FULL value as its cap, so a second refund draws from the earliest earmark
+		// again — past what it actually holds — while later earmarks are never touched. The aggregate
+		// still ties, which is why no total looks wrong, but every per-bucket figure derived from
+		// fund_<bucket> is: the labelled earmark lines on /foundation/finances, bursary_fund_cents()
+		// behind /bursary/status, and the bucket-level balance test in Credits::match, which would then
+		// spend money from a later bucket that has already gone back to the donor. It would also drive
+		// a crd_ counter negative, which Credits::verify_credits treats as a CRITICAL page.
+		//
+		// Allocation is front-to-back and deterministic, so replaying the same skip reproduces exactly
+		// what the earlier calls consumed.
+		$skip = (int) $already;
+		$taken = 0; // counts toward $goal, INCLUDING the part earlier refunds already took
 		$cents = 0; $buckets = []; $sources = [];
 		foreach ( $rows as $r ) {
-			if ( $cents >= $target ) { break; }
-			// Take this row's share of what is still owed back, never more than the row itself held.
-			$part = min( (int) $r['cents'], $target - $cents );
+			if ( $taken >= $goal ) { break; }
+			$rowc = (int) $r['cents'];
+			if ( $skip >= $rowc ) { $skip -= $rowc; $taken += $rowc; continue; } // fully consumed earlier
+			$avail = $rowc - $skip;
+			$taken += $skip;
+			$skip   = 0;
+			$part   = min( $avail, $goal - $taken );
 			if ( $part < 1 ) { continue; }
 			$id = self::fund_append( (string) $r['bucket'], -$part, $rev, (string) $note, 'refund' );
 			if ( ! $id ) { continue; } // fund_append already logged it; the counter never moved either
+			$taken            += $part; // only a row that LANDED advances the cursor
 			$cents            += $part;
 			$buckets[]         = (string) $r['bucket'];
 			$sources[ (int) $r['id'] ] = $part;

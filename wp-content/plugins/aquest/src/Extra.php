@@ -3700,19 +3700,20 @@ final class Extra {
 		// silently, logging "0 coins, 0 fund cents". Cash-out is live, so coins left unreversed are
 		// withdrawable real money.
 		//
-		// Keying on the refund/dispute object keeps a webhook redelivery idempotent (same object id →
-		// same ref → no-op) while letting each NEW refund do its own share. `$already` then tells the
-		// writers how much of this charge earlier refunds have accounted for, so the total reversed
-		// converges on what was actually returned and never overshoots.
-		$obj_id = (string) ( $obj['id'] ?? '' );
-		if ( ! $dispute ) {
-			$refunds = ( is_array( $obj['refunds'] ?? null ) && is_array( $obj['refunds']['data'] ?? null ) ) ? $obj['refunds']['data'] : [];
-			$last    = $refunds ? end( $refunds ) : null;
-			$obj_id  = is_array( $last ) && ! empty( $last['id'] ) ? (string) $last['id'] : $obj_id;
-		}
-		// The ref carries BOTH: the charge, so every reversal of one payment can be summed back up, and
-		// the refund/dispute object, so a redelivery of the same event is a no-op. ~60 chars.
-		$rev = 'srev:' . $charge . ':' . ( $obj_id !== '' ? $obj_id : 'full' );
+		// THE DISCRIMINATOR IS THE CUMULATIVE AMOUNT, NOT A REFUND ID.
+		//
+		// Picking the refund object out of `$obj['refunds']['data']` looks natural and is a trap twice
+		// over: Stripe orders list objects NEWEST FIRST, so end() returns the OLDEST refund — the same
+		// id on every subsequent charge.refunded for that charge — and on current API versions
+		// `Charge.refunds` is not included at all unless expanded, which would have collapsed the ref
+		// to the charge id itself. Either way every refund on a charge shared one ref, and since both
+		// writers bail on `WHERE ref = $rev`, the second refund reversed nothing. That is precisely the
+		// defect this was written to fix.
+		//
+		// `amount_refunded` is cumulative and strictly increases with each new refund, so it separates
+		// them without an extra API call, and a REDELIVERY of the same event carries the same total and
+		// is still a no-op. A dispute has a genuinely per-object id (dp_…), so it keeps using it.
+		$rev = 'srev:' . $charge . ':' . ( $dispute ? ( (string) ( $obj['id'] ?? 'dispute' ) ) : 'r' . $back );
 
 		[ $done_coins, $done_cents ] = self::already_reversed( $charge );
 		$coins = Economy::reverse_coin_purchase( $ref, $rev, $frac, $done_coins );

@@ -521,45 +521,6 @@ final class Books {
 		], 'donation', 0 );
 	}
 
-	/**
-	 * Mirror a COIN SALE — a member paid fiat and received ArtaCoin.
-	 *
-	 * Donations reach the books because Funds::fund_append mirrors them. Coin sales are the platform's
-	 * OTHER live fiat rail (Stripe is in live mode with cash-out enabled) and reached them not at all:
-	 * Economy::fulfil_coin_purchase minted against a captured payment and wrote no journal entry, so
-	 * the balance sheet showed neither the cash that came in nor the obligation it created. That is not
-	 * a modelling choice — the chart of accounts already carries `coin_liability`, and the filing notes
-	 * already describe ArtaCoin as an obligation of the Foundation.
-	 *
-	 * A sale is not revenue: the Foundation owes the coin. Cash rises, and so does what it owes.
-	 * Idempotent on the coin-ledger ref, which is the same ref the ledger row carries.
-	 */
-	public static function mirror_coin_sale( $ref, $uid, $coins, $cad_cents ) {
-		$cad_cents = (int) $cad_cents;
-		$coins     = (int) $coins;
-		if ( $cad_cents < 1 || $coins < 1 || (string) $ref === '' ) { return 0; }
-		if ( get_option( 'aq_books_table_version' ) !== self::TABLE_VERSION ) { return 0; }
-		return self::journal( 'coinbuy:' . $ref, self::today(), $coins . ' ₳ sold', [
-			[ 'account' => 'cash',           'debit'  => $cad_cents, 'party_uid' => (int) $uid, 'memo' => 'Coin top-up received' ],
-			[ 'account' => 'coin_liability', 'credit' => $cad_cents, 'party_uid' => (int) $uid, 'memo' => $coins . ' ₳ issued to a member' ],
-		], 'coin', 0 );
-	}
-
-	/**
-	 * Mirror a CASH-OUT — a member redeemed ArtaCoin and real money left the platform. The mirror of
-	 * the sale above: the obligation is discharged and cash falls.
-	 */
-	public static function mirror_cashout( $ref, $uid, $coins, $cad_cents ) {
-		$cad_cents = (int) $cad_cents;
-		$coins     = (int) $coins;
-		if ( $cad_cents < 1 || $coins < 1 || (string) $ref === '' ) { return 0; }
-		if ( get_option( 'aq_books_table_version' ) !== self::TABLE_VERSION ) { return 0; }
-		return self::journal( 'coinout:' . $ref, self::today(), $coins . ' ₳ redeemed', [
-			[ 'account' => 'coin_liability', 'debit'  => $cad_cents, 'party_uid' => (int) $uid, 'memo' => $coins . ' ₳ redeemed by a member' ],
-			[ 'account' => 'cash',           'credit' => $cad_cents, 'party_uid' => (int) $uid, 'memo' => 'Paid out to a member' ],
-		], 'coin', 0 );
-	}
-
 	/** 'YYYY-MM-DD' or '' — a real calendar date, not merely a well-shaped string. */
 	private static function norm_date( $v ) {
 		$v = trim( (string) $v );

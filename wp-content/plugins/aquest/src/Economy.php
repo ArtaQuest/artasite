@@ -1158,13 +1158,23 @@ final class Economy {
 		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'buy' AND ref = %s LIMIT 1", [ $ref ] ) ) { return 0; }
 		self::credit_coins( $uid, $coins, 'buy', $ref );
 		self::counter_add( 'backing_mg', $coins ); // atomic — full-reserve backing rises in lockstep with the mint
-		// A coin sale is real fiat arriving and a real obligation created, and until now it reached the
-		// double-entry books not at all — only donations did, because only they pass through
-		// Funds::fund_append. Best-effort in one direction: bookkeeping never blocks a paid mint.
-		if ( class_exists( '\\AQ\\Books' ) ) {
-			$p = self::coin_price();
-			Books::mirror_coin_sale( $ref, $uid, $coins, (int) round( $coins * (float) $p['buy'] * 100 ) );
-		}
+		// KNOWN GAP, DELIBERATELY LEFT OPEN: a member coin sale is real fiat arriving and a real
+		// obligation created, and it reaches the double-entry books not at all — only donations do,
+		// because only they pass through Funds::fund_append.
+		//
+		// A mirror was written for this and then REMOVED, because crediting `coin_liability` is not
+		// free: Books::reconcile_coin_liability treats that account's entire balance as the founding
+		// tranche (its target is derived purely from the invoice register and capped at the issued
+		// coins), so it would release a member's purchase into activity_revenue on the next daily
+		// tick — booking as income an obligation still sitting in that member's wallet, still
+		// redeemable through the live cash-out rail. It would also move authorised_shortfall(), and so
+		// the threshold Integrity::check_reserve pages on.
+		//
+		// Closing this properly means deciding how the Foundation REPRESENTS member-held coin
+		// alongside the founding tranche — a separate liability account, or a tranche-aware reconcile
+		// that values each at its own issue price. That is an accounting policy call for the operator,
+		// not something to infer from code, and it must not be guessed at on statements that are
+		// published and filed. Until it is made, the books omit coin sales and say so here.
 		return $coins;
 	}
 
@@ -1254,12 +1264,11 @@ final class Economy {
 		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'sell' AND ref = %s LIMIT 1", [ $ref ] ) ) { return 0; }
 		self::credit_coins( $uid, -$coins, 'sell', $ref );
 		self::release_backing( $coins ); // never below zero — see release_backing
-		// Real money left the platform. Discharge the obligation in the books too, or the balance
-		// sheet keeps both the cash and the coin liability the payout just settled.
-		if ( class_exists( '\\AQ\\Books' ) ) {
-			$p = self::coin_price();
-			Books::mirror_cashout( $ref, $uid, $coins, (int) round( $coins * (float) $p['sell'] * 100 ) );
-		}
+		// The cash-out half of the same open gap — see fulfil_coin_purchase. A mirror here would debit
+		// `coin_liability` for coins the reconcile has (or will have) already released, driving the
+		// founding tranche below its own target, from which reconcile_coin_liability cannot recover:
+		// its release goes negative, it returns 0 forever, authorised_shortfall() falls with it, and
+		// Integrity::check_reserve begins paging CRITICAL for an entirely legitimate redemption.
 		return $coins;
 	}
 
