@@ -44,7 +44,7 @@ final class Funds {
 	/** The ONE choke point that appends to the fund ledger: writes the row and bumps the bucket's
 	 *  counter projection in lockstep. $bucket is clamped to the column width first, so the stored
 	 *  row and the counter key can never diverge on an over-long earmark key. Returns the row id. */
-	private static function fund_append( $bucket, $cents, $ref, $note ) {
+	private static function fund_append( $bucket, $cents, $ref, $note, $kind = '' ) {
 		$bucket = substr( (string) $bucket, 0, 24 );
 		$id = Data::insert( 'aq_fund_ledger', [
 			'bucket'  => $bucket,
@@ -65,8 +65,58 @@ final class Funds {
 		// twice. Without it the general ledger has no revenue writer at all and the published
 		// statement would report nil income forever while donations piled up in the bucket counters.
 		// Guarded by class_exists so Funds never hard-depends on Books.
-		if ( class_exists( '\\AQ\\Books' ) ) { Books::mirror_fund( $id, $bucket, (int) $cents, (string) $note ); }
+		// $kind tells the books what ECONOMIC EVENT this row is. Without it mirror_fund could only read
+		// the sign, and a pure bucket transfer — which this ledger deliberately expresses as a zero-sum
+		// PAIR of signed appends — was mirrored as a real expense plus a real gift of the same size.
+		// Cash netted to zero and every invariant stayed green while revenue and expenses were each
+		// overstated on the published income statement and on CRA Schedule 125.
+		if ( class_exists( '\\AQ\\Books' ) ) { Books::mirror_fund( $id, $bucket, (int) $cents, (string) $note, (string) $kind ); }
 		return $id;
+	}
+
+	/**
+	 * REVERSE A GIFT whose money went back (a Stripe refund or a lost dispute), through the one door.
+	 *
+	 * This lived in Extra::reverse_fund_gift, which wrote aq_fund_ledger with a bare Data::insert and
+	 * bumped the counter itself — the only other writer of that table in the plugin. Its own comment
+	 * said so and deferred the fix to "the next time that file is open". The consequence was not
+	 * cosmetic: fund_append is the sole caller of Books::mirror_fund, so a refund lowered the bucket
+	 * counters and the public /foundation/finances total while the double-entry books kept the whole
+	 * original gift as revenue and as cash, forever. /foundation/books/verify stayed green throughout,
+	 * because not one of its invariants tied the fund ledger to the general ledger.
+	 *
+	 * $frac reverses a partial refund proportionally. `$already` lets the caller reverse only the part
+	 * a previous refund did not, so several refunds on one charge each do their share exactly once.
+	 * Returns [ cents reversed, buckets touched, [ fund_row_id => cents ] ].
+	 */
+	public static function reverse_gift( $ref, $rev, $frac, $note, $already = 0 ) {
+		$ref  = (string) $ref;
+		$rev  = (string) $rev;
+		$frac = max( 0.0, min( 1.0, (float) $frac ) );
+		// Only the POSITIVE rows: a sponsorship also writes a negative row of its own (the CAD it spent
+		// on a prize pool), and mirroring that would hand the fund money back that it never had.
+		$rows = Data::all(
+			'SELECT id, bucket, cents FROM ' . Data::t( 'aq_fund_ledger' ) . ' WHERE ref = %s AND cents > 0 ORDER BY id ASC',
+			[ $ref ]
+		);
+		$total = 0;
+		foreach ( $rows as $r ) { $total += (int) $r['cents']; }
+		$target = (int) round( $total * $frac ) - (int) $already;
+		if ( $target < 1 ) { return [ 0, [], [] ]; }
+
+		$cents = 0; $buckets = []; $sources = [];
+		foreach ( $rows as $r ) {
+			if ( $cents >= $target ) { break; }
+			// Take this row's share of what is still owed back, never more than the row itself held.
+			$part = min( (int) $r['cents'], $target - $cents );
+			if ( $part < 1 ) { continue; }
+			$id = self::fund_append( (string) $r['bucket'], -$part, $rev, (string) $note, 'refund' );
+			if ( ! $id ) { continue; } // fund_append already logged it; the counter never moved either
+			$cents            += $part;
+			$buckets[]         = (string) $r['bucket'];
+			$sources[ (int) $r['id'] ] = $part;
+		}
+		return [ $cents, $buckets, $sources ];
 	}
 
 	/** All fund counters as bucket => cents (counter names are 'fund_<bucket>'; tiny table read). */
@@ -236,8 +286,8 @@ final class Funds {
 		if ( $held === 0 ) { return; } // nothing earmarked under the old key — pure rename, no money to move
 		$ref  = substr( 'rename:' . $old . '>' . $new, 0, 64 );
 		$note = substr( 'Topic key renamed: ' . $old . ' → ' . $new, 0, 191 );
-		self::fund_append( $old_bucket, -$held, $ref, $note );
-		self::fund_append( 'typ_' . $new, $held, $ref, $note );
+		self::fund_append( $old_bucket, -$held, $ref, $note, 'transfer' );
+		self::fund_append( 'typ_' . $new, $held, $ref, $note, 'transfer' );
 	}
 
 	/**
@@ -307,8 +357,8 @@ final class Funds {
 		if ( (string) $from === (string) $to ) { return false; }
 		$ref  = substr( sanitize_text_field( (string) $ref ), 0, 64 );
 		$note = substr( sanitize_text_field( (string) $note ), 0, 191 );
-		self::fund_append( (string) $from, -$cents, $ref, $note );
-		self::fund_append( (string) $to, $cents, $ref, $note );
+		self::fund_append( (string) $from, -$cents, $ref, $note, 'transfer' );
+		self::fund_append( (string) $to, $cents, $ref, $note, 'transfer' );
 		return true;
 	}
 

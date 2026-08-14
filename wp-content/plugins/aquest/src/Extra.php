@@ -3621,10 +3621,33 @@ final class Extra {
 			return;
 		}
 		$ref = 'stripe:' . $sid;
-		$rev = 'srev:' . $charge; // deterministic: one reversal per charge, whichever event delivers it
+		// ONE REVERSAL REF PER REFUND OBJECT, not per charge.
+		//
+		// It used to be 'srev:<charge>', and both writers refuse to run twice under the same ref. But
+		// Stripe emits charge.refunded once per REFUND created on a charge, while $frac is computed
+		// from the CUMULATIVE amount_refunded. So a first partial refund consumed the only ref the
+		// system would ever use, and every later refund on that charge — including the one taking it
+		// to 100%, and a lost dispute after a partial — found the ref present and reversed nothing,
+		// silently, logging "0 coins, 0 fund cents". Cash-out is live, so coins left unreversed are
+		// withdrawable real money.
+		//
+		// Keying on the refund/dispute object keeps a webhook redelivery idempotent (same object id →
+		// same ref → no-op) while letting each NEW refund do its own share. `$already` then tells the
+		// writers how much of this charge earlier refunds have accounted for, so the total reversed
+		// converges on what was actually returned and never overshoots.
+		$obj_id = (string) ( $obj['id'] ?? '' );
+		if ( ! $dispute ) {
+			$refunds = ( is_array( $obj['refunds'] ?? null ) && is_array( $obj['refunds']['data'] ?? null ) ) ? $obj['refunds']['data'] : [];
+			$last    = $refunds ? end( $refunds ) : null;
+			$obj_id  = is_array( $last ) && ! empty( $last['id'] ) ? (string) $last['id'] : $obj_id;
+		}
+		// The ref carries BOTH: the charge, so every reversal of one payment can be summed back up, and
+		// the refund/dispute object, so a redelivery of the same event is a no-op. ~60 chars.
+		$rev = 'srev:' . $charge . ':' . ( $obj_id !== '' ? $obj_id : 'full' );
 
-		$coins = Economy::reverse_coin_purchase( $ref, $rev, $frac );
-		[ $cents, $buckets ] = self::reverse_fund_gift( $ref, $rev, $frac, $charge );
+		[ $done_coins, $done_cents ] = self::already_reversed( $charge );
+		$coins = Economy::reverse_coin_purchase( $ref, $rev, $frac, $done_coins );
+		[ $cents, $buckets ] = self::reverse_fund_gift( $ref, $rev, $frac, $charge, $done_cents );
 
 		Watchdog::note( sprintf( 'Stripe %s reversed: charge %s, %.2f CAD, %d coins, %d fund cents', $type, $charge, $back / 100, $coins, $cents ) );
 		// Two cases a human must actually look at: a sponsorship whose money has already been spent
@@ -3645,38 +3668,21 @@ final class Extra {
 	 * Mirror a gift's fund-ledger rows as negatives, and take back the donate points it bought.
 	 * Returns [ cents reversed, buckets touched ].
 	 *
-	 * The fund ledger's append is private to Funds (its one write choke point, which moves the bucket
-	 * counter in lockstep), and Funds.php is not ours to edit in this pass — so this mirrors that
-	 * invariant exactly: the row lands FIRST and the counter moves only if it did, because a counter
-	 * that moves without a row desyncs the public finances permanently. Fold it into a
-	 * Funds::reverse_gift the next time that file is open.
+	 * The ledger write itself now lives in Funds::reverse_gift — the one door, which moves the bucket
+	 * counter in lockstep AND mirrors into the double-entry books. This function used to insert into
+	 * aq_fund_ledger directly and bump the counter itself, which meant a refund lowered the public
+	 * /foundation/finances total while the published statements kept the whole gift as revenue and as
+	 * cash forever. What remains here is the part that is genuinely Stripe's business: taking back the
+	 * donate-track standing the refunded money bought.
 	 */
-	private static function reverse_fund_gift( $ref, $rev, $frac, $charge ) {
+	private static function reverse_fund_gift( $ref, $rev, $frac, $charge, $already = 0 ) {
 		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_fund_ledger' ) . ' WHERE ref = %s LIMIT 1', [ $rev ] ) ) { return [ 0, [] ]; }
-		// Only the POSITIVE rows: a sponsorship also writes a negative row of its own (the CAD it spent
-		// on a prize pool), and mirroring that would hand the fund money back that it never had.
-		$rows = Data::all( 'SELECT id, bucket, cents FROM ' . Data::t( 'aq_fund_ledger' ) . ' WHERE ref = %s AND cents > 0 ORDER BY id ASC', [ (string) $ref ] );
-		$cents = 0; $awarded = 0; $uid = 0; $buckets = [];
-		foreach ( $rows as $r ) {
-			$part = (int) round( (int) $r['cents'] * (float) $frac );
-			if ( $part < 1 ) { continue; }
-			$id = Data::insert( 'aq_fund_ledger', [
-				'bucket'  => (string) $r['bucket'],
-				'cents'   => -$part,
-				'ref'     => (string) $rev,
-				'note'    => 'Refunded: ' . $charge,
-				'created' => Data::now(),
-			] );
-			if ( ! $id ) {
-				error_log( 'AQ reverse_fund_gift: ledger INSERT FAILED bucket=' . $r['bucket'] . " {$part}c ref={$rev} — nothing reversed" );
-				continue;
-			}
-			Economy::counter_add( 'fund_' . (string) $r['bucket'], -$part );
-			$cents    += $part;
-			$buckets[] = (string) $r['bucket'];
+		[ $cents, $buckets, $sources ] = Funds::reverse_gift( $ref, $rev, $frac, 'Refunded: ' . $charge, $already );
+		$awarded = 0; $uid = 0;
+		foreach ( $sources as $fund_row_id => $part ) {
 			// The donor + the points this part bought: the fund ledger records no user_id, but
 			// record_donation awarded the points against ref 'fund<row id>', which does.
-			$p = Data::one( 'SELECT user_id, delta FROM ' . Data::t( 'aq_points_ledger' ) . " WHERE track = 'donate' AND ref = %s LIMIT 1", [ 'fund' . (int) $r['id'] ] );
+			$p = Data::one( 'SELECT user_id, delta FROM ' . Data::t( 'aq_points_ledger' ) . " WHERE track = 'donate' AND ref = %s LIMIT 1", [ 'fund' . (int) $fund_row_id ] );
 			if ( $p ) { $uid = (int) $p['user_id']; $awarded += (int) $p['delta']; }
 		}
 		// Standing bought by money that went back is standing nobody earned — and it buys real things
@@ -3685,6 +3691,26 @@ final class Extra {
 		$giveback = min( $awarded, (int) floor( $cents / 100 ) );
 		if ( $uid > 0 && $giveback > 0 ) { Economy::award_points( $uid, -$giveback, 'donate', (string) $rev ); }
 		return [ $cents, $buckets ];
+	}
+
+	/**
+	 * How much of a charge earlier refund events have ALREADY reversed — [ coins, fund cents ].
+	 * Every reversal ref is 'srev:<charge>:<refund object>', so one prefix scan answers it for both
+	 * ledgers. This is what lets several refunds on one payment each reverse their own share exactly
+	 * once, instead of the first one consuming the whole reversal and the rest silently doing nothing.
+	 */
+	private static function already_reversed( $charge ) {
+		global $wpdb;
+		$like = $wpdb->esc_like( 'srev:' . (string) $charge . ':' ) . '%';
+		$coins = (int) Data::col(
+			'SELECT COALESCE(SUM(-delta),0) FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'refund' AND ref LIKE %s",
+			[ $like ]
+		);
+		$cents = (int) Data::col(
+			'SELECT COALESCE(SUM(-cents),0) FROM ' . Data::t( 'aq_fund_ledger' ) . ' WHERE cents < 0 AND ref LIKE %s',
+			[ $like ]
+		);
+		return [ max( 0, $coins ), max( 0, $cents ) ];
 	}
 
 	/**

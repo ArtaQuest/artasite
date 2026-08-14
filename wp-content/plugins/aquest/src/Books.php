@@ -489,13 +489,26 @@ final class Books {
 	 * a donation is never blocked by bookkeeping. It is not best-effort about correctness — an
 	 * unbalanced mirror is refused by journal() like any other entry.
 	 */
-	public static function mirror_fund( $fund_id, $bucket, $cents, $note = '' ) {
+	public static function mirror_fund( $fund_id, $bucket, $cents, $note = '', $kind = '' ) {
 		$fund_id = (int) $fund_id;
 		$cents   = (int) $cents;
 		if ( $fund_id < 1 || 0 === $cents ) { return 0; }
 		if ( get_option( 'aq_books_table_version' ) !== self::TABLE_VERSION ) { return 0; }
 		$memo = substr( sanitize_text_field( (string) ( $note ?: $bucket ) ), 0, 191 );
 		$date = self::today();
+		// A TRANSFER BETWEEN BUCKETS IS NOT AN ECONOMIC EVENT. A fund bucket is an earmark, not a GL
+		// account: money moving from one to another has not been received and has not been spent, and
+		// the cash balance is unchanged. Booking each half by its sign posted a matching fake expense
+		// and fake gift, which balanced perfectly and inflated both totals.
+		if ( 'transfer' === $kind ) { return 0; }
+		// A REFUND is revenue coming back, not a grant being paid: it reverses the gift entry rather
+		// than recording money spent on someone. Same cash credit, different debit.
+		if ( 'refund' === $kind && $cents < 0 ) {
+			return self::journal( 'fund:' . $fund_id, $date, $memo, [
+				[ 'account' => 'donations', 'debit'  => -$cents, 'memo' => $memo ],
+				[ 'account' => 'cash',      'credit' => -$cents, 'memo' => 'Refunded from ' . $bucket ],
+			], 'donation', 0 );
+		}
 		if ( $cents > 0 ) {
 			return self::journal( 'fund:' . $fund_id, $date, $memo, [
 				[ 'account' => 'cash',      'debit'  => $cents, 'memo' => 'Received into ' . $bucket ],
@@ -506,6 +519,45 @@ final class Books {
 			[ 'account' => 'grants_out', 'debit'  => -$cents, 'memo' => $memo ],
 			[ 'account' => 'cash',       'credit' => -$cents, 'memo' => 'Paid out of ' . $bucket ],
 		], 'donation', 0 );
+	}
+
+	/**
+	 * Mirror a COIN SALE — a member paid fiat and received ArtaCoin.
+	 *
+	 * Donations reach the books because Funds::fund_append mirrors them. Coin sales are the platform's
+	 * OTHER live fiat rail (Stripe is in live mode with cash-out enabled) and reached them not at all:
+	 * Economy::fulfil_coin_purchase minted against a captured payment and wrote no journal entry, so
+	 * the balance sheet showed neither the cash that came in nor the obligation it created. That is not
+	 * a modelling choice — the chart of accounts already carries `coin_liability`, and the filing notes
+	 * already describe ArtaCoin as an obligation of the Foundation.
+	 *
+	 * A sale is not revenue: the Foundation owes the coin. Cash rises, and so does what it owes.
+	 * Idempotent on the coin-ledger ref, which is the same ref the ledger row carries.
+	 */
+	public static function mirror_coin_sale( $ref, $uid, $coins, $cad_cents ) {
+		$cad_cents = (int) $cad_cents;
+		$coins     = (int) $coins;
+		if ( $cad_cents < 1 || $coins < 1 || (string) $ref === '' ) { return 0; }
+		if ( get_option( 'aq_books_table_version' ) !== self::TABLE_VERSION ) { return 0; }
+		return self::journal( 'coinbuy:' . $ref, self::today(), $coins . ' ₳ sold', [
+			[ 'account' => 'cash',           'debit'  => $cad_cents, 'party_uid' => (int) $uid, 'memo' => 'Coin top-up received' ],
+			[ 'account' => 'coin_liability', 'credit' => $cad_cents, 'party_uid' => (int) $uid, 'memo' => $coins . ' ₳ issued to a member' ],
+		], 'coin', 0 );
+	}
+
+	/**
+	 * Mirror a CASH-OUT — a member redeemed ArtaCoin and real money left the platform. The mirror of
+	 * the sale above: the obligation is discharged and cash falls.
+	 */
+	public static function mirror_cashout( $ref, $uid, $coins, $cad_cents ) {
+		$cad_cents = (int) $cad_cents;
+		$coins     = (int) $coins;
+		if ( $cad_cents < 1 || $coins < 1 || (string) $ref === '' ) { return 0; }
+		if ( get_option( 'aq_books_table_version' ) !== self::TABLE_VERSION ) { return 0; }
+		return self::journal( 'coinout:' . $ref, self::today(), $coins . ' ₳ redeemed', [
+			[ 'account' => 'coin_liability', 'debit'  => $cad_cents, 'party_uid' => (int) $uid, 'memo' => $coins . ' ₳ redeemed by a member' ],
+			[ 'account' => 'cash',           'credit' => $cad_cents, 'party_uid' => (int) $uid, 'memo' => 'Paid out to a member' ],
+		], 'coin', 0 );
 	}
 
 	/** 'YYYY-MM-DD' or '' — a real calendar date, not merely a well-shaped string. */
@@ -902,6 +954,43 @@ final class Books {
 			. Data::t( 'aq_books_entry' ) . ' e ON e.id = l.entry_id WHERE e.id IS NULL' );
 		$checks[] = [ 'check' => 'no_orphan_lines', 'ok' => 0 === $orphan,
 			'detail' => $orphan ? $orphan . ' line(s) with no entry' : 'every line belongs to an entry' ];
+
+		// THE CHECK THAT TIES THE FUND LEDGER TO THE BOOKS.
+		//
+		// Every invariant above this line is internal to the general ledger: it can prove the ledger is
+		// self-consistent, and nothing more. All eight stayed green through two real defects. A refund
+		// wrote aq_fund_ledger directly and never mirrored, so the published income statement kept the
+		// gift as revenue and as cash after the money had gone back. And a pure bucket transfer was
+		// mirrored as a matching fake expense and fake gift, which balanced perfectly while overstating
+		// both totals. A ledger that only checks itself cannot see either.
+		//
+		// So: every cent in the fund ledger must be answered by a journal entry keyed on its row id.
+		// A bypass shows up as a missing entry; the transfer rows are legitimately absent, so they are
+		// excluded by the same 'transfer' movement kind that keeps them out of the books.
+		// Joined in PHP, not in SQL: the natural form needs CONCAT('fund:', f.id) in an ON clause, and
+		// this plugin also runs on Studio's SQLite emulation where that is not dependable. Two bounded
+		// reads and an array_diff say the same thing on both engines. The 'rename:'/'widen:' refs are
+		// the zero-sum bucket transfers, which are correctly absent from the books.
+		$fund_rows = Data::all(
+			'SELECT id, bucket FROM ' . Data::t( 'aq_fund_ledger' )
+			. " WHERE ref NOT LIKE 'rename:%' AND ref NOT LIKE 'widen:%' ORDER BY id DESC LIMIT 500" );
+		$unmirrored = [];
+		if ( $fund_rows ) {
+			$ids  = array_map( static fn( $r ) => (int) $r['id'], $fund_rows );
+			$refs = array_map( static fn( $i ) => 'fund:' . $i, $ids );
+			$in   = implode( ',', array_fill( 0, count( $refs ), '%s' ) );
+			$seen = [];
+			foreach ( Data::all( 'SELECT ref FROM ' . Data::t( 'aq_books_entry' ) . " WHERE ref IN ($in)", $refs ) as $e ) {
+				$seen[ (string) $e['ref'] ] = true;
+			}
+			foreach ( $fund_rows as $r ) {
+				if ( ! isset( $seen[ 'fund:' . (int) $r['id'] ] ) ) { $unmirrored[] = '#' . (int) $r['id'] . ' ' . $r['bucket']; }
+			}
+		}
+		$checks[] = [ 'check' => 'fund_ledger_mirrored', 'ok' => ! $unmirrored,
+			'detail' => $unmirrored
+				? count( $unmirrored ) . ' fund row(s) with no journal entry: ' . implode( ', ', array_slice( $unmirrored, 0, 6 ) )
+				: 'every fund-ledger movement is mirrored into the books (last 500)' ];
 
 		return $checks;
 	}

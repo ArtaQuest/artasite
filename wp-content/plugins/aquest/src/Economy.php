@@ -338,6 +338,29 @@ final class Economy {
 	 *  'backing_mg') so concurrent buys / sells / bursary grants never lose an update the way the old
 	 *  aq_coin_backing_mg OPTION's read-modify-write (get_option → +n → update_option) did. Seeded once at
 	 *  migration (Schema) from the legacy option, or from the coins in circulation on a genesis install. */
+	/**
+	 * RELEASE GOLD BACKING, NEVER BELOW ZERO.
+	 *
+	 * `counter_add` is an unconditional `SET value = value + %d`, so redeeming or refunding a coin
+	 * used to subtract a milligram whether or not a milligram was there. Live state is 4,230 coins
+	 * issued against 0 mg held, so the very first redemption of an unbacked coin would have
+	 * manufactured a NEGATIVE gold holding — which reserve() publishes raw, and which makes
+	 * `shortfall = max(0, issued - backing)` subtract a negative and stop falling as coins leave
+	 * circulation. Books::authorised_shortfall() meanwhile falls with coin_liability, so the two
+	 * diverge and Integrity::check_reserve begins paging CRITICAL "FULL-RESERVE INVARIANT BROKEN,
+	 * FREEZE cash-outs" for a redemption that was entirely legitimate.
+	 *
+	 * Redeeming a coin from the authorised unbacked tranche extinguishes a liability; it does not
+	 * remove metal that was never in the vault. So release only what is actually held.
+	 */
+	public static function release_backing( $coins ) {
+		$coins = (int) $coins;
+		if ( $coins < 1 ) { return 0; }
+		$release = min( (int) self::backing_mg(), $coins );
+		if ( $release > 0 ) { self::counter_add( 'backing_mg', -$release ); }
+		return $release;
+	}
+
 	public static function backing_mg() {
 		return self::counter( 'backing_mg' );
 	}
@@ -1083,9 +1106,20 @@ final class Economy {
 	public static function buy( $req ) {
 		if ( Rest::throttle( 'coin_buy', 20, 3600 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$uid = Rest::uid();
-		$cad = (float) Rest::p( $req, 'amount', 0 );
-		if ( $cad < 1 ) { return Rest::err( 'bad_input', 'Minimum purchase is $1.' ); }
+		$raw = Rest::p( $req, 'amount', 0 );
+		$cad = is_numeric( $raw ) ? (float) $raw : 0.0;
+		// BOUND THE INPUT BEFORE ANY ARITHMETIC. `(int)` on an out-of-range double is reduced modulo
+		// 2^64 in PHP, so an unchecked amount does not merely produce a big number — it produces a
+		// WRONG one, of either sign. Verified on PHP 8.4: amount=1e17 yields coins=533049040511727104
+		// and amount_cents=-8446744073709551616. The coin count then travels to fulfilment in Stripe
+		// metadata and is minted verbatim, so the stated invariant below (fiat captured == coin value
+		// credited == gold backing added) held only by Stripe's own API refusing the charge.
+		if ( ! is_finite( $cad ) || $cad < 1 ) { return Rest::err( 'bad_input', 'Minimum purchase is $1.' ); }
+		if ( $cad > self::MAX_BUY_CAD ) {
+			return Rest::err( 'too_large', 'The most you can buy in one go is $' . number_format( self::MAX_BUY_CAD ) . '. Split it into smaller purchases.' );
+		}
 		$p     = self::coin_price();
+		if ( ! ( $p['buy'] > 0 ) ) { return Rest::err( 'price_unavailable', 'The coin price is unavailable right now. Please try again shortly.', 503 ); }
 		$coins = (int) floor( $cad / $p['buy'] );
 		if ( $coins < 1 ) { return Rest::err( 'too_small', 'That buys less than one coin.' ); }
 		// Charge ONLY for the whole coins delivered (coins are integer-mg), never the rounded-down remainder
@@ -1121,6 +1155,13 @@ final class Economy {
 		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'buy' AND ref = %s LIMIT 1", [ $ref ] ) ) { return 0; }
 		self::credit_coins( $uid, $coins, 'buy', $ref );
 		self::counter_add( 'backing_mg', $coins ); // atomic — full-reserve backing rises in lockstep with the mint
+		// A coin sale is real fiat arriving and a real obligation created, and until now it reached the
+		// double-entry books not at all — only donations did, because only they pass through
+		// Funds::fund_append. Best-effort in one direction: bookkeeping never blocks a paid mint.
+		if ( class_exists( '\\AQ\\Books' ) ) {
+			$p = self::coin_price();
+			Books::mirror_coin_sale( $ref, $uid, $coins, (int) round( $coins * (float) $p['buy'] * 100 ) );
+		}
 		return $coins;
 	}
 
@@ -1139,16 +1180,20 @@ final class Economy {
 	 * went back, the coins did not — and credit_coins' overdraft canary pages an operator to chase it.
 	 * Returns the coins clawed back (0 when there is nothing to reverse, or it was already done).
 	 */
-	public static function reverse_coin_purchase( $ref, $rev_ref, $fraction = 1.0 ) {
+	public static function reverse_coin_purchase( $ref, $rev_ref, $fraction = 1.0, $already = 0 ) {
 		$ref = (string) $ref; $rev_ref = (string) $rev_ref;
 		if ( $ref === '' || $rev_ref === '' ) { return 0; }
 		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . ' WHERE ref = %s LIMIT 1', [ $rev_ref ] ) ) { return 0; }
 		$row = Data::one( 'SELECT user_id, delta FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'buy' AND ref = %s LIMIT 1", [ $ref ] );
 		if ( ! $row || (int) $row['delta'] < 1 ) { return 0; } // nothing was minted for this payment
-		$coins = (int) floor( (int) $row['delta'] * max( 0.0, min( 1.0, (float) $fraction ) ) );
+		// $fraction is the CUMULATIVE share of the payment now refunded, so subtract what earlier
+		// refunds on the same charge already clawed back and reverse only the remainder. Without this
+		// a second refund would either double-count or (under the old one-ref-per-charge scheme) do
+		// nothing at all.
+		$coins = (int) floor( (int) $row['delta'] * max( 0.0, min( 1.0, (float) $fraction ) ) ) - (int) $already;
 		if ( $coins < 1 ) { return 0; }
 		self::credit_coins( (int) $row['user_id'], -$coins, 'refund', $rev_ref );
-		self::counter_add( 'backing_mg', -$coins ); // the mint is undone, so its gold is released with it
+		self::release_backing( $coins ); // the mint is undone, so its gold is released with it — never below zero
 		return $coins;
 	}
 
@@ -1205,7 +1250,13 @@ final class Economy {
 		$ref = 'stripe_tr:' . $tid;
 		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'sell' AND ref = %s LIMIT 1", [ $ref ] ) ) { return 0; }
 		self::credit_coins( $uid, -$coins, 'sell', $ref );
-		self::counter_add( 'backing_mg', -$coins ); // atomic — backing shrinks in lockstep with the redeemed coins
+		self::release_backing( $coins ); // never below zero — see release_backing
+		// Real money left the platform. Discharge the obligation in the books too, or the balance
+		// sheet keeps both the cash and the coin liability the payout just settled.
+		if ( class_exists( '\\AQ\\Books' ) ) {
+			$p = self::coin_price();
+			Books::mirror_cashout( $ref, $uid, $coins, (int) round( $coins * (float) $p['sell'] * 100 ) );
+		}
 		return $coins;
 	}
 
@@ -1345,6 +1396,11 @@ final class Economy {
 	// accepted only inside HARD sanity bounds AND within a ±20% band of the current value — a glitched
 	// or manipulated feed can nudge the price, never crater or spike it. Rejections and staleness are
 	// alarmed through the Watchdog so a broken feed is an operator page, not a silent mispricing.
+
+	/** Ceiling on a single coin purchase (CAD). Not a policy limit so much as an overflow guard: it
+	 *  keeps `(int)` casts of amount/coins far inside the integer range, and caps the damage of a
+	 *  fat-fingered or scripted amount. Stripe's own API refuses over 99,999,999 cents. */
+	const MAX_BUY_CAD = 10000.0;
 
 	const ORACLE_MAX_AGE = 7 * DAY_IN_SECONDS;  // staleness alarm threshold (checked hourly by the Watchdog)
 	const SPOT_HARD_MIN  = 1000.0;              // USD/oz — outside these the feed is broken, full stop
