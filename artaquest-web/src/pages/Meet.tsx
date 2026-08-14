@@ -420,15 +420,17 @@ function NewMeetingForm({ seatsMax, onDone, onClose }: {
           placeholder="What is this meeting for?" />
       </Field>
 
-      <Field label="Agenda" optional>
+      <Field label="Agenda" optional
+        hint="The call is encrypted end to end; the agenda is not — it is stored in plain text and travels in calendar invitations">
         <Textarea value={agenda} onChange={(e) => setAgenda(e.target.value)} rows={3} maxLength={500}
           placeholder="What you want to get through" />
       </Field>
       {/* NOT a policy page. title, agenda, time and the whole guest list are plaintext rows served
           in full at /data/ — so the sentence belongs where the host is typing them. */}
       <p className="-mt-2 text-[12px] leading-relaxed text-ink-3">
-        Anyone can see that this meeting exists, when it is, and who is invited. Nobody but the people in it can
-        see or hear what happens
+        Anyone can see that this meeting exists, when it is, and who is invited — including its title and
+        agenda, which are stored in plain text and travel in calendar invitations. Nobody but the people in
+        it can see or hear what happens: the call itself is encrypted end to end
       </p>
 
       <div className="flex flex-col gap-3 sm:flex-row">

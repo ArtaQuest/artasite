@@ -1045,7 +1045,8 @@ function VisitorPage({ handle }: { handle: string }) {
               a click; the confirm button being below the fold is not. A note carried back from
               signing in re-opens itself (`useState(!!entry.note)`), so nothing is ever hidden. */}
           <div className={cx("mt-3", noteOpen ? "block" : "hidden")}>
-            <Field label="What would you like to talk about?" optional hint="They’ll see this before the call">
+            <Field label="What would you like to talk about?" optional
+                hint="They’ll see this before the call. Unlike the call itself, this note isn’t encrypted — we can read it, so keep anything private for the conversation">
               <Textarea ref={noteBox} rows={3} value={note} maxLength={500}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="A sentence is plenty" />
