@@ -32,7 +32,24 @@ async function post<T>(path: string, body: Record<string, unknown>): Promise<T> 
   // Carry the HTTP status (mirrors ./api's ApiError) so callers can tell a paywall (402) — e.g. the
   // enrol entry fee a new member can't yet cover — apart from an auth/network/server failure. The
   // backend message is preserved, so existing `catch (e) { e.message }` consumers are unaffected.
-  if (!r.ok) throw new ApiError(path, r.status, (j as { message?: string })?.message);
+  if (!r.ok) {
+    // A STALE NONCE IS NOT A SERVER ERROR, AND IT MUST NOT READ LIKE ONE.
+    //
+    // NONCE is captured once when this module is imported and sent for the life of the tab, but
+    // WordPress REST nonces roll on the 12/24-hour tick. After that, rest_cookie_check_errors
+    // rejects the request before the route's permission callback ever runs, and the message the
+    // browser gets back is WordPress's own "Cookie check failed" — which names no cause and offers
+    // no way out. Pages surface it verbatim, so on /donate (which invites a long dwell: three
+    // decision steps, a live certificate preview and the whole books section) the one tap that
+    // moves money failed with a sentence about cookies. Say what actually happened instead.
+    const code = (j as { code?: string })?.code || "";
+    if ((r.status === 401 || r.status === 403) && /nonce|cookie/i.test(code + " " + ((j as { message?: string })?.message || ""))) {
+      // Deliberately generic: post() is shared by every page, and only some of them can promise that
+      // reloading keeps anything. A page that CAN (see Donate's stashIntent) says so itself.
+      throw new ApiError(path, r.status, "Your session has expired. Please reload the page and try again.");
+    }
+    throw new ApiError(path, r.status, (j as { message?: string })?.message);
+  }
   return j as T;
 }
 const AQ = "/aq/v1";

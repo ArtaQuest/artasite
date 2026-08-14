@@ -163,12 +163,57 @@ export default function Donate() {
 
   const logged = isLoggedIn();
 
+  /**
+   * THE INTENT SURVIVES THE SIGN-IN.
+   *
+   * /donate is public, linked from the nav, from /reserve and from the FAQ, so most first-time
+   * visitors arrive signed out — and the wall below used to replace the whole flow with a bare
+   * "Sign in to give" whose link carried no redirect_to. Login.tsx has honoured a return-to since it
+   * was written; /donate simply never passed one. So a donor who had chosen a slice, an amount and a
+   * name was authenticated and then dropped on the feed, with every one of those choices discarded
+   * and no way back but to find the page again and start over.
+   *
+   * Both halves are fixed here: the link carries where to come back to, and the choices are parked
+   * in sessionStorage first (this tab only, cleared on read — it is a handoff, not a record).
+   */
+  const STASH = "aq.donate.intent";
+  function stashIntent() {
+    try {
+      sessionStorage.setItem(STASH, JSON.stringify({ country, gender, band, preset, custom, donorName, anon }));
+    } catch { /* private mode / quota — the sign-in still works, it just forgets */ }
+  }
+  useEffect(() => {
+    if (!logged) return;
+    let raw: string | null;
+    try { raw = sessionStorage.getItem(STASH); sessionStorage.removeItem(STASH); } catch { return; }
+    if (!raw) return;
+    try {
+      const v = JSON.parse(raw) as Partial<{ country: string; gender: string; band: string; preset: number; custom: string; donorName: string; anon: boolean }>;
+      if (typeof v.country === "string") setCountry(v.country);
+      if (typeof v.gender === "string") setGender(v.gender);
+      if (typeof v.band === "string") setBand(v.band);
+      if (typeof v.preset === "number") setPreset(v.preset);
+      if (typeof v.custom === "string") setCustom(v.custom);
+      // The name is restored only if they typed one — otherwise the account's own name, set below,
+      // is the better answer and must not be overwritten with a stale blank.
+      if (typeof v.donorName === "string" && v.donorName.trim()) setDonorName(v.donorName);
+      if (typeof v.anon === "boolean") setAnon(v.anon);
+    } catch { /* corrupt stash — start clean rather than half-restored */ }
+  }, [logged]);
+
+  const loginHref = `${w.AQ_LOGIN_URL || "/login/"}?redirect_to=${encodeURIComponent(
+    typeof window === "undefined" ? "/donate/" : window.location.pathname + window.location.search
+  )}`;
+
   // The foundation's books are PUBLIC — fetched regardless of login state.
   useEffect(() => { getFoundationFinances().then((d) => (d ? setFin(d) : setFinFailed(true))); }, []);
   useEffect(() => { creditOptions().then(setCopts).catch(() => setCopts(null)); }, []);
+  // Presets and the coin price come from the PUBLIC /reserve (getDonateOptions calls nothing else),
+  // and credits/options is public too — so a signed-out visitor can be shown the real amounts and the
+  // real reach instead of a wall. Only the donor's own gift history needs an account.
+  useEffect(() => { getDonateOptions().then(setOpts); }, []);
   useEffect(() => {
     if (!logged) return;
-    getDonateOptions().then(setOpts);
     myCredits().then((r) => setGifts(r.items)).catch(() => {});
     setDonorName((me?.name || "").trim());
   }, [logged]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -233,6 +278,10 @@ export default function Donate() {
 
   function give() {
     if (busy || amount < 1) return;
+    // Park the choices before leaving for Stripe. It costs nothing and it covers every way this can
+    // fail — an expired nonce, a network drop, a Stripe error, or simply the donor deciding to come
+    // back later — so "reload and your choices are kept" is a promise the page can actually keep.
+    stashIntent();
     setBusy(true); setErr("");
     postCourseCheckout({
       donations: [{ amount, credit: { country, gender, band, fee_cap: copts?.fee_cap, name: anon ? "" : donorName.trim() } }],
@@ -250,27 +299,13 @@ export default function Donate() {
     <>Every member can read, publish and be cited for free. The one thing that costs money is <strong className="text-ink">entering a challenge</strong> — and that is what your gift pays for. Choose who it reaches, and your name goes on their Certificate of Participation.</>
   );
 
-  if (!logged) {
-    return (
-      <div className="flex flex-col gap-10 pb-12">
-        <PageHero eyebrow="Donations" glyph={<DomainGlyph domain="cause" />} title="Pay someone’s way into a challenge" lede={heroLede} />
-        <Card className="mx-auto w-full max-w-lg px-6 py-8 text-center">
-          <h2 className="text-[20px] font-bold tracking-tight">Sign in to give</h2>
-          <p className="mt-2 text-[14.5px] leading-relaxed text-ink-2">Your gift is recorded against your account so it can be traced from your payment to the exact entry it paid for — and so we know whose name to print.</p>
-          <div className="mt-5 flex justify-center gap-3">
-            <Button href={w.AQ_LOGIN_URL || "/login/"} size="lg">Sign in</Button>
-            <Button variant="outline" href="/challenges/" size="lg">See the challenges</Button>
-          </div>
-        </Card>
-        <section className="flex flex-col gap-4">
-          <h2 className="text-[20px] font-bold tracking-tight">The certificate your name goes on</h2>
-          <ParticipationDoc cert={sampleCert("Your name", "any member of ArtaQuest")} sample />
-        </section>
-        {books}
-      </div>
-    );
-  }
-
+  /* THERE IS NO LONGER A WALL IN FRONT OF THE FLOW.
+     A signed-out visitor used to get a "Sign in to give" card INSTEAD of the page — so the one thing
+     they came to do was invisible until they had an account, and everything they might have chosen
+     was lost on the way there. An account is genuinely required (the gift is traced to the entry it
+     paid for, and the certificate needs a name), but that is a fact about the LAST step, not a reason
+     to hide the first three. They now choose slice, amount and name exactly as a member does; the
+     final button signs them in, carrying both the return address and the choices. */
   return (
     <div className="flex flex-col gap-10 pb-12">
       <PageHero eyebrow="Donations" glyph={<DomainGlyph domain="cause" />} title="Pay someone’s way into a challenge" lede={heroLede} />
@@ -386,10 +421,26 @@ export default function Donate() {
 
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-2.5">
           {err && <StatusNote error className="py-2 text-left">{err}</StatusNote>}
-          <Button onClick={give} disabled={busy || amount < 1} className="h-12 w-full text-[16px] disabled:opacity-50">
-            {busy ? "Starting…" : `Give ${sym}${amount || 0}`}
-          </Button>
-          <p className="text-center text-[12px] text-ink-3">You’ll choose how to pay on the next screen. Nothing is charged until you do.</p>
+          {logged ? (
+            <Button onClick={give} disabled={busy || amount < 1} className="h-12 w-full text-[16px] disabled:opacity-50">
+              {busy ? "Starting…" : `Give ${sym}${amount || 0}`}
+            </Button>
+          ) : (
+            <Button onClick={() => { stashIntent(); window.location.assign(loginHref); }} disabled={amount < 1}
+              className="h-12 w-full text-[16px] disabled:opacity-50">
+              {`Sign in to give ${sym}${amount || 0}`}
+            </Button>
+          )}
+          <p className="text-center text-[12px] text-ink-3">
+            {logged
+              ? "You’ll choose how to pay on the next screen. Nothing is charged until you do."
+              : "Your choices are kept — you’ll come straight back here, then choose how to pay. Nothing is charged until you do."}
+          </p>
+          {!logged && (
+            <p className="text-center text-[12px] leading-relaxed text-ink-3">
+              An account is needed because the gift is traced from your payment to the exact entry it paid for, and because the certificate needs a name to print.
+            </p>
+          )}
         </div>
       </div>
 

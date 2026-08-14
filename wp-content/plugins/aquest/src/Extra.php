@@ -3447,7 +3447,21 @@ final class Extra {
 					'Donation to the ArtaQuest Foundation',
 					$return . '?stripe=success&session={CHECKOUT_SESSION_ID}',
 					$return . '?stripe=cancel',
-					[ 'aq_kind' => 'donations', 'aq_uid' => $uid, 'aq_donations' => $donations_json ]
+					[ 'aq_kind' => 'donations', 'aq_uid' => $uid, 'aq_donations' => $donations_json ],
+					[
+						// One less field to type: we already hold the donor's registered address, and
+						// prefilling it also means the Stripe receipt reaches the account that gave.
+						'customer_email' => self::member_email( $uid ),
+						// Stripe's button reads "Donate" rather than "Pay" — this IS a donation, and the
+						// mismatch between the page's language and the checkout's was its own small doubt.
+						'submit_type'    => 'donate',
+						// What the donor sees on their card statement weeks later. An unrecognised line is
+						// the most common cause of a chargeback on a genuine gift.
+						'payment_intent_data' => [
+							'description' => 'ArtaQuest Foundation — gift',
+							'statement_descriptor_suffix' => 'GIFT',
+						],
+					]
 				);
 				if ( ! $sess ) { return Rest::err( 'stripe_error', 'Could not start the secure payment. Please try again.', 502 ); }
 				return [ 'ok' => true, 'redirect' => true, 'url' => $sess['url'], 'course' => 'Your gift', 'total' => $total_cents / 100 ];
@@ -3547,6 +3561,12 @@ final class Extra {
 			Economy::fulfil_coin_purchase( (int) ( $meta['aq_uid'] ?? 0 ), (int) ( $meta['aq_coins'] ?? 0 ), $ref ); // idempotent
 		}
 		return [ $kind, $total ];
+	}
+
+	/** A member's registered email, or '' — used to prefill Stripe Checkout. Never invents one. */
+	private static function member_email( $uid ) {
+		$u = get_userdata( (int) $uid );
+		return ( $u && is_email( $u->user_email ) ) ? (string) $u->user_email : '';
 	}
 
 	/**

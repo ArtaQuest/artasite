@@ -71,7 +71,7 @@ final class Stripe {
 	 * values) is echoed back on the session so fulfilment can reconstruct the order. Returns
 	 * [ id, url ] (redirect the browser to url) or null.
 	 */
-	public static function create_session( $amount_cents, $description, $success_url, $cancel_url, $metadata = [] ) {
+	public static function create_session( $amount_cents, $description, $success_url, $cancel_url, $metadata = [], $extra = [] ) {
 		$amount_cents = (int) $amount_cents;
 		if ( $amount_cents < 1 ) { return null; }
 		$params = [
@@ -87,6 +87,18 @@ final class Stripe {
 				],
 			] ],
 		];
+		// `payment_method_types` stays UNSET on purpose: Stripe then offers whatever is enabled on the
+		// account, which is how Apple Pay, Google Pay and Link appear without a code change. Naming
+		// types here would silently switch those off.
+		//
+		// $extra carries the per-flow trimmings — customer_email (one field the donor does not retype),
+		// submit_type (Stripe's button reads "Donate" instead of "Pay"), payment_intent_data. Only
+		// known keys are copied, so a caller cannot overwrite the amount or the return URLs.
+		foreach ( [ 'customer_email', 'submit_type', 'payment_intent_data', 'allow_promotion_codes', 'locale' ] as $k ) {
+			if ( isset( $extra[ $k ] ) && ( is_array( $extra[ $k ] ) || (string) $extra[ $k ] !== '' ) ) {
+				$params[ $k ] = $extra[ $k ];
+			}
+		}
 		foreach ( $metadata as $mk => $mv ) { $params['metadata'][ (string) $mk ] = mb_substr( (string) $mv, 0, 500 ); }
 		$s = self::req( 'POST', '/checkout/sessions', $params );
 		return ( $s && ! empty( $s['id'] ) ) ? [ 'id' => (string) $s['id'], 'url' => (string) ( $s['url'] ?? '' ) ] : null;
