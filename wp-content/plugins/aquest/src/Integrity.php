@@ -33,6 +33,11 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *   6. FULL-RESERVE INVARIANT — coins in circulation must never exceed the gold backing
  *      (Economy::verify_reserve). A break means coins were minted that no value backs (a ledger/counter
  *      attack or a solvency bug) ⇒ CRITICAL.
+ *   7. LEDGER REF WIDTH — every Stripe idempotency guard is a `WHERE ref = 'stripe:<session id>'`, and
+ *      that string is 73 characters. If a ledger's `ref` column cannot hold it, wpdb truncates on write
+ *      while the probe uses the full length, so no guard can ever match: payments fulfil twice and
+ *      refunds reverse nothing. Read the width back from the live DB rather than trusting the
+ *      migration ⇒ CRITICAL.
  *
  * Baselines live in a gitignored file (aq-integrity-state.php), outside the public DB, so an attacker
  * with DB write access can't forge them. Alarms ride the Watchdog channel (operator email + every
@@ -85,6 +90,7 @@ final class Integrity {
 		self::check_code();
 		self::check_cron();
 		self::check_reserve();
+		self::check_ref_width();
 		self::$state['last_run'] = time();
 		self::save();
 	}
@@ -237,6 +243,53 @@ final class Integrity {
 			. ( $shortfall - $authorised ) . " mg is UNEXPLAINED.\n"
 			. 'Coins were minted that no value backs: either the coin ledger / backing counter was tampered with directly, '
 			. 'or a minting bug fired. FREEZE cash-outs (set AQ_CASHOUT_FROZEN) and audit the coin ledger now.', true );
+	}
+
+	// ── 7. LEDGER REF WIDTH — the idempotency keys must fit the columns that hold them ──────
+	/**
+	 * Every money guard on the Stripe path is the string `'stripe:' . <checkout session id>` compared
+	 * with `WHERE ref = %s`. A modern session id is `cs_live_` + 58 characters, so the ref is 73 — and
+	 * until Schema 1.70.0 the four ledger `ref` columns were VARCHAR(64).
+	 *
+	 * That combination is silent and total. WordPress strips STRICT_TRANS_TABLES in wpdb::set_sql_mode,
+	 * so wpdb truncates the value to 64 characters BEFORE the query, with no error; every later lookup
+	 * still uses the full 73-character literal, so it can never match the row it just wrote. Each guard
+	 * that was supposed to make a payment idempotent — the fulfilment probe, the fund replay guard,
+	 * fulfil_coin_purchase, reverse_coin_purchase — returns false forever. A payment can then be
+	 * fulfilled twice (mint the coins again), and a refund reverses nothing at all.
+	 *
+	 * A schema migration that fails is normally quiet, which is exactly the failure mode that must not
+	 * be quiet here. dbDelta is also known in this project to emit NO TABLE at all under Studio's
+	 * SQLite for certain definitions. So rather than trust the migration, read the width back from the
+	 * live database and page if a ref column cannot hold the key we are about to probe with.
+	 */
+	private static function check_ref_width() {
+		global $wpdb;
+		if ( ! isset( $wpdb ) ) { return; }
+		// SQLite (local Studio) has no VARCHAR length enforcement and INFORMATION_SCHEMA is absent, so
+		// there is nothing to read and nothing that can truncate. Abstain rather than alarm.
+		if ( ! defined( 'DB_NAME' ) ) { return; }
+		$need   = 73; // 'stripe:' + cs_live_ + 58
+		$narrow = [];
+		foreach ( [ 'aq_coin_ledger', 'aq_points_ledger', 'aq_fund_ledger', 'aq_credit_gifts' ] as $t ) {
+			$table = Data::t( $t );
+			$len   = $wpdb->get_var( $wpdb->prepare(
+				'SELECT CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS'
+				. ' WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = %s',
+				DB_NAME, $table, 'ref'
+			) );
+			if ( $len === null ) { continue; }        // table absent on this install — not our alarm
+			if ( (int) $len < $need ) { $narrow[] = $table . '.ref is VARCHAR(' . (int) $len . ')'; }
+		}
+		if ( ! $narrow ) { return; }
+		Watchdog::alert( 'integrity_ref_width', 'LEDGER REF COLUMN TOO NARROW — payment idempotency is OFF',
+			"These columns cannot hold a Stripe idempotency key (needs {$need} characters):\n - "
+			. implode( "\n - ", $narrow ) . "\n\n"
+			. "wpdb truncates the value silently on write while every guard probes with the full-length string, so "
+			. "no `WHERE ref = …` can match: a paid Checkout Session can be fulfilled more than once (minting coins "
+			. "again from one payment) and a refund reverses nothing.\n"
+			. 'The Schema 1.70.0 migration widens all four to VARCHAR(191). It has not taken effect here — re-run it '
+			. 'before accepting another payment, or freeze payments (unset STRIPE_SECRET_KEY).', true );
 	}
 
 	/**
