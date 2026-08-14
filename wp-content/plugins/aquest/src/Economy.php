@@ -1019,6 +1019,20 @@ final class Economy {
 	 *  Sourced from the surviving aq_gold_spot_oz_usd / aq_coin_spread / aq_fx_rates options (the
 	 *  wallet's buy/sell/cash-out all depend on these — without them every figure renders as 0). */
 	public static function reserve( $req ) {
+		return self::reserve_data();
+	}
+
+	/**
+	 * The reserve figures themselves, from no request at all.
+	 *
+	 * Split out to follow the rule Books::cra_package established: anything callable from cron takes
+	 * DATA, not a request. reserve() never read $req, so passing null worked — but that is a fact
+	 * about today's body, not a contract, and the reserve audit tick calls this on a WP-cron run where
+	 * there is no request to hand. The same shape fatalled /foundation/cra/pdf in production on the
+	 * first request it served, and the test harness could not see it because its Rest::p stub returns
+	 * the default without touching the argument.
+	 */
+	public static function reserve_data() {
 		$issued  = self::counter( 'coins_issued' ); // Σ all coin deltas, maintained in lockstep (was Σ over the whole ledger)
 		// mg gold held in reserve — an atomic counter, seeded at migration to the genuine holdings. Reads the
 		// TRUE (possibly under-collateralized) ratio, never a falsely-perfect 1.0; buy/sell + add_backing

@@ -3276,7 +3276,7 @@ final class Extra {
 	 * history the moment the next month opens. A closed row is never rewritten — that is the part
 	 * worth protecting, and it is the only part that was ever true.
 	 *
-	 * The figures come from Economy::reserve() rather than being recomputed from the counters here,
+	 * The figures come from Economy::reserve_data() rather than being recomputed from the counters here,
 	 * so the trail and the live page cannot drift apart by construction — the old copy re-derived
 	 * `ratio` with its own `: 1.0` fallback and would have published a perfect ratio for an empty
 	 * reserve, which is exactly the failure this whole sweep is about.
@@ -3285,7 +3285,7 @@ final class Extra {
 		$audits = get_option( 'aq_reserve_audits', [] );
 		if ( ! is_array( $audits ) ) { $audits = []; }
 		$month = gmdate( 'Y-m' );
-		$live  = Economy::reserve( null );
+		$live  = Economy::reserve_data(); // cron has no request — take data, never a request object
 		$row   = [
 			'month'        => $month,
 			'ts'           => time(),
