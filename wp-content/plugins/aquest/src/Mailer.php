@@ -143,7 +143,7 @@ class Mailer {
 			'label'    => 'Your booking is confirmed',
 			'audience' => 'member',
 			'subject'  => 'Booked: {{when_short}} with {{host}}',
-			'body'     => "That is arranged. It is an ordinary meeting now — in your calendar and in {{host}}'s.\n\nWhat: {{title}}\nWhen: {{when}}\nWith: {{host}}\n\nThe call happens on ArtaMeet, in your browser, and it is encrypted end to end — there is no bridge in the middle holding your video. Nobody has to write back to make this happen; the time is yours.\n\nIf you cannot make it, tell {{host}} as soon as you can — the hour can then go back on offer for somebody else.",
+			'body'     => "That is arranged. It is an ordinary meeting now — in your calendar and in {{host}}'s.\n\nWhat: {{title}}\nWhen: {{when}}\nWith: {{host}}\n\nThe call happens on ArtaMeet, in your browser, and it is encrypted end to end — there is no bridge in the middle holding your video. Nobody has to write back to make this happen; the time is yours.\n\nIf you cannot make it, open the meeting and cancel — the hour goes straight back on offer for somebody else, and {{host}} is told.",
 			'cta'      => [ 'Open the meeting', '{{meet_url}}' ],
 			'vars'     => [ 'title', 'host', 'when', 'when_short', 'meet_url' ],
 			'sample'   => [

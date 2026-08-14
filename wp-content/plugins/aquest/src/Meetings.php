@@ -720,9 +720,29 @@ final class Meetings {
 		$mid = Rest::pint( $req, 'id', 0 );
 		$m   = $mid ? self::row( $mid ) : null;
 		if ( ! $m || ! self::guest_row( $mid, $uid ) ) { return Rest::err( 'not_found', 'No such meeting.', 404 ); }
-		if ( (int) $m['host_id'] !== $uid ) { return Rest::err( 'not_host', 'Only the host can cancel this meeting.', 403 ); }
+		/**
+		 * THE BOOKER MAY CANCEL A BOOKING. Host-only is right for a meeting somebody convened: the
+		 * guests were invited to it and cancelling is the convener's act. A booking is the other
+		 * shape — the owner published hours, a stranger took one, and Booking::take makes the OWNER
+		 * the host. So the person who claimed the hour had no way to give it back: the API answered
+		 * 403, the SPA rendered no control, and an RSVP of 'no' releases nothing (Booking::busy
+		 * filters on status, never on rsvp), so a dropped booking kept the slot shut for everybody
+		 * including the owner. Cancelling already frees it cleanly — busy() excludes cancelled rows
+		 * and take() re-keys a dead ctx_key — so the only thing missing was the permission.
+		 *
+		 * SCOPED, not opened: a booking with exactly two guests is the arrangement Booking::take
+		 * creates, and either party may end it. A booking the owner has since invited others into is
+		 * a meeting with a history, and stays host-only rather than letting one guest end it for
+		 * everyone.
+		 */
+		$is_booking = 'book' === (string) ( $m['context_type'] ?? '' );
+		$two_party  = $is_booking && 2 === count( self::guests_of( $mid ) );
+		if ( (int) $m['host_id'] !== $uid && ! $two_party ) {
+			return Rest::err( 'not_host', 'Only the host can cancel this meeting.', 403 );
+		}
 		if ( 'cancelled' === (string) $m['status'] ) { return [ 'ok' => true, 'already' => true, 'meet' => self::meet_payload( $m ) ]; }
-		self::cancel_row( $m, $m['title'] . ' was cancelled' );
+		$who = (int) $m['host_id'] === $uid ? '' : ' by ' . ( get_userdata( $uid )->display_name ?? 'the person who booked it' );
+		self::cancel_row( $m, $m['title'] . ' was cancelled' . $who );
 		return [ 'ok' => true, 'meet' => self::meet_payload( self::row( $mid ) ) ];
 	}
 

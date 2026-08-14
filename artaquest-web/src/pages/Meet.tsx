@@ -1144,6 +1144,7 @@ function MeetingPage({ id }: { id: number }) {
     tickNow.current();
   }, "Couldn’t move the meeting.");
 
+  const [confirmDrop, setConfirmDrop] = useState(false);
   const doCancel = () => act(async () => {
     const r = await meetCancel(id);
     setMeet(r.meet);
@@ -1256,6 +1257,27 @@ function MeetingPage({ id }: { id: number }) {
           {meet.status !== "cancelled" && me > 0 && !isHost && (
             <div className="rounded-card border border-line bg-space-2 p-4">
               <RsvpControl mine={myRsvp} busy={busy} onPick={(r) => void doRsvp(r)} />
+              {/* THE PERSON WHO TOOK THE HOUR CAN GIVE IT BACK. On a booking the OWNER is the host,
+                  so the booker had no cancel — and saying "not coming" releases nothing: free/busy
+                  filters on status, never on RSVP, so the slot stayed shut for everybody. Only shown
+                  for a two-party booking, which is exactly what the server now permits; a booking the
+                  owner has invited others into stays theirs to end. */}
+              {String(meet.context_type) === "book" && guests.length === 2 && (
+                <div className="mt-3 border-t border-line pt-3">
+                  {confirmDrop ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[12.5px] text-ink-2">The hour goes back on offer.</span>
+                      <button type="button" disabled={busy} onClick={() => { setConfirmDrop(false); void doCancel(); }}
+                        className="h-9 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">Cancel it</button>
+                      <button type="button" onClick={() => setConfirmDrop(false)}
+                        className="h-9 rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2">Keep it</button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => setConfirmDrop(true)}
+                      className="text-[12.5px] font-semibold text-ink-2 hover:text-ink">Cancel this booking</button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
