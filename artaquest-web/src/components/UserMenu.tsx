@@ -258,7 +258,13 @@ export function UserMenu() {
                         table: a private-ish meeting title republished onto a second public surface,
                         via a third party, because somebody happened to view their own bell in
                         French. The wrapper carries the marker, so the whole composed line is
-                        excluded — there is no translatable UI text in here to lose. */}
+                        excluded. THE COST, stated plainly: most notifications are pure platform English
+                        with no member content at all ("New sign-in to your account", "Your book is ready
+                        to review"), and this makes every one of them permanently untranslatable. That is
+                        the wrong trade for those rows and the right one for the rest, because the server
+                        composes them all into one string and the client cannot tell them apart. Privacy
+                        wins the tie. Giving back both needs Notify::push to carry a template and its
+                        values separately, so only the values are skipped. */}
                     <span className="min-w-0 flex-1" data-ay-skip="1">
                       <span className="block text-[13.5px] font-semibold leading-snug text-ink">{n.title}</span>
                       {n.body && <span className="mt-0.5 block text-[12.5px] leading-snug text-ink-3">{n.body}</span>}

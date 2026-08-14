@@ -421,16 +421,17 @@ function NewMeetingForm({ seatsMax, onDone, onClose }: {
       </Field>
 
       <Field label="Agenda" optional
-        hint="The call is encrypted end to end; the agenda is not — it is stored in plain text and travels in calendar invitations">
+        hint="The call is encrypted end to end; the agenda is not — we can read it, and it travels in calendar invitations">
         <Textarea value={agenda} onChange={(e) => setAgenda(e.target.value)} rows={3} maxLength={500}
           placeholder="What you want to get through" />
       </Field>
       {/* NOT a policy page. title, agenda, time and the whole guest list are plaintext rows served
           in full at /data/ — so the sentence belongs where the host is typing them. */}
       <p className="-mt-2 text-[12px] leading-relaxed text-ink-3">
-        Anyone can see that this meeting exists, when it is, and who is invited — including its title and
-        agenda, which are stored in plain text and travel in calendar invitations. Nobody but the people in
-        it can see or hear what happens: the call itself is encrypted end to end
+        Anyone can see that this meeting exists, when it is, and who is invited. Its title and agenda are
+        withheld from the public data explorer, but they are not encrypted the way the call is: we can read
+        them, and they travel in calendar invitations. Nobody but the people in it can see or hear what
+        happens — the call itself is encrypted end to end
       </p>
 
       <div className="flex flex-col gap-3 sm:flex-row">
@@ -1264,7 +1265,8 @@ function MeetingPage({ id }: { id: number }) {
                   filters on status, never on RSVP, so the slot stayed shut for everybody. Only shown
                   for a two-party booking, which is exactly what the server now permits; a booking the
                   owner has invited others into stays theirs to end. */}
-              {String(meet.context_type) === "book" && guests.length === 2 && (
+              {String(meet.context_type) === "book" && guests.length === 2
+                && meet.status === "scheduled" && Number(meet.start_ts) > now && (
                 <div className="mt-3 border-t border-line pt-3">
                   {confirmDrop ? (
                     <div className="flex flex-wrap items-center gap-2">

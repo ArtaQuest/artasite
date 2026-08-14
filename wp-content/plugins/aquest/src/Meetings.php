@@ -740,6 +740,18 @@ final class Meetings {
 		if ( (int) $m['host_id'] !== $uid && ! $two_party ) {
 			return Rest::err( 'not_host', 'Only the host can cancel this meeting.', 403 );
 		}
+		/**
+		 * A GUEST MAY ONLY CANCEL SOMETHING STILL AHEAD. The host keeps the wider power — cancelling a
+		 * meeting after the fact is sometimes how a host records that it did not happen — but a booker
+		 * cancelling last week's booking releases an hour nobody can use and emails BOTH parties that
+		 * a meeting they already had was called off. The only status check here was 'cancelled', so an
+		 * ended row accepted the POST, advanced seq and rang everyone. Reserved for the person who
+		 * convened it.
+		 */
+		if ( (int) $m['host_id'] !== $uid
+			&& ( 'scheduled' !== (string) $m['status'] || (int) $m['start_ts'] <= time() ) ) {
+			return Rest::err( 'too_late', 'This meeting has already started — only the host can cancel it now.', 409 );
+		}
 		if ( 'cancelled' === (string) $m['status'] ) { return [ 'ok' => true, 'already' => true, 'meet' => self::meet_payload( $m ) ]; }
 		$who = (int) $m['host_id'] === $uid ? '' : ' by ' . ( get_userdata( $uid )->display_name ?? 'the person who booked it' );
 		self::cancel_row( $m, $m['title'] . ' was cancelled' . $who );

@@ -564,7 +564,7 @@ export function BotChat() {
               </button>
               <button type="button" aria-label="Close this conversation"
                 onClick={() => void closeSession(x.id)}
-                className="grid min-h-9 min-w-9 place-items-center rounded-full opacity-0 transition-opacity hover:text-rose-300 focus-visible:opacity-100 group-hover:opacity-60">×</button>
+                className="grid min-h-9 min-w-9 place-items-center rounded-full opacity-60 transition-opacity hover:text-rose-300 focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-60">×</button>
             </span>
           ))}
           <select aria-label="Start another conversation" value=""
@@ -1132,7 +1132,11 @@ export function ArtaBot() {
   // burying the mic button. It stays MOUNTED (this is the same invisible/pointer-events-none path
   // the keyboard uses, not an unmount), so an incoming call still rings and the unread count still
   // ticks; the page has its own, larger, version of every control it offers.
-  const hideDock = onChatPage || (!open && ((fieldFocused && (vvSupported ? kbShrunk : true)) || scrolledAway));
+  // A RINGING CALL OUTRANKS EVERY REASON TO HIDE. The drawer hides itself on ArtaChat, while a
+  // keyboard is up and when scrolled away — all sensible, and all of them were also hiding the
+  // one thing a member must be able to answer. Mounted is not the same as visible: the wrapper
+  // goes `invisible`, which paints nothing and takes Answer out of the tab order too.
+  const hideDock = !ring && (onChatPage || (!open && ((fieldFocused && (vvSupported ? kbShrunk : true)) || scrolledAway)));
 
   const inThread = dockView.k !== "list";
   const title = dockView.k === "bot" ? "ArtaBot" : dockView.k === "dm" ? dockView.peer.name : "Chat";
@@ -1151,29 +1155,6 @@ export function ArtaBot() {
      focus guard above self-excludes on `closest(".aq-bot-panel")` so typing in here cannot fade
      out the control that closes it. Renaming the class breaks both, silently. */
   return (
-    <>
-      {/* THE RING LIVES OUTSIDE THE DRAWER, and that is the whole point. The drawer hides itself on
-          ArtaChat — it is a shortcut to the page you are already on — with
-          `pointer-events-none invisible opacity-0` and aria-hidden. The comment there says an
-          incoming call "still rings" because the drawer stays MOUNTED, but visibility:hidden paints
-          nothing and takes Answer out of the tab order too, so the one page where members sit
-          waiting for a call was the one page where the call could not be seen, clicked or tabbed to.
-          Mounted is not the same as visible. Its own fixed layer, above the drawer, unconditional. */}
-      {ring && (
-        <div className="aq-bot-ring fixed bottom-[calc(var(--aq-bottom-bar,0px)+0.5rem)] z-[70] w-[min(400px,calc(100vw-2.5rem))] end-4">
-          <IncomingCall name={ring.from.name} avatar={ring.from.avatar}
-            onDismiss={() => clearRing()}
-            /* Arm the intent BEFORE opening: the thread is what holds the offer, and it answers
-               the moment it sees one (see takeAutoAnswer). Otherwise "Answer" only navigated, and
-               the member arrived at a second Answer button having already answered. */
-            onAnswer={() => {
-              armAutoAnswer(ring.from.id);
-              clearRing();
-              setOpen(true);
-              setDockView({ k: "dm", peer: ring.from });
-            }} />
-        </div>
-      )}
     <div
       /* aq-bot-above-tabs: signed-in phones carry AppShell's fixed bottom tab bar, and the drawer is
          welded to the bottom edge — so without this it opens ON TOP of that bar, covering the nav.
@@ -1194,6 +1175,30 @@ export function ArtaBot() {
           Chat::RING_S is longer so no ring can fall between two polls), and "Answer" OPENS THE
           CONVERSATION rather than dialling: the beacon deliberately carries no room name — that
           exists only inside the sealed invite, which is what makes a public database safe here. */}
+      {/* AN INBOUND CALL, wherever the member is on the site. It rides the badge poll (30s, and
+          Chat::RING_S is longer so no ring can fall between two polls), and "Answer" OPENS THE
+          CONVERSATION rather than dialling: the beacon deliberately carries no room name — that
+          exists only inside the sealed invite, which is what makes a public database safe here.
+
+          IN FLOW, ABOVE THE DOCK CARD — not a fixed sibling. I moved it out to escape hideDock and
+          it then had to clear the dock's own height by hand: at bottom+0.5rem it painted straight
+          over the collapsed bar (its title, unread badge and expand control), over the composer when
+          open, over the media player, and over Arta's ledge, and it flipped to the wrong edge in RTL.
+          The panel is bottom-anchored with auto height, so flow already puts this above the card for
+          free and keeps it on the same edge. The real bug was never the position — it was that
+          hideDock hid the ring too, which `ring &&` below now prevents. */}
+      {ring && (
+        <div className="mb-2">
+          <IncomingCall name={ring.from.name} avatar={ring.from.avatar}
+            onDismiss={() => clearRing()}
+            onAnswer={() => {
+              armAutoAnswer(ring.from.id);
+              clearRing();
+              setOpen(true);
+              setDockView({ k: "dm", peer: ring.from });
+            }} />
+        </div>
+      )}
       <div className="flex flex-col overflow-hidden rounded-t-2xl border border-b-0 border-line bg-space-1 shadow-2xl shadow-black/50">
         {/* The pinned bar. Hoisted out of DockBody so it survives collapse; its title still tracks
             the view, so opening a conversation renames the bar exactly as LinkedIn's does. */}
@@ -1285,6 +1290,5 @@ export function ArtaBot() {
         </div>
       </div>
     </div>
-    </>
   );
 }

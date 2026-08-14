@@ -493,6 +493,18 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [failMsg, setFailMsg] = useState("");
+  /* THE BANNER IS TWO PIECES OF STATE AND THEY MUST MOVE TOGETHER. I added failMsg so a server
+     refusal could speak for itself, and wrote it in exactly one catch — so it was never cleared.
+     A "Slow down" from a send throttle then survived the next successful poll (which clears
+     `failed` but not the words), and the next unrelated network blip re-showed "Slow down" as the
+     reason. "This member isn't accepting messages from you" was worse: latched for the session and
+     shown thereafter as the reason a page of history would not load. Every path goes through
+     these two now. */
+  const showFail = (e?: unknown) => {
+    setFailMsg(e instanceof ApiError && e.message ? e.message : "");
+    setFailed(true);
+  };
+  const clearFail = () => { setFailMsg(""); setFailed(false); };
   const [note, setNote] = useState<string | null>(null);
   const [code, setCode] = useState<string | null>(null);
   const [panel, setPanel] = useState<"" | "code" | "timer" | "search" | "menu">("");
@@ -715,9 +727,9 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
           merge(ordered);
         }
         if (page.peer_online) setDeliveredTo((d) => Math.max(d, lastId.current));
-        setFailed(false);
+        clearFail();
       } catch {
-        if (!stop) setFailed(true);
+        if (!stop) showFail();
       }
       inFlight = false;
       schedule();
@@ -1021,7 +1033,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
      Capture phase, like the menu handler above, so it lands before the dock's document listener. */
   useEffect(() => {
     if (callState === "idle") return;
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); } };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") e.preventDefault(); };
     document.addEventListener("keydown", esc, true);
     return () => document.removeEventListener("keydown", esc, true);
   }, [callState]);
@@ -1150,8 +1162,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
          does. So somebody over their budget re-picked the same file, waited, and got the same
          sentence, with no way to learn the real reason. A connection story is the fallback for an
          error that carries no words of its own, not a replacement for one that does. */
-      setFailMsg(e instanceof ApiError && e.message ? e.message : "");
-      setFailed(true);
+      showFail(e);
       return false;
     }
   }
@@ -1211,8 +1222,9 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
           : { v: 2, t: "file", att: { ...att, name: extra?.name }, ...ref };
       const ok = await sealAndSend(payload, up.blob);
       if (ok) setReplyTo(null);
-    } catch {
-      setFailed(true);
+    } catch (e) {
+      // chatUploadBlob's own refusals land HERE, not in sealAndSend.
+      showFail(e);
     } finally {
       setBusy(false);
     }
@@ -1584,7 +1596,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                     // did not change.
                     requestAnimationFrame(() => { el.scrollTop = el.scrollHeight - before; });
                   }
-                } catch { setFailed(true); }
+                } catch (e) { showFail(e); }
               }}>Show earlier messages</button>
           </div>
         )}

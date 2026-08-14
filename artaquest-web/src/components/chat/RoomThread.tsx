@@ -88,6 +88,9 @@ export function RoomThread({
      what the POLL wrote; a refusal stays until the member does something else. */
   const pollNote = useRef(false);
   const say = (m: string) => { pollNote.current = false; setNote(m); };
+  /** The condition is gone — so is the sentence about it. Called on the success side of every
+   *  action that can `say`, because nothing else clears a refusal now that the poll may not. */
+  const said = () => { if (!pollNote.current) setNote(null); };
   const [panel, setPanel] = useState<"" | "people" | "invite">("");
   const [invite, setInvite] = useState("");
   const lastId = useRef(0);
@@ -207,6 +210,7 @@ export function RoomThread({
       lastId.current = Math.max(lastId.current, r.id);
       setRows((cur) => [...cur, { id: r.id, sender: me, at: r.at, payload }]);
       setDraft("");
+      said();
     } catch {
       say("That didn’t send — try again.");
     }
@@ -220,6 +224,7 @@ export function RoomThread({
     try {
       const r = await roomsInvite(roomId, handle);
       setRoom(r.room);
+      said();
       setInvite("");
       setPanel("people");
       // Hand them the key immediately — they are in the room but cannot read it until somebody does.
@@ -242,6 +247,7 @@ export function RoomThread({
     try {
       const r = await roomsCall(roomId, inCall ? "leave" : "join");
       setRoom((cur) => (cur ? { ...cur, in_call: r.in_call } : cur));
+      said();
     } catch (e) {
       say(e instanceof Error && e.message ? e.message : "Couldn’t join the call.");
     }
