@@ -1259,8 +1259,24 @@ final class Books {
 		$total  = (int) round( (float) Rest::p( $req, 'total', 0 ) * 100 );
 		$tax    = (int) round( (float) Rest::p( $req, 'tax', 0 ) * 100 );
 		$payer  = (int) Rest::pint( $req, 'payer_uid', 0 );
+		// IS THIS AN IMPORTED SERVICE? The Foundation is not a GST/HST registrant, so a non-resident
+		// supplier's 0% "reverse charge" against a bare BN does NOT extinguish the tax — it makes the
+		// Foundation liable to self-assess it. filing_notes publishes to every reader that this is
+		// accrued at 5% as a matter of policy, and the T2 package reports gst_payable straight off the
+		// ledger, so an invoice recorded without its GST leg understates a real CRA liability on a
+		// published return. Only the three hard-coded founding costs ever got one.
+		//
+		// Deliberately NOT defaulted. Guessing from the currency would be wrong in both directions (a
+		// non-resident can invoice in CAD; a Canadian supplier can invoice in USD), and this is a tax
+		// position, so the operator answers it. `imported` accepts 1/0/true/false and nothing else.
+		$imported_raw = Rest::p( $req, 'imported_service', null );
 
 		if ( '' === $vendor || '' === $number ) { return Rest::err( 'bad_input', 'A vendor and an invoice number are required.' ); }
+		if ( null === $imported_raw || '' === $imported_raw ) {
+			return Rest::err( 'bad_input', 'Say whether this is a service bought from a NON-RESIDENT supplier (imported_service: true/false). '
+				. 'If it is, the Foundation must self-assess ' . self::GST_RATE_PCT . '% GST on it — the supplier charging 0% does not settle it.' );
+		}
+		$imported = filter_var( $imported_raw, FILTER_VALIDATE_BOOLEAN );
 		if ( '' === $paid )   { return Rest::err( 'bad_input', 'A payment date is required (YYYY-MM-DD).' ); }
 		if ( $total <= 0 )    { return Rest::err( 'bad_input', 'The invoice total must be positive.' ); }
 		if ( ! isset( self::ACCOUNTS[ $acct ] ) || 'expense' !== self::ACCOUNTS[ $acct ][1] ) {
@@ -1332,6 +1348,20 @@ final class Books {
 			$wpdb->delete( Data::t( 'aq_books_invoice' ), [ 'id' => $id ] );
 			error_log( 'AQ Books: add_invoice rolled back ' . $number . ' — the journal refused the entry' );
 			return Rest::err( 'not_posted', 'That cost could not be posted to the ledger — check the date is inside an open fiscal period.', 409 );
+		}
+
+		// The self-assessed tax is its OWN entry, ref 'gst:<number>', source 'tax' — exactly the shape
+		// accrue_founding_gst posts, so the invoices_tie_to_expenses invariant (which compares the
+		// register against invoice-SOURCED entries) is unaffected by it. It is not recoverable without
+		// a registration, so it debits the expense rather than a receivable.
+		if ( $imported ) {
+			$gst = (int) round( $cad * self::GST_RATE_PCT / 100 );
+			if ( $gst > 0 ) {
+				self::journal( 'gst:' . $number, $paid, 'Self-assessed GST — ' . $vendor . ' ' . $number, [
+					[ 'account' => $acct,         'debit'  => $gst, 'memo' => self::GST_RATE_PCT . '% of ' . self::cad( $cad ) . ' — not recoverable without a registration' ],
+					[ 'account' => 'gst_payable', 'credit' => $gst, 'memo' => 'Owed to CRA on form GST59 · ' . self::GST_JURISDICTION ],
+				], 'tax', $id );
+			}
 		}
 		Data::update( 'aq_books_invoice', [ 'entry_id' => $eid ], [ 'id' => $id ] );
 

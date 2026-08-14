@@ -83,7 +83,19 @@ final class Credits {
 		$cty    = strtolower( preg_replace( '/[^A-Za-z]/', '', (string) $cty ) );
 		$gender = (string) $gender;
 		$band   = (string) $band;
-		if ( strlen( $cty ) !== 2 ) { $cty = self::ANY; }
+		// NATIONALITY IS PINNED TO ANY *HERE*, at the one place a bucket key is ever built.
+		//
+		// buckets_for_user has hard-pinned its country segment since 2026-08-11 and its comment states
+		// the axis is "pinned to ANY on both sides" — but only the MATCHING side was ever pinned. This
+		// function, the MINTING side, kept any 2-letter code, so a donor who picked Iran had their gift
+		// minted into crd_ir_w_25 while buckets_for_user can only ever return crd_x_w_25. No match()
+		// could reach it: the money was stranded in an earmark with zero possible recipients, forever.
+		// The reach meter compounded it by answering for the country-agnostic bucket, so the donor was
+		// shown a real audience for a slice their money would never enter.
+		//
+		// Pinning it at the choke point rather than at the callers means the two sides agree by
+		// construction, and no client — nor a future caller — can reintroduce the split.
+		$cty = self::ANY;
 		if ( ! isset( self::GENDERS[ $gender ] ) ) { $gender = self::ANY; }
 		if ( ! in_array( $band, self::SLICE_BANDS, true ) ) { $band = self::ANY; }
 		return 'crd_' . $cty . '_' . $gender . '_' . $band;
@@ -468,7 +480,12 @@ final class Credits {
 	 *  targeting oracle and a disclosure. The donor sees reach for their OWN pick via credits/reach. */
 	public static function options( $req = null ) {
 		return [
-			'countries' => self::countries(),
+			// `countries` is deliberately EMPTY, not removed: the key stays so a cached or older client
+			// renders an empty picker rather than crashing on a missing field. Nationality stopped being
+			// a matching facet on 2026-08-11 — nobody can be matched by one — so offering all 249 of
+			// them invited donors to direct money at a slice that could never receive it. Credits::bucket
+			// now pins the axis, so a country sent by any client is ignored rather than stranding a gift.
+			'countries' => [],
 			'genders'   => array_map( fn( $k ) => [ 'key' => $k, 'label' => self::GENDERS[ $k ] ], array_keys( self::GENDERS ) ),
 			'bands'     => array_map( fn( $k ) => [ 'key' => $k, 'label' => self::BANDS[ $k ] ], self::SLICE_BANDS ),
 			'fee_cap'   => self::FEE_CAP,

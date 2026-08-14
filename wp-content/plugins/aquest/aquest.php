@@ -239,6 +239,17 @@ add_action( 'plugins_loaded', function () {
 } );
 aq_cron_on( 'aq_payout_reconcile', 'aq_payout_reconcile', [ 'AQ\\Economy', 'reconcile_payouts' ], 3600 );
 
+/** The INBOUND mirror of the above: money that came IN and was never recorded. Fulfilment is claimed
+ *  atomically by whichever of the browser return / webhook gets there first, which is correct until
+ *  that winner dies holding the claim — the browser has already stripped ?session= so it cannot retry,
+ *  and nothing else was looking. The webhook now 409s in that window so Stripe redelivers, but its
+ *  retries are finite and a session paid while the site was down outlives them. This asks Stripe
+ *  daily for paid sessions no ledger row mentions, fulfils them (idempotent by ref) and alarms. */
+add_action( 'plugins_loaded', function () {
+	if ( ! wp_next_scheduled( 'aq_session_reconcile' ) ) { wp_schedule_event( time() + 900, 'daily', 'aq_session_reconcile' ); }
+} );
+aq_cron_on( 'aq_session_reconcile', 'aq_session_reconcile', [ 'AQ\\Extra', 'reconcile_sessions' ], 3600 );
+
 /** Competition deadlines: a daily settle closes every competition whose deadline has passed and
  *  pays its coin podium (owner-funded 50/30/20; idempotent by ledger ref — see Competitions::settle_due). */
 add_action( 'plugins_loaded', function () {
@@ -412,6 +423,7 @@ if ( ! defined( 'DISALLOW_FILE_EDIT' ) ) { define( 'DISALLOW_FILE_EDIT', true );
 register_deactivation_hook( __FILE__, function () {
 	wp_clear_scheduled_hook( 'aq_season_reset' );
 	wp_clear_scheduled_hook( 'aq_payout_reconcile' );
+	wp_clear_scheduled_hook( 'aq_session_reconcile' );
 	wp_clear_scheduled_hook( 'aq_tr_gc' );
 	wp_clear_scheduled_hook( 'aq_video_refresh' ); // retired (comment-based trending)
 	wp_clear_scheduled_hook( 'aq_video_sync' );     // retired

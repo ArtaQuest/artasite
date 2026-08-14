@@ -145,7 +145,6 @@ export default function Donate() {
   const [gifts, setGifts] = useState<CreditGift[]>([]);
 
   // step 1 — who
-  const [country, setCountry] = useState("");
   const [gender, setGender] = useState("");
   const [band, setBand] = useState("");
   const [reach, setReach] = useState<CreditReach | null>(null);
@@ -179,7 +178,7 @@ export default function Donate() {
   const STASH = "aq.donate.intent";
   function stashIntent() {
     try {
-      sessionStorage.setItem(STASH, JSON.stringify({ country, gender, band, preset, custom, donorName, anon }));
+      sessionStorage.setItem(STASH, JSON.stringify({ gender, band, preset, custom, donorName, anon }));
     } catch { /* private mode / quota — the sign-in still works, it just forgets */ }
   }
   useEffect(() => {
@@ -188,8 +187,7 @@ export default function Donate() {
     try { raw = sessionStorage.getItem(STASH); sessionStorage.removeItem(STASH); } catch { return; }
     if (!raw) return;
     try {
-      const v = JSON.parse(raw) as Partial<{ country: string; gender: string; band: string; preset: number; custom: string; donorName: string; anon: boolean }>;
-      if (typeof v.country === "string") setCountry(v.country);
+      const v = JSON.parse(raw) as Partial<{ gender: string; band: string; preset: number; custom: string; donorName: string; anon: boolean }>;
       if (typeof v.gender === "string") setGender(v.gender);
       if (typeof v.band === "string") setBand(v.band);
       if (typeof v.preset === "number") setPreset(v.preset);
@@ -240,9 +238,9 @@ export default function Donate() {
   // Reach for the CURRENT pick only — one slice at a time, never a published map.
   useEffect(() => {
     let live = true;
-    creditReach(country, gender, band).then((r) => { if (live) setReach(r); }, () => { if (live) setReach(null); });
+    creditReach("", gender, band).then((r) => { if (live) setReach(r); }, () => { if (live) setReach(null); });
     return () => { live = false; };
-  }, [country, gender, band]);
+  }, [gender, band]);
 
   const cur = opts?.currency || "CAD";
   const sym = opts?.symbol || "$";
@@ -284,7 +282,8 @@ export default function Donate() {
     stashIntent();
     setBusy(true); setErr("");
     postCourseCheckout({
-      donations: [{ amount, credit: { country, gender, band, fee_cap: copts?.fee_cap, name: anon ? "" : donorName.trim() } }],
+      // No `country`: Credits::bucket pins that axis to ANY, so sending one only ever misled.
+      donations: [{ amount, credit: { gender, band, fee_cap: copts?.fee_cap, name: anon ? "" : donorName.trim() } }],
       // No email: the donations branch of Extra::course_checkout never reads it, and currentUser()
       // does not carry one — referencing it was a type error the root `tsc --noEmit` could not see
       // (this project is solution-style, so only `tsc -b` actually checks the sources).
@@ -323,11 +322,14 @@ export default function Donate() {
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-9">
           <Step n={1} title="Who your gift reaches"
             hint="Leave any answer as “Anyone”. Members are matched only on what they have chosen to say about themselves — nothing is ever inferred.">
-            <Card className="grid gap-4 p-5 sm:grid-cols-3">
-              <Picker id="cr-country" label="Nationality" value={country} onChange={setCountry}>
-                <option value="">Anyone</option>
-                {(copts?.countries || []).map((c) => <option key={c.iso} value={c.iso}>{c.name}</option>)}
-              </Picker>
+            {/* NATIONALITY IS NOT OFFERED. It stopped being a matching facet on 2026-08-11 —
+                Credits::buckets_for_user pins the country axis to ANY, so no member can be matched by
+                one. The picker outlived that change: a donor who chose Iran had their gift minted into
+                crd_ir_w_25 while only crd_x_w_25 can ever be matched, and the reach meter answered for
+                the country-agnostic slice, so they were shown a real audience for a bucket their money
+                would never enter. Offering a choice that cannot be honoured is worse than offering
+                none. */}
+            <Card className="grid gap-4 p-5 sm:grid-cols-2">
               <Picker id="cr-gender" label="Gender" value={gender} onChange={setGender}>
                 <option value="">Anyone</option>
                 {(copts?.genders || []).map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}

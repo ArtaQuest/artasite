@@ -38,6 +38,12 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *      while the probe uses the full length, so no guard can ever match: payments fulfil twice and
  *      refunds reverse nothing. Read the width back from the live DB rather than trusting the
  *      migration ⇒ CRITICAL.
+ *   8. THE PLATFORM'S OWN PROOFS — Economy::verify_projections() (every counter equals the Σ of the
+ *      ledger it mirrors) and Books::verify() (every published statement follows from the lines). Both
+ *      are cited everywhere as the guarantee that figures cannot drift, and NEITHER had a production
+ *      caller until now: one lived only in a dev CLI script, the other only behind a public endpoint
+ *      nobody polls ⇒ CRITICAL. This is also the only guard over aq_counters, which holds backing_mg
+ *      and coins_issued, is mutable, and is published in full.
  *
  * Baselines live in a gitignored file (aq-integrity-state.php), outside the public DB, so an attacker
  * with DB write access can't forge them. Alarms ride the Watchdog channel (operator email + every
@@ -91,6 +97,7 @@ final class Integrity {
 		self::check_cron();
 		self::check_reserve();
 		self::check_ref_width();
+		self::check_invariants();
 		self::$state['last_run'] = time();
 		self::save();
 	}
@@ -290,6 +297,51 @@ final class Integrity {
 			. "again from one payment) and a refund reverses nothing.\n"
 			. 'The Schema 1.70.0 migration widens all four to VARCHAR(191). It has not taken effect here — re-run it '
 			. 'before accepting another payment, or freeze payments (unset STRIPE_SECRET_KEY).', true );
+	}
+
+	// ── 8. THE PLATFORM'S OWN PROOFS, ACTUALLY EXECUTED ─────────────────────────────────────
+	/**
+	 * Run Economy::verify_projections() and Books::verify() on the hourly tick and page on a failure.
+	 *
+	 * Both functions are held up — in code comments, in CLAUDE.md and on /finances itself — as the
+	 * proof that the counters cannot drift from the ledgers and that the published statements cannot
+	 * drift from the lines. Neither had a production caller. verify_projections() appeared exactly
+	 * twice in the tree: its own definition and tools/verify-projections.php, a developer CLI script.
+	 * Books::verify() was reachable only as a public endpoint nobody polls. A proof nobody runs is a
+	 * comment.
+	 *
+	 * This matters most for the counters. aq_counters holds backing_mg and coins_issued, it is a
+	 * MUTABLE row in a database this project publishes in full, and the threat model these classes
+	 * exist for is explicitly an attacker with DB write access. Watchdog::LEDGERS cannot cover it —
+	 * those are append-only prefix sums and a counter legitimately changes. The projection check is
+	 * the guard that fits: a counter inflated by hand no longer equals the Σ of the ledger it mirrors,
+	 * and that inequality is exactly what this reads. Without it, one UPDATE made /reserve report
+	 * backed:true AND disarmed Integrity::check_reserve, which reads the same unwatched counter.
+	 */
+	private static function check_invariants() {
+		$broken = [];
+		if ( class_exists( 'AQ\\Economy' ) && method_exists( 'AQ\\Economy', 'verify_projections' ) ) {
+			foreach ( (array) Economy::verify_projections() as $c ) {
+				if ( empty( $c['ok'] ) ) {
+					$broken[] = 'projection ' . ( $c['check'] ?? '?' ) . ': counter ' . ( $c['projected'] ?? '?' )
+						. ' vs ledger ' . ( $c['ledger'] ?? '?' );
+				}
+			}
+		}
+		if ( class_exists( 'AQ\\Books' ) && method_exists( 'AQ\\Books', 'verify' ) ) {
+			foreach ( (array) Books::verify() as $c ) {
+				if ( empty( $c['ok'] ) ) { $broken[] = 'books ' . ( $c['check'] ?? '?' ) . ': ' . ( $c['detail'] ?? '' ); }
+			}
+		}
+		if ( ! $broken ) { return; }
+		Watchdog::alert( 'integrity_invariants', 'LEDGER INVARIANT BROKEN — a projection or the books disagree with the ledger',
+			"These proofs failed on the hourly sweep:\n - " . implode( "\n - ", array_slice( $broken, 0, 10 ) )
+			. ( count( $broken ) > 10 ? "\n - … +" . ( count( $broken ) - 10 ) . ' more' : '' ) . "\n\n"
+			. "A counter that no longer equals the Σ of its ledger means either a write that skipped the ledger, or a\n"
+			. "direct edit of aq_counters — which would also make /reserve report a backing it does not hold and disarm\n"
+			. "the full-reserve alarm, since that reads the same counter. A books check failing means a published\n"
+			. "statement disagrees with the lines it claims to be computed from.\n"
+			. 'Rebuild with tools/verify-projections.php, and audit the ledgers before trusting any published figure.', true );
 	}
 
 	/**

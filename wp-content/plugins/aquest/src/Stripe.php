@@ -209,4 +209,21 @@ final class Stripe {
 		$r = self::req( 'GET', $q );
 		return ( is_array( $r ) && isset( $r['data'] ) && is_array( $r['data'] ) ) ? $r['data'] : [];
 	}
+
+	/**
+	 * Recent COMPLETED Checkout Sessions (newest first), for the inbound reconcile — the mirror of
+	 * list_transfers, which has covered the OUTBOUND cash-out leg since Economy::reconcile_payouts.
+	 * Inbound had no equivalent, so a payment captured but never recorded had nothing looking for it.
+	 *
+	 * `status=complete` is Stripe's own filter for a finished session; `payment_status` is not a list
+	 * parameter, so paid-ness is decided per row by is_paid(). Same test seam as list_transfers.
+	 */
+	public static function list_sessions( $created_gte = 0, $limit = 100 ) {
+		$override = apply_filters( 'aq_stripe_list_sessions', null, (int) $created_gte, (int) $limit );
+		if ( $override !== null ) { return is_array( $override ) ? $override : []; }
+		$q = '/checkout/sessions?status=complete&limit=' . max( 1, min( 100, (int) $limit ) );
+		if ( $created_gte > 0 ) { $q .= '&created[gte]=' . (int) $created_gte; }
+		$r = self::req( 'GET', $q );
+		return ( is_array( $r ) && isset( $r['data'] ) && is_array( $r['data'] ) ) ? $r['data'] : [];
+	}
 }

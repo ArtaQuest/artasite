@@ -3566,6 +3566,52 @@ final class Extra {
 		return [ $kind, $total, true ];
 	}
 
+	/**
+	 * Daily cron `aq_session_reconcile`: find PAID Checkout Sessions whose money was never recorded,
+	 * and record them. The inbound mirror of Economy::reconcile_payouts.
+	 *
+	 * Fulfilment has two callers — the returning browser and Stripe's webhook — and both go through
+	 * one atomic claim, so exactly one does the work. That is correct right up until the winner dies
+	 * holding the claim (a fatal, an OOM, the WP.com edge cutting a slow request). The loser has
+	 * already returned, the browser has stripped ?session= from the URL so a reload cannot retry, and
+	 * nothing else in the system was looking: money captured, coins or donation never recorded, no
+	 * alarm. The webhook now answers 409 in that window so Stripe redelivers, which closes most of it —
+	 * but Stripe's retries are finite, and a session paid while the site was down outlives them.
+	 *
+	 * So this asks the authoritative source. Anything Stripe says was paid, and that no ledger row
+	 * mentions, is fulfilled here and the operator is told — the ref guards make it idempotent, so a
+	 * session already handled costs one indexed lookup and nothing else.
+	 */
+	public static function reconcile_sessions() {
+		if ( ! Stripe::enabled() ) { return 0; }
+		$fixed = [];
+		foreach ( Stripe::list_sessions( time() - 3 * DAY_IN_SECONDS, 100 ) as $s ) {
+			if ( ! is_array( $s ) || ! Stripe::is_paid( $s ) ) { continue; }
+			$sid = (string) ( $s['id'] ?? '' );
+			if ( '' === $sid ) { continue; }
+			$ref  = 'stripe:' . $sid;
+			$kind = (string) ( ( is_array( $s['metadata'] ?? null ) ? $s['metadata'] : [] )['aq_kind'] ?? '' );
+			// Ask the ledger the payment WOULD have landed in. A donation writes the fund ledger; a
+			// coin top-up writes the coin ledger with reason 'buy'.
+			$done = ( 'coins' === $kind )
+				? Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'buy' AND ref = %s LIMIT 1", [ $ref ] )
+				: Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_fund_ledger' ) . ' WHERE ref = %s LIMIT 1', [ $ref ] );
+			if ( $done ) { continue; }
+			[ , $total, $ok ] = self::fulfil_session( $s );
+			if ( $ok ) { $fixed[] = $sid . ' (' . ( $kind ?: 'unknown' ) . ', ' . number_format( (int) $total / 100, 2 ) . ' CAD)'; }
+		}
+		if ( $fixed ) {
+			Watchdog::alert( 'stripe_session_reconcile', 'Captured payments were recorded late by the reconcile',
+				"Stripe reported these sessions PAID, and no ledger row mentioned them, so the daily reconcile fulfilled them:\n - "
+				. implode( "\n - ", array_slice( $fixed, 0, 10 ) )
+				. ( count( $fixed ) > 10 ? "\n - … +" . ( count( $fixed ) - 10 ) . ' more' : '' ) . "\n\n"
+				. "In the healthy steady state this finds nothing: the browser return or the webhook records a payment within\n"
+				. "seconds. A hit means both callers failed — worth checking the error log around those timestamps for a fatal\n"
+				. 'during fulfilment, and worth confirming the member has what they paid for.', false );
+		}
+		return count( $fixed );
+	}
+
 	/** A member's registered email, or '' — used to prefill Stripe Checkout. Never invents one. */
 	private static function member_email( $uid ) {
 		$u = get_userdata( (int) $uid );

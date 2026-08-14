@@ -348,7 +348,15 @@ final class Funds {
 			$ref !== '' ? sanitize_text_field( (string) $ref ) : 'u' . $uid,
 			sanitize_text_field( (string) $note )
 		);
-		Economy::award_points( $uid, max( 1, (int) floor( $cents / 100 ) ), 'donate', 'fund' . $id );
+		// NO `max(1, …)` FLOOR. record_gift splits one gift evenly across every target the donor chose
+		// and calls this once per part, each against its own `fund<row id>` ref — so award_points'
+		// idempotency cannot merge them and the floor handed out a free point PER PART. A $3 gift split
+		// across four earmarks awarded 4 points where the docstring promises 1 per coin-equivalent of
+		// the whole gift, and a full refund then clawed back only the cents-derived share of it.
+		// Standing buys real things here (group-tag slots, the creator rung), so it has to be earned by
+		// the money and not by the number of boxes ticked.
+		$award = (int) floor( $cents / 100 );
+		if ( $award > 0 ) { Economy::award_points( $uid, $award, 'donate', 'fund' . $id ); }
 		return $id;
 	}
 
