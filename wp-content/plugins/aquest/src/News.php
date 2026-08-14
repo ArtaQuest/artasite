@@ -980,9 +980,16 @@ final class News {
 		// Only live, newsworthy detections get context — matching against the whole ledger would
 		// attach today's headlines to months-old events, which is the juxtaposition trap with a
 		// time axis instead of a distance one.
+		// ⚠️ ORDERED BY RECENCY, NOT rank_score. `rank_score` is each detector's OWN unit — megawatts
+		// for thermal (with a 1,000,000 watchlist bonus), moment magnitude for quakes, percent for
+		// netloss — so it is meaningless to compare across them, and DESC over the whole ledger handed
+		// all twelve slots to thermal events permanently. Every other detector would have gone without
+		// context forever, which is invisible because "no context" is also what a quiet day looks like.
+		// `last_ts` is the one quantity that means the same thing to all six, and it is also the right
+		// question here: context is about what is being discussed NOW.
 		$rows = Data::all(
-			'SELECT id, place, country, first_ts, last_ts, detector, severity, measures FROM ' . Data::t( 'aq_news_events' )
-			. ' WHERE last_ts > %d ORDER BY rank_score DESC LIMIT %d',
+			'SELECT id, place, country, place_km, first_ts, last_ts, detector, severity, measures FROM ' . Data::t( 'aq_news_events' )
+			. ' WHERE last_ts > %d ORDER BY last_ts DESC LIMIT %d',
 			[ time() - self::FEED_MAX_AGE, self::MAX_EVENTS ]
 		);
 		$out = [];
@@ -1094,6 +1101,7 @@ final class News {
 		$terms = self::place_terms( $ev );
 		if ( ! $terms ) { return []; }
 		$place = trim( (string) ( $ev['place'] ?? '' ) );
+		$pkm   = (float) ( $ev['place_km'] ?? 0 );
 		$names = [];
 		foreach ( $terms as $t ) { $names[] = [ $t, 0 === strcasecmp( $t, $place ) ? 'settlement' : 'country' ]; }
 		$from = (int) $ev['first_ts'] - 86400;   // a day either side: reporting lags a measurement,
@@ -1111,12 +1119,21 @@ final class News {
 				// the post being about that place, and the weaker one must not be displayed as context.
 				if ( preg_match( '/\b' . preg_quote( $n, '/' ) . '\b/iu', $p['title'] ) ) {
 					$seen[ $p['url'] ] = true;
+					// SAY THE DISTANCE. ARTANEWS.md §2 requires every reference to state how far it sits
+					// from the measurement, and the first version dropped that on the grounds that a
+					// Reddit post has no coordinate. True — but the SETTLEMENT has one, and calling it
+					// "the nearest settlement" while it can be up to BEARING_KM (60 km) away implied a
+					// proximity the number contradicts. The post is still not geolocated and the note
+					// still says so; what is now stated is the one distance actually measured.
+					$note = 'country' === $kind
+						? 'mentions ' . $n . ' only — the country, not the location measured'
+						: 'mentions ' . $n . ', the nearest settlement to the measurement'
+							. ( $pkm >= 1.0 ? ' (' . round( $pkm ) . ' km from it)' : '' )
+							. '; the post itself is not geolocated';
 					$hits[] = $p + [
 						'matched_name' => $n,
 						'match_kind'   => $kind,
-						'match_note'   => 'settlement' === $kind
-							? 'mentions ' . $n . ', the nearest settlement to the measurement'
-							: 'mentions ' . $n . ' only — the country, not the location measured',
+						'match_note'   => $note,
 					];
 					break;
 				}
@@ -1218,7 +1235,7 @@ final class News {
 	 *
 	 * NO TILE SERVER, deliberately. A slippy map would mean an external request from a page whose
 	 * whole claim is that it is self-contained and reproducible — and the site's CSP blocks outbound
-	 * hosts anyway. data/world-outline.json is Natural Earth 110 m land, Douglas-Peucker simplified
+	 * hosts anyway. data/world-outline.json is Natural Earth 1:110 million land, Douglas-Peucker simplified
 	 * to 50 rings and 903 points (11.8 KB, public domain), which is coarse for a continent and ample
 	 * for "which part of the world is this".
 	 *
@@ -1244,7 +1261,7 @@ final class News {
 				. number_format( abs( $lon ), 2 ) . ( $lon >= 0 ? '°E' : '°W' ) ) . '" '
 			. 'style="width:100%;height:auto;background:#06121E;border-radius:10px">';
 		$o .= '<title>Where on Earth this was measured</title>';
-		$o .= '<desc>' . esc_html( 'Coastlines from Natural Earth 110 m (public domain), equirectangular. '
+		$o .= '<desc>' . esc_html( 'Coastlines from Natural Earth 1:110 million scale (public domain), equirectangular. '
 			. 'The marker is the measured coordinate.' ) . '</desc>';
 		// equator and prime meridian, so the marker can be read against something
 		$o .= '<line x1="0" y1="' . round( $y( 0 ), 1 ) . '" x2="' . $w . '" y2="' . round( $y( 0 ), 1 )
@@ -1262,11 +1279,23 @@ final class News {
 		}
 		$o .= '<path d="' . trim( $d ) . '" fill="#16283a" stroke="#2b4157" stroke-width=".7"/>';
 		$mx = round( $x( $lon ), 1 ); $my = round( $y( $lat ), 1 );
-		// a ping, so the eye finds it on a busy outline
-		$o .= '<circle cx="' . $mx . '" cy="' . $my . '" r="5" fill="none" stroke="#E8B923" stroke-width="1.6">'
-			. '<animate attributeName="r" values="5;17;5" dur="2.8s" repeatCount="indefinite"/>'
-			. '<animate attributeName="opacity" values="1;0;1" dur="2.8s" repeatCount="indefinite"/></circle>'
-			. '<circle cx="' . $mx . '" cy="' . $my . '" r="3.6" fill="#E8B923" stroke="#06121E" stroke-width="1"/>';
+		// ⚠️ THE PING IS DRAWN TWICE, ONE WORLD-WIDTH APART. It expands to r=17, so a coordinate within
+		// ~17 px of either edge — the antimeridian, which runs through Kamchatka, Fiji and the Aleutians,
+		// all places this platform detects events — has half its marker clipped by the viewBox. The twin
+		// is what an equirectangular map of a SPHERE actually needs: the world does not end at ±180°, and
+		// the arc cut off one edge is exactly the arc that belongs on the other. The marker itself is
+		// NEVER nudged inward — that would move a measured coordinate to make it look better, which is
+		// the one thing a figure on this platform may not do.
+		$ping = static function ( $cx, $cy ) {
+			return '<circle cx="' . $cx . '" cy="' . $cy . '" r="5" fill="none" stroke="#E8B923" stroke-width="1.6">'
+				. '<animate attributeName="r" values="5;17;5" dur="2.8s" repeatCount="indefinite"/>'
+				. '<animate attributeName="opacity" values="1;0;1" dur="2.8s" repeatCount="indefinite"/></circle>'
+				. '<circle cx="' . $cx . '" cy="' . $cy . '" r="3.6" fill="#E8B923" stroke="#06121E" stroke-width="1"/>';
+		};
+		$o .= $ping( $mx, $my );
+		// Only when the twin could actually be seen, so the ordinary case adds no markup.
+		$twin = $mx < 17.0 ? $mx + $w : ( $mx > $w - 17.0 ? $mx - $w : null );
+		if ( null !== $twin ) { $o .= $ping( round( $twin, 1 ), $my ); }
 		// the coordinate as real text — the point of the figure, and indexable
 		$o .= '<text x="14" y="' . ( $h - 14 ) . '" fill="#8fa3b8" font-size="12">'
 			. esc_html( number_format( abs( $lat ), 2 ) . ( $lat >= 0 ? '°N ' : '°S ' )
@@ -1849,6 +1878,16 @@ final class News {
 			// is exactly why it was easy to get wrong and never notice.
 			$evtype = strtolower( (string) ( $p['evtype'] ?? 'ke' ) );
 			$eblast = in_array( $evtype, [ 'km', 'sm', 'kx', 'sx', 'kn', 'sn' ], true );
+			// ⚠️ THIS BRANCH HAS NEVER FIRED, and saying so is the point. Over 365 days and 20,000
+			// EMSC solutions the evtype field took four values — ke, ue, se, fe — all earthquakes;
+			// USGS classified 242 explosions over 30 days. EMSC is an earthquake catalogue in
+			// practice, so the classification path is kept as a correct-if-it-ever-happens guard,
+			// NOT as coverage this platform can claim. It also means the watched-region "any size"
+			// exemption below is unreachable here: the request floor is BLAST_MIN_MAG, and nothing
+			// under it is fetched to be judged. That gap is deliberate rather than overlooked —
+			// closing it would mean a second, box-scoped request per tick to admit a category this
+			// source has never once emitted. USGS is the leg that actually classifies blasts, and
+			// its all-magnitudes feed applies the exemption for real.
 			// Mirror the USGS leg exactly: an ordinary earthquake needs QUAKE_MIN_MAG worldwide; a
 			// classified explosion needs BLAST_MIN_MAG, and nothing at all inside a watched box,
 			// where a small blast is precisely the signal. Reading both floors from the constants
@@ -1883,9 +1922,17 @@ final class News {
 					'Origin time'  => gmdate( 'Y-m-d H:i', $ts ) . ' UTC',
 					'Network region' => (string) ( $p['flynn_region'] ?? '' ),
 				],
-				'source'     => [ 'name' => 'EMSC · European-Mediterranean Seismological Centre (M'
-					. number_format( self::QUAKE_MIN_MAG, 1 ) . '+ earthquakes, classified explosions from M'
-					. number_format( self::BLAST_MIN_MAG, 1 ) . ' and from any size inside a watched region)',
+				// THE LABEL MUST DESCRIBE THE REQUEST, NOT THE INTENT. It previously advertised
+				// "classified explosions from any size inside a watched region", which the code cannot
+				// deliver: the endpoint is asked for BLAST_MIN_MAG and up, so nothing below it is ever
+				// fetched to be judged, watched region or not. On a platform whose whole premise is
+				// claims a stranger can check, a provenance line that overstates coverage is the worst
+				// kind of error — it is checkable, and it is wrong. It now states the floor actually
+				// requested, which is the honest ceiling on everything downstream.
+				'source'     => [ 'name' => 'EMSC · European-Mediterranean Seismological Centre (requested from M'
+					. number_format( self::BLAST_MIN_MAG, 1 ) . '; earthquakes published from M'
+					. number_format( self::QUAKE_MIN_MAG, 1 ) . ', classified explosions from M'
+					. number_format( self::BLAST_MIN_MAG, 1 ) . ')',
 					'url' => $eurl, 'retrieved' => $now ],
 			];
 		}
@@ -1899,18 +1946,25 @@ final class News {
 	 * must never do is quietly report a category the network did not assign.
 	 */
 	private static function emsc_evtype_label( $evtype ) {
+		// MEASURED VOCABULARY, not assumed. Over 365 days and 20,000 EMSC solutions (checked
+		// 2026-08-09) the field took exactly four values: ke 19,895 · ue 76 · se 27 · fe 2. The first
+		// letter is the qualifier and the second the class — and the first version of this table knew
+		// only k and s, so `ue` and `fe`, together some seventy-eight real events a year, rendered on
+		// the page as "code not recognised". Honest, but needlessly: the vocabulary was one query away.
+		$qual  = [ 'k' => '', 's' => 'suspected ', 'u' => 'unverified ', 'f' => 'felt ' ];
 		$class = [
 			'e' => 'earthquake', 'm' => 'mine explosion', 'x' => 'experimental explosion',
 			'n' => 'nuclear explosion', 'r' => 'rockslide', 'i' => 'induced event',
 			'l' => 'landslide', 'v' => 'volcanic event',
 		];
-		$evtype = strtolower( (string) $evtype );
-		if ( 2 !== strlen( $evtype ) || ! isset( $class[ $evtype[1] ] ) ) {
-			return '' === $evtype ? 'not stated' : $evtype . ' (code not recognised)';
+		$evtype = strtolower( trim( (string) $evtype ) );
+		if ( '' === $evtype ) { return 'not stated'; }
+		if ( 2 !== strlen( $evtype ) || ! isset( $class[ $evtype[1] ], $qual[ $evtype[0] ] ) ) {
+			// Still the right answer for anything outside the table: show the network's own code
+			// rather than guess a category it did not assign.
+			return $evtype . ' (code not recognised)';
 		}
-		$known = 'k' === $evtype[0];
-		if ( ! $known && 's' !== $evtype[0] ) { return $evtype . ' (code not recognised)'; }
-		return ( $known ? '' : 'suspected ' ) . $class[ $evtype[1] ] . ' (' . $evtype . ')';
+		return $qual[ $evtype[0] ] . $class[ $evtype[1] ] . ' (' . $evtype . ')';
 	}
 
 	/**
