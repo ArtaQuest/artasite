@@ -689,6 +689,57 @@ final class News {
 	}
 
 	/**
+	 * ONE-TIME CORRECTION OF A FALSE PROVENANCE LINE ALREADY IN THE LEDGER.
+	 *
+	 * A detection FREEZES its source label into `measures` at the moment it is written, so fixing the
+	 * string in code only helps rows detected afterwards. The EMSC label used to promise "classified
+	 * explosions … from any size inside a watched region", which the request floor makes impossible —
+	 * and it was rendering on live detection pages under "Where this came from", beside the very URL a
+	 * reader would use to check it. On a platform whose whole premise is claims a stranger can check,
+	 * a checkable claim that is wrong has to be corrected where the reader meets it, not only where it
+	 * is generated.
+	 *
+	 * THIS IS NOT REWRITING PROVENANCE. The clause was never a record of what happened — it described
+	 * a rule the code did not implement, so it was false on the day it was written. The evidence
+	 * itself, the query URL, is untouched, as are every measurement, timestamp and identifier. Only
+	 * the inaccurate sentence is replaced, and only where it appears verbatim.
+	 *
+	 * Gated on OPTION PRESENCE, never on a version constant: a version-keyed one-shot re-fires on
+	 * every environment that has not seen that version, and this codebase has already paid for that
+	 * mistake once with a real gold reserve. Idempotent besides — the second run matches nothing.
+	 */
+	const LABEL_FIX_OPT = 'aq_news_emsc_label_fixed';
+
+	public static function fix_emsc_labels() {
+		if ( get_option( self::LABEL_FIX_OPT ) ) { return 0; }
+		global $wpdb;
+		$t     = Data::t( 'aq_news_events' );
+		$stale = ' and from any size inside a watched region';
+		$rows  = $wpdb->get_results( $wpdb->prepare(
+			"SELECT id, measures FROM {$t} WHERE detector = %s AND measures LIKE %s",
+			'quake', '%' . $wpdb->esc_like( 'watched region' ) . '%'
+		), ARRAY_A );
+		$fixed = 0;
+		foreach ( (array) $rows as $r ) {
+			$m = json_decode( (string) $r['measures'], true );
+			if ( ! is_array( $m ) ) { continue; }
+			$name = (string) ( $m['source']['name'] ?? '' );
+			if ( '' === $name || false === strpos( $name, $stale ) ) { continue; }
+			// Replace the false clause with what the code actually requests, leaving the rest of the
+			// sentence — and the URL beside it — exactly as recorded.
+			$m['source']['name'] = str_replace(
+				$stale,
+				'; requested from M' . number_format( self::BLAST_MIN_MAG, 1 ),
+				$name
+			);
+			$wpdb->update( $t, [ 'measures' => wp_json_encode( $m ) ], [ 'id' => (int) $r['id'] ] );
+			$fixed++;
+		}
+		update_option( self::LABEL_FIX_OPT, gmdate( 'c' ), false );
+		return $fixed;
+	}
+
+	/**
 	 * PURGE THE POSTS ARTANEWS ALREADY PUBLISHED — wp-cli only, never a route (operator 2026-07-31,
 	 * who chose deletion over unpublishing having been told it is irreversible and orphans any DOI).
 	 *
