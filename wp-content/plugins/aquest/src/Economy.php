@@ -1174,7 +1174,7 @@ final class Economy {
 	 *  to. Idempotent: an existing account id is reused, never duplicated. */
 	public static function payout_connect( $req ) {
 		if ( ! self::cashout_enabled() ) {
-			return Rest::err( 'cashout_unavailable', 'Cash-out isn’t available yet. Your coins are fully gold-backed and safe.', 503 );
+			return Rest::err( 'cashout_unavailable', 'Cash-out isn’t available yet. Your coins keep their value and can be spent or held; the live gold backing is published at /reserve.', 503 );
 		}
 		if ( Rest::throttle( 'payout_connect', 10, 3600 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$uid  = Rest::uid();
@@ -1205,7 +1205,7 @@ final class Economy {
 	 */
 	public static function sell( $req ) {
 		if ( ! self::cashout_enabled() ) {
-			return Rest::err( 'cashout_unavailable', 'Cash-out isn’t available yet. Your coins are fully gold-backed and safe — spend or hold them, and you’ll be able to redeem for cash once cash-out launches.', 503 );
+			return Rest::err( 'cashout_unavailable', 'Cash-out isn’t available yet — spend or hold your coins, and you’ll be able to redeem for cash once it launches. The live gold backing is published at /reserve.', 503 );
 		}
 		if ( Rest::throttle( 'coin_sell', 10, 3600 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$uid   = Rest::uid();

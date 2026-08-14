@@ -3259,30 +3259,70 @@ final class Extra {
 
 	// ── Monthly reserve audit (2026-06-12): publish the full-reserve receipts ───────────────
 
-	/** Hourly (rides aq_watchdog): the first tick of each new month appends a snapshot of the gold
-	 *  reserve — issued coins, backing mg, ratio, spot — to the public audit trail. Append-only. */
+	/**
+	 * Hourly (rides aq_watchdog): keep the OPEN month's reserve snapshot equal to the live figures,
+	 * and leave every CLOSED month exactly as it was.
+	 *
+	 * This used to write a month once, on the first tick after it began, and then refuse to look at
+	 * it again — `foreach ($audits as $a) if ($a['month'] === $month) return;`. On 2026-08-11 the coin
+	 * ledger was deliberately reset, and because August had already been stamped on the 1st, the
+	 * public trail was left asserting 161 coins against 1,000 mg — a ratio of 6.2 — for the very month
+	 * in which /reserve was truthfully reporting 4,230 coins against 0 mg. Two public endpoints
+	 * describing the same month, disagreeing by a factor of six, with no mechanism that could ever
+	 * reconcile them. A snapshot taken on the first day of a month is not an audit of that month; it
+	 * is an audit of the previous one, published under the wrong heading.
+	 *
+	 * So: the current month is a LIVE row that tracks the reserve until the month ends, and becomes
+	 * history the moment the next month opens. A closed row is never rewritten — that is the part
+	 * worth protecting, and it is the only part that was ever true.
+	 *
+	 * The figures come from Economy::reserve() rather than being recomputed from the counters here,
+	 * so the trail and the live page cannot drift apart by construction — the old copy re-derived
+	 * `ratio` with its own `: 1.0` fallback and would have published a perfect ratio for an empty
+	 * reserve, which is exactly the failure this whole sweep is about.
+	 */
 	public static function reserve_audit_tick() {
 		$audits = get_option( 'aq_reserve_audits', [] );
 		if ( ! is_array( $audits ) ) { $audits = []; }
 		$month = gmdate( 'Y-m' );
-		foreach ( $audits as $a ) { if ( ( $a['month'] ?? '' ) === $month ) { return; } }
-		$issued  = Economy::counter( 'coins_issued' );
-		$backing = Economy::backing_mg();
-		$audits[] = [
-			'month'      => $month,
-			'ts'         => time(),
-			'issued_coins' => (int) $issued,
-			'backing_mg' => (int) $backing,
-			'ratio'      => $issued > 0 ? round( $backing / $issued, 4 ) : 1.0,
-			'spot_oz_usd' => (float) get_option( 'aq_gold_spot_oz_usd', 0 ),
+		$live  = Economy::reserve( null );
+		$row   = [
+			'month'        => $month,
+			'ts'           => time(),
+			'issued_coins' => (int) $live['issued_coins'],
+			'backing_mg'   => (int) $live['backing_mg'],
+			'ratio'        => (float) $live['ratio'],
+			'shortfall_mg' => (int) $live['shortfall_mg'],
+			'spot_oz_usd'  => (float) get_option( 'aq_gold_spot_oz_usd', 0 ),
+			'open'         => true, // still tracking; cleared below once a later month exists
 		];
-		update_option( 'aq_reserve_audits', array_slice( $audits, -60 ), false ); // 5 years of months
+		$found = false;
+		foreach ( $audits as $i => $a ) {
+			if ( ( $a['month'] ?? '' ) !== $month ) {
+				// Any month that is not the current one is closed. Stamp it once so a reader can tell
+				// a frozen row from the live one without knowing today's date.
+				if ( ! empty( $a['open'] ) ) { $audits[ $i ]['open'] = false; }
+				continue;
+			}
+			$found = true;
+			// Only the OPEN row may be refreshed. A row already closed by a previous tick stays put
+			// even if the clock is wound back, so history cannot be rewritten by a bad system time.
+			if ( ! empty( $a['open'] ) || ! array_key_exists( 'open', $a ) ) { $audits[ $i ] = $row; }
+		}
+		if ( ! $found ) { $audits[] = $row; }
+		update_option( 'aq_reserve_audits', array_slice( $audits, -60 ), false ); // the last 60 months
 	}
 
-	/** GET /reserve/audits — the append-only monthly audit trail (also visible raw in /data/). */
+	/** GET /reserve/audits — the monthly reserve trail (also visible raw in /data/). */
 	public static function reserve_audits( $req ) {
 		$a = get_option( 'aq_reserve_audits', [] );
-		return [ 'items' => is_array( $a ) ? array_reverse( $a ) : [], 'note' => 'Snapshotted on the first tick of each month — issued coins vs milligrams of gold held. The live figures are on /reserve/.' ];
+		return [
+			'items' => is_array( $a ) ? array_reverse( $a ) : [],
+			// NOT described as append-only: this is a bounded option (the last 60 months) whose open
+			// row tracks the live reserve, and calling it append-only was a claim the storage could
+			// not keep. The append-only ledgers are the coin and fund tables, in /data/.
+			'note'  => 'One row per month: issued coins against milligrams of gold held. The current month tracks the live reserve at /reserve/ and is frozen when the month ends; closed months are never rewritten. Retains the last 60 months.',
+		];
 	}
 
 	// ── Course checkout — charges the entry fee via the canonical enrol primitive ───────────

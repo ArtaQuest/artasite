@@ -50,7 +50,10 @@ function FoundationBooks({ fin }: { fin: FoundationFinances }) {
         <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">In the fund</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-yang">{formatFiat(fin.donations_fiat, fin.fiat)}</p><p className="text-[12px] text-ink-3">donated money still on hand, every bucket</p></Card>
         <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">ArtaCredits held</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-yin-light">{formatFiat(creditsHeld, fin.fiat)}</p><p className="text-[12px] text-ink-3">of the above, waiting for the slices donors chose</p></Card>
         <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Coins in circulation</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-ink"><Coins n={fin.coin_supply} /></p><p className="text-[12px] text-ink-3">{(fin.reserve_mg / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} g of gold held</p></Card>
-        <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Backing</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-yang">{Math.round((fin.backing_ratio || 1) * 100)}%</p><p className="text-[12px] text-ink-3">gold-backed</p></Card>
+        {/* `|| 1` here printed "100% gold-backed" for a ratio of 0 — directly beside the "0.0 g of
+            gold held" card above it. Coerce, then default to 0: a missing figure must never render
+            as a perfect one. See Reserve.tsx for the same fix on the proof-of-reserve page. */}
+        <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Backing</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-yang">{Math.round((Number(fin.backing_ratio) || 0) * 100)}%</p><p className="text-[12px] text-ink-3">of the coin is gold-backed</p></Card>
       </div>
       <Card className="overflow-hidden p-0">
         <p className="border-b border-line px-5 py-2.5 text-[13px] font-semibold text-ink-2">Recent fund movements</p>
