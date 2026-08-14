@@ -117,6 +117,28 @@ final class Books {
 	];
 
 	/**
+	 * The official RC4088 description for each code in use. A GIFI schedule carries ONE amount per
+	 * code, so when two accounts share one — ArtaCoin and self-assessed GST are both "other current
+	 * liabilities" — the filed line has to be their sum under the code's own name, not either
+	 * account's label. Filing the same code twice is a rejected schedule.
+	 */
+	const GIFI_NAMES = [
+		'1002' => 'Deposits in Canadian banks and institutions - Canadian currency',
+		'1484' => 'Prepaid expenses',
+		'2770' => 'Deferred income',
+		'2780' => 'Due to shareholder(s)/director(s)',
+		'2960' => 'Other current liabilities',
+		'8223' => 'Gifts',
+		'8224' => 'Gross sales and revenues from organizational activities',
+		'8242' => 'Subsidies and grants',
+		'8522' => 'Donations',
+		'8715' => 'Bank charges',
+		'8810' => 'Office expenses',
+		'8860' => 'Professional fees',
+		'9150' => 'Computer-related expenses',
+	];
+
+	/**
 	 * GIFI totals that are computed, not posted: code => label. Reported on the schedules.
 	 *
 	 * Only codes whose number AND official description were read off RC4088 appear here. The
@@ -812,8 +834,13 @@ final class Books {
 	 */
 	/** Integer cents as a readable CAD figure. A check that fails must be legible to whoever reads
 	 *  it — "liabilities 84000" is a number nobody can act on; "CA$840.00" is. */
+	/** Money for HUMANS, in accounting presentation: a negative is parenthesised, never signed.
+	 *  "CA$-432.18" in a column of figures reads as a typo; "(CA$432.18)" reads as a deficit. Every
+	 *  string a person sees goes through here — the check details, the ledger memos, the package. */
 	private static function cad( $cents ) {
-		return 'CA$' . number_format( ( (int) $cents ) / 100, 2 );
+		$c = (int) $cents;
+		$s = 'CA$' . number_format( abs( $c ) / 100, 2 );
+		return $c < 0 ? '(' . $s . ')' : $s;
 	}
 
 	public static function verify() {
@@ -905,11 +932,8 @@ final class Books {
 		foreach ( $years as $y ) { if ( $y['label'] === $want ) { $fy = $y; } }
 
 		$st  = self::period_statements( $fy );
-		$s100 = []; $s125 = [];
-		foreach ( $st['position']['assets'] as $r )      { if ( $r['cents'] ) { $s100[] = self::gifi_row( $r ); } }
-		foreach ( $st['position']['liabilities'] as $r ) { if ( $r['cents'] ) { $s100[] = self::gifi_row( $r ); } }
-		foreach ( $st['operations']['revenue'] as $r )   { if ( $r['cents'] ) { $s125[] = self::gifi_row( $r ); } }
-		foreach ( $st['operations']['expenses'] as $r )  { if ( $r['cents'] ) { $s125[] = self::gifi_row( $r ); } }
+		$s100 = self::gifi_lines( array_merge( $st['position']['assets'], $st['position']['liabilities'] ) );
+		$s125 = self::gifi_lines( array_merge( $st['operations']['revenue'], $st['operations']['expenses'] ) );
 
 		$net = $st['operations']['result'];
 		$s100[] = [ 'gifi' => '3600', 'label' => self::GIFI_TOTALS['3600'], 'cents' => $st['position']['net_assets'] ];
@@ -951,8 +975,30 @@ final class Books {
 		];
 	}
 
-	private static function gifi_row( $r ) {
-		return [ 'gifi' => $r['gifi'], 'gifi_short' => $r['gifi_short'], 'label' => $r['label'], 'account' => $r['account'], 'cents' => $r['cents'] ];
+	/**
+	 * Collapse account rows into filed GIFI lines: ONE line per code, amounts summed, labelled with
+	 * the code's official description. `accounts` keeps the contributing account labels so a reader
+	 * can still see what went into a line the form shows only as a number.
+	 */
+	private static function gifi_lines( $rows ) {
+		$by = [];
+		foreach ( $rows as $r ) {
+			if ( ! (int) $r['cents'] ) { continue; }
+			$code = (string) $r['gifi'];
+			if ( ! isset( $by[ $code ] ) ) {
+				$by[ $code ] = [
+					'gifi'       => $code,
+					'gifi_short' => (string) $r['gifi_short'],
+					'label'      => self::GIFI_NAMES[ $code ] ?? (string) $r['label'],
+					'accounts'   => [],
+					'cents'      => 0,
+				];
+			}
+			$by[ $code ]['cents']     += (int) $r['cents'];
+			$by[ $code ]['accounts'][] = (string) $r['label'];
+		}
+		ksort( $by );
+		return array_values( $by );
 	}
 
 	/**
@@ -1355,6 +1401,296 @@ final class Books {
 			'rate_source'     => substr( (string) $basis['source'], 0, 191 ),
 		], [ 'id' => (int) $inv['id'] ] );
 		return $coins;
+	}
+
+	// ── The filing package, as a PDF ──────────────────────────────────────────
+
+	/**
+	 * The T2 Short Return's own field numbers, read off form T2 SHORT E (19).
+	 *
+	 * The package prints the LINE NUMBER beside every value, because that is the difference between
+	 * "here are our accounts" and "here is what to type into box 085". Whoever fills the form —
+	 * the operator, an accountant, a piece of certified software — is transcribing, not deriving.
+	 */
+	const T2_FIELDS = [
+		'001' => 'Business number',
+		'002' => "Corporation's name",
+		'015' => 'Head office — city',
+		'016' => 'Head office — province',
+		'017' => 'Head office — country',
+		'018' => 'Head office — postal code',
+		'040' => 'Type of corporation at the end of the tax year',
+		'085' => 'If exempt from tax under section 149, tick one',
+		'060' => 'Tax year start',
+		'061' => 'Tax year-end',
+		'070' => 'Date of incorporation',
+		'280' => 'Is the corporation inactive?',
+		'300' => 'Net income or (loss) for income tax purposes',
+		'750' => 'Provincial/territorial jurisdiction',
+		'990' => 'Language of correspondence (1 English, 2 French)',
+	];
+
+	/** Where a value is a fact about a person rather than about the books, it is asked for, not
+	 *  invented. Options the operator sets; the package prints the gap until they do. */
+	private static function signer() {
+		return [
+			'last'  => (string) get_option( 'aq_books_signer_last', '' ),
+			'first' => (string) get_option( 'aq_books_signer_first', '' ),
+			'role'  => (string) get_option( 'aq_books_signer_role', 'Director' ),
+			'phone' => (string) get_option( 'aq_books_signer_phone', '' ),
+		];
+	}
+
+	/**
+	 * Render the whole year-end filing package as a PDF.
+	 *
+	 * It PREPARES a return; it does not file one, and it says so on the cover in the largest type on
+	 * the page. Paper filing is open to this corporation specifically: CRA made electronic filing
+	 * mandatory for tax years starting after 2023 but exempted "corporations that are exempt from
+	 * tax payable under section 149", which is what a 149(1)(l) non-profit is. That single fact is
+	 * what makes a printable package worth generating rather than a curiosity.
+	 */
+	public static function return_pdf( $fy_label = '', $generated = '' ) {
+		self::ensure_tables();
+		// The generation date is stamped in the footer, so leaving it as "today" would make every
+		// regeneration produce different bytes — and a package whose hash moves daily cannot be the
+		// one you filed. Archiving pins it, so the stored sha256 stays checkable forever.
+		$generated = self::norm_date( $generated ) ?: self::today();
+		$years = self::fy_list();
+		$fy    = $years ? $years[ count( $years ) - 1 ] : self::fy_of( self::today() );
+		foreach ( $years as $y ) { if ( $y['label'] === $fy_label ) { $fy = $y; } }
+
+		$st   = self::period_statements( $fy );
+		$pos  = $st['position'];
+		$ops  = $st['operations'];
+		$cra  = self::cra( null );
+		$t1044 = self::t1044_test( $fy, $years );
+		$due  = self::filing_due( $fy['end'] );
+		$sign = self::signer();
+		$m = fn( $c ) => self::cad( (int) $c ); // cad() already renders a negative in parentheses
+
+		$pdf = new Pdf(
+			self::ENTITY . ' — ' . $fy['label'] . ' filing package',
+			'Generated from the published ledger at artaquest.com/finances · ' . $generated
+		);
+
+		// ── Cover ──
+		$pdf->h1( self::ENTITY );
+		$pdf->para( 'Year-end filing package for ' . $fy['label'] . ' (' . $fy['start'] . ' to ' . $fy['end'] . ')', 11, 0.1 );
+		$pdf->gap( 4 );
+		$pdf->kv( 'Business number', self::BN );
+		$pdf->kv( 'Incorporated', self::INCORPORATED );
+		$pdf->kv( 'Jurisdiction', 'Alberta, Canada' );
+		$pdf->kv( 'Entity type', 'Non-profit corporation, exempt under ITA paragraph 149(1)(l)' );
+		$pdf->kv( 'Registered charity', 'No' );
+		$pdf->kv( 'Fiscal year end', self::fy_end_md() . ( get_option( 'aq_books_fy_end_chosen' ) ? ' (chosen ' . get_option( 'aq_books_fy_end_chosen' ) . ')' : '' ) );
+		$pdf->kv( 'Return due', $due );
+		$pdf->kv( 'Reporting currency', self::CURRENCY );
+		$pdf->gap( 8 );
+		$pdf->h2( 'This package is prepared, not filed' );
+		$pdf->para( 'Nothing here has been submitted to the Canada Revenue Agency. It is generated automatically from the '
+			. 'Foundation\'s published general ledger so that the figures on a return are transcribed from the books rather '
+			. 'than re-derived by hand. Every amount below is the sum of ledger entries published at artaquest.com/finances '
+			. 'and reproducible from the raw tables at artaquest.com/data.' );
+		$pdf->para( 'Have it reviewed before it is filed. It encodes a reading of the rules, and a reading is not advice.' );
+
+		// ── What must be filed ──
+		$pdf->h2( 'What has to be filed for this period' );
+		$pdf->h3( 'T2 Corporation Income Tax Return — REQUIRED' );
+		$pdf->para( 'Every resident corporation files a T2 for every tax year even with no tax payable. CRA excuses only '
+			. 'tax-exempt Crown corporations, Hutterite colonies and registered charities; a non-profit is none of those. '
+			. 'The section 149 exemption removes the tax, not the return.' );
+		$pdf->row( 'Form', 'T2 Short Return', true );
+		$pdf->row( 'Due', $due, true );
+		$pdf->para( 'The T2 Short is available because the corporation is exempt from tax under section 149. Confirm the '
+			. 'remaining conditions before filing: a permanent establishment in only one province, no taxable dividends paid '
+			. 'or received, reporting in Canadian dollars, and no refundable credits claimed other than a refund of instalments.' );
+		$pdf->para( 'Electronic filing is mandatory for tax years starting after 2023 — except for corporations exempt from '
+			. 'tax payable under section 149, which includes this one. This package may therefore be completed on paper.' );
+
+		$pdf->h3( 'T1044 NPO Information Return — ' . ( $t1044['required'] ? 'REQUIRED' : 'NOT required for this period' ) );
+		foreach ( $t1044['tests'] as $t ) {
+			$pdf->row( ( $t['met'] ? '[MET] ' : '[ - ] ' ) . $t['test'], isset( $t['value_cents'] ) ? $m( (int) $t['value_cents'] ) : '' );
+		}
+		$pdf->para( $t1044['warning'] );
+
+		// ── The T2 Short, field by field ──
+		$pdf->page_break();
+		$pdf->h1( 'T2 Short Return — what to enter' );
+		$pdf->para( 'Line numbers are the form\'s own. Values come from the ledger except where marked, which are facts about '
+			. 'a person or a filing choice and must be supplied by the signing officer.' );
+		$vals = [
+			'001' => self::BN . '  (add the RC program account, e.g. RC0001)',
+			'002' => self::ENTITY,
+			'015' => 'Edmonton',
+			'016' => 'AB',
+			'017' => 'Canada',
+			'018' => 'T5J 3B1',
+			'040' => '5 — Other corporation (a corporation without share capital)',
+			'085' => '1 — Exempt under paragraph 149(1)(e) or 149(1)(l)',
+			'060' => $fy['start'],
+			'061' => $fy['end'],
+			'070' => self::INCORPORATED,
+			'280' => ( 0 === $pos['total_assets'] && 0 === $ops['total_expenses'] && 0 === $ops['total_revenue'] ) ? 'Yes' : 'No',
+			'300' => $m( $ops['result'] ),
+			'750' => 'Alberta',
+			'990' => '1',
+		];
+		foreach ( self::T2_FIELDS as $line => $label ) {
+			$pdf->field( $line, $label, (string) ( $vals[ $line ] ?? '' ) );
+		}
+		$pdf->gap( 4 );
+		$pdf->para( 'Line 280 is answered No because there is balance sheet and income statement information to report. An '
+			. 'organisation that merely pays a bank charge is not inactive for this purpose.' );
+		$pdf->h3( 'Certification — to be completed by the signing officer' );
+		$pdf->field( '950', 'Last name', $sign['last'] ?: '________________________' );
+		$pdf->field( '951', 'First name', $sign['first'] ?: '________________________' );
+		$pdf->field( '954', 'Position, office or rank', $sign['role'] ?: '________________________' );
+		$pdf->field( '955', 'Date', '________________________' );
+		$pdf->field( '956', 'Telephone number', $sign['phone'] ?: '________________________' );
+
+		// ── GIFI schedules ──
+		$pdf->page_break();
+		$pdf->h1( 'GIFI schedules' );
+		$pdf->para( 'Financial statement information must be filed with the T2 in GIFI form; traditional financial statements '
+			. 'are not submitted. Codes are from Guide RC4088.' );
+		$pdf->h2( 'Schedule 100 — Balance sheet information' );
+		foreach ( $cra['schedule_100'] as $r ) {
+			$pdf->row( $r['gifi'] . '   ' . $r['label'], $m( (int) $r['cents'] ), in_array( $r['gifi'], [ '3600', '3620', '3640' ], true ),
+				count( (array) ( $r['accounts'] ?? [] ) ) > 1 ? implode( ' + ', $r['accounts'] ) : '' );
+		}
+		if ( $fy['first'] ) {
+			$pdf->h2( 'Schedule 101 — Opening balance sheet information' );
+			$pdf->para( 'Required in the first year after incorporation. The corporation held nothing on the day it was formed.' );
+			$pdf->row( '3640   Total liabilities and shareholder equity at ' . self::INCORPORATED, $m( 0 ), true );
+		}
+		$pdf->h2( 'Schedule 125 — Income statement information' );
+		foreach ( $cra['schedule_125'] as $r ) {
+			$pdf->row( $r['gifi'] . '   ' . $r['label'], $m( (int) $r['cents'] ), in_array( $r['gifi'], [ '8299', '9368', '9970', '9999' ], true ),
+				count( (array) ( $r['accounts'] ?? [] ) ) > 1 ? implode( ' + ', $r['accounts'] ) : '' );
+		}
+
+		$pdf->h2( 'Schedule 141 — GIFI additional information' );
+		$s141 = self::schedule_141();
+		foreach ( [ 'part1', 'part2', 'part3', 'part4' ] as $part ) {
+			foreach ( (array) ( $s141[ $part ] ?? [] ) as $q ) {
+				$pdf->field( (string) ( $q['line'] ?? '' ), (string) ( $q['q'] ?? ( $q['selected'] ?? '' ) ), (string) ( $q['a'] ?? ( ! empty( $q['selected'] ) ? 'selected' : '' ) ) );
+				if ( ! empty( $q['note'] ) ) { $pdf->para( $q['note'], 7.5, 0.5, 34 ); }
+			}
+		}
+		$pdf->para( 'Schedule 141 must be completed even when there are no notes to the financial statements.' );
+
+		// ── The statements, in readable form ──
+		$pdf->page_break();
+		$pdf->h1( 'Financial statements' );
+		$pdf->para( 'Unaudited. Prepared by the Foundation from its own double-entry general ledger. No accountant has '
+			. 'audited, reviewed or compiled them.' );
+		$pdf->h2( 'Statement of financial position at ' . $fy['end'] );
+		$pdf->h3( 'Assets' );
+		$any = false;
+		foreach ( $pos['assets'] as $a ) { if ( $a['cents'] ) { $pdf->row( $a['label'], $m( $a['cents'] ) ); $any = true; } }
+		if ( ! $any ) { $pdf->para( 'None. The Foundation holds no cash; its costs have been met personally by a director.' ); }
+		$pdf->row( 'Total assets', $m( $pos['total_assets'] ), true );
+		$pdf->h3( 'Liabilities' );
+		foreach ( $pos['liabilities'] as $a ) { if ( $a['cents'] ) { $pdf->row( $a['label'], $m( $a['cents'] ) ); } }
+		$pdf->row( 'Total liabilities', $m( $pos['total_liabilities'] ), true );
+		$pdf->gap( 4 );
+		$pdf->row( 'Accumulated surplus / (deficit)', $m( $pos['net_assets'] ), true );
+		$pdf->para( $pos['balances']
+			? 'Assets equal liabilities plus accumulated surplus, to the cent.'
+			: 'THESE FIGURES DO NOT BALANCE. Do not file this package until that is resolved.' );
+
+		$pdf->h2( 'Statement of operations for ' . $fy['label'] );
+		$pdf->h3( 'Revenue' );
+		$anyr = false;
+		foreach ( $ops['revenue'] as $a ) { if ( $a['cents'] ) { $pdf->row( $a['label'], $m( $a['cents'] ) ); $anyr = true; } }
+		if ( ! $anyr ) { $pdf->para( 'No revenue this period.' ); }
+		$pdf->row( 'Total revenue', $m( $ops['total_revenue'] ), true );
+		$pdf->h3( 'Expenses' );
+		foreach ( $ops['expenses'] as $a ) { if ( $a['cents'] ) { $pdf->row( $a['label'], $m( $a['cents'] ) ); } }
+		$pdf->row( 'Total expenses', $m( $ops['total_expenses'] ), true );
+		$pdf->gap( 4 );
+		$pdf->row( $ops['result'] < 0 ? 'Deficit for the period' : 'Surplus for the period', $m( $ops['result'] ), true );
+
+		// ── Notes ──
+		$pdf->h2( 'Notes to the financial statements' );
+		foreach ( self::filing_notes( $fy ) as $n ) {
+			$pdf->h3( $n['title'] );
+			$pdf->para( $n['body'] );
+		}
+
+		// ── The evidence ──
+		$pdf->page_break();
+		$pdf->h1( 'Supporting records' );
+		$pdf->para( 'CRA requires records and supporting documents to be kept for six years from the end of the last tax year '
+			. 'they relate to. Records created electronically must be kept electronically; a printout is not sufficient. The '
+			. 'originals are the PDFs published beside each entry, and each is listed with the SHA-256 of its bytes so a copy '
+			. 'can be proved identical to the one recorded.' );
+		$rows = Data::all( 'SELECT * FROM ' . Data::t( 'aq_books_invoice' ) . ' WHERE paid >= %s AND paid <= %s ORDER BY paid, id', [ $fy['start'], $fy['end'] ] );
+		$docs = [];
+		foreach ( Data::all( 'SELECT invoice_id, kind, name, sha256 FROM ' . Data::t( 'aq_books_doc' ) . ' ORDER BY id' ) as $d ) {
+			$docs[ (int) $d['invoice_id'] ][] = $d;
+		}
+		$reg_total = 0;
+		foreach ( $rows as $r ) {
+			$reg_total += (int) $r['cad_cents'];
+			$pdf->row( $r['paid'] . '   ' . $r['vendor'] . ' — ' . $r['description'], $m( (int) $r['cad_cents'] ), false,
+				'Invoice ' . $r['number'] . ( $r['pay_method'] ? ' · paid with ' . $r['pay_method'] : '' ) );
+			foreach ( (array) ( $docs[ (int) $r['id'] ] ?? [] ) as $d ) {
+				$pdf->para( ucfirst( (string) $d['kind'] ) . ': ' . $d['name'] . '  sha256 ' . substr( (string) $d['sha256'], 0, 32 ) . '...', 7, 0.5, 16 );
+			}
+		}
+		$pdf->row( 'Total costs on the register', $m( $reg_total ), true );
+
+		// ── GST ──
+		$pdf->h2( 'GST self-assessed on imported services' );
+		$gst = 0;
+		foreach ( self::movement( $fy['start'], $fy['end'] ) as $code => $cents ) {
+			if ( 'gst_payable' === $code ) { $gst = $cents; }
+		}
+		$pdf->para( 'The supplier is registered under CRA\'s simplified regime for non-resident digital suppliers and charged '
+			. '0% because a Canadian business number was supplied. That relief is for a recipient who provides a GST/HST '
+			. 'REGISTRATION number, and the Foundation is not a registrant — so the tax was not extinguished, it moved. A '
+			. 'non-registrant acquiring an imported taxable supply of services self-assesses the tax and remits it on form GST59.' );
+		$pdf->row( 'Consideration for imported taxable supplies', $m( $reg_total ) );
+		$pdf->row( 'Rate applied (' . self::GST_JURISDICTION . ')', self::GST_RATE_PCT . '%' );
+		$pdf->row( 'Tax self-assessed and accrued', $m( $gst ), true );
+		$pdf->para( 'Not recoverable: an input tax credit requires a registration the Foundation does not hold, which makes '
+			. 'the tax part of the cost of the supplies rather than a balance to net off. Confirm the rate and the remittance '
+			. 'deadline before filing GST59.' );
+
+		// ── Proof ──
+		$pdf->h2( 'Arithmetic checks' );
+		$pdf->para( 'Recomputed from the raw ledger lines when this package was generated. Anyone can re-run them at '
+			. 'artaquest.com/wp-json/aq/v1/foundation/books/verify.' );
+		foreach ( self::verify() as $c ) {
+			$pdf->row( ( $c['ok'] ? '[PASS] ' : '[FAIL] ' ) . str_replace( '_', ' ', $c['check'] ), '', false, $c['detail'] );
+		}
+		return $pdf->output();
+	}
+
+	/**
+	 * GET /foundation/cra/pdf — the filing package as a file.
+	 * Public, like every other figure it contains.
+	 */
+	public static function cra_pdf( $req ) {
+		self::ensure_tables();
+		$want = sanitize_text_field( (string) Rest::p( $req, 'fy', '' ) );
+		$fy   = self::fy_of( self::today() );
+		foreach ( self::fy_list() as $y ) { if ( $y['label'] === $want ) { $fy = $y; } }
+		$bytes = self::return_pdf( $fy['label'] );
+		$name  = 'ArtaQuest-Foundation-' . $fy['label'] . '-filing-package.pdf';
+
+		while ( ob_get_level() ) { ob_end_clean(); }
+		status_header( 200 );
+		header( 'Content-Type: application/pdf' );
+		header( 'Content-Length: ' . strlen( $bytes ) );
+		header( 'Content-Disposition: attachment; filename="' . $name . '"' );
+		header( 'X-Content-Type-Options: nosniff' );
+		header( 'Cache-Control: public, max-age=300' );
+		header( 'X-AQ-SHA256: ' . hash( 'sha256', $bytes ) );
+		echo $bytes; // phpcs:ignore
+		exit;
 	}
 
 	// ── The founding costs ────────────────────────────────────────────────────
@@ -1803,6 +2139,71 @@ final class Books {
 	}
 
 	/**
+	 * Freeze the filing package for a closed period: render it, store it beside the invoice evidence,
+	 * and record the hash. Idempotent — the same period archives once, and because the generation
+	 * date is pinned to the archive date the bytes (and therefore the hash) never move afterwards.
+	 */
+	public static function archive_return( $fy_label, $on = '' ) {
+		self::ensure_tables();
+		$on = self::norm_date( $on ) ?: self::today();
+		$have = Data::one(
+			'SELECT id, sha256 FROM ' . Data::t( 'aq_books_doc' ) . ' WHERE kind = %s AND name = %s',
+			[ 'return', $fy_label . '-filing-package.pdf' ] );
+		if ( $have ) { return (int) $have['id']; }
+
+		$bytes = self::return_pdf( $fy_label, $on );
+		if ( strlen( $bytes ) < 1000 ) { error_log( 'AQ Books: refusing to archive a suspiciously small package for ' . $fy_label ); return 0; }
+		$sha  = hash( 'sha256', $bytes );
+		$dest = trailingslashit( self::doc_dir() ) . $sha . '.pdf';
+		if ( ! is_file( $dest ) && false === @file_put_contents( $dest, $bytes ) ) {
+			error_log( 'AQ Books: could not write the archived package for ' . $fy_label );
+			return 0;
+		}
+		@chmod( $dest, 0644 );
+		return (int) Data::insert( 'aq_books_doc', [
+			'invoice_id' => 0, 'kind' => 'return', 'name' => $fy_label . '-filing-package.pdf',
+			'file_key' => $sha . '.pdf', 'mime' => 'application/pdf', 'bytes' => strlen( $bytes ),
+			'sha256' => $sha, 'uploaded_by' => 0, 'created' => Data::now(),
+		] );
+	}
+
+	/**
+	 * Tell the operator a return is coming due, and keep telling them as it gets closer.
+	 *
+	 * A deadline nobody is reminded of is a penalty with a date on it. Fires once per threshold per
+	 * period — the option records which have gone out, so a daily cron does not send ninety emails.
+	 */
+	public static function deadline_tick() {
+		self::ensure_tables();
+		if ( ! class_exists( '\\AQ\\Watchdog' ) ) { return; }
+		$sent = get_option( 'aq_books_deadline_sent', [] );
+		if ( ! is_array( $sent ) ) { $sent = []; }
+		$today = new \DateTimeImmutable( self::today(), new \DateTimeZone( self::TZ ) );
+		foreach ( self::fy_list() as $fy ) {
+			if ( self::today() <= $fy['end'] ) { continue; }
+			if ( in_array( $fy['label'] . ':filed', $sent, true ) ) { continue; }
+			$due  = self::filing_due( $fy['end'] );
+			$days = (int) $today->diff( new \DateTimeImmutable( $due, new \DateTimeZone( self::TZ ) ) )->format( '%r%a' );
+			foreach ( [ 120, 60, 30, 7, 0 ] as $mark ) {
+				$key = $fy['label'] . ':' . $mark;
+				if ( $days > $mark || in_array( $key, $sent, true ) ) { continue; }
+				$sent[] = $key;
+				update_option( 'aq_books_deadline_sent', $sent, true );
+				Watchdog::alert( 'books_due_' . $key,
+					$days < 0
+						? 'T2 for ' . $fy['label'] . ' is OVERDUE by ' . abs( $days ) . ' days'
+						: 'T2 for ' . $fy['label'] . ' is due in ' . $days . ' days (' . $due . ')',
+					"The filing package is generated and frozen: https://artaquest.com/wp-json/aq/v1/foundation/cra/pdf?fy=" . $fy['label'] . "\n"
+					. "The figures behind it: https://artaquest.com/finances\n\n"
+					. 'A T2 is required for every tax year even with no tax payable. Nothing here has been submitted — '
+					. 'the package is prepared for a human to review and file.',
+					$days <= 7 );
+				break;
+			}
+		}
+	}
+
+	/**
 	 * Daily cron aq_books_year_end: publish the return package once a period has ended.
 	 *
 	 * "Publish" here means compute, freeze and expose — the package at /foundation/cra is generated
@@ -1813,6 +2214,7 @@ final class Books {
 	public static function year_end_tick() {
 		self::ensure_tables();
 		self::reconcile_coin_liability();
+		self::deadline_tick();
 		foreach ( self::fy_list() as $fy ) {
 			if ( self::today() <= $fy['end'] ) { continue; }
 			if ( in_array( $fy['label'], self::locked_years(), true ) ) { continue; }
@@ -1821,6 +2223,7 @@ final class Books {
 			if ( ! is_array( $pub ) ) { $pub = []; }
 			$pub[ $fy['label'] ] = self::today();
 			update_option( 'aq_books_published', $pub, true );
+			self::archive_return( $fy['label'], self::today() );
 			if ( class_exists( '\\AQ\\Watchdog' ) ) {
 				Watchdog::note( 'Books: ' . $fy['label'] . ' is closed and its CRA package is published at /foundation/cra?fy=' . $fy['label']
 					. ' — the T2 is due ' . self::filing_due( $fy['end'] ) . '.' );

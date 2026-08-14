@@ -240,6 +240,7 @@ final class Rest {
 		[ 'GET',  'foundation/invoices',           'Books::invoices',    'public' ], // the invoice register + document hashes
 		[ 'GET',  'foundation/invoices/(?P<id>[0-9]+)/file/(?P<doc>[0-9]+)', 'Books::invoice_file', 'public' ], // the PDF itself
 		[ 'GET',  'foundation/cra',                'Books::cra',         'public' ], // ?fy= — T2/GIFI schedules + the T1044 threshold test
+		[ 'GET',  'foundation/cra/pdf',            'Books::cra_pdf',     'public' ], // the same package as a printable, paper-filable PDF
 		[ 'GET',  'foundation/books/verify',       'Books::verify_rest', 'public' ], // the invariants, recomputed from the lines
 		[ 'POST', 'studio/books/invoice',          'Books::add_invoice', 'admin'  ], // operator: record a cost + its evidence
 

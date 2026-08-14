@@ -936,6 +936,8 @@ export const Books = {
   invoices: () => get<{ items: BookInvoice[]; count: number; total_cad_cents: number; currency: string }>("/foundation/invoices"),
   cra: (fy = "") => get<CraPackage>(`/foundation/cra${fy ? `?fy=${encodeURIComponent(fy)}` : ""}`),
   verify: () => get<{ checks: BookCheck[]; ok: boolean }>("/foundation/books/verify"),
+  // A file, not JSON — the browser navigates to it, so this is a URL rather than a fetch.
+  packageUrl: (fy = "") => `/wp-json/aq/v1/foundation/cra/pdf${fy ? `?fy=${encodeURIComponent(fy)}` : ""}`,
   // Operator only. The figures are typed rather than parsed out of the PDF: in a PDF a space is
   // usually positioning rather than a character, so a heuristic parser binds "Total" to the wrong
   // number often enough to matter, and a bookkeeping total has to be right every time.
