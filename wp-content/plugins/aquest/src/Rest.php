@@ -390,6 +390,14 @@ final class Rest {
 		// magnitude · a price move past 4σ), reported with measurement and inference kept separate
 		// and full provenance so the claim is reproducible. See src/News.php.
 		[ 'GET',  'news',                          'News::feed',             'public' ],
+		// BEFORE the slug pattern below, which would otherwise swallow it: `sources` matches
+		// [a-z0-9-]+ perfectly well, and the first matching route wins.
+		// What each instrument last reported, in public. The health map already existed but only an
+		// operator could see it, so a detector that had silently stopped answering looked exactly like
+		// a quiet news day — which is how a wholly-blocked source hid for a full deploy. A platform
+		// whose claim is "re-run the evidence and contradict it" has to publish whether the
+		// instruments are running.
+		[ 'GET',  'news/sources',                  'News::sources_health',   'public' ],
 		[ 'GET',  'news/(?P<slug>[a-z0-9-]+)',     'News::article',          'public' ],
 		[ 'GET',  'market/geo',                    'Extra::market_geo',      'public' ], // the viewer's country + currency from their IP (client cache-busts; ip-api via Sessions::geo)
 		[ 'GET',  'climate/daily',                 'Extra::climate_daily',   'public' ], // data-shelf rail: NCEP/NCAR R1 daily mean 2m air temperature 1948→, global + 5 latitude bands, raw CSV (CC BY 4.0)
