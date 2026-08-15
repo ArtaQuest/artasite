@@ -1636,12 +1636,24 @@ final class Books {
 		$pdf->gap( 4 );
 		$pdf->para( 'Line 280 is answered No because there is balance sheet and income statement information to report. An '
 			. 'organisation that merely pays a bank charge is not inactive for this purpose.' );
-		$pdf->h3( 'Certification — to be completed by the signing officer' );
+		$pdf->h3( 'Certification' );
+		$pdf->para( 'I, ' . trim( $sign['first'] . ' ' . $sign['last'] ) . ', am an authorized signing officer of the '
+			. 'corporation. I certify that I have examined this return, including accompanying schedules and statements, '
+			. 'and that the information given on this return is, to the best of my knowledge, correct and complete.' );
 		$pdf->field( '950', 'Last name', $sign['last'] ?: '________________________' );
 		$pdf->field( '951', 'First name', $sign['first'] ?: '________________________' );
 		$pdf->field( '954', 'Position, office or rank', $sign['role'] ?: '________________________' );
-		$pdf->field( '955', 'Date', '________________________' );
 		$pdf->field( '956', 'Telephone number', $sign['phone'] ?: '________________________' );
+		$pdf->gap( 6 );
+		// The signature and its date are left to be executed by hand, deliberately. This package is
+		// regenerated on a cron and published to anyone who asks for it; stamping a real signature
+		// under a certification that begins "I certify that I have examined this return" would make
+		// every nightly copy assert a declaration nobody had made that day.
+		$pdf->sign_line( 'Signature of the authorized signing officer', 240 );
+		$pdf->sign_line( 'Line 955 - Date signed (YYYY-MM-DD)', 160 );
+		$pdf->para( 'Signed by hand at filing. This document is generated automatically and published publicly, so it '
+			. 'carries the signing officer\'s name and position but never a signature: a certification is made by a '
+			. 'person on a date, not by a scheduled job.', 7.5, 0.5 );
 
 		// ── GIFI schedules ──
 		$pdf->page_break();
@@ -2064,6 +2076,25 @@ final class Books {
 		if ( ! get_option( 'aq_books_gst_accrued' ) ) { self::accrue_founding_gst(); }
 		if ( ! get_option( 'aq_books_taxnote_v2' ) )   { self::refresh_founding_tax_note(); }
 		if ( ! get_option( 'aq_books_fy_end' ) )       { self::record_year_end( self::FY_END_DEFAULT, '2026-08-14' ); }
+		if ( ! get_option( 'aq_books_signer_last' ) )  { self::seed_signer(); }
+	}
+
+	/**
+	 * The signing officer, seeded once from what the corporation already publishes about itself.
+	 *
+	 * The name and position are on the founder's own certificate plate and in the About page; they
+	 * are not a secret and not a guess. The TELEPHONE is deliberately left empty — it appears nowhere
+	 * in the repository, and inventing a contact number on a tax return is worse than a blank, which
+	 * at least reads as "still to complete".
+	 *
+	 * Presence-gated, so an operator who edits these from /finances is never overwritten by a later
+	 * deploy re-seeding them.
+	 */
+	public static function seed_signer() {
+		update_option( 'aq_books_signer_last', 'Ashrafnejad', true );
+		update_option( 'aq_books_signer_first', 'Arash', true );
+		update_option( 'aq_books_signer_role', 'Director', true );
+		return 'seeded';
 	}
 
 	/**

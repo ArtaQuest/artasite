@@ -194,6 +194,20 @@ final class Pdf {
 
 	public function gap( $h = 6 ) { $this->y += $h; }
 
+	/** A short ruled line to sign or date on, with its caption underneath. */
+	public function sign_line( $caption, $width = 210, $x = null ) {
+		$this->room( 34 );
+		$x  = ( null === $x ) ? self::MARGIN : $x;
+		$this->y += 16;
+		$this->buf .= sprintf(
+			"0.35 G 0.6 w %.2f %.2f m %.2f %.2f l S\n",
+			$x, self::PAGE_H - $this->y, $x + $width, self::PAGE_H - $this->y
+		);
+		$this->y += 10;
+		$this->put( $x, $this->y, $caption, 7.5, false, 0.5 );
+		$this->y += 12;
+	}
+
 	/**
 	 * A label on the left and a right-aligned figure on the right — the shape every line of a
 	 * financial statement takes. $note prints small and grey under the label.
