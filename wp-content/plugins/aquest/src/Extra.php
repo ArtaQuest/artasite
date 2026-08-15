@@ -877,6 +877,15 @@ final class Extra {
 		// seal these into the room payload so the server never holds them at all, and it is named as
 		// the next step rather than implied by this line.
 		'aq_meets'      => [ 'title' => 'meeting title', 'agenda' => 'meeting agenda' ],
+		// A notification NAMES the other person: "Arash sent you an encrypted message", "Eceergun10
+		// started following you", "Arash is calling you" — four times over. Joined to `user_id` and
+		// `created` that is a member-to-member behavioural graph with timestamps: who contacted whom,
+		// when, and how insistently. Masking the two prose columns leaves `type`, `user_id`, `read`
+		// and `created` fully public, so the SHAPE stays auditable — how many security alarms fired
+		// and on which days, how much traffic each kind carries — while the row stops naming a person.
+		// The narrower fix than withholding the table, which would also have hidden the Watchdog
+		// security alarms that exist to be read.
+		'aq_notifications' => [ 'title' => 'names another member', 'body' => 'names another member' ],
 		// A public reset key is inert while password login is disabled, but it would become a takeover
 		// vector the moment the AQ_ALLOW_PASSWORD_LOGIN escape hatch were set — so it stays masked.
 		//
@@ -1055,8 +1064,22 @@ final class Extra {
 	 *  promised owner-only — and may contain third-party text the uploader has the right to use only as
 	 *  private inspiration, not to redistribute. So this one table is masked, like credentials-in-flight. */
 	/** aq_order_ship: a shop order's delivery address — the order itself (aq_orders) stays public,
-	 *  but where a member physically lives is promised private, like the inspiration files. */
-	const PRIVATE_TABLES = [ 'aq_doc_sources', 'aq_order_ship' ];
+	 *  but where a member physically lives is promised private, like the inspiration files.
+	 *
+	 *  aq_chats + aq_chat_msgs: THE MESSAGE METADATA GRAPH. The bodies are end-to-end encrypted, and
+	 *  publishing the ciphertext is fine — but everything AROUND it was public too, and on a surface
+	 *  the operator designated for dating that is the more revealing half. `aq_chats` carried
+	 *  `a_uid`/`b_uid` (who talks to whom), `a_read`/`b_read` (read receipts), who started it, and
+	 *  `a_block`/`b_block`/`a_mute` — so the public database announced that one member had BLOCKED
+	 *  another, to that member and to everyone else. `aq_chat_msgs` carried sender and the exact
+	 *  second of every message, which is a daily-routine trace and a conversation-volume graph.
+	 *
+	 *  This is not a retreat from transparency; it is the feature keeping the promise it makes. We
+	 *  built end-to-end encryption for chat, which IS the decision that a conversation is private —
+	 *  and metadata that names both parties, the timing and the block state gives away most of what
+	 *  the encryption was for. Same reasoning as aq_order_ship above: the database is public; who a
+	 *  member talks to is not what it is a record OF. */
+	const PRIVATE_TABLES = [ 'aq_doc_sources', 'aq_order_ship', 'aq_chats', 'aq_chat_msgs' ];
 
 	public static function all_table_names() {
 		global $wpdb;

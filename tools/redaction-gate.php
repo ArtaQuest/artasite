@@ -32,6 +32,7 @@ $want = [
 	'REDACT_VALUE_RE'  => '/\tconst REDACT_VALUE_RE = .*?;/s',
 	'REDACT_IDENTITY'  => '/\tconst REDACT_IDENTITY = \[.*?\n\t\];/s',
 	'REDACT_PUBLIC'    => '/\tconst REDACT_PUBLIC = \[.*?\];/s',
+	'PRIVATE_TABLES'   => '/\tconst PRIVATE_TABLES = \[.*?\];/s',
 	'redact_row'       => '/\tpublic static function redact_row\(.*?\n\t\}/s',
 	'redact_reason'    => '/\tprivate static function redact_reason\(.*?\n\t\}/s',
 ];
@@ -81,5 +82,22 @@ foreach(['jetpack_private_options'=>true,'session_tokens'=>true,'auth_key'=>true
          'aq_recaptcha_site_key'=>false] as $k=>$w){
   $r=Extra::redact_row('wp_options',['option_name'=>$k,'option_value'=>'v']);
   $check("options.$k",$r['option_value'],$w); }
+// aq_notifications: the prose columns NAME another member; the shape stays auditable.
+$r=Extra::redact_row('wp_aq_notifications',['title'=>'X','body'=>'X','type'=>'dm','user_id'=>'1','created'=>'1','read'=>'0']);
+foreach(['title'=>true,'body'=>true,'type'=>false,'user_id'=>false,'created'=>false,'read'=>false] as $c=>$w){
+  $check("aq_notifications.$c",$r[$c],$w); }
+// aq_meets keeps its existing masks — no regression from the entry added beside it.
+$r=Extra::redact_row('wp_aq_meets',['title'=>'X','agenda'=>'X','id'=>'1']);
+$check('aq_meets.title',$r['title'],true);
+$check('aq_meets.agenda',$r['agenda'],true);
+$check('aq_meets.id',$r['id'],false);
+// Tables WITHHELD entirely — the DM metadata graph plus the two older promises.
+foreach(['aq_chats','aq_chat_msgs','aq_doc_sources','aq_order_ship'] as $t){
+  $in=in_array($t,Extra::PRIVATE_TABLES,true); $n++; if(!$in)$fails++;
+  printf("%s  %-46s withheld=%s want=Y\n", $in?'PASS':'FAIL', "PRIVATE_TABLES has $t", $in?'Y':'N'); }
+// ...and the tables that must NOT be withheld, or the product itself is gone.
+foreach(['aq_notebooks','aq_votes','aq_coin_ledger','aq_books_line','aq_comments'] as $t){
+  $in=in_array($t,Extra::PRIVATE_TABLES,true); $n++; if($in)$fails++;
+  printf("%s  %-46s withheld=%s want=N\n", $in?'FAIL':'PASS', "PRIVATE_TABLES lacks $t", $in?'Y':'N'); }
 printf("\n%s  %d/%d assertions\n", $fails===0?'✓ ALL PASS':"✗ $fails FAILED", $n-$fails, $n);
 exit($fails===0?0:1);

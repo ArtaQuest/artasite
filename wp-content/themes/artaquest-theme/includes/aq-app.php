@@ -1088,7 +1088,15 @@ function aq_app_head_meta() {
 		$image = (string) $nb->thumb; // the work's own card
 		$image_w = 0; $image_h = 0; // stored thumbs vary in size — don't declare wrong dims
 	} elseif ( $puser ) {
-		$av = get_avatar_url( $puser->ID, array( 'size' => 512 ) );
+		// Verify::avatar_url, NOT get_avatar_url — two reasons, and both are bugs the direct call had.
+		// (1) It is what the PAGE shows: an uploaded picture, else a typology pick, else the member's
+		// season sigil. get_avatar_url skipped all of that, so the social card and the schema.org
+		// image depicted a Gravatar the profile itself does not display.
+		// (2) A Gravatar URL is a HASH OF THE EMAIL ADDRESS, which makes an indexable page into an
+		// email-confirmation oracle: guess an address, hash it, compare. We had just finished masking
+		// those addresses everywhere else (see Extra::REDACT_COLUMNS) — leaving the hash in og:image
+		// would have handed back a way to test a guess.
+		$av = class_exists( '\AQ\Verify' ) ? \AQ\Verify::avatar_url( $puser->ID, 512 ) : '';
 		if ( $av ) { $image = $av; $image_w = 512; $image_h = 512; }
 	}
 
@@ -1243,7 +1251,9 @@ function aq_app_head_meta() {
 			$person['alternateName'] = (string) $puser->display_name;
 		}
 		if ( '' !== $pbio ) { $person['description'] = $pbio; }
-		$avatar = get_avatar_url( $puser->ID, array( 'size' => 512 ) );
+		// Same resolver as og:image above — the picture the page actually shows, and never a
+		// Gravatar hash of the member's email address.
+		$avatar = class_exists( '\AQ\Verify' ) ? \AQ\Verify::avatar_url( $puser->ID, 512 ) : '';
 		if ( $avatar ) { $person['image'] = $avatar; }
 		// sameAs — the member's own profiles elsewhere. This is the strongest thing a page can say
 		// about WHICH person it means: a name is ambiguous and a set of accounts is not, and it is
