@@ -64,7 +64,7 @@ export default function ArtaTTSPlayer({ range, onClose }: { range: Range; onClos
           <div className="h-full rounded-full bg-yang transition-[width] duration-300" style={{ width: `${Math.round(((idx + 1) / sentences.length) * 100)}%` }} />
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => s.playAt(Math.max(0, idx - 1))} aria-label="Previous paragraph" title="Previous paragraph (←)" aria-keyshortcuts="ArrowLeft"
+          <button type="button" onClick={() => s.playAt(Math.max(0, idx - 1))} aria-label="Previous paragraph" title="Previous paragraph" aria-keyshortcuts="ArrowLeft"
             className="flex h-11 w-11 items-center justify-center rounded-full border border-line hover:border-yin md:h-8 md:w-8">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden><path d="M6 6h2v12H6zM20 6v12l-10-6z" /></svg>
           </button>
@@ -74,7 +74,7 @@ export default function ArtaTTSPlayer({ range, onClose }: { range: Range; onClos
               ? <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden><path d="M7 5h4v14H7zM13 5h4v14h-4z" /></svg>
               : <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden><path d="M8 5v14l11-7z" /></svg>}
           </button>
-          <button type="button" onClick={() => s.playAt(Math.min(sentences.length - 1, idx + 1))} aria-label="Next paragraph" title="Next paragraph (→)" aria-keyshortcuts="ArrowRight"
+          <button type="button" onClick={() => s.playAt(Math.min(sentences.length - 1, idx + 1))} aria-label="Next paragraph" title="Next paragraph" aria-keyshortcuts="ArrowRight"
             className="flex h-11 w-11 items-center justify-center rounded-full border border-line hover:border-yin md:h-8 md:w-8">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden><path d="M16 6h2v12h-2zM4 6v12l10-6z" /></svg>
           </button>
@@ -94,7 +94,7 @@ export default function ArtaTTSPlayer({ range, onClose }: { range: Range; onClos
             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-space-2">
               <div className="h-full rounded-full bg-yang transition-[width] duration-300" style={{ width: `${pct}%` }} />
             </div>
-            <span className="w-9 text-right text-[11px] tabular-nums text-ink-3" aria-hidden>{pct}%</span>
+            <span className="w-9 text-end text-[11px] tabular-nums text-ink-3" aria-hidden>{pct}%</span>
           </div>
         )}
         <div className="flex items-center gap-2">

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { getReserve, getFoundationFinances, localePath, type Reserve, type FoundationFinances, type ReservePoint } from "../lib/wp";
+import { uiLocale, getReserve, getFoundationFinances, localePath, type Reserve, type FoundationFinances, type ReservePoint } from "../lib/wp";
 import { Coins, formatFiat } from "../lib/currency";
 import { Button, Card, OrbitRings, StatusNote } from "../components/ui";
 import { CoinDisc } from "../components/CoinDisc";
@@ -28,7 +28,7 @@ function PriceChart({ history, fiat }: { history: ReservePoint[]; fiat: string }
   const y = (v: number) => H - padY - ((v - minY) / spanY) * (H - 2 * padY);
   const line = (key: "buy" | "sell") => history.map((p, i) => `${i ? "L" : "M"}${x(p.ts).toFixed(1)},${y(p[key]).toFixed(1)}`).join(" ");
   const last = history[history.length - 1];
-  const fmtDate = (t: number) => new Date(t * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const fmtDate = (t: number) => new Date(t * 1000).toLocaleDateString(uiLocale(), { month: "short", day: "numeric" });
   return (
     <div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`Arta Coin price over time — buy currently ${perCoin(last.buy, fiat)}, sell ${perCoin(last.sell, fiat)}; period high ${perCoin(maxY, fiat)}, low ${perCoin(minY, fiat)}`}>

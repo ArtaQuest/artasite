@@ -63,7 +63,7 @@ export default function Rankings() {
                         </p>
                       </div>
                       <span className="inline-flex shrink-0 items-center gap-1.5 text-sm text-ink-2"><HeartGlyph size={14} /> {e.hearts}</span>
-                      <span className={cx("w-16 shrink-0 text-right text-sm font-extrabold", e.rank === 1 ? "text-yang-ink" : "text-ink-3")}>
+                      <span className={cx("w-16 shrink-0 text-end text-sm font-extrabold", e.rank === 1 ? "text-yang-ink" : "text-ink-3")}>
                         {e.rank === 1 ? `₳${board.pool}` : "—"}
                       </span>
                     </Link>

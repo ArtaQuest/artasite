@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { localePath } from "../lib/wp";
+import { uiLocale, localePath } from "../lib/wp";
 import {
   getBook, generateBook, publishBook, deleteBook, addBookSource, removeBookSource,
   listIllustrations, type IllustrationCard,
@@ -21,7 +21,7 @@ function shareUrl(path: string): string {
 
 function fmtWhen(ts: number): string {
   if (!ts) return "";
-  return new Date(ts * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  return new Date(ts * 1000).toLocaleDateString(uiLocale(), { year: "numeric", month: "short", day: "numeric" });
 }
 
 /** Adapt a Book to the generic reader content shape (so the SAME ReadMode the Journal uses drives it). */

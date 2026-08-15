@@ -1,5 +1,15 @@
 <!doctype html>
-<html <?php language_attributes(); ?>>
+<?php
+// language_attributes() reports WP's own locale — 'en-US' — and never a dir, because the i18n router
+// is ArtaQuest's, not WordPress's. The SPA template sets both correctly, but THIS header serves
+// search.php / single.php / archive.php, and /fa/?s=<query> is the very URL the site's own
+// SearchAction advertises in its JSON-LD (aq-seo-schema.php). So a Persian search-results page
+// arrived as lang="en-US" with no direction at all: unmirrored layout, and a screen reader
+// announcing Persian text in an English voice. Mirror I18n::RTL rather than repeating the list.
+$aq_hdr_lang = class_exists( '\AQ\I18n' ) ? \AQ\I18n::current() : '';
+$aq_hdr_dir  = ( $aq_hdr_lang && in_array( $aq_hdr_lang, \AQ\I18n::RTL, true ) ) ? 'rtl' : 'ltr';
+?>
+<html <?php echo $aq_hdr_lang ? 'lang="' . esc_attr( $aq_hdr_lang ) . '" dir="' . esc_attr( $aq_hdr_dir ) . '"' : get_language_attributes(); ?>>
 <head>
 	<meta charset="<?php bloginfo( 'charset' ); ?>">
 	<meta name="viewport" content="width=device-width, initial-scale=1">

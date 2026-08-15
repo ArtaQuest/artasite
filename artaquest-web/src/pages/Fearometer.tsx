@@ -34,7 +34,7 @@ function Meter() {
       </div>
       <div className="mt-2 flex text-[11px] font-semibold uppercase tracking-wide">
         <span className="flex-[70] text-ink-3">Everything here stays — question it all</span>
-        <span className="flex-[30] text-right text-rose-300">Set aside</span>
+        <span className="flex-[30] text-end text-rose-300">Set aside</span>
       </div>
     </div>
   );
@@ -216,7 +216,7 @@ export default function Fearometer() {
             </Card>
           ))}
         </div>
-        <p className="mt-6 max-w-3xl border-l-2 border-l-yang pl-4 text-[16px] leading-relaxed text-ink-2">
+        <p className="mt-6 max-w-3xl border-s-2 border-s-yang ps-4 text-[16px] leading-relaxed text-ink-2">
           So a slur quoted to condemn it is not hate. A frightening fact stated calmly is not fear. And your own honest dread is never held against you. The screen reads what a sentence is trying to <em>do</em>.
         </p>
       </section>
@@ -248,7 +248,7 @@ export default function Fearometer() {
 
       {/* Our promise — we don't censor; we demonetise, because we know we can be wrong */}
       <section id="promise" className="scroll-mt-24">
-        <Card className="relative overflow-hidden border-l-4 border-l-yang p-7 sm:p-9">
+        <Card className="relative overflow-hidden border-s-4 border-s-yang p-7 sm:p-9">
           <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-yang/10 blur-3xl" aria-hidden />
           <div className="relative max-w-3xl">
             <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-ink-3">Our promise</p>

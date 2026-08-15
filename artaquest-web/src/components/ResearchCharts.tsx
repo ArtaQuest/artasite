@@ -122,7 +122,7 @@ export function ContribBars({ items, label }: { items: { label: string; pct: num
           <span className="relative h-3 flex-1 overflow-hidden rounded-pill bg-space-3">
             <span className="absolute inset-y-0 left-0 rounded-pill transition-[width]" style={{ width: `${(Math.max(0, it.pct) / max) * 100}%`, background: i === 0 ? t.gold : t.blue }} />
           </span>
-          <span className="w-12 shrink-0 text-right font-bold tabular-nums" style={{ color: i === 0 ? t.gold : "var(--color-ink)" }}>{it.pct.toFixed(1)}%</span>
+          <span className="w-12 shrink-0 text-end font-bold tabular-nums" style={{ color: i === 0 ? t.gold : "var(--color-ink)" }}>{it.pct.toFixed(1)}%</span>
         </div>
       ))}
     </div>
@@ -144,7 +144,7 @@ export function FreqBars({ items, label }: { items: { body: string; freq: number
           <span className="relative h-3 flex-1 overflow-hidden rounded-pill bg-space-3">
             <span className="absolute inset-y-0 left-0 rounded-pill transition-[width]" style={{ width: `${(Math.max(0, it.freq) / max) * 100}%`, background: i === 0 ? t.gold : t.blue }} />
           </span>
-          <span className="w-12 shrink-0 text-right font-bold tabular-nums" style={{ color: i === 0 ? t.gold : "var(--color-ink)" }}>{it.freq.toFixed(2)}</span>
+          <span className="w-12 shrink-0 text-end font-bold tabular-nums" style={{ color: i === 0 ? t.gold : "var(--color-ink)" }}>{it.freq.toFixed(2)}</span>
         </div>
       ))}
     </div>
@@ -165,7 +165,7 @@ export function SignBars({ scores, signs, win, label }: { scores: number[]; sign
           <span className="relative h-3 flex-1 overflow-hidden rounded-pill bg-space-3">
             <span className="absolute inset-y-0 left-0 rounded-pill transition-[width]" style={{ width: `${(Math.max(0, v) / max) * 100}%`, background: i === win ? t.gold : t.blue }} />
           </span>
-          <span className="w-12 shrink-0 text-right font-bold tabular-nums" style={{ color: i === win ? t.gold : "var(--color-ink)" }}>{(v * 100).toFixed(1)}%</span>
+          <span className="w-12 shrink-0 text-end font-bold tabular-nums" style={{ color: i === win ? t.gold : "var(--color-ink)" }}>{(v * 100).toFixed(1)}%</span>
         </div>
       ))}
     </div>
@@ -198,12 +198,12 @@ export function PeriodCurveBars({ curve, chosen, label }: {
           <div key={i}
             title={`${c.period.toFixed(2)} yr — score ${c.f1.toFixed(2)} (R² ${(c.r2 * 100).toFixed(0)}%${c.rep != null ? `, rep ${c.rep.toFixed(0)}%` : ""})`}
             className="flex items-center gap-2 rounded px-1 py-0.5 text-[13px] transition-colors hover:bg-space-3/50">
-            <span className="w-14 shrink-0 text-right tabular-nums text-ink-2">{c.period.toFixed(2)} y</span>
+            <span className="w-14 shrink-0 text-end tabular-nums text-ink-2">{c.period.toFixed(2)} y</span>
             <span className="relative h-3 flex-1 overflow-hidden rounded-pill bg-space-3">
               <span className="absolute inset-y-0 left-0 rounded-pill transition-[width]" style={{ width: `${(Math.max(0, c.f1) / max) * 100}%`, background: win ? t.gold : t.blue }} />
             </span>
-            <span className="w-10 shrink-0 text-right font-bold tabular-nums" style={{ color: win ? t.gold : "var(--color-ink)" }}>{c.f1.toFixed(2)}</span>
-            <span className="w-24 shrink-0 text-right tabular-nums text-ink-3/80">R² {(c.r2 * 100).toFixed(0)}%{c.rep != null && <> · rep {c.rep.toFixed(0)}%</>}</span>
+            <span className="w-10 shrink-0 text-end font-bold tabular-nums" style={{ color: win ? t.gold : "var(--color-ink)" }}>{c.f1.toFixed(2)}</span>
+            <span className="w-24 shrink-0 text-end tabular-nums text-ink-3/80">R² {(c.r2 * 100).toFixed(0)}%{c.rep != null && <> · rep {c.rep.toFixed(0)}%</>}</span>
           </div>
         );
       })}
@@ -263,7 +263,7 @@ function ChartFrame({ label, children }: { label: string; children: React.ReactN
   return (
     <figure className="m-0" aria-label={label}>
       {children}
-      <figcaption className="mt-1 select-none text-right text-[10px] text-ink-2">drag to zoom · double-click to reset · scroll to zoom</figcaption>
+      <figcaption className="mt-1 select-none text-end text-[10px] text-ink-2">drag to zoom · double-click to reset · scroll to zoom</figcaption>
     </figure>
   );
 }

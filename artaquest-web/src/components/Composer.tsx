@@ -85,14 +85,14 @@ export function Composer({ initialValue = "", placeholder, submitLabel, minRows 
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center gap-1 border-b border-line px-2 py-1.5">
-        <div className="mr-1 inline-flex rounded-pill bg-veil/5 p-0.5">
+        <div className="me-1 inline-flex rounded-pill bg-veil/5 p-0.5">
           {(["write", "preview"] as const).map((m) => (
             <button key={m} type="button" onClick={() => setMode(m)}
               className={cx("min-h-[24px] rounded-pill px-2.5 text-[12px] font-semibold capitalize transition-colors", mode === m ? "bg-yin text-white" : "text-ink-3 hover:text-ink")}>{m}</button>
           ))}
         </div>
         {mode === "write" && <MdToolbar taRef={taRef} value={text} onChange={setText} />}
-        <span className="ml-auto pr-1 text-[11px] text-ink-2">Markdown &amp; LaTeX</span>
+        <span className="ml-auto pe-1 text-[11px] text-ink-2">Markdown &amp; LaTeX</span>
       </div>
       {mode === "write" ? (
         <Textarea ref={taRef} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKeyDown} rows={minRows} maxLength={maxLength} autoFocus={autoFocus}

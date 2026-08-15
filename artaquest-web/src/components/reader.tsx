@@ -115,13 +115,13 @@ export function MarkdownLite({ text }: { text: string }) {
     if (/^\s*[-*]\s+/.test(line)) {
       const items: string[] = [];
       while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) { items.push(lines[i].replace(/^\s*[-*]\s+/, "")); i++; }
-      blocks.push(<ul key={key++} className="list-disc space-y-0.5 pl-5">{items.map((it, x) => <li key={x}>{inline(it)}</li>)}</ul>);
+      blocks.push(<ul key={key++} className="list-disc space-y-0.5 ps-5">{items.map((it, x) => <li key={x}>{inline(it)}</li>)}</ul>);
       continue;
     }
     if (/^\s*\d+\.\s+/.test(line)) {
       const items: string[] = [];
       while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) { items.push(lines[i].replace(/^\s*\d+\.\s+/, "")); i++; }
-      blocks.push(<ol key={key++} className="list-decimal space-y-0.5 pl-5">{items.map((it, x) => <li key={x}>{inline(it)}</li>)}</ol>);
+      blocks.push(<ol key={key++} className="list-decimal space-y-0.5 ps-5">{items.map((it, x) => <li key={x}>{inline(it)}</li>)}</ol>);
       continue;
     }
     if (line.trim() === "") { i++; continue; }
@@ -693,7 +693,7 @@ export function ReadMode({ s, body, figures, hasFigures, actions, onClose, retur
     }
   };
 
-  const prose = "[&_h2]:font-bold [&_h2]:tracking-tight [&_h2]:text-ink [&_h2]:scroll-mt-20 [&_h3]:font-bold [&_h3]:text-ink [&_h3]:scroll-mt-20 [&_a]:text-yin-ink [&_a]:font-medium hover:[&_a]:underline [&_figure]:text-center [&_img]:mx-auto [&_img]:max-w-full [&_img]:border [&_img]:border-line [&_figcaption]:mt-2 [&_figcaption]:text-[0.85em] [&_figcaption]:leading-relaxed [&_figcaption]:text-ink-3 [&_table]:w-full [&_table]:border-collapse [&_table]:scroll-mt-20 [&_th]:border [&_th]:border-line [&_th]:bg-space-2 [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-left [&_td]:border [&_td]:border-line [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:text-ink [&_blockquote]:my-6 [&_sup]:text-[0.7em] [&_sup_a]:font-semibold [&_sup_a]:text-yin-ink [&_code]:rounded [&_code]:bg-space-1 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_section]:scroll-mt-20 [&_li[id^='ref-']]:scroll-mt-20";
+  const prose = "[&_h2]:font-bold [&_h2]:tracking-tight [&_h2]:text-ink [&_h2]:scroll-mt-20 [&_h3]:font-bold [&_h3]:text-ink [&_h3]:scroll-mt-20 [&_a]:text-yin-ink [&_a]:font-medium hover:[&_a]:underline [&_figure]:text-center [&_img]:mx-auto [&_img]:max-w-full [&_img]:border [&_img]:border-line [&_figcaption]:mt-2 [&_figcaption]:text-[0.85em] [&_figcaption]:leading-relaxed [&_figcaption]:text-ink-3 [&_table]:w-full [&_table]:border-collapse [&_table]:scroll-mt-20 [&_th]:border [&_th]:border-line [&_th]:bg-space-2 [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-start [&_td]:border [&_td]:border-line [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:text-ink [&_blockquote]:my-6 [&_sup]:text-[0.7em] [&_sup_a]:font-semibold [&_sup_a]:text-yin-ink [&_code]:rounded [&_code]:bg-space-1 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_section]:scroll-mt-20 [&_li[id^='ref-']]:scroll-mt-20";
 
   return (
     <div

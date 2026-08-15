@@ -161,7 +161,7 @@ export default function Offline() {
         </Card>
         <Card className="p-4">
           <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Storage used</p>
-          <p className="mt-1 text-[15px] font-semibold">{fmtBytes(usage.usage)}{usage.quota ? <span className="text-ink-3"> / {fmtBytes(usage.quota)}</span> : null}</p>
+          <p className="mt-1 text-[15px] font-semibold"><bdi dir="ltr" data-ay-skip="1">{fmtBytes(usage.usage)}{usage.quota ? <span className="text-ink-3"> / {fmtBytes(usage.quota)}</span> : null}</bdi></p>
           {usage.quota > 0 && (
             <div className="mt-2 h-1.5 overflow-hidden rounded-pill bg-veil/10">
               <div className="h-full rounded-pill bg-gradient-to-r from-yang to-yin" style={{ width: `${Math.min(100, (usage.usage / usage.quota) * 100)}%` }} />

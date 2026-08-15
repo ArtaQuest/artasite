@@ -46,6 +46,12 @@ const SKIP_TAGS: Record<string, 1> = { SCRIPT: 1, STYLE: 1, CODE: 1, PRE: 1, KBD
 const ATTRS = ["placeholder", "aria-label", "title", "alt"] as const;
 const MAX_LEN = 5000; // skip very long nodes (matches the server cap).
 const GATE_TIMEOUT_MS = 6000; // max time the first-paint loader can block the page.
+// Match I18n::MT_OUTBOUND_MAX. Sending more per request than the server will forward only means the
+// remainder returns untranslated; sizing to the budget converges in far fewer round trips.
+const SERVER_MT_CHUNK = 8;
+// How many times one pass chases strings the server deferred before leaving the rest to the next
+// page view. Each round is cheap (earlier rounds' rows are now cache hits) and strictly bounded.
+const MAX_DEFERRED_ROUNDS = 6;
 
 // Current viewer language + whether it is the source language. Set when the
 // engine is constructed; consulted by the shared DOM walkers.
@@ -250,12 +256,24 @@ async function resolveDb(lang: string, strings: string[]): Promise<{ hits: Recor
   return { hits: (j.hits as Record<string, string>) || {}, missing: (j.missing as string[]) || [] };
 }
 
-async function serverTranslate(lang: string, strings: string[]): Promise<Record<string, string>> {
+async function serverTranslate(
+  lang: string,
+  strings: string[],
+): Promise<{ hits: Record<string, string>; deferred: string[] }> {
   // source=auto: the strings may be UI English OR user-generated content in any
   // language (global discussions). Google auto-detects either and translates to
   // the viewer's language.
+  //
+  // `deferred` names the strings the server ran out of outbound budget for and never sent to
+  // Google (I18n::MT_OUTBOUND_MAX, 8 per request). They are NOT failures and must never be cached
+  // as their own translation — the caller re-queues them. A network error is read as "everything
+  // was deferred", which is the safe direction: retry rather than freeze as English.
   const j = await post("/translate", { lang, strings, source: "auto" });
-  return j ? ((j.hits as Record<string, string>) || {}) : {};
+  if (!j) return { hits: {}, deferred: strings.slice() };
+  return {
+    hits: (j.hits as Record<string, string>) || {},
+    deferred: Array.isArray(j.deferred) ? (j.deferred as string[]) : [],
+  };
 }
 
 function save(lang: string, pairs: { s: string; t: string }[]): void {
@@ -303,6 +321,9 @@ class Engine {
   // IS Google, just same-origin) and skip the doomed direct attempt. The direct
   // code path is kept for environments where a CORS-friendly endpoint exists.
   private directBlocked = true;
+  /** Strings the server had no outbound budget for this pass — re-queued, never cached as English. */
+  private deferred: string[] = [];
+  private deferredRounds = 0;
   private dirty: { s: string; t: string }[] = [];
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
   private passTimer: ReturnType<typeof setTimeout> | undefined;
@@ -419,13 +440,53 @@ class Engine {
     try {
       // Stream each batch into the page as it lands.
       const got = await this.translate(unknown, (partial) => this.absorb(partial));
-      // Seed identity for anything still unresolved so we never retry in a loop.
-      for (const s of unknown) if (!got[s] && !this.mem.has(s)) this.mem.set(s, s);
+      // Seed identity ONLY for strings the server actually put to Google and Google declined — that
+      // is a real answer and must not be retried in a loop. A string the server DEFERRED for budget
+      // was never asked about, so caching it as its own translation is simply wrong: it pinned
+      // roughly four strings in five permanently in English (mem is written straight to localStorage
+      // by scheduleFlush, and pass() filters on mem.has, so nothing ever revisited it).
+      const wasDeferred = new Set(this.deferred);
+      for (const s of unknown) if (!got[s] && !wasDeferred.has(s) && !this.mem.has(s)) this.mem.set(s, s);
+      // Re-queue what was deferred: the rows this pass created are cache HITS next time (hits are
+      // unbudgeted), so a few rounds converge instead of stalling. Bounded by round count.
+      if (this.deferred.length && this.deferredRounds < MAX_DEFERRED_ROUNDS) {
+        this.deferredRounds++;
+        const again = this.deferred.slice();
+        this.deferred = [];
+        setTimeout(() => void this.retryDeferred(again), 400 * this.deferredRounds);
+      }
       this.applyAll();
       this.scheduleFlush();
     } finally {
       unknown.forEach((s) => this.inflight.delete(s));
       if (!initial && this.inflight.size === 0) this.setBusy(false);
+    }
+  }
+
+  /**
+   * Chase the strings the server deferred for outbound budget.
+   *
+   * Cheap by construction: everything earlier rounds created is now a cache HIT, and hits are
+   * unbudgeted, so each round moves the frontier forward by another MT_OUTBOUND_MAX per request
+   * instead of stalling. Silent — it never touches `busy`, so a member sees strings arrive in place
+   * rather than a loader reappearing after first paint.
+   */
+  private async retryDeferred(list: string[]): Promise<void> {
+    const todo = list.filter((s) => !this.mem.has(s) && !this.inflight.has(s));
+    if (!todo.length) return;
+    todo.forEach((s) => this.inflight.add(s));
+    try {
+      await this.translate(todo, (partial) => this.absorb(partial));
+      this.applyAll();
+      this.scheduleFlush();
+      if (this.deferred.length && this.deferredRounds < MAX_DEFERRED_ROUNDS) {
+        this.deferredRounds++;
+        const again = this.deferred.slice();
+        this.deferred = [];
+        setTimeout(() => void this.retryDeferred(again), 400 * this.deferredRounds);
+      }
+    } finally {
+      todo.forEach((s) => this.inflight.delete(s));
     }
   }
 
@@ -480,11 +541,16 @@ class Engine {
     // 3. Server proxy (persists server-side too) — chunked to the cap and run a
     // few chunks concurrently so a fresh page fills fast (each chunk also streams
     // into the page via onBatch as it lands).
-    await mapLimit(chunked(stillMissing, 40), 3, async (chunk) => {
+    // Chunk to the server's own per-request outbound budget rather than 40: a 40-string chunk had
+    // at most 8 of them translated, and the other 32 came back untouched and were cached as English.
+    const deferred: string[] = [];
+    await mapLimit(chunked(stillMissing, SERVER_MT_CHUNK), 3, async (chunk) => {
       const srv = await serverTranslate(this.cfg.current, chunk);
-      Object.assign(out, srv);
-      if (onBatch && Object.keys(srv).length) onBatch(srv);
+      Object.assign(out, srv.hits);
+      if (srv.deferred.length) deferred.push(...srv.deferred);
+      if (onBatch && Object.keys(srv.hits).length) onBatch(srv.hits);
     });
+    this.deferred = deferred;
     return out;
   }
 

@@ -15,11 +15,11 @@ function Round({ r, label, open, onToggle }: { r: WorkReview; label: string; ope
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[13px]"
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-start text-[13px]"
       >
         <span className="font-medium text-ink">
           {label}
-          <span className="ml-2 text-[11.5px] font-normal text-ink-3">{r.reviewer}</span>
+          <span className="ms-2 text-[11.5px] font-normal text-ink-3">{r.reviewer}</span>
         </span>
         <span className="flex items-center gap-2">
           <span

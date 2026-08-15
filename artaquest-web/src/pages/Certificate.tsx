@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { getCertificate, type Cert, type Medal } from "../lib/wp";
+import { uiLocale, getCertificate, type Cert, type Medal } from "../lib/wp";
 import { Button, LogoMark, StatusNote, cx } from "../components/ui";
 import { WithRail, RailInline } from "../components/PageRail";
 
@@ -55,7 +55,7 @@ export default function Certificate() {
     <div className="aq-no-print flex flex-col gap-2 rounded-card border border-line bg-space-2 p-4">
       <h2 className="text-sm font-bold uppercase tracking-wider text-ink-3">This certificate</h2>
       {/* Same order the action bar had: back first, then the primary action. */}
-      <Button variant="ghost" href="/user-account/" className="h-9 w-full px-3 text-[13px]">← Account</Button>
+      <Button variant="ghost" href="/user-account/" className="h-9 w-full px-3 text-[13px]"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Account</Button>
       <Button onClick={() => window.print()} className="h-10 w-full px-5 text-[14px]">Print / Save as PDF</Button>
     </div>
   );
@@ -159,16 +159,16 @@ export function CertificateDoc({ cert }: { cert: Cert }) {
               <div className="flex flex-col items-center sm:items-start">
                 <div className="flex w-fit flex-col items-center sm:items-start">
                   <FounderSignature />
-                  <div className="mt-1.5 w-full border-t border-line/70 pt-2 text-center sm:text-left">
+                  <div className="mt-1.5 w-full border-t border-line/70 pt-2 text-center sm:text-start">
                     <p className="text-[19px] font-semibold leading-none tracking-tight text-ink" data-ay-skip="1">Arash Ashrafnejad</p>
                     <p className="mt-1 whitespace-nowrap text-[10px] tracking-[0.01em] text-ink-2">Founder · ArtaQuest Foundation</p>
                   </div>
                 </div>
               </div>
 
-              <div className="text-center sm:text-right">
+              <div className="text-center sm:text-end">
                 <p className="text-[12.5px] leading-none text-ink-2" data-ay-skip="1">
-                  {date ? <time dateTime={date.toISOString().slice(0, 10)}>{date.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}</time> : "—"}
+                  {date ? <time dateTime={date.toISOString().slice(0, 10)}>{date.toLocaleDateString(uiLocale(), { year: "numeric", month: "long", day: "numeric" })}</time> : "—"}
                 </p>
                 <p className="mt-1 text-[9.5px] uppercase tracking-[0.14em] text-ink-2">Date completed</p>
                 <p className="mt-3.5 font-mono text-[12.5px] tracking-[0.12em] leading-none text-ink-2" data-ay-skip="1">{cert.code || "—"}</p>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { localePath } from "../lib/wp";
+import { uiLocale, localePath } from "../lib/wp";
 import {
   getTrack, generateTrack, publishTrack, deleteTrack, addTrackSource, removeTrackSource,
   type Track, type TrackReview, ApiError,
@@ -14,7 +14,7 @@ function shareUrl(path: string): string {
   return typeof window !== "undefined" ? window.location.origin + p : "https://artaquest.com" + p;
 }
 
-function fmtWhen(ts: number) { return ts ? new Date(ts * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : ""; }
+function fmtWhen(ts: number) { return ts ? new Date(ts * 1000).toLocaleDateString(uiLocale(), { year: "numeric", month: "short", day: "numeric" }) : ""; }
 
 function Cover({ title, src, className }: { title: string; src?: string; className?: string }) {
   if (src) return <img src={src} alt="" className={cx("h-full w-full object-cover", className)} />;
@@ -68,7 +68,7 @@ function ImprovementRounds({ reviews }: { reviews: TrackReview[] }) {
         {reviews.map((r) => (
           <li key={r.round} className="rounded-md border border-line bg-space-1/40">
             <button type="button" onClick={() => setOpen(open === r.round ? null : r.round)} aria-expanded={open === r.round}
-              className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[13px]">
+              className="flex w-full items-center justify-between gap-2 px-3 py-2 text-start text-[13px]">
               <span className="font-medium text-ink">Round {r.round}{r.audio_url ? " · recording" : ""}</span>
               <span className="flex items-center gap-2">
                 <Pill className={r.verdict === "approve" ? "text-yang" : ""}>{r.verdict === "approve" ? "Approved" : "Revise"}</Pill>

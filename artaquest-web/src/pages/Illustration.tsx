@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { localePath } from "../lib/wp";
+import { uiLocale, localePath } from "../lib/wp";
 import {
   getIllustration, generateIllustration, publishIllustration, deleteIllustration,
   type Illustration, type IllustrationRound, ApiError,
@@ -13,7 +13,7 @@ function shareUrl(path: string): string {
   const p = localePath(path);
   return typeof window !== "undefined" ? window.location.origin + p : "https://artaquest.com" + p;
 }
-function fmtWhen(ts: number) { return ts ? new Date(ts * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : ""; }
+function fmtWhen(ts: number) { return ts ? new Date(ts * 1000).toLocaleDateString(uiLocale(), { year: "numeric", month: "short", day: "numeric" }) : ""; }
 
 const AXIS_LABEL: Record<string, string> = {
   fidelity: "Brief fidelity", composition: "Composition", craft: "Craft", colour: "Colour & light", purpose: "Purpose fit",
@@ -30,7 +30,7 @@ function Improvements({ rounds }: { rounds: IllustrationRound[] }) {
         <h2 className="text-[18px] font-bold tracking-tight">How it was refined</h2>
         <p className="mt-0.5 text-[12.5px] text-ink-3">
           Every illustration is adversarially improved: an AI critic inspects each render against the brief and directs the next fix.
-          The whole loop is public — every attempt, image and critique, across {rounds.length} round{rounds.length > 1 ? "s" : ""}. <a className="font-semibold text-yin-light hover:underline" href={localePath("/artaillustration/")}>How the studio works →</a>
+          The whole loop is public — every attempt, image and critique, across {rounds.length} round{rounds.length > 1 ? "s" : ""}. <a className="font-semibold text-yin-light hover:underline" href={localePath("/artaillustration/")}>How the studio works <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
         </p>
       </div>
       <ol className="flex list-none flex-col gap-4">

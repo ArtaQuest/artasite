@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { ArtaBot as Api, ApiError, BotSessions, chatGetKey, chatMembers, type ArtabotMsg, type BotSession, type ChatMember, type ChatUserCard, type LiveStep, type UsageTier } from "../lib/api";
-import { currentUser, isLoggedIn, localePath, renderRich } from "../lib/wp";
+import { uiLocale, currentUser, isLoggedIn, localePath, renderRich } from "../lib/wp";
 import { armAutoAnswer, clearRing, getChatState, markSeen, subscribeChat, watchList } from "../lib/chat-store";
 import { useTypewriter } from "../lib/useTypewriter";
 import { Avatar, Button, LogoMark, RichText } from "./ui";
@@ -569,7 +569,7 @@ export function BotChat() {
           ))}
           <select aria-label="Start another conversation" value=""
             onChange={(e) => { if (e.target.value) void newSession(e.target.value); }}
-            className="ml-1 shrink-0 rounded-full border border-line bg-space-2 px-2 py-1 text-[12px] text-ink-3">
+            className="ms-1 shrink-0 rounded-full border border-line bg-space-2 px-2 py-1 text-[12px] text-ink-3">
             <option value="">+ New</option>
             {Object.entries(tiers ?? {}).map(([k, t]) => (
               <option key={k} value={k}>{t.label}{t.blurb ? ` — ${t.blurb}` : ""}</option>
@@ -755,7 +755,7 @@ function relTime(ts: number): string {
   if (d < 3600) return `${Math.floor(d / 60)}m`;
   if (d < 86400) return `${Math.floor(d / 3600)}h`;
   if (d < 604800) return `${Math.floor(d / 86400)}d`;
-  return new Date(ts * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return new Date(ts * 1000).toLocaleDateString(uiLocale(), { month: "short", day: "numeric" });
 }
 
 function DockBody({ view, setView }: {

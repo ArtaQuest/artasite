@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getPage, localePath, type WpPage } from "../lib/wp";
+import { uiLocale, getPage, localePath, type WpPage } from "../lib/wp";
 import { StatusNote } from "../components/ui";
 
 // WP REST returns entity-ENCODED title.rendered ("Terms &#038; Conditions"); the <h1> + tab title
@@ -59,7 +59,7 @@ export default function Page({ id }: { id: number | string }) {
     <article className="mx-auto max-w-3xl py-4">
       <h1 className="text-[clamp(1.75rem,3vw,2.25rem)] font-bold leading-tight tracking-tight">{decodeEntities(p.title)}</h1>
       {updated ? (
-        <p className="mt-2 text-[13px] text-ink-3">Last updated <time dateTime={updated.toISOString()}>{updated.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}</time></p>
+        <p className="mt-2 text-[13px] text-ink-3">Last updated <time dateTime={updated.toISOString()}>{updated.toLocaleDateString(uiLocale(), { year: "numeric", month: "long", day: "numeric" })}</time></p>
       ) : null}
       <div className="aq-prose mt-6 text-[16px] leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />
     </article>

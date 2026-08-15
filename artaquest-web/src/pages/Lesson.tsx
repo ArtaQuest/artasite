@@ -129,9 +129,9 @@ function Curriculum({ items, courseUrl }: { items: CurriculumItem[]; courseUrl: 
     <aside className="min-w-0" aria-label="Course videos">
       <div className="flex items-center justify-between">
         <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-3">Videos</h2>
-        <a href={localePath(courseUrl + "?tab=rankings")} className="text-[12px] font-semibold text-yang hover:underline">Rankings →</a>
+        <a href={localePath(courseUrl + "?tab=rankings")} className="text-[12px] font-semibold text-yang hover:underline">Rankings <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
       </div>
-      <ol className="mt-2 max-h-[72vh] list-none overflow-y-auto pr-1">
+      <ol className="mt-2 max-h-[72vh] list-none overflow-y-auto pe-1">
         {items.map((l) => {
           const inner = (
             <span className="flex min-w-0 items-center gap-2">
@@ -374,10 +374,10 @@ export default function Lesson({ id }: { id: number | string }) {
   if (!id) return (
     <div className="py-16 text-center">
       <p className="text-[15px] text-ink-2">No video selected.</p>
-      <a href={localePath("/courses/")} className="mt-3 inline-block text-[14px] font-semibold text-yang hover:underline">Browse courses →</a>
+      <a href={localePath("/courses/")} className="mt-3 inline-block text-[14px] font-semibold text-yang hover:underline">Browse courses <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
     </div>
   );
-  if (!d) return <p className="py-16 text-center text-ink-3">{tried ? <>Video not found. <a href={localePath("/courses/")} className="text-yang hover:underline">Browse courses →</a></> : "Loading…"}</p>;
+  if (!d) return <p className="py-16 text-center text-ink-3">{tried ? <>Video not found. <a href={localePath("/courses/")} className="text-yang hover:underline">Browse courses <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a></> : "Loading…"}</p>;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
@@ -430,7 +430,7 @@ export default function Lesson({ id }: { id: number | string }) {
               <span>Captions</span>
               <span className="rounded bg-veil/10 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide">{siteLang()}</span>
             </button>
-            <div role="group" aria-label="Playback speed" className="inline-flex h-9 items-center gap-1 rounded-pill border border-line pl-1 pr-1">
+            <div role="group" aria-label="Playback speed" className="inline-flex h-9 items-center gap-1 rounded-pill border border-line ps-1 pe-1">
               <span className="px-2 text-[12px] font-semibold text-ink-3" aria-hidden>Speed</span>
               {RATES.map((r) => (
                 <button key={r} type="button" aria-pressed={rate === r} aria-label={`${r} times speed`} onClick={() => changeRate(r)}

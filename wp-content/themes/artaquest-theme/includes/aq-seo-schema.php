@@ -13,6 +13,27 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
+ * The active locale as BCP-47, for `inLanguage`.
+ *
+ * Every node below hardcoded 'en'. On /fa/ and /ar/ that made the structured data contradict the
+ * markup — <html lang="fa" dir="rtl"> and a Persian hreflang, against a graph asserting the resource
+ * is English. Where the two disagree Google trusts inLanguage, so ~133 locales' worth of pages were
+ * classified as English duplicates of one another.
+ *
+ * Same lowercase-language / uppercase-region normalisation aq_app_hreflang_links() already applies,
+ * so the two never drift (zh-tw -> zh-TW).
+ */
+function aq_seo_bcp47() {
+	$code = class_exists( '\\AQ\\I18n' ) ? \AQ\I18n::current() : 'en';
+	if ( ! $code ) {
+		return 'en';
+	}
+	return strpos( $code, '-' ) !== false
+		? preg_replace_callback( '/-([a-z]+)$/', function ( $r ) { return '-' . strtoupper( $r[1] ); }, $code )
+		: $code;
+}
+
+/**
  * THE official ArtaQuest accounts — one PHP source of truth, keyed by platform.
  *
  * WHY THIS EXISTS: the list used to be copy-pasted into the Organization node's `sameAs` AND into
@@ -352,7 +373,7 @@ add_action(
 			'url'              => $home,
 			'name'             => 'ArtaQuest',
 			'publisher'        => array( '@id' => $home . '#org' ),
-			'inLanguage'       => 'en',
+			'inLanguage'       => aq_seo_bcp47(),
 			'potentialAction'  => array(
 				'@type'       => 'SearchAction',
 				'target'      => array( '@type' => 'EntryPoint', 'urlTemplate' => $home . '?s={search_term_string}' ),
@@ -404,7 +425,7 @@ add_action(
 				'url'         => $home . 'about/',
 				'name'        => 'About ArtaQuest',
 				'description' => 'ArtaQuest is a not-for-profit social media for science and education. Every post is a public Kaggle notebook that has been run, checked in the open against Kaggle\'s public record and published by its own author with a permanent citation link.',
-				'inLanguage'  => 'en',
+				'inLanguage'  => aq_seo_bcp47(),
 				'isPartOf'    => array( '@id' => $home . '#website' ),
 				'about'       => array( '@id' => $home . '#org' ),
 				'mainEntity'  => array( '@id' => $home . '#org' ),

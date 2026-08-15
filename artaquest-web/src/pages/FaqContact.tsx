@@ -75,7 +75,7 @@ function FaqItem({ q, a, id }: QA & { id: string }) {
         {q}
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-ink-3 transition-transform duration-200 group-open:rotate-180" aria-hidden><path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </summary>
-      <div className="pb-4 pr-8 text-[15px] leading-relaxed text-ink-2">{a}</div>
+      <div className="pb-4 pe-8 text-[15px] leading-relaxed text-ink-2">{a}</div>
     </details>
   );
 }

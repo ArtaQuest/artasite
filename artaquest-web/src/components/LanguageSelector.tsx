@@ -113,7 +113,7 @@ export function LanguageSelector({ compact = false }: { compact?: boolean } = {}
             <span className="text-[12px] font-semibold uppercase sm:hidden" data-ay-skip="1">{active.code.split("-")[0]}</span>
           </>
         ) : (
-          <span className="flex-1 text-left"><bdi dir={active.dir} data-ay-skip="1">{active.native}</bdi></span>
+          <span className="flex-1 text-start"><bdi dir={active.dir} data-ay-skip="1">{active.native}</bdi></span>
         )}
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" className={`text-ink-3 transition-transform ${open ? "rotate-180" : ""} ${compact ? "hidden sm:block" : ""}`} aria-hidden>
           <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
@@ -160,7 +160,7 @@ export function LanguageSelector({ compact = false }: { compact?: boolean } = {}
                     lang={l.code}
                     dir={l.dir}
                     data-ay-skip="1"
-                    className={`flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-[14px] transition-colors ${
+                    className={`flex w-full items-center justify-between gap-3 px-4 py-2 text-start text-[14px] transition-colors ${
                       isHi ? "bg-veil/[0.07]" : ""
                     } ${isActive ? "font-semibold text-yang" : "text-ink-2 hover:text-ink"}`}
                   >
@@ -175,7 +175,7 @@ export function LanguageSelector({ compact = false }: { compact?: boolean } = {}
           {/* ArtaTranslate transparency — every language here is continuously upgraded by it. */}
           <div className="border-t border-line px-4 pb-1 pt-2">
             <a href="/artatranslate" className="text-[12px] font-semibold text-yin-light hover:underline">
-              How these translations are made and improved →
+              How these translations are made and improved <span aria-hidden className="inline-block rtl:-scale-x-100">→</span>
             </a>
           </div>
         </div>

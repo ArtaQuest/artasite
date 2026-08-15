@@ -93,7 +93,7 @@ function Bubble({ m, animate = false, onTypingDone }: { m: TicketMsg; animate?: 
         {/* break-words: members paste URLs / error strings — pre-wrap alone won't break an unbroken
             token, and it would paint past the bubble and off-screen on phones (#18). */}
         <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-card bg-yin/15 px-3.5 py-2.5 text-[14px] leading-relaxed text-ink">{body}{shot && <Shot url={shot} below={!!body} />}</div>
-        <span className="mr-0.5 text-[11px] text-ink-2">{fmtTime(m.at)}</span>
+        <span className="me-0.5 text-[11px] text-ink-2">{fmtTime(m.at)}</span>
       </div>
     );
   }
@@ -367,7 +367,7 @@ export default function Issues() {
               </div>
               <h1 className="break-words text-[20px] font-bold leading-snug">{t.title}</h1>
               <p className="mt-1 text-[12px] text-ink-3">Opened by {owner ? "you" : t.author}</p>
-              {t.pr_url && <a href={t.pr_url} target="_blank" rel="noopener noreferrer" className="text-[13px] text-yin-light hover:underline">View the change →</a>}
+              {t.pr_url && <a href={t.pr_url} target="_blank" rel="noopener noreferrer" className="text-[13px] text-yin-light hover:underline">View the change <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>}
             </div>
           </header>
         )}
@@ -379,7 +379,7 @@ export default function Issues() {
         {t?.chat_prompt && (
           <figure className="rounded-card border border-line bg-space-2 p-4">
             <figcaption className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-2">Original message</figcaption>
-            <blockquote className="whitespace-pre-wrap break-words border-l-2 border-yin/50 pl-3 text-[14px] leading-relaxed text-ink-2">{t.chat_prompt}</blockquote>
+            <blockquote className="whitespace-pre-wrap break-words border-s-2 border-yin/50 ps-3 text-[14px] leading-relaxed text-ink-2">{t.chat_prompt}</blockquote>
           </figure>
         )}
 
@@ -496,7 +496,7 @@ export default function Issues() {
                     const on = kind === k.key;
                     return (
                       <button key={k.key} type="button" onClick={() => setKind(k.key)} aria-pressed={on}
-                        className={`rounded-card border px-3 py-2.5 text-left transition-colors ${on ? "border-yang/60 bg-yang/10" : "border-line bg-space-2 hover:border-ink-3/40"}`}>
+                        className={`rounded-card border px-3 py-2.5 text-start transition-colors ${on ? "border-yang/60 bg-yang/10" : "border-line bg-space-2 hover:border-ink-3/40"}`}>
                         <span className={`block text-[14px] font-bold ${on ? "text-yang" : "text-ink"}`}>{k.label}</span>
                         <span className="mt-0.5 block text-[11px] leading-snug text-ink-2">{k.hint}</span>
                       </button>
@@ -573,7 +573,7 @@ export default function Issues() {
               <ul className="flex flex-col gap-2">
                 {list.map((t) => (
                   <li key={t.id}>
-                    <button onClick={() => open(t.id)} className="group flex w-full items-start justify-between gap-2 rounded-card border border-line bg-space-2 px-3.5 py-3 text-left hover:border-ink-3/40">
+                    <button onClick={() => open(t.id)} className="group flex w-full items-start justify-between gap-2 rounded-card border border-line bg-space-2 px-3.5 py-3 text-start hover:border-ink-3/40">
                       <span className="min-w-0">
                         <span className="block truncate text-[14px] font-semibold text-ink group-hover:text-yang">{t.title}</span>
                         <span className="mt-0.5 block text-[11px] text-ink-2">{roleOf(t.kind)} · {t.mine ? "you" : t.author} · {t.msg_count} msg</span>

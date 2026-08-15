@@ -187,11 +187,11 @@ export default function Data() {
             {/* table list */}
             <aside className="min-w-0">
               <SearchPill value={q} onChange={setQ} placeholder="Find a table…" className="mb-2 h-9 w-full px-3" />
-              <ul className="max-h-[72vh] list-none space-y-0.5 overflow-y-auto pr-1">
+              <ul className="max-h-[72vh] list-none space-y-0.5 overflow-y-auto pe-1">
                 {shown.map((t) => (
                   <li key={t.name}>
                     <button type="button" onClick={() => setSel(t.name)} title={t.desc}
-                      className={`flex w-full items-center justify-between gap-2 rounded-field px-3 py-2 text-left text-[13.5px] transition-colors ${sel === t.name ? "bg-yin/15 font-semibold text-yang" : "text-ink-2 hover:bg-veil/5"}`}>
+                      className={`flex w-full items-center justify-between gap-2 rounded-field px-3 py-2 text-start text-[13.5px] transition-colors ${sel === t.name ? "bg-yin/15 font-semibold text-yang" : "text-ink-2 hover:bg-veil/5"}`}>
                       <span className="truncate">{t.label}</span>
                       <span className="shrink-0 text-[12px] tabular-nums text-ink-3">{t.rows.toLocaleString()}</span>
                     </button>
@@ -214,7 +214,7 @@ export default function Data() {
                 <>
                   <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                     <h3 className="text-[18px] font-bold tracking-tight">
-                      {data.label} <span className="ml-1 font-mono text-[12px] font-normal text-ink-3" data-ay-skip="1">{data.table}</span>
+                      {data.label} <span className="ms-1 font-mono text-[12px] font-normal text-ink-3" data-ay-skip="1">{data.table}</span>
                     </h3>
                     <span className="text-[13px] text-ink-3">{data.total.toLocaleString()} {data.total === 1 ? "row" : "rows"} · {data.per}/page</span>
                   </div>
@@ -229,7 +229,7 @@ export default function Data() {
                         <table className="w-full border-collapse text-[12.5px]" data-ay-skip="1">
                           <caption className="sr-only">{data.label} — {data.total.toLocaleString()} rows</caption>
                           <thead>
-                            <tr className="border-b border-line bg-space-2 text-left">
+                            <tr className="border-b border-line bg-space-2 text-start">
                               {data.columns.map((c) => (
                                 <th key={c} scope="col" className="whitespace-nowrap px-3 py-2 font-semibold text-ink-2">{c}</th>
                               ))}
@@ -258,9 +258,9 @@ export default function Data() {
                   )}
                   {data.pages > 1 && (
                     <div className="mt-3 flex items-center justify-center gap-3 text-[13px]">
-                      <Button variant="outline" size="sm" disabled={data.page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>← Prev</Button>
+                      <Button variant="outline" size="sm" disabled={data.page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Prev</Button>
                       <span className="text-ink-3">Page {data.page} of {data.pages}</span>
-                      <Button variant="outline" size="sm" disabled={data.page >= data.pages} onClick={() => setPage((p) => p + 1)}>Next →</Button>
+                      <Button variant="outline" size="sm" disabled={data.page >= data.pages} onClick={() => setPage((p) => p + 1)}>Next <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></Button>
                     </div>
                   )}
                 </>
@@ -318,7 +318,7 @@ export default function Data() {
               <CopyButton text={citation} label="Copy citation" className="border border-line px-2.5 hover:border-ink-3" />
             </div>
             <p className="text-[13.5px] leading-relaxed text-ink-2">Suggested citation (adapt to your style guide). The access date is today, {accessDate}:</p>
-            <blockquote data-ay-skip="1" className="break-words rounded-field border-l-2 border-yang bg-yang/[0.06] px-4 py-3 text-[13.5px] leading-relaxed text-ink">
+            <blockquote data-ay-skip="1" className="break-words rounded-field border-s-2 border-yang bg-yang/[0.06] px-4 py-3 text-[13.5px] leading-relaxed text-ink">
               ArtaQuest Foundation. ({now.getFullYear()}). <em>ArtaQuest open data</em> [Data set]. Retrieved {accessDate}, from {base}/data/
             </blockquote>
             <div className="mt-auto space-y-2 border-t border-line/60 pt-4 text-[13px] leading-relaxed text-ink-3">

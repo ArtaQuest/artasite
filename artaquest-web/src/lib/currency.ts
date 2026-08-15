@@ -154,8 +154,10 @@ export function formatPoints(n: number): string {
  *  `nClassName` styles ONLY the digits (e.g. `aq-grad`), leaving the gold star mark untouched. */
 export function Points({ n, withLabel = false, markSize, nClassName }: { n: number; withLabel?: boolean; markSize?: string; nClassName?: string }): React.ReactElement {
   return React.createElement(
-    "span",
-    { className: "aq-points", style: { whiteSpace: "nowrap" } },
+    // Matches Coins() above: a bdi pinned to ltr, so the star mark and the number keep their order
+    // inside Persian/Arabic text instead of reading "pts 1,234" with the mark trailing.
+    "bdi",
+    { dir: "ltr", "data-ay-skip": "1", className: "aq-points", style: { whiteSpace: "nowrap" } },
     React.createElement(PointsMark, { size: markSize, className: "aq-points__mark", title: "points" }),
     React.createElement("span", { className: nClassName ? `aq-points__n ${nClassName}` : "aq-points__n", style: { marginInlineStart: "0.22em" } },
       Math.round(n || 0).toLocaleString() + (withLabel ? " pts" : "")),

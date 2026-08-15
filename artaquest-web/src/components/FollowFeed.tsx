@@ -82,7 +82,7 @@ function EventLine({ it, lead, busy, err, onVote }: {
         <span className="shrink-0 text-[12px] text-ink-3">{relAgo(it.at)}</span>
       </div>
       {it.excerpt && (
-        <p className="mt-1.5 line-clamp-3 border-l-2 border-line bg-veil/5 py-1 pl-3 pr-2 text-[13px] leading-relaxed text-ink-2">{it.excerpt}</p>
+        <p className="mt-1.5 line-clamp-3 border-s-2 border-line bg-veil/5 py-1 ps-3 pe-2 text-[13px] leading-relaxed text-ink-2">{it.excerpt}</p>
       )}
       {it.target && (
         <div className="mt-1.5">

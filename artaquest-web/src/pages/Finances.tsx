@@ -180,11 +180,11 @@ function RecordCost({ onSaved }: { onSaved: () => void }) {
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <Field label="Invoice PDF" optional>
           <input type="file" accept="application/pdf" onChange={(e) => setInvoicePdf(e.target.files?.[0] ?? null)}
-            className="block w-full text-[13px] text-ink-2 file:mr-3 file:rounded file:border file:border-line file:bg-space-1 file:px-3 file:py-1.5 file:text-[13px] file:text-ink-2" />
+            className="block w-full text-[13px] text-ink-2 file:me-3 file:rounded file:border file:border-line file:bg-space-1 file:px-3 file:py-1.5 file:text-[13px] file:text-ink-2" />
         </Field>
         <Field label="Receipt PDF" optional>
           <input type="file" accept="application/pdf" onChange={(e) => setReceiptPdf(e.target.files?.[0] ?? null)}
-            className="block w-full text-[13px] text-ink-2 file:mr-3 file:rounded file:border file:border-line file:bg-space-1 file:px-3 file:py-1.5 file:text-[13px] file:text-ink-2" />
+            className="block w-full text-[13px] text-ink-2 file:me-3 file:rounded file:border file:border-line file:bg-space-1 file:px-3 file:py-1.5 file:text-[13px] file:text-ink-2" />
         </Field>
       </div>
       <div className="mt-5 flex items-center gap-3">
@@ -494,8 +494,8 @@ export default function Finances() {
                   <div className="mt-2 grid gap-1">
                     {e.lines.map((l, i) => (
                       <div key={i} className="flex items-baseline justify-between gap-4 text-[13px]">
-                        <span className={l.debit ? "text-ink-2" : "pl-6 text-ink-3"}>
-                          <span className="mr-2 inline-block w-5 text-[11px] font-semibold tracking-wide text-ink-3">{l.debit ? "Dr" : "Cr"}</span>
+                        <span className={l.debit ? "text-ink-2" : "ps-6 text-ink-3"}>
+                          <span className="me-2 inline-block w-5 text-[11px] font-semibold tracking-wide text-ink-3">{l.debit ? "Dr" : "Cr"}</span>
                           {l.label}
                         </span>
                         <span className={`shrink-0 tabular-nums ${l.debit ? "text-ink-2" : "text-ink-3"}`}>

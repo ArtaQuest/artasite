@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { localePath } from "../lib/wp";
+import { uiLocale, localePath } from "../lib/wp";
 import {
   getAnimation, generateAnimation, publishAnimation, deleteAnimation, addAnimationSource, removeAnimationSource,
   type Animation, ApiError,
@@ -14,7 +14,7 @@ function shareUrl(path: string): string {
   return typeof window !== "undefined" ? window.location.origin + p : "https://artaquest.com" + p;
 }
 
-function fmtWhen(ts: number) { return ts ? new Date(ts * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : ""; }
+function fmtWhen(ts: number) { return ts ? new Date(ts * 1000).toLocaleDateString(uiLocale(), { year: "numeric", month: "short", day: "numeric" }) : ""; }
 
 function OwnerStudio({ anim, reload }: { anim: Animation; reload: () => void }) {
   const [busy, setBusy] = useState("");

@@ -166,7 +166,7 @@ function StatusTimeline({ status, doi }: { status: string; doi?: string }) {
           </div>
         );
       })}
-      {terminal && <span className="ml-2 mb-4 text-[11px] font-semibold text-ink-2">· {smeta(status).label}</span>}
+      {terminal && <span className="ms-2 mb-4 text-[11px] font-semibold text-ink-2">· {smeta(status).label}</span>}
     </div>
   );
 }
@@ -245,7 +245,10 @@ function NotebookPreview({ json }: { json: string }) {
           </div>
         ) : c.cell_type === "code" ? (
           <div key={i} className="border-b border-line/50 last:border-0">
-            <div className="flex gap-2 bg-space-1/40">
+            {/* dir="ltr" on the ROW and the paddings stay physical on purpose: the `In` gutter belongs
+                to the left of the source in every language, exactly as in Jupyter. Without the pin the
+                gutter jumps to the trailing edge while the <pre> inside stays LTR (index.css). */}
+            <div dir="ltr" className="flex gap-2 bg-space-1/40">
               <span className="select-none py-2 pl-3 pr-1 font-mono text-[11px] text-yin-light/70">In</span>
               <pre className="flex-1 overflow-x-auto py-2 pr-3 font-mono text-[12px] leading-relaxed text-ink"><code>{nbText(c.source)}</code></pre>
             </div>
@@ -313,7 +316,7 @@ function CsvTable({ id, url }: { id: number; url: string }) {
       <div className="max-h-[420px] overflow-auto rounded-card border border-line">
         <table className="w-full border-collapse text-[12px]">
           <thead className="sticky top-0 bg-space-3 text-ink-2">
-            <tr>{head.map((h, i) => <th key={i} className="border-b border-line px-2.5 py-1.5 text-left font-semibold whitespace-nowrap">{h}</th>)}</tr>
+            <tr>{head.map((h, i) => <th key={i} className="border-b border-line px-2.5 py-1.5 text-start font-semibold whitespace-nowrap">{h}</th>)}</tr>
           </thead>
           <tbody className="font-mono text-ink-2">
             {body.slice(0, MAXR).map((r, ri) => (
@@ -377,7 +380,7 @@ function RubricBreakdown({ scores }: { scores?: Record<string, number> | null })
     <div className="mt-3 rounded-card border border-line bg-space-1 p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
         <span className="text-[11.5px] font-semibold uppercase tracking-wide text-ink-2">Rubric breakdown</span>
-        <a href="/artascience" className="text-[11px] font-semibold text-yin-light hover:underline">How scoring works →</a>
+        <a href="/artascience" className="text-[11px] font-semibold text-yin-light hover:underline">How scoring works <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
       </div>
       <p className="mt-0.5 text-[11px] leading-relaxed text-ink-2">Seven weighted axes (each 0–100); the score above is their weighted average.</p>
       <dl className="mt-2.5 space-y-1.5">
@@ -393,7 +396,7 @@ function RubricBreakdown({ scores }: { scores?: Record<string, number> | null })
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-veil/[0.10]" role="img" aria-label={`${a.label}: ${v} out of 100, weight ${a.weight} percent`}>
                   <div className="h-full rounded-full" style={{ width: `${v}%`, background: "linear-gradient(90deg, var(--color-yang) 0%, var(--color-yin-light) 100%)" }} />
                 </div>
-                <span className="w-7 shrink-0 text-right text-[12px] font-semibold tabular-nums text-ink">{v}</span>
+                <span className="w-7 shrink-0 text-end text-[12px] font-semibold tabular-nums text-ink">{v}</span>
               </dd>
             </div>
           );
@@ -413,7 +416,7 @@ function ReviewRoundCard({ r, defaultOpen = true }: { r: ReviewRound; defaultOpe
   return (
     <div className="overflow-hidden rounded-card border border-line bg-space-2">
       <button onClick={() => setOpen((o) => !o)} aria-expanded={open}
-        className="flex w-full flex-wrap items-center gap-2 px-4 py-3 text-left text-[13px] transition hover:bg-veil/[0.03]">
+        className="flex w-full flex-wrap items-center gap-2 px-4 py-3 text-start text-[13px] transition hover:bg-veil/[0.03]">
         <span className="font-bold text-ink">Round {r.round}</span>
         <span className={cx("font-semibold", VERDICT_TONE[r.verdict])}>{r.verdict === "accept" ? "Accept" : r.verdict === "reject" ? "Reject" : "Revise"}</span>
         <span className="text-ink-3">· reproduced: <b className={r.reproduced ? "text-yang" : "text-ink-2"}>{r.reproduced ? "yes" : "no"}</b></span>
@@ -491,7 +494,7 @@ function SubmitView({ onClose, reviseId, onDone, journals, journalSlug, backLabe
                     const t = leanTok(skinFor(j.slug).lean);
                     return (
                       <button key={j.slug} type="button" role="radio" aria-checked={on} onClick={() => setJournal(j.slug)}
-                        className={cx("flex items-start gap-2.5 rounded-card border p-3 text-left transition", on ? cx(t.chipBorder, t.soft) : "border-line bg-space-2 hover:border-yin-light")}>
+                        className={cx("flex items-start gap-2.5 rounded-card border p-3 text-start transition", on ? cx(t.chipBorder, t.soft) : "border-line bg-space-2 hover:border-yin-light")}>
                         <span className="mt-0.5 shrink-0">{skinFor(j.slug).glyph}</span>
                         <span className="min-w-0">
                           <span className={cx("block text-[14px] font-bold", on ? t.text : "text-ink")}>{j.name}</span>
@@ -694,7 +697,7 @@ function SubmissionsView({ open, onClose, onNew, journalSlug, backLabel }: { ope
         {failed && <p className="rounded-card border border-rose-400/40 bg-rose-400/[0.08] p-6 text-center text-[14px] text-rose-300">Couldn't load the queue. Please refresh.</p>}
         {!failed && shown !== null && !shown.length && <p className="rounded-card border border-line bg-space-2 p-6 text-center text-[14px] text-ink-3">{filter === "all" ? "No submissions yet — be the first." : "Nothing here yet."}</p>}
         {shown?.map((s) => (
-          <Card key={s.id} as="button" className="block w-full p-4 text-left transition hover:border-line/80 hover:bg-veil/[0.04]" onClick={() => open(s.id)}>
+          <Card key={s.id} as="button" className="block w-full p-4 text-start transition hover:border-line/80 hover:bg-veil/[0.04]" onClick={() => open(s.id)}>
             <div className="flex items-start justify-between gap-3">
               <h2 className="text-[16px] font-bold leading-snug text-ink">{s.title}</h2>
               <StatusPill status={s.status} />
@@ -736,7 +739,7 @@ function PublishedList({ open, journalSlug, heading = "Published articles" }: { 
       ) : (
         <div className="mt-3 space-y-3">
           {items.map((s) => (
-            <Card key={s.id} as="button" className="block w-full p-5 text-left transition hover:border-line/80 hover:bg-veil/[0.04]" onClick={() => open(s.id)}>
+            <Card key={s.id} as="button" className="block w-full p-5 text-start transition hover:border-line/80 hover:bg-veil/[0.04]" onClick={() => open(s.id)}>
               <div className="flex gap-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -753,7 +756,7 @@ function PublishedList({ open, journalSlug, heading = "Published articles" }: { 
                     {(s.kaggle_url || s.colab_url) ? <span className="font-medium text-yin-light">▶ runnable on Kaggle</span> : null}
                     <span>CC BY 4.0</span>
                   </p>
-                  <p className="mt-3 text-[13px] font-semibold text-yin-light">Read the article →</p>
+                  <p className="mt-3 text-[13px] font-semibold text-yin-light">Read the article <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></p>
                 </div>
                 {s.thumb_url && (
                   <img src={s.thumb_url} alt="" loading="lazy"
@@ -787,12 +790,12 @@ function InReviewList({ open, onQueue, journalSlug }: { open: (id: number) => vo
     <section className="mt-9">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-[13px] font-semibold uppercase tracking-[0.14em] text-ink-3">In review now</h2>
-        <button onClick={onQueue} className="text-[12.5px] font-semibold text-yin-light hover:underline">Full queue →</button>
+        <button onClick={onQueue} className="text-[12.5px] font-semibold text-yin-light hover:underline">Full queue <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></button>
       </div>
       <p className="mt-1 text-[12.5px] text-ink-3">Every submission — and every round of AI feedback — is public from the moment it enters the queue</p>
       <div className="mt-3 space-y-2">
         {items.map((s) => (
-          <Card key={s.id} as="button" className="block w-full p-3.5 text-left transition hover:border-line/80 hover:bg-veil/[0.04]" onClick={() => open(s.id)}>
+          <Card key={s.id} as="button" className="block w-full p-3.5 text-start transition hover:border-line/80 hover:bg-veil/[0.04]" onClick={() => open(s.id)}>
             <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
               <span className="min-w-0 flex-1 text-[14px] font-semibold leading-snug text-ink">{s.title}</span>
               <StatusPill status={s.status} />
@@ -1256,7 +1259,7 @@ function Disclosure({ label, children }: { label: string; children: ReactNode })
   const [open, setOpen] = useState(false);
   return (
     <div className="overflow-hidden rounded-card border border-line bg-space-2">
-      <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-[13.5px] font-semibold text-ink-2 hover:text-ink">
+      <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-start text-[13.5px] font-semibold text-ink-2 hover:text-ink">
         <span>{label}</span>
         <span className="text-[16px] leading-none text-ink-3">{open ? "−" : "+"}</span>
       </button>
@@ -1378,7 +1381,7 @@ function ArticleReader({ s, onClose, backLabel }: { s: Submission; onClose: () =
   // plateau, not the muted secondary), body leading 1.6 (was 1.78 — too loose hurts line-tracking; matches
   // the abstract + the published measurement, APCA paper DOI 10.5281/zenodo.21046102), prose
   // links use the accessible yin-ink (the lightened brand blue) not yin-light (Lc ~32 on dark), tables 14px.
-  const prose = "[&_h2]:mt-10 [&_h2]:scroll-mt-24 [&_h2]:text-[22px] [&_h2]:font-bold [&_h2]:tracking-tight [&_h2]:text-ink [&_h3]:mt-7 [&_h3]:scroll-mt-24 [&_h3]:text-[18px] [&_h3]:font-bold [&_h3]:text-ink [&_p]:mt-4 [&_p]:text-[16px] [&_p]:leading-[1.6] [&_p]:text-ink [&_ul]:mt-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:text-ink [&_ol]:mt-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:text-ink [&_li]:mt-1.5 [&_li]:leading-relaxed [&_a]:text-yin-ink [&_a]:font-medium hover:[&_a]:underline [&_figure]:my-7 [&_figure]:text-center [&_img]:mx-auto [&_img]:max-w-full [&_img]:rounded-card [&_img]:border [&_img]:border-line [&_img]:cursor-zoom-in [&_figcaption]:mt-2 [&_figcaption]:text-[13px] [&_figcaption]:leading-relaxed [&_figcaption]:text-ink-2 [&_table]:my-5 [&_table]:scroll-mt-24 [&_table]:w-full [&_table]:border-collapse [&_table]:text-[14px] [&_th]:border [&_th]:border-line [&_th]:bg-space-2 [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-left [&_td]:border [&_td]:border-line [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:text-ink [&_blockquote]:my-4 [&_blockquote]:border-l-2 [&_blockquote]:border-yin/40 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-ink [&_sup]:text-[11px] [&_sup_a]:font-semibold [&_sup_a]:text-yin-ink [&_code]:rounded [&_code]:bg-space-1 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[13px] [&_section]:mt-2 [&_section]:scroll-mt-24";
+  const prose = "[&_h2]:mt-10 [&_h2]:scroll-mt-24 [&_h2]:text-[22px] [&_h2]:font-bold [&_h2]:tracking-tight [&_h2]:text-ink [&_h3]:mt-7 [&_h3]:scroll-mt-24 [&_h3]:text-[18px] [&_h3]:font-bold [&_h3]:text-ink [&_p]:mt-4 [&_p]:text-[16px] [&_p]:leading-[1.6] [&_p]:text-ink [&_ul]:mt-3 [&_ul]:list-disc [&_ul]:ps-6 [&_ul]:text-ink [&_ol]:mt-3 [&_ol]:list-decimal [&_ol]:ps-6 [&_ol]:text-ink [&_li]:mt-1.5 [&_li]:leading-relaxed [&_a]:text-yin-ink [&_a]:font-medium hover:[&_a]:underline [&_figure]:my-7 [&_figure]:text-center [&_img]:mx-auto [&_img]:max-w-full [&_img]:rounded-card [&_img]:border [&_img]:border-line [&_img]:cursor-zoom-in [&_figcaption]:mt-2 [&_figcaption]:text-[13px] [&_figcaption]:leading-relaxed [&_figcaption]:text-ink-2 [&_table]:my-5 [&_table]:scroll-mt-24 [&_table]:w-full [&_table]:border-collapse [&_table]:text-[14px] [&_th]:border [&_th]:border-line [&_th]:bg-space-2 [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-start [&_td]:border [&_td]:border-line [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:text-ink [&_blockquote]:my-4 [&_blockquote]:border-s-2 [&_blockquote]:border-yin/40 [&_blockquote]:ps-4 [&_blockquote]:italic [&_blockquote]:text-ink [&_sup]:text-[11px] [&_sup_a]:font-semibold [&_sup_a]:text-yin-ink [&_code]:rounded [&_code]:bg-space-1 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[13px] [&_section]:mt-2 [&_section]:scroll-mt-24";
   // The shared-TOC item set for the inline reader: Abstract + the body's h2/h3 + the end-matter sections.
   const readerToc = useMemo<TocItem[]>(() => {
     const out: TocItem[] = [{ id: "abstract", label: "Abstract", level: 2 }];
@@ -1482,7 +1485,7 @@ function ArticleReader({ s, onClose, backLabel }: { s: Submission; onClose: () =
 
             <section id="review" className="mt-10 scroll-mt-24 border-t border-line pt-6">
               <h2 className="text-[16px] font-bold">AI review {s.reviews?.length ? `· ${s.reviews.length} round${s.reviews.length > 1 ? "s" : ""}` : ""}</h2>
-              <p className="mt-1 text-[13px] text-ink-3">Reviewed by ArtaScience, which ran this code on its open data. <a href="/research/artascience" className="font-semibold text-yin-light hover:underline">See the exact review prompt →</a></p>
+              <p className="mt-1 text-[13px] text-ink-3">Reviewed by ArtaScience, which ran this code on its open data. <a href="/research/artascience" className="font-semibold text-yin-light hover:underline">See the exact review prompt <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a></p>
               {/* Earlier rounds collapse to their verdict line; the decisive (latest) round opens in full. */}
               <div className="mt-2 space-y-3">{s.reviews?.map((r, i, a) => <ReviewRoundCard key={r.round} r={r} defaultOpen={i === a.length - 1} />)}</div>
             </section>
@@ -1709,7 +1712,7 @@ function Foot({ name = PORTAL }: { name?: string }) {
 // ── The shared review model, explained once (reused by the hub + every journal's About) ─────────────
 function ReviewModelExplainer() {
   return (
-    <p className="text-[15px] leading-relaxed text-ink-2">Every ArtaQuest journal runs a <b className="text-ink">fully automated, end-to-end AI review process</b>. There is no human peer review. The reviewer — ArtaScience, Claude running at maximum effort with tools — clones your code, fetches your data, <b className="text-ink">runs the analysis itself</b>, and checks whether the results reproduce your claims. It returns a reproduced (yes/no) verdict, a score, and a detailed report, and either accepts, requests revisions, or rejects. Revisions loop: address the report, resubmit, and a fresh round is reviewed — for as many rounds as it takes. Only work that <i>reproduces</i> is accepted. Every submission and every round of feedback is public. In the spirit of radical transparency, the reviewer's <a className="font-semibold text-yin-light hover:underline" href="/artascience">exact prompt is published and annotated line by line — see how ArtaScience works →</a></p>
+    <p className="text-[15px] leading-relaxed text-ink-2">Every ArtaQuest journal runs a <b className="text-ink">fully automated, end-to-end AI review process</b>. There is no human peer review. The reviewer — ArtaScience, Claude running at maximum effort with tools — clones your code, fetches your data, <b className="text-ink">runs the analysis itself</b>, and checks whether the results reproduce your claims. It returns a reproduced (yes/no) verdict, a score, and a detailed report, and either accepts, requests revisions, or rejects. Revisions loop: address the report, resubmit, and a fresh round is reviewed — for as many rounds as it takes. Only work that <i>reproduces</i> is accepted. Every submission and every round of feedback is public. In the spirit of radical transparency, the reviewer's <a className="font-semibold text-yin-light hover:underline" href="/artascience">exact prompt is published and annotated line by line — see how ArtaScience works <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a></p>
   );
 }
 
@@ -1737,7 +1740,7 @@ function JournalCard({ j, onOpen, onSubmit }: { j: Journal; onOpen: () => void; 
       <div className="flex items-start gap-3">
         <span className="shrink-0">{skin.glyph}</span>
         <div className="min-w-0">
-          <button onClick={onOpen} className="block text-left text-[19px] font-bold leading-snug text-ink hover:text-yin-light hover:underline">{j.name}</button>
+          <button onClick={onOpen} className="block text-start text-[19px] font-bold leading-snug text-ink hover:text-yin-light hover:underline">{j.name}</button>
           <p className={cx("mt-0.5 text-[13.5px] font-semibold", t.text)}>{j.tagline}</p>
         </div>
       </div>
@@ -1747,7 +1750,7 @@ function JournalCard({ j, onOpen, onSubmit }: { j: Journal; onOpen: () => void; 
         <span><b className="text-ink">{j.in_review}</b> in review</span>
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-2 pt-1">
-        <button onClick={onOpen} className="rounded-field border border-line px-3.5 py-1.5 text-[13px] font-semibold text-ink hover:bg-veil/[0.04]">Enter the journal →</button>
+        <button onClick={onOpen} className="rounded-field border border-line px-3.5 py-1.5 text-[13px] font-semibold text-ink hover:bg-veil/[0.04]">Enter the journal <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></button>
         <button onClick={onSubmit} className={cx("rounded-field px-3.5 py-1.5 text-[13px] font-bold", skin.lean === "yang" ? "bg-yang text-on-accent hover:opacity-90" : "border border-yin/50 bg-yin/[0.12] text-yin-light hover:bg-yin/[0.18]")}>Submit</button>
       </div>
     </Card>
@@ -1766,7 +1769,7 @@ function Hub({ journals, set }: { journals: Journal[]; set: (patch: Record<strin
         </p>
         <h1 className="mt-2 text-[clamp(2rem,4.6vw,3rem)] font-extrabold leading-[1.05] tracking-tight">{PORTAL}</h1>
         <p className="mt-3 max-w-2xl text-[16px] leading-relaxed text-ink">A growing family of open-access journals of short, reproducible studies. Every paper ships its open data and code and is reviewed by an AI that <b className="text-ink">re-runs the analysis and reproduces the result</b> before it is published — with a permanent DOI.</p>
-        <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-ink-2"><b className="text-ink">No human peer review.</b> Open access (CC BY 4.0), no fees to read or publish. <a className="font-semibold text-yin-light hover:underline" href="/artascience">How papers are reviewed →</a></p>
+        <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-ink-2"><b className="text-ink">No human peer review.</b> Open access (CC BY 4.0), no fees to read or publish. <a className="font-semibold text-yin-light hover:underline" href="/artascience">How papers are reviewed <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a></p>
         <div className="mt-5 flex flex-wrap items-center gap-2.5">
           <button onClick={() => set({ submit: "1" })} className="rounded-field bg-yang px-3.5 py-2 text-[14px] font-bold text-on-accent hover:opacity-90" title="Pick a journal, then submit — a registered dataset + model required">Submit a manuscript</button>
           <button onClick={() => set({ submissions: "1" })} className="rounded-field border border-line px-3.5 py-2 text-[14px] font-semibold text-ink hover:bg-veil/[0.04]">All submissions</button>
@@ -1839,7 +1842,7 @@ function JournalHome({ j, set }: { j: Journal; set: (patch: Record<string, strin
         <button onClick={() => set({ submissions: "1" })} className="rounded-field border border-line px-3.5 py-2 text-[14px] font-semibold text-ink hover:bg-veil/[0.04]">Review queue</button>
       </div>
       <div className="mt-3"><ReviewStatusBanner journal={j.slug} /></div>
-      <p className="mt-4 text-[14px] leading-relaxed text-ink-2"><b className="text-ink">No human peer review.</b> Every submission is read, run, and checked by an AI that reproduces your results from your own code and data — round after round — and only reproduced work is published, each with a permanent DOI. <button onClick={() => set({ about: "1" })} className="font-semibold text-yin-light hover:underline">How it works →</button></p>
+      <p className="mt-4 text-[14px] leading-relaxed text-ink-2"><b className="text-ink">No human peer review.</b> Every submission is read, run, and checked by an AI that reproduces your results from your own code and data — round after round — and only reproduced work is published, each with a permanent DOI. <button onClick={() => set({ about: "1" })} className="font-semibold text-yin-light hover:underline">How it works <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></button></p>
       <div className="mt-6"><PipelineStrip /></div>
       <PublishedList open={(sid) => set({ submission: String(sid) })} journalSlug={j.slug} />
       <InReviewList open={(sid) => set({ submission: String(sid) })} onQueue={() => set({ submissions: "1" })} journalSlug={j.slug} />
@@ -1871,7 +1874,7 @@ function AboutPanel({ journal, set }: { journal: Journal | null; set: (patch: Re
       <H>Automated AI review — no human peer review</H>
       <ReviewModelExplainer />
       <H>Author guidelines</H>
-      <ul className="mt-1 list-disc space-y-1.5 pl-5 text-[15px] leading-relaxed text-ink-2">
+      <ul className="mt-1 list-disc space-y-1.5 ps-5 text-[15px] leading-relaxed text-ink-2">
         <li><b className="text-ink">Manuscript in LaTeX.</b> Submit it as a <b className="text-ink">zipped LaTeX project</b> that compiles to a PDF. Our class <span className="font-mono text-[13px]">artaquest.cls</span> is recommended: <a className="font-semibold text-yin-light hover:underline" href="https://artaquest.com/papers/artaquest-latex-template.zip">download the template</a> · <a className="font-semibold text-yin-light hover:underline" href="https://artaquest.com/papers/style-guide.html" target="_blank" rel="noopener noreferrer">style guide</a>.</li>
         <li><b className="text-ink">Open data + open code are mandatory.</b> A submission is reviewed only if both are public and runnable — provide a code URL (a git repo is ideal) and a data URL the code can read, or upload each file.</li>
         <li><b className="text-ink">Make it run end-to-end.</b> A self-contained script or notebook that regenerates every figure from the open data (a one-click Colab is ideal). Pin dependencies; document how to run it.</li>

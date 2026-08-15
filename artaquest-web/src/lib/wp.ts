@@ -219,7 +219,10 @@ export function fmtBirthday(ymd?: string): string {
   if (!m) return "";
   const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
   if (Number.isNaN(d.getTime())) return "";
-  try { return d.toLocaleDateString(uiLang(), { day: "numeric", month: "long", year: "numeric" }); }
+  // uiLocale(), not uiLang(): a bare "fa" renders this in the Jalali calendar, so a member whose
+  // stored birthday is 1990-08-14 saw a different day and year on their own profile, with nothing
+  // saying it had been converted. The value here is a Gregorian YYYY-MM-DD; it is displayed as one.
+  try { return d.toLocaleDateString(uiLocale(), { day: "numeric", month: "long", year: "numeric" }); }
   catch { return d.toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" }); }
 }
 
@@ -268,9 +271,35 @@ export function localePath(href: string): string {
   if ((rest.split("/")[1] || "").toLowerCase() === cur) return href;
   return origin + "/" + cur + rest;
 }
-function uiLang(): string {
+export function uiLang(): string {
   const w = window as unknown as { AQ_I18N?: { current?: string } };
   return (w.AQ_I18N?.current || document.documentElement.lang || "en").toLowerCase().split("-")[0];
+}
+
+/**
+ * The locale to format DATES in — the SITE's language, not the browser's.
+ *
+ * Every date on the platform used `toLocaleDateString(undefined, …)`, which reads the BROWSER's
+ * locale. A Persian reader on `/fa/` whose browser is en-US therefore saw "August 14, 2026" on an
+ * otherwise Persian page. The page's language is the right answer, and it is the one thing
+ * `undefined` can never be.
+ *
+ * TWO extensions are pinned, and both are load-bearing:
+ *
+ *  - `ca-gregory` — bare "fa" formats in the JALALI calendar: 14 August 2026 becomes ۲۳ مرداد ۱۴۰۵.
+ *    For a DOI-bearing, citable record that is a change to the PUBLICATION DATE, not to its
+ *    presentation, so it must never happen implicitly. A reader-facing Jalali option is a real
+ *    feature, but it belongs behind an explicit preference, decided separately.
+ *  - `nu-latn` — keeps Western digits. Numerals are a separate, uniform decision (the server still
+ *    sends `digits: null`, leaving the localiser in lib/i18n.ts dormant); pinning them here means
+ *    dates cannot drift into Persian digits while every other number on the page stays Latin.
+ *
+ * Net effect for Persian: "August 14, 2026" → "14 اوت 2026" — the language localises, the calendar
+ * and the numerals do not.
+ */
+export function uiLocale(): string {
+  const l = uiLang();
+  return l === "en" ? "en" : `${l}-u-ca-gregory-nu-latn`;
 }
 
 // ── Auth (passwordless) — endpoints are unchanged in the new backend ─────────

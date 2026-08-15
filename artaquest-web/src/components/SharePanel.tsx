@@ -57,7 +57,7 @@ export function SharePanel({ title, url, message, image, dialogLabel = "Share", 
         {SHARE_ICON}Share
       </Button>
       {open && (
-        <div role="dialog" aria-label={dialogLabel} className="absolute right-0 z-30 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-card border border-line bg-space-2 p-4 text-left shadow-card">
+        <div role="dialog" aria-label={dialogLabel} className="absolute right-0 z-30 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-card border border-line bg-space-2 p-4 text-start shadow-card">
           <p className="text-[13px] font-semibold text-ink">Ready-to-post — pick a platform</p>
           <div className="mt-3 overflow-hidden rounded-field border border-line">
             <div className="aspect-[16/9] w-full overflow-hidden bg-space-3">

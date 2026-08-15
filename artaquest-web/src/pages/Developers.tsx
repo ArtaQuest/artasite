@@ -258,7 +258,7 @@ export default function Developers() {
             the machine's authority ends:
           </p>
           <Card className="p-5">
-            <ol className="flex list-decimal flex-col gap-3 pl-5 text-[15px] leading-relaxed text-ink-2">
+            <ol className="flex list-decimal flex-col gap-3 ps-5 text-[15px] leading-relaxed text-ink-2">
               <li>
                 <b className="text-ink">The checklist.</b> About twenty deterministic checks in four groups —
                 can anyone open it, can anyone re-run it, did that run produce these files, how repeatable is
@@ -306,7 +306,7 @@ export default function Developers() {
 
         <section className="flex flex-col gap-3">
           <H2 id="conventions">Conventions & limits</H2>
-          <ul className="flex list-disc flex-col gap-2 pl-5 text-[15px] leading-relaxed text-ink-2">
+          <ul className="flex list-disc flex-col gap-2 ps-5 text-[15px] leading-relaxed text-ink-2">
             <li>Errors are <code>{`{ "error": code, "message": text }`}</code> with an honest HTTP status.</li>
             <li>Lists return <code>{`{ items, next }`}</code> keyset cursors — pass <code>next</code> back as <code>?cursor=</code>; there are no page numbers.</li>
             <li>1,000 requests per hour per token, plus per-action limits (20 kernel imports per hour, 40 checklist re-runs per 10 minutes). A 429 means pause and retry.</li>

@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useState } from "react";
-import { getDashboard, getDonateOptions, getReserve, getWallet, buyCoins, sellCoins, getStripeVerify, getPayoutStatus, connectPayout, isLoggedIn, localePath, CHECKOUT_LIVE, type Dashboard, type DonateOptions, type Reserve, type WalletData, type BuyCoinsResult, type SellCoinsResult, type PayoutStatus } from "../lib/wp";
+import { uiLocale, getDashboard, getDonateOptions, getReserve, getWallet, buyCoins, sellCoins, getStripeVerify, getPayoutStatus, connectPayout, isLoggedIn, localePath, CHECKOUT_LIVE, type Dashboard, type DonateOptions, type Reserve, type WalletData, type BuyCoinsResult, type SellCoinsResult, type PayoutStatus } from "../lib/wp";
 import { Coins, formatCoins, formatFiat, sanitizeDecimal } from "../lib/currency";
 import { Button, Card, ErrorNote, Field, GatewayPicker, Input, OrbitRings, SignInGate } from "../components/ui";
 import { CoinDisc } from "../components/CoinDisc";
@@ -68,7 +68,7 @@ function BuyPanel({ opts, buyPrice, fiat, payments, onCredited }: { opts: Donate
             ? <>Complete your {result.total_display || formatFiat(result.total, fiat)} payment via {result.gateway} to receive <Coins n={result.coins} />. We credit your wallet within 1–2 business days.</>
             : <>Payment received — <Coins n={result.coins} /> are now in your wallet.</>}
         </p>
-        {result.instructions && <Card className="mt-4 whitespace-pre-line px-5 py-4 text-left text-[14px] leading-relaxed text-ink-2">{result.instructions}</Card>}
+        {result.instructions && <Card className="mt-4 whitespace-pre-line px-5 py-4 text-start text-[14px] leading-relaxed text-ink-2">{result.instructions}</Card>}
         <Button variant="outline" onClick={() => setResult(null)} className="mt-4 h-10 px-5 text-[14px]">Buy more</Button>
       </Card>
     );
@@ -291,7 +291,7 @@ export default function Wallet() {
             <p className="text-[13px] font-semibold uppercase tracking-[0.18em] text-ink-3">Your wallet</p>
             <div className="mt-2 text-[clamp(2.4rem,6vw,3.2rem)] font-extrabold leading-none text-yang tabular-nums">{balance == null && !dash ? "—" : <Coins n={bal} />}</div>
             <p className="mt-2 text-[14px] text-ink-2">Arta Coins · <a href="/reserve/" className="hover:text-yin-light hover:underline">{reserve ? `${Math.round((Number(reserve.backing_ratio) || 0) * 100)}% gold-backed` : "gold-backed"}</a>.{reserve ? <> Cash-out value ≈ <span className="font-semibold text-ink">{formatFiat(bal * reserve.sell, fiat)}</span>.</> : failed ? <> Live cash-out value is temporarily unavailable.</> : null}</p>
-            <a href={localePath("/reserve/")} className="mt-3 inline-block text-[14px] font-semibold text-yang hover:underline">See the reserve →</a>
+            <a href={localePath("/reserve/")} className="mt-3 inline-block text-[14px] font-semibold text-yang hover:underline">See the reserve <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
           </div>
           <CoinDisc size={132} className="hidden shrink-0 sm:block" />
         </div>
@@ -330,7 +330,7 @@ export default function Wallet() {
               <li key={i} className="flex items-center justify-between gap-3 py-2.5">
                 <span className="min-w-0">
                   <span className="block text-[14px] text-ink-2">{txnLabel(t.reason)}</span>
-                  {t.at > 0 && <span className="block text-[12px] text-ink-3">{new Date(t.at * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>}
+                  {t.at > 0 && <span className="block text-[12px] text-ink-3">{new Date(t.at * 1000).toLocaleDateString(uiLocale(), { month: "short", day: "numeric", year: "numeric" })}</span>}
                 </span>
                 <span className={`shrink-0 text-[15px] font-semibold tabular-nums ${t.delta >= 0 ? "text-yang" : "text-ink-3"}`}>{t.delta >= 0 ? "+" : "−"}<Coins n={Math.abs(t.delta)} /></span>
               </li>

@@ -69,7 +69,7 @@ export default function CompetitionNewPage() {
     <div className="flex flex-col">
       <WithRail label="Hosting a competition" rail={<DatasetHelp />}>
         <div className="mx-auto max-w-lg">
-          <a href={localePath("/competitions/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-light">← Competitions</a>
+          <a href={localePath("/competitions/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-light"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Competitions</a>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">New competition</h1>
           <p className="mt-2 text-[14px] leading-relaxed text-ink-3">
             Host a dataset with a hidden holdout and let others compete on it. Name it and describe it in a line;

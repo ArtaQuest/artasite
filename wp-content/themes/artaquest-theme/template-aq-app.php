@@ -98,7 +98,6 @@ if ( ! $aq_lesson_id ) {
 // new on a class that already exists.
 // Language boot config comes from the artaquest plugin's i18n registry (AQ\I18n).
 $aq_i18n     = null;
-$aq_seo_i18n = null;
 try {
 	if ( class_exists( 'AQ\\I18n' ) ) {
 		$aq_i18n = AQ\I18n::js_config();
@@ -141,15 +140,20 @@ if ( ! $aq_dash ) {
 	// always for these to load.
 	$aq_jsonld   = trim( (string) $aq_seo_head ); // full SEO head (meta + links + JSON-LD), emitted below
 }
-// wp_get_document_title() runs the document_title_parts filter (AQ_I18N_SEO::title_parts
-// localises every part) and yields a descriptive "<Page> – <Site>" title. The old
-// wp_title() path bypassed that filter, so titles were neither descriptive on the home
-// nor translated on non-English locales.
-$aq_title = $aq_dash ? get_bloginfo( 'name' ) : wp_get_document_title();
-// Prefer the client-saved translated title for this URL+language when we have it.
-if ( ! empty( $aq_seo_i18n['title'] ) ) {
-	$aq_title = $aq_seo_i18n['title'];
-}
+// wp_get_document_title() yields a descriptive "<Page> – <Site>" title, but it is ENGLISH: the
+// AQ_I18N_SEO::title_parts localiser the old comment credited was retired with MasterStudy and now
+// exists nowhere in the tree (grep: comments only), and $aq_seo_i18n was declared null and never
+// assigned. So every one of the ~133 locales served an identical English <title> — while og:title,
+// two lines away in aq_app_head_meta(), was already being localised, so the page contradicted itself.
+//
+// aq_app_head_meta() runs on wp_head at priority 5, i.e. inside the ob capture above and therefore
+// BEFORE this line; it has already called aq_seo_tr( null, [ $title, $desc ] ), and aq_seo_tr()'s
+// $map is a function static. So this wrap is a cache read with no extra query. It degrades to
+// English when the mesh has no row yet, exactly as the meta description does. The function_exists
+// guard matters because the $aq_dash branch never runs wp_head at all.
+$aq_title = $aq_dash
+	? get_bloginfo( 'name' )
+	: ( function_exists( 'aq_seo_tr' ) ? aq_seo_tr( wp_get_document_title() ) : wp_get_document_title() );
 ?><!doctype html>
 <?php
 // Set lang/dir straight from the i18n router so every one of the ~130 languages
@@ -199,7 +203,22 @@ $aq_html_dir  = ( $aq_i18n && 'rtl' === $aq_i18n['dir'] ) ? 'rtl' : 'ltr';
 	<?php echo $aq_jsonld; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped — schema.org JSON-LD from wp_head emitters ?>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Montserrat:wght@600;700;800&amp;display=swap">
+	<?php
+	// Inter + Montserrat carry NO Arabic subset, so on an RTL locale every Persian/Arabic glyph fell
+	// through to whatever the OS happened to have (Tahoma on Windows, Geeza Pro on macOS) — four
+	// different faces with four different vertical metrics, and synthesised bold. Request a real
+	// Arabic-script family, but ONLY on the ten RTL locales: the other ~123 languages must not pay for
+	// a font they will never render. Vazirmatn is the text face (Persian ی/ک forms, Persian digits);
+	// Noto Kufi Arabic is the geometric display counterpart to Montserrat, so the heading/body
+	// hierarchy survives translation instead of collapsing to one face.
+	$aq_font_fams = 'family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800';
+	if ( 'rtl' === $aq_html_dir ) {
+		$aq_font_fams .= '&family=Vazirmatn:wght@400;500;600;700'
+		              .  '&family=Noto+Kufi+Arabic:wght@600;700'
+		              .  '&family=Noto+Naskh+Arabic:wght@400;700';
+	}
+	?>
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?<?php echo esc_attr( $aq_font_fams ); ?>&amp;display=swap">
 	<?php // The SPA's bundle CSS loads NON-render-blocking (preload → flip to stylesheet on load): the
 	// branded #aq-boot-screen below — styled by the critical inline CSS above — covers the canvas until
 	// React paints the route, so the stylesheet arriving a beat later is invisible, and the browser no

@@ -377,8 +377,13 @@ export function BookReader({ book, onClose, onSwitchToScroll, returnFocus }: {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") { stopListenRef.current?.(); onClose(); returnFocus?.(); }
       else if (e.key === "l" || e.key === "L") toggleListen();
-      else if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") { e.preventDefault(); go("next"); }
-      else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go("prev"); }
+      // Arrow keys follow the direction the pages VISUALLY travel, so in an RTL book ArrowLeft
+      // advances. Keyed off book.dir, not the UI language: a Persian member reading an English book
+      // still turns pages rightward. PageDown/PageUp/Space are direction-agnostic by convention.
+      else if (e.key === "PageDown" || e.key === " ") { e.preventDefault(); go("next"); }
+      else if (e.key === "PageUp") { e.preventDefault(); go("prev"); }
+      else if (e.key === "ArrowRight") { e.preventDefault(); go(rtl ? "prev" : "next"); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); go(rtl ? "next" : "prev"); }
       else if (e.key === "t" || e.key === "T") flipTheme();
     };
     window.addEventListener("keydown", onKey);
@@ -393,7 +398,10 @@ export function BookReader({ book, onClose, onSwitchToScroll, returnFocus }: {
   const onTouchEnd = (e: React.TouchEvent) => {
     if (!touch.current || dragRef.current) return;
     const t = e.changedTouches[0], dx = t.clientX - touch.current.x, dy = t.clientY - touch.current.y;
-    if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.4) go(dx < 0 ? "next" : "prev");
+    // A leftward swipe advances an LTR book and goes BACK in an RTL one — the gesture follows the
+    // pages. index.css already draws the mobile fold on the left for RTL books, so without this the
+    // affordance and the gesture contradicted each other.
+    if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.4) go((dx < 0) !== rtl ? "next" : "prev");
     touch.current = null;
   };
 
@@ -528,15 +536,33 @@ export function BookReader({ book, onClose, onSwitchToScroll, returnFocus }: {
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
-        {/* click/drag zones for turning */}
-        <button type="button" className="aq-book-turn aq-book-turn-prev" aria-label="Previous page" disabled={!canPrev}
-          onPointerDown={(e) => { if (e.pointerType !== "touch") { e.preventDefault(); beginDrag(rtl && !isMobile ? "next" : "prev", e.clientX); } }}
-          onClick={() => { if (!mouseTurnRef.current) go(rtl && !isMobile ? "next" : "prev"); }} />
-        <button type="button" className="aq-book-turn aq-book-turn-next" aria-label="Next page" disabled={!canNext}
-          onPointerDown={(e) => { if (e.pointerType !== "touch") { e.preventDefault(); beginDrag(rtl && !isMobile ? "prev" : "next", e.clientX); } }}
-          onClick={() => { if (!mouseTurnRef.current) go(rtl && !isMobile ? "prev" : "next"); }} />
+        {/* Click/drag zones for turning. Each zone is bound to an ACTION, and its disabled state and
+            label derive from that same action. Previously label and `disabled` keyed off the physical
+            side while the handler keyed off the action, so on an RTL book they disagreed: at open
+            (leftPage 0 -> canPrev false) the leading zone was disabled and the trailing zone called a
+            no-op go("prev"), leaving BOTH tap zones dead, while a screen reader announced "Previous
+            page" on the control that advances. */}
+        {(() => {
+          const leadAction: "next" | "prev" = rtl && !isMobile ? "next" : "prev";
+          const trailAction: "next" | "prev" = leadAction === "next" ? "prev" : "next";
+          const zone = (cls: string, action: "next" | "prev") => (
+            <button
+              type="button"
+              className={`aq-book-turn ${cls}`}
+              aria-label={action === "next" ? "Next page" : "Previous page"}
+              disabled={action === "next" ? !canNext : !canPrev}
+              onPointerDown={(e) => { if (e.pointerType !== "touch") { e.preventDefault(); beginDrag(action, e.clientX); } }}
+              onClick={() => { if (!mouseTurnRef.current) go(action); }}
+            />
+          );
+          return <>{zone("aq-book-turn-prev", leadAction)}{zone("aq-book-turn-next", trailAction)}</>;
+        })()}
 
-        <div className="aq-book-book">
+        {/* dir="ltr" makes `flex-direction: row-reverse` (index.css .aq-book-rtl) the SINGLE mirror.
+            Without it this container inherited the document direction, so a Persian member opening an
+            RTL book got two mirrors that cancelled — the spread rendered unmirrored while every
+            control still assumed it was mirrored. Leaves carry their own lang/dir. */}
+        <div dir="ltr" className="aq-book-book">
           {isMobile ? (
             <>
               <Leaf n={mobilePage} side="right" />
@@ -588,7 +614,7 @@ export function BookReader({ book, onClose, onSwitchToScroll, returnFocus }: {
         </button>
 
         <span className="aq-book-nav">
-          <button type="button" className="aq-book-ctl" onClick={() => go("prev")} disabled={!canPrev} aria-label="Previous page" title="Previous (←)">
+          <button type="button" className="aq-book-ctl" onClick={() => go("prev")} disabled={!canPrev} aria-label="Previous page" title="Previous page" aria-keyshortcuts={rtl ? "ArrowRight" : "ArrowLeft"}>
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 5l-7 7 7 7" /></svg>
           </button>
           <span className="aq-book-count" aria-live="polite">{pageLabel}</span>
@@ -596,7 +622,7 @@ export function BookReader({ book, onClose, onSwitchToScroll, returnFocus }: {
             value={Math.min(Math.max(1, isMobile ? mobilePage : Math.max(1, leftPage)), Math.max(1, leafCount))}
             onChange={(e) => jump(Number(e.target.value))}
             aria-label={`Go to page (1 to ${leafCount})`} title="Go to page" />
-          <button type="button" className="aq-book-ctl" onClick={() => go("next")} disabled={!canNext} aria-label="Next page" title="Next (→)">
+          <button type="button" className="aq-book-ctl" onClick={() => go("next")} disabled={!canNext} aria-label="Next page" title="Next page" aria-keyshortcuts={rtl ? "ArrowLeft" : "ArrowRight"}>
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M9 5l7 7-7 7" /></svg>
           </button>
         </span>

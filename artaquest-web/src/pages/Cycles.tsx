@@ -98,9 +98,9 @@ export default function CyclesPage() {
               <Card className="p-4 transition-colors hover:border-yin-light sm:p-5">
                 <div className="flex items-baseline justify-between gap-3">
                   <h2 className="min-w-0 text-[17px] font-bold tracking-tight">
-                    <span className="mr-2 tabular-nums text-ink-3/60">{i + 1}</span>
+                    <span className="me-2 tabular-nums text-ink-3/60">{i + 1}</span>
                     {c.body}
-                    <span className="ml-2 text-[12px] font-normal text-ink-3">{c.period}</span>
+                    <span className="ms-2 text-[12px] font-normal text-ink-3">{c.period}</span>
                   </h2>
                   <span className="shrink-0 text-[15px] font-bold tabular-nums" style={{ color: AXIS_COLOR.why }}>{c.share}%</span>
                 </div>
@@ -127,7 +127,7 @@ function CycleView({ stat, dossier, n }: { stat: CycleStat | null; dossier?: Cyc
   if (!stat) {
     return (
       <article className="mx-auto max-w-2xl py-8 sm:py-10">
-        <a href={localePath("/cycles/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-light">← Cycles</a>
+        <a href={localePath("/cycles/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-light"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Cycles</a>
         <p className="text-[14px] text-ink-3">Unknown cycle.</p>
       </article>
     );
@@ -149,7 +149,7 @@ function CycleView({ stat, dossier, n }: { stat: CycleStat | null; dossier?: Cyc
   return (
     <WithRail label="How to cite this cycle" rail={citeCard}>
       <article className="mx-auto min-w-0 max-w-2xl py-8 sm:py-10">
-        <a href={localePath("/cycles/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-light">← Cycles</a>
+        <a href={localePath("/cycles/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-light"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Cycles</a>
         <header className="mb-4">
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{stat.body}</h1>
           <p className="mt-1 text-[13px] text-ink-3">{stat.period}{dossier?.natural_cycle ? <> · {dossier.natural_cycle}</> : null}</p>

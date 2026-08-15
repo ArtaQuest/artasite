@@ -181,7 +181,7 @@ export default function CitySelect({ value, onPick, onClear, id, required, inval
                     type="button"
                     onMouseEnter={() => setActive(i)}
                     onClick={() => pick(c)}
-                    className={cx("flex min-h-11 w-full items-center gap-2 px-3.5 py-2 text-left transition-colors",
+                    className={cx("flex min-h-11 w-full items-center gap-2 px-3.5 py-2 text-start transition-colors",
                       i === active ? "bg-veil/[0.08]" : "hover:bg-veil/[0.05]")}
                   >
                     <span data-ay-skip="1" className="min-w-0 flex-1 truncate text-[14.5px] text-ink">

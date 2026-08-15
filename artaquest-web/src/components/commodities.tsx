@@ -14,6 +14,7 @@
 import { useState } from "react";
 import type { Commodities, Commodity } from "../lib/api";
 import { Card, cx } from "./ui";
+import { uiLocale } from "../lib/wp";
 
 function Sparkline({ series, at, onScrub, lo, hi }: { series: number[]; at: number | null; onScrub: (i: number | null) => void; lo: number; hi: number }) {
   if (!series || series.length < 2) return null;
@@ -52,7 +53,7 @@ function Sparkline({ series, at, onScrub, lo, hi }: { series: number[]; at: numb
 /** "24 Jul" — a scrubbed day reads as a plain short date, no year noise inside a 56-day window. */
 function shortDay(iso: string) {
   const d = new Date(`${iso}T00:00:00Z`);
-  return isNaN(+d) ? iso : d.toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
+  return isNaN(+d) ? iso : d.toLocaleDateString(uiLocale(), { day: "numeric", month: "short", timeZone: "UTC" });
 }
 
 /** "₳0.402" · standardized per-kWh prices are small — keep 3 decimals below ₳1. */

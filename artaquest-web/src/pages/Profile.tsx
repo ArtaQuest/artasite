@@ -391,7 +391,7 @@ export default function Profile() {
                   anywhere embarrassing. */}
               {isOwn ? (
                 <a href={localePath("/user-account/?settings=1")} className="shrink-0 self-start text-[13.5px] font-semibold text-ink-3 transition-colors hover:text-yang sm:self-auto sm:pb-1">
-                  Edit profile →
+                  Edit profile <span aria-hidden className="inline-block rtl:-scale-x-100">→</span>
                 </a>
               ) : isLoggedIn() ? (
                 /* Follow + Message. Until this existed the ONLY way to open a conversation was typing

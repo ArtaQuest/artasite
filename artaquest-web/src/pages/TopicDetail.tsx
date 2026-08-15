@@ -126,7 +126,7 @@ export default function TopicDetail() {
           <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden><path d="M8 5v14l11-7z" /></svg>
           {learn.course ? "Take the course" : learn.instructor ? `Watch ${learn.instructor} explain this` : "Learn this — watch an instructor"}
         </a>
-        <Button href={localePath(`/typologies/?q=${encodeURIComponent(sys.key)}`)} className="h-10 px-5 text-[14px]">Stand with a group →</Button>
+        <Button href={localePath(`/typologies/?q=${encodeURIComponent(sys.key)}`)} className="h-10 px-5 text-[14px]">Stand with a group <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></Button>
       </div>
 
       {/* Groups (single/multi) or dimensions (spectrum), each with its profile picture + description. */}
@@ -172,7 +172,7 @@ export default function TopicDetail() {
 
       <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
         <span className="text-[13.5px] text-ink-2">Explore every framework people use to understand who they are.</span>
-        <LinkButton onClick={() => { window.location.href = localePath("/typologies/"); }} className="text-[13px] font-semibold">All topics →</LinkButton>
+        <LinkButton onClick={() => { window.location.href = localePath("/typologies/"); }} className="text-[13px] font-semibold">All topics <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></LinkButton>
       </Card>
     </div>
   );

@@ -144,8 +144,9 @@ final class I18n {
 		$lang    = self::lang( (string) Rest::p( $req, 'lang', '' ) );
 		$strings = array_slice( (array) Rest::p( $req, 'strings', [] ), 0, 100 );
 		$source  = (string) Rest::p( $req, 'source', 'auto' );
-		if ( ! $lang || $lang === 'en' || ! $strings ) { return [ 'hits' => (object) [] ]; }
-		$hits = [];
+		if ( ! $lang || $lang === 'en' || ! $strings ) { return [ 'hits' => (object) [], 'deferred' => [] ]; }
+		$hits     = [];
+		$deferred = [];
 		// OUTBOUND BUDGET PER REQUEST. The throttle above bounds how many REQUESTS a caller may make;
 		// it said nothing about how much work each one causes. Every cache miss here is a separate
 		// sequential call to Google with an 8-second timeout, and the batch is 100 — so ONE
@@ -161,7 +162,11 @@ final class I18n {
 			$hash   = md5( $s );
 			$cached = Data::col( 'SELECT translated_text FROM ' . Data::t( 'aq_translations' ) . ' WHERE source_hash = %s AND lang = %s', [ $hash, $lang ] );
 			if ( $cached !== null && $cached !== '' ) { $hits[ $s ] = $cached; continue; }
-			if ( $budget <= 0 ) { continue; }  // out of outbound budget — leave it missing, the client re-asks
+			// Out of outbound budget. Leave it missing AND name it in `deferred`, so the client can tell
+			// "we asked Google and it refused" (never retry) apart from "we never asked" (retry). Without
+			// this distinction the client seeded these as their own translation and cached that forever —
+			// a first Persian visitor to any real page kept roughly four strings in five in English.
+			if ( $budget <= 0 ) { $deferred[] = $s; continue; }
 			--$budget;
 			$t = self::google( $s, $lang, $source );
 			if ( $t !== null ) {
@@ -181,7 +186,7 @@ final class I18n {
 				$hits[ $s ] = $t;
 			}
 		}
-		return [ 'hits' => $hits ?: (object) [] ];
+		return [ 'hits' => $hits ?: (object) [], 'deferred' => $deferred ];
 	}
 
 	/**
@@ -245,7 +250,69 @@ final class I18n {
 	}
 
 	/** Single-string Google translate (free endpoint). Returns null on failure. */
+	/**
+	 * Names that must reach every language UNCHANGED.
+	 *
+	 * The only glossary in the system lived in tools/ticket-agent/translate-relay.mjs — the adversarial
+	 * SECOND pass, gated on `demand`, so most strings never reach it and keep raw edge output produced
+	 * with no glossary at all.
+	 *
+	 * MULTI-WORD NAMES ONLY, and that restriction is load-bearing — measured against the live edge, fa:
+	 *
+	 *   "Your ArtaCoin balance and the ArtaQuest Foundation"
+	 *     no mask          -> موجودی ArtaCoin شما و بنیاد ArtaQuest   (entity split: "Foundation" translated)
+	 *     mask multi-word  -> موجودی ArtaCoin و ArtaQuest Foundation شما   <- entity AND sense both intact
+	 *     mask every term  -> تعادل ArtaCoin شما و ArtaQuest Foundation   (balance -> "equilibrium": WRONG)
+	 *
+	 * Masking a token removes the context Google disambiguates the REST of the sentence from, so
+	 * over-masking degrades the surrounding translation. Single distinctive tokens — Kaggle, ArtaBot,
+	 * Zenodo, DOI — already survive untouched (verified), so masking them costs quality and buys
+	 * nothing. Only names whose parts are ordinary English words need the protection.
+	 *
+	 * Deliberately NOT here: 'notebook', 'kernel', 'library', 'feed', 'hearts'. Those are ordinary words
+	 * used as jargon, and whether a Persian reader is better served by the English term or a translated
+	 * one is a product decision, not a mechanical one.
+	 */
+	const DNT = [
+		'ArtaQuest Foundation',
+	];
+
+	/**
+	 * Translate one string, protecting the names in DNT.
+	 *
+	 * Each protected term is swapped for an opaque ASCII placeholder before the call and restored
+	 * after. The restoration is VERIFIED: if the edge dropped or mangled any placeholder, the masked
+	 * result is discarded and the string is re-fetched unmasked. A glossary that is asked for but never
+	 * checked is the same failure mode as no glossary — and a half-restored string would be worse than
+	 * a translated brand name, because it would leave "AQ0X" on the page.
+	 */
 	private static function google( $text, $lang, $source = 'auto' ) {
+		$map  = [];
+		$i    = 0;
+		$sent = $text;
+		foreach ( self::DNT as $term ) {
+			if ( stripos( $sent, $term ) === false ) { continue; }
+			$ph   = 'AQ' . $i . 'X';
+			$sent = str_ireplace( $term, $ph, $sent );
+			$map[ $ph ] = $term;
+			$i++;
+		}
+		$out = self::google_raw( $sent, $lang, $source );
+		if ( $out === null ) { return null; }
+		if ( ! $map ) { return $out; }
+		foreach ( array_keys( $map ) as $ph ) {
+			if ( stripos( $out, $ph ) === false ) {
+				return self::google_raw( $text, $lang, $source ); // unmasked retry
+			}
+		}
+		foreach ( $map as $ph => $term ) {
+			$out = preg_replace( '/' . preg_quote( $ph, '/' ) . '/i', str_replace( '$', '\\$', $term ), $out );
+		}
+		return $out !== '' ? $out : null;
+	}
+
+	/** The bare edge call — no glossary. Only google() should call this. */
+	private static function google_raw( $text, $lang, $source = 'auto' ) {
 		$sl   = preg_match( '/^[a-z]{2,3}(-[a-z]{2,4})?$/i', $source ) ? strtolower( $source ) : 'auto';
 		$url  = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' . rawurlencode( $sl ) . '&tl='
 			. rawurlencode( $lang ) . '&dt=t&q=' . rawurlencode( $text );

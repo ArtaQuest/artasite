@@ -29,7 +29,7 @@ import { watchMath } from "../lib/math";
 import { Avatar, Button, Chip, EmptyState, HeartGlyph, SectionHeader, Textarea, cx } from "../components/ui";
 import { Checklist } from "../components/checklist";
 import { isLoggedIn } from "../lib/auth";
-import { currentUser } from "../lib/wp";
+import { uiLocale, currentUser } from "../lib/wp";
 
 
 
@@ -195,7 +195,7 @@ function CommentRow({ c, nbId, mine, onReply, onDeleted, depth }: { c: NbComment
     voteComment(c.id, v as 0 | 1).catch(() => { setHearted(hearted); setVotes(c.votes); });
   };
   return (
-    <div className={cx("flex gap-2.5", depth > 0 && "ml-9")}>
+    <div className={cx("flex gap-2.5", depth > 0 && "ms-9")}>
       <Link to={`/u/${c.author.slug}`} className="shrink-0 self-start">
         <Avatar name={c.author.name} src={c.author.avatar} className="h-8 w-8 text-[11px]" />
       </Link>
@@ -397,11 +397,11 @@ export default function NotebookPage() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-yang-ink">ArtaQuest Journal</p>
             <h1 className="max-w-3xl font-serif text-3xl font-bold leading-tight text-ink sm:text-4xl">{nb.title}</h1>
             {nb.abstract ? (
-              <p className="max-w-3xl border-l-2 border-yang/50 pl-4 text-[15px] leading-relaxed text-ink-2"><span className="font-semibold text-ink">Abstract.</span> {nb.abstract}</p>
+              <p className="max-w-3xl border-s-2 border-yang/50 ps-4 text-[15px] leading-relaxed text-ink-2"><span className="font-semibold text-ink">Abstract.</span> {nb.abstract}</p>
             ) : null}
             <EditLink own={own} onClick={() => setEditing(true)} />
             <p className="text-[12px] text-ink-3">
-              <span data-ay-skip="1">{nb.kaggle?.author || nb.author.name}</span> · published <span data-ay-skip="1">{new Date((nb.published_at || nb.created) * 1000).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}</span>
+              <span data-ay-skip="1">{nb.kaggle?.author || nb.author.name}</span> · published <span data-ay-skip="1">{new Date((nb.published_at || nb.created) * 1000).toLocaleDateString(uiLocale(), { year: "numeric", month: "long", day: "numeric" })}</span>
               {nb.doi_link ? <> · <a href={nb.doi_link} className="inline-block py-1 text-yin-ink hover:underline">{nb.doi_link.replace(/^https?:\/\//, "")}</a></> : null}
             </p>
           </>

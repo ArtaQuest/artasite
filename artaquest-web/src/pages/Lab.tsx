@@ -90,7 +90,14 @@ function CodeArea({ cell, onChange, onKeyDown, onFocus }: {
 }) {
   const isCode = cell.type === "code";
   return (
-    <div className={`relative rounded-field border border-line ${isCode ? "bg-space-1" : "bg-space-2"} focus-within:border-yin-ink/60`}>
+    // Direction lives on the WRAPPER so the highlighted <pre> and the transparent <textarea> stacked
+    // on it can never resolve it differently: the textarea's text is invisible and only its caret
+    // shows, so any disagreement puts the caret where the member is not typing. Code is always ltr;
+    // a text cell is "auto" so a Persian member writing markdown gets RTL there.
+    <div
+      dir={isCode ? "ltr" : "auto"}
+      className={`relative rounded-field border border-line ${isCode ? "bg-space-1" : "bg-space-2"} focus-within:border-yin-ink/60`}
+    >
       <pre
         aria-hidden
         className={`hl m-0 min-h-[2.6em] w-full text-ink ${ED_FONT}`}
@@ -549,7 +556,7 @@ export default function Lab() {
       </div>
 
       {note ? (
-        <div className="banner mb-3 flex flex-wrap items-center gap-2 rounded-card border border-line border-l-2 border-l-yang bg-space-2 px-3 py-2 text-sm text-ink-2" role="status">
+        <div className="banner mb-3 flex flex-wrap items-center gap-2 rounded-card border border-line border-s-2 border-s-yang bg-space-2 px-3 py-2 text-sm text-ink-2" role="status">
           <span>{note.text}</span>
           {(note.actions || []).map((a) => (
             <Button key={a.label} size="sm" variant="outline" onClick={a.run}>{a.label}</Button>
@@ -586,7 +593,7 @@ export default function Lab() {
                 <a
                   key={i}
                   href="#"
-                  className={`block overflow-hidden text-ellipsis whitespace-nowrap border-l-2 py-0.5 text-xs no-underline ${t.level === 2 ? "pl-5" : t.level === 3 ? "pl-8" : "pl-2"} ${activeToc === t.cellId ? "active border-yang text-yang-ink" : "border-line text-ink-3 hover:border-yin-ink hover:text-ink"}`}
+                  className={`block overflow-hidden text-ellipsis whitespace-nowrap border-l-2 py-0.5 text-xs no-underline ${t.level === 2 ? "ps-5" : t.level === 3 ? "ps-8" : "ps-2"} ${activeToc === t.cellId ? "active border-yang text-yang-ink" : "border-line text-ink-3 hover:border-yin-ink hover:text-ink"}`}
                   onClick={(e) => { e.preventDefault(); document.querySelector(`[data-cell="${t.cellId}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
                 >{t.text}</a>
                   ))}

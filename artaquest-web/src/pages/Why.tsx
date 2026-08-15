@@ -232,7 +232,7 @@ function CycleDetail({ cycle }: { cycle: Cycle }) {
 
   return (
     <div className="flex flex-col gap-6 pb-12">
-      <a href={localePath("/why/")} className="text-[13px] font-semibold text-ink-3 hover:text-yang">← All study cycles</a>
+      <a href={localePath("/why/")} className="text-[13px] font-semibold text-ink-3 hover:text-yang"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> All study cycles</a>
       <PageHero
         eyebrow="Study cycle" glyph={<DomainGlyph domain="course" />}
         title={cycle.name}

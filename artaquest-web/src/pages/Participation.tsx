@@ -39,7 +39,7 @@ function VerifyPaste() {
     window.location.href = `/verify/?p=${p}&u=${u}&k=${encodeURIComponent(k)}`;
   }
   return (
-    <form onSubmit={go} className="mt-5 flex flex-col gap-2 text-left">
+    <form onSubmit={go} className="mt-5 flex flex-col gap-2 text-start">
       <label htmlFor="aq-cert-paste" className="text-[13px] font-semibold text-ink">Verification address</label>
       <input id="aq-cert-paste" value={raw} onChange={(e) => { setRaw(e.target.value); setBad(false); }}
         placeholder="artaquest.com/verify/?p=…&u=…&k=…" spellCheck={false} autoCapitalize="off"

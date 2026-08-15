@@ -23,7 +23,7 @@ export default function Cart() {
 
   const header = (
     <div className="flex items-end justify-between gap-3">
-      <h1 className="text-[30px] font-bold tracking-tight">Your donation{items.length === 1 ? "" : "s"}{items.length > 1 && <span className="ml-2 text-[15px] font-medium text-ink-3">{items.length} gifts</span>}</h1>
+      <h1 className="text-[30px] font-bold tracking-tight">Your donation{items.length === 1 ? "" : "s"}{items.length > 1 && <span className="ms-2 text-[15px] font-medium text-ink-3">{items.length} gifts</span>}</h1>
       {items.length > 1 && <button type="button" onClick={() => clearCart()} className="min-h-[28px] text-[13px] font-semibold text-ink-3 transition-colors hover:text-rose-300">Clear all</button>}
     </div>
   );

@@ -43,7 +43,7 @@ function Row({ c }: { c: HealthCheck }) {
         aria-expanded={hasEvidence ? open : undefined}
         disabled={!hasEvidence}
         className={cx(
-          "flex w-full items-start gap-3 px-3 py-2.5 text-left",
+          "flex w-full items-start gap-3 px-3 py-2.5 text-start",
           hasEvidence && "transition-colors hover:bg-veil/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yang/60",
         )}
       >

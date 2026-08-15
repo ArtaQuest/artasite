@@ -42,7 +42,7 @@ export function BalancePanel({ title, sub, balance, thinnest, buckets, top }: {
               <span className="h-3 min-w-0 flex-1 rounded-sm bg-veil/[0.06]">
                 <span className="block h-full rounded-sm bg-yang" style={{ width: `${(b.value / maxV) * 100}%`, opacity: isTop ? 0.9 : 0.35 + 0.45 * (b.value / maxV) }} aria-hidden />
               </span>
-              <span className="w-16 shrink-0 text-right tabular-nums text-ink-2">{isCounts ? `${b.value} · ${pct}%` : `${pct}%`}</span>
+              <span className="w-16 shrink-0 text-end tabular-nums text-ink-2">{isCounts ? `${b.value} · ${pct}%` : `${pct}%`}</span>
             </li>
           );
         })}

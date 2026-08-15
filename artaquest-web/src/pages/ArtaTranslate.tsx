@@ -208,8 +208,8 @@ export default function ArtaTranslate({ embedded = false }: { embedded?: boolean
           Because the entire database is public, you can audit every translation and every critique yourself.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <a href={localePath("/data/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">Open the Data explorer →</a>
-          <a href={localePath("/library/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">Hear a read-along →</a>
+          <a href={localePath("/data/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">Open the Data explorer <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
+          <a href={localePath("/library/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">Hear a read-along <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   getDonateOptions, getFoundationFinances, getStripeVerify, postCourseCheckout, isLoggedIn,
-  localePath, currentUser, type DonateOptions, type FoundationFinances,
+  localePath, currentUser, uiLocale, type DonateOptions, type FoundationFinances,
 } from "../lib/wp";
 import { creditOptions, creditReach, myCredits, sampleCert, widenCredit, type CreditOptions, type CreditReach, type CreditGift } from "../lib/api";
 import { Coins, formatFiat, sanitizeDecimal } from "../lib/currency";
@@ -35,7 +35,7 @@ const w = (typeof window !== "undefined" ? (window as unknown as Record<string, 
  *  the last 25 ledger rows in DOLLARS, spends included, so a row is not always a gift and never a
  *  coin; and `fund_issued` is not carried at all (wp.ts fills 0). Labels below match all three. */
 function FoundationBooks({ fin }: { fin: FoundationFinances }) {
-  const fmt = (s: number) => (s ? new Date(s * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—");
+  const fmt = (s: number) => (s ? new Date(s * 1000).toLocaleDateString(uiLocale(), { month: "short", day: "numeric" }) : "—");
   // ArtaCredits held: the crd_ earmarks, which are a SUBSET of the fund total beside them. Matched on
   // the bucket prefix (Funds::finances emits kind 'crd'), because the FundEarmark type in wp.ts still
   // narrows `kind` to grp|cty|typ and the prefix is the same fact without the cast.
@@ -429,7 +429,7 @@ export default function Donate() {
         </section>
 
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-2.5">
-          {err && <StatusNote error className="py-2 text-left">{err}</StatusNote>}
+          {err && <StatusNote error className="py-2 text-start">{err}</StatusNote>}
           {logged ? (
             <Button onClick={give} disabled={busy || amount < 1} className="h-12 w-full text-[16px] disabled:opacity-50">
               {busy ? "Starting…" : `Give ${sym}${amount || 0}`}
@@ -486,7 +486,7 @@ export default function Donate() {
                   <div className="min-w-0">
                     <p className="truncate text-[14.5px] text-ink">For {g.words}</p>
                     <p className="text-[12.5px] text-ink-2">
-                      {new Date(g.date * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                      {new Date(g.date * 1000).toLocaleDateString(uiLocale(), { year: "numeric", month: "short", day: "numeric" })}
                       {g.name ? <> · printed as <span data-ay-skip="1">{g.name}</span></> : <> · anonymous</>}
                       {g.widened ? <> · released to any member</> : null}
                     </p>

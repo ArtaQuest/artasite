@@ -586,7 +586,7 @@ function TypeChooser({ offered, current, onPick }: { offered: BookRule[]; curren
         const on = current?.slug === t.slug;
         return (
           <button key={t.slug} type="button" role="radio" aria-checked={on} onClick={() => onPick(t.slug)}
-            className={cx("flex min-h-[56px] w-full items-center justify-between gap-3 rounded-field border p-3 text-left transition-colors duration-150",
+            className={cx("flex min-h-[56px] w-full items-center justify-between gap-3 rounded-field border p-3 text-start transition-colors duration-150",
               on ? "border-yang bg-yang/12" : "border-line hover:border-yin-light")}>
             <span className="min-w-0 text-[14px] font-semibold text-ink" data-ay-skip="1">{t.title}</span>
             <span className="shrink-0 text-[12.5px] text-ink-3"><DurationText m={Number(t.minutes) || 30} /></span>
@@ -1147,7 +1147,7 @@ function VisitorPage({ handle }: { handle: string }) {
           </p>
         )}
         {booked.note.trim() && (
-          <p className="mt-4 border-l-2 border-yang/40 pl-3 text-[14px] italic leading-relaxed text-ink-2" data-ay-skip="1">
+          <p className="mt-4 border-s-2 border-yang/40 ps-3 text-[14px] italic leading-relaxed text-ink-2" data-ay-skip="1">
             {booked.note}
           </p>
         )}

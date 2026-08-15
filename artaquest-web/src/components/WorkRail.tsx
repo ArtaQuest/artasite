@@ -47,7 +47,7 @@ export function CiteBox({ nb }: { nb: NotebookFull }) {
     <aside className="flex flex-col gap-3 rounded-card border border-line bg-space-2 p-4">
       <h2 className="text-sm font-bold uppercase tracking-wider text-ink-3">Cite this work</h2>
       {nb.doi_link ? (
-        <button type="button" onClick={() => copy("doi", nb.doi_link)} className="break-all text-left text-sm text-yin-ink hover:underline" title="Copy the permanent link">
+        <button type="button" onClick={() => copy("doi", nb.doi_link)} className="break-all text-start text-sm text-yin-ink hover:underline" title="Copy the permanent link">
           {nb.doi_link.replace(/^https?:\/\//, "")}
         </button>
       ) : (

@@ -2303,7 +2303,7 @@ export default function Messages() {
               onKeyDown={(e) => { if (e.key === "Enter" && filter.trim()) void openNew(filter); }} />
             {currentUser()?.slug ? (
               <button type="button" onClick={() => void openNew(currentUser()!.slug!)}
-                className="self-start text-[12px] text-yin-ink hover:underline">Notes to yourself →</button>
+                className="self-start text-[12px] text-yin-ink hover:underline">Notes to yourself <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></button>
             ) : null}
             {note && <p className="text-[13px] text-ink-3">{note}</p>}
 

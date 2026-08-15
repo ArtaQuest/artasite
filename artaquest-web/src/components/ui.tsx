@@ -86,7 +86,7 @@ function TipBubble({ anchor, tip }: { anchor: DOMRect; tip: ButtonTip }) {
         opacity: pos ? 1 : 0, transition: "opacity 120ms ease-out", pointerEvents: "none",
         boxShadow: "0 14px 36px -8px rgba(2,8,20,0.4)",
       }}
-      className="rounded-xl border border-line bg-space-3 px-3.5 py-2.5 text-left">
+      className="rounded-xl border border-line bg-space-3 px-3.5 py-2.5 text-start">
       {typeof tip === "string"
         ? <span className="text-[13px] leading-relaxed text-ink-2">{tip}</span>
         : <>
@@ -378,9 +378,12 @@ export function Tabs({ tabs, active, onChange, className, label = "Tabs", border
   const ref = useRef<HTMLDivElement>(null);
   // Roving-tabindex + arrow/Home/End keyboard nav (WAI-ARIA tabs pattern).
   const onKey = (e: ReactKeyboardEvent<HTMLButtonElement>, i: number) => {
+    // Arrow keys follow VISUAL order: in an RTL tablist ArrowRight is the PREVIOUS tab. Read the
+    // resolved direction off the live element — a tablist may sit in a subtree with its own dir.
+    const rtl = !!ref.current && getComputedStyle(ref.current).direction === "rtl";
     let n: number;
-    if (e.key === "ArrowRight") n = (i + 1) % tabs.length;
-    else if (e.key === "ArrowLeft") n = (i - 1 + tabs.length) % tabs.length;
+    if (e.key === (rtl ? "ArrowLeft" : "ArrowRight")) n = (i + 1) % tabs.length;
+    else if (e.key === (rtl ? "ArrowRight" : "ArrowLeft")) n = (i - 1 + tabs.length) % tabs.length;
     else if (e.key === "Home") n = 0;
     else if (e.key === "End") n = tabs.length - 1;
     else return;
@@ -811,7 +814,7 @@ export function GatewayPicker({ gateways, value, onChange, descriptions, labelId
           const desc = descriptions?.[g.id] || g.desc;
           return (
             <button key={g.id} type="button" onClick={() => onChange(g.id)} aria-pressed={value === g.id}
-              className={cx("rounded-card border px-4 py-3 text-left transition-colors", value === g.id ? "border-yang bg-yang/10" : "border-line hover:border-ink-3")}>
+              className={cx("rounded-card border px-4 py-3 text-start transition-colors", value === g.id ? "border-yang bg-yang/10" : "border-line hover:border-ink-3")}>
               <span className="block text-[15px] font-semibold">{g.title}</span>
               {desc && <span className="mt-0.5 block text-[13px] text-ink-3">{desc}</span>}
             </button>
@@ -848,7 +851,10 @@ export function RichText({ html, className, srcLang }: { html: string; className
   const mark = srcLang !== undefined
     ? { "data-ay-tr": "1", "data-ay-src": srcLang || "en" }
     : { "data-ay-skip": "1" };
-  return <div ref={ref} {...mark} className={cx("aq-prose", className)} dangerouslySetInnerHTML={{ __html: html }} />;
+  // dir="auto" because this renders MEMBER-authored text — comments, thread bodies, descriptions —
+  // whose language is independent of the page's. Pairs with `unicode-bidi: plaintext` on .aq-prose so
+  // multi-paragraph bodies resolve per paragraph, not from the opening word of the whole block.
+  return <div ref={ref} dir="auto" {...mark} className={cx("aq-prose", className)} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 /* ───────────────────────── LogoMark (brand A-in-ring) ───────────────────────── */
@@ -1196,7 +1202,9 @@ export function StatusNote({ error, className, children }: { error?: boolean; cl
    Renders an <a> with href (locale-aware) or a <button> with onClick. */
 export function BackLink({ href, onClick, className, children }: { href?: string; onClick?: () => void; className?: string; children: ReactNode }) {
   const cls = cx("inline-flex items-center gap-1 self-start text-[14px] font-semibold text-ink-3 transition-colors hover:text-yang", className);
-  const inner = <><span aria-hidden>←</span>{children}</>;
+  // The arrow points the way the reader travels, so it mirrors. It already sits in its own
+  // aria-hidden span, so it was never baked into a translated string — flipping it costs no cache.
+  const inner = <><span aria-hidden className="inline-block rtl:-scale-x-100">←</span>{children}</>;
   return href
     ? <a href={localePath(href)} className={cls}>{inner}</a>
     : <button type="button" onClick={onClick} className={cls}>{inner}</button>;

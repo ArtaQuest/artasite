@@ -10,8 +10,14 @@
    rounded-card, w-sidebar…). No override CSS, no inherited leaks.
    ════════════════════════════════════════════════════════════════════════════ */
 @theme {
-  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
-  --font-display: Montserrat, Inter, ui-sans-serif, system-ui, sans-serif;
+  /* Latin families stay FIRST, so Latin rendering is byte-identical to before. Font fallback is
+     per-character: only glyphs Inter/Montserrat lack (i.e. Arabic script) reach the Arabic face.
+     The two tokens name DIFFERENT Arabic families on purpose — sharing one would collapse the
+     heading/body hierarchy on every translated page. Requested only on RTL locales (see
+     template-aq-app.php), and Google serves them unicode-range-scoped, so a Latin reader downloads
+     zero Arabic bytes. */
+  --font-sans: Inter, Vazirmatn, "Noto Sans Arabic", ui-sans-serif, system-ui, sans-serif;
+  --font-display: Montserrat, "Noto Kufi Arabic", Vazirmatn, Inter, ui-sans-serif, system-ui, sans-serif;
 
   /* Brand — Yang (gold · the Why) / Yin (blue · the How). The only two accents. */
   --color-yang: #e8b923;
@@ -520,11 +526,11 @@ select option, select optgroup { color: #111; background: #fff; }
 .aq-prose strong { color: var(--color-ink); font-weight: 700; }
 .aq-prose em { font-style: italic; }
 .aq-prose a { color: var(--color-yang); text-decoration: underline; text-underline-offset: 2px; }
-.aq-prose .aq-md-ul, .aq-prose .aq-md-ol { margin: 0 0 0.9em; padding-left: 1.4em; }
+.aq-prose .aq-md-ul, .aq-prose .aq-md-ol { margin: 0 0 0.9em; padding-inline-start: 1.4em; }
 .aq-prose .aq-md-ul { list-style: disc; }
 .aq-prose .aq-md-ol { list-style: decimal; }
 .aq-prose li { margin: 0.25em 0; line-height: 1.65; }
-.aq-prose .aq-md-bq { margin: 0.9em 0; padding: 0.5em 0.9em; border-left: 3px solid var(--color-yang); background: rgba(232, 185, 35, 0.06); color: var(--color-ink-2); border-radius: 0 4px 4px 0; }
+.aq-prose .aq-md-bq { margin: 0.9em 0; padding: 0.5em 0.9em; border-inline-start: 3px solid var(--color-yang); background: rgba(232, 185, 35, 0.06); color: var(--color-ink-2); border-start-end-radius: 4px; border-end-end-radius: 4px; }
 /* An audio player sized for a chat bubble rather than a page. */
 .aq-prose .aq-md-audio { display: block; width: 100%; margin: 0.6em 0; height: 40px; }
 /* An interactive panel ArtaBot built. Tall enough to be usable, capped so it never eats the thread. */
@@ -571,7 +577,7 @@ select option, select optgroup { color: #111; background: #fff; }
 /* display:block + overflow-x lets a wide markdown table scroll inside the comment column instead of
    pushing past a phone viewport (the rows form an anonymous table box, so collapsed borders survive). */
 .aq-prose .aq-md-table { display: block; width: 100%; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin: 0 0 0.9em; font-size: 0.92em; }
-.aq-prose .aq-md-table th, .aq-prose .aq-md-table td { border: 1px solid var(--color-line); padding: 0.45em 0.7em; text-align: left; }
+.aq-prose .aq-md-table th, .aq-prose .aq-md-table td { border: 1px solid var(--color-line); padding: 0.45em 0.7em; text-align: start; }
 .aq-prose .aq-md-table th { background: color-mix(in srgb, var(--color-veil) 4%, transparent); color: var(--color-ink); font-weight: 600; }
 .aq-prose hr { border: 0; border-top: 1px solid var(--color-line); margin: 1.2em 0; }
 
@@ -640,16 +646,17 @@ select option, select optgroup { color: #111; background: #fff; }
 .aq-article-body .key-findings {
   list-style: none;
   margin: 1.6rem 0;
-  padding: 1.1rem 1.25rem 1.1rem 1.5rem;
+  padding-block: 1.1rem;
+  padding-inline: 1.5rem 1.25rem;
   border: 1px solid color-mix(in srgb, var(--color-yang) 36%, transparent);
-  border-left: 3px solid var(--color-yang);
+  border-inline-start: 3px solid var(--color-yang);
   border-radius: var(--radius-card);
   background: rgba(232, 185, 35, 0.06);
 }
 .aq-article-body .key-findings > li {
   position: relative;
   margin: 0 0 0.55rem;
-  padding-left: 1.4rem;
+  padding-inline-start: 1.4rem;
   font-size: 0.98rem;
   line-height: 1.6;
   color: var(--color-ink-2);
@@ -658,7 +665,7 @@ select option, select optgroup { color: #111; background: #fff; }
 .aq-article-body .key-findings > li::before {
   content: "";
   position: absolute;
-  left: 0; top: 0.62em;
+  inset-inline-start: 0; top: 0.62em;
   width: 6px; height: 6px;
   border-radius: 999px;
   background: var(--color-yang);
@@ -667,8 +674,9 @@ select option, select optgroup { color: #111; background: #fff; }
 /* Pull-quote takeaway — gold rule + larger, lightly emphasised display type. */
 .aq-article-body blockquote {
   margin: 2rem 0;
-  padding: 0.3rem 0 0.3rem 1.4rem;
-  border-left: 3px solid var(--color-yang);
+  padding-block: 0.3rem;
+  padding-inline: 1.4rem 0;
+  border-inline-start: 3px solid var(--color-yang);
   font-family: var(--font-display);
   font-weight: 500;
   font-size: 1.28rem;
@@ -682,7 +690,7 @@ select option, select optgroup { color: #111; background: #fff; }
 
 /* References — well set, with a target highlight when a [n] back-reference jumps here. */
 .aq-article-body section#references ol,
-.aq-article-body #references > ol { padding-left: 1.6rem; }
+.aq-article-body #references > ol { padding-inline-start: 1.6rem; }
 .aq-article-body #references li {
   margin: 0.5rem 0;
   font-size: 0.9rem;
@@ -854,12 +862,12 @@ html[data-theme="light"] .aq-sig-img { filter: none; }
   /* Reclaim horizontal room so the whole row fits a 360–390px phone with no clip: drop the size
      readout + the contrast icon, and slim the slider. Tap targets stay ≥40px. */
   .aq-read-seg .aq-read-size-label { display: none; }                     /* the M/S/L size readout */
-  .aq-read-contrast { padding-left: 0; gap: 0.2rem; }
+  .aq-read-contrast { padding-inline-start: 0; gap: 0.2rem; }
   .aq-read-contrast > svg { display: none; }                              /* the contrast glyph (slider speaks for itself) */
   /* The slider is the LAST item — keep it narrow + give the contrast group a little right padding so the
      16px thumb at the Crisp end stays fully inside the viewport (no clip). Serif/Sans tighten too. */
   .aq-read-crange { width: 1.5rem; }
-  .aq-read-contrast { padding-right: 0.75rem; }
+  .aq-read-contrast { padding-inline-end: 0.75rem; }
   .aq-read-bar [role="group"][aria-label="Reading typeface"] .aq-read-ctl { padding: 0 0.4rem; }
   .aq-read-seg { gap: 0.1rem; }
 }
@@ -895,7 +903,7 @@ html[data-theme="light"] .aq-sig-img { filter: none; }
   text-decoration: none;
   transition: color 0.15s ease;
 }
-.aq-toc-sub { padding-left: 1.55rem; font-size: 0.78rem; }
+.aq-toc-sub { padding-inline-start: 1.55rem; font-size: 0.78rem; }
 /* Upcoming sections read muted, passed ones normal, the active one gold + medium. */
 .aq-toc-item:hover { color: var(--color-yin-light); }
 .aq-toc-item:focus-visible {
@@ -938,7 +946,7 @@ html[data-theme="light"] .aq-sig-img { filter: none; }
   transition: width 0.2s ease;
 }
 .aq-read-col.aq-read-serif {
-  --aq-read-face: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Cambria, "Times New Roman", serif;
+  --aq-read-face: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Cambria, "Noto Naskh Arabic", "Times New Roman", serif;
 }
 .aq-read-col.aq-read-sans { --aq-read-face: var(--font-sans); }
 
@@ -959,7 +967,7 @@ html[data-theme="light"] .aq-sig-img { filter: none; }
 .aq-read-abstract {
   margin-top: 1.6rem;
   padding: 0 0 0 1.1rem;
-  border-left: 3px solid color-mix(in srgb, var(--color-yang) 55%, transparent);
+  border-inline-start: 3px solid color-mix(in srgb, var(--color-yang) 55%, transparent);
 }
 .aq-read-abstract h2 { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--color-ink-3); margin: 0; }
 .aq-read-abstract p { margin: 0.5rem 0 0; font-family: var(--aq-read-face); font-size: calc(1.06em); line-height: 1.6; color: var(--color-ink); }
@@ -982,8 +990,9 @@ html[data-theme="light"] .aq-sig-img { filter: none; }
 .aq-read-justify .aq-article-body > p,
 .aq-read-justify .aq-article-body li,
 .aq-read-justify .aq-article-body > blockquote { text-align: justify; -webkit-hyphens: auto; hyphens: auto; }
-/* RTL content (dir resolves from the document): keep the abstract's accent bar on the reading side. */
-.aq-read-col[dir="rtl"] .aq-read-abstract { padding: 0 1.1rem 0 0; border-left: 0; border-right: 3px solid color-mix(in srgb, var(--color-yang) 55%, transparent); }
+/* RTL abstract accent bar — see the RTL section at the end of this file. It must key on :dir(rtl),
+   not [dir="rtl"]: reader.tsx renders dir="auto" on this column, and an attribute selector cannot
+   read a direction the browser resolved from content. */
 .aq-read-col .aq-article-body > h2 { font-family: var(--font-display); font-size: 1.5em; margin-top: 2.1em; color: var(--color-ink); letter-spacing: -0.015em; }
 .aq-read-col .aq-article-body > h3 { font-family: var(--font-display); font-size: 1.2em; margin-top: 1.6em; color: var(--color-ink); }
 .aq-read-col .aq-article-body > ul, .aq-read-col .aq-article-body > ol { font-size: 1.04em; line-height: var(--aq-read-lh, 1.62); }
@@ -1019,7 +1028,7 @@ html[data-theme="light"] .aq-sig-img { filter: none; }
 .aq-read-seg { display: inline-flex; align-items: center; gap: 0.15rem; }
 
 /* In-bar text-contrast slider (Calm ↔ Crisp) — compact; reuses the engine, tunes the read-mode prose. */
-.aq-read-contrast { gap: 0.4rem; color: var(--color-ink-3); padding-left: 0.2rem; }
+.aq-read-contrast { gap: 0.4rem; color: var(--color-ink-3); padding-inline-start: 0.2rem; }
 .aq-read-crange { -webkit-appearance: none; appearance: none; width: 4.5rem; height: 18px; background: transparent; cursor: pointer; }
 .aq-read-crange::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: var(--color-line); }
 .aq-read-crange::-moz-range-track { height: 4px; border-radius: 999px; background: var(--color-line); }
@@ -1042,7 +1051,7 @@ html[data-theme="light"] .aq-sig-img { filter: none; }
   pointer-events: none;
 }
 .aq-read-progress > span { display: block; width: 0; height: 100%; background: var(--color-yang); }
-.aq-read-minleft { flex: none; min-width: 4.5rem; text-align: right; font-size: 0.72rem; font-weight: 600; color: var(--color-ink-3); font-variant-numeric: tabular-nums; }
+.aq-read-minleft { flex: none; min-width: 4.5rem; text-align: end; font-size: 0.72rem; font-weight: 600; color: var(--color-ink-3); font-variant-numeric: tabular-nums; }
 
 /* READING RULER — a soft gold band that follows the pointer's line; a place-keeper for readers with
    tracking/attention difficulties. Translucent tint only (text stays fully legible beneath), edged so
@@ -1490,7 +1499,7 @@ html[data-theme="dark"] .aq-pdf-crop[data-invert] svg { filter: invert(1) hue-ro
 .aq-book-body .aq-book-eq { margin: 0.85rem auto; text-align: center; overflow-x: auto; overflow-y: hidden; max-width: 100%; }
 .aq-book-body .aq-book-eq .katex-display { margin: 0.2rem 0; }
 .aq-book-body .aq-book-eq .katex { font-size: 1.05em; }
-.aq-book-eqprog { display: inline-flex; align-items: center; gap: 0.4rem; margin-left: auto; font-size: 11.5px; opacity: 0.7; white-space: nowrap; }
+.aq-book-eqprog { display: inline-flex; align-items: center; gap: 0.4rem; margin-inline-start: auto; font-size: 11.5px; opacity: 0.7; white-space: nowrap; }
 .aq-book-spinner-sm { width: 13px; height: 13px; border-width: 2px; }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════════════════
@@ -1535,7 +1544,10 @@ html[data-theme="dark"] .aq-pdf-crop[data-invert] svg { filter: invert(1) hue-ro
 .aq-lib-ph-music { background: linear-gradient(150deg, color-mix(in srgb, var(--color-yang) 22%, var(--color-space-3)), var(--color-space-3)); }
 .aq-lib-ph-video { background: linear-gradient(150deg, color-mix(in srgb, var(--color-yin) 26%, var(--color-space-3)), var(--color-space-3)); }
 .aq-lib-ph-doc   { background: linear-gradient(150deg, color-mix(in srgb, var(--color-yang) 12%, var(--color-space-3)), var(--color-space-3)); }
-.aq-lib-hover { position: absolute; inset-inline-start: 50%; top: calc(50% - 1.1rem); translate: -50% -50%;
+/* Centring is direction-neutral, so this stays PHYSICAL on purpose: `inset-inline-start: 50%` flips
+   to `right: 50%` under RTL while `translate: -50%` keeps moving in physical -X, offsetting the badge
+   by its own width instead of centring it. Do not "logicalise" this. */
+.aq-lib-hover { position: absolute; left: 50%; top: calc(50% - 1.1rem); translate: -50% -50%;
   width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; border-radius: 50%;
   background: color-mix(in srgb, var(--color-space-1) 72%, transparent); color: var(--color-ink);
   opacity: 0; transition: opacity 0.15s ease; pointer-events: none; }
@@ -1654,7 +1666,7 @@ html[data-aq-modal="1"] .aq-bot-panel { visibility: hidden; opacity: 0; pointer-
    The caret that follows the words while a reply is still being written, and the thinking dots shown
    before the first token lands. Brand only (yang/yin) — no third accent. Both are decorative and
    aria-hidden; a reader on prefers-reduced-motion gets the same information without the movement. */
-.aq-caret { display: inline-block; width: 2px; height: 1.05em; margin-left: 1px;
+.aq-caret { display: inline-block; width: 2px; height: 1.05em; margin-inline-start: 1px;
   vertical-align: text-bottom; background: var(--color-yang); animation: aq-caret-blink 1.05s step-end infinite; }
 @keyframes aq-caret-blink { 0%, 100% { opacity: 1 } 50% { opacity: 0 } }
 
@@ -1673,3 +1685,100 @@ html[data-aq-modal="1"] .aq-bot-panel { visibility: hidden; opacity: 0; pointer-
   .aq-caret { animation: none; opacity: 1 }
   .aq-think-dots > i { animation: none; opacity: .75 }
 }
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   RIGHT-TO-LEFT (Persian · Arabic · Hebrew · Urdu …)
+
+   ArtaQuest is routable in ~133 languages, ten of which are RTL (I18n::RTL). The document's
+   direction is stamped server-side on the first byte (template-aq-app.php) and mirrored by
+   i18n.ts on boot, so `dir` is correct before React runs. What follows is everything the flip
+   does NOT get right on its own, in three groups:
+
+     1. Machine text that must NEVER mirror (code, output, maths, identifiers).
+     2. Latin-tuned typography that actively damages a cursive script.
+     3. The handful of decorations welded to a physical side.
+
+   Kept unlayered and at the end of the file so it outranks Tailwind's @layer utilities without a
+   single `!important` — `!important` here would clobber --aq-read-ls/--aq-read-lh, which are
+   WCAG 1.4.12 reader controls.
+   ═══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Machine text is always LTR ──────────────────────────────────────────────────────────
+   The platform's entire claim is that a stranger can re-read the evidence. Under dir=rtl a bare
+   <pre> right-aligns, loses its indentation and bidi-reorders trailing neutrals — `foo(a, b);`
+   renders as `;(foo(a, b`. Every code, console and traceback surface in the app is a bare <pre>
+   (nbview, Research, Data, Developers, chat fences, ArtaReader, Lab), so one rule covers them.
+
+   `isolate` on INLINE code is load-bearing and separate from `direction`: without it an inline
+   identifier drags the surrounding Persian sentence's punctuation to the wrong end. Block code
+   additionally needs text-align, which would be a no-op on inline code. */
+pre { direction: ltr; text-align: left; }
+pre code, code, kbd, samp, .aq-code, .aq-nb-code, .aq-nb-out { unicode-bidi: isolate; }
+code, kbd, samp { direction: ltr; }
+/* Maths is LTR in every language — an RTL flip transposes operands and displaces brackets. */
+.katex, .katex-display, .aq-math { direction: ltr; unicode-bidi: isolate; }
+/* Machine values rendered as prose: sizes, durations, coordinates, handles, versions, DOIs.
+   `isolate` (not `embed`) so the value can never leak its direction into the sentence. */
+.aq-ltr { direction: ltr; unicode-bidi: isolate; }
+/* Member-authored blocks resolve per-paragraph from their own first strong character, so a
+   Persian comment reads RTL and an English one LTR inside the same thread. `plaintext` only
+   works on block containers — on an inline element it silently degrades to `isolate`. */
+.aq-prose, .aq-article-body > p, .aq-article-body > li, .aq-article-body > blockquote,
+.aq-read-title, .aq-read-abstract p { unicode-bidi: plaintext; }
+
+/* ── 2. Typography for a cursive script ─────────────────────────────────────────────────────
+   Arabic script joins. Every Latin micro-typography default below is not merely unhelpful on it
+   — it is damaging. Scoped with :dir(rtl) rather than [dir="rtl"] wherever the element resolves
+   its direction from content (ArtaReader renders dir="auto"), because an attribute selector
+   cannot read resolved direction. */
+
+/* Negative tracking fuses joined glyphs and collides dots with the neighbouring bowl. */
+:dir(rtl) h1, :dir(rtl) h2, :dir(rtl) h3, :dir(rtl) h4,
+:dir(rtl) .lead, :dir(rtl) .aq-read-title,
+:dir(rtl) .aq-read-col .aq-article-body > h2 { letter-spacing: normal; }
+/* Naskh carries a taller ink box than Latin at the same em — 1.16 overlaps ascenders on to the
+   line above. Headings only; a blanket rule would hit fixed-height chips and the brand lockup. */
+:dir(rtl) h1, :dir(rtl) h2, :dir(rtl) h3, :dir(rtl) h4, :dir(rtl) .aq-read-title { line-height: 1.45; }
+/* Tracked-uppercase eyebrows: positive tracking inserts gaps BETWEEN joined letters — the single
+   most recognisable "nobody localised this" signal. text-transform is a no-op on Arabic anyway. */
+:dir(rtl) .aq-eyebrow, :dir(rtl) [class*="tracking-"] { letter-spacing: normal; }
+/* A drop cap tears a joined word in half: ::first-letter takes one letter out of its ligature and
+   floats it to the trailing edge at 3.1em. There is no correct Arabic drop cap here. */
+:dir(rtl) .aq-article-body > p:first-of-type::first-letter,
+:dir(rtl) .aq-read-col .aq-article-body > p:first-of-type::first-letter {
+  float: none; font-size: inherit; font-weight: inherit; line-height: inherit;
+  padding: 0; color: inherit; font-family: inherit;
+}
+/* No browser hyphenates fa/ar, so justification produces exactly the rivers the justified setting
+   exists to avoid. The reader's preference is honoured in LTR and dropped in RTL. */
+:dir(rtl) .aq-read-justify .aq-article-body > p,
+:dir(rtl) .aq-read-justify .aq-article-body li,
+:dir(rtl) .aq-read-justify .aq-article-body > blockquote {
+  text-align: start; -webkit-hyphens: none; hyphens: none;
+}
+/* Synthetic italic shears strokes AGAINST the writing direction. The book's translation note is
+   guaranteed RTL content inside an LTR document, so it is un-italicised unconditionally. */
+:dir(rtl) em, :dir(rtl) .aq-prose em, :dir(rtl) blockquote { font-style: normal; }
+.aq-book-tr-note, .aq-book-err { font-style: normal; }
+/* Letter-spacing is meaningless-to-harmful on a joined script; the reader's Aa control keeps its
+   purpose by moving to word-spacing, which IS meaningful in Persian and Arabic. */
+:dir(rtl) .aq-read-col .aq-article-body > p,
+:dir(rtl) .aq-read-col .aq-article-body > blockquote,
+:dir(rtl) .aq-read-col .aq-article-body li {
+  letter-spacing: normal; word-spacing: var(--aq-read-ls, 0);
+}
+
+/* ── 3. Decorations welded to a physical side ───────────────────────────────────────────────
+   env(safe-area-inset-*) has no logical counterpart, so these keep the LTR default and flip
+   explicitly — the same pattern the scroll-fade near the top of this file already uses. */
+html[dir="rtl"] .aq-bot-panel { right: auto; left: calc(1.25rem + env(safe-area-inset-left, 0px)); }
+/* The abstract's accent bar: the old rule keyed on [dir="rtl"], which never matched because
+   ArtaReader renders dir="auto" on the column. :dir(rtl) reads the RESOLVED direction. */
+.aq-read-col:dir(rtl) .aq-read-abstract {
+  padding: 0 1.1rem 0 0; border-left: 0;
+  border-right: 3px solid color-mix(in srgb, var(--color-yang) 55%, transparent);
+}
+/* The "there's more" affordance points the way the reader travels. Flip and nudge compose into ONE
+   transform so property order cannot make them fight; the hover nudge is not re-negated. */
+:dir(rtl) .aq-continue-arrow { transform: scaleX(-1); }
+:dir(rtl) .aq-continue-arrow:hover { transform: scaleX(-1) translateX(3px); }

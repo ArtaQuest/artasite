@@ -27,7 +27,7 @@ import { isLoggedIn } from "../lib/auth";
 // localePath: a programmatic redirect is NOT intercepted by AppShell's locale safety net (that only
 // rewrites clicks on real <a> elements), so a signed-out reader on /fa/ was dropped on the English
 // login and lost their language mid-flow.
-import { currentUser, localePath } from "../lib/wp";
+import { uiLocale, currentUser, localePath } from "../lib/wp";
 
 // ── little helpers ───────────────────────────────────────────────────────────
 
@@ -37,7 +37,7 @@ function timeAgo(ts: number) {
   if (s < 3600) return `${Math.floor(s / 60)}m`;
   if (s < 86400) return `${Math.floor(s / 3600)}h`;
   if (s < 86400 * 30) return `${Math.floor(s / 86400)}d`;
-  return new Date(ts * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return new Date(ts * 1000).toLocaleDateString(uiLocale(), { month: "short", day: "numeric" });
 }
 
 function closesIn(ts: number) {
@@ -236,7 +236,7 @@ function NbContinue() {
  *  full-screen catch layer closes it on any outside tap. */
 function OwnMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
   const [open, setOpen] = useState(false);
-  const item = "px-4 py-2.5 text-left text-[14px] font-semibold text-ink transition-colors hover:bg-veil/[0.06]";
+  const item = "px-4 py-2.5 text-start text-[14px] font-semibold text-ink transition-colors hover:bg-veil/[0.06]";
   return (
     <span className="relative ms-auto shrink-0">
       <button type="button" aria-label="More options" aria-haspopup="menu" aria-expanded={open}
@@ -327,7 +327,7 @@ function FeedPost({ post, onDeleted, hearted }: { post: FeedPostT; onDeleted?: (
               your own posts. The handle doubles as the profile link's visible address. */}
           <div className="flex items-center gap-1.5 text-sm">
             <Link to={`/u/${post.author.slug}`} className="truncate font-bold text-ink hover:underline">{post.author.name}</Link>
-            <Link to={`/u/${post.author.slug}`} tabIndex={-1} className="hidden min-w-0 shrink-[2] truncate text-ink-3 sm:block">@{post.author.slug}</Link>
+            <Link to={`/u/${post.author.slug}`} tabIndex={-1} className="hidden min-w-0 shrink-[2] truncate text-ink-3 sm:block"><bdi dir="ltr" data-ay-skip="1">@{post.author.slug}</bdi></Link>
             <span className="text-ink-3">·</span>
             <time className="shrink-0 text-ink-3" dateTime={new Date(post.created * 1000).toISOString()}>{timeAgo(post.created)}</time>
             {own ? (
@@ -799,7 +799,7 @@ function Composer({ onPosted }: { onPosted: (p: FeedPostT) => void }) {
           {quote ? (
             <div className="mb-2 rounded-xl border border-line bg-space-2/60 px-3 py-2 text-[13px] text-ink-3">
               Quoting <span className="font-semibold text-ink-2">{quote.author.name}</span>: {quote.body || quote.nb?.title}
-              <button type="button" onClick={() => setQuote(null)} className="ml-2 text-yin-ink hover:underline">remove</button>
+              <button type="button" onClick={() => setQuote(null)} className="ms-2 text-yin-ink hover:underline">remove</button>
             </div>
           ) : null}
           {attach ? (
@@ -837,7 +837,7 @@ function Composer({ onPosted }: { onPosted: (p: FeedPostT) => void }) {
                     {mine === null ? <span className="text-[12px] text-ink-3">Loading…</span>
                       : mine.length ? mine.map((n) => (
                         <button key={n.id} type="button" onClick={() => setAttach(n)}
-                          className="truncate rounded-lg border border-line px-2.5 py-1.5 text-left text-[13px] text-ink-2 hover:border-yin-ink">
+                          className="truncate rounded-lg border border-line px-2.5 py-1.5 text-start text-[13px] text-ink-2 hover:border-yin-ink">
                           {NB_KIND_META[n.kind]?.label} · {n.title}
                         </button>
                       )) : <span className="text-[12px] text-ink-3">You have no published work yet — <button type="button" className="text-yin-ink hover:underline" onClick={() => nav("/studio")}>publish one in the Studio</button>. Text posts need no attachment.</span>}

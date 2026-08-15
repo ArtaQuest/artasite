@@ -122,7 +122,7 @@ export default function ArtaIllustrationStudio() {
   return (
     <div className="flex flex-col py-1">
       {/* ── 1. HEADER ── */}
-      <a href={localePath("/illustrations/")} className="text-[14px] font-semibold text-yin-light hover:underline">← Illustrations</a>
+      <a href={localePath("/illustrations/")} className="text-[14px] font-semibold text-yin-light hover:underline"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Illustrations</a>
       <div className="mt-4">
         <PageHero
           eyebrow="ArtaIllustration · Transparency"

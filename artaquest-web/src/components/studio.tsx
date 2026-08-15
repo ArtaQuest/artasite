@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { seasonByN, seasonForDate } from "../lib/seasons";
 import { CATEGORY_GROUPS } from "../lib/typology-meta";
-import { localePath, isLoggedIn, currentUser } from "../lib/wp";
+import { uiLocale, localePath, isLoggedIn, currentUser } from "../lib/wp";
 import {
   createBook, createTrack, createAnimation, createFilm, createIllustration, myBooks,
   getStudioPulse, type StudioPulse, Challenges as ChallengesApi,
@@ -112,7 +112,7 @@ export function WorkCardChip({ w }: { w: WorkItem }) {
 
 function fmtWhen(ts: number): string {
   if (!ts) return "";
-  return new Date(ts * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  return new Date(ts * 1000).toLocaleDateString(uiLocale(), { year: "numeric", month: "short", day: "numeric" });
 }
 function mmss(s: number) { return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; }
 
@@ -248,7 +248,7 @@ export function ChallengeStrip({ kind }: { kind: MakeKind }) {
       <span className="font-bold text-yang">₳{c.pool} pool</span>
       <span>· {c.entries} {c.entries === 1 ? "entry" : "entries"} · closes in {c.closes}</span>
       <span>· publishing enters your work</span>
-      <Link to={localePath(`/challenges/${kind}/`)} className="ms-auto font-semibold text-yin-light no-underline hover:underline">Board →</Link>
+      <Link to={localePath(`/challenges/${kind}/`)} className="ms-auto font-semibold text-yin-light no-underline hover:underline">Board <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></Link>
     </p>
   );
 }
@@ -328,7 +328,7 @@ export function StudioPulseStrip({ kind }: { kind: MakeKind }) {
       <span className="text-[12.5px] text-ink-3">{pulse.model} · +{pulse.points_per_coin} points per ₳1 published</span>
       {record && (
         <Link to={localePath(record)} className="ml-auto text-[12.5px] font-semibold text-yin-light no-underline hover:underline">
-          Full studio record →
+          Full studio record <span aria-hidden className="inline-block rtl:-scale-x-100">→</span>
         </Link>
       )}
     </Card>
@@ -473,7 +473,7 @@ export function CreateWork({ initialKind = "book", onDone }: { initialKind?: Mak
   const fileField = (accept: string, label: string, hint: string) => (
     <Field label={label} optional>
       <input type="file" accept={accept} onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-        className="block w-full text-[13px] text-ink-2 file:mr-3 file:rounded-md file:border-0 file:bg-space-3 file:px-3 file:py-1.5 file:text-ink" />
+        className="block w-full text-[13px] text-ink-2 file:me-3 file:rounded-md file:border-0 file:bg-space-3 file:px-3 file:py-1.5 file:text-ink" />
       <p className="mt-1 text-[12px] text-ink-3">{hint}</p>
     </Field>
   );
@@ -498,7 +498,7 @@ export function CreateWork({ initialKind = "book", onDone }: { initialKind?: Mak
       <p className="text-[13px] text-ink-3">{INTRO[kind]}</p>
 
       {kind === "paper" ? (
-        <div><Button href={localePath("/research/")}>Go to the journals →</Button></div>
+        <div><Button href={localePath("/research/")}>Go to the journals <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></Button></div>
       ) : (
         <>
           <Field label="Title"><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`The title of your ${WORK_KINDS[kind].label.toLowerCase()}`} maxLength={255} /></Field>

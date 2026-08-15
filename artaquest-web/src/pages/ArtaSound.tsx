@@ -119,7 +119,7 @@ export default function ArtaSound() {
   return (
     <div className="flex flex-col py-1">
       {/* ── 1. HEADER ── */}
-      <a href={localePath("/music/")} className="text-[14px] font-semibold text-yin-light hover:underline">← Music</a>
+      <a href={localePath("/music/")} className="text-[14px] font-semibold text-yin-light hover:underline"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Music</a>
       <div className="mt-4">
         <PageHero
           eyebrow="ArtaSound · Transparency"
@@ -237,9 +237,9 @@ export default function ArtaSound() {
           track, play each round's recording next to its verdict.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <a href={localePath("/music/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">Browse the music →</a>
-          <a href={localePath("/data/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">Open the Data explorer →</a>
-          <a href={localePath("/research/artascience/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">ArtaScience — the same loop on research →</a>
+          <a href={localePath("/music/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">Browse the music <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
+          <a href={localePath("/data/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">Open the Data explorer <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
+          <a href={localePath("/research/artascience/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">ArtaScience — the same loop on research <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
         </div>
         <p className="mt-6 border-t border-line pt-4 text-[12px] text-ink-3">ArtaSound · original music and audiobooks by members · every draft critiqued in the open before its author hears it</p>
       </div>

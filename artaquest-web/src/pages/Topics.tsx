@@ -22,7 +22,7 @@ function OptionRow({ multi, checked, label, short, desc, image, seed, onToggle }
   return (
     <li>
       <button type="button" role={multi ? "checkbox" : "radio"} aria-checked={checked} onClick={onToggle}
-        className={`flex w-full items-start gap-3 rounded-field border px-3.5 py-2.5 text-left transition-colors ${checked ? "border-yang/60 bg-yang/[0.06]" : "border-line hover:border-yin-light/40 hover:bg-veil/[0.02]"}`}>
+        className={`flex w-full items-start gap-3 rounded-field border px-3.5 py-2.5 text-start transition-colors ${checked ? "border-yang/60 bg-yang/[0.06]" : "border-line hover:border-yin-light/40 hover:bg-veil/[0.02]"}`}>
         <span aria-hidden className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center border ${multi ? "rounded-[4px]" : "rounded-full"} ${checked ? "border-yang bg-yang" : "border-ink-3"}`}>
           {checked && <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="var(--color-on-accent)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5 10 17 19 6" /></svg>}
         </span>
@@ -114,7 +114,7 @@ function SystemCard({ sys, sel, onChange, openInitially }: {
   return (
     <Card className="overflow-hidden p-0 transition-colors hover:border-yin-light/40">
       <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-start gap-3 px-4 py-3.5 text-left">
+        className="flex w-full items-start gap-3 px-4 py-3.5 text-start">
         {/* The topic's profile picture when one is set (real canonical image or self-hosted bespoke
             brand SVG, resolved against the app base), else the deterministic brand emblem — so every
             topic card reads as its own identity (ticket #67). */}

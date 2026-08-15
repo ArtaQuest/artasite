@@ -134,13 +134,13 @@ function PlayerBar({ p, score, you, pending, clock, running, showClock }: {
       <div className="min-w-0 flex-1">
         <p className="truncate text-[14.5px] font-bold">
           {p && p.slug ? <a className="hover:underline" href={`/u/${p.slug}`}>{p.name}</a> : (p ? p.name : "ArtaBot")}
-          {you && <span className="ml-2 rounded-pill bg-yin/15 px-1.5 py-0.5 text-[10.5px] font-semibold text-yin-light">you</span>}
+          {you && <span className="ms-2 rounded-pill bg-yin/15 px-1.5 py-0.5 text-[10.5px] font-semibold text-yin-light">you</span>}
         </p>
-        <p className="mt-0.5 text-[12px] text-ink-3">{p ? `${p.wins}W · ${p.losses}L · ${p.draws}D` : "practice partner"}{pending && <span className="ml-2 text-yang">✦ sealed a throw</span>}</p>
+        <p className="mt-0.5 text-[12px] text-ink-3">{p ? `${p.wins}W · ${p.losses}L · ${p.draws}D` : "practice partner"}{pending && <span className="ms-2 text-yang">✦ sealed a throw</span>}</p>
       </div>
       {p && <RatingPill p={p} />}
       <ClockChip seconds={clock} running={running} show={showClock} />
-      <span className={cx("min-w-[3ch] text-right text-[26px] font-extrabold tabular-nums", score < 0 ? "text-yin-light" : "text-ink")}>{sc(score)}</span>
+      <span className={cx("min-w-[3ch] text-end text-[26px] font-extrabold tabular-nums", score < 0 ? "text-yin-light" : "text-ink")}>{sc(score)}</span>
     </div>
   );
 }
@@ -195,7 +195,7 @@ function RevealStage({ round, mineIsA, onDone }: { round: RpsRound; mineIsA: boo
           <span className="relative text-[11px] font-bold text-ink-3">{shown ? TOOL_NAME[theirs] : " "}</span>
         </div>
       </div>
-      {shown && <p className="text-[11.5px] font-semibold uppercase tracking-[0.18em] text-ink-3">Tap to continue →</p>}
+      {shown && <p className="text-[11.5px] font-semibold uppercase tracking-[0.18em] text-ink-3">Tap to continue <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></p>}
     </div>
   );
 }
@@ -420,7 +420,7 @@ function MatchBoard({ match, onExit, onRematch }: { match: RpsMatch; onExit: () 
       <HandDefs />
       <div className="min-w-0">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={onExit}>← All games</Button>
+          <Button variant="ghost" size="sm" onClick={onExit}><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> All games</Button>
           <Pill>◍ {gameTitle(m.game)}</Pill>
           <Pill>{m.rated ? "Rated" : "Practice"}</Pill>
           <Pill>Round {roundNo}/{m.rounds_total}</Pill>
@@ -484,7 +484,7 @@ function MatchBoard({ match, onExit, onRematch }: { match: RpsMatch; onExit: () 
           <Card className="mt-4 p-5 text-center">
             <p className="text-[17px] font-extrabold">
               {m.winner === 0 ? "Draw" : seat !== 0 && m.winner === seat ? "Victory" : seat !== 0 ? "Defeat" : `Player ${m.winner} wins`}
-              <span className="ml-2 text-ink-3 tabular-nums">{scoreLine(m.score[0], m.score[1])}</span>
+              <span className="ms-2 text-ink-3 tabular-nums">{scoreLine(m.score[0], m.score[1])}</span>
             </p>
             {m.rated && seat !== 0 && m.delta[meIdx] !== 0 && (
               <p className={cx("mt-1 text-[14px] font-bold", m.delta[meIdx] > 0 ? "text-yang" : "text-yin-light")}>
@@ -697,7 +697,7 @@ function GameHub({ game, embedded }: { game: GameDef; embedded?: boolean }) {
       <HandDefs />
       {!embedded && (
         <p className="mb-3">
-          <Link to={localePath("/games/")} className="text-[13px] font-semibold text-ink-3 hover:text-ink">← All games</Link>
+          <Link to={localePath("/games/")} className="text-[13px] font-semibold text-ink-3 hover:text-ink"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> All games</Link>
         </p>
       )}
       <Masthead compact={embedded} game={game} />
@@ -799,27 +799,27 @@ function GameHub({ game, embedded }: { game: GameDef; embedded?: boolean }) {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[520px] border-collapse text-[14px]">
                 <thead>
-                  <tr className="border-b border-line text-left text-[12px] uppercase tracking-[0.12em] text-ink-3">
-                    <th className="py-2 pr-3 font-semibold">#</th><th className="py-2 pr-3 font-semibold">Player</th>
-                    <th className="py-2 pr-3 text-right font-semibold">Rating</th><th className="py-2 pr-3 text-right font-semibold">W</th>
-                    <th className="py-2 pr-3 text-right font-semibold">L</th><th className="py-2 text-right font-semibold">D</th>
+                  <tr className="border-b border-line text-start text-[12px] uppercase tracking-[0.12em] text-ink-3">
+                    <th className="py-2 pe-3 font-semibold">#</th><th className="py-2 pe-3 font-semibold">Player</th>
+                    <th className="py-2 pe-3 text-end font-semibold">Rating</th><th className="py-2 pe-3 text-end font-semibold">W</th>
+                    <th className="py-2 pe-3 text-end font-semibold">L</th><th className="py-2 text-end font-semibold">D</th>
                   </tr>
                 </thead>
                 <tbody>
                   {board.leaderboard.map((r) => (
                     <tr key={r.uid} className={cx("border-b border-line/60", board.me?.uid === r.uid && "bg-yang/[0.06]")}>
-                      <th scope="row" className="py-2.5 pr-3 text-left font-bold tabular-nums">{r.rank <= 3 ? ["🥇", "🥈", "🥉"][r.rank - 1] : r.rank}</th>
-                      <td className="py-2.5 pr-3">
+                      <th scope="row" className="py-2.5 pe-3 text-start font-bold tabular-nums">{r.rank <= 3 ? ["🥇", "🥈", "🥉"][r.rank - 1] : r.rank}</th>
+                      <td className="py-2.5 pe-3">
                         <span className="flex items-center gap-2">
                           <Avatar name={r.name} />
                           {r.slug ? <a className="truncate font-semibold hover:underline" href={`/u/${r.slug}`}>{r.name}</a> : <span className="truncate font-semibold">{r.name}</span>}
                           {board.me?.uid === r.uid && <span className="rounded-pill bg-yin/15 px-1.5 py-0.5 text-[10.5px] font-semibold text-yin-light">you</span>}
                         </span>
                       </td>
-                      <td className="py-2.5 pr-3 text-right font-bold tabular-nums">{r.rating}</td>
-                      <td className="py-2.5 pr-3 text-right tabular-nums">{r.wins}</td>
-                      <td className="py-2.5 pr-3 text-right tabular-nums">{r.losses}</td>
-                      <td className="py-2.5 text-right tabular-nums">{r.draws}</td>
+                      <td className="py-2.5 pe-3 text-end font-bold tabular-nums">{r.rating}</td>
+                      <td className="py-2.5 pe-3 text-end tabular-nums">{r.wins}</td>
+                      <td className="py-2.5 pe-3 text-end tabular-nums">{r.losses}</td>
+                      <td className="py-2.5 text-end tabular-nums">{r.draws}</td>
                     </tr>
                   ))}
                 </tbody>

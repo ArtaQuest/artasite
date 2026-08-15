@@ -92,26 +92,26 @@ export default function Pricing() {
         {mine && !q && (
           <Card className="mb-3 flex items-center justify-between gap-3 border-yang/40 bg-yang/5 p-4">
             <div><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Where you are</p><p className="mt-0.5 text-[16px] font-bold text-ink">{mine.name}</p></div>
-            <div className="text-right"><p className="text-[20px] font-extrabold tabular-nums text-yang">{local(mine.buy, mine.currency)}</p><p className="text-[12px] text-ink-3">buy 1 coin · sell {local(mine.sell, mine.currency)}</p></div>
+            <div className="text-end"><p className="text-[20px] font-extrabold tabular-nums text-yang">{local(mine.buy, mine.currency)}</p><p className="text-[12px] text-ink-3">buy 1 coin · sell {local(mine.sell, mine.currency)}</p></div>
           </Card>
         )}
         <Card className="overflow-x-auto p-0">
           <table className="w-full text-[14px]">
-            <thead><tr className="border-b border-line text-left text-[12px] uppercase tracking-wide text-ink-3"><th scope="col" className="px-4 py-3 font-semibold">Country</th><th scope="col" className="px-4 py-3 font-semibold">Currency</th><th scope="col" className="px-4 py-3 text-right font-semibold">Buy 1 coin</th><th scope="col" className="px-4 py-3 text-right font-semibold">Sell 1 coin</th></tr></thead>
+            <thead><tr className="border-b border-line text-start text-[12px] uppercase tracking-wide text-ink-3"><th scope="col" className="px-4 py-3 font-semibold">Country</th><th scope="col" className="px-4 py-3 font-semibold">Currency</th><th scope="col" className="px-4 py-3 text-end font-semibold">Buy 1 coin</th><th scope="col" className="px-4 py-3 text-end font-semibold">Sell 1 coin</th></tr></thead>
             <tbody>
               {rows.map((c) => (
                 <tr key={c.code} className={`border-b border-line/60 last:border-0 ${c.code === w.you ? "bg-yang/5" : ""}`}>
-                  <td className="px-4 py-2.5 text-ink">{c.name}{c.code === w.you && <span className="ml-2 rounded-pill bg-yang/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yang">You</span>}</td>
+                  <td className="px-4 py-2.5 text-ink">{c.name}{c.code === w.you && <span className="ms-2 rounded-pill bg-yang/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yang">You</span>}</td>
                   <td className="px-4 py-2.5 text-ink-3">{c.currency}</td>
-                  <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-yang">{local(c.buy, c.currency)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-ink-2">{local(c.sell, c.currency)}</td>
+                  <td className="px-4 py-2.5 text-end font-semibold tabular-nums text-yang">{local(c.buy, c.currency)}</td>
+                  <td className="px-4 py-2.5 text-end tabular-nums text-ink-2">{local(c.sell, c.currency)}</td>
                 </tr>
               ))}
               {rows.length === 0 && <tr><td colSpan={4} className="px-4 py-6 text-center text-ink-3">No match.</td></tr>}
             </tbody>
           </table>
         </Card>
-        <p className="mt-3 text-[13px] text-ink-3">Rates follow the live gold price and refresh continuously. Buy and sell differ by the {totalSpread}% spread that funds custody and operations. <a href={localePath("/reserve/")} className="text-yang hover:underline">See the full reserve →</a></p>
+        <p className="mt-3 text-[13px] text-ink-3">Rates follow the live gold price and refresh continuously. Buy and sell differ by the {totalSpread}% spread that funds custody and operations. <a href={localePath("/reserve/")} className="text-yang hover:underline">See the full reserve <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a></p>
       </section>
     </div>
   );

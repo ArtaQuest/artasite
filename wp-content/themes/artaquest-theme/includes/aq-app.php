@@ -666,15 +666,47 @@ function aq_app_seo_html() {
 		if ( '' === $kg_author ) {
 			$kg_author = $kg_owner;
 		}
+		// Localise this branch's OWN prose. Notebook pages are the bulk of the indexable corpus and
+		// this was the one crawler-body branch that never called aq_seo_tr() — unlike the hub, route
+		// and FAQ branches — so /fa/nb/<id>/ served a 100% English body under hreflang="fa".
+		//
+		// Whole sentences with %s placeholders, never fragments: the mesh is keyed on md5 of each text
+		// node, so translating "By " and " on Kaggle" separately caches two fragments that no language
+		// can reassemble in its own word order. The placeholder also keeps ONE cache key per sentence
+		// instead of one per author.
+		//
+		// NOT translated, deliberately: $nb->title, the abstract, the Kaggle author name and the DOI
+		// URL. Those are member/Kaggle content — translating them misattributes the author and
+		// mis-keys the mesh per work. Priming is not optional; an unprimed aq_seo_tr() returns English.
+		$aq_kind_label = isset( $hubs[ $hub ] ) ? strtolower( $hubs[ $hub ][1] ) : 'work';
+		$aq_nb_prose   = array(
+			'By %s on Kaggle',
+			'By %s',
+			'Brought to ArtaQuest by %s',
+			'Permanent DOI short link: %s',
+			// ONE key for all eleven kinds — the kind name is substituted, not baked in.
+			'This %s is a public Kaggle notebook that has been run. Before it published, a reproducibility checklist read Kaggle\'s public API and recorded four things anyone can check for themselves: the notebook is public, every one of its inputs is public, the run finished and produced these exact files, and whether it ran with the internet switched off on Kaggle\'s own record. The member who brought it here then requested publication and confirmed it from their own inbox.',
+			'More %s on ArtaQuest',
+			'The Feed',
+			$aq_kind_label,
+			isset( $hubs[ $hub ] ) ? strtolower( $hubs[ $hub ][0] ) : '',
+		);
+		aq_seo_tr( null, array_values( array_filter( $aq_nb_prose ) ) );
+
 		if ( '' !== $kg_author ) {
-			$html .= '<p>By ' . ( '' !== $kg_owner
+			$aq_by = ( '' !== $kg_owner )
 				? '<a href="' . esc_url( 'https://www.kaggle.com/' . rawurlencode( $kg_owner ) ) . '">' . esc_html( $kg_author ) . '</a>'
-				: esc_html( $kg_author ) ) . ' on Kaggle</p>';
+				: esc_html( $kg_author );
+			$html .= '<p>' . sprintf( esc_html( aq_seo_tr( 'By %s on Kaggle' ) ), $aq_by ) . '</p>';
 			if ( $au ) {
-				$html .= '<p>Brought to ArtaQuest by <a href="' . esc_url( home_url( '/u/' . $au->user_nicename . '/' ) ) . '">' . esc_html( $au->display_name ) . '</a></p>';
+				$aq_sub = '<a href="' . esc_url( home_url( '/u/' . $au->user_nicename . '/' ) ) . '">' . esc_html( $au->display_name ) . '</a>';
+				$html  .= '<p>' . sprintf( esc_html( aq_seo_tr( 'Brought to ArtaQuest by %s' ) ), $aq_sub ) . '</p>';
 			}
 		} elseif ( $au ) {
-			$html .= '<p>By <a href="' . esc_url( home_url( '/u/' . $au->user_nicename . '/' ) ) . '">' . esc_html( $au->display_name ) . '</a></p>';
+			// Kaggle reported neither an author nor an owner, so this credits the ArtaQuest member.
+			// It must NOT say "on Kaggle" — that is the misattribution the byline comment above guards.
+			$aq_sub = '<a href="' . esc_url( home_url( '/u/' . $au->user_nicename . '/' ) ) . '">' . esc_html( $au->display_name ) . '</a>';
+			$html  .= '<p>' . sprintf( esc_html( aq_seo_tr( 'By %s' ) ), $aq_sub ) . '</p>';
 		}
 		$abs = trim( wp_strip_all_tags( (string) $nb->abstract ) );
 		if ( '' !== $abs ) {
@@ -685,13 +717,15 @@ function aq_app_seo_html() {
 		}
 		if ( '' !== trim( (string) $nb->doi ) ) {
 			$durl  = home_url( '/d/n' . (int) $nb->id );
-			$html .= '<p>Permanent DOI short link: <a href="' . esc_url( $durl ) . '">' . esc_html( $durl ) . '</a></p>';
+			$aq_doi = '<a href="' . esc_url( $durl ) . '">' . esc_html( $durl ) . '</a>';
+			$html  .= '<p>' . sprintf( esc_html( aq_seo_tr( 'Permanent DOI short link: %s' ) ), $aq_doi ) . '</p>';
 		}
-		$html .= '<p>' . esc_html( 'This ' . ( isset( $hubs[ $hub ] ) ? strtolower( $hubs[ $hub ][1] ) : 'work' ) . ' is a public Kaggle notebook that has been run. Before it published, a reproducibility checklist read Kaggle\'s public API and recorded four things anyone can check for themselves: the notebook is public, every one of its inputs is public, the run finished and produced these exact files, and whether it ran with the internet switched off on Kaggle\'s own record. The member who brought it here then requested publication and confirmed it from their own inbox.' ) . '</p>';
+		$html .= '<p>' . esc_html( sprintf( aq_seo_tr( 'This %s is a public Kaggle notebook that has been run. Before it published, a reproducibility checklist read Kaggle\'s public API and recorded four things anyone can check for themselves: the notebook is public, every one of its inputs is public, the run finished and produced these exact files, and whether it ran with the internet switched off on Kaggle\'s own record. The member who brought it here then requested publication and confirmed it from their own inbox.' ), aq_seo_tr( $aq_kind_label ) ) ) . '</p>';
 		if ( isset( $hubs[ $hub ] ) ) {
-			$html .= '<p><a href="' . esc_url( home_url( '/' . $hub . '/' ) ) . '">More ' . esc_html( strtolower( $hubs[ $hub ][0] ) ) . ' on ArtaQuest</a> · <a href="' . esc_url( home_url( '/works/' ) ) . '">The Feed</a></p>';
+			$aq_more = sprintf( esc_html( aq_seo_tr( 'More %s on ArtaQuest' ) ), esc_html( aq_seo_tr( strtolower( $hubs[ $hub ][0] ) ) ) );
+			$html   .= '<p><a href="' . esc_url( home_url( '/' . $hub . '/' ) ) . '">' . $aq_more . '</a> · <a href="' . esc_url( home_url( '/works/' ) ) . '">' . esc_html( aq_seo_tr( 'The Feed' ) ) . '</a></p>';
 		} else {
-			$html .= '<p><a href="' . esc_url( home_url( '/works/' ) ) . '">The Feed</a></p>';
+			$html .= '<p><a href="' . esc_url( home_url( '/works/' ) ) . '">' . esc_html( aq_seo_tr( 'The Feed' ) ) . '</a></p>';
 		}
 		return $html;
 	}

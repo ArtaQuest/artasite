@@ -11,6 +11,7 @@ import { Avatar, Button, MetricChip, StatusNote, Tabs } from "../components/ui";
 import { SYSTEMS, loadTypologies, typologiesReady } from "../lib/typologies";
 import { type TypologySystem } from "../lib/typology-meta";
 import { SharePanel } from "../components/SharePanel";
+import { uiLocale } from "../lib/wp";
 
 /** The topic pages this course belongs to: the typology systems that point at it (system.course ===
  *  the course URL → real /topics/<key> pages), plus its subject facet as a browse chip. Every course
@@ -79,7 +80,7 @@ function CompetitionRules({ sharePct, split, minEnrol }: { sharePct: number; spl
       <summary className="cursor-pointer list-none px-4 py-3 text-[13px] font-semibold text-ink marker:content-none [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-2"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" className="text-ink-3" aria-hidden><circle cx="12" cy="12" r="9" /><path d="M12 8h.01M11 12h1v4h1" strokeLinecap="round" strokeLinejoin="round" /></svg>Competition rules</span>
       </summary>
-      <ol className="list-decimal space-y-1.5 px-4 pb-4 pl-9 text-[13px] leading-relaxed text-ink-2 marker:text-ink-3">
+      <ol className="list-decimal space-y-1.5 px-4 pb-4 ps-9 text-[13px] leading-relaxed text-ink-2 marker:text-ink-3">
         <li><strong className="text-ink">Join for 1 coin a video.</strong> Watching is free; enrolling costs 1 coin per video (a 12-video course costs ₳12), and that fee builds the prize pool. <a href={localePath("/sponsors/")} className="text-yang hover:underline">Sponsors</a> covers it if it’s a barrier.</li>
         <li><strong className="text-ink">Discuss, don’t answer.</strong> Watch each video in full, then post your reply in its discussion board. There are no right or wrong answers — share what it made you think.</li>
         <li><strong className="text-ink">Upvote your peers.</strong> Upvote at least one other learner’s reply in each video (you can’t upvote your own). The upvotes your replies earn this season decide the ranking.</li>
@@ -155,20 +156,20 @@ function CourseRankingsPanel({ courseId }: { courseId: number }) {
         <p className="mt-6 py-6 text-center text-[14px] text-ink-3">{r.archived ? "No entries were recorded for this season." : "No replies yet this season — be the first to post one and top the board."}</p>
       ) : (
         <div className="-mx-gutter mt-5 overflow-x-auto">
-          <table className="w-full border-collapse text-left">
+          <table className="w-full border-collapse text-start">
             <thead>
               <tr className="border-b border-line text-[12px] uppercase tracking-wide text-ink-3">
-                <th scope="col" className="py-2 pl-gutter pr-1 text-center font-semibold">#</th>
+                <th scope="col" className="py-2 pl-gutter pe-1 text-center font-semibold">#</th>
                 <th scope="col" className="py-2 font-semibold">Quester</th>
-                <th scope="col" className="hidden py-2 text-right font-semibold sm:table-cell">Replies</th>
-                <th scope="col" className="py-2 text-right font-semibold">Votes</th>
-                <th scope="col" className="py-2 pl-1 pr-gutter text-right font-semibold">Prize</th>
+                <th scope="col" className="hidden py-2 text-end font-semibold sm:table-cell">Replies</th>
+                <th scope="col" className="py-2 text-end font-semibold">Votes</th>
+                <th scope="col" className="py-2 ps-1 pr-gutter text-end font-semibold">Prize</th>
               </tr>
             </thead>
             <tbody>
               {r.items.map((it) => (
                 <tr key={it.rank} className="border-b border-line/70">
-                  <td className="py-3 pl-gutter pr-1 text-center align-middle"><Medal kind={it.medal} rank={it.rank} /></td>
+                  <td className="py-3 pl-gutter pe-1 text-center align-middle"><Medal kind={it.medal} rank={it.rank} /></td>
                   <td className="py-3 align-middle">
                     <a href={localePath(`/u/${it.slug}/`)} className="group flex min-w-0 items-center gap-2.5">
                       <Avatar src={it.avatar} name={it.name} country={it.country} className="h-7 w-7 text-[12px]" />
@@ -177,9 +178,9 @@ function CourseRankingsPanel({ courseId }: { courseId: number }) {
                     </a>
                   </td>
                   {/* Archived seasons don't snapshot the comment count, so show "—" rather than a misleading 0. */}
-                  <td className="hidden py-3 text-right align-middle text-[14px] tabular-nums text-ink-2 sm:table-cell">{r.archived ? "—" : it.questions}</td>
-                  <td className="py-3 text-right align-middle text-[14px] font-bold tabular-nums text-yang">{it.votes}</td>
-                  <td className="py-3 pl-1 pr-gutter text-right align-middle text-[14px] tabular-nums">
+                  <td className="hidden py-3 text-end align-middle text-[14px] tabular-nums text-ink-2 sm:table-cell">{r.archived ? "—" : it.questions}</td>
+                  <td className="py-3 text-end align-middle text-[14px] font-bold tabular-nums text-yang">{it.votes}</td>
+                  <td className="py-3 ps-1 pr-gutter text-end align-middle text-[14px] tabular-nums">
                     {it.prize > 0
                       ? (it.reward > 0
                           ? <span className="font-semibold text-yang"><Coins n={it.reward} /></span>
@@ -282,7 +283,7 @@ function CommentRateChart({ courseId, history }: { courseId: number; history: Co
 
   const W = 1000, H = 100, padY = 6;
   const sp = rateSpark(pts, W, H, padY);
-  const fmtDate = (t: number) => new Date(t * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const fmtDate = (t: number) => new Date(t * 1000).toLocaleDateString(uiLocale(), { month: "short", day: "numeric" });
 
   return (
     <div className="flex items-center gap-4 rounded-card border border-line bg-veil/[0.02] p-3" aria-label="Discussion rate">
@@ -345,7 +346,7 @@ function SectionRateChart({ video, series, fallbackRate }: { video: string; seri
           </svg>
         )}
       </span>
-      <span className="inline-block w-[72px] shrink-0 whitespace-nowrap text-right tabular-nums text-[12px] font-semibold text-yang/90">{rate.toLocaleString("en")}<span className="text-yang/60">/day</span></span>
+      <span className="inline-block w-[72px] shrink-0 whitespace-nowrap text-end tabular-nums text-[12px] font-semibold text-yang/90">{rate.toLocaleString("en")}<span className="text-yang/60">/day</span></span>
     </div>
   );
 }
@@ -584,7 +585,7 @@ export default function CourseDetail() {
                   {rErr && (
                     <p className="mt-2 text-[13px] text-yin-light">
                       {rErr}{" "}
-                      {/name|birthday|identity/i.test(rErr) && <a href={localePath("/user-account/")} className="font-semibold text-yang hover:underline">Update your profile →</a>}
+                      {/name|birthday|identity/i.test(rErr) && <a href={localePath("/user-account/")} className="font-semibold text-yang hover:underline">Update your profile <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>}
                     </p>
                   )}
                 </div>
@@ -613,7 +614,7 @@ export default function CourseDetail() {
                   <span className="block text-[14px] font-semibold text-ink">Section discussion boards</span>
                   <span className="block text-[13px] text-ink-3">Watch a section, then reply and upvote — the most-upvoted replies climb the rankings.</span>
                 </span>
-                <span className="shrink-0 text-[14px] font-semibold text-yin-light">Browse →</span>
+                <span className="shrink-0 text-[14px] font-semibold text-yin-light">Browse <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></span>
               </a>
 
               {/* Course Q&A — free, course-level threads open to everyone (distinct from the per-section
@@ -627,7 +628,7 @@ export default function CourseDetail() {
                   {tErr && (
                     <p className="mt-2 text-[13px] text-yin-light">
                       {tErr}{" "}
-                      {/name|birthday|identity/i.test(tErr) && <a href={localePath("/user-account/")} className="font-semibold text-yang hover:underline">Update your profile →</a>}
+                      {/name|birthday|identity/i.test(tErr) && <a href={localePath("/user-account/")} className="font-semibold text-yang hover:underline">Update your profile <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>}
                     </p>
                   )}
                 </div>
@@ -649,7 +650,7 @@ export default function CourseDetail() {
             is flush to the viewport edge, so on common laptop heights the launcher's disc landed on the
             Enrol button and obscured its label (ticket #88). The launcher only auto-hides on touch (it
             stays on for desktop's fine pointer), so the desktop rail must step aside for it. */}
-        <aside className="w-full shrink-0 lg:me-16 lg:w-[268px] lg:border-l lg:border-line lg:pl-8">
+        <aside className="w-full shrink-0 lg:me-16 lg:w-[268px] lg:border-s lg:border-line lg:ps-8">
           <dl className="flex flex-col gap-4">
             <MetaRow label="Videos" value={String(c.lessons_total)} />
             {durationLabel && <MetaRow label="Duration" value={durationLabel} />}

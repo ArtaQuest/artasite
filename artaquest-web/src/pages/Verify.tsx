@@ -49,7 +49,7 @@ export default function Verify() {
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-yang/20 text-yang" aria-hidden>
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
         </span>
-        <div className="text-left">
+        <div className="text-start">
           <p className="text-[14px] font-semibold text-ink">Authentic certificate</p>
           <p className="text-[12px] text-ink-2" data-ay-skip="1">
             Issued by the ArtaQuest Foundation to {cert!.learner} for {cert!.course}.

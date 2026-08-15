@@ -97,14 +97,14 @@ export default function SeasonNow() {
                 {d.label}
               </a>
             ))}
-            <a href={localePath("/topics/")} className="rounded-full px-2.5 py-1 text-[12.5px] font-semibold text-yin-light hover:underline">the whole cycle →</a>
+            <a href={localePath("/topics/")} className="rounded-full px-2.5 py-1 text-[12.5px] font-semibold text-yin-light hover:underline">the whole cycle <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
           </div>
         </div>
       )}
       {!mine && (
         <p className="mt-3 border-t border-line/60 pt-3 text-[12.5px] text-ink-3">
           Every member follows ONE of the twelve seasons — by default the one they were born in.{" "}
-          <a href={localePath("/topics/")} className="font-semibold text-yin-light hover:underline">Pick yours on the cycle →</a>
+          <a href={localePath("/topics/")} className="font-semibold text-yin-light hover:underline">Pick yours on the cycle <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
         </p>
       )}
     </section>

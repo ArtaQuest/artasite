@@ -180,7 +180,7 @@ function CheckoutPanel({ basket, products, setBasket, onOrdered }: {
                   <button type="button" aria-label="One more" className="px-2 py-0.5 text-ink-3 hover:text-ink"
                     onClick={() => setBasket(basket.map((b) => b.id === l.id ? { ...b, qty: Math.min(99, b.qty + 1) } : b))}>+</button>
                 </span>
-                <span className="w-14 text-right font-semibold text-ink">₳{p.price_coins * l.qty}</span>
+                <span className="w-14 text-end font-semibold text-ink">₳{p.price_coins * l.qty}</span>
               </span>
             </li>
           );
@@ -258,7 +258,7 @@ function ProductDetail({ id, onAdd }: { id: number; onAdd: (p: ShopProduct) => v
     return () => { live = false; };
   }, [id]);
   useEffect(() => { if (p) document.title = `${p.title} – ArtaQuest Store`; }, [p]);
-  if (missing) return <EmptyState title="This product is no longer in the Store" body={<Link className="font-semibold text-yin-light hover:underline" to={localePath("/shop/")}>Back to the Store →</Link>} />;
+  if (missing) return <EmptyState title="This product is no longer in the Store" body={<Link className="font-semibold text-yin-light hover:underline" to={localePath("/shop/")}>Back to the Store <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></Link>} />;
   if (!p) return <SkeletonGrid count={2} />;
   const sourceHref = p.source_type === "document" ? `/read/${p.source_id}/` : p.source_type === "illustration" ? `/illustration/${p.source_id}/` : "";
   return (
@@ -275,7 +275,7 @@ function ProductDetail({ id, onAdd }: { id: number; onAdd: (p: ShopProduct) => v
         {sourceHref && (
           <p className="text-[13px] text-ink-3">
             This is the hard copy of a work published on ArtaQuest —{" "}
-            <Link className="font-semibold text-yin-light hover:underline" to={localePath(sourceHref)}>see the digital original (free) →</Link>
+            <Link className="font-semibold text-yin-light hover:underline" to={localePath(sourceHref)}>see the digital original (free) <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></Link>
           </p>
         )}
         <div className="mt-auto flex items-center gap-4 pt-3">

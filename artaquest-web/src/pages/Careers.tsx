@@ -99,7 +99,7 @@ function FearMeter() {
       </div>
       <div className="mt-2 flex text-[11px] font-semibold uppercase tracking-wide">
         <span className="flex-[72] text-ink-3">Welcome</span>
-        <span className="flex-[28] text-right text-rose-300">Blocked</span>
+        <span className="flex-[28] text-end text-rose-300">Blocked</span>
       </div>
     </div>
   );
@@ -200,7 +200,7 @@ export default function Careers() {
           </Card>
         </div>
 
-        <p className="mt-7 max-w-3xl border-l-2 border-l-yang pl-4 text-[16px] leading-relaxed text-ink-2">
+        <p className="mt-7 max-w-3xl border-s-2 border-s-yang ps-4 text-[16px] leading-relaxed text-ink-2">
           Hate and fear are the only ideas we turn away — not because they are unpopular, but because they are divisive and they hijack the very capacity for critical thinking we exist to protect. We will never coerce you into a belief. Persuasion by evidence is welcome here; manipulation by fear is not.
         </p>
       </section>
@@ -220,7 +220,7 @@ export default function Careers() {
               It does not care who is speaking or which side they are on. It reads only for language meant to dehumanise or to frighten. The same measure is applied to every request, objectively and automatically, so the standard stays identical for everyone — mainstream or fringe, one side or the other. Question everything; just never by attacking people or spreading fear.
             </p>
             <p className="mt-5">
-              <a href={localePath("/fearometer/")} className="font-semibold text-yang underline-offset-2 hover:underline">See exactly how ArtaMod works, and the study set behind it →</a>
+              <a href={localePath("/fearometer/")} className="font-semibold text-yang underline-offset-2 hover:underline">See exactly how ArtaMod works, and the study set behind it <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
             </p>
           </div>
           <Card className="p-6 sm:p-7">

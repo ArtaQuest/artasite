@@ -1,6 +1,7 @@
 import { useId } from "react";
 import type { PartCert } from "../lib/api";
 import { LogoMark, cx } from "./ui";
+import { uiLocale } from "../lib/wp";
 
 const BASE = import.meta.env.BASE_URL || "/";
 
@@ -37,7 +38,7 @@ const GOLD_DEEP = "#C49B1A";
 const BLUE = "#2352E8";   // the brand-blue SENTINEL — the global remap maps it to the live token
 
 function fmtDate(ts: number): string {
-  return ts ? new Date(ts * 1000).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) : "—";
+  return ts ? new Date(ts * 1000).toLocaleDateString(uiLocale(), { year: "numeric", month: "long", day: "numeric" }) : "—";
 }
 
 function ordinal(n: number): string {
@@ -208,7 +209,7 @@ export function ParticipationDoc({ cert, sample = false }: { cert: PartCert; sam
             {/* the Foundation's plate */}
             <div className="flex flex-col items-center sm:items-start">
               <FounderSignature />
-              <div className="mt-1.5 w-full border-t border-line/70 pt-2 text-center sm:text-left">
+              <div className="mt-1.5 w-full border-t border-line/70 pt-2 text-center sm:text-start">
                 <p className="text-[17px] font-semibold leading-none tracking-tight text-ink" data-ay-skip="1">Arash Ashrafnejad</p>
                 <p className="mt-1 whitespace-nowrap text-[9.5px] tracking-[0.01em] text-ink-2">Founder · ArtaQuest Foundation</p>
               </div>
@@ -217,7 +218,7 @@ export function ParticipationDoc({ cert, sample = false }: { cert: PartCert; sam
             {/* the DONOR's plate — present only when a donor actually paid this entry fee. When they
                 did not, the grid collapses to two columns and there is no visible absence. */}
             {cert.sponsored && (
-              <div className="flex flex-col justify-end sm:col-start-3 sm:items-end sm:text-right">
+              <div className="flex flex-col justify-end sm:col-start-3 sm:items-end sm:text-end">
                 <span className="text-[9.5px] font-semibold uppercase tracking-[0.24em] text-yang">Entry fee given by</span>
                 <p className="mt-1.5 text-[17px] font-semibold leading-tight tracking-tight text-ink" data-ay-skip={cert.donor ? "1" : undefined}>
                   {cert.donor || "A friend of ArtaQuest"}
@@ -227,7 +228,7 @@ export function ParticipationDoc({ cert, sample = false }: { cert: PartCert; sam
             )}
 
             {/* the record line, centred between the plates on wide screens */}
-            <div className={cx("text-center", cert.sponsored ? "sm:col-start-2 sm:row-start-1 sm:self-end" : "sm:col-start-2 sm:self-end sm:text-right")}>
+            <div className={cx("text-center", cert.sponsored ? "sm:col-start-2 sm:row-start-1 sm:self-end" : "sm:col-start-2 sm:self-end sm:text-end")}>
               <p className="font-mono text-[12px] leading-none tracking-[0.14em] text-ink-2" data-ay-skip="1">{cert.code || "—"}</p>
               <p className="mt-1 text-[9px] uppercase tracking-[0.14em] text-ink-2">Verification code</p>
               <p className="mt-3 text-[11px] leading-none text-ink-2" data-ay-skip="1">{fmtDate(cert.entered_ts)}</p>

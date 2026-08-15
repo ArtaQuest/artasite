@@ -12,9 +12,10 @@ import { NB_KIND_META } from "../components/nbview";
 import { Avatar, Button, Chip, cx, EmptyState, HeartGlyph, PageHero, SectionHeader } from "../components/ui";
 import { CommoditiesCard } from "../components/commodities";
 import { isLoggedIn } from "../lib/auth";
+import { uiLocale } from "../lib/wp";
 
 function moonLabel(ts: number) {
-  return new Date(ts * 1000).toLocaleDateString(undefined, { month: "long", day: "numeric" }) + " (full moon)";
+  return new Date(ts * 1000).toLocaleDateString(uiLocale(), { month: "long", day: "numeric" }) + " (full moon)";
 }
 
 function CreateTournament({ onCreated }: { onCreated: () => void }) {

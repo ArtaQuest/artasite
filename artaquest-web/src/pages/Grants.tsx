@@ -140,7 +140,7 @@ function GrantDetail({ g, loggedIn, onChanged }: { g: OutreachGrant; loggedIn: b
           <span><strong className="text-ink-2 tabular-nums">{g.slots_left}</strong>/{g.capacity} slots</span>
         </div>
         {!loggedIn ? (
-          <a href={localePath("/login/")} className="text-[13px] font-medium text-yang hover:underline">Sign in to claim this sponsor →</a>
+          <a href={localePath("/login/")} className="text-[13px] font-medium text-yang hover:underline">Sign in to claim this sponsor <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
         ) : g.my_status === "verified" ? (
           <Pill className="bg-yang/15 text-yang">✓ Verified — {g.points.toLocaleString()} points awarded</Pill>
         ) : g.my_status === "submitted" ? (
@@ -234,7 +234,7 @@ export default function Grants() {
 
   const datedCount = (data?.grants || []).filter((g) => g.deadline).length;
   const Th = ({ k, children, className }: { k?: SortKey; children: ReactNode; className?: string }) => (
-    <th className={cx("px-3 py-2 text-left font-semibold", className)}>
+    <th className={cx("px-3 py-2 text-start font-semibold", className)}>
       {k ? (
         /* -my-1 py-1: these were 18px-tall targets, and sorting is the main thing anyone does to a
            table of 166 funders. The negative margin absorbs the padding so the header row does not
@@ -297,12 +297,12 @@ export default function Grants() {
               <tr className="border-b border-line bg-space-1/60 text-[12px] uppercase tracking-wide text-ink-3">
                 <Th>Sponsor</Th>
                 <Th k="deadline">Deadline</Th>
-                <Th k="amount_cad" className="text-right">Amount</Th>
+                <Th k="amount_cad" className="text-end">Amount</Th>
                 <Th>Eligibility</Th>
                 <Th k="fit" className="text-center">Fit</Th>
                 <Th k="slots_left" className="text-center">Slots</Th>
                 <Th k="taken">Registered</Th>
-                <Th className="text-right">Action</Th>
+                <Th className="text-end">Action</Th>
               </tr>
             </thead>
             <tbody>
@@ -334,7 +334,7 @@ export default function Grants() {
                           </span>
                         ) : <span className="text-ink-3">Rolling</span>}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-right text-ink-2">{g.amount_display || "—"}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-end text-ink-2">{g.amount_display || "—"}</td>
                       <td className="px-3 py-2.5">
                         <div className="flex flex-wrap gap-1">
                           {eligChips(g).map((c) => (
@@ -348,7 +348,7 @@ export default function Grants() {
                       </td>
                       <td className="px-3 py-2.5 text-center tabular-nums text-ink-2">{g.slots_left}/{g.capacity}</td>
                       <td className="px-3 py-2.5"><Registrants members={g.members} /></td>
-                      <td className="px-3 py-2.5 text-right">
+                      <td className="px-3 py-2.5 text-end">
                         {g.my_status === "verified" ? <span className="text-[12px] font-medium text-yang">✓ Verified</span>
                           : g.my_status === "submitted" ? <span className="text-[12px] text-yang">Submitted</span>
                           : g.my_status === "claimed" ? <span className="text-[12px] text-yin-light">Claimed</span>

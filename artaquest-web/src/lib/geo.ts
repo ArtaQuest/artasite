@@ -83,7 +83,13 @@ export function langUrl(code: string): string {
   let path = window.location.pathname || "/";
   // Match a language prefix: 2-3 letters, optional "-xx[xx]" region/script (zh-tw, mni-mtei).
   const m = path.match(/^\/([a-z]{2,3}(?:-[a-z]{2,4})?)(?:\/|$)/i);
-  if (m && targets.includes(m[1].toLowerCase())) {
+  // …but `nb` is BOTH Norwegian Bokmal (I18n TABLE) and the notebook route, /nb/<id>/<slug>/. Without
+  // this guard, switching language on any published work stripped the route as if it were a locale and
+  // sent the reader to /fa/<id>/<slug>/ — no such route, so WordPress 404s. Every published work, every
+  // language. The server carries this guard twice (aq-app.php: the reclaim shim, and the hreflang
+  // builder); this is the missing third copy. `{0,2}` covers /<id>, /<id>/<slug> and /<id>/<slug>/book.
+  const nbRoute = /^\/nb\/[0-9]+(?:\/[^/]*){0,2}\/?$/i.test(path);
+  if (m && !nbRoute && targets.includes(m[1].toLowerCase())) {
     path = path.slice(m[1].length + 1) || "/";
     if (!path.startsWith("/")) path = "/" + path;
   }

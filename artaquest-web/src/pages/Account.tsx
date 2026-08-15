@@ -1273,7 +1273,7 @@ function KaggleIdentity() {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <a href={`https://www.kaggle.com/${k.handle}`} target="_blank" rel="noopener noreferrer"
-                      data-ay-skip="1" className="text-[15px] font-semibold hover:text-yang">@{k.handle}</a>
+                      data-ay-skip="1" className="text-[15px] font-semibold hover:text-yang"><bdi dir="ltr">@{k.handle}</bdi></a>
                     {k.state === "verified"
                       ? <Pill className="px-2 py-0.5 text-[11px]">proved</Pill>
                       : <Pill className="bg-yin/15 px-2 py-0.5 text-[11px] text-yin-ink">not proved yet</Pill>}
@@ -1561,7 +1561,7 @@ export default function Account() {
               {d.tier.next
                 ? <Pill className="px-3 py-0.5 text-[13px]">{d.tier.pct}% to {d.tier.next}</Pill>
                 : <Pill className="px-3 py-0.5 text-[13px]">Top tier</Pill>}
-              {d.user.slug && <a href={localePath(`/u/${d.user.slug}/`)} className="text-[13px] text-ink-3 hover:text-yang">View public profile →</a>}
+              {d.user.slug && <a href={localePath(`/u/${d.user.slug}/`)} className="text-[13px] text-ink-3 hover:text-yang">View public profile <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>}
             </div>
           </div>
         </div>
@@ -1598,7 +1598,7 @@ export default function Account() {
           )}
         </div>
         {d.courses.length === 0 ? (
-          <p className="mt-3 text-[15px] text-ink-3">You have not joined a course yet. <a href={localePath("/courses/")} className="text-yang hover:underline">Browse courses →</a></p>
+          <p className="mt-3 text-[15px] text-ink-3">You have not joined a course yet. <a href={localePath("/courses/")} className="text-yang hover:underline">Browse courses <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a></p>
         ) : (
           <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {d.courses.map((c) => (

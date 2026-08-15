@@ -162,7 +162,7 @@ export default function Studio() {
               {filtered.map((c) => (
                 <li key={c.id}>
                   <button type="button" title="Open this course to edit its details, videos and analytics" onClick={() => openEditor(c.id)}
-                    className="group flex h-full w-full flex-col overflow-hidden rounded-card border border-line bg-veil/[0.02] text-left transition-colors hover:border-yang/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yang/60">
+                    className="group flex h-full w-full flex-col overflow-hidden rounded-card border border-line bg-veil/[0.02] text-start transition-colors hover:border-yang/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yang/60">
                     {c.image && <img src={c.image} alt="" loading="lazy" className="aspect-video w-full object-cover" />}
                     <span className="flex flex-1 flex-col gap-1 p-3">
                       <span className="font-semibold leading-snug text-ink transition-colors group-hover:text-yang">{c.title}</span>
@@ -216,7 +216,7 @@ function BooksMode() {
           {filtered.map((b) => (
             <li key={b.id}>
               <a href={localePath(`/read/${b.id}/`)} title="Open this book"
-                className="group flex h-full w-full flex-col overflow-hidden rounded-card border border-line bg-veil/[0.02] text-left no-underline transition-colors hover:border-yang/40">
+                className="group flex h-full w-full flex-col overflow-hidden rounded-card border border-line bg-veil/[0.02] text-start no-underline transition-colors hover:border-yang/40">
                 {b.thumb
                   ? <img src={b.thumb} alt="" loading="lazy" className="aspect-[3/4] w-full object-cover" />
                   : <span className="flex aspect-[3/4] w-full items-center justify-center bg-gradient-to-br from-yang/25 to-yin/25 text-2xl font-bold text-ink">{(b.title.match(/\b\w/g) || []).slice(0, 2).join("").toUpperCase() || "A"}</span>}
@@ -465,14 +465,14 @@ function SurfaceRow({ s, busyKey, act }: { s: ArtaaiSurface; busyKey: string; ac
           )}
         </span>
       </div>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pl-5 text-[12px] text-ink-3">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 ps-5 text-[12px] text-ink-3">
         <span>{s.blurb}</span>
         <span className="text-ink-3/70">·</span>
         {s.model && <span className="rounded bg-veil/[0.06] px-1.5 py-0.5 font-mono text-[11px] text-ink-2" title="Relay model · reasoning effort">{s.model}{s.effort ? ` · ${s.effort}` : ""}</span>}
         {s.engine && <span className="rounded bg-veil/[0.06] px-1.5 py-0.5 text-[11px]" title="Generation engine (free HuggingFace ZeroGPU)">{s.engine}</span>}
       </div>
       {s.head.length > 0 && (
-        <ul className="flex list-none flex-col gap-1 pl-5">
+        <ul className="flex list-none flex-col gap-1 ps-5">
           {s.head.map((h, i) => (
             <li key={`${h.id}-${i}`} className="flex items-center gap-2 rounded border border-line/50 px-2 py-1 text-[12px]">
               <span className={cx("h-1.5 w-1.5 shrink-0 rounded-full", h.state === "processing" ? "bg-yang" : "bg-ink-3")} />
@@ -719,7 +719,7 @@ function ConsoleMode() {
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-[15px] font-bold">ArtaScience <span className="font-normal text-ink-3">— automated AI review queue</span></h3>
             <span className={cx("text-[12px] font-semibold", snap.research.online ? "text-yang" : "text-ink-3")}>
-              <span className={cx("mr-1 inline-block h-2 w-2 rounded-full align-middle", snap.research.online ? "bg-yang" : "bg-ink-3")} />
+              <span className={cx("me-1 inline-block h-2 w-2 rounded-full align-middle", snap.research.online ? "bg-yang" : "bg-ink-3")} />
               reviewer {snap.research.online ? "online" : "offline"}
             </span>
           </div>
@@ -841,7 +841,7 @@ function HousesMode() {
             <div className={cx("flex items-baseline justify-between gap-3", h.fields.length > 0 && "mb-3 border-b border-line/60 pb-2")}>
               <h2 className="text-[16px] font-bold tracking-tight">
                 <span className="tabular-nums text-ink-3">{idx + 1}</span>
-                <span className="ml-2">{seasonLabel(h.key)}</span>
+                <span className="ms-2">{seasonLabel(h.key)}</span>
               </h2>
               <span className="shrink-0 text-[12px] tabular-nums text-ink-3">{h.fields.length}</span>
             </div>
@@ -1310,7 +1310,7 @@ function Editor({ course, onClose }: { course: StudioCourseDetail; onClose: (ref
     <div className="flex max-w-3xl flex-col gap-5">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[20px] font-bold tracking-tight">Edit · {course.title}</h2>
-        <a href={localePath(`/courses/${course.slug}/`)} className="text-[13px] font-semibold text-yang hover:underline">View course →</a>
+        <a href={localePath(`/courses/${course.slug}/`)} className="text-[13px] font-semibold text-yang hover:underline">View course <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
       </div>
       {note && <StatusNote>{note}</StatusNote>}
       {err && <StatusNote error>{err}</StatusNote>}
@@ -1398,7 +1398,7 @@ function Editor({ course, onClose }: { course: StudioCourseDetail; onClose: (ref
               </div>
               {/* Segment trim — turn one long video into a focused section by clipping to a span (seconds).
                   Leave both 0 to play the whole video. A trim change re-syncs the section (ids preserved). */}
-              <div className="flex flex-wrap items-center gap-2 pl-8 text-[12px] text-ink-3">
+              <div className="flex flex-wrap items-center gap-2 ps-8 text-[12px] text-ink-3">
                 <span>Trim (optional):</span>
                 <span>from <Input type="number" aria-label="Trim start (seconds)" min={0} value={l.seg_start || 0} onChange={(e) => set(i, { seg_start: Math.max(0, parseInt(e.target.value, 10) || 0) })} className="h-8 w-20 text-[13px]" /> s</span>
                 <span>to <Input type="number" aria-label="Trim end (seconds)" min={0} value={l.seg_end || 0} onChange={(e) => set(i, { seg_end: Math.max(0, parseInt(e.target.value, 10) || 0) })} className="h-8 w-20 text-[13px]" /> s</span>
@@ -1424,7 +1424,7 @@ function Editor({ course, onClose }: { course: StudioCourseDetail; onClose: (ref
           <p className="text-[13px] text-ink-3">
             Testing now:{" "}
             {course.candidates.map((c) => (
-              <span key={c.video} className="mr-3">
+              <span key={c.video} className="me-3">
                 <a href={`https://youtu.be/${c.video}`} target="_blank" rel="noreferrer" className="font-mono text-yin-light hover:underline">{c.video}</a>
                 {" "}<span className={cx(c.rate >= c.baseline && c.rate > 0 ? "text-yang" : "")}>{c.rate}/day vs {c.baseline}</span>, {c.ripe_in > 0 ? `ripe in ${rel(c.ripe_in)}` : "ready"}
               </span>
@@ -1441,7 +1441,7 @@ function Editor({ course, onClose }: { course: StudioCourseDetail; onClose: (ref
 
       <DeleteCourse course={course} onDeleted={() => onClose(true)} />
 
-      <div><Button variant="outline" tip="Return to the course list" onClick={() => onClose(true)}>← Back to your courses</Button></div>
+      <div><Button variant="outline" tip="Return to the course list" onClick={() => onClose(true)}><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Back to your courses</Button></div>
     </div>
   );
 }
@@ -1538,7 +1538,7 @@ function TopicsMode() {
           {filtered.map((t) => (
             <li key={t.key}>
               <button type="button" title="Open this topic to edit it" onClick={() => openEditor(t.key)}
-                className="group flex h-full w-full flex-col gap-2 rounded-card border border-line bg-veil/[0.02] p-3 text-left transition-colors hover:border-yang/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yang/60">
+                className="group flex h-full w-full flex-col gap-2 rounded-card border border-line bg-veil/[0.02] p-3 text-start transition-colors hover:border-yang/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yang/60">
                 <span className="font-semibold leading-snug text-ink transition-colors group-hover:text-yang">{t.name}</span>
                 <span className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink-3">
                   {t.category && <span className="rounded-full border border-line px-2 py-0.5">{t.category}</span>}
@@ -1637,7 +1637,7 @@ function TopicEditor({ topic, isNew, onClose }: {
     <div className="flex max-w-3xl flex-col gap-5">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[20px] font-bold tracking-tight">{isNew ? "New topic" : `Edit · ${topic.name}`}</h2>
-        {!isNew && <a href={localePath(`/topics/${savedKey}/`)} className="text-[13px] font-semibold text-yang hover:underline">View topic →</a>}
+        {!isNew && <a href={localePath(`/topics/${savedKey}/`)} className="text-[13px] font-semibold text-yang hover:underline">View topic <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>}
       </div>
       {note && <StatusNote>{note}</StatusNote>}
       {err && <StatusNote error>{err}</StatusNote>}
@@ -1918,7 +1918,7 @@ function GrantsMode() {
             return (
               <li key={g.id}>
                 <button type="button" title="Open this sponsor to edit it" onClick={() => openEditor(g.id)}
-                  className="group flex h-full w-full flex-col gap-2 rounded-card border border-line bg-veil/[0.02] p-3 text-left transition-colors hover:border-yang/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yang/60">
+                  className="group flex h-full w-full flex-col gap-2 rounded-card border border-line bg-veil/[0.02] p-3 text-start transition-colors hover:border-yang/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yang/60">
                   <span className="flex items-start justify-between gap-2">
                     <span className={cx("font-semibold leading-snug transition-colors group-hover:text-yang", g.active === 0 ? "text-ink-3" : "text-ink")}>{g.title}</span>
                     <FitDots fit={g.fit} />
@@ -2011,7 +2011,7 @@ function GrantEditor({ grant, isNew, onClose }: {
     <div className="flex max-w-3xl flex-col gap-5">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[20px] font-bold tracking-tight">{isNew ? "New sponsor" : `Edit · ${grant.title}`}</h2>
-        <a href={localePath("/sponsors/")} className="text-[13px] font-semibold text-yang hover:underline">View sponsors →</a>
+        <a href={localePath("/sponsors/")} className="text-[13px] font-semibold text-yang hover:underline">View sponsors <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
       </div>
       {note && <StatusNote>{note}</StatusNote>}
       {err && <StatusNote error>{err}</StatusNote>}

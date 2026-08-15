@@ -95,7 +95,7 @@ export default function ArtaScience() {
   return (
     <div className="flex flex-col py-1">
       {/* ── 1. HEADER ── */}
-      <a href={localePath("/research/")} className="text-[14px] font-semibold text-yin-light hover:underline">← ArtaQuest Journals</a>
+      <a href={localePath("/research/")} className="text-[14px] font-semibold text-yin-light hover:underline"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> ArtaQuest Journals</a>
       <div className="mt-4">
         <PageHero
           eyebrow={`${REVIEWER} · Transparency`}
@@ -211,9 +211,9 @@ export default function ArtaScience() {
           database is public, you can read every submission and every round of review yourself.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <a href={localePath("/research/?submissions=1")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">Browse the public review queue →</a>
-          <a href={localePath("/data/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">Open the Data explorer →</a>
-          <a href={localePath("/research/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">ArtaQuest Journals →</a>
+          <a href={localePath("/research/?submissions=1")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">Browse the public review queue <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
+          <a href={localePath("/data/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">Open the Data explorer <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
+          <a href={localePath("/research/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">ArtaQuest Journals <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
         </div>
         <p className="mt-6 border-t border-line pt-4 text-[12px] text-ink-3">ArtaQuest Journals · automated AI review · open access (CC BY 4.0) · every article reproduced from its open data and code before publication</p>
       </div>

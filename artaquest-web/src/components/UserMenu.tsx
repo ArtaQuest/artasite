@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEventHandler } from "react";
 import { createPortal } from "react-dom";
-import { localePath, currentUser, getDashboard, type Dashboard } from "../lib/wp";
+import { uiLocale, localePath, currentUser, getDashboard, type Dashboard } from "../lib/wp";
 import { signOut } from "../lib/auth";
 import { CoinMark } from "../lib/currency";
 import { Avatar, FlagBadge, IconButton } from "./ui";
@@ -13,7 +13,7 @@ function ago(ts: number): string {
   if (s < 3600) return `${Math.floor(s / 60)}m`;
   if (s < 86400) return `${Math.floor(s / 3600)}h`;
   if (s < 604800) return `${Math.floor(s / 86400)}d`;
-  return new Date(ts * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  return new Date(ts * 1000).toLocaleDateString(uiLocale(), { day: "numeric", month: "short" });
 }
 
 const w = (typeof window !== "undefined" ? (window as unknown as Record<string, string>) : {}) || {};
@@ -247,7 +247,7 @@ export function UserMenu() {
               <p className="px-3 py-4 text-[13px] italic text-ink-3">No notifications to display</p>
             ) : (
               notes.map((n) => {
-                const cls = `flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-veil/5 ${n.read ? "" : "bg-yin/5"}`;
+                const cls = `flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-start transition-colors hover:bg-veil/5 ${n.read ? "" : "bg-yin/5"}`;
                 const inner = (
                   <>
                     <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.read ? "bg-transparent" : "bg-yang"}`} aria-hidden />

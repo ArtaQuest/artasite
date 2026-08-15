@@ -207,7 +207,7 @@ function Overview({ c, onTab }: { c: CompetitionDetail; onTab: (k: string) => vo
           {c.thread_id > 0 && (
             <button type="button" onClick={() => onTab("discussion")}
               className="shrink-0 text-[13px] font-semibold text-yin-light hover:underline">
-              Official discussion →
+              Official discussion <span aria-hidden className="inline-block rtl:-scale-x-100">→</span>
             </button>
           )}
         </div>
@@ -271,7 +271,7 @@ function DataExplorer({ url, keyCol }: { url: string; keyCol: string }) {
       <div className="overflow-x-auto rounded-card border border-line">
         <table className="w-full border-collapse text-[12.5px]">
           <thead>
-            <tr className="border-b border-line bg-space-2 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-2">
+            <tr className="border-b border-line bg-space-2 text-start text-[11px] font-semibold uppercase tracking-wide text-ink-2">
               {d.header.map((h) => <th key={h} className="px-2.5 py-2 font-semibold">{h}</th>)}
             </tr>
           </thead>
@@ -288,20 +288,20 @@ function DataExplorer({ url, keyCol }: { url: string; keyCol: string }) {
       <div className="overflow-x-auto rounded-card border border-line">
         <table className="w-full border-collapse text-[12.5px]">
           <thead>
-            <tr className="border-b border-line bg-space-2 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-2">
+            <tr className="border-b border-line bg-space-2 text-start text-[11px] font-semibold uppercase tracking-wide text-ink-2">
               <th className="px-2.5 py-2 font-semibold">column</th>
-              <th className="px-2.5 py-2 text-right font-semibold">min</th>
-              <th className="px-2.5 py-2 text-right font-semibold">mean</th>
-              <th className="px-2.5 py-2 text-right font-semibold">max</th>
+              <th className="px-2.5 py-2 text-end font-semibold">min</th>
+              <th className="px-2.5 py-2 text-end font-semibold">mean</th>
+              <th className="px-2.5 py-2 text-end font-semibold">max</th>
             </tr>
           </thead>
           <tbody>
             {d.summary.map((s) => (
               <tr key={s.col} className="border-b border-line/40">
                 <td className="px-2.5 py-1.5 font-mono text-ink-2">{s.col}</td>
-                <td className="px-2.5 py-1.5 text-right tabular-nums text-ink-2">{s.min}</td>
-                <td className="px-2.5 py-1.5 text-right tabular-nums text-ink-2">{s.mean.toFixed(2)}</td>
-                <td className="px-2.5 py-1.5 text-right tabular-nums text-ink-2">{s.max}</td>
+                <td className="px-2.5 py-1.5 text-end tabular-nums text-ink-2">{s.min}</td>
+                <td className="px-2.5 py-1.5 text-end tabular-nums text-ink-2">{s.mean.toFixed(2)}</td>
+                <td className="px-2.5 py-1.5 text-end tabular-nums text-ink-2">{s.max}</td>
               </tr>
             ))}
           </tbody>
@@ -366,7 +366,7 @@ function DataPanel({ c }: { c: CompetitionDetail }) {
           <div className="overflow-x-auto rounded-card border border-line">
             <table className="w-full border-collapse text-[13px]">
               <thead>
-                <tr className="border-b border-line bg-space-2 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-2">
+                <tr className="border-b border-line bg-space-2 text-start text-[11px] font-semibold uppercase tracking-wide text-ink-2">
                   <th className="px-3 py-2 font-semibold">Column</th>
                   <th className="px-3 py-2 font-semibold">Type</th>
                   <th className="px-3 py-2 font-semibold">Description</th>
@@ -457,13 +457,13 @@ function Leaderboard({ slug, prize, naming, phase }: { slug: string; prize: numb
       <table className="w-full border-collapse text-[14px]">
         <caption className="sr-only">Leaderboard — best score per member, medals mark where the prize settles</caption>
         <thead>
-          <tr className="border-b border-line text-left text-[12px] font-semibold uppercase tracking-wide text-ink-3">
+          <tr className="border-b border-line text-start text-[12px] font-semibold uppercase tracking-wide text-ink-3">
             <th scope="col" className="py-2 pe-3 font-semibold">#</th>
             <th scope="col" className="py-2 pe-3 font-semibold">Team</th>
-            <th scope="col" className="py-2 pe-3 text-right font-semibold">Score</th>
-            <th scope="col" className="py-2 pe-3 text-right font-semibold">Code</th>
-            <th scope="col" className="py-2 pe-3 text-right font-semibold">Entries</th>
-            <th scope="col" className="py-2 text-right font-semibold">Last</th>
+            <th scope="col" className="py-2 pe-3 text-end font-semibold">Score</th>
+            <th scope="col" className="py-2 pe-3 text-end font-semibold">Code</th>
+            <th scope="col" className="py-2 pe-3 text-end font-semibold">Entries</th>
+            <th scope="col" className="py-2 text-end font-semibold">Last</th>
           </tr>
         </thead>
         <tbody>
@@ -481,10 +481,10 @@ function Leaderboard({ slug, prize, naming, phase }: { slug: string; prize: numb
                 {r.verified && <span title="Solution verified by adversarial review — prize-eligible" className="ms-2 rounded-pill bg-yin/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-yin-light">✓ verified</span>}
                 {r.bot && <span className="ms-2 rounded-pill bg-veil/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-2">bot</span>}
               </td>
-              <td className="py-2.5 pe-3 text-right font-semibold tabular-nums">{fmt(r.score)}</td>
-              <td className="py-2.5 pe-3 text-right">{r.code_url ? <a href={r.code_url} target="_blank" rel="noopener noreferrer" className="text-[12.5px] font-semibold text-yin-light hover:underline">code ↗</a> : <span className="text-ink-3">—</span>}</td>
-              <td className="py-2.5 pe-3 text-right tabular-nums text-ink-2">{r.n_subs}</td>
-              <td className="py-2.5 text-right text-ink-3">{r.last ? relAgo(r.last) : "—"}</td>
+              <td className="py-2.5 pe-3 text-end font-semibold tabular-nums">{fmt(r.score)}</td>
+              <td className="py-2.5 pe-3 text-end">{r.code_url ? <a href={r.code_url} target="_blank" rel="noopener noreferrer" className="text-[12.5px] font-semibold text-yin-light hover:underline">code ↗</a> : <span className="text-ink-3">—</span>}</td>
+              <td className="py-2.5 pe-3 text-end tabular-nums text-ink-2">{r.n_subs}</td>
+              <td className="py-2.5 text-end text-ink-3">{r.last ? relAgo(r.last) : "—"}</td>
             </tr>
           ))}
         </tbody>
@@ -802,27 +802,27 @@ function MySubmissions({ slug, refresh, naming, phase }: { slug: string; refresh
           <table className="w-full border-collapse text-[13px]">
             <caption className="sr-only">Your submissions, newest first — the starred row is your best and the one the leaderboard counts</caption>
             <thead>
-              <tr className="border-b border-line bg-space-2 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-2">
+              <tr className="border-b border-line bg-space-2 text-start text-[11px] font-semibold uppercase tracking-wide text-ink-2">
                 <th scope="col" className="px-3 py-2 font-semibold">#</th>
-                <th scope="col" className="px-3 py-2 text-right font-semibold">Score</th>
-                <th scope="col" className="px-3 py-2 text-right font-semibold">Code</th>
+                <th scope="col" className="px-3 py-2 text-end font-semibold">Score</th>
+                <th scope="col" className="px-3 py-2 text-end font-semibold">Code</th>
                 <th scope="col" className="px-3 py-2 font-semibold">Note</th>
                 <th scope="col" className="px-3 py-2 font-semibold">Review</th>
-                <th scope="col" className="px-3 py-2 text-right font-semibold">When</th>
+                <th scope="col" className="px-3 py-2 text-end font-semibold">When</th>
               </tr>
             </thead>
             <tbody>
               {items.map((s, i) => (
                 <tr key={s.id} className="border-b border-line/40 last:border-0">
                   <td className="px-3 py-2 tabular-nums text-ink-3">{i + 1}</td>
-                  <td className={"whitespace-nowrap px-3 py-2 text-right tabular-nums " + (s.best ? "font-bold text-yang" : "text-ink-2")}>
+                  <td className={"whitespace-nowrap px-3 py-2 text-end tabular-nums " + (s.best ? "font-bold text-yang" : "text-ink-2")}>
                     {s.best && <span title="Your best submission — the one that counts" role="img" aria-label="best">★ </span>}
                     {fmt(s.score)}
                   </td>
-                  <td className="px-3 py-2 text-right">{s.code_url ? <a href={s.code_url} target="_blank" rel="noopener noreferrer" className="text-[12.5px] font-semibold text-yin-light hover:underline">code ↗</a> : <span className="text-ink-3">—</span>}</td>
+                  <td className="px-3 py-2 text-end">{s.code_url ? <a href={s.code_url} target="_blank" rel="noopener noreferrer" className="text-[12.5px] font-semibold text-yin-light hover:underline">code ↗</a> : <span className="text-ink-3">—</span>}</td>
                   <td className="max-w-[200px] truncate px-3 py-2 text-ink-3" title={s.note || undefined}>{s.note || "—"}</td>
                   <td className="px-3 py-2"><ReviewStatePill review={s.review} verified={s.verified} chant={naming} /></td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right text-ink-3">{s.created ? relAgo(s.created) : "—"}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-end text-ink-3">{s.created ? relAgo(s.created) : "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -1024,7 +1024,7 @@ function SubmitPanel({ slug, keyCol, prize, entryFee = 0, my, naming, phase }: {
       <div>
         <label htmlFor="aq-pred-file" className="sr-only">Upload a predictions file (CSV or JSON)</label>
         <input id="aq-pred-file" type="file" accept=".csv,.json,text/csv,application/json" onChange={onFile}
-          className="block w-full text-[13px] text-ink-2 file:mr-3 file:rounded-pill file:border-0 file:bg-veil/10 file:px-4 file:py-2 file:text-[13px] file:font-semibold file:text-ink-2 hover:file:bg-veil/20" />
+          className="block w-full text-[13px] text-ink-2 file:me-3 file:rounded-pill file:border-0 file:bg-veil/10 file:px-4 file:py-2 file:text-[13px] file:font-semibold file:text-ink-2 hover:file:bg-veil/20" />
       </div>
       <Textarea rows={8} value={text} onChange={(e) => setText(e.target.value)} aria-label="Predictions (CSV or JSON)"
         placeholder={keyCol === "trend|sky" ? `trend,sun,mercury,venus,mars,jupiter,saturn,uranus,neptune,pluto,chiron,node,target\ntopic-001,12,45,301,…,63\ntopic-001,17,52,308,…,58\n…`
@@ -1181,7 +1181,7 @@ export default function CompetitionPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:py-10">
-      <a href={localePath("/competitions/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-light">← Competitions</a>
+      <a href={localePath("/competitions/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-light"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Competitions</a>
       <header className="mb-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{c ? c.title : slug}</h1>

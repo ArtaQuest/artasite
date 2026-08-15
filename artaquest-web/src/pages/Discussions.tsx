@@ -70,7 +70,7 @@ export default function Discussions() {
           options={data.forums.filter((f) => f.slug !== "courses").map((f) => ({ key: f.slug, label: f.title }))}
           group={forum} showAll={false}
           href={(slug) => `/discussions/?forum=${slug}`}
-          trailing={<Chip href="/discussions/?scope=courses">Course boards →</Chip>}
+          trailing={<Chip href="/discussions/?scope=courses">Course boards <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></Chip>}
         />
       )}
 

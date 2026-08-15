@@ -236,14 +236,14 @@ function CommentNode(p: NodeProps) {
           )}
 
           {kids.length > 0 && (
-            <ul className="mt-1 list-none border-l border-line/60 pl-3">
+            <ul className="mt-1 list-none border-s border-line/60 ps-3">
               {kids.map((k) => <CommentNode key={k.id} {...p} c={k} depth={p.depth + 1} />)}
             </ul>
           )}
           {moreKids > 0 && p.onLoadMoreReplies && (
             <button type="button" disabled={loadingKids}
               onClick={async () => { setLoadingKids(true); try { await p.onLoadMoreReplies!(c.id); } finally { setLoadingKids(false); } }}
-              className="mt-1 pl-3 text-[12px] font-semibold text-yin-light hover:underline disabled:opacity-50">
+              className="mt-1 ps-3 text-[12px] font-semibold text-yin-light hover:underline disabled:opacity-50">
               {loadingKids ? "Loading…" : `Show ${moreKids} more ${moreKids === 1 ? "reply" : "replies"}`}
             </button>
           )}

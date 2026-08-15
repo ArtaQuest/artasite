@@ -627,7 +627,7 @@ function StudioHome() {
                     {STATUS_LABEL[w.status] || "Draft"}
                   </span>
                 </span>
-                <span aria-hidden className="text-ink-3">→</span>
+                <span aria-hidden className="inline-block text-ink-3 rtl:-scale-x-100">→</span>
               </a>
             </li>
           ))}

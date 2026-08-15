@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { localePath } from "../lib/wp";
+import { uiLocale, localePath } from "../lib/wp";
 import { getFilm, generateFilm, publishFilm, deleteFilm, type Film, ApiError } from "../lib/api";
 import { Button, Card, StatusNote, Pill, BackLink, LinkButton } from "../components/ui";
 import { SharePanel } from "../components/SharePanel";
@@ -11,7 +11,7 @@ function shareUrl(path: string): string {
   const p = localePath(path);
   return typeof window !== "undefined" ? window.location.origin + p : "https://artaquest.com" + p;
 }
-function fmtWhen(ts: number) { return ts ? new Date(ts * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : ""; }
+function fmtWhen(ts: number) { return ts ? new Date(ts * 1000).toLocaleDateString(uiLocale(), { year: "numeric", month: "short", day: "numeric" }) : ""; }
 
 function OwnerStudio({ film, reload }: { film: Film; reload: () => void }) {
   const [busy, setBusy] = useState("");
