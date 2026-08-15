@@ -426,8 +426,13 @@ export function LinkButton({ onClick, disabled, className, children, ...rest }: 
 /* ───────────────────────── IconButton ───────────────────────── */
 export function IconButton({ label, onClick, className, children, ...rest }: { label: string; onClick?: () => void; className?: string; children: ReactNode } & ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
+    /* A disabled button still matches `:hover`, so an unguarded hover fill lights one up under the
+       cursor while it does nothing — read, correctly, as "this button is broken". It was also drawn
+       at full strength, so there was no way to tell a dead control from a live one before pressing
+       it. Dimmed, and the hover withdrawn, it simply says there is nothing that way. */
     <button type="button" aria-label={label} onClick={onClick}
-      className={cx("grid place-items-center rounded-card text-ink-2 transition-colors hover:bg-veil/5 hover:text-ink", className)} {...rest}>
+      className={cx("grid place-items-center rounded-card text-ink-2 transition-colors hover:bg-veil/5 hover:text-ink",
+        "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-2", className)} {...rest}>
       {children}
     </button>
   );

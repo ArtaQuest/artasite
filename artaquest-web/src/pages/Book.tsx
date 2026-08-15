@@ -273,17 +273,11 @@ function errText(e: unknown, fallback: string): string {
 
 const STROKE = { fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round" } as const;
 
-const ClockGlyph = ({ size = 16 }: { size?: number }) => (
-  <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden className="mt-px shrink-0" {...STROKE}><circle cx="12" cy="12" r="9" /><path d="M12 7v5.2l3.2 1.9" /></svg>
-);
 const CameraGlyph = ({ size = 16 }: { size?: number }) => (
   <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden className="mt-px shrink-0" {...STROKE}><rect x="3" y="6" width="12" height="12" rx="3" /><path d="m15 11.2 5-3.2v8l-5-3.2z" /></svg>
 );
 const PeopleGlyph = ({ size = 16 }: { size?: number }) => (
   <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden className="mt-px shrink-0" {...STROKE}><circle cx="9" cy="8" r="3.2" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 6.2a3 3 0 0 1 0 5.6" /><path d="M17 14.6A5.4 5.4 0 0 1 20.5 19" /></svg>
-);
-const BellGlyph = ({ size = 16 }: { size?: number }) => (
-  <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden className="mt-px shrink-0" {...STROKE}><path d="M18 9.5a6 6 0 1 0-12 0c0 4.5-2 5.5-2 5.5h16s-2-1-2-5.5" /><path d="M13.7 19a2 2 0 0 1-3.4 0" /></svg>
 );
 const CalGlyph = ({ size = 16 }: { size?: number }) => (
   <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden className="mt-px shrink-0" {...STROKE}><rect x="3.5" y="5.5" width="17" height="15" rx="3" /><path d="M8 3.5v4M16 3.5v4M3.5 10.5h17" /></svg>
@@ -627,20 +621,19 @@ function MetaList({ type, className }: { type: BookRule; className?: string }) {
   const seats = Number(type.seats) || 2;
   const notice = Number(type.notice_h) || 0;
   const horizon = Number(type.horizon_d) || 21;
+  /* Five lines became three. The duration was the first of them AND the pill beside the title at
+     both call sites — the same fact twice, three words apart. And the notice and the horizon are
+     not two facts: they are the two ends of one window, so they are stated as one. */
   return (
     <ul className={cx("flex flex-col gap-2 text-[13px] text-ink-2", className)}>
-      <li className="flex items-start gap-2.5"><span className="text-ink-3"><ClockGlyph /></span>
-        <DurationText m={Number(type.minutes) || 30} /></li>
       <li className="flex items-start gap-2.5"><span className="text-ink-3"><CameraGlyph /></span>
-        <span>A video call on ArtaMeet, encrypted end to end</span></li>
+        <span>Encrypted video call on ArtaMeet</span></li>
       <li className="flex items-start gap-2.5"><span className="text-ink-3"><PeopleGlyph /></span>
         <span>{seats <= 2 ? "Just the two of you" : <>Up to <span data-ay-skip="1">{seats}</span> people</>}</span></li>
-      {notice > 0 && (
-        <li className="flex items-start gap-2.5"><span className="text-ink-3"><BellGlyph /></span>
-          <span>Book at least <NoticeText h={notice} /> ahead</span></li>
-      )}
       <li className="flex items-start gap-2.5"><span className="text-ink-3"><CalGlyph /></span>
-        <span>Open for the next <span data-ay-skip="1">{horizon}</span> days</span></li>
+        <span>{notice > 0
+          ? <>Book <NoticeText h={notice} /> to <span data-ay-skip="1">{horizon}</span> days ahead</>
+          : <>Open for the next <span data-ay-skip="1">{horizon}</span> days</>}</span></li>
     </ul>
   );
 }
@@ -1043,7 +1036,11 @@ function VisitorPage({ handle }: { handle: string }) {
      time is chosen (parked above AppShell's own bottom quick-nav, whose height lives in
      --aq-bottom-bar); at rest it stays in flow so a permanent bar is not sitting on the times. */
   const signedIn = isLoggedIn();
-  const confirmSurface = (
+  /* NOTHING until there is something to confirm. At rest this card carried a heading naming itself
+     and a line — "Pick a day, then a time" — instructing the visitor to do the thing the calendar
+     beside it is already asking for. A card whose whole content is a restatement of the page is a
+     card to delete, so it now exists only once a time is held. */
+  const confirmSurface = picked > 0 && type ? (
     <section
       aria-label="The time you pick"
       className={cx(
@@ -1055,15 +1052,14 @@ function VisitorPage({ handle }: { handle: string }) {
         // longer title, a blurb or several types pushes the confirm button back below the fold —
         // collapsing the note only bought 66px. First in the rail, `sticky top-[76px]` pins it for
         // the whole scroll range, so the action is on screen at any rail height and any window.
-        picked > 0 && "fixed inset-x-0 bottom-[var(--aq-bottom-bar)] z-30 rounded-none border-x-0 border-b-0 border-t border-line bg-space-2/95 p-3 backdrop-blur md:inset-x-auto md:bottom-auto md:order-first md:rounded-card md:border md:p-4",
+        "fixed inset-x-0 bottom-[var(--aq-bottom-bar)] z-30 rounded-none border-x-0 border-b-0 border-t border-line bg-space-2/95 p-3 backdrop-blur md:inset-x-auto md:bottom-auto md:order-first md:rounded-card md:border md:p-4",
       )}>
       {/* The heading is the rail card's title and stays on a wide screen. On a phone the same
           element has become a one-line bar above the thumb, where a title is a wasted row — so it
           is hidden by CLASS, not by the `hidden` attribute, whose UA rule a `md:block` would
           silently outrank. */}
-      <h2 className={cx("text-[14px] font-semibold text-ink", picked > 0 && "hidden md:block")}>The time you pick</h2>
-      {picked > 0 && type ? (
-        <>
+      <h2 className="hidden text-[14px] font-semibold text-ink md:block">The time you pick</h2>
+      <>
           <p className="text-[14px] font-semibold text-ink md:text-[15px]" data-ay-skip="1">
             {longInstant(picked, displayTz)}
           </p>
@@ -1111,13 +1107,8 @@ function VisitorPage({ handle }: { handle: string }) {
             </p>
           )}
         </>
-      ) : (
-        <>
-          <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-3">Pick a day, then a time</p>
-        </>
-      )}
     </section>
-  );
+  ) : null;
 
   /* ── the frame ──
      The house row: a 1076px band, a 672px main column, a 330px rail. Identical to Meet and Messages,
@@ -1458,20 +1449,20 @@ function VisitorPage({ handle }: { handle: string }) {
       </section>
 
       {type && (
+        /* The card's own title was "What you're asking for", above the meeting's title — a label
+           announcing the thing directly beneath it. The meeting IS the heading now, and the label
+           survives only for assistive tech, where a section does need a name. */
         <section className="hidden rounded-card border border-line bg-space-2 p-4 md:block" aria-label="What you’re asking for">
-          <h2 className="text-[14px] font-semibold text-ink">What you’re asking for</h2>
           {offered.length > 1 ? (
-            <div className="mt-3">
-              <TypeChooser offered={offered} current={type} onPick={(s) => { setTypeSlug(s); setPicked(0); setDay(""); }} />
-            </div>
+            <TypeChooser offered={offered} current={type} onPick={(s) => { setTypeSlug(s); setPicked(0); setDay(""); }} />
           ) : (
-            <div className="mt-3">
-              <p className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-ink">
+            <>
+              <h2 className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-ink">
                 <span data-ay-skip="1">{type.title}</span>
                 <Pill><DurationText m={Number(type.minutes) || 30} /></Pill>
-              </p>
+              </h2>
               {type.blurb && <p className="mt-1.5 line-clamp-3 text-[13px] leading-relaxed text-ink-2" data-ay-skip="1">{type.blurb}</p>}
-            </div>
+            </>
           )}
           <MetaList type={type} className="mt-3.5 border-t border-line pt-3.5" />
         </section>
