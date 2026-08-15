@@ -1547,7 +1547,11 @@ final class Books {
 			'last'  => (string) get_option( 'aq_books_signer_last', '' ),
 			'first' => (string) get_option( 'aq_books_signer_first', '' ),
 			'role'  => (string) get_option( 'aq_books_signer_role', 'Director' ),
-			'phone' => (string) get_option( 'aq_books_signer_phone', '' ),
+			// Named with a `_private` segment ON PURPOSE. Extra::REDACT_NAME_RE masks that shape in every
+			// key/value store, and wp_options is published at /data — so an option called
+			// `aq_books_signer_phone` would put a personal mobile number in the open database. This is
+			// the same trick Chat.php uses in naming its column `vault_key`.
+			'phone' => (string) get_option( 'aq_books_signer_phone_private', '' ),
 		];
 	}
 
@@ -1560,7 +1564,20 @@ final class Books {
 	 * tax payable under section 149", which is what a 149(1)(l) non-profit is. That single fact is
 	 * what makes a printable package worth generating rather than a curiosity.
 	 */
-	public static function return_pdf( $fy_label = '', $generated = '' ) {
+	/**
+	 * A telephone number with its middle removed: '+90 540 154 6666' -> '+90 ••• ••• ••66'.
+	 * Enough for the operator to recognise which number is on file, useless to a harvester.
+	 */
+	private static function mask_phone( $p ) {
+		$p = trim( (string) $p );
+		if ( '' === $p ) { return ''; }
+		$cc  = ( '+' === substr( $p, 0, 1 ) && preg_match( '/^\+\d{1,3}/', $p, $m ) ) ? $m[0] : '';
+		$dig = preg_replace( '/\D/', '', substr( $p, strlen( $cc ) ) );
+		$end = substr( $dig, -2 );
+		return trim( $cc . ' ••• ••• ••' . $end );
+	}
+
+	public static function return_pdf( $fy_label = '', $generated = '', $full = false ) {
 		self::ensure_tables();
 		// The generation date is stamped in the footer, so leaving it as "today" would make every
 		// regeneration produce different bytes — and a package whose hash moves daily cannot be the
@@ -1590,7 +1607,8 @@ final class Books {
 		$pdf->gap( 4 );
 		$pdf->kv( 'Business number', self::BN );
 		$pdf->kv( 'Incorporated', self::INCORPORATED );
-		$pdf->kv( 'Jurisdiction', 'Alberta, Canada' );
+		$pdf->kv( 'Jurisdiction', 'Federal - Canada Not-for-profit Corporations Act' );
+		$pdf->kv( 'Registered office', 'Edmonton, Alberta' );
 		$pdf->kv( 'Entity type', 'Non-profit corporation, exempt under ITA paragraph 149(1)(l)' );
 		$pdf->kv( 'Registered charity', 'No' );
 		$pdf->kv( 'Fiscal year end', self::fy_end_md() . ( get_option( 'aq_books_fy_end_chosen' ) ? ' (chosen ' . get_option( 'aq_books_fy_end_chosen' ) . ')' : '' ) );
@@ -1659,7 +1677,17 @@ final class Books {
 		$pdf->field( '950', 'Last name', $sign['last'] ?: '________________________' );
 		$pdf->field( '951', 'First name', $sign['first'] ?: '________________________' );
 		$pdf->field( '954', 'Position, office or rank', $sign['role'] ?: '________________________' );
-		$pdf->field( '956', 'Telephone number', $sign['phone'] ?: '________________________' );
+		// The public copy carries a masked number. The filed copy needs the real one, and the operator
+		// download at /studio/books/package has it — but this package is served to anyone who asks,
+		// and a personal mobile in a world-readable PDF is harvested within the week. Masking here is
+		// not coyness about a fact: the number is on the return CRA receives, not on the one the
+		// internet receives.
+		$pdf->field( '956', 'Telephone number',
+			$sign['phone'] ? ( $full ? $sign['phone'] : self::mask_phone( $sign['phone'] ) ) : '________________________' );
+		if ( $sign['phone'] && ! $full ) {
+			$pdf->para( 'The signing officer\'s telephone number is masked on the published copy. The operator\'s copy at '
+				. '/studio/books/package carries it in full, and that is the copy to file.', 7.5, 0.5, 34 );
+		}
 		$pdf->gap( 6 );
 		// The signature and its date are left to be executed by hand, deliberately. This package is
 		// regenerated on a cron and published to anyone who asks for it; stamping a real signature
@@ -1839,18 +1867,45 @@ final class Books {
 		$out   = [];
 		$filed = self::filings();
 
+		// The corporation is FEDERAL (Canada Not-for-profit Corporations Act), so the annual return goes
+		// to CORPORATIONS CANADA rather than to a provincial registry — a different authority and a
+		// different clock: within 60 DAYS FOLLOWING the anniversary date, not on it.
 		$inc = new \DateTimeImmutable( self::INCORPORATED, new \DateTimeZone( self::TZ ) );
-		$ab  = get_option( 'aq_books_ab_return', [] );
-		if ( ! is_array( $ab ) ) { $ab = []; }
+		$cc  = get_option( 'aq_books_annual_return', [] );
+		if ( ! is_array( $cc ) ) { $cc = []; }
 		for ( $y = (int) $inc->format( 'Y' ) + 1; $y <= (int) substr( $today, 0, 4 ) + 1; $y++ ) {
-			$due = self::clamp_date( $y, (int) $inc->format( 'n' ), (int) $inc->format( 'j' ) );
+			$anniv = self::clamp_date( $y, (int) $inc->format( 'n' ), (int) $inc->format( 'j' ) );
+			$due   = ( new \DateTimeImmutable( $anniv, new \DateTimeZone( self::TZ ) ) )->modify( '+60 days' )->format( 'Y-m-d' );
 			$out[] = [
-				'key' => 'ab-return:' . $y, 'title' => 'Alberta annual return ' . $y,
-				'authority' => 'Alberta Corporate Registry', 'due' => $due, 'days' => $days( $due ),
-				'done' => (string) ( $ab[ (string) $y ] ?? '' ), 'amount' => null,
-				'consequence' => 'The corporation MAY BE DISSOLVED if this is not filed.',
-				'detail' => 'Filed through an authorised Alberta service provider. Corporate Registry mails a reminder to '
-					. 'the registered office one month before the anniversary of incorporation — that address has to receive post.',
+				'key' => 'annual-return:' . $y, 'title' => 'Corporations Canada annual return ' . $y,
+				'authority' => 'Corporations Canada (NFP Act)', 'due' => $due, 'days' => $days( $due ),
+				'done' => (string) ( $cc[ (string) $y ] ?? '' ), 'amount' => null,
+				'consequence' => 'The corporation CAN BE DISSOLVED for non-filing. The Act allows it after one year; '
+					. 'the published policy is to dissolve after three, with a final notice giving 120 days more.',
+				'detail' => 'Anniversary ' . $anniv . '; the return is due within the 60 days following it. It asks for the '
+					. 'date of the last annual meeting of members, so hold that meeting — or sign a written resolution of all '
+					. 'voting members — before filing.',
+			];
+		}
+
+		// Financial statements go to Corporations Canada only if the corporation is SOLICITING: public
+		// donations and/or government grants over $10,000 in a single financial year. Computed from the
+		// ledger like the T1044 test, and absent from this list until the threshold is actually crossed.
+		foreach ( self::fy_list() as $fy ) {
+			$public_income = 0;
+			foreach ( self::movement( $fy['start'], $fy['end'] ) as $code => $cents ) {
+				if ( in_array( $code, [ 'donations', 'grants_in' ], true ) ) { $public_income += $cents; }
+			}
+			if ( $public_income <= 1000000 ) { continue; }
+			$fs_due = self::filing_due( $fy['end'] );
+			$out[]  = [
+				'key' => 'soliciting:' . $fy['label'], 'title' => 'Financial statements to Corporations Canada - ' . $fy['label'],
+				'authority' => 'Corporations Canada (NFP Act)', 'due' => $fs_due, 'days' => $days( $fs_due ),
+				'done' => (string) ( $cc[ 'fs' . $fy['label'] ] ?? '' ), 'amount' => $public_income,
+				'consequence' => 'A soliciting corporation must send its financial statements to Corporations Canada.',
+				'detail' => 'Public donations and grants exceeded $10,000 in ' . $fy['label'] . ', which makes the corporation '
+					. 'SOLICITING. Statements are due not less than 21 days before the annual meeting of members, or as soon as '
+					. 'possible after a written resolution is signed. No fee.',
 			];
 		}
 
@@ -1884,11 +1939,18 @@ final class Books {
 	/** Record an obligation as discharged: an Alberta annual return, or a GST remittance. */
 	public static function mark_done( $key, $on = '' ) {
 		$on = self::norm_date( $on ) ?: self::today();
-		if ( preg_match( '/^ab-return:(\d{4})$/', (string) $key, $m ) ) {
-			$ab = get_option( 'aq_books_ab_return', [] );
-			if ( ! is_array( $ab ) ) { $ab = []; }
-			$ab[ $m[1] ] = $on;
-			update_option( 'aq_books_ab_return', $ab, true );
+		if ( preg_match( '/^annual-return:(\d{4})$/', (string) $key, $m ) ) {
+			$cc = get_option( 'aq_books_annual_return', [] );
+			if ( ! is_array( $cc ) ) { $cc = []; }
+			$cc[ $m[1] ] = $on;
+			update_option( 'aq_books_annual_return', $cc, true );
+			return 'recorded';
+		}
+		if ( preg_match( '/^soliciting:(FY\d{4})$/', (string) $key, $m ) ) {
+			$cc = get_option( 'aq_books_annual_return', [] );
+			if ( ! is_array( $cc ) ) { $cc = []; }
+			$cc[ 'fs' . $m[1] ] = $on;
+			update_option( 'aq_books_annual_return', $cc, true );
 			return 'recorded';
 		}
 		if ( preg_match( '/^gst59:(\d{4}-\d{2})$/', (string) $key, $m ) ) {
@@ -1976,7 +2038,9 @@ final class Books {
 		$out = [ 'ok' => true ];
 		foreach ( [ 'last', 'first', 'role', 'phone' ] as $k ) {
 			$v = Rest::p( $req, 'signer_' . $k, null );
-			if ( null !== $v ) { update_option( 'aq_books_signer_' . $k, substr( sanitize_text_field( (string) $v ), 0, 80 ), true ); }
+			if ( null === $v ) { continue; }
+			$opt = 'phone' === $k ? 'aq_books_signer_phone_private' : 'aq_books_signer_' . $k;
+			update_option( $opt, substr( sanitize_text_field( (string) $v ), 0, 80 ), true );
 		}
 		$fy    = sanitize_text_field( (string) Rest::p( $req, 'filed_fy', '' ) );
 		$which = sanitize_text_field( (string) Rest::p( $req, 'filed_form', '' ) );
@@ -2002,11 +2066,27 @@ final class Books {
 	 * Public, like every other figure it contains.
 	 */
 	public static function cra_pdf( $req ) {
+		return self::serve_package( $req, false );
+	}
+
+	/**
+	 * GET /studio/books/package — the same package with the telephone number unmasked.
+	 *
+	 * A SEPARATE URL rather than a capability check inside the public one, deliberately. The public
+	 * package is edge-cached for five minutes; varying its body by who asked would let the shared
+	 * cache hand the operator's copy to whoever asked next. Two URLs, two cache policies, no way for
+	 * one to leak into the other.
+	 */
+	public static function cra_pdf_full( $req ) {
+		return self::serve_package( $req, true );
+	}
+
+	private static function serve_package( $req, $full ) {
 		self::ensure_tables();
 		$want = sanitize_text_field( (string) Rest::p( $req, 'fy', '' ) );
 		$fy   = self::fy_of( self::today() );
 		foreach ( self::fy_list() as $y ) { if ( $y['label'] === $want ) { $fy = $y; } }
-		$bytes = self::return_pdf( $fy['label'] );
+		$bytes = self::return_pdf( $fy['label'], '', $full );
 		$name  = 'ArtaQuest-Foundation-' . $fy['label'] . '-filing-package.pdf';
 
 		while ( ob_get_level() ) { ob_end_clean(); }
@@ -2015,7 +2095,7 @@ final class Books {
 		header( 'Content-Length: ' . strlen( $bytes ) );
 		header( 'Content-Disposition: attachment; filename="' . $name . '"' );
 		header( 'X-Content-Type-Options: nosniff' );
-		header( 'Cache-Control: public, max-age=300' );
+		header( $full ? 'Cache-Control: private, no-store' : 'Cache-Control: public, max-age=300' );
 		header( 'X-AQ-SHA256: ' . hash( 'sha256', $bytes ) );
 		echo $bytes; // phpcs:ignore
 		exit;

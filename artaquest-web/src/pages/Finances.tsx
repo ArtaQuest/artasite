@@ -607,11 +607,16 @@ export default function Finances() {
               <p className="mt-3 text-[12.5px] leading-relaxed text-ink-3">{cra.t2.form_why}</p>
               <ul className="mt-3 grid gap-1 text-[13px] text-ink-2">{cra.t2.schedules.map((s) => <li key={s}>· {s}</li>)}</ul>
               <div className="mt-5 border-t border-line pt-4">
-                <Button href={Books.packageUrl(cra.fy.label)}>Download the filing package (PDF)</Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button href={Books.packageUrl(cra.fy.label)}>Download the filing package (PDF)</Button>
+                  {operator ? <Button variant="outline" href={Books.filingCopyUrl(cra.fy.label)}>Operator copy — to file</Button> : null}
+                </div>
                 <p className="mt-2 max-w-[70ch] text-[12.5px] leading-relaxed text-ink-3">
                   Every figure below, plus the T2 Short line numbers to transcribe, the GIFI schedules, the
                   statements, the notes, the invoice register with each document&rsquo;s hash, and the GST
-                  working. Generated from the ledger — nothing in it has been filed.
+                  working. Generated from the ledger — nothing in it has been filed. The signing
+                  officer&rsquo;s telephone number is masked on this public copy; the operator&rsquo;s copy
+                  carries it in full and is the one to file.
                 </p>
               </div>
             </Card>

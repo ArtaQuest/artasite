@@ -944,6 +944,10 @@ export const Books = {
   verify: () => get<{ checks: BookCheck[]; ok: boolean }>("/foundation/books/verify"),
   // A file, not JSON — the browser navigates to it, so this is a URL rather than a fetch.
   packageUrl: (fy = "") => `/wp-json/aq/v1/foundation/cra/pdf${fy ? `?fy=${encodeURIComponent(fy)}` : ""}`,
+  // Operator only, and a different URL rather than the same one behaving differently: the public
+  // package is edge-cached, so varying its body by who asked would let the cache hand this copy to
+  // the next visitor. This one carries the signing officer's telephone number unmasked.
+  filingCopyUrl: (fy = "") => `/wp-json/aq/v1/studio/books/package${fy ? `?fy=${encodeURIComponent(fy)}` : ""}`,
   // Operator only. The signing officer's details are facts about a person, and a filing date is a
   // fact about the world; neither can be derived from the ledger, so both are asked for.
   settings: (fields: Record<string, string>) =>
