@@ -754,12 +754,17 @@ final class Social {
 			'joined'     => Verify::joined_label( $u->user_registered ), // clamped to the platform launch (ticket #103)
 			'verified'   => Verify::is_verified( $id ),         // the blue check
 			'full_name'  => Verify::full_name( $id ),           // public (radical transparency)
-			// The exact DATE goes only to the member themselves (and operators); everyone else gets the
-			// AGE. See Verify::age() for the whole argument — briefly: full name + city + exact date of
-			// birth is the identity-verification triplet, the date is now mandatory rather than
-			// volunteered, and age is strictly less information while being the datum a dating profile
-			// is actually read for. Revert by restoring Verify::birthday( $id ) here.
-			'birthday'   => ( $viewer === $id || current_user_can( 'manage_options' ) ) ? Verify::birthday( $id ) : '',
+			// PUBLIC, and the exact date. Operator 2026-08-15, reaffirming 2026-07-27 ("the DATE only —
+			// no derived age") and 2026-05-22 ("data (except passwords) is public, including
+			// birthdays"). Between 08-14 and 08-15 this was gated to the member themselves and the
+			// profile printed a derived age instead; that was my call and the operator has reversed it.
+			// Do not narrow it again without the operator saying so — the concern (full name + city +
+			// exact date of birth is the identity-verification triplet a bank asks for) was raised,
+			// heard, and decided.
+			'birthday'   => Verify::birthday( $id ),
+			// Still emitted, now ALONGSIDE the date rather than instead of it: the Developer API is a
+			// real consumer surface and an age saves every client reimplementing the leap-year
+			// arithmetic. The profile page renders the date, never this.
 			'age'        => Verify::age( $id ),                 // 0 = no valid date on record
 			'season'     => Seasons::of_user( $id ),            // the ONE season this member follows (0 = none on record)
 			'typologies' => array_values( $tags ),

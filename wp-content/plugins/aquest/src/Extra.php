@@ -1001,7 +1001,12 @@ final class Extra {
 	];
 
 	const REDACT_IDENTITY = [
-		'aq_birthday'               => 'exact date of birth — the age is public on the profile',
+		// `aq_birthday` is NOT here, deliberately. The exact date is published on every profile
+		// (operator 2026-08-15, reaffirming 2026-05-22's "data (except passwords) is public, including
+		// birthdays"), so masking the same value in the explorer would give one fact two different
+		// answers depending on which surface you asked — which is worse than either answer alone.
+		// It was masked here for one day, 08-14 to 08-15, alongside a profile that showed an age
+		// instead; both halves are reverted together, because they were one decision.
 		'wpcom_user_data'           => 'platform account blob — carries the sign-in email address',
 		'community-events-location' => 'cached IP address',
 		'aq_google_sub'             => 'Google account identifier',

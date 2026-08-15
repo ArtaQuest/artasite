@@ -66,9 +66,11 @@ $check('users.display_name      → public',$r['display_name'],false);
 $check('users.user_registered   → public',$r['user_registered'],false);
 $check('users.user_activation_key → masked',$r['user_activation_key'],true);
 // usermeta identity
-foreach(['aq_birthday'=>true,'wpcom_user_data'=>true,'community-events-location'=>true,
+// aq_birthday is PUBLIC by operator decision (2026-08-15) — the profile prints the exact date,
+// so the explorer must not withhold it. Asserted in the must-stay-public direction below.
+foreach(['wpcom_user_data'=>true,'community-events-location'=>true,
          'aq_google_sub'=>true,'aq_birth_min'=>true,'aq_gender'=>true,
-         'aq_location'=>false,'aq_full_name'=>false,'aq_relationship'=>false,
+         'aq_birthday'=>false,'aq_location'=>false,'aq_full_name'=>false,'aq_relationship'=>false,
          'aq_languages'=>false,'aq_last_seen'=>false,'aq_verified'=>false,
          'aq_palm_url'=>false,'aq_typology_tags'=>false,'description'=>false] as $k=>$w){
   $r=Extra::redact_row('wp_usermeta',['meta_key'=>$k,'meta_value'=>'X']);

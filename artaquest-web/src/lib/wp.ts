@@ -998,9 +998,9 @@ export type Profile = {
   // Public identity facts (radical transparency — the same values the /data/ explorer serves, and
   // required of every member at signup).
   //
-  // `age` is the PUBLIC one — whole years, from the server. `birthday` is the EXACT date and now
-  // arrives ONLY on your own profile (and for operators); it is '' for every other viewer, so a
-  // component that renders it is automatically own-only. See Verify::age() for why.
+  // `birthday` is the EXACT date, `YYYY-MM-DD`, and is PUBLIC — operator 2026-08-15, reaffirming
+  // 2026-07-27's "the DATE only, no derived age". `age` comes with it as an API convenience for
+  // other clients; the profile page renders the date and never the age.
   age?: number;
   birthday?: string;
   fullName?: string;
@@ -1060,8 +1060,8 @@ export type ProfileCourse = { id: number; slug: string; title: string; image: st
 export type ProfileTopic = { key: string; name: string; category: string; status: string; image: string };
 type ProfileR = {
   id: number; name: string; slug: string; avatar: string; palm?: string; country?: string; nationality?: string; email?: string; points: number; tier: string;
-  /** Whole years, computed server-side (Verify::age). The public profile publishes THIS; the
-   *  exact `birthday` below now arrives only on your OWN profile. 0 = no valid date on record. */
+  /** Whole years, computed server-side (Verify::age) — an API convenience emitted BESIDE the exact
+   *  `birthday` below, never instead of it. 0 = no valid date on record. */
   age?: number;
   birthday?: string; full_name?: string; season?: number; verified?: boolean;
   links?: Partial<Record<ProfileLinkKey, string>>;
@@ -1112,8 +1112,9 @@ export async function endorseTag(targetId: number, tag: string, on: boolean): Pr
 export async function getProfile(slug: string): Promise<Profile | null> {
   // The public /profile endpoint carries the full public picture — identity, standing, wallet
   // balance, typology tags, activity stats, recent threads, follow state. ArtaQuest is radically
-  // transparent (the whole DB is public via /data/), so the wallet is public too. Two fields are
-  // NOT: `email` and the exact `birthday` come back only on your own profile — see Verify::age().
+  // transparent (the whole DB is public via /data/), so the wallet is public too. ONE field is not:
+  // `email` comes back only on your own profile (it is the sign-in identifier). The exact `birthday`
+  // IS public — operator 2026-08-15.
   try {
     const pr = await get<ProfileR>(`${AQ}/profile?slug=${encodeURIComponent(slug)}`);
     return {
