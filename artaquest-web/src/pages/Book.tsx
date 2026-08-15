@@ -529,8 +529,10 @@ function DayGrid({ month, dayMap, todayKey, horizonKey, selected, onChoose, onMo
               return (
                 <div key={key} role="gridcell" aria-disabled="true" tabIndex={roving} ref={setRef}
                   {...(isToday ? { "aria-current": "date" as const } : {})}
-                  className={cx("grid place-items-center rounded-card text-[15px] font-normal tabular-nums text-ink-3 outline-none md:text-[17px]",
-                    CELL_H, isToday && "ring-1 ring-inset ring-yin-light/60")}>
+                  style={{ position: "relative" }}
+                  className={cx("grid place-items-center text-[15px] font-normal tabular-nums text-ink-3 outline-none md:text-[17px]",
+                    CELL_H)}>
+                  {isToday && <span aria-hidden className="pointer-events-none absolute h-9 w-9 rounded-full ring-1 ring-inset ring-yin-light/60 md:h-11 md:w-11" />}
                   {/* The numeral is the DECORATION and the sr-only line is the NAME: a reader who
                       cannot see which column a square is in gets the weekday, not a bare "17". The
                       formatted date is skip-wrapped, the words beside it are not. */}
@@ -544,18 +546,25 @@ function DayGrid({ month, dayMap, todayKey, horizonKey, selected, onChoose, onMo
               <button key={key} type="button" role="gridcell" ref={setRef} tabIndex={roving}
                 aria-selected={on} {...(isToday ? { "aria-current": "date" as const } : {})}
                 onClick={() => onChoose(key)}
-                className={cx("flex flex-col items-center justify-center gap-1.5 rounded-card border text-ink transition-colors duration-150 outline-none",
-                  CELL_H,
-                  on ? "border-yang bg-yang text-on-accent" : "border-line bg-space-2 hover:border-yin-light focus-visible:border-yin-light",
-                  // Blue marks where you STAND, gold marks what you CHOSE. The two brand colours never
-                  // do the same job, and no third mark is invented for "today".
-                  isToday && !on && "ring-1 ring-inset ring-yin-light/60")}>
-                <span aria-hidden data-ay-skip="1" className="text-[15px] font-semibold tabular-nums md:text-[17px]">{Number(key.slice(8, 10))}</span>
-                {/* A 3px METER, not a state: how much room this day has, so a visitor scanning a
-                    five-hour window can see where the space is without opening four days. */}
-                <span aria-hidden className={cx("h-[3px] w-6 overflow-hidden rounded-pill md:w-8", on ? "bg-on-accent/25" : "bg-veil/10")}>
-                  <span className={cx("block h-full rounded-pill", on ? "bg-on-accent" : "bg-yang/50")} style={{ width: `${pct}%` }} />
+                className={cx("group grid place-items-center outline-none", CELL_H)}>
+                {/* A CIRCLE, not a bordered box. Every free day used to be a rounded rectangle with a
+                    border and a small bar chart inside it, and twenty of those in a grid read as a
+                    wall of controls rather than as a month — the page looked busy while saying very
+                    little. A tinted disc says "this day is open" with no border at all, the gold fill
+                    says "this is the one you chose", and the density that bar carried survives as the
+                    dot below: same information, a fraction of the ink. */}
+                <span aria-hidden
+                  className={cx("relative grid h-9 w-9 place-items-center rounded-full text-[15px] font-semibold tabular-nums transition-colors duration-150 md:h-11 md:w-11 md:text-[17px]",
+                    on ? "bg-yang text-on-accent shadow-card"
+                       : "bg-yang/[0.10] text-ink group-hover:bg-yang/25 group-focus-visible:bg-yang/25",
+                    // Blue marks where you STAND, gold marks what you CHOSE. The two brand colours
+                    // never do the same job, and no third mark is invented for "today".
+                    isToday && !on && "ring-1 ring-inset ring-yin-light/60")}>
+                  <span data-ay-skip="1">{Number(key.slice(8, 10))}</span>
                 </span>
+                <span aria-hidden
+                  className={cx("mt-1 h-1 w-1 rounded-full transition-opacity", on ? "bg-yang" : "bg-yang")}
+                  style={{ opacity: on ? 0 : 0.25 + (pct / 100) * 0.6 }} />
                 <span className="sr-only">
                   <span data-ay-skip="1">{dayHeadingLong(key)}</span>, <span data-ay-skip="1">{free}</span> times free
                 </span>
@@ -1017,26 +1026,24 @@ function VisitorPage({ handle }: { handle: string }) {
           {!noteOpen && <div className="mt-2"><LinkButton className={LINK_HIT} onClick={openNote}>Add a line about it</LinkButton></div>}
 
 
-          <div className="mt-3 flex flex-wrap items-center gap-3">
+          <div className="mt-3 flex items-center gap-3">
             {/* A plain element rather than <Button>: this is the one control the page has to be able
                 to FOCUS on the way back from signing in, and Button owns its own ref. */}
             <button ref={confirmBtn} type="button" onClick={() => void take()} disabled={busy}
-              className="inline-flex h-11 w-full items-center justify-center rounded-pill bg-yang px-6 text-[14px] font-bold text-on-accent shadow-card transition-colors duration-150 hover:bg-yin hover:text-white disabled:cursor-not-allowed disabled:opacity-50 md:w-auto">
+              className="inline-flex h-11 flex-1 items-center justify-center rounded-pill bg-yang px-6 text-[14px] font-bold text-on-accent shadow-card transition-colors duration-150 hover:bg-yin hover:text-white disabled:cursor-not-allowed disabled:opacity-50 md:flex-none">
               {busy ? "Asking…" : signedIn ? "Book this time" : "Sign in and book this time"}
             </button>
             <LinkButton className={LINK_HIT} onClick={() => { setPicked(0); setTakeErr(""); }}>Choose another time</LinkButton>
           </div>
 
-          {signedIn ? (
-            // Knowing WHICH identity lands in the owner's calendar is the other half of "requires an
-            // account".
+          {/* WHO is booking stays — it is the other half of "an account is needed", and it is one
+              line. The signed-out twin ("New here? The same step creates your free account…") is
+              gone: on a phone this surface is a FIXED BAR, so every line in it is permanent
+              furniture standing over the calendar, and that one said what the button says. */}
+          {signedIn && (
             <p className="mt-2 flex items-center gap-2 text-[12.5px] text-ink-3">
               <Avatar src={me?.avatar} name={me?.name} className="h-5 w-5 text-[10px]" />
               <span>Booking as <span data-ay-skip="1">{me?.name || "you"}</span></span>
-            </p>
-          ) : (
-            <p className="mt-2 text-[12.5px] leading-relaxed text-ink-3">
-              New here? The same step creates your free account — and your time and your note are kept
             </p>
           )}
         </>
@@ -1076,7 +1083,7 @@ function VisitorPage({ handle }: { handle: string }) {
         </div>
         <WeekdayStrip />
         <GridSkeleton />
-        <div className="mt-4 min-h-[224px] border-t border-line pt-4">
+        <div className="mt-4 min-h-[236px] border-t border-line pt-4 md:min-h-[156px]">
           <p className="text-[13px] text-ink-3">Loading this booking page…</p>
         </div>
       </section>,
@@ -1251,7 +1258,8 @@ function VisitorPage({ handle }: { handle: string }) {
             </p>
           )}
 
-          <section className="rounded-card border border-line bg-space-2 p-4 md:p-5" aria-label="Choose a day and a time">
+          <section className="rounded-card border border-line bg-space-2 p-4 md:flex md:items-start md:gap-5 md:p-5" aria-label="Choose a day and a time">
+            <div className="md:min-w-0 md:flex-1">
             <div className="flex h-10 items-center justify-between">
               <h2 className="text-[18px] font-bold text-ink">
                 <time dateTime={month} data-ay-skip="1">{monthLabel(month)}</time>
@@ -1305,7 +1313,9 @@ function VisitorPage({ handle }: { handle: string }) {
               </div>
             )}
 
-            <div ref={timesBox} className="mt-4 min-h-[224px] scroll-mt-topbar border-t border-line pt-4">
+            </div>
+
+            <div ref={timesBox} className="mt-4 min-h-[236px] scroll-mt-topbar border-t border-line pt-4 md:mt-0 md:min-h-0 md:w-[210px] md:shrink-0 md:border-l md:border-t-0 md:ps-5 md:pt-0">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 ref={timesHead} tabIndex={-1} className="text-[14px] font-semibold text-ink outline-none">
                   {activeKey
@@ -1327,7 +1337,7 @@ function VisitorPage({ handle }: { handle: string }) {
 
               <div className="mt-3">
                 {dayTimes.length > 0 ? (
-                  <div className="grid grid-cols-3 gap-2 md:grid-cols-[repeat(auto-fill,minmax(104px,1fr))]">
+                  <div className="grid grid-cols-3 gap-2 md:max-h-[468px] md:grid-cols-1 md:gap-1.5 md:overflow-y-auto md:pe-1">
                     {dayTimes.map((ts) => {
                       const on = ts === picked;
                       // A slot a re-read says has gone stays PUT, disabled and labelled — it must
@@ -1337,7 +1347,7 @@ function VisitorPage({ handle }: { handle: string }) {
                       return (
                         <button key={ts} type="button" aria-pressed={on} disabled={dead}
                           onClick={() => { setPicked(ts); setTakeErr(""); setGone(false); }}
-                          className={cx("h-12 rounded-field border text-[15px] font-semibold tabular-nums transition-colors duration-150",
+                          className={cx("h-12 rounded-field border text-[15px] font-semibold tabular-nums transition-colors duration-150 md:h-11 md:text-[14.5px]",
                             dead ? "cursor-not-allowed border-line text-ink-3"
                               : on ? "border-yang bg-yang text-on-accent"
                               : "border-line text-ink-2 hover:border-yin-light hover:text-ink")}>
