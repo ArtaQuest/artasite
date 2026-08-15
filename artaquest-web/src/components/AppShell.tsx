@@ -429,6 +429,11 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
   // slack, instead of shoving the theme toggle against its neighbours and clipping the trailing
   // control off-screen (ticket #47).
   const login = w.AQ_LOGIN_URL || "/login/";
+  // Are we ALREADY on the auth page? Then the two CTAs below point at the page you are reading, and
+  // a sign-in page whose loudest control is a Sign in button is a page arguing with itself. Compared
+  // on the path so a locale prefix (/fa/login/) and a trailing slash both match.
+  const { pathname: aqPath } = useLocation();
+  const onAuthPage = /(^|\/)(login|sign-in|signin)\/?$/.test(aqPath.replace(/\/+$/, "/"));
   return (
     <header className="sticky top-0 z-30 flex h-topbar items-center gap-1.5 border-b border-line/70 bg-space-1/80 px-3 backdrop-blur-md md:gap-3 md:px-4 md:ps-12 md:pe-14">
       {/* Phone has no rail, so the menu trigger lives here. Desktop's trigger is in the rail. */}
@@ -462,10 +467,15 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
       {isLoggedIn() ? (
         <UserMenu />
       ) : (
+        // On the auth page itself: no CTAs. Both of these lead here, so on /login/ they are two
+        // competing buttons to the current page, sitting above a form that already asks for the
+        // one thing they would ask for. Everywhere else they stay exactly as they were.
+        onAuthPage ? null : (
         <>
           <a href={localePath(login)} className="hidden h-9 items-center whitespace-nowrap px-2 text-[14px] font-semibold text-ink-2 transition-colors hover:text-ink md:flex">Sign in</a>
           <Button href={login} className="h-9 shrink-0 px-3 text-[14px] md:px-4">Register</Button>
         </>
+        )
       )}
     </header>
   );

@@ -45,7 +45,12 @@ function loadGsi(lang: string): Promise<void> {
   if (gsiPromise) return gsiPromise;
   gsiPromise = new Promise((resolve, reject) => {
     const s = document.createElement("script");
-    s.src = `https://accounts.google.com/gsi/client${lang && lang !== "en" ? `?hl=${encodeURIComponent(lang)}` : ""}`;
+    // `hl` is passed ALWAYS, English included. Omitting it does not mean "English" to Google — it
+    // means "decide for yourself", and Google then picks from the browser/IP locale. On a laptop in
+    // Istanbul that rendered "Google ile devam edin" on a page whose own language selector said
+    // English, which reads as a broken page rather than a helpful one. English was the single case
+    // the old condition left unpinned, so it was the one that broke.
+    s.src = `https://accounts.google.com/gsi/client?hl=${encodeURIComponent(lang || "en")}`;
     s.async = true;
     s.defer = true;
     s.onload = () => resolve();
@@ -249,7 +254,13 @@ export default function Login() {
 
   return (
     <div className="relative">
-    <div className="mx-auto flex max-w-md flex-col items-center pb-[150px] pt-12">
+    {/* OPTICALLY CENTRED, not top-anchored. `pt-12 pb-[150px]` put the card 200px from the top and
+        left 386px of measured emptiness under the button at 1440×900 — the page read as content
+        that had loaded halfway. min-h with justify-center centres it in whatever height is left
+        below the topbar; `pb-16 pt-8` biases it a touch high, which is where the eye expects a
+        sign-in card to sit, and the min-h floor stops it collapsing upward on a short window.
+        The magic 150px was clearance for the chat dock, which does not render signed-out. */}
+    <div className="mx-auto flex min-h-[calc(100svh-140px)] max-w-md flex-col items-center justify-center pb-16 pt-8">
       <LogoMark className="h-12 w-12" iconSize={26} />
       <h1 className="mt-4 text-[26px] font-bold tracking-tight">Sign in to ArtaQuest</h1>
       <p className="mt-1.5 text-center text-[13.5px] text-ink-2">No password to invent, and nothing to remember afterwards.</p>
@@ -293,6 +304,16 @@ export default function Login() {
               </Button>
             </form>
 
+            {/* "AM I ON THE RIGHT PAGE?" — the question this page left unanswered.
+                The topbar shows Sign in AND Register, and both go here, because there is no separate
+                registration: the account is created on first use. Somebody without an account reads
+                a heading that says SIGN IN, finds no way to sign up, and reasonably concludes they
+                are in the wrong place. The honest fix is not a second door to the same room — a
+                "Create an account" link here would point at /register/, which 301s to
+                /user-account/ — it is to say what actually happens. */}
+            <p className="mt-5 text-center text-[13px] text-ink-3">
+              No account yet? This is also how you make one — enter your email and it is created when you confirm.
+            </p>
           </>
         ) : (
           <>
