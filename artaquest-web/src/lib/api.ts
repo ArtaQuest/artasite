@@ -898,7 +898,12 @@ export type BookCheck = { check: string; ok: boolean; detail: string };
 export type Statements = {
   entity: { name: string; bn: string; kind: string; incorporated: string; province: string; receipts: boolean; receipts_note: string };
   currency: string;
-  fiscal: { year_end: string; year_end_chosen: string; year_end_settled: boolean; max_first_end: string; note: string; years: BookFy[]; locked: string[]; filing_due: string };
+  fiscal: {
+    year_end: string; year_end_chosen: string; year_end_settled: boolean; max_first_end: string;
+    note: string; years: BookFy[]; locked: string[]; filing_due: string;
+    filings: Record<string, { t2?: string; t1044?: string }>;
+    archives: { id: number; name: string; bytes: number; sha256: string; created: number; url: string }[];
+  };
   statements: {
     fy: BookFy;
     position: { assets: BookAmount[]; total_assets: number; liabilities: BookAmount[]; total_liabilities: number; net_assets: number; balances: boolean };
@@ -938,6 +943,11 @@ export const Books = {
   verify: () => get<{ checks: BookCheck[]; ok: boolean }>("/foundation/books/verify"),
   // A file, not JSON — the browser navigates to it, so this is a URL rather than a fetch.
   packageUrl: (fy = "") => `/wp-json/aq/v1/foundation/cra/pdf${fy ? `?fy=${encodeURIComponent(fy)}` : ""}`,
+  // Operator only. The signing officer's details are facts about a person, and a filing date is a
+  // fact about the world; neither can be derived from the ledger, so both are asked for.
+  settings: (fields: Record<string, string>) =>
+    post<{ ok: boolean; signer: Record<string, string>; filings: Record<string, { t2?: string; t1044?: string }> }>(
+      "/studio/books/settings", fields),
   // Operator only. The figures are typed rather than parsed out of the PDF: in a PDF a space is
   // usually positioning rather than a character, so a heuristic parser binds "Total" to the wrong
   // number often enough to matter, and a bookkeeping total has to be right every time.

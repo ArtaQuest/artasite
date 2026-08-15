@@ -648,6 +648,8 @@ final class Books {
 				'years'             => $years,
 				'locked'            => self::locked_years(),
 				'filing_due'        => self::filing_due( $fy['end'] ),
+				'filings'           => self::filings(),
+				'archives'          => self::archives(),
 			],
 			'statements'  => $st,
 			'entries'     => self::recent_entries( $fy ),
@@ -1679,6 +1681,95 @@ final class Books {
 			$pdf->row( ( $c['ok'] ? '[PASS] ' : '[FAIL] ' ) . str_replace( '_', ' ', $c['check'] ), '', false, $c['detail'] );
 		}
 		return $pdf->output();
+	}
+
+	/** Every frozen package, newest first: what was generated, when, and the hash of its bytes. */
+	public static function archives() {
+		self::ensure_tables();
+		$out = [];
+		foreach ( Data::all( 'SELECT id, name, bytes, sha256, created FROM ' . Data::t( 'aq_books_doc' )
+			. " WHERE kind = 'return' ORDER BY id DESC LIMIT 40" ) as $d ) {
+			$out[] = [
+				'id'      => (int) $d['id'],
+				'name'    => (string) $d['name'],
+				'bytes'   => (int) $d['bytes'],
+				'sha256'  => (string) $d['sha256'],
+				'created' => (int) $d['created'],
+				'url'     => rest_url( 'aq/v1/foundation/invoices/0/file/' . (int) $d['id'] ),
+			];
+		}
+		return $out;
+	}
+
+	/** What has been filed, and when: [ FY2026 => [ t2 => date, t1044 => date ] ]. */
+	public static function filings() {
+		$v = get_option( 'aq_books_filed', [] );
+		return is_array( $v ) ? $v : [];
+	}
+
+	/**
+	 * Record that a return was actually filed.
+	 *
+	 * Three things hang off this, which is why it needs recording rather than remembering:
+	 * the fiscal year end stops being changeable once the first T2 is in; the T1044 becomes a
+	 * PERMANENT annual obligation once one has been filed, so the threshold test has to know;
+	 * and the deadline alerts for that period must stop, or they nag about work already done.
+	 */
+	public static function mark_filed( $fy_label, $which = 't2', $on = '' ) {
+		$fy_label = sanitize_text_field( (string) $fy_label );
+		$which    = in_array( $which, [ 't2', 't1044' ], true ) ? $which : 't2';
+		$known    = false;
+		foreach ( self::fy_list() as $y ) { if ( $y['label'] === $fy_label ) { $known = true; } }
+		if ( ! $known ) { return 'no such period'; }
+		$on = self::norm_date( $on ) ?: self::today();
+
+		$filed = self::filings();
+		if ( ! isset( $filed[ $fy_label ] ) ) { $filed[ $fy_label ] = []; }
+		$filed[ $fy_label ][ $which ] = $on;
+		update_option( 'aq_books_filed', $filed, true );
+
+		if ( 't2' === $which ) {
+			// The year end is fixed by the first T2 filed. After this, changing it needs CRA's
+			// written permission, so the page must stop offering it as an open choice.
+			update_option( 'aq_books_fy_filed_once', 1, true );
+		} else {
+			// The one-way ratchet: an NPO that has filed once must file for every later period,
+			// whatever its revenue or assets. t1044_test reads this.
+			update_option( 'aq_books_t1044_filed_once', 1, true );
+		}
+		// Stop the reminders for this period.
+		$sent = get_option( 'aq_books_deadline_sent', [] );
+		if ( ! is_array( $sent ) ) { $sent = []; }
+		if ( ! in_array( $fy_label . ':filed', $sent, true ) ) {
+			$sent[] = $fy_label . ':filed';
+			update_option( 'aq_books_deadline_sent', $sent, true );
+		}
+		return 'recorded';
+	}
+
+	/**
+	 * POST /studio/books/settings — operator: the signing officer, and recording a filing.
+	 *
+	 * The signing officer's name and position are facts about a person, not about the books, so they
+	 * are asked for rather than invented; the package prints blanks until they are set.
+	 */
+	public static function settings( $req ) {
+		self::ensure_tables();
+		$out = [ 'ok' => true ];
+		foreach ( [ 'last', 'first', 'role', 'phone' ] as $k ) {
+			$v = Rest::p( $req, 'signer_' . $k, null );
+			if ( null !== $v ) { update_option( 'aq_books_signer_' . $k, substr( sanitize_text_field( (string) $v ), 0, 80 ), true ); }
+		}
+		$fy    = sanitize_text_field( (string) Rest::p( $req, 'filed_fy', '' ) );
+		$which = sanitize_text_field( (string) Rest::p( $req, 'filed_form', '' ) );
+		if ( '' !== $fy && '' !== $which ) {
+			$r = self::mark_filed( $fy, $which, (string) Rest::p( $req, 'filed_on', '' ) );
+			if ( 'recorded' !== $r ) { return Rest::err( 'bad_input', 'That period is not one the books know about.' ); }
+			$out['filed'] = $fy . ':' . $which;
+		}
+		$out['signer']   = self::signer();
+		$out['filings']  = self::filings();
+		return $out;
 	}
 
 	/**

@@ -173,6 +173,72 @@ function RecordCost({ onSaved }: { onSaved: () => void }) {
   );
 }
 
+
+/**
+ * Operator-only: the two things the ledger cannot know.
+ *
+ * The signing officer's name and position are facts about a person; a filing date is a fact about
+ * the world. The package prints blanks for the first until they are set, and the second is what
+ * fixes the year end and arms the T1044 ratchet — so both are recorded rather than remembered.
+ */
+function FilingSettings({ st, onSaved }: { st: Statements; onSaved: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [f, setF] = useState({ signer_last: "", signer_first: "", signer_role: "Director", signer_phone: "" });
+  const [fy, setFy] = useState(st.statements.fy.label);
+  const [form, setForm] = useState("t2");
+  const [on, setOn] = useState("");
+  const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((p) => ({ ...p, [k]: e.target.value }));
+
+  async function save(fields: Record<string, string>) {
+    setBusy(true); setMsg("");
+    try { await Books.settings(fields); setMsg("Saved."); onSaved(); }
+    catch (e) { setMsg(e instanceof Error ? e.message : "That could not be saved."); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <Card className="mt-3 p-5">
+      <p className="text-[15px] font-semibold text-ink">Filing details</p>
+      <p className="mt-1 max-w-[70ch] text-[13px] leading-relaxed text-ink-3">
+        Only the operator sees this. Everything else on the page comes from the ledger; these two do not.
+      </p>
+      <h3 className="mt-4 text-[13px] font-semibold uppercase tracking-wide text-ink-3">Signing officer</h3>
+      <div className="mt-2 grid gap-4 sm:grid-cols-2">
+        <Field label="Last name (line 950)"><Input value={f.signer_last} onChange={set("signer_last")} /></Field>
+        <Field label="First name (line 951)"><Input value={f.signer_first} onChange={set("signer_first")} /></Field>
+        <Field label="Position, office or rank (line 954)"><Input value={f.signer_role} onChange={set("signer_role")} /></Field>
+        <Field label="Telephone (line 956)"><Input value={f.signer_phone} onChange={set("signer_phone")} /></Field>
+      </div>
+      <div className="mt-3">
+        <Button onClick={() => save(f)} disabled={busy}>{busy ? "Saving…" : "Save signing officer"}</Button>
+      </div>
+
+      <h3 className="mt-6 text-[13px] font-semibold uppercase tracking-wide text-ink-3">Record a return as filed</h3>
+      <p className="mt-1 max-w-[70ch] text-[12.5px] leading-relaxed text-ink-3">
+        Recording a T2 fixes the fiscal year end permanently. Recording a T1044 arms a one-way ratchet:
+        CRA then requires one for every subsequent period, whatever the revenue. Only record what has
+        actually been filed.
+      </p>
+      <div className="mt-2 grid gap-4 sm:grid-cols-3">
+        <Field label="Period">
+          <Select value={fy} onChange={setFy} options={st.fiscal.years.map((y) => ({ value: y.label, label: y.label }))} />
+        </Field>
+        <Field label="Form">
+          <Select value={form} onChange={setForm} options={[{ value: "t2", label: "T2" }, { value: "t1044", label: "T1044" }]} />
+        </Field>
+        <Field label="Date filed" optional hint="Defaults to today"><Input value={on} onChange={(e) => setOn(e.target.value)} placeholder="2027-06-15" /></Field>
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <Button variant="outline" onClick={() => save({ filed_fy: fy, filed_form: form, filed_on: on })} disabled={busy}>
+          Record {form.toUpperCase()} for {fy} as filed
+        </Button>
+        {msg ? <span className="text-[13px] text-ink-2">{msg}</span> : null}
+      </div>
+    </Card>
+  );
+}
+
 type Reserve = Awaited<ReturnType<typeof Economy.reserve>>;
 
 export default function Finances() {
@@ -509,6 +575,39 @@ export default function Finances() {
               </ul>
               <p className="mt-3 max-w-[70ch] text-[12.5px] leading-relaxed text-ink-3">{cra.t1044.warning}</p>
             </Card>
+            {Object.keys(st.fiscal.filings).length > 0 ? (
+              <Card className="mt-3 p-5">
+                <p className="text-[14px] font-semibold text-ink">Filed</p>
+                <ul className="mt-2 grid gap-1 text-[13px] text-ink-2">
+                  {Object.entries(st.fiscal.filings).map(([period, v]) => (
+                    <li key={period} data-ay-skip="1">
+                      {period}: {v.t2 ? `T2 filed ${v.t2}` : "T2 not recorded"}{v.t1044 ? ` · T1044 filed ${v.t1044}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            ) : null}
+            {st.fiscal.archives.length > 0 ? (
+              <Card className="mt-3 p-5">
+                <p className="text-[14px] font-semibold text-ink">Frozen packages</p>
+                <p className="mt-1 max-w-[70ch] text-[12.5px] leading-relaxed text-ink-3">
+                  Generated automatically when a period closed and stored unchanged since, each with the
+                  SHA-256 of its bytes. These are the documents as they stood at filing time — the live
+                  download above reflects the ledger as it is now.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {st.fiscal.archives.map((a) => (
+                    <a key={a.id} href={a.url}
+                      className="group inline-flex items-baseline gap-2 rounded-card border border-line px-3 py-2 text-[12.5px] text-ink-2 transition-colors hover:border-yin-light hover:text-yin-light">
+                      <span data-ay-skip="1" className="font-medium">{a.name}</span>
+                      <span data-ay-skip="1" className="text-ink-3 group-hover:text-yin-light">{bytes(a.bytes)}</span>
+                      <span data-ay-skip="1" className="hidden font-mono text-[10px] text-ink-3 sm:inline">{a.sha256.slice(0, 12)}…</span>
+                    </a>
+                  ))}
+                </div>
+              </Card>
+            ) : null}
+            {operator ? <FilingSettings st={st} onSaved={() => setReload((n) => n + 1)} /> : null}
           </Section>
 
           <Section title="The same figures, in CRA's codes" note="What the return actually carries. Every code is the official one from Guide RC4088.">

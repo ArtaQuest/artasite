@@ -247,6 +247,7 @@ final class Rest {
 		[ 'GET',  'foundation/cra/pdf',            'Books::cra_pdf',     'public' ], // the same package as a printable, paper-filable PDF
 		[ 'GET',  'foundation/books/verify',       'Books::verify_rest', 'public' ], // the invariants, recomputed from the lines
 		[ 'POST', 'studio/books/invoice',          'Books::add_invoice', 'admin'  ], // operator: record a cost + its evidence
+		[ 'POST', 'studio/books/settings',         'Books::settings',    'admin'  ], // operator: signing officer + record a return as filed
 
 		// ── ArtaCredits: a donor pays a stranger's challenge entry fee (Credits) ──
 		// Every write here is reached from the captured-payment fulfilment or from ch_enter — there is
