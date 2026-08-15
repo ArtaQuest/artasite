@@ -143,7 +143,7 @@ class Mailer {
 			'label'    => 'Your booking is confirmed',
 			'audience' => 'member',
 			'subject'  => 'Booked: {{when_short}} with {{host}}',
-			'body'     => "That is arranged. It is an ordinary meeting now — in your calendar and in {{host}}'s.\n\nWhat: {{title}}\nWhen: {{when}}\nWith: {{host}}\n\nThe call happens on ArtaMeet, in your browser, and it is encrypted end to end — there is no bridge in the middle holding your video. Nobody has to write back to make this happen; the time is yours.\n\nIf you cannot make it, open the meeting and cancel — the hour goes straight back on offer for somebody else, and {{host}} is told.",
+			'body'     => "That is arranged. It is an ordinary meeting now — in your calendar and in {{host}}'s.\n\nWhat: {{title}}\nWhen: {{when}}\nWith: {{host}}\n\nThe call happens on ArtaMeet, in your browser, and it is encrypted end to end — there is no bridge in the middle holding your video. Nobody has to write back to make this happen; the time is yours.\n\nIf the time no longer works you have two ways out, both on the meeting page: ask {{host}} for a different time, or cancel — which puts the hour straight back on offer for somebody else. Either way {{host}} is told.",
 			'cta'      => [ 'Open the meeting', '{{meet_url}}' ],
 			'vars'     => [ 'title', 'host', 'when', 'when_short', 'meet_url' ],
 			'sample'   => [
@@ -159,6 +159,18 @@ class Mailer {
 			'cta'      => [ 'Open the meeting', '{{meet_url}}' ],
 			'vars'     => [ 'head', 'body', 'meet_url' ],
 			'sample'   => [ 'head' => 'Starting soon: A chat with Arash', 'body' => 'Starts in 30 minutes — Thu 20 Aug, 14:00 Europe/Istanbul (the meeting’s own timezone).', 'meet_url' => '/meet/1' ],
+		],
+		'meet_retime' => [
+			'label'   => 'Meeting — somebody asked to move it',
+			'subject' => '{{who}} asked to move {{title}}',
+			'vars'    => [ 'who', 'title', 'when', 'was', 'meet_url' ],
+			'sample'  => [ 'who' => 'Cara', 'title' => 'A chat with Arash', 'was' => 'Thursday 14 August at 2:00 pm',
+			               'when' => 'Friday 15 August at 4:00 pm', 'meet_url' => '/meet/12' ],
+			'cta'     => [ 'Answer them', '{{site_url}}{{meet_url}}' ],
+			'body'    => "{{who}} can't make {{title}} and has asked for a different time.\n\n"
+			           . "It is currently {{was}}.\nThey have suggested {{when}}.\n\n"
+			           . "Nothing has moved: the meeting keeps its time, and your calendar keeps its entry, until you say yes.\n\n"
+			           . "To stop these emails, turn off \"Email me about meetings\" on the Meet page.",
 		],
 		'meet_changed' => [
 			'label'    => 'A meeting was moved or called off',

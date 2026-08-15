@@ -952,6 +952,8 @@ final class Schema {
 				context_type VARCHAR(16) NOT NULL DEFAULT '',
 				context_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
 				ctx_key VARCHAR(64) NOT NULL DEFAULT '',
+				retime_ts INT UNSIGNED NOT NULL DEFAULT 0,
+				retime_by BIGINT UNSIGNED NOT NULL DEFAULT 0,
 				created INT UNSIGNED NOT NULL DEFAULT 0,
 				updated INT UNSIGNED NOT NULL DEFAULT 0,
 				PRIMARY KEY  (id),
@@ -1355,6 +1357,16 @@ final class Schema {
 		] as $col => $def ) {
 			if ( ! self::column_exists( "{$p}aq_courses", $col ) ) {
 				$wpdb->query( "ALTER TABLE {$p}aq_courses ADD COLUMN $def" );
+			}
+		}
+		// 1.70.0 — a proposed new time for a meeting, and who proposed it. One pending proposal per
+		// meeting is deliberate: two people trading times is a conversation, and they have one.
+		foreach ( [
+			'retime_ts' => 'retime_ts INT UNSIGNED NOT NULL DEFAULT 0',
+			'retime_by' => 'retime_by BIGINT UNSIGNED NOT NULL DEFAULT 0',
+		] as $col => $def ) {
+			if ( ! self::column_exists( "{$p}aq_meets", $col ) ) {
+				$wpdb->query( "ALTER TABLE {$p}aq_meets ADD COLUMN $def" );
 			}
 		}
 		// 1.30.0 — same SQLite-safe explicit adds for the comment columns (anchored replies + appeals).

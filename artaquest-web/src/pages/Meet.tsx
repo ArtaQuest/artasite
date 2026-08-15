@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ApiError,
   meetCalRotate, meetEmailPrefs, meetCancel, meetCreate, meetGet, meetInvite, meetList, meetLobby,
+  meetRetime, meetRetimeRespond,
   meetNow, meetOpen, meetRsvp, meetSeat, meetUninvite, meetUpdate, roomsCall,
   type Meet as MeetRow, type MeetCal, type MeetGuest, type MeetLobby, type MeetRsvp,
 } from "../lib/api";
@@ -1148,6 +1149,21 @@ function MeetingPage({ id }: { id: number }) {
   }, "Couldn’t move the meeting.");
 
   const [confirmDrop, setConfirmDrop] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
+  const [askAt, setAskAt] = useState("");
+  const doAsk = () => act(async () => {
+    const t = Math.round(new Date(askAt).getTime() / 1000);
+    if (!t) return;
+    const r = await meetRetime(id, t);
+    setMeet(r.meet); setAskOpen(false); setAskAt("");
+    tickNow.current();
+  }, "Couldn’t send that suggestion.");
+  const doAnswerAsk = (accept: boolean) => act(async () => {
+    const r = await meetRetimeRespond(id, accept);
+    setMeet(r.meet);
+    tickNow.current();
+  }, "Couldn’t answer that suggestion.");
+
   const doCancel = () => act(async () => {
     const r = await meetCancel(id);
     setMeet(r.meet);
@@ -1265,6 +1281,37 @@ function MeetingPage({ id }: { id: number }) {
                   filters on status, never on RSVP, so the slot stayed shut for everybody. Only shown
                   for a two-party booking, which is exactly what the server now permits; a booking the
                   owner has invited others into stays theirs to end. */}
+              {/* ASK FOR A DIFFERENT TIME. Before this a guest whose week had moved could only keep a
+                  slot they could not make or cancel it outright and start again — and on a booking
+                  that means giving the hour back to a stranger's queue. Asking is the middle one a
+                  person would actually take. It writes a PROPOSAL: the meeting keeps its time and
+                  its calendar entry until the host says yes. */}
+              {meet.status === "scheduled" && Number(meet.start_ts) > now && (
+                <div className="mt-3 border-t border-line pt-3">
+                  {Number(meet.retime_ts) > 0 ? (
+                    <p className="text-[12.5px] leading-relaxed text-ink-2">
+                      You asked for <span className="font-semibold text-ink" data-ay-skip="1">{longWhen(Number(meet.retime_ts), meet.tz)}</span>.
+                      {" "}Waiting for <span data-ay-skip="1">{guests.find((g) => g.id === Number(meet.host_id))?.name || "the host"}</span> to answer — until then it stays as it is.
+                    </p>
+                  ) : askOpen ? (
+                    <div className="flex flex-col gap-2">
+                      <label htmlFor="aq-ask-when" className="text-[12.5px] font-semibold text-ink">Suggest a time</label>
+                      <input id="aq-ask-when" type="datetime-local" value={askAt} onChange={(e) => setAskAt(e.target.value)}
+                        className="h-10 rounded-field border border-line bg-space-2 px-3 text-[14px] text-ink outline-none focus:border-yin-light" />
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" disabled={busy || !askAt} onClick={() => void doAsk()}
+                          className="h-9 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">Ask</button>
+                        <button type="button" onClick={() => { setAskOpen(false); setAskAt(""); }}
+                          className="h-9 rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2">Never mind</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => setAskOpen(true)}
+                      className="text-[12.5px] font-semibold text-ink-2 hover:text-ink">Ask for a different time</button>
+                  )}
+                </div>
+              )}
+
               {String(meet.context_type) === "book" && guests.length === 2
                 && meet.status === "scheduled" && Number(meet.start_ts) > now && (
                 <div className="mt-3 border-t border-line pt-3">
@@ -1287,6 +1334,28 @@ function MeetingPage({ id }: { id: number }) {
 
           <GuestList guests={guests} seats={Number(meet.seats) || 5} hostId={Number(meet.host_id)}
             isHost={isHost} bound={roomId > 0} busy={busy} onRemove={(uid) => void doUninvite(uid)} />
+
+          {/* A PROPOSAL IS A QUESTION, and it belongs where the host already looks. Accepting goes
+              through the ordinary retime — same seq bump, same guest emails, same calendar update —
+              so there is only ever one way a meeting moves. */}
+          {isHost && meet.status === "scheduled" && Number(meet.retime_ts) > 0 && (
+            <section className="rounded-card border border-yang/40 bg-yang/[0.07] p-4" aria-label="A suggested time">
+              <h2 className="text-[14px] font-semibold text-ink">
+                <span data-ay-skip="1">{guests.find((g) => g.id === Number(meet.retime_by))?.name || "A guest"}</span>
+                {" "}asked for a different time
+              </h2>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-ink-2">
+                They suggested <span className="font-semibold text-ink" data-ay-skip="1">{longWhen(Number(meet.retime_ts), meet.tz)}</span>.
+                {" "}It is <span data-ay-skip="1">{longWhen(meet.start_ts, meet.tz)}</span> now, and nothing moves until you decide.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" disabled={busy} onClick={() => void doAnswerAsk(true)}
+                  className="h-9 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">Move it</button>
+                <button type="button" disabled={busy} onClick={() => void doAnswerAsk(false)}
+                  className="h-9 rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 disabled:opacity-50">Keep the time</button>
+              </div>
+            </section>
+          )}
 
           {isHost && meet.status === "scheduled" && (
             <HostControls meet={meet} busy={busy}

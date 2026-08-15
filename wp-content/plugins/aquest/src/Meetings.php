@@ -134,6 +134,10 @@ final class Meetings {
 			'ctx_key'   => (string) $m['ctx_key'],
 			'created'   => (int) $m['created'],
 			'updated'   => (int) $m['updated'],
+			// A proposed new time, if somebody has asked for one. Both sides render from this: the
+			// person who asked sees "waiting", the host sees Accept / Decline.
+			'retime_ts' => (int) ( $m['retime_ts'] ?? 0 ),
+			'retime_by' => (int) ( $m['retime_by'] ?? 0 ),
 			'gcal_url'  => self::gcal_url( $m ),
 		];
 	}
@@ -589,6 +593,105 @@ final class Meetings {
 	}
 
 	/** POST meet/rsvp {id, reply} — yes | no | maybe, from anybody who was invited. */
+	/**
+	 * POST meet/retime {id, start} — a GUEST asks for a different time.
+	 *
+	 * WHY THIS EXISTS. Until now the only thing a guest could do about a time that no longer worked
+	 * was not turn up, or cancel it outright and lose the meeting. On a BOOKING that is worse than it
+	 * sounds: the owner published hours, a stranger took one, and if the stranger's week moved the
+	 * choice was "keep a slot I cannot make" or "give it back and start again". Asking is the missing
+	 * middle, and it is the one a person would actually take.
+	 *
+	 * A PROPOSAL IS NOT A CHANGE. It writes retime_ts and nothing else: the meeting keeps its time,
+	 * its seq and its calendar entry until the host says yes. Nothing subscribed to the .ics moves
+	 * because somebody asked. ONE pending proposal per meeting — two people trading times is a
+	 * conversation, and they already have one.
+	 */
+	public static function retime( $req ) {
+		if ( Rest::throttle( 'aq_meet_retime', 12, 300 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+		$mid = Rest::pint( $req, 'id', 0 );
+		$m   = $mid ? self::row( $mid ) : null;
+		if ( ! $m || ! self::guest_row( $mid, $uid ) ) { return Rest::err( 'not_found', 'No such meeting.', 404 ); }
+		if ( 'scheduled' !== (string) $m['status'] ) { return Rest::err( 'not_open', 'This meeting isn’t open to changes.', 409 ); }
+		if ( (int) $m['host_id'] === $uid ) {
+			// The host does not ask, they move it — anything else would be theatre.
+			return Rest::err( 'is_host', 'You can change the time yourself.', 400 );
+		}
+		$start = Rest::pint( $req, 'start', 0 );
+		$now   = time();
+		if ( $start < $now + 300 )      { return Rest::err( 'too_soon', 'Suggest a time at least five minutes out.', 400 ); }
+		if ( $start > $now + 31536000 ) { return Rest::err( 'too_far', 'Suggest a time within the next year.', 400 ); }
+		if ( $start === (int) $m['start_ts'] ) { return Rest::err( 'same_time', 'That is when it is already.', 400 ); }
+
+		Data::update( 'aq_meets', [ 'retime_ts' => $start, 'retime_by' => $uid, 'updated' => $now ], [ 'id' => $mid ] );
+		// Same sanitiser the letters use: a display name reaches a subject line here too.
+		$who = Mailer::safe_var( get_userdata( $uid )->display_name ?? 'A member', 40 );
+		$when = self::when_line( array_merge( $m, [ 'start_ts' => $start ] ), false );
+		Notify::push_mail(
+			(int) $m['host_id'], 'meeting',
+			$who . ' asked to move ' . $m['title'],
+			$when,
+			'/meet/' . $mid,
+			'mtretime' . $mid . '-' . $start,
+			'meet_retime',
+			[ 'who' => $who, 'title' => $m['title'], 'when' => $when,
+			  'was' => self::when_line( $m, false ), 'meet_url' => '/meet/' . $mid ]
+		);
+		return [ 'ok' => true, 'meet' => self::meet_payload( self::row( $mid ) ) ];
+	}
+
+	/**
+	 * POST meet/retime-respond {id, accept} — the HOST answers a proposal.
+	 *
+	 * Accepting goes through the ordinary retime path, so the seq bump, the guest emails and the
+	 * calendar update are the ones that already exist; there is no second way to move a meeting.
+	 */
+	public static function retime_respond( $req ) {
+		if ( Rest::throttle( 'aq_meet_edit', 30, 300 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+		$mid = Rest::pint( $req, 'id', 0 );
+		$m   = $mid ? self::row( $mid ) : null;
+		if ( ! $m || ! self::guest_row( $mid, $uid ) ) { return Rest::err( 'not_found', 'No such meeting.', 404 ); }
+		if ( (int) $m['host_id'] !== $uid ) { return Rest::err( 'not_host', 'Only the host can answer this.', 403 ); }
+		$want = (int) $m['retime_ts'];
+		if ( ! $want ) { return Rest::err( 'nothing_asked', 'Nobody has asked for a different time.', 409 ); }
+		$asker = (int) $m['retime_by'];
+		$accept = (bool) Rest::pint( $req, 'accept', 0 );
+
+		// Clear the proposal either way: it has been answered, and a stale one on the page is a
+		// question the host has already dealt with asking itself again.
+		Data::update( 'aq_meets', [ 'retime_ts' => 0, 'retime_by' => 0, 'updated' => time() ], [ 'id' => $mid ] );
+
+		if ( ! $accept ) {
+			Notify::push_mail(
+				$asker, 'meeting',
+				$m['title'] . ' is staying where it is',
+				self::when_line( $m, true ),
+				'/meet/' . $mid,
+				'mtretimeno' . $mid . '-' . $want,
+				'meet_changed',
+				[ 'head' => $m['title'] . ' is staying where it is',
+				  'when' => self::when_line( $m, true ), 'meet_url' => '/meet/' . $mid ]
+			);
+			return [ 'ok' => true, 'accepted' => false, 'meet' => self::meet_payload( self::row( $mid ) ) ];
+		}
+
+		$mins = max( 1, (int) round( ( (int) $m['end_ts'] - (int) $m['start_ts'] ) / 60 ) );
+		Data::update( 'aq_meets', [
+			'start_ts' => $want,
+			'end_ts'   => $want + ( $mins * 60 ),
+			'sort_key' => self::sort_key( $want, $mid ),
+			'seq'      => (int) $m['seq'] + 1,
+			'updated'  => time(),
+		], [ 'id' => $mid ] );
+		$after = self::row( $mid );
+		self::tell_guests( $after, 'changed', $after['title'] . ' was moved', 'no' );
+		return [ 'ok' => true, 'accepted' => true, 'meet' => self::meet_payload( $after ) ];
+	}
+
 	public static function rsvp( $req ) {
 		if ( Rest::throttle( 'aq_meet_rsvp', 30, 300 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$uid = Rest::uid();

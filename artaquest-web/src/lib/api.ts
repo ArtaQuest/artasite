@@ -2693,6 +2693,9 @@ export type Meet = {
   phase: MeetPhase;
   room_id: number; opened_ts: number; seq: number;
   context_type: string; context_id: number; ctx_key: string;
+  /** A time somebody has ASKED for. Zero when nobody has. The meeting keeps its own time
+   *  until the host accepts — a proposal is not a change. */
+  retime_ts?: number; retime_by?: number;
   created: number; updated: number;
   /** A one-click "add this to Google Calendar" TEMPLATE url, composed SERVER-side (the precedent is
    *  Extra::gcal_link for a grant deadline). The browser is deliberately not trusted to build it:
@@ -2790,6 +2793,16 @@ export function meetUpdate(b: {
 /** The row is kept, not deleted: a cancelled meeting has to go on saying it is cancelled to every
  *  calendar subscribed to it. */
 export function meetCancel(id: number) { return post<{ ok: boolean; meet: Meet; already?: boolean }>("/meet/cancel", { id }); }
+
+/** Ask the host for a different time. A GUEST only — the host just moves it. */
+export function meetRetime(id: number, start: number) {
+  return post<{ ok: boolean; meet: Meet }>("/meet/retime", { id, start: Math.round(start) });
+}
+/** The host's answer. Accepting goes through the ordinary retime, so the calendar and the emails
+ *  are the ones that already exist. */
+export function meetRetimeRespond(id: number, accept: boolean) {
+  return post<{ ok: boolean; accepted: boolean; meet: Meet }>("/meet/retime-respond", { id, accept: accept ? 1 : 0 });
+}
 export function meetInvite(id: number, user: string | number) {
   return post<{ ok: boolean; already?: boolean; user?: number }>("/meet/invite", { id, user });
 }

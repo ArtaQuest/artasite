@@ -569,6 +569,8 @@ final class Rest {
 		[ 'POST', 'meet/invite',                   'Meetings::invite',    'user' ], // host only
 		[ 'POST', 'meet/uninvite',                 'Meetings::uninvite',  'user' ], // host only
 		[ 'POST', 'meet/rsvp',                     'Meetings::rsvp',      'user' ], // guest: yes|no|maybe
+		[ 'POST', 'meet/retime',                   'Meetings::retime',    'user' ], // guest: ask for a different time (a proposal, not a change)
+		[ 'POST', 'meet/retime-respond',           'Meetings::retime_respond', 'user' ], // host: accept it (goes through the ordinary retime) or decline
 		[ 'GET',  'meet/lobby',                    'Meetings::lobby',     'user' ], // the join-window poll
 		[ 'POST', 'meet/open',                     'Meetings::open',      'user' ], // bind a room, atomically, once
 		[ 'POST', 'meet/seat',                     'Meetings::seat',      'user' ], // add me to the bound room
