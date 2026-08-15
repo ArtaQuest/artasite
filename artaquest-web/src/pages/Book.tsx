@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import {
   ApiError, bookPage, bookRuleOff, bookRules, bookSetRule, bookSlots, bookTake,
@@ -807,6 +807,28 @@ function VisitorPage({ handle }: { handle: string }) {
   const dayMap = useMemo(() => new Map(groups.map((g) => [g.key, g.starts])), [groups]);
   const monthsWithSlots = useMemo(() => new Set(groups.map((g) => monthOf(g.key))), [groups]);
 
+  /**
+   * How much room the times below the calendar hold OPEN — the phone reserve only; beside the
+   * calendar (`md:`) the column has its own height and needs none.
+   *
+   * It was a flat 236px, which is the right idea and the wrong number: the block must not collapse
+   * and shove the page around as you move between days, but 236px was chosen for a rule offering a
+   * dozen times, and the live rule offers five. Measured on the page: 104px of reserved nothing
+   * under the last time, on a 612px card.
+   *
+   * So reserve what the BUSIEST day actually needs, over every day in the horizon — not the day
+   * showing, or the reserve would itself be the thing that jumps. Constants are measured off the
+   * rendered page, not derived from the classes: chip 48px, row gap 8px, three columns, and 45px
+   * of rule, padding and heading above the first chip. A day with more times than the busiest
+   * simply grows past it; `min-height` reserves, it does not cap.
+   */
+  const timesFloor = useMemo(() => {
+    let most = 0;
+    for (const g of groups) most = Math.max(most, g.starts.length);
+    const rows = Math.max(1, Math.ceil(most / 3));
+    return 45 + rows * 48 + (rows - 1) * 8;
+  }, [groups]);
+
   // Pick the slot the sign-in trip was for, once, as soon as there is a grid to find it in.
   useEffect(() => {
     if (restored.current || !entry.t || !starts) return;
@@ -1350,7 +1372,11 @@ function VisitorPage({ handle }: { handle: string }) {
 
             </div>
 
-            <div ref={timesBox} className="mt-4 min-h-[236px] scroll-mt-topbar border-t border-line pt-4 md:mt-0 md:min-h-0 md:w-[210px] md:shrink-0 md:border-l md:border-t-0 md:ps-5 md:pt-0">
+            {/* The reserve arrives as a CUSTOM PROPERTY rather than an inline `minHeight`: inline
+                styles beat every class, so a computed height set that way would also apply beside
+                the calendar and defeat `md:min-h-0`. As a variable, the breakpoint still wins. */}
+            <div ref={timesBox} style={{ "--times-floor": `${timesFloor}px` } as CSSProperties}
+              className="mt-4 min-h-[var(--times-floor)] scroll-mt-topbar border-t border-line pt-4 md:mt-0 md:min-h-0 md:w-[210px] md:shrink-0 md:border-l md:border-t-0 md:ps-5 md:pt-0">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 ref={timesHead} tabIndex={-1} className="text-[14px] font-semibold text-ink outline-none">
                   {activeKey
