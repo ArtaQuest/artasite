@@ -945,15 +945,29 @@ function VisitorPage({ handle }: { handle: string }) {
   const bothZones = !!ownerTz && ownerTz !== displayTz;
   const me = currentUser();
 
-  /* ── the rail's zone card, and its phone twin ──
-     A visitor verifies a zone by RECOGNISING the clock in it, not by decoding an offset — so both
-     zones are shown running. Switching is a pure regroup of instants already in memory: instant,
-     offline-safe, and never a request. */
-  const zoneRow = (
-    <p className="flex items-center gap-2 text-[13px] font-semibold text-ink">
-      <span className="text-ink-3"><GlobeGlyph /></span>
-      <span className="min-w-0 break-words" data-ay-skip="1">{displayTz} · {clockOnly(now, displayTz)}</span>
-    </p>
+
+  /* THE CLOCK, STATED WHERE THE TIME IS CHOSEN.
+     Booking 2pm in the wrong zone is the one mistake this page can make that costs somebody a real
+     hour of their day, and the zone was a caption: a quiet rail card on a desktop and a small strip
+     at the top of a phone, both far from the row of times a visitor is actually reading. It sits
+     directly above the times now, centred, in reading weight rather than the muted tier, and it says
+     WHOSE clock it is — "your own" is the reassurance, "Arash's" is the warning. The offset is there
+     for anyone who thinks in offsets; the running clock is there because a person verifies a zone by
+     recognising the time in it, not by decoding GMT+3. */
+  const zoneBanner = (
+    <div data-zone-banner className="mb-3 rounded-card border border-yang/30 bg-yang/[0.07] px-3 py-2 text-center">
+      <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-[13.5px] font-semibold text-ink">
+        <span className="text-yang"><GlobeGlyph /></span>
+        <span>Times shown in</span>
+        <span data-ay-skip="1">{displayTz}</span>
+        <span className="font-normal text-ink-2" data-ay-skip="1">({zoneName(now, displayTz)} · {clockOnly(now, displayTz)} now)</span>
+      </p>
+      <p className="mt-0.5 text-[12.5px] text-ink-2">
+        {displayTz === VIEWER_TZ
+          ? "That is your own zone"
+          : <>That is <span data-ay-skip="1">{ownerName}</span>’s zone, not yours</>}
+      </p>
+    </div>
   );
 
   const zoneControls = (
@@ -1217,14 +1231,6 @@ function VisitorPage({ handle }: { handle: string }) {
         {zoneControls}
       </section>
 
-      {/* The zone stays legible while a long list scrolls — one compact strip, parked under the
-          60px topbar. Never truncated: a half-hidden zone name is the wrong-zone bug again. */}
-      {/* Full-bleed on the SHELL's own gutter token, never a guessed -mx-4: AppShell pads every route
-          with px-gutter (24px), so a hand-picked 16px leaves an 8px sliver of page down each edge and
-          misaligns this strip's contents with the cards above it. */}
-      <div className="sticky top-topbar z-10 -mx-gutter border-b border-line bg-space-1/85 px-gutter py-2 backdrop-blur md:hidden">
-        {zoneRow}
-      </div>
 
       {slotsFailed && (
         <ErrorNote>
@@ -1258,7 +1264,9 @@ function VisitorPage({ handle }: { handle: string }) {
             </p>
           )}
 
-          <section className="rounded-card border border-line bg-space-2 p-4 md:flex md:items-start md:gap-5 md:p-5" aria-label="Choose a day and a time">
+          <section className="rounded-card border border-line bg-space-2 p-4 md:p-5" aria-label="Choose a day and a time">
+            {zoneBanner}
+            <div className="md:flex md:items-start md:gap-5">
             <div className="md:min-w-0 md:flex-1">
             <div className="flex h-10 items-center justify-between">
               <h2 className="text-[18px] font-bold text-ink">
@@ -1367,6 +1375,7 @@ function VisitorPage({ handle }: { handle: string }) {
                 )}
               </div>
             </div>
+            </div>
           </section>
         </>
       )}
@@ -1417,19 +1426,12 @@ function VisitorPage({ handle }: { handle: string }) {
 
       <section className="hidden rounded-card border border-line bg-space-2 p-4 md:block" aria-label="Times are shown in">
         <h2 className="text-[14px] font-semibold text-ink">Times are shown in</h2>
-        <div className="mt-2">{zoneRow}</div>
         {bothZones && (
           <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-3">
             <span data-ay-skip="1">{ownerName}</span> is in <span data-ay-skip="1">{ownerTz}</span> —{" "}
             <span data-ay-skip="1">{clockOnly(now, ownerTz)}</span> there now
           </p>
         )}
-        <p className="mt-1.5 text-[12.5px] text-ink-3">
-          {displayTz === VIEWER_TZ
-            ? "Times below are in your own zone"
-            : <>Times below are in <span data-ay-skip="1">{ownerName}</span>’s zone</>}
-          {" · "}<span data-ay-skip="1">{zoneName(now, displayTz)}</span>
-        </p>
         {zoneControls}
       </section>
 
