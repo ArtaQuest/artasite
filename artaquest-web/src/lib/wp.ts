@@ -32,7 +32,24 @@ async function post<T>(path: string, body: Record<string, unknown>): Promise<T> 
   // Carry the HTTP status (mirrors ./api's ApiError) so callers can tell a paywall (402) — e.g. the
   // enrol entry fee a new member can't yet cover — apart from an auth/network/server failure. The
   // backend message is preserved, so existing `catch (e) { e.message }` consumers are unaffected.
-  if (!r.ok) throw new ApiError(path, r.status, (j as { message?: string })?.message);
+  if (!r.ok) {
+    // A STALE NONCE IS NOT A SERVER ERROR, AND IT MUST NOT READ LIKE ONE.
+    //
+    // NONCE is captured once when this module is imported and sent for the life of the tab, but
+    // WordPress REST nonces roll on the 12/24-hour tick. After that, rest_cookie_check_errors
+    // rejects the request before the route's permission callback ever runs, and the message the
+    // browser gets back is WordPress's own "Cookie check failed" — which names no cause and offers
+    // no way out. Pages surface it verbatim, so on /donate (which invites a long dwell: three
+    // decision steps, a live certificate preview and the whole books section) the one tap that
+    // moves money failed with a sentence about cookies. Say what actually happened instead.
+    const code = (j as { code?: string })?.code || "";
+    if ((r.status === 401 || r.status === 403) && /nonce|cookie/i.test(code + " " + ((j as { message?: string })?.message || ""))) {
+      // Deliberately generic: post() is shared by every page, and only some of them can promise that
+      // reloading keeps anything. A page that CAN (see Donate's stashIntent) says so itself.
+      throw new ApiError(path, r.status, "Your session has expired. Please reload the page and try again.");
+    }
+    throw new ApiError(path, r.status, (j as { message?: string })?.message);
+  }
   return j as T;
 }
 const AQ = "/aq/v1";
@@ -566,9 +583,14 @@ export async function getFoundationFinances(): Promise<FoundationFinances | null
     const total = (f.total_cents || 0) / 100;
     return {
       symbol: "$", currency: "CAD", fiat: "CAD",
+      // `donations_count` is the size of the last-25 `recent` WINDOW, spends included — it is not a
+      // gift count and never was, so it is capped at 25 by construction and counts money leaving as
+      // money arriving. No consumer may label it "gifts"; /reserve did, and that tile is gone.
       donations_fiat: total, donations_count: (f.recent || []).length,
+      // `?? 1` claimed a perfect backing ratio whenever the server omitted one. A ratio is a
+      // published financial figure: absent means 0 known backing, never "fully backed".
       fund_issued: 0, fund_balance: total,
-      coin_supply: r.issued_coins ?? 0, reserve_mg: r.backing_mg ?? 0, backing_ratio: r.ratio ?? 1,
+      coin_supply: r.issued_coins ?? 0, reserve_mg: r.backing_mg ?? 0, backing_ratio: r.ratio ?? 0,
       ledger: (f.recent || []).map((rr, i) => ({ id: i, scope: rr.bucket, direction: "in", coins: rr.cents / 100, reason: rr.note || rr.bucket, date: rr.at })),
       earmarks: (f.earmarks || []).map((e) => ({ bucket: e.bucket, kind: (e.kind as "grp" | "cty" | "typ"), key: e.key, label: e.label, dollars: e.cents / 100 })),
     };
@@ -1121,6 +1143,15 @@ export type Reserve = {
   spot: number; buy: number; sell: number; updated: number; history: ReservePoint[];
   payments: boolean; // Stripe configured → buying coins is live; the Wallet gates the Buy form on this
   cashout: boolean; // false until a real fiat payout rail exists — the Wallet gates cash-out on this
+  // THE HONEST HALF. /reserve has published these since 2026-08-11 and this mapper dropped all four,
+  // so the two oldest money pages could only ever render the flattering version of the story: coin
+  // issued to settle a director's advance is backed by NOTHING, because that cash went to a supplier
+  // instead of into the vault. `backed` is the server's own verdict — never re-derive it from a ratio
+  // here, and never substitute a default for it.
+  backed: boolean;
+  shortfall_mg: number;            // issued coins that no gold stands behind
+  authorised_shortfall_mg: number; // …of which this much is the disclosed, board-authorised tranche
+  shortfall_note: string;          // the server's plain-English explanation; render it verbatim
 };
 
 // ── Wallet (the signed-in user's balances + recent ledger activity) ──────────
@@ -1134,10 +1165,19 @@ export async function getWallet(): Promise<WalletData | null> {
 }
 export async function getReserve(): Promise<Reserve | null> {
   try {
-    const r = await get<{ issued_coins: number; backing_mg: number; ratio: number; fiat?: string; spot?: number; buy?: number; sell?: number; spread?: number; gold_oz_usd?: number; updated?: number; payments?: boolean; cashout?: boolean; history?: ReservePoint[] }>(`${AQ}/reserve`);
+    const r = await get<{ issued_coins: number; backing_mg: number; ratio: number; backed?: boolean; shortfall_mg?: number; authorised_shortfall_mg?: number; shortfall_note?: string; fiat?: string; spot?: number; buy?: number; sell?: number; spread?: number; gold_oz_usd?: number; updated?: number; payments?: boolean; cashout?: boolean; history?: ReservePoint[] }>(`${AQ}/reserve`);
     return {
       symbol: "₳", code: "ARTA", name: "Arta Coin", peg: "1 ₳ = 1 mg gold",
-      supply: r.issued_coins, reserve_mg: r.backing_mg, backing_ratio: r.ratio, fully_backed: r.ratio >= 1,
+      // `?? 0`, NEVER `|| 0` and never a default of 1: a ratio of 0 is a REAL, publishable answer, and
+      // the falsy-coalesce that used to sit downstream of this turned it into a perfect 100%.
+      supply: r.issued_coins, reserve_mg: r.backing_mg, backing_ratio: r.ratio ?? 0,
+      // Trust the server's verdict; `ratio >= 1` was a local re-derivation that disagreed with it the
+      // moment the server learned about an authorised shortfall.
+      fully_backed: r.backed ?? (r.ratio ?? 0) >= 1,
+      backed: r.backed ?? (r.ratio ?? 0) >= 1,
+      shortfall_mg: r.shortfall_mg ?? 0,
+      authorised_shortfall_mg: r.authorised_shortfall_mg ?? 0,
+      shortfall_note: r.shortfall_note ?? "",
       // Fiat worth of the gold held = milligrams reserved × the per-mg spot price (1 coin = 1 mg), so
       // the Reserve page's "Reserve value" reflects the vault instead of a hardcoded 0.
       reserve_value: r.backing_mg * (r.spot ?? 0), gold_oz_usd: r.gold_oz_usd ?? 0, fiat: r.fiat || "CAD", spread: r.spread ?? 0, spread_total: (r.spread ?? 0) * 2,

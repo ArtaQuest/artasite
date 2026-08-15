@@ -196,8 +196,19 @@ final class Narrate {
 		if ( ! $segs ) { return Rest::err( 'empty', 'There is nothing to narrate in this work' ); }
 		$words = self::count_words( implode( ' ', $segs ) );
 		$cost  = self::cost_for_words( $words );
+		// Friendly pre-check keeps the exact figure; the authoritative one is inside Economy::spend.
 		$bal   = Economy::coin_balance( $uid );
 		if ( $bal < $cost ) { return Rest::err( 'insufficient', 'Narrating this ' . number_format( $words ) . '-word work costs ₳' . $cost . ' — you have ₳' . $bal . '.', 402 ); }
+		// THE LEDGER REF MUST STAY 'narration:<row id>'. Narrate::refund() — the compensating credit on
+		// a translation timeout or an empty-audio failure — looks the charge up by exactly that string,
+		// so a ref computed from the natural key (target + voice) makes every refund a silent no-op:
+		// the member keeps a failed narration, loses the coins and is never notified. The points award
+		// in complete() reads the same ref and would likewise collapse to the minimum.
+		//
+		// So the row is inserted FIRST, purely to mint its id, and the charge follows under the wallet
+		// lock. That is not the old grant-then-charge ordering it replaced: nothing has been delivered
+		// at this point — the row is only a queue slot — and a charge that cannot be taken deletes it
+		// before the relay can claim it.
 		$now = Data::now();
 		$id  = Data::insert( 'aq_narrations', [
 			'author_id'   => $uid,
@@ -211,7 +222,12 @@ final class Narrate {
 			'updated'     => $now,
 		] );
 		if ( ! $id ) { return Rest::err( 'failed', 'Could not start the narration', 500 ); }
-		Economy::credit_coins( $uid, -$cost, 'narrate', 'narration:' . $id ); // charge by length, once, on publish
+		$paid = Economy::spend( $uid, $cost, 'narrate', 'narration:' . (int) $id );
+		if ( $paid !== '' ) {
+			global $wpdb;
+			$wpdb->delete( Data::t( 'aq_narrations' ), [ 'id' => (int) $id ] ); // unpaid → never queued
+			return Economy::spend_error( $paid, $cost, 'Narrating this work' );
+		}
 		return self::detail_row( self::row( $id ) );
 	}
 

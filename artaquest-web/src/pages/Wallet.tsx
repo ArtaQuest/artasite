@@ -38,6 +38,10 @@ function BuyPanel({ opts, buyPrice, fiat, payments, onCredited }: { opts: Donate
 
   const cad = Math.max(0, parseFloat(amount) || 0);
   const estCoins = buyPrice > 0 ? Math.floor(cad / buyPrice) : 0;
+  // WHAT STRIPE WILL ACTUALLY CHARGE. Economy::buy floors the coin count and then bills
+  // `round($coins * $p['buy'], 2)` — never the typed amount — so the button used to quote a price
+  // the checkout page then contradicted. Quote the server's own figure and nothing else.
+  const charge = buyPrice > 0 ? Math.round(estCoins * buyPrice * 100) / 100 : cad;
   // No inbound payment rail (Stripe not configured) → don't show a form the backend will refuse; coins
   // are minted ONLY against a captured payment, never for free.
   const noRails = !payments || (!!opts && opts.gateways.length === 0);
@@ -84,14 +88,14 @@ function BuyPanel({ opts, buyPrice, fiat, payments, onCredited }: { opts: Donate
             <Input value={amount} onChange={(e) => setAmount(sanitizeDecimal(e.target.value))} inputMode="decimal" className="bg-space-1 px-3.5" />
           </Field>
           {buyPrice > 0
-            ? <p className="-mt-1 text-[13px] text-ink-3">≈ <span className="font-semibold text-yang"><Coins n={estCoins} /></span> at today’s price. You receive whole coins; any remainder stays as a small unspent balance.</p>
+            ? <p className="-mt-1 text-[13px] text-ink-3"><span className="font-semibold text-yang"><Coins n={estCoins} /></span> at today’s price, charged at {formatFiat(charge, fiat)}. Coins are whole, so we round down and only charge for the coins you receive.</p>
             : <p className="-mt-1 text-[13px] text-ink-3">Your coins are calculated at today’s gold price when the payment is confirmed.</p>}
           <Field label={<>Email <span className="font-normal text-ink-3">— for your receipt (optional; we’ll use your account email)</span></>}>
             <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" placeholder="you@example.com" className="bg-space-1 px-3.5" />
           </Field>
           <GatewayPicker gateways={opts?.gateways || []} value={gateway} onChange={setPicked} descriptions={GATEWAY_DESC} labelId="aq-buy-method-label" />
           {err && <ErrorNote>{err}</ErrorNote>}
-          <Button type="submit" disabled={busy || cad < 1} className="h-12 w-full text-[16px] disabled:opacity-50">{busy ? "Processing…" : <>Buy {estCoins > 0 ? <Coins n={estCoins} /> : "coins"} — {formatFiat(cad, fiat)}</>}</Button>
+          <Button type="submit" disabled={busy || cad < 1 || estCoins < 1} className="h-12 w-full text-[16px] disabled:opacity-50">{busy ? "Processing…" : <>Buy {estCoins > 0 ? <Coins n={estCoins} /> : "coins"} — {formatFiat(charge, fiat)}</>}</Button>
         </>
       )}
     </Card>
@@ -142,7 +146,8 @@ function SellPanel({ balance, sellPrice, fiat, cashout, onSold }: { balance: num
   }
 
   // Cash-out is disabled until a real fiat payout rail exists (reserve.cashout). Show a calm, honest
-  // "coming soon" rather than a form the backend would reject — coins stay fully gold-backed.
+  // "coming soon" rather than a form the backend would reject. (This used to add "coins stay fully
+  // gold-backed"; they do not — /reserve publishes the live ratio and it is currently 0.)
   if (!cashout) {
     return (
       <Card className="flex flex-col gap-4 p-6">
@@ -150,7 +155,7 @@ function SellPanel({ balance, sellPrice, fiat, cashout, onSold }: { balance: num
           <h3 className="text-[18px] font-bold tracking-tight">Cash out</h3>
           <p className="mt-1 text-[13px] text-ink-3">Redeem coins for cash at the published sell price.</p>
         </div>
-        <p className="rounded-field border border-line bg-space-1 px-4 py-3 text-[14px] text-ink-2">Cash-out is coming soon. Your coins are fully gold-backed and safe — spend or hold them now, and you’ll be able to redeem for cash the moment cash-out launches.</p>
+        <p className="rounded-field border border-line bg-space-1 px-4 py-3 text-[14px] text-ink-2">Cash-out is coming soon — spend or hold your coins now, and you’ll be able to redeem for cash the moment it launches. How much gold currently stands behind the coin is published live on <a href="/reserve/" className="font-semibold text-yang hover:underline">the reserve page</a>.</p>
       </Card>
     );
   }
@@ -285,7 +290,7 @@ export default function Wallet() {
           <div>
             <p className="text-[13px] font-semibold uppercase tracking-[0.18em] text-ink-3">Your wallet</p>
             <div className="mt-2 text-[clamp(2.4rem,6vw,3.2rem)] font-extrabold leading-none text-yang tabular-nums">{balance == null && !dash ? "—" : <Coins n={bal} />}</div>
-            <p className="mt-2 text-[14px] text-ink-2">Arta Coins · gold-backed.{reserve ? <> Cash-out value ≈ <span className="font-semibold text-ink">{formatFiat(bal * reserve.sell, fiat)}</span>.</> : failed ? <> Live cash-out value is temporarily unavailable.</> : null}</p>
+            <p className="mt-2 text-[14px] text-ink-2">Arta Coins · <a href="/reserve/" className="hover:text-yin-light hover:underline">{reserve ? `${Math.round((Number(reserve.backing_ratio) || 0) * 100)}% gold-backed` : "gold-backed"}</a>.{reserve ? <> Cash-out value ≈ <span className="font-semibold text-ink">{formatFiat(bal * reserve.sell, fiat)}</span>.</> : failed ? <> Live cash-out value is temporarily unavailable.</> : null}</p>
             <a href={localePath("/reserve/")} className="mt-3 inline-block text-[14px] font-semibold text-yang hover:underline">See the reserve →</a>
           </div>
           <CoinDisc size={132} className="hidden shrink-0 sm:block" />

@@ -489,13 +489,26 @@ final class Books {
 	 * a donation is never blocked by bookkeeping. It is not best-effort about correctness — an
 	 * unbalanced mirror is refused by journal() like any other entry.
 	 */
-	public static function mirror_fund( $fund_id, $bucket, $cents, $note = '' ) {
+	public static function mirror_fund( $fund_id, $bucket, $cents, $note = '', $kind = '' ) {
 		$fund_id = (int) $fund_id;
 		$cents   = (int) $cents;
 		if ( $fund_id < 1 || 0 === $cents ) { return 0; }
 		if ( get_option( 'aq_books_table_version' ) !== self::TABLE_VERSION ) { return 0; }
 		$memo = substr( sanitize_text_field( (string) ( $note ?: $bucket ) ), 0, 191 );
 		$date = self::today();
+		// A TRANSFER BETWEEN BUCKETS IS NOT AN ECONOMIC EVENT. A fund bucket is an earmark, not a GL
+		// account: money moving from one to another has not been received and has not been spent, and
+		// the cash balance is unchanged. Booking each half by its sign posted a matching fake expense
+		// and fake gift, which balanced perfectly and inflated both totals.
+		if ( 'transfer' === $kind ) { return 0; }
+		// A REFUND is revenue coming back, not a grant being paid: it reverses the gift entry rather
+		// than recording money spent on someone. Same cash credit, different debit.
+		if ( 'refund' === $kind && $cents < 0 ) {
+			return self::journal( 'fund:' . $fund_id, $date, $memo, [
+				[ 'account' => 'donations', 'debit'  => -$cents, 'memo' => $memo ],
+				[ 'account' => 'cash',      'credit' => -$cents, 'memo' => 'Refunded from ' . $bucket ],
+			], 'donation', 0 );
+		}
 		if ( $cents > 0 ) {
 			return self::journal( 'fund:' . $fund_id, $date, $memo, [
 				[ 'account' => 'cash',      'debit'  => $cents, 'memo' => 'Received into ' . $bucket ],
@@ -903,6 +916,43 @@ final class Books {
 		$checks[] = [ 'check' => 'no_orphan_lines', 'ok' => 0 === $orphan,
 			'detail' => $orphan ? $orphan . ' line(s) with no entry' : 'every line belongs to an entry' ];
 
+		// THE CHECK THAT TIES THE FUND LEDGER TO THE BOOKS.
+		//
+		// Every invariant above this line is internal to the general ledger: it can prove the ledger is
+		// self-consistent, and nothing more. All eight stayed green through two real defects. A refund
+		// wrote aq_fund_ledger directly and never mirrored, so the published income statement kept the
+		// gift as revenue and as cash after the money had gone back. And a pure bucket transfer was
+		// mirrored as a matching fake expense and fake gift, which balanced perfectly while overstating
+		// both totals. A ledger that only checks itself cannot see either.
+		//
+		// So: every cent in the fund ledger must be answered by a journal entry keyed on its row id.
+		// A bypass shows up as a missing entry; the transfer rows are legitimately absent, so they are
+		// excluded by the same 'transfer' movement kind that keeps them out of the books.
+		// Joined in PHP, not in SQL: the natural form needs CONCAT('fund:', f.id) in an ON clause, and
+		// this plugin also runs on Studio's SQLite emulation where that is not dependable. Two bounded
+		// reads and an array_diff say the same thing on both engines. The 'rename:'/'widen:' refs are
+		// the zero-sum bucket transfers, which are correctly absent from the books.
+		$fund_rows = Data::all(
+			'SELECT id, bucket FROM ' . Data::t( 'aq_fund_ledger' )
+			. " WHERE ref NOT LIKE 'rename:%' AND ref NOT LIKE 'widen:%' ORDER BY id DESC LIMIT 500" );
+		$unmirrored = [];
+		if ( $fund_rows ) {
+			$ids  = array_map( static fn( $r ) => (int) $r['id'], $fund_rows );
+			$refs = array_map( static fn( $i ) => 'fund:' . $i, $ids );
+			$in   = implode( ',', array_fill( 0, count( $refs ), '%s' ) );
+			$seen = [];
+			foreach ( Data::all( 'SELECT ref FROM ' . Data::t( 'aq_books_entry' ) . " WHERE ref IN ($in)", $refs ) as $e ) {
+				$seen[ (string) $e['ref'] ] = true;
+			}
+			foreach ( $fund_rows as $r ) {
+				if ( ! isset( $seen[ 'fund:' . (int) $r['id'] ] ) ) { $unmirrored[] = '#' . (int) $r['id'] . ' ' . $r['bucket']; }
+			}
+		}
+		$checks[] = [ 'check' => 'fund_ledger_mirrored', 'ok' => ! $unmirrored,
+			'detail' => $unmirrored
+				? count( $unmirrored ) . ' fund row(s) with no journal entry: ' . implode( ', ', array_slice( $unmirrored, 0, 6 ) )
+				: 'every fund-ledger movement is mirrored into the books (last 500)' ];
+
 		return $checks;
 	}
 
@@ -1170,8 +1220,24 @@ final class Books {
 		$total  = (int) round( (float) Rest::p( $req, 'total', 0 ) * 100 );
 		$tax    = (int) round( (float) Rest::p( $req, 'tax', 0 ) * 100 );
 		$payer  = (int) Rest::pint( $req, 'payer_uid', 0 );
+		// IS THIS AN IMPORTED SERVICE? The Foundation is not a GST/HST registrant, so a non-resident
+		// supplier's 0% "reverse charge" against a bare BN does NOT extinguish the tax — it makes the
+		// Foundation liable to self-assess it. filing_notes publishes to every reader that this is
+		// accrued at 5% as a matter of policy, and the T2 package reports gst_payable straight off the
+		// ledger, so an invoice recorded without its GST leg understates a real CRA liability on a
+		// published return. Only the three hard-coded founding costs ever got one.
+		//
+		// Deliberately NOT defaulted. Guessing from the currency would be wrong in both directions (a
+		// non-resident can invoice in CAD; a Canadian supplier can invoice in USD), and this is a tax
+		// position, so the operator answers it. `imported` accepts 1/0/true/false and nothing else.
+		$imported_raw = Rest::p( $req, 'imported_service', null );
 
 		if ( '' === $vendor || '' === $number ) { return Rest::err( 'bad_input', 'A vendor and an invoice number are required.' ); }
+		if ( null === $imported_raw || '' === $imported_raw ) {
+			return Rest::err( 'bad_input', 'Say whether this is a service bought from a NON-RESIDENT supplier (imported_service: true/false). '
+				. 'If it is, the Foundation must self-assess ' . self::GST_RATE_PCT . '% GST on it — the supplier charging 0% does not settle it.' );
+		}
+		$imported = filter_var( $imported_raw, FILTER_VALIDATE_BOOLEAN );
 		if ( '' === $paid )   { return Rest::err( 'bad_input', 'A payment date is required (YYYY-MM-DD).' ); }
 		if ( $total <= 0 )    { return Rest::err( 'bad_input', 'The invoice total must be positive.' ); }
 		if ( ! isset( self::ACCOUNTS[ $acct ] ) || 'expense' !== self::ACCOUNTS[ $acct ][1] ) {
@@ -1243,6 +1309,20 @@ final class Books {
 			$wpdb->delete( Data::t( 'aq_books_invoice' ), [ 'id' => $id ] );
 			error_log( 'AQ Books: add_invoice rolled back ' . $number . ' — the journal refused the entry' );
 			return Rest::err( 'not_posted', 'That cost could not be posted to the ledger — check the date is inside an open fiscal period.', 409 );
+		}
+
+		// The self-assessed tax is its OWN entry, ref 'gst:<number>', source 'tax' — exactly the shape
+		// accrue_founding_gst posts, so the invoices_tie_to_expenses invariant (which compares the
+		// register against invoice-SOURCED entries) is unaffected by it. It is not recoverable without
+		// a registration, so it debits the expense rather than a receivable.
+		if ( $imported ) {
+			$gst = (int) round( $cad * self::GST_RATE_PCT / 100 );
+			if ( $gst > 0 ) {
+				self::journal( 'gst:' . $number, $paid, 'Self-assessed GST — ' . $vendor . ' ' . $number, [
+					[ 'account' => $acct,         'debit'  => $gst, 'memo' => self::GST_RATE_PCT . '% of ' . self::cad( $cad ) . ' — not recoverable without a registration' ],
+					[ 'account' => 'gst_payable', 'credit' => $gst, 'memo' => 'Owed to CRA on form GST59 · ' . self::GST_JURISDICTION ],
+				], 'tax', $id );
+			}
 		}
 		Data::update( 'aq_books_invoice', [ 'entry_id' => $eid ], [ 'id' => $id ] );
 

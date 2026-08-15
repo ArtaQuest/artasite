@@ -4,6 +4,11 @@ import { getCreatorStatus } from "../lib/wp";
 import { isLoggedIn } from "../lib/auth";
 import { Button, Card, Field, Input, Select } from "../components/ui";
 
+/* Mirrors Books::GST_RATE_PCT. Copy rather than a fetched value on purpose: it labels a control the
+   operator reads BEFORE submitting, and the server is the one that actually computes and posts the
+   tax, so a stale copy here can misdescribe a rate but can never produce a wrong entry. */
+const GST_PCT = 5;
+
 /* Money on a financial statement always carries both decimal places, including on a round number —
    "CA$840" in a column of cents reads as a rounded figure rather than an exact one. */
 const money = (cents: number, cur = "CAD") => {
@@ -96,18 +101,22 @@ function RecordCost({ onSaved }: { onSaved: () => void }) {
   const [f, setF] = useState({
     vendor: "", number: "", description: "", paid: "", issued: "",
     period_start: "", period_end: "", currency: "CAD", total: "", tax: "",
-    account: "software", pay_method: "", note: "", payer_uid: "",
+    account: "software", pay_method: "", note: "", payer_uid: "", imported_service: "",
   });
   const [invoicePdf, setInvoicePdf] = useState<File | null>(null);
   const [receiptPdf, setReceiptPdf] = useState<File | null>(null);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((p) => ({ ...p, [k]: e.target.value }));
 
   async function submit() {
+    if (f.imported_service !== "true" && f.imported_service !== "false") {
+      setMsg("Say whether the supplier is non-resident — it decides whether GST is self-assessed on this cost.");
+      return;
+    }
     setBusy(true); setMsg("");
     try {
       const r = await Books.addInvoice(f as unknown as Record<string, string>, invoicePdf || undefined, receiptPdf || undefined);
       setMsg(`Recorded — CA$${(r.cad_cents / 100).toFixed(2)}, ${r.documents} document(s) attached.`);
-      setF({ vendor: "", number: "", description: "", paid: "", issued: "", period_start: "", period_end: "", currency: "CAD", total: "", tax: "", account: "software", pay_method: "", note: "", payer_uid: "" });
+      setF({ vendor: "", number: "", description: "", paid: "", issued: "", period_start: "", period_end: "", currency: "CAD", total: "", tax: "", account: "software", pay_method: "", note: "", payer_uid: "", imported_service: "" });
       setInvoicePdf(null); setReceiptPdf(null);
       onSaved();
     } catch (e) {
@@ -148,6 +157,20 @@ function RecordCost({ onSaved }: { onSaved: () => void }) {
         </Field>
         <Field label="Total" required hint="As billed, in the invoice's own currency"><Input value={f.total} onChange={set("total")} placeholder="280.00" /></Field>
         <Field label="Tax included in the total" optional><Input value={f.tax} onChange={set("tax")} placeholder="0.00" /></Field>
+        {/* A tax POSITION, so it is asked rather than guessed. Inferring it from the currency is wrong
+            both ways round — a non-resident can invoice in CAD, a Canadian supplier can invoice in USD.
+            The server refuses the invoice until this is answered, because the Foundation is not a
+            GST/HST registrant: a non-resident charging 0% does not settle the tax, it makes the
+            Foundation liable to self-assess it, and /finances publishes that this is accrued. */}
+        <Field label="Supplier is non-resident" required
+          hint={`An imported service self-assesses ${GST_PCT}% GST, posted as its own entry. The supplier charging 0% does not settle it.`}>
+          <Select value={f.imported_service} onChange={(v) => setF((p) => ({ ...p, imported_service: v }))}
+            options={[
+              { value: "", label: "Choose…" },
+              { value: "false", label: "No — Canadian supplier" },
+              { value: "true", label: "Yes — imported service, self-assess GST" },
+            ]} />
+        </Field>
         <Field label="Payment method" optional><Input value={f.pay_method} onChange={set("pay_method")} placeholder="Visa ending 2178" /></Field>
         <Field label="Paid personally by (user id)" optional hint="Leave empty if the Foundation paid it directly">
           <Input value={f.payer_uid} onChange={set("payer_uid")} placeholder="138324856" />

@@ -47,7 +47,11 @@ final class Watchdog {
 	const CRITICAL_OPTIONS = [ 'siteurl', 'home', 'admin_email', 'users_can_register', 'default_role', 'template', 'stylesheet', 'active_plugins' ];
 
 	/** Append-only ledgers → the column whose prefix-SUM must never change. */
-	const LEDGERS = [ 'aq_coin_ledger' => 'delta', 'aq_points_ledger' => 'delta', 'aq_fund_ledger' => 'cents' ];
+	// aq_books_line belongs here for the same reason the three ledgers do: Books::journal() only ever
+	// APPENDS entries and their lines, and refuses an unbalanced one, so a prefix-SUM over `debit` that
+	// moves means existing rows were rewritten — i.e. the published statements were edited underneath
+	// the ledger they claim to be computed from.
+	const LEDGERS = [ 'aq_coin_ledger' => 'delta', 'aq_points_ledger' => 'delta', 'aq_fund_ledger' => 'cents', 'aq_books_line' => 'debit' ];
 
 	const THROTTLE = 6 * HOUR_IN_SECONDS; // min interval between identical alert emails
 

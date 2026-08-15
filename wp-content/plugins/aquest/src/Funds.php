@@ -25,6 +25,16 @@ final class Funds {
 		'indigenous'     => 'Indigenous communities',
 	];
 
+	/** Is this a real, active topic? The allow-list behind a `typ_` sponsorship earmark — the same
+	 *  table sponsor_topic resolves the live course from, so a key that passes here can actually be
+	 *  honoured rather than becoming a bucket that names nothing. */
+	private static function topic_exists( $key ) {
+		return (bool) Data::col(
+			'SELECT 1 FROM ' . Data::t( 'aq_topics' ) . ' WHERE topic_key = %s AND active = 1 LIMIT 1',
+			[ (string) $key ]
+		);
+	}
+
 	/** A readable label for an earmark bucket key: grp_<group> · cty_<iso> · typ_<system>_<type>. */
 	private static function earmark_label( $kind, $key ) {
 		if ( $kind === 'grp' ) { return self::GROUPS[ $key ] ?? ucwords( str_replace( [ '_', '-' ], ' ', $key ) ); }
@@ -44,7 +54,7 @@ final class Funds {
 	/** The ONE choke point that appends to the fund ledger: writes the row and bumps the bucket's
 	 *  counter projection in lockstep. $bucket is clamped to the column width first, so the stored
 	 *  row and the counter key can never diverge on an over-long earmark key. Returns the row id. */
-	private static function fund_append( $bucket, $cents, $ref, $note ) {
+	private static function fund_append( $bucket, $cents, $ref, $note, $kind = '' ) {
 		$bucket = substr( (string) $bucket, 0, 24 );
 		$id = Data::insert( 'aq_fund_ledger', [
 			'bucket'  => $bucket,
@@ -65,8 +75,80 @@ final class Funds {
 		// twice. Without it the general ledger has no revenue writer at all and the published
 		// statement would report nil income forever while donations piled up in the bucket counters.
 		// Guarded by class_exists so Funds never hard-depends on Books.
-		if ( class_exists( '\\AQ\\Books' ) ) { Books::mirror_fund( $id, $bucket, (int) $cents, (string) $note ); }
+		// $kind tells the books what ECONOMIC EVENT this row is. Without it mirror_fund could only read
+		// the sign, and a pure bucket transfer — which this ledger deliberately expresses as a zero-sum
+		// PAIR of signed appends — was mirrored as a real expense plus a real gift of the same size.
+		// Cash netted to zero and every invariant stayed green while revenue and expenses were each
+		// overstated on the published income statement and on CRA Schedule 125.
+		if ( class_exists( '\\AQ\\Books' ) ) { Books::mirror_fund( $id, $bucket, (int) $cents, (string) $note, (string) $kind ); }
 		return $id;
+	}
+
+	/**
+	 * REVERSE A GIFT whose money went back (a Stripe refund or a lost dispute), through the one door.
+	 *
+	 * This lived in Extra::reverse_fund_gift, which wrote aq_fund_ledger with a bare Data::insert and
+	 * bumped the counter itself — the only other writer of that table in the plugin. Its own comment
+	 * said so and deferred the fix to "the next time that file is open". The consequence was not
+	 * cosmetic: fund_append is the sole caller of Books::mirror_fund, so a refund lowered the bucket
+	 * counters and the public /foundation/finances total while the double-entry books kept the whole
+	 * original gift as revenue and as cash, forever. /foundation/books/verify stayed green throughout,
+	 * because not one of its invariants tied the fund ledger to the general ledger.
+	 *
+	 * $frac reverses a partial refund proportionally. `$already` lets the caller reverse only the part
+	 * a previous refund did not, so several refunds on one charge each do their share exactly once.
+	 * Returns [ cents reversed, buckets touched, [ fund_row_id => cents ] ].
+	 */
+	public static function reverse_gift( $ref, $rev, $frac, $note, $already = 0 ) {
+		$ref  = (string) $ref;
+		$rev  = (string) $rev;
+		$frac = max( 0.0, min( 1.0, (float) $frac ) );
+		// Only the POSITIVE rows: a sponsorship also writes a negative row of its own (the CAD it spent
+		// on a prize pool), and mirroring that would hand the fund money back that it never had.
+		$rows = Data::all(
+			'SELECT id, bucket, cents FROM ' . Data::t( 'aq_fund_ledger' ) . ' WHERE ref = %s AND cents > 0 ORDER BY id ASC',
+			[ $ref ]
+		);
+		$total = 0;
+		foreach ( $rows as $r ) { $total += (int) $r['cents']; }
+		// $goal is the CUMULATIVE amount that should have been reversed once this refund is applied;
+		// $already is what earlier refunds on the same charge took.
+		$goal = (int) round( $total * $frac );
+		if ( $goal - (int) $already < 1 ) { return [ 0, [], [] ]; }
+
+		// THE WALK MUST SKIP WHAT EARLIER REFUNDS ALREADY TOOK, ROW BY ROW.
+		//
+		// Netting $already out of the target alone is not enough: the loop still restarts at the first
+		// row with that row's FULL value as its cap, so a second refund draws from the earliest earmark
+		// again — past what it actually holds — while later earmarks are never touched. The aggregate
+		// still ties, which is why no total looks wrong, but every per-bucket figure derived from
+		// fund_<bucket> is: the labelled earmark lines on /foundation/finances, bursary_fund_cents()
+		// behind /bursary/status, and the bucket-level balance test in Credits::match, which would then
+		// spend money from a later bucket that has already gone back to the donor. It would also drive
+		// a crd_ counter negative, which Credits::verify_credits treats as a CRITICAL page.
+		//
+		// Allocation is front-to-back and deterministic, so replaying the same skip reproduces exactly
+		// what the earlier calls consumed.
+		$skip = (int) $already;
+		$taken = 0; // counts toward $goal, INCLUDING the part earlier refunds already took
+		$cents = 0; $buckets = []; $sources = [];
+		foreach ( $rows as $r ) {
+			if ( $taken >= $goal ) { break; }
+			$rowc = (int) $r['cents'];
+			if ( $skip >= $rowc ) { $skip -= $rowc; $taken += $rowc; continue; } // fully consumed earlier
+			$avail = $rowc - $skip;
+			$taken += $skip;
+			$skip   = 0;
+			$part   = min( $avail, $goal - $taken );
+			if ( $part < 1 ) { continue; }
+			$id = self::fund_append( (string) $r['bucket'], -$part, $rev, (string) $note, 'refund' );
+			if ( ! $id ) { continue; } // fund_append already logged it; the counter never moved either
+			$taken            += $part; // only a row that LANDED advances the cursor
+			$cents            += $part;
+			$buckets[]         = (string) $r['bucket'];
+			$sources[ (int) $r['id'] ] = $part;
+		}
+		return [ $cents, $buckets, $sources ];
 	}
 
 	/** All fund counters as bucket => cents (counter names are 'fund_<bucket>'; tiny table read). */
@@ -169,10 +251,37 @@ final class Funds {
 		if ( $cents < 1 ) { return; }
 		// Each target is [kind, key]: a group/country just RECORDS an earmark (bursary money); a topic
 		// (typ) is a SPONSORSHIP that flows into that topic's live course prize pool (sponsor_topic).
-		$targets = [];
-		foreach ( (array) $groups as $g )    { $g = sanitize_key( (string) $g ); if ( $g ) { $targets[] = [ 'grp', $g ]; } }
-		foreach ( (array) $countries as $c ) { $c = sanitize_key( (string) $c ); if ( $c ) { $targets[] = [ 'cty', $c ]; } }
-		foreach ( (array) $topics as $t )    { $t = sanitize_key( (string) $t ); if ( $t ) { $targets[] = [ 'typ', $t ]; } }
+		//
+		// AN EARMARK KEY IS PUBLISHED PROSE, SO IT MUST COME FROM AN ALLOW-LIST.
+		//
+		// These three lists used to be sanitize_key() and nothing else, so any key the donor sent
+		// became a permanent bucket in aq_fund_ledger, a permanent fund_<bucket> counter, and a
+		// LABELLED LINE on GET /foundation/finances — earmark_label() falls through to ucwords() of the
+		// key itself, which renders the donor's own words as an official earmark on the Foundation's
+		// published financial statement and on the /donate books panel. A second effect was quieter:
+		// bursary_fund_cents('') sums every fund_grp_% counter, so invented grp_ buckets inflated the
+		// bursary availability figure published at GET /bursary/status.
+		//
+		// An unrecognised target is not dropped — that would silently keep money the donor directed
+		// somewhere. It falls back to the general bursary fund, and the donor's money is still theirs.
+		$targets = []; $unknown = 0;
+		foreach ( (array) $groups as $g ) {
+			$g = sanitize_key( (string) $g );
+			if ( $g && isset( self::GROUPS[ $g ] ) ) { $targets[] = [ 'grp', $g ]; } elseif ( $g ) { $unknown++; }
+		}
+		foreach ( (array) $countries as $c ) {
+			$c = sanitize_key( (string) $c );
+			// ISO 3166-1 alpha-2, which is the entire vocabulary the donate picker can emit.
+			if ( $c && preg_match( '/^[a-z]{2}$/', $c ) ) { $targets[] = [ 'cty', $c ]; } elseif ( $c ) { $unknown++; }
+		}
+		foreach ( (array) $topics as $t ) {
+			$t = sanitize_key( (string) $t );
+			if ( $t && self::topic_exists( $t ) ) { $targets[] = [ 'typ', $t ]; } elseif ( $t ) { $unknown++; }
+		}
+		if ( $unknown > 0 ) {
+			Watchdog::note( 'record_gift: ' . $unknown . ' unrecognised earmark target(s) on ref ' . (string) $ref
+				. ' — that share went to the general bursary fund rather than creating a bucket' );
+		}
 		if ( ! $targets ) { self::record_donation( $uid, $cents, 'bursary', 'General donation', $ref ); return; }
 		$n    = count( $targets );
 		$each = intdiv( $cents, $n );
@@ -236,8 +345,8 @@ final class Funds {
 		if ( $held === 0 ) { return; } // nothing earmarked under the old key — pure rename, no money to move
 		$ref  = substr( 'rename:' . $old . '>' . $new, 0, 64 );
 		$note = substr( 'Topic key renamed: ' . $old . ' → ' . $new, 0, 191 );
-		self::fund_append( $old_bucket, -$held, $ref, $note );
-		self::fund_append( 'typ_' . $new, $held, $ref, $note );
+		self::fund_append( $old_bucket, -$held, $ref, $note, 'transfer' );
+		self::fund_append( 'typ_' . $new, $held, $ref, $note, 'transfer' );
 	}
 
 	/**
@@ -261,7 +370,15 @@ final class Funds {
 			$ref !== '' ? sanitize_text_field( (string) $ref ) : 'u' . $uid,
 			sanitize_text_field( (string) $note )
 		);
-		Economy::award_points( $uid, max( 1, (int) floor( $cents / 100 ) ), 'donate', 'fund' . $id );
+		// NO `max(1, …)` FLOOR. record_gift splits one gift evenly across every target the donor chose
+		// and calls this once per part, each against its own `fund<row id>` ref — so award_points'
+		// idempotency cannot merge them and the floor handed out a free point PER PART. A $3 gift split
+		// across four earmarks awarded 4 points where the docstring promises 1 per coin-equivalent of
+		// the whole gift, and a full refund then clawed back only the cents-derived share of it.
+		// Standing buys real things here (group-tag slots, the creator rung), so it has to be earned by
+		// the money and not by the number of boxes ticked.
+		$award = (int) floor( $cents / 100 );
+		if ( $award > 0 ) { Economy::award_points( $uid, $award, 'donate', 'fund' . $id ); }
 		return $id;
 	}
 
@@ -307,8 +424,8 @@ final class Funds {
 		if ( (string) $from === (string) $to ) { return false; }
 		$ref  = substr( sanitize_text_field( (string) $ref ), 0, 64 );
 		$note = substr( sanitize_text_field( (string) $note ), 0, 191 );
-		self::fund_append( (string) $from, -$cents, $ref, $note );
-		self::fund_append( (string) $to, $cents, $ref, $note );
+		self::fund_append( (string) $from, -$cents, $ref, $note, 'transfer' );
+		self::fund_append( (string) $to, $cents, $ref, $note, 'transfer' );
 		return true;
 	}
 

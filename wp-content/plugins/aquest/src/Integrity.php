@@ -33,6 +33,17 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *   6. FULL-RESERVE INVARIANT — coins in circulation must never exceed the gold backing
  *      (Economy::verify_reserve). A break means coins were minted that no value backs (a ledger/counter
  *      attack or a solvency bug) ⇒ CRITICAL.
+ *   7. LEDGER REF WIDTH — every Stripe idempotency guard is a `WHERE ref = 'stripe:<session id>'`, and
+ *      that string is 73 characters. If a ledger's `ref` column cannot hold it, wpdb truncates on write
+ *      while the probe uses the full length, so no guard can ever match: payments fulfil twice and
+ *      refunds reverse nothing. Read the width back from the live DB rather than trusting the
+ *      migration ⇒ CRITICAL.
+ *   8. THE PLATFORM'S OWN PROOFS — Economy::verify_projections() (every counter equals the Σ of the
+ *      ledger it mirrors) and Books::verify() (every published statement follows from the lines). Both
+ *      are cited everywhere as the guarantee that figures cannot drift, and NEITHER had a production
+ *      caller until now: one lived only in a dev CLI script, the other only behind a public endpoint
+ *      nobody polls ⇒ CRITICAL. This is also the only guard over aq_counters, which holds backing_mg
+ *      and coins_issued, is mutable, and is published in full.
  *
  * Baselines live in a gitignored file (aq-integrity-state.php), outside the public DB, so an attacker
  * with DB write access can't forge them. Alarms ride the Watchdog channel (operator email + every
@@ -85,6 +96,8 @@ final class Integrity {
 		self::check_code();
 		self::check_cron();
 		self::check_reserve();
+		self::check_ref_width();
+		self::check_invariants();
 		self::$state['last_run'] = time();
 		self::save();
 	}
@@ -237,6 +250,98 @@ final class Integrity {
 			. ( $shortfall - $authorised ) . " mg is UNEXPLAINED.\n"
 			. 'Coins were minted that no value backs: either the coin ledger / backing counter was tampered with directly, '
 			. 'or a minting bug fired. FREEZE cash-outs (set AQ_CASHOUT_FROZEN) and audit the coin ledger now.', true );
+	}
+
+	// ── 7. LEDGER REF WIDTH — the idempotency keys must fit the columns that hold them ──────
+	/**
+	 * Every money guard on the Stripe path is the string `'stripe:' . <checkout session id>` compared
+	 * with `WHERE ref = %s`. A modern session id is `cs_live_` + 58 characters, so the ref is 73 — and
+	 * until Schema 1.70.0 the four ledger `ref` columns were VARCHAR(64).
+	 *
+	 * That combination is silent and total. WordPress strips STRICT_TRANS_TABLES in wpdb::set_sql_mode,
+	 * so wpdb truncates the value to 64 characters BEFORE the query, with no error; every later lookup
+	 * still uses the full 73-character literal, so it can never match the row it just wrote. Each guard
+	 * that was supposed to make a payment idempotent — the fulfilment probe, the fund replay guard,
+	 * fulfil_coin_purchase, reverse_coin_purchase — returns false forever. A payment can then be
+	 * fulfilled twice (mint the coins again), and a refund reverses nothing at all.
+	 *
+	 * A schema migration that fails is normally quiet, which is exactly the failure mode that must not
+	 * be quiet here. dbDelta is also known in this project to emit NO TABLE at all under Studio's
+	 * SQLite for certain definitions. So rather than trust the migration, read the width back from the
+	 * live database and page if a ref column cannot hold the key we are about to probe with.
+	 */
+	private static function check_ref_width() {
+		global $wpdb;
+		if ( ! isset( $wpdb ) ) { return; }
+		// SQLite (local Studio) has no VARCHAR length enforcement and INFORMATION_SCHEMA is absent, so
+		// there is nothing to read and nothing that can truncate. Abstain rather than alarm.
+		if ( ! defined( 'DB_NAME' ) ) { return; }
+		$need   = 73; // 'stripe:' + cs_live_ + 58
+		$narrow = [];
+		foreach ( [ 'aq_coin_ledger', 'aq_points_ledger', 'aq_fund_ledger', 'aq_credit_gifts' ] as $t ) {
+			$table = Data::t( $t );
+			$len   = $wpdb->get_var( $wpdb->prepare(
+				'SELECT CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS'
+				. ' WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = %s',
+				DB_NAME, $table, 'ref'
+			) );
+			if ( $len === null ) { continue; }        // table absent on this install — not our alarm
+			if ( (int) $len < $need ) { $narrow[] = $table . '.ref is VARCHAR(' . (int) $len . ')'; }
+		}
+		if ( ! $narrow ) { return; }
+		Watchdog::alert( 'integrity_ref_width', 'LEDGER REF COLUMN TOO NARROW — payment idempotency is OFF',
+			"These columns cannot hold a Stripe idempotency key (needs {$need} characters):\n - "
+			. implode( "\n - ", $narrow ) . "\n\n"
+			. "wpdb truncates the value silently on write while every guard probes with the full-length string, so "
+			. "no `WHERE ref = …` can match: a paid Checkout Session can be fulfilled more than once (minting coins "
+			. "again from one payment) and a refund reverses nothing.\n"
+			. 'The Schema 1.70.0 migration widens all four to VARCHAR(191). It has not taken effect here — re-run it '
+			. 'before accepting another payment, or freeze payments (unset STRIPE_SECRET_KEY).', true );
+	}
+
+	// ── 8. THE PLATFORM'S OWN PROOFS, ACTUALLY EXECUTED ─────────────────────────────────────
+	/**
+	 * Run Economy::verify_projections() and Books::verify() on the hourly tick and page on a failure.
+	 *
+	 * Both functions are held up — in code comments, in CLAUDE.md and on /finances itself — as the
+	 * proof that the counters cannot drift from the ledgers and that the published statements cannot
+	 * drift from the lines. Neither had a production caller. verify_projections() appeared exactly
+	 * twice in the tree: its own definition and tools/verify-projections.php, a developer CLI script.
+	 * Books::verify() was reachable only as a public endpoint nobody polls. A proof nobody runs is a
+	 * comment.
+	 *
+	 * This matters most for the counters. aq_counters holds backing_mg and coins_issued, it is a
+	 * MUTABLE row in a database this project publishes in full, and the threat model these classes
+	 * exist for is explicitly an attacker with DB write access. Watchdog::LEDGERS cannot cover it —
+	 * those are append-only prefix sums and a counter legitimately changes. The projection check is
+	 * the guard that fits: a counter inflated by hand no longer equals the Σ of the ledger it mirrors,
+	 * and that inequality is exactly what this reads. Without it, one UPDATE made /reserve report
+	 * backed:true AND disarmed Integrity::check_reserve, which reads the same unwatched counter.
+	 */
+	private static function check_invariants() {
+		$broken = [];
+		if ( class_exists( 'AQ\\Economy' ) && method_exists( 'AQ\\Economy', 'verify_projections' ) ) {
+			foreach ( (array) Economy::verify_projections() as $c ) {
+				if ( empty( $c['ok'] ) ) {
+					$broken[] = 'projection ' . ( $c['check'] ?? '?' ) . ': counter ' . ( $c['projected'] ?? '?' )
+						. ' vs ledger ' . ( $c['ledger'] ?? '?' );
+				}
+			}
+		}
+		if ( class_exists( 'AQ\\Books' ) && method_exists( 'AQ\\Books', 'verify' ) ) {
+			foreach ( (array) Books::verify() as $c ) {
+				if ( empty( $c['ok'] ) ) { $broken[] = 'books ' . ( $c['check'] ?? '?' ) . ': ' . ( $c['detail'] ?? '' ); }
+			}
+		}
+		if ( ! $broken ) { return; }
+		Watchdog::alert( 'integrity_invariants', 'LEDGER INVARIANT BROKEN — a projection or the books disagree with the ledger',
+			"These proofs failed on the hourly sweep:\n - " . implode( "\n - ", array_slice( $broken, 0, 10 ) )
+			. ( count( $broken ) > 10 ? "\n - … +" . ( count( $broken ) - 10 ) . ' more' : '' ) . "\n\n"
+			. "A counter that no longer equals the Σ of its ledger means either a write that skipped the ledger, or a\n"
+			. "direct edit of aq_counters — which would also make /reserve report a backing it does not hold and disarm\n"
+			. "the full-reserve alarm, since that reads the same counter. A books check failing means a published\n"
+			. "statement disagrees with the lines it claims to be computed from.\n"
+			. 'Rebuild with tools/verify-projections.php, and audit the ledgers before trusting any published figure.', true );
 	}
 
 	/**

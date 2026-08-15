@@ -542,7 +542,15 @@ final class Competitions {
 		if ( ! $id ) { return Rest::err( 'failed', 'Could not create the competition', 500 ); }
 		if ( $create_fee > 0 ) {
 			$ref = 'comp:' . (int) $id;
-			Economy::credit_coins( $uid, -$create_fee, 'publish', $ref ); // burned — fully backs the pool it re-mints
+			// The fee is burned and FULLY BACKS the pool this competition re-mints at settlement, so a
+			// fee that never landed leaves the payout unbacked. The balance check above is a plain
+			// read; Economy::spend holds the wallet lock across the check and the debit.
+			$paid = Economy::spend( $uid, $create_fee, 'publish', $ref );
+			if ( $paid !== '' ) {
+				global $wpdb;
+				$wpdb->delete( Data::t( 'aq_competitions' ), [ 'id' => (int) $id ] ); // unpaid → never hosted
+				return Economy::spend_error( $paid, $create_fee, 'Hosting a dataset' );
+			}
 			Economy::content_points( $uid, $create_fee, $ref );           // a dataset is a creation like any other
 		}
 		// A hosted dataset enters the season's DATASET Challenge (the unified challenge frame —
@@ -1733,7 +1741,10 @@ final class Competitions {
 		if ( $fee <= 0 || ! $sid || ! $uid ) { return; }
 		$ref = 'compsub:' . (int) $sid;
 		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'compent' AND ref = %s", [ $ref ] ) ) { return; }
-		Economy::credit_coins( $uid, -$fee, 'compent', $ref );
+		// The ref probe dedupes a replay of THIS submission; it never serialised submissions to
+		// different boards, which all read one balance. `revenue` grows only when the fee actually
+		// landed — a pool that counts fees it never received pays out coins nothing backs.
+		if ( '' !== Economy::spend( $uid, $fee, 'compent', $ref ) ) { return; }
 		Data::bump( 'aq_competitions', [ 'id' => (int) $comp['id'] ], 'revenue', $fee );
 	}
 

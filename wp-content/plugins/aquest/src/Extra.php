@@ -3259,30 +3259,70 @@ final class Extra {
 
 	// ── Monthly reserve audit (2026-06-12): publish the full-reserve receipts ───────────────
 
-	/** Hourly (rides aq_watchdog): the first tick of each new month appends a snapshot of the gold
-	 *  reserve — issued coins, backing mg, ratio, spot — to the public audit trail. Append-only. */
+	/**
+	 * Hourly (rides aq_watchdog): keep the OPEN month's reserve snapshot equal to the live figures,
+	 * and leave every CLOSED month exactly as it was.
+	 *
+	 * This used to write a month once, on the first tick after it began, and then refuse to look at
+	 * it again — `foreach ($audits as $a) if ($a['month'] === $month) return;`. On 2026-08-11 the coin
+	 * ledger was deliberately reset, and because August had already been stamped on the 1st, the
+	 * public trail was left asserting 161 coins against 1,000 mg — a ratio of 6.2 — for the very month
+	 * in which /reserve was truthfully reporting 4,230 coins against 0 mg. Two public endpoints
+	 * describing the same month, disagreeing by a factor of six, with no mechanism that could ever
+	 * reconcile them. A snapshot taken on the first day of a month is not an audit of that month; it
+	 * is an audit of the previous one, published under the wrong heading.
+	 *
+	 * So: the current month is a LIVE row that tracks the reserve until the month ends, and becomes
+	 * history the moment the next month opens. A closed row is never rewritten — that is the part
+	 * worth protecting, and it is the only part that was ever true.
+	 *
+	 * The figures come from Economy::reserve_data() rather than being recomputed from the counters here,
+	 * so the trail and the live page cannot drift apart by construction — the old copy re-derived
+	 * `ratio` with its own `: 1.0` fallback and would have published a perfect ratio for an empty
+	 * reserve, which is exactly the failure this whole sweep is about.
+	 */
 	public static function reserve_audit_tick() {
 		$audits = get_option( 'aq_reserve_audits', [] );
 		if ( ! is_array( $audits ) ) { $audits = []; }
 		$month = gmdate( 'Y-m' );
-		foreach ( $audits as $a ) { if ( ( $a['month'] ?? '' ) === $month ) { return; } }
-		$issued  = Economy::counter( 'coins_issued' );
-		$backing = Economy::backing_mg();
-		$audits[] = [
-			'month'      => $month,
-			'ts'         => time(),
-			'issued_coins' => (int) $issued,
-			'backing_mg' => (int) $backing,
-			'ratio'      => $issued > 0 ? round( $backing / $issued, 4 ) : 1.0,
-			'spot_oz_usd' => (float) get_option( 'aq_gold_spot_oz_usd', 0 ),
+		$live  = Economy::reserve_data(); // cron has no request — take data, never a request object
+		$row   = [
+			'month'        => $month,
+			'ts'           => time(),
+			'issued_coins' => (int) $live['issued_coins'],
+			'backing_mg'   => (int) $live['backing_mg'],
+			'ratio'        => (float) $live['ratio'],
+			'shortfall_mg' => (int) $live['shortfall_mg'],
+			'spot_oz_usd'  => (float) get_option( 'aq_gold_spot_oz_usd', 0 ),
+			'open'         => true, // still tracking; cleared below once a later month exists
 		];
-		update_option( 'aq_reserve_audits', array_slice( $audits, -60 ), false ); // 5 years of months
+		$found = false;
+		foreach ( $audits as $i => $a ) {
+			if ( ( $a['month'] ?? '' ) !== $month ) {
+				// Any month that is not the current one is closed. Stamp it once so a reader can tell
+				// a frozen row from the live one without knowing today's date.
+				if ( ! empty( $a['open'] ) ) { $audits[ $i ]['open'] = false; }
+				continue;
+			}
+			$found = true;
+			// Only the OPEN row may be refreshed. A row already closed by a previous tick stays put
+			// even if the clock is wound back, so history cannot be rewritten by a bad system time.
+			if ( ! empty( $a['open'] ) || ! array_key_exists( 'open', $a ) ) { $audits[ $i ] = $row; }
+		}
+		if ( ! $found ) { $audits[] = $row; }
+		update_option( 'aq_reserve_audits', array_slice( $audits, -60 ), false ); // the last 60 months
 	}
 
-	/** GET /reserve/audits — the append-only monthly audit trail (also visible raw in /data/). */
+	/** GET /reserve/audits — the monthly reserve trail (also visible raw in /data/). */
 	public static function reserve_audits( $req ) {
 		$a = get_option( 'aq_reserve_audits', [] );
-		return [ 'items' => is_array( $a ) ? array_reverse( $a ) : [], 'note' => 'Snapshotted on the first tick of each month — issued coins vs milligrams of gold held. The live figures are on /reserve/.' ];
+		return [
+			'items' => is_array( $a ) ? array_reverse( $a ) : [],
+			// NOT described as append-only: this is a bounded option (the last 60 months) whose open
+			// row tracks the live reserve, and calling it append-only was a claim the storage could
+			// not keep. The append-only ledgers are the coin and fund tables, in /data/.
+			'note'  => 'One row per month: issued coins against milligrams of gold held. The current month tracks the live reserve at /reserve/ and is frozen when the month ends; closed months are never rewritten. Retains the last 60 months.',
+		];
 	}
 
 	// ── Course checkout — charges the entry fee via the canonical enrol primitive ───────────
@@ -3407,7 +3447,21 @@ final class Extra {
 					'Donation to the ArtaQuest Foundation',
 					$return . '?stripe=success&session={CHECKOUT_SESSION_ID}',
 					$return . '?stripe=cancel',
-					[ 'aq_kind' => 'donations', 'aq_uid' => $uid, 'aq_donations' => $donations_json ]
+					[ 'aq_kind' => 'donations', 'aq_uid' => $uid, 'aq_donations' => $donations_json ],
+					[
+						// One less field to type: we already hold the donor's registered address, and
+						// prefilling it also means the Stripe receipt reaches the account that gave.
+						'customer_email' => self::member_email( $uid ),
+						// Stripe's button reads "Donate" rather than "Pay" — this IS a donation, and the
+						// mismatch between the page's language and the checkout's was its own small doubt.
+						'submit_type'    => 'donate',
+						// What the donor sees on their card statement weeks later. An unrecognised line is
+						// the most common cause of a chargeback on a genuine gift.
+						'payment_intent_data' => [
+							'description' => 'ArtaQuest Foundation — gift',
+							'statement_descriptor_suffix' => 'GIFT',
+						],
+					]
 				);
 				if ( ! $sess ) { return Rest::err( 'stripe_error', 'Could not start the secure payment. Please try again.', 502 ); }
 				return [ 'ok' => true, 'redirect' => true, 'url' => $sess['url'], 'course' => 'Your gift', 'total' => $total_cents / 100 ];
@@ -3438,12 +3492,12 @@ final class Extra {
 	 * donation/coin writers each no-op if that ref is already present). Returns [ kind, amount_total_cents ].
 	 */
 	public static function fulfil_session( $session ) {
-		if ( ! is_array( $session ) ) { return [ '', 0 ]; }
+		if ( ! is_array( $session ) ) { return [ '', 0, false ]; }
 		$sid   = (string) ( $session['id'] ?? '' );
 		$meta  = is_array( $session['metadata'] ?? null ) ? $session['metadata'] : [];
 		$total = (int) ( $session['amount_total'] ?? 0 );
 		$kind  = (string) ( $meta['aq_kind'] ?? '' );
-		if ( $sid === '' ) { return [ $kind, $total ]; }
+		if ( $sid === '' ) { return [ $kind, $total, false ]; }
 		$ref = 'stripe:' . $sid;
 		self::remember_payment( $session ); // so a refund months from now can find these rows again
 
@@ -3463,7 +3517,10 @@ final class Extra {
 			$done = ( $kind === 'coins' )
 				? Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'buy' AND ref = %s LIMIT 1", [ $ref ] )
 				: Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_fund_ledger' ) . ' WHERE ref = %s LIMIT 1', [ $ref ] );
-			if ( $done || ( $age && time() - $age < 120 ) ) { return [ $kind, $total ]; } // already fulfilled, or in flight
+			// $done means the money is recorded. A young claim means another request is MID-FLIGHT with
+			// it — which is not the same thing, and used to be reported to the caller identically.
+			if ( $done ) { return [ $kind, $total, true ]; }
+			if ( $age && time() - $age < 120 ) { return [ $kind, $total, false ]; } // in flight — NOT done
 			$wpdb->update( $F, [ 'created' => time() ], [ 'session_id' => $sid ] ); // stale claim from a crash → reclaim + finish
 		}
 
@@ -3506,7 +3563,59 @@ final class Extra {
 		} elseif ( $kind === 'coins' ) {
 			Economy::fulfil_coin_purchase( (int) ( $meta['aq_uid'] ?? 0 ), (int) ( $meta['aq_coins'] ?? 0 ), $ref ); // idempotent
 		}
-		return [ $kind, $total ];
+		return [ $kind, $total, true ];
+	}
+
+	/**
+	 * Daily cron `aq_session_reconcile`: find PAID Checkout Sessions whose money was never recorded,
+	 * and record them. The inbound mirror of Economy::reconcile_payouts.
+	 *
+	 * Fulfilment has two callers — the returning browser and Stripe's webhook — and both go through
+	 * one atomic claim, so exactly one does the work. That is correct right up until the winner dies
+	 * holding the claim (a fatal, an OOM, the WP.com edge cutting a slow request). The loser has
+	 * already returned, the browser has stripped ?session= from the URL so a reload cannot retry, and
+	 * nothing else in the system was looking: money captured, coins or donation never recorded, no
+	 * alarm. The webhook now answers 409 in that window so Stripe redelivers, which closes most of it —
+	 * but Stripe's retries are finite, and a session paid while the site was down outlives them.
+	 *
+	 * So this asks the authoritative source. Anything Stripe says was paid, and that no ledger row
+	 * mentions, is fulfilled here and the operator is told — the ref guards make it idempotent, so a
+	 * session already handled costs one indexed lookup and nothing else.
+	 */
+	public static function reconcile_sessions() {
+		if ( ! Stripe::enabled() ) { return 0; }
+		$fixed = [];
+		foreach ( Stripe::list_sessions( time() - 3 * DAY_IN_SECONDS, 100 ) as $s ) {
+			if ( ! is_array( $s ) || ! Stripe::is_paid( $s ) ) { continue; }
+			$sid = (string) ( $s['id'] ?? '' );
+			if ( '' === $sid ) { continue; }
+			$ref  = 'stripe:' . $sid;
+			$kind = (string) ( ( is_array( $s['metadata'] ?? null ) ? $s['metadata'] : [] )['aq_kind'] ?? '' );
+			// Ask the ledger the payment WOULD have landed in. A donation writes the fund ledger; a
+			// coin top-up writes the coin ledger with reason 'buy'.
+			$done = ( 'coins' === $kind )
+				? Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'buy' AND ref = %s LIMIT 1", [ $ref ] )
+				: Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_fund_ledger' ) . ' WHERE ref = %s LIMIT 1', [ $ref ] );
+			if ( $done ) { continue; }
+			[ , $total, $ok ] = self::fulfil_session( $s );
+			if ( $ok ) { $fixed[] = $sid . ' (' . ( $kind ?: 'unknown' ) . ', ' . number_format( (int) $total / 100, 2 ) . ' CAD)'; }
+		}
+		if ( $fixed ) {
+			Watchdog::alert( 'stripe_session_reconcile', 'Captured payments were recorded late by the reconcile',
+				"Stripe reported these sessions PAID, and no ledger row mentioned them, so the daily reconcile fulfilled them:\n - "
+				. implode( "\n - ", array_slice( $fixed, 0, 10 ) )
+				. ( count( $fixed ) > 10 ? "\n - … +" . ( count( $fixed ) - 10 ) . ' more' : '' ) . "\n\n"
+				. "In the healthy steady state this finds nothing: the browser return or the webhook records a payment within\n"
+				. "seconds. A hit means both callers failed — worth checking the error log around those timestamps for a fatal\n"
+				. 'during fulfilment, and worth confirming the member has what they paid for.', false );
+		}
+		return count( $fixed );
+	}
+
+	/** A member's registered email, or '' — used to prefill Stripe Checkout. Never invents one. */
+	private static function member_email( $uid ) {
+		$u = get_userdata( (int) $uid );
+		return ( $u && is_email( $u->user_email ) ) ? (string) $u->user_email : '';
 	}
 
 	/**
@@ -3581,10 +3690,34 @@ final class Extra {
 			return;
 		}
 		$ref = 'stripe:' . $sid;
-		$rev = 'srev:' . $charge; // deterministic: one reversal per charge, whichever event delivers it
+		// ONE REVERSAL REF PER REFUND OBJECT, not per charge.
+		//
+		// It used to be 'srev:<charge>', and both writers refuse to run twice under the same ref. But
+		// Stripe emits charge.refunded once per REFUND created on a charge, while $frac is computed
+		// from the CUMULATIVE amount_refunded. So a first partial refund consumed the only ref the
+		// system would ever use, and every later refund on that charge — including the one taking it
+		// to 100%, and a lost dispute after a partial — found the ref present and reversed nothing,
+		// silently, logging "0 coins, 0 fund cents". Cash-out is live, so coins left unreversed are
+		// withdrawable real money.
+		//
+		// THE DISCRIMINATOR IS THE CUMULATIVE AMOUNT, NOT A REFUND ID.
+		//
+		// Picking the refund object out of `$obj['refunds']['data']` looks natural and is a trap twice
+		// over: Stripe orders list objects NEWEST FIRST, so end() returns the OLDEST refund — the same
+		// id on every subsequent charge.refunded for that charge — and on current API versions
+		// `Charge.refunds` is not included at all unless expanded, which would have collapsed the ref
+		// to the charge id itself. Either way every refund on a charge shared one ref, and since both
+		// writers bail on `WHERE ref = $rev`, the second refund reversed nothing. That is precisely the
+		// defect this was written to fix.
+		//
+		// `amount_refunded` is cumulative and strictly increases with each new refund, so it separates
+		// them without an extra API call, and a REDELIVERY of the same event carries the same total and
+		// is still a no-op. A dispute has a genuinely per-object id (dp_…), so it keeps using it.
+		$rev = 'srev:' . $charge . ':' . ( $dispute ? ( (string) ( $obj['id'] ?? 'dispute' ) ) : 'r' . $back );
 
-		$coins = Economy::reverse_coin_purchase( $ref, $rev, $frac );
-		[ $cents, $buckets ] = self::reverse_fund_gift( $ref, $rev, $frac, $charge );
+		[ $done_coins, $done_cents ] = self::already_reversed( $charge );
+		$coins = Economy::reverse_coin_purchase( $ref, $rev, $frac, $done_coins );
+		[ $cents, $buckets ] = self::reverse_fund_gift( $ref, $rev, $frac, $charge, $done_cents );
 
 		Watchdog::note( sprintf( 'Stripe %s reversed: charge %s, %.2f CAD, %d coins, %d fund cents', $type, $charge, $back / 100, $coins, $cents ) );
 		// Two cases a human must actually look at: a sponsorship whose money has already been spent
@@ -3605,38 +3738,21 @@ final class Extra {
 	 * Mirror a gift's fund-ledger rows as negatives, and take back the donate points it bought.
 	 * Returns [ cents reversed, buckets touched ].
 	 *
-	 * The fund ledger's append is private to Funds (its one write choke point, which moves the bucket
-	 * counter in lockstep), and Funds.php is not ours to edit in this pass — so this mirrors that
-	 * invariant exactly: the row lands FIRST and the counter moves only if it did, because a counter
-	 * that moves without a row desyncs the public finances permanently. Fold it into a
-	 * Funds::reverse_gift the next time that file is open.
+	 * The ledger write itself now lives in Funds::reverse_gift — the one door, which moves the bucket
+	 * counter in lockstep AND mirrors into the double-entry books. This function used to insert into
+	 * aq_fund_ledger directly and bump the counter itself, which meant a refund lowered the public
+	 * /foundation/finances total while the published statements kept the whole gift as revenue and as
+	 * cash forever. What remains here is the part that is genuinely Stripe's business: taking back the
+	 * donate-track standing the refunded money bought.
 	 */
-	private static function reverse_fund_gift( $ref, $rev, $frac, $charge ) {
+	private static function reverse_fund_gift( $ref, $rev, $frac, $charge, $already = 0 ) {
 		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_fund_ledger' ) . ' WHERE ref = %s LIMIT 1', [ $rev ] ) ) { return [ 0, [] ]; }
-		// Only the POSITIVE rows: a sponsorship also writes a negative row of its own (the CAD it spent
-		// on a prize pool), and mirroring that would hand the fund money back that it never had.
-		$rows = Data::all( 'SELECT id, bucket, cents FROM ' . Data::t( 'aq_fund_ledger' ) . ' WHERE ref = %s AND cents > 0 ORDER BY id ASC', [ (string) $ref ] );
-		$cents = 0; $awarded = 0; $uid = 0; $buckets = [];
-		foreach ( $rows as $r ) {
-			$part = (int) round( (int) $r['cents'] * (float) $frac );
-			if ( $part < 1 ) { continue; }
-			$id = Data::insert( 'aq_fund_ledger', [
-				'bucket'  => (string) $r['bucket'],
-				'cents'   => -$part,
-				'ref'     => (string) $rev,
-				'note'    => 'Refunded: ' . $charge,
-				'created' => Data::now(),
-			] );
-			if ( ! $id ) {
-				error_log( 'AQ reverse_fund_gift: ledger INSERT FAILED bucket=' . $r['bucket'] . " {$part}c ref={$rev} — nothing reversed" );
-				continue;
-			}
-			Economy::counter_add( 'fund_' . (string) $r['bucket'], -$part );
-			$cents    += $part;
-			$buckets[] = (string) $r['bucket'];
+		[ $cents, $buckets, $sources ] = Funds::reverse_gift( $ref, $rev, $frac, 'Refunded: ' . $charge, $already );
+		$awarded = 0; $uid = 0;
+		foreach ( $sources as $fund_row_id => $part ) {
 			// The donor + the points this part bought: the fund ledger records no user_id, but
 			// record_donation awarded the points against ref 'fund<row id>', which does.
-			$p = Data::one( 'SELECT user_id, delta FROM ' . Data::t( 'aq_points_ledger' ) . " WHERE track = 'donate' AND ref = %s LIMIT 1", [ 'fund' . (int) $r['id'] ] );
+			$p = Data::one( 'SELECT user_id, delta FROM ' . Data::t( 'aq_points_ledger' ) . " WHERE track = 'donate' AND ref = %s LIMIT 1", [ 'fund' . (int) $fund_row_id ] );
 			if ( $p ) { $uid = (int) $p['user_id']; $awarded += (int) $p['delta']; }
 		}
 		// Standing bought by money that went back is standing nobody earned — and it buys real things
@@ -3644,7 +3760,71 @@ final class Extra {
 		// than was awarded, and never below zero. award_points is itself idempotent per (user, track, ref).
 		$giveback = min( $awarded, (int) floor( $cents / 100 ) );
 		if ( $uid > 0 && $giveback > 0 ) { Economy::award_points( $uid, -$giveback, 'donate', (string) $rev ); }
+		if ( $cents > 0 ) { self::retire_refunded_credits( $ref, $rev, $charge ); }
 		return [ $cents, $buckets ];
+	}
+
+	/**
+	 * A REFUNDED CREDIT GIFT MUST STOP BEING SPENDABLE.
+	 *
+	 * Reversing the cents in the slice earmark left the aq_credit_gifts row exactly as it was:
+	 * `entries` unchanged, `widened` still 0, and no refunded flag anywhere. Credits::match selects
+	 * live gifts on `used < entries AND widened = 0` plus a BUCKET-LEVEL balance test — a counter
+	 * shared by every donor who chose the same slice — and orders oldest-first. So the refunded gift
+	 * was not merely still live, it was PREFERRED over the honest gift behind it: it spent another
+	 * donor's money, and Credits::notify_donor printed the refunded donor's name on the entrant's
+	 * permanent Certificate of Participation.
+	 *
+	 * `widened` is the existing "this gift is no longer claimable" stamp that both match() and widen()
+	 * already honour, so retiring the gift needs no new column and no new state to reason about. Any
+	 * entry ALREADY granted against it stays granted — the entrant did nothing wrong and their
+	 * certificate is theirs — but an operator is told, because a printed plate now names someone whose
+	 * money went back.
+	 */
+	private static function retire_refunded_credits( $ref, $rev, $charge ) {
+		$gifts = Data::all(
+			'SELECT id, bucket, entries, donor_name FROM ' . Data::t( 'aq_credit_gifts' ) . ' WHERE ref = %s AND widened = 0',
+			[ (string) $ref ]
+		);
+		if ( ! $gifts ) { return; }
+		$stamp = Data::now();
+		$spent = [];
+		foreach ( $gifts as $g ) {
+			// Compare-and-swap, exactly as widen() does, so a concurrent release cannot double-handle it.
+			if ( 1 !== (int) Data::update( 'aq_credit_gifts', [ 'widened' => $stamp ], [ 'id' => (int) $g['id'], 'widened' => 0 ] ) ) { continue; }
+			$used = (int) Data::col(
+				'SELECT COUNT(*) FROM ' . Data::t( 'aq_credit_grants' ) . ' WHERE gift_id = %d', [ (int) $g['id'] ]
+			);
+			if ( $used > 0 ) { $spent[] = '#' . (int) $g['id'] . ' (' . $used . ' already granted)'; }
+		}
+		if ( $spent ) {
+			Watchdog::alert( 'stripe_refund_credits_' . $charge, 'A refunded gift had already paid for entries',
+				'Charge ' . $charge . " was refunded, and its ArtaCredits gift had already been redeemed:\n - "
+				. implode( "\n - ", $spent ) . "\n\n"
+				. "The gift is now retired so it cannot be spent again (ref {$rev}). The entries already granted STAY granted —\n"
+				. 'the entrant did nothing wrong — but their Certificate of Participation carries the refunded donor’s name, '
+				. 'so decide whether the plate should be corrected.', false );
+		}
+	}
+
+	/**
+	 * How much of a charge earlier refund events have ALREADY reversed — [ coins, fund cents ].
+	 * Every reversal ref is 'srev:<charge>:<refund object>', so one prefix scan answers it for both
+	 * ledgers. This is what lets several refunds on one payment each reverse their own share exactly
+	 * once, instead of the first one consuming the whole reversal and the rest silently doing nothing.
+	 */
+	private static function already_reversed( $charge ) {
+		global $wpdb;
+		$like = $wpdb->esc_like( 'srev:' . (string) $charge . ':' ) . '%';
+		$coins = (int) Data::col(
+			'SELECT COALESCE(SUM(-delta),0) FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'refund' AND ref LIKE %s",
+			[ $like ]
+		);
+		$cents = (int) Data::col(
+			'SELECT COALESCE(SUM(-cents),0) FROM ' . Data::t( 'aq_fund_ledger' ) . ' WHERE cents < 0 AND ref LIKE %s',
+			[ $like ]
+		);
+		return [ max( 0, $coins ), max( 0, $cents ) ];
 	}
 
 	/**
@@ -3670,8 +3850,10 @@ final class Extra {
 	/**
 	 * POST /stripe/webhook — Stripe's server-to-server confirmation, the RELIABLE fulfilment path (fires
 	 * even if the buyer closes the tab). Verifies the Stripe-Signature against STRIPE_WEBHOOK_SECRET on
-	 * the RAW body, then fulfils a completed+paid checkout via the shared idempotent path. Always 200s a
-	 * verified event (so Stripe stops retrying); 400 on a bad signature; no-op 200 when unconfigured.
+	 * the RAW body, then fulfils a completed+paid checkout via the shared idempotent path. 200s a
+	 * verified event it has FINISHED with (so Stripe stops retrying); 409 when the payment is not yet
+	 * recorded, which asks Stripe to redeliver rather than losing it; 400 on a bad signature; no-op
+	 * 200 when unconfigured.
 	 */
 	public static function stripe_webhook( $req ) {
 		if ( ! Secrets::has( 'STRIPE_WEBHOOK_SECRET' ) ) { return new \WP_REST_Response( [ 'ok' => true, 'skipped' => true ], 200 ); }
@@ -3683,7 +3865,26 @@ final class Extra {
 		$type = (string) ( $event['type'] ?? '' );
 		if ( $type === 'checkout.session.completed' ) {
 			$session = $event['data']['object'] ?? null;
-			if ( is_array( $session ) && ( $session['payment_status'] ?? '' ) === 'paid' ) { self::fulfil_session( $session ); }
+			if ( is_array( $session ) && ( $session['payment_status'] ?? '' ) === 'paid' ) {
+				[ , , $done ] = self::fulfil_session( $session );
+				// A PAYMENT THAT IS NOT RECORDED MUST NOT BE ACKNOWLEDGED.
+				//
+				// fulfil_session claims the session before doing any work, and a caller that loses the
+				// claim to an in-flight winner returns without crediting anything. This branch then fell
+				// through to a flat 200, so Stripe marked checkout.session.completed as delivered and
+				// never retried. If the winner — normally the returning browser's /stripe-verify, which
+				// fires within a second of the redirect and so is squarely inside the 120s window — died
+				// after claiming (fatal, OOM, the edge cutting a slow request), nothing ever finished
+				// the job: the SPA strips ?session= with replaceState so a reload will not retry, and the
+				// webhook had just given up. Money captured, nothing recorded, no alert.
+				//
+				// 409 puts it back on Stripe's retry schedule, which redelivers after the winner has
+				// either finished (the ref guards make the retry a no-op) or gone stale (the claim is
+				// reclaimed and completed).
+				if ( ! $done ) {
+					return new \WP_REST_Response( [ 'ok' => false, 'retry' => true ], 409 );
+				}
+			}
 		} elseif ( $type === 'charge.refunded' || $type === 'charge.dispute.created' || $type === 'charge.dispute.closed' ) {
 			// Money going BACK is as much a fulfilment as money coming in — see reverse_charge.
 			self::reverse_charge( $type, $event );

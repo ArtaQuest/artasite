@@ -87,7 +87,12 @@ export default function Reserve() {
   if (failed) return <StatusNote error className="py-16">Couldn't load — refresh to try again.</StatusNote>;
   if (!r) return <StatusNote className="py-16">Loading the reserve…</StatusNote>;
   const fiat = r.fiat || "CAD";
-  const backedPct = Math.round((r.backing_ratio || 1) * 100);
+  // NEVER `|| 1` here. A backing ratio of 0 is a real, publishable answer, and the falsy-coalesce
+  // that used to sit on this line turned it into a perfect 100% — so the one page whose entire job
+  // is proof of reserve spent its life reporting the single most flattering number it could, beside
+  // a "0 mg held" card that contradicted it. About.tsx already adjudicated the rule this restores:
+  // say the RATIO is published, never say the coins are fully backed.
+  const backedPct = Math.round((Number(r.backing_ratio) || 0) * 100);
   const reserveG = (r.reserve_mg / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 });
   const updated = r.updated ? new Date(r.updated * 1000).toLocaleString() : "";
 
@@ -103,11 +108,19 @@ export default function Reserve() {
         <div className="relative max-w-2xl">
           <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-ink-3">{r.name} · {r.code}</p>
           <h1 className="mt-4 text-[clamp(2.1rem,5vw,3.3rem)] font-extrabold leading-[1.1]">
-            A currency backed by <span className="aq-grad">real gold</span>
+            A currency measured in <span className="aq-grad">real gold</span>
           </h1>
           <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-ink-2">
-            Every <bdi dir="ltr" data-ay-skip="1">{r.symbol}</bdi> Arta Coin is backed 1-for-1 by a milligram of real gold held in reserve. We mint coins only when gold enters our vault and burn them only when it leaves. Everyone can cash out at the same time.
+            One <bdi dir="ltr" data-ay-skip="1">{r.symbol}</bdi> Arta Coin is meant to be one milligram of real gold. How much gold actually stands behind the coins in circulation is published below, live, whatever it says — and right now it does not say what we would like it to.
           </p>
+          {/* The shortfall is stated in the HERO, not buried under a fold. The server already writes
+              the plain-English explanation (Economy::reserve); render it verbatim rather than
+              paraphrasing a number we would be tempted to round in our own favour. */}
+          {!r.backed && r.shortfall_note && (
+            <p className="mt-4 max-w-xl rounded-card border border-yang/40 bg-yang/10 px-4 py-3 text-[14px] leading-relaxed text-ink-2">
+              {r.shortfall_note}
+            </p>
+          )}
           <p className="mt-3 text-[14px] text-ink-3"><bdi dir="ltr" data-ay-skip="1">{r.peg}</bdi></p>
           <div className="mt-7 flex flex-wrap gap-3">
             <Button href="/wallet/" size="xl">Buy or cash out coins</Button>
@@ -142,31 +155,47 @@ export default function Reserve() {
           <TickerCard label="Coins in circulation" value={<Coins n={r.supply} />} sub="total Arta Coins minted" tone="ink" />
           <TickerCard label="Gold reserve" value={`${reserveG} g`} sub={`${r.reserve_mg.toLocaleString()} mg held`} tone="yang" />
           <TickerCard label="Reserve value" value={formatFiat(r.reserve_value, fiat)} sub="at today’s spot" tone="yin" />
-          <TickerCard label="Backing" value={`${backedPct}%`} sub={r.fully_backed ? "100% backed" : "backing ratio"} tone="yang" />
+          <TickerCard label="Backing" value={`${backedPct}%`} sub={r.backed ? "fully backed" : `${r.shortfall_mg.toLocaleString()} mg not backed`} tone="yang" />
         </div>
         <Card className="mt-3 flex flex-wrap items-center justify-between gap-4 p-5">
           <div>
             <p className="text-[15px] font-bold text-ink"><bdi dir="ltr" data-ay-skip="1">{r.peg}</bdi></p>
-            <p className="mt-0.5 text-[13px] text-ink-3">Each coin is redeemable for its milligram of gold, at the sell price, any time.</p>
+            {/* "redeemable any time" was a promise the cash-out rail does not keep: Economy::sell
+                gates on cashout_enabled(), identity verification and a Stripe Connect payout account,
+                and it can only ever pay out against gold that is actually held. */}
+            <p className="mt-0.5 text-[13px] text-ink-3">
+              {r.cashout
+                ? "Coins can be cashed out at the sell price once you have verified your identity and set up a payout account."
+                : "Cash-out is not open yet. Coins can be spent and held; redemption for money starts when the payout rail does."}
+            </p>
           </div>
-          <span className={`shrink-0 rounded-pill px-3.5 py-1.5 text-[13px] font-bold ${r.fully_backed ? "bg-yang/15 text-yang" : "bg-yin/15 text-yin-light"}`}>
-            {r.fully_backed ? "100% backed" : `${backedPct}% backed`}
+          <span className={`shrink-0 rounded-pill px-3.5 py-1.5 text-[13px] font-bold ${r.backed ? "bg-yin/15 text-yin-light" : "bg-yang/15 text-yang"}`}>
+            {r.backed ? `${backedPct}% backed` : `${backedPct}% backed — a shortfall we owe`}
           </span>
         </Card>
       </section>
 
-      {/* the foundation's coin fund (optional, from finances) */}
+      {/* The member fund. Four separate figures on this row used to be wrong, all in the same
+          direction — flattering. `fund_balance` and `donations_fiat` are CANADIAN DOLLARS (the fund
+          ledger is fiat; no coin is minted from a gift), so they must go through formatFiat and never
+          through <Coins/>, which stamps the gold-coin mark on them. `fund_issued` was hardcoded to 0
+          in wp.ts and rendered as fact under the label "bursaries granted". And `donations_count` is
+          the length of the last-25 `recent` window, spends included, so it counted spends as gifts
+          and would have frozen at "25 gifts" forever. The two figures that are real are shown; the
+          two that were invented are gone, and the books proper are one link away. */}
       {fin && (
         <section>
-          <h2 className="text-[20px] font-bold tracking-tight">The member fund</h2>           <p className="mt-1
-          max-w-2xl text-[14px] leading-relaxed text-ink-2">Donations are converted to gold-backed Arta
-          Coins and held for members, issued when someone needs them.</p>           <div className="mt-4
-          grid grid-cols-2 gap-3 sm:grid-cols-3">             <TickerCard label="Fund on hand"
-          value={<Coins n={fin.fund_balance} />} sub="held for members" tone="yin" />
-          <TickerCard label="Issued to members" value={<Coins n={fin.fund_issued} />} sub="bursaries
-          granted" tone="yang" />
-            <TickerCard label="Donations received" value={formatFiat(fin.donations_fiat, fin.fiat)} sub={`${fin.donations_count} gift${fin.donations_count === 1 ? "" : "s"}`} tone="ink" />
+          <h2 className="text-[20px] font-bold tracking-tight">The member fund</h2>
+          <p className="mt-1 max-w-2xl text-[14px] leading-relaxed text-ink-2">
+            Gifts are held as money, earmarked to whoever the donor chose, and spent on challenge entry fees for those members. Nothing here is converted into coin.
+          </p>
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <TickerCard label="In the fund" value={formatFiat(fin.fund_balance, fin.fiat)} sub="donated money still on hand, every earmark" tone="yin" />
+            <TickerCard label="Directed earmarks" value={fin.earmarks.length.toLocaleString()} sub="slices a donor has chosen and money is waiting for" tone="yang" />
           </div>
+          <p className="mt-3 text-[13px] text-ink-3">
+            Every entry and both of its sides are on <a href={localePath("/finances/")} className="font-semibold text-yang hover:underline">the Foundation’s books</a>.
+          </p>
         </section>
       )}
 
@@ -175,8 +204,13 @@ export default function Reserve() {
         <div className="mx-auto max-w-2xl">
           <h2 className="text-[clamp(1.4rem,3vw,1.9rem)] font-bold leading-snug">How it works</h2>
           <p className="mt-4 text-[16px] leading-relaxed text-ink-2">
-            Every Arta Coin is a claim on one milligram of real gold. We mint coins only when gold enters our vault and burn them only when it leaves, and the ratio of gold held to coins issued is published above, live — so if it ever slips below 1, you see it before we say anything.
+            An Arta Coin is meant to be a claim on one milligram of real gold, and the ratio of gold held to coins issued is published above, live. It is not a promise that the ratio is 1 — it is a promise that you see the true number before we say anything about it, including when that number is against us.
           </p>
+          {!r.backed && (
+            <p className="mt-3 text-[15px] leading-relaxed text-ink-2">
+              It is against us today. <strong className="text-ink">{r.shortfall_mg.toLocaleString()} mg</strong> of the coin in circulation has no gold behind it, because those coins were issued to settle costs a director had already paid out of their own pocket — that money went to the supplier, so no gold was ever bought with it. The Foundation owes that gold. The entry is in the books, with the invoices attached.
+            </p>
+          )}
           <p className="mt-3 text-[15px] leading-relaxed text-ink-3">
             You win coins by taking a challenge pool: every entrant’s fee goes into the pool, and at the full moon the most-hearted entry takes the whole thing (an exact tie splits it evenly). You can also buy them with cash or cash them out at the published sell price. Prices move only with the price of gold — not with us.
           </p>
@@ -195,10 +229,12 @@ export default function Reserve() {
   );
 }
 
-/* Monthly full-reserve audits — an append-only trail snapshotted on the first watchdog tick of each
-   month (issued coins vs milligrams held). The raw rows are also in the public DB. */
+/* Monthly reserve trail — one row per month, issued coins vs milligrams held. The open (current)
+   month tracks the live reserve; closed months are frozen. Deliberately NOT called "append-only":
+   it is a bounded option holding the last 60 months, and the append-only ledgers are the coin and
+   fund tables in /data/. The raw rows are also in the public DB. */
 function MonthlyAudits() {
-  const [items, setItems] = useState<{ month: string; issued_coins: number; backing_mg: number; ratio: number }[]>([]);
+  const [items, setItems] = useState<{ month: string; issued_coins: number; backing_mg: number; ratio: number; open?: boolean }[]>([]);
   useEffect(() => {
     fetch("/wp-json/aq/v1/reserve/audits").then((r) => r.json()).then((d) => setItems(d.items ?? [])).catch(() => {});
   }, []);
@@ -206,7 +242,7 @@ function MonthlyAudits() {
   return (
     <section className="max-w-2xl">
       <h2 className="text-[20px] font-bold tracking-tight">Monthly audits</h2>
-      <p className="mt-1 text-[13.5px] text-ink-3">Snapshotted automatically on the first day of each month — an append-only public record of the full reserve.</p>
+      <p className="mt-1 text-[13.5px] text-ink-3">One row per month, recorded automatically. The current month tracks the live reserve above; a month is frozen once it ends, and a frozen row is never rewritten.</p>
       <table className="mt-4 w-full text-[14px]">
         <thead><tr className="border-b border-line text-[12px] uppercase tracking-wide text-ink-3">
           <th className="py-2 text-start font-semibold">Month</th><th className="py-2 text-end font-semibold">Coins issued</th><th className="py-2 text-end font-semibold">Gold held (mg)</th><th className="py-2 text-end font-semibold">Backed</th>
@@ -214,7 +250,7 @@ function MonthlyAudits() {
         <tbody>
           {items.map((a) => (
             <tr key={a.month} className="border-b border-line/50">
-              <td className="py-2">{a.month}</td>
+              <td className="py-2">{a.month}{a.open ? <span className="ms-2 text-[12px] font-semibold text-yang">live</span> : null}</td>
               <td className="py-2 text-end tabular-nums">{a.issued_coins.toLocaleString("en")}</td>
               <td className="py-2 text-end tabular-nums">{a.backing_mg.toLocaleString("en")}</td>
               <td className="py-2 text-end tabular-nums">{Math.round(a.ratio * 100)}%</td>

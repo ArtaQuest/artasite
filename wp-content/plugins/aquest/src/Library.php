@@ -288,9 +288,14 @@ final class Library {
 			if ( $bal < $cost ) {
 				return Rest::err( 'insufficient', 'Publishing a ' . (int) $row['pages'] . '-page book costs ₳' . $cost . ' — you have ₳' . $bal . '.', 402 );
 			}
+			// Charge BEFORE claiming: the conditional UPDATE stops the SAME book being charged twice,
+			// but it never stopped N different books racing one balance. Economy::spend holds the
+			// member's wallet lock across the check and the debit.
+			$paid = Economy::spend( $uid, $cost, 'publish', $ref );
+			if ( $paid !== '' ) { return Economy::spend_error( $paid, $cost, 'Publishing this book' ); }
 			$claimed = (bool) Data::update( 'aq_documents', [ 'status' => 'published', 'book_state' => 'live', 'updated' => Data::now() ], [ 'id' => $id, 'status' => 'draft' ] );
+			if ( ! $claimed ) { Economy::refund_spend( $uid, $cost, 'publish-void', $ref ); } // lost the claim → money back
 			if ( $claimed ) {
-				Economy::credit_coins( $uid, -$cost, 'publish', $ref ); // debit the author's wallet (only the winner)
 				Economy::content_points( $uid, $cost, $ref ); // +points ∝ the coins invested (idempotent by ref)
 				Challenges::enter( 'book', $id, $uid, $cost ); // the fee enters the season's Book Challenge pool
 			}

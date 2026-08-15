@@ -344,14 +344,24 @@ final class Music {
 
 		if ( $row['status'] === 'draft' ) {
 			if ( $err = Challenges::quota_gate( $uid ) ) { return $err; } // shelf quota: prune before publishing more
+			// Friendly pre-check only — it keeps the exact figure in the refusal copy. The
+			// AUTHORITATIVE check is inside Economy::spend below, which holds this member's
+			// wallet lock across the check and the debit together.
 			$bal = Economy::coin_balance( $uid );
 			if ( $bal < $cost ) {
 				$what = ( (string) ( $row['kind'] ?? 'music' ) ) === 'audiobook' ? 'this audiobook' : 'a ' . self::mmss( (int) $row['seconds'] ) . ' track';
 				return Rest::err( 'insufficient', 'Publishing ' . $what . ' costs ₳' . $cost . ' — you have ₳' . $bal . '.', 402 );
 			}
+			// Charge BEFORE claiming the row. Claim-then-charge publishes the work even when the
+			// charge is refused, which mints the goods for free.
+			$paid = Economy::spend( $uid, $cost, 'music', $ref );
+			if ( $paid !== '' ) { return Economy::spend_error( $paid, $cost, 'Publishing this track' ); }
 			$claimed = (bool) Data::update( 'aq_tracks', [ 'status' => 'published', 'track_state' => 'live', 'updated' => Data::now() ], [ 'id' => $id, 'status' => 'draft' ] );
+			if ( ! $claimed ) {
+				// Another request published it first — give the money straight back, append-only.
+				Economy::refund_spend( $uid, $cost, 'music-void', $ref );
+			}
 			if ( $claimed ) {
-				Economy::credit_coins( $uid, -$cost, 'music', $ref );
 				Economy::content_points( $uid, $cost, $ref );
 				Challenges::enter( ( (string) ( $row['kind'] ?? 'music' ) ) === 'audiobook' ? 'audiobook' : 'music', $id, $uid, $cost ); // fee → the season's challenge pool
 			}

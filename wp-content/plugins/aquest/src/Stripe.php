@@ -71,7 +71,7 @@ final class Stripe {
 	 * values) is echoed back on the session so fulfilment can reconstruct the order. Returns
 	 * [ id, url ] (redirect the browser to url) or null.
 	 */
-	public static function create_session( $amount_cents, $description, $success_url, $cancel_url, $metadata = [] ) {
+	public static function create_session( $amount_cents, $description, $success_url, $cancel_url, $metadata = [], $extra = [] ) {
 		$amount_cents = (int) $amount_cents;
 		if ( $amount_cents < 1 ) { return null; }
 		$params = [
@@ -87,6 +87,18 @@ final class Stripe {
 				],
 			] ],
 		];
+		// `payment_method_types` stays UNSET on purpose: Stripe then offers whatever is enabled on the
+		// account, which is how Apple Pay, Google Pay and Link appear without a code change. Naming
+		// types here would silently switch those off.
+		//
+		// $extra carries the per-flow trimmings — customer_email (one field the donor does not retype),
+		// submit_type (Stripe's button reads "Donate" instead of "Pay"), payment_intent_data. Only
+		// known keys are copied, so a caller cannot overwrite the amount or the return URLs.
+		foreach ( [ 'customer_email', 'submit_type', 'payment_intent_data', 'allow_promotion_codes', 'locale' ] as $k ) {
+			if ( isset( $extra[ $k ] ) && ( is_array( $extra[ $k ] ) || (string) $extra[ $k ] !== '' ) ) {
+				$params[ $k ] = $extra[ $k ];
+			}
+		}
 		foreach ( $metadata as $mk => $mv ) { $params['metadata'][ (string) $mk ] = mb_substr( (string) $mv, 0, 500 ); }
 		$s = self::req( 'POST', '/checkout/sessions', $params );
 		return ( $s && ! empty( $s['id'] ) ) ? [ 'id' => (string) $s['id'], 'url' => (string) ( $s['url'] ?? '' ) ] : null;
@@ -193,6 +205,23 @@ final class Stripe {
 		$override = apply_filters( 'aq_stripe_list_transfers', null, (int) $created_gte, (int) $limit );
 		if ( $override !== null ) { return is_array( $override ) ? $override : []; }
 		$q = '/transfers?limit=' . (int) $limit;
+		if ( $created_gte > 0 ) { $q .= '&created[gte]=' . (int) $created_gte; }
+		$r = self::req( 'GET', $q );
+		return ( is_array( $r ) && isset( $r['data'] ) && is_array( $r['data'] ) ) ? $r['data'] : [];
+	}
+
+	/**
+	 * Recent COMPLETED Checkout Sessions (newest first), for the inbound reconcile — the mirror of
+	 * list_transfers, which has covered the OUTBOUND cash-out leg since Economy::reconcile_payouts.
+	 * Inbound had no equivalent, so a payment captured but never recorded had nothing looking for it.
+	 *
+	 * `status=complete` is Stripe's own filter for a finished session; `payment_status` is not a list
+	 * parameter, so paid-ness is decided per row by is_paid(). Same test seam as list_transfers.
+	 */
+	public static function list_sessions( $created_gte = 0, $limit = 100 ) {
+		$override = apply_filters( 'aq_stripe_list_sessions', null, (int) $created_gte, (int) $limit );
+		if ( $override !== null ) { return is_array( $override ) ? $override : []; }
+		$q = '/checkout/sessions?status=complete&limit=' . max( 1, min( 100, (int) $limit ) );
 		if ( $created_gte > 0 ) { $q .= '&created[gte]=' . (int) $created_gte; }
 		$r = self::req( 'GET', $q );
 		return ( is_array( $r ) && isset( $r['data'] ) && is_array( $r['data'] ) ) ? $r['data'] : [];

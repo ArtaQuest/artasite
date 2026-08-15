@@ -185,7 +185,15 @@ final class Challenges {
 			'revenue' => self::CREATE_FEE, 'status' => 'open', 'created' => Data::now(),
 		] );
 		if ( ! $id ) { return Rest::err( 'failed', 'Could not start the challenge', 500 ); }
-		Economy::credit_coins( $uid, -self::CREATE_FEE, 'chcreate', 'chcreate:' . (int) $id ); // burned — it backs the pot
+		// The fee is burned and it BACKS THE POT, so a challenge that opens without its fee actually
+		// landing seeds a pool out of nothing. Take it under the wallet lock; if it cannot be taken,
+		// the challenge does not open.
+		$paid = Economy::spend( $uid, self::CREATE_FEE, 'chcreate', 'chcreate:' . (int) $id );
+		if ( $paid !== '' ) {
+			global $wpdb;
+			$wpdb->delete( Data::t( 'aq_challenges' ), [ 'id' => (int) $id ] ); // unpaid → un-opened, before anyone can enter
+			return Economy::spend_error( $paid, self::CREATE_FEE, 'Starting a challenge' );
+		}
 		$who = wp_get_current_user();
 		self::attach_thread( (int) $id, $title,
 			esc_html( $brief !== '' ? $brief : 'A member challenge by ' . ( $who ? $who->display_name : 'a member' ) . '. Enter your ' . $kind . ', collect hearts, split the pot at the new moon.' ) );
@@ -232,8 +240,12 @@ final class Challenges {
 		$bal = Economy::coin_balance( $uid );
 		if ( $bal < self::ENTER_FEE ) { return Rest::err( 'insufficient', 'Entering costs ₳' . self::ENTER_FEE . ' (it joins the pot) — you have ₳' . $bal . '.', 402 ); }
 		$ref = 'chent:' . (int) $ch['id'] . ':w' . $wid;
+		// The ref probe dedupes a REPLAY of this exact entry; it never serialised entries to different
+		// challenges, which all read one balance. spend() closes that; the probe still short-circuits
+		// the replay so a re-entry is not charged twice.
 		if ( ! Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'chent' AND ref = %s", [ $ref ] ) ) {
-			Economy::credit_coins( $uid, -self::ENTER_FEE, 'chent', $ref ); // burned — it backs the pot
+			$paid = Economy::spend( $uid, self::ENTER_FEE, 'chent', $ref ); // burned — it backs the pot
+			if ( $paid !== '' ) { return Economy::spend_error( $paid, self::ENTER_FEE, 'Entering this challenge' ); }
 		}
 		self::insert_entry( $ch, $wid, $uid, self::ENTER_FEE );
 		self::entry_touch( $kind, $wid ); // pick up hearts the work already earned this season

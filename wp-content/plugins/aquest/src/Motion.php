@@ -265,13 +265,23 @@ final class Motion {
 
 		if ( $row['status'] === 'draft' ) {
 			if ( $err = Challenges::quota_gate( $uid ) ) { return $err; } // shelf quota: prune before publishing more
+			// Friendly pre-check only — it keeps the exact figure in the refusal copy. The
+			// AUTHORITATIVE check is inside Economy::spend below, which holds this member's
+			// wallet lock across the check and the debit together.
 			$bal = Economy::coin_balance( $uid );
 			if ( $bal < $cost ) {
 				return Rest::err( 'insufficient', 'Publishing a ' . self::mmss( (int) $row['seconds'] ) . ' animation costs ₳' . $cost . ' — you have ₳' . $bal . '.', 402 );
 			}
+			// Charge BEFORE claiming the row. Claim-then-charge publishes the work even when the
+			// charge is refused, which mints the goods for free.
+			$paid = Economy::spend( $uid, $cost, 'motion', $ref );
+			if ( $paid !== '' ) { return Economy::spend_error( $paid, $cost, 'Publishing this animation' ); }
 			$claimed = (bool) Data::update( 'aq_animations', [ 'status' => 'published', 'anim_state' => 'live', 'updated' => Data::now() ], [ 'id' => $id, 'status' => 'draft' ] );
+			if ( ! $claimed ) {
+				// Another request published it first — give the money straight back, append-only.
+				Economy::refund_spend( $uid, $cost, 'motion-void', $ref );
+			}
 			if ( $claimed ) {
-				Economy::credit_coins( $uid, -$cost, 'motion', $ref );
 				Economy::content_points( $uid, $cost, $ref );
 				Challenges::enter( 'animation', $id, $uid, $cost ); // fee → the season's Animation Challenge pool
 			}

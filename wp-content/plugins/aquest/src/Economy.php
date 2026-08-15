@@ -92,8 +92,10 @@ final class Economy {
 		if ( 'welcome' !== $track ) { Extra::nudge_tag_slot( (int) $uid, $before, $before + (int) $delta ); }
 	}
 
+	/** Returns the ledger row id, or 0 when nothing moved — callers that record a CONSEQUENCE of the
+	 *  movement (a prize pool growing, a seat being held) must gate on it. */
 	public static function credit_coins( $uid, $delta, $reason = '', $ref = '' ) {
-		if ( ! $uid || ! $delta ) { return; }
+		if ( ! $uid || ! $delta ) { return 0; }
 		$id = Data::insert( 'aq_coin_ledger', [
 			'user_id' => $uid, 'delta' => (int) $delta, 'reason' => $reason, 'ref' => $ref, 'created' => Data::now(),
 		] );
@@ -103,7 +105,7 @@ final class Economy {
 		// row is the money; a write that failed simply didn't happen.
 		if ( ! $id ) {
 			error_log( "AQ credit_coins: ledger INSERT FAILED u{$uid} {$delta} '{$reason}' ref={$ref} — no coins moved" );
-			return;
+			return 0;
 		}
 		// Keep the circulating-supply counter in lockstep so reserve()/Funds read one row, not Σ ledger.
 		self::counter_add( 'coins_issued', (int) $delta );
@@ -118,6 +120,7 @@ final class Economy {
 				. 'debits raced past their checks or a check was bypassed. The ledger is append-only — audit the refs and '
 				. 'reconcile with a compensating entry; if it repeats, suspect deliberate race abuse.', true );
 		}
+		return (int) $id;
 	}
 
 	/**
@@ -151,6 +154,86 @@ final class Economy {
 	public static function release_lock( $name ) {
 		global $wpdb;
 		$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name = %s", 'aq_lock_' . $name ) );
+	}
+
+	/** The one per-member lock name every coin debit must serialise on. */
+	public static function wallet_lock( $uid ) { return 'wallet_u' . (int) $uid; }
+
+	/**
+	 * TAKE COINS OFF A MEMBER. The only correct way to do it.
+	 *
+	 * A debit is two statements — read the balance, then append a negative row — and between them any
+	 * number of other requests can read the same balance. Every spend site in this codebase wrote
+	 * those two statements itself, and only four of them (sell, Shop::order, Learn::ensure_enrolled,
+	 * the challenge entry) took the per-member lock that makes the pair atomic. The comment above
+	 * Economy::sell asserted that ONE lock name was "shared by every user-initiated debit path"; it
+	 * was shared by six of about fifteen. Media::buy, the five studio publish paths, the nbdev run and
+	 * both challenge writers checked and debited with nothing serialising them, and aq_coin_ledger's
+	 * (reason, ref) index is deliberately NON-unique, so the database did not stop it either. Five
+	 * concurrent requests could each see the same ₳1000 and each spend it.
+	 *
+	 * The affordability check therefore belongs INSIDE the lock, with the debit, in one primitive that
+	 * a new studio cannot forget to use. Callers get a code back and map it to their own copy:
+	 *
+	 *   ''            — charged; $coins are gone and the ledger row is written
+	 *   'busy'        — another debit for this member is in flight (retryable; answer 429)
+	 *   'insufficient'— the wallet does not hold $coins (answer 402)
+	 *   'failed'      — the ledger write itself did not land; nothing was charged (answer 500)
+	 *
+	 * ORDER OF OPERATIONS AT THE CALL SITE. Charge first, then grant the goods, and if granting fails
+	 * append a compensating credit with the same ref. The reverse order — grant, then charge — hands
+	 * over the goods even when the charge is refused, which is how coins get created from nothing.
+	 */
+	public static function spend( $uid, $coins, $reason, $ref ) {
+		$uid   = (int) $uid;
+		$coins = (int) $coins;
+		if ( $uid < 1 || $coins < 1 ) { return 'failed'; }
+		$lock = self::wallet_lock( $uid );
+		if ( ! self::acquire_lock( $lock, 30 ) ) { return 'busy'; }
+		try {
+			if ( self::coin_balance( $uid ) < $coins ) { return 'insufficient'; }
+			$id = Data::insert( 'aq_coin_ledger', [
+				'user_id' => $uid, 'delta' => -$coins, 'reason' => (string) $reason,
+				'ref' => (string) $ref, 'created' => Data::now(),
+			] );
+			// Mirror credit_coins exactly: the counter moves only when the row actually landed, because
+			// the row IS the money. A bumped counter behind a failed insert desyncs coins_issued from
+			// Σ ledger permanently (observed on prod 2026-07-10).
+			if ( ! $id ) {
+				error_log( "AQ spend: ledger INSERT FAILED u{$uid} -{$coins} '{$reason}' ref={$ref} — nothing charged" );
+				return 'failed';
+			}
+			self::counter_add( 'coins_issued', -$coins );
+			return '';
+		} finally {
+			self::release_lock( $lock );
+		}
+	}
+
+	/**
+	 * Give back coins a spend() took when the thing it paid for could not be delivered. Append-only:
+	 * this is a NEW positive row carrying the same ref, never an edit of the debit. Credits need no
+	 * lock — only the check-then-debit pair races.
+	 */
+	public static function refund_spend( $uid, $coins, $reason, $ref ) {
+		if ( (int) $coins < 1 ) { return; }
+		self::credit_coins( (int) $uid, (int) $coins, (string) $reason, (string) $ref );
+	}
+
+	/** Turn a non-empty spend() code into the REST refusal for it, so every debit site answers the
+	 *  same status for the same cause. $what names the purchase, e.g. 'Publishing this track'. */
+	public static function spend_error( $code, $coins, $what = 'This' ) {
+		if ( 'busy' === $code ) {
+			return Rest::err( 'busy', 'Another payment on your wallet is in progress. Please try again in a moment.', 429 );
+		}
+		if ( 'insufficient' === $code ) {
+			// Deliberately no balance figure here. The payer is not always the caller (an operator can
+			// publish a member's draft, and the member is charged), so Rest::uid() would quote the
+			// wrong wallet. Each site's own pre-check already carries the exact number in the ordinary
+			// case; reaching this branch means the balance moved underneath us anyway.
+			return Rest::err( 'insufficient', $what . ' costs ₳' . (int) $coins . ', which is more than the wallet holds.', 402 );
+		}
+		return Rest::err( 'charge_failed', 'The charge could not be recorded, so nothing was taken. Please try again.', 500 );
 	}
 
 	// ── Materialized projections of the ledgers (read accelerators; see Schema aq_standing/aq_counters) ──
@@ -258,6 +341,29 @@ final class Economy {
 	 *  'backing_mg') so concurrent buys / sells / bursary grants never lose an update the way the old
 	 *  aq_coin_backing_mg OPTION's read-modify-write (get_option → +n → update_option) did. Seeded once at
 	 *  migration (Schema) from the legacy option, or from the coins in circulation on a genesis install. */
+	/**
+	 * RELEASE GOLD BACKING, NEVER BELOW ZERO.
+	 *
+	 * `counter_add` is an unconditional `SET value = value + %d`, so redeeming or refunding a coin
+	 * used to subtract a milligram whether or not a milligram was there. Live state is 4,230 coins
+	 * issued against 0 mg held, so the very first redemption of an unbacked coin would have
+	 * manufactured a NEGATIVE gold holding — which reserve() publishes raw, and which makes
+	 * `shortfall = max(0, issued - backing)` subtract a negative and stop falling as coins leave
+	 * circulation. Books::authorised_shortfall() meanwhile falls with coin_liability, so the two
+	 * diverge and Integrity::check_reserve begins paging CRITICAL "FULL-RESERVE INVARIANT BROKEN,
+	 * FREEZE cash-outs" for a redemption that was entirely legitimate.
+	 *
+	 * Redeeming a coin from the authorised unbacked tranche extinguishes a liability; it does not
+	 * remove metal that was never in the vault. So release only what is actually held.
+	 */
+	public static function release_backing( $coins ) {
+		$coins = (int) $coins;
+		if ( $coins < 1 ) { return 0; }
+		$release = min( (int) self::backing_mg(), $coins );
+		if ( $release > 0 ) { self::counter_add( 'backing_mg', -$release ); }
+		return $release;
+	}
+
 	public static function backing_mg() {
 		return self::counter( 'backing_mg' );
 	}
@@ -913,6 +1019,20 @@ final class Economy {
 	 *  Sourced from the surviving aq_gold_spot_oz_usd / aq_coin_spread / aq_fx_rates options (the
 	 *  wallet's buy/sell/cash-out all depend on these — without them every figure renders as 0). */
 	public static function reserve( $req ) {
+		return self::reserve_data();
+	}
+
+	/**
+	 * The reserve figures themselves, from no request at all.
+	 *
+	 * Split out to follow the rule Books::cra_package established: anything callable from cron takes
+	 * DATA, not a request. reserve() never read $req, so passing null worked — but that is a fact
+	 * about today's body, not a contract, and the reserve audit tick calls this on a WP-cron run where
+	 * there is no request to hand. The same shape fatalled /foundation/cra/pdf in production on the
+	 * first request it served, and the test harness could not see it because its Rest::p stub returns
+	 * the default without touching the argument.
+	 */
+	public static function reserve_data() {
 		$issued  = self::counter( 'coins_issued' ); // Σ all coin deltas, maintained in lockstep (was Σ over the whole ledger)
 		// mg gold held in reserve — an atomic counter, seeded at migration to the genuine holdings. Reads the
 		// TRUE (possibly under-collateralized) ratio, never a falsely-perfect 1.0; buy/sell + add_backing
@@ -1003,9 +1123,20 @@ final class Economy {
 	public static function buy( $req ) {
 		if ( Rest::throttle( 'coin_buy', 20, 3600 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$uid = Rest::uid();
-		$cad = (float) Rest::p( $req, 'amount', 0 );
-		if ( $cad < 1 ) { return Rest::err( 'bad_input', 'Minimum purchase is $1.' ); }
+		$raw = Rest::p( $req, 'amount', 0 );
+		$cad = is_numeric( $raw ) ? (float) $raw : 0.0;
+		// BOUND THE INPUT BEFORE ANY ARITHMETIC. `(int)` on an out-of-range double is reduced modulo
+		// 2^64 in PHP, so an unchecked amount does not merely produce a big number — it produces a
+		// WRONG one, of either sign. Verified on PHP 8.4: amount=1e17 yields coins=533049040511727104
+		// and amount_cents=-8446744073709551616. The coin count then travels to fulfilment in Stripe
+		// metadata and is minted verbatim, so the stated invariant below (fiat captured == coin value
+		// credited == gold backing added) held only by Stripe's own API refusing the charge.
+		if ( ! is_finite( $cad ) || $cad < 1 ) { return Rest::err( 'bad_input', 'Minimum purchase is $1.' ); }
+		if ( $cad > self::MAX_BUY_CAD ) {
+			return Rest::err( 'too_large', 'The most you can buy in one go is $' . number_format( self::MAX_BUY_CAD ) . '. Split it into smaller purchases.' );
+		}
 		$p     = self::coin_price();
+		if ( ! ( $p['buy'] > 0 ) ) { return Rest::err( 'price_unavailable', 'The coin price is unavailable right now. Please try again shortly.', 503 ); }
 		$coins = (int) floor( $cad / $p['buy'] );
 		if ( $coins < 1 ) { return Rest::err( 'too_small', 'That buys less than one coin.' ); }
 		// Charge ONLY for the whole coins delivered (coins are integer-mg), never the rounded-down remainder
@@ -1041,6 +1172,23 @@ final class Economy {
 		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'buy' AND ref = %s LIMIT 1", [ $ref ] ) ) { return 0; }
 		self::credit_coins( $uid, $coins, 'buy', $ref );
 		self::counter_add( 'backing_mg', $coins ); // atomic — full-reserve backing rises in lockstep with the mint
+		// KNOWN GAP, DELIBERATELY LEFT OPEN: a member coin sale is real fiat arriving and a real
+		// obligation created, and it reaches the double-entry books not at all — only donations do,
+		// because only they pass through Funds::fund_append.
+		//
+		// A mirror was written for this and then REMOVED, because crediting `coin_liability` is not
+		// free: Books::reconcile_coin_liability treats that account's entire balance as the founding
+		// tranche (its target is derived purely from the invoice register and capped at the issued
+		// coins), so it would release a member's purchase into activity_revenue on the next daily
+		// tick — booking as income an obligation still sitting in that member's wallet, still
+		// redeemable through the live cash-out rail. It would also move authorised_shortfall(), and so
+		// the threshold Integrity::check_reserve pages on.
+		//
+		// Closing this properly means deciding how the Foundation REPRESENTS member-held coin
+		// alongside the founding tranche — a separate liability account, or a tranche-aware reconcile
+		// that values each at its own issue price. That is an accounting policy call for the operator,
+		// not something to infer from code, and it must not be guessed at on statements that are
+		// published and filed. Until it is made, the books omit coin sales and say so here.
 		return $coins;
 	}
 
@@ -1059,16 +1207,20 @@ final class Economy {
 	 * went back, the coins did not — and credit_coins' overdraft canary pages an operator to chase it.
 	 * Returns the coins clawed back (0 when there is nothing to reverse, or it was already done).
 	 */
-	public static function reverse_coin_purchase( $ref, $rev_ref, $fraction = 1.0 ) {
+	public static function reverse_coin_purchase( $ref, $rev_ref, $fraction = 1.0, $already = 0 ) {
 		$ref = (string) $ref; $rev_ref = (string) $rev_ref;
 		if ( $ref === '' || $rev_ref === '' ) { return 0; }
 		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . ' WHERE ref = %s LIMIT 1', [ $rev_ref ] ) ) { return 0; }
 		$row = Data::one( 'SELECT user_id, delta FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'buy' AND ref = %s LIMIT 1", [ $ref ] );
 		if ( ! $row || (int) $row['delta'] < 1 ) { return 0; } // nothing was minted for this payment
-		$coins = (int) floor( (int) $row['delta'] * max( 0.0, min( 1.0, (float) $fraction ) ) );
+		// $fraction is the CUMULATIVE share of the payment now refunded, so subtract what earlier
+		// refunds on the same charge already clawed back and reverse only the remainder. Without this
+		// a second refund would either double-count or (under the old one-ref-per-charge scheme) do
+		// nothing at all.
+		$coins = (int) floor( (int) $row['delta'] * max( 0.0, min( 1.0, (float) $fraction ) ) ) - (int) $already;
 		if ( $coins < 1 ) { return 0; }
 		self::credit_coins( (int) $row['user_id'], -$coins, 'refund', $rev_ref );
-		self::counter_add( 'backing_mg', -$coins ); // the mint is undone, so its gold is released with it
+		self::release_backing( $coins ); // the mint is undone, so its gold is released with it — never below zero
 		return $coins;
 	}
 
@@ -1125,7 +1277,12 @@ final class Economy {
 		$ref = 'stripe_tr:' . $tid;
 		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_coin_ledger' ) . " WHERE reason = 'sell' AND ref = %s LIMIT 1", [ $ref ] ) ) { return 0; }
 		self::credit_coins( $uid, -$coins, 'sell', $ref );
-		self::counter_add( 'backing_mg', -$coins ); // atomic — backing shrinks in lockstep with the redeemed coins
+		self::release_backing( $coins ); // never below zero — see release_backing
+		// The cash-out half of the same open gap — see fulfil_coin_purchase. A mirror here would debit
+		// `coin_liability` for coins the reconcile has (or will have) already released, driving the
+		// founding tranche below its own target, from which reconcile_coin_liability cannot recover:
+		// its release goes negative, it returns 0 forever, authorised_shortfall() falls with it, and
+		// Integrity::check_reserve begins paging CRITICAL for an entirely legitimate redemption.
 		return $coins;
 	}
 
@@ -1174,7 +1331,7 @@ final class Economy {
 	 *  to. Idempotent: an existing account id is reused, never duplicated. */
 	public static function payout_connect( $req ) {
 		if ( ! self::cashout_enabled() ) {
-			return Rest::err( 'cashout_unavailable', 'Cash-out isn’t available yet. Your coins are fully gold-backed and safe.', 503 );
+			return Rest::err( 'cashout_unavailable', 'Cash-out isn’t available yet. Your coins keep their value and can be spent or held; the live gold backing is published at /reserve.', 503 );
 		}
 		if ( Rest::throttle( 'payout_connect', 10, 3600 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$uid  = Rest::uid();
@@ -1205,7 +1362,7 @@ final class Economy {
 	 */
 	public static function sell( $req ) {
 		if ( ! self::cashout_enabled() ) {
-			return Rest::err( 'cashout_unavailable', 'Cash-out isn’t available yet. Your coins are fully gold-backed and safe — spend or hold them, and you’ll be able to redeem for cash once cash-out launches.', 503 );
+			return Rest::err( 'cashout_unavailable', 'Cash-out isn’t available yet — spend or hold your coins, and you’ll be able to redeem for cash once it launches. The live gold backing is published at /reserve.', 503 );
 		}
 		if ( Rest::throttle( 'coin_sell', 10, 3600 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$uid   = Rest::uid();
@@ -1221,9 +1378,12 @@ final class Economy {
 		// reads the balance THEN moves money, so two in-flight sells must be serialised. ATOMIC claim
 		// (acquire_lock) — the old transient get→set had a read/write race two simultaneous sells with
 		// DIFFERENT amounts could both slip through (same-amount replays were already caught by the
-		// Stripe idempotency key below; different-amount pairs were not). ONE lock name — wallet_u<id> —
-		// is shared by every user-initiated debit path (sell / shop order / enrol), so a cash-out can
-		// never race a purchase past both balance checks either.
+		// Stripe idempotency key below; different-amount pairs were not). ONE lock name — wallet_u<id>.
+		// This comment used to assert that name was "shared by every user-initiated debit path"; it was
+		// shared by six of about fifteen, and the other nine (Media::buy, the five studio publish
+		// paths, the nbdev run, both challenge writers, both competition writers) checked and debited
+		// with nothing serialising them. They now all go through Economy::spend(), which takes this
+		// same lock, so a cash-out genuinely cannot race a purchase past both balance checks.
 		$lock = 'wallet_u' . $uid;
 		if ( ! self::acquire_lock( $lock, 30 ) ) { return Rest::err( 'busy', 'Another payment is in progress. Please wait a moment.', 429 ); }
 		try {
@@ -1262,6 +1422,11 @@ final class Economy {
 	// accepted only inside HARD sanity bounds AND within a ±20% band of the current value — a glitched
 	// or manipulated feed can nudge the price, never crater or spike it. Rejections and staleness are
 	// alarmed through the Watchdog so a broken feed is an operator page, not a silent mispricing.
+
+	/** Ceiling on a single coin purchase (CAD). Not a policy limit so much as an overflow guard: it
+	 *  keeps `(int)` casts of amount/coins far inside the integer range, and caps the damage of a
+	 *  fat-fingered or scripted amount. Stripe's own API refuses over 99,999,999 cents. */
+	const MAX_BUY_CAD = 10000.0;
 
 	const ORACLE_MAX_AGE = 7 * DAY_IN_SECONDS;  // staleness alarm threshold (checked hourly by the Watchdog)
 	const SPOT_HARD_MIN  = 1000.0;              // USD/oz — outside these the feed is broken, full stop

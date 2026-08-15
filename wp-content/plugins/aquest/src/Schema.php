@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.69.0';
+	const VERSION = '1.70.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -263,7 +263,7 @@ final class Schema {
 				user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
 				delta BIGINT NOT NULL DEFAULT 0,
 				reason VARCHAR(40) NOT NULL DEFAULT '',
-				ref VARCHAR(64) NOT NULL DEFAULT '',
+				ref VARCHAR(191) NOT NULL DEFAULT '',
 				created INT UNSIGNED NOT NULL DEFAULT 0,
 				PRIMARY KEY  (id),
 				KEY user_id_id (user_id, id),
@@ -278,7 +278,7 @@ final class Schema {
 				user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
 				delta INT NOT NULL DEFAULT 0,
 				track VARCHAR(20) NOT NULL DEFAULT 'learn',
-				ref VARCHAR(64) NOT NULL DEFAULT '',
+				ref VARCHAR(191) NOT NULL DEFAULT '',
 				created INT UNSIGNED NOT NULL DEFAULT 0,
 				PRIMARY KEY  (id),
 				KEY user_id_id (user_id, id),
@@ -513,7 +513,7 @@ final class Schema {
 				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 				bucket VARCHAR(24) NOT NULL DEFAULT 'bursary',
 				cents BIGINT NOT NULL DEFAULT 0,
-				ref VARCHAR(64) NOT NULL DEFAULT '',
+				ref VARCHAR(191) NOT NULL DEFAULT '',
 				note VARCHAR(191) NOT NULL DEFAULT '',
 				created INT UNSIGNED NOT NULL DEFAULT 0,
 				PRIMARY KEY  (id),
@@ -569,7 +569,7 @@ final class Schema {
 				unit_cents INT NOT NULL DEFAULT 0,
 				fee_cap INT NOT NULL DEFAULT 5,
 				donor_name VARCHAR(80) NOT NULL DEFAULT '',
-				ref VARCHAR(64) NOT NULL DEFAULT '',
+				ref VARCHAR(191) NOT NULL DEFAULT '',
 				widened INT UNSIGNED NOT NULL DEFAULT 0,
 				created INT UNSIGNED NOT NULL DEFAULT 0,
 				PRIMARY KEY  (id),

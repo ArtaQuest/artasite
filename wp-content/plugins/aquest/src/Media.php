@@ -637,17 +637,22 @@ final class Media {
 		if ( Rest::throttle( 'aq_media_buy', 6, 60 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$coins = (int) $req->get_param( 'coins' );
 		if ( $coins < 1 || $coins > 1000 ) { return Rest::err( 'bad_amount', 'Choose between 1 and 1000 coins', 400 ); }
-		if ( Economy::coin_balance( $uid ) < $coins ) { return Rest::err( 'insufficient', 'Not enough ArtaCoin', 400 ); }
-
 		$bytes = $coins * self::BYTES_PER_COIN;
-		// The grant row is written FIRST with a unique ref; the charge carries the same ref, so a
-		// replayed request cannot double-charge (Economy::credit_coins is idempotent per ref).
-		$ref = 'media-cap:' . $uid . ':' . Data::now() . ':' . wp_generate_password( 6, false, false );
-		$id  = Data::insert( 'aq_media_grants', [
+		$ref   = 'media-cap:' . $uid . ':' . Data::now() . ':' . wp_generate_password( 6, false, false );
+		// Charge FIRST. The old order granted the capacity and debited after, with a comment claiming
+		// "Economy::credit_coins is idempotent per ref" — it is not; it is a bare append with no ref
+		// probe. Nothing serialised the balance check either, so six requests a minute (the throttle)
+		// could each spend the same balance and each keep their storage. Economy::spend holds the
+		// member's wallet lock across the check and the debit.
+		$paid = Economy::spend( $uid, $coins, 'media-capacity', $ref );
+		if ( $paid !== '' ) { return Economy::spend_error( $paid, $coins, 'This much storage' ); }
+		$id = Data::insert( 'aq_media_grants', [
 			'user_id' => $uid, 'bytes' => $bytes, 'coins' => $coins, 'ref' => $ref, 'created' => Data::now(),
 		] );
-		if ( ! $id ) { return Rest::err( 'write_failed', 'Could not record the purchase', 500 ); }
-		Economy::credit_coins( $uid, -$coins, 'media-capacity', $ref );
+		if ( ! $id ) {
+			Economy::refund_spend( $uid, $coins, 'media-capacity-void', $ref ); // no capacity granted → nothing owed
+			return Rest::err( 'write_failed', 'Could not record the purchase', 500 );
+		}
 		return [ 'ok' => true, 'bytes' => $bytes, 'capacity' => self::capacity( $uid ), 'balance' => Economy::coin_balance( $uid ) ];
 	}
 
