@@ -148,6 +148,8 @@ final class Books {
 	 * quietly omitting them.
 	 */
 	const GIFI_TOTALS = [
+		'2599' => 'Total assets',
+		'3499' => 'Total liabilities',
 		'3600' => 'Retained earnings/deficit',
 		'3620' => 'Total shareholder equity',
 		'3640' => 'Total liabilities and shareholder equity',
@@ -663,6 +665,7 @@ final class Books {
 				'filing_due'        => self::filing_due( $fy['end'] ),
 				'filings'           => self::filings(),
 				'archives'          => self::archives(),
+				'obligations'       => self::obligations(),
 			],
 			'statements'  => $st,
 			'entries'     => self::recent_entries( $fy ),
@@ -932,9 +935,18 @@ final class Books {
 		// this plugin also runs on Studio's SQLite emulation where that is not dependable. Two bounded
 		// reads and an array_diff say the same thing on both engines. The 'rename:'/'widen:' refs are
 		// the zero-sum bucket transfers, which are correctly absent from the books.
+		//
+		// READ IT DEFENSIVELY. verify() is called by statements(), which is THE public endpoint for
+		// this whole subsystem — so an unreadable table here does not fail a check, it 500s the page.
+		// aq_fund_ledger belongs to Schema, not to these self-installing tables, so on a fresh site
+		// (or one where dbDelta silently skipped it under SQLite) it can genuinely be absent. With no
+		// fund ledger there are no movements to mirror, which satisfies the invariant vacuously.
+		global $wpdb;
+		$prev      = $wpdb->suppress_errors( true );
 		$fund_rows = Data::all(
 			'SELECT id, bucket FROM ' . Data::t( 'aq_fund_ledger' )
 			. " WHERE ref NOT LIKE 'rename:%' AND ref NOT LIKE 'widen:%' ORDER BY id DESC LIMIT 500" );
+		$wpdb->suppress_errors( $prev );
 		$unmirrored = [];
 		if ( $fund_rows ) {
 			$ids  = array_map( static fn( $r ) => (int) $r['id'], $fund_rows );
@@ -1000,6 +1012,10 @@ final class Books {
 		$s125 = self::gifi_lines( array_merge( $st['operations']['revenue'], $st['operations']['expenses'] ) );
 
 		$net = $st['operations']['result'];
+		// 2599 and 3499 are VALIDITY-CHECK items — CRA verifies the accounting equation from them, and a
+		// Schedule 100 without both is incomplete. They were missing entirely.
+		$s100[] = [ 'gifi' => '2599', 'label' => self::GIFI_TOTALS['2599'], 'cents' => $st['position']['total_assets'] ];
+		$s100[] = [ 'gifi' => '3499', 'label' => self::GIFI_TOTALS['3499'], 'cents' => $st['position']['total_liabilities'] ];
 		$s100[] = [ 'gifi' => '3600', 'label' => self::GIFI_TOTALS['3600'], 'cents' => $st['position']['net_assets'] ];
 		$s100[] = [ 'gifi' => '3620', 'label' => self::GIFI_TOTALS['3620'], 'cents' => $st['position']['net_assets'] ];
 		$s100[] = [ 'gifi' => '3640', 'label' => self::GIFI_TOTALS['3640'], 'cents' => $st['position']['total_liabilities'] + $st['position']['net_assets'] ];
@@ -1662,7 +1678,7 @@ final class Books {
 			. 'are not submitted. Codes are from Guide RC4088.' );
 		$pdf->h2( 'Schedule 100 — Balance sheet information' );
 		foreach ( $cra['schedule_100'] as $r ) {
-			$pdf->row( $r['gifi'] . '   ' . $r['label'], $m( (int) $r['cents'] ), in_array( $r['gifi'], [ '3600', '3620', '3640' ], true ),
+			$pdf->row( $r['gifi'] . '   ' . $r['label'], $m( (int) $r['cents'] ), in_array( $r['gifi'], [ '2599', '3499', '3600', '3620', '3640' ], true ),
 				count( (array) ( $r['accounts'] ?? [] ) ) > 1 ? implode( ' + ', $r['accounts'] ) : '' );
 		}
 		if ( $fy['first'] ) {
@@ -1775,6 +1791,116 @@ final class Books {
 		return $pdf->output();
 	}
 
+	/** The last day of the month following $date's month — the GST59 clock. */
+	private static function month_end_after( $date ) {
+		return ( new \DateTimeImmutable( $date, new \DateTimeZone( self::TZ ) ) )
+			->modify( 'first day of next month' )->modify( 'last day of this month' )->format( 'Y-m-d' );
+	}
+
+	/** GST self-assessed but not yet remitted, grouped by the month the tax became payable. */
+	public static function gst_due() {
+		self::ensure_tables();
+		$done = get_option( 'aq_books_gst_remitted', [] );
+		if ( ! is_array( $done ) ) { $done = []; }
+		$by = [];
+		foreach ( Data::all( 'SELECT e.on_date, l.credit FROM ' . Data::t( 'aq_books_line' ) . ' l JOIN '
+			. Data::t( 'aq_books_entry' ) . " e ON e.id = l.entry_id WHERE l.account = 'gst_payable' AND l.credit > 0" ) as $r ) {
+			$month = substr( (string) $r['on_date'], 0, 7 );
+			$by[ $month ] = ( $by[ $month ] ?? 0 ) + (int) $r['credit'];
+		}
+		ksort( $by );
+		$out = [];
+		foreach ( $by as $month => $cents ) {
+			$out[] = [ 'month' => $month, 'cents' => $cents,
+				'due' => self::month_end_after( $month . '-01' ), 'remitted' => (string) ( $done[ $month ] ?? '' ) ];
+		}
+		return $out;
+	}
+
+	/**
+	 * Every deadline the Foundation is actually under, in one list.
+	 *
+	 * They are not all tax, and the most dangerous one is not: an Alberta corporation that misses its
+	 * annual return to Corporate Registry MAY BE DISSOLVED, and no amount of tidy bookkeeping survives
+	 * the company ceasing to exist. It falls on the anniversary of incorporation, the registry mails a
+	 * reminder to the registered office a month before, and nothing in these books would otherwise
+	 * have known it existed.
+	 *
+	 * Each entry carries what it is, who wants it, when, and WHAT HAPPENS IF IT IS MISSED — a deadline
+	 * without its consequence gets triaged by whoever is busiest rather than by what it costs.
+	 */
+	public static function obligations() {
+		self::ensure_tables();
+		$today = self::today();
+		$days  = function ( $d ) use ( $today ) {
+			return (int) ( new \DateTimeImmutable( $today, new \DateTimeZone( self::TZ ) ) )
+				->diff( new \DateTimeImmutable( $d, new \DateTimeZone( self::TZ ) ) )->format( '%r%a' );
+		};
+		$out   = [];
+		$filed = self::filings();
+
+		$inc = new \DateTimeImmutable( self::INCORPORATED, new \DateTimeZone( self::TZ ) );
+		$ab  = get_option( 'aq_books_ab_return', [] );
+		if ( ! is_array( $ab ) ) { $ab = []; }
+		for ( $y = (int) $inc->format( 'Y' ) + 1; $y <= (int) substr( $today, 0, 4 ) + 1; $y++ ) {
+			$due = self::clamp_date( $y, (int) $inc->format( 'n' ), (int) $inc->format( 'j' ) );
+			$out[] = [
+				'key' => 'ab-return:' . $y, 'title' => 'Alberta annual return ' . $y,
+				'authority' => 'Alberta Corporate Registry', 'due' => $due, 'days' => $days( $due ),
+				'done' => (string) ( $ab[ (string) $y ] ?? '' ), 'amount' => null,
+				'consequence' => 'The corporation MAY BE DISSOLVED if this is not filed.',
+				'detail' => 'Filed through an authorised Alberta service provider. Corporate Registry mails a reminder to '
+					. 'the registered office one month before the anniversary of incorporation — that address has to receive post.',
+			];
+		}
+
+		foreach ( self::gst_due() as $g ) {
+			$out[] = [
+				'key' => 'gst59:' . $g['month'], 'title' => 'GST59 remittance for ' . $g['month'],
+				'authority' => 'Canada Revenue Agency', 'due' => $g['due'], 'days' => $days( $g['due'] ),
+				'done' => $g['remitted'], 'amount' => $g['cents'],
+				'consequence' => 'Interest and penalty accrue on tax remitted late.',
+				'detail' => 'A non-registrant self-assesses GST on an imported taxable supply of services and remits it on '
+					. 'form GST59, by the last day of the month following the month the tax became payable.',
+			];
+		}
+
+		foreach ( self::fy_list() as $fy ) {
+			if ( $today <= $fy['end'] ) { continue; }
+			$due = self::filing_due( $fy['end'] );
+			$out[] = [
+				'key' => 't2:' . $fy['label'], 'title' => 'T2 Corporation Income Tax Return - ' . $fy['label'],
+				'authority' => 'Canada Revenue Agency', 'due' => $due, 'days' => $days( $due ),
+				'done' => (string) ( $filed[ $fy['label'] ]['t2'] ?? '' ), 'amount' => null,
+				'consequence' => 'Required every year even with no tax payable.',
+				'detail' => 'The filing package is generated and frozen at /foundation/cra/pdf.',
+			];
+		}
+
+		usort( $out, fn( $a, $b ) => strcmp( $a['due'], $b['due'] ) );
+		return $out;
+	}
+
+	/** Record an obligation as discharged: an Alberta annual return, or a GST remittance. */
+	public static function mark_done( $key, $on = '' ) {
+		$on = self::norm_date( $on ) ?: self::today();
+		if ( preg_match( '/^ab-return:(\d{4})$/', (string) $key, $m ) ) {
+			$ab = get_option( 'aq_books_ab_return', [] );
+			if ( ! is_array( $ab ) ) { $ab = []; }
+			$ab[ $m[1] ] = $on;
+			update_option( 'aq_books_ab_return', $ab, true );
+			return 'recorded';
+		}
+		if ( preg_match( '/^gst59:(\d{4}-\d{2})$/', (string) $key, $m ) ) {
+			$g = get_option( 'aq_books_gst_remitted', [] );
+			if ( ! is_array( $g ) ) { $g = []; }
+			$g[ $m[1] ] = $on;
+			update_option( 'aq_books_gst_remitted', $g, true );
+			return 'recorded';
+		}
+		return 'unknown obligation';
+	}
+
 	/** Every frozen package, newest first: what was generated, when, and the hash of its bytes. */
 	public static function archives() {
 		self::ensure_tables();
@@ -1859,8 +1985,15 @@ final class Books {
 			if ( 'recorded' !== $r ) { return Rest::err( 'bad_input', 'That period is not one the books know about.' ); }
 			$out['filed'] = $fy . ':' . $which;
 		}
-		$out['signer']   = self::signer();
-		$out['filings']  = self::filings();
+		$done_key = sanitize_text_field( (string) Rest::p( $req, 'done_key', '' ) );
+		if ( '' !== $done_key ) {
+			$r = self::mark_done( $done_key, (string) Rest::p( $req, 'done_on', '' ) );
+			if ( 'recorded' !== $r ) { return Rest::err( 'bad_input', 'That is not an obligation the books track.' ); }
+			$out['done'] = $done_key;
+		}
+		$out['signer']      = self::signer();
+		$out['filings']     = self::filings();
+		$out['obligations'] = self::obligations();
 		return $out;
 	}
 
@@ -2392,27 +2525,32 @@ final class Books {
 		if ( ! class_exists( '\\AQ\\Watchdog' ) ) { return; }
 		$sent = get_option( 'aq_books_deadline_sent', [] );
 		if ( ! is_array( $sent ) ) { $sent = []; }
-		$today = new \DateTimeImmutable( self::today(), new \DateTimeZone( self::TZ ) );
-		foreach ( self::fy_list() as $fy ) {
-			if ( self::today() <= $fy['end'] ) { continue; }
-			if ( in_array( $fy['label'] . ':filed', $sent, true ) ) { continue; }
-			$due  = self::filing_due( $fy['end'] );
-			$days = (int) $today->diff( new \DateTimeImmutable( $due, new \DateTimeZone( self::TZ ) ) )->format( '%r%a' );
-			foreach ( [ 120, 60, 30, 7, 0 ] as $mark ) {
-				$key = $fy['label'] . ':' . $mark;
-				if ( $days > $mark || in_array( $key, $sent, true ) ) { continue; }
-				$sent[] = $key;
+
+		// Everything in obligations() — the Alberta annual return and the GST remittances as well as
+		// the returns. Driving the sweep off that list means a deadline added later is alerted on
+		// without touching this function.
+		foreach ( self::obligations() as $ob ) {
+			if ( '' !== $ob['done'] ) { continue; }
+			// Alert on the TIGHTEST threshold already crossed, and retire the looser ones with it.
+			// Firing "due in 120 days" and then "due in 60" and then "due in 30" on three consecutive
+			// mornings — which is what stepping through the list one per run did — teaches the reader
+			// to skim past the alert, and the one that matters is the one they skim.
+			$crossed = array_values( array_filter( [ 120, 60, 30, 14, 7, 0 ], fn( $m ) => $ob['days'] <= $m ) );
+			if ( ! $crossed ) { continue; }
+			$mark = min( $crossed );
+			$key  = $ob['key'] . ':' . $mark;
+			if ( ! in_array( $key, $sent, true ) ) {
+				foreach ( $crossed as $m ) { $sent[] = $ob['key'] . ':' . $m; }
+				$sent = array_values( array_unique( $sent ) );
 				update_option( 'aq_books_deadline_sent', $sent, true );
-				Watchdog::alert( 'books_due_' . $key,
-					$days < 0
-						? 'T2 for ' . $fy['label'] . ' is OVERDUE by ' . abs( $days ) . ' days'
-						: 'T2 for ' . $fy['label'] . ' is due in ' . $days . ' days (' . $due . ')',
-					"The filing package is generated and frozen: https://artaquest.com/wp-json/aq/v1/foundation/cra/pdf?fy=" . $fy['label'] . "\n"
-					. "The figures behind it: https://artaquest.com/finances\n\n"
-					. 'A T2 is required for every tax year even with no tax payable. Nothing here has been submitted — '
-					. 'the package is prepared for a human to review and file.',
-					$days <= 7 );
-				break;
+				Watchdog::alert( 'books_ob_' . str_replace( ':', '_', $key ),
+					$ob['days'] < 0
+						? $ob['title'] . ' is OVERDUE by ' . abs( $ob['days'] ) . ' days'
+						: $ob['title'] . ' is due in ' . $ob['days'] . ' days (' . $ob['due'] . ')',
+					$ob['authority'] . "\n" . ( null !== $ob['amount'] ? 'Amount: ' . self::cad( (int) $ob['amount'] ) . "\n" : '' )
+					. "\n" . $ob['consequence'] . "\n\n" . $ob['detail']
+					. "\n\nThe figures: https://artaquest.com/finances",
+					$ob['days'] <= 14 );
 			}
 		}
 	}

@@ -902,6 +902,7 @@ export type Statements = {
     year_end: string; year_end_chosen: string; year_end_settled: boolean; max_first_end: string;
     note: string; years: BookFy[]; locked: string[]; filing_due: string;
     filings: Record<string, { t2?: string; t1044?: string }>;
+    obligations: { key: string; title: string; authority: string; due: string; days: number; done: string; amount: number | null; consequence: string; detail: string }[];
     archives: { id: number; name: string; bytes: number; sha256: string; created: number; url: string }[];
   };
   statements: {

@@ -408,6 +408,35 @@ export default function Finances() {
             </Section>
           ) : null}
 
+          {st.fiscal.obligations.length > 0 ? (
+            <Section title="What has to be done, and by when"
+              note="Not all of it is tax, and the one that matters most is not. Each carries what happens if it is missed.">
+              <div className="grid gap-3">
+                {st.fiscal.obligations.map((o) => {
+                  const overdue = !o.done && o.days < 0;
+                  const soon = !o.done && o.days >= 0 && o.days <= 30;
+                  return (
+                    <Card key={o.key} className={`p-5 ${overdue || soon ? "border-yang/50" : ""}`}>
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <span className="text-[15px] font-semibold text-ink">{o.title}</span>
+                        <span data-ay-skip="1" className={`text-[13px] font-semibold ${o.done ? "text-ink-3" : overdue || soon ? "text-yang" : "text-ink-2"}`}>
+                          {o.done ? `done ${o.done}` : overdue ? `${Math.abs(o.days)} days overdue` : `in ${o.days} days`}
+                        </span>
+                      </div>
+                      <dl className="mt-2 grid grid-cols-2 gap-x-5 gap-y-1 text-[12.5px] sm:grid-cols-3">
+                        <div><dt className="text-ink-3">Due</dt><dd data-ay-skip="1" className="mt-0.5 text-ink-2">{o.due}</dd></div>
+                        <div><dt className="text-ink-3">To</dt><dd className="mt-0.5 text-ink-2">{o.authority}</dd></div>
+                        {o.amount !== null ? <div><dt className="text-ink-3">Amount</dt><dd data-ay-skip="1" className="mt-0.5 text-ink-2">{money(o.amount, cur)}</dd></div> : null}
+                      </dl>
+                      <p className={`mt-2 text-[13px] font-medium ${overdue || soon ? "text-yang" : "text-ink-2"}`}>{o.consequence}</p>
+                      <p className="mt-1 max-w-[72ch] text-[12.5px] leading-relaxed text-ink-3">{o.detail}</p>
+                    </Card>
+                  );
+                })}
+              </div>
+            </Section>
+          ) : null}
+
           <Section title="Can I check this myself?" note="Yes, and without asking us for anything.">
             <Card className="p-5">
               <ul className="grid gap-3 text-[13.5px] leading-relaxed text-ink-2">
