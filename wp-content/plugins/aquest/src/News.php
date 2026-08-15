@@ -253,8 +253,24 @@ final class News {
 		foreach ( self::DETECTORS as $key => $d ) {
 			try {
 				$t0   = microtime( true );
+				self::fetch_failures( true );   // start this detector with a clean slate
 				$rows = call_user_func( [ __CLASS__, $d['fn'] ] );
-				Extra::src_health( 'news:' . $key, (bool) $rows, ( microtime( true ) - $t0 ) * 1000, count( (array) $rows ) );
+				$bad  = self::fetch_failures( true );
+				// ⚠️ "NOTHING CROSSED THE THRESHOLD" IS NOT A FAILURE. This reported `(bool) $rows`,
+				// so a detector that ran perfectly and found a quiet world was recorded identically to
+				// one whose source refused to answer. For `price` — a commodity move past several
+				// sigma — an empty result is the normal state almost every day, so four of the six
+				// legs sat permanently marked as broken. That conflation only became visible when the
+				// health map was about to be published, and publishing it would have told readers
+				// working instruments were failing. A throw is a failure; a return is a result, and
+				// the count is what says whether the result was empty.
+				// A leg with more than one feed (quake reads USGS AND EMSC) still counts as working
+				// while any of them answered — but a partial outage is named in the note rather than
+				// hidden, because a source quietly dropping out halves the coverage without changing
+				// the shape of anything downstream.
+				$ok   = $rows || ! $bad;
+				Extra::src_health( 'news:' . $key, $ok, ( microtime( true ) - $t0 ) * 1000,
+					count( (array) $rows ), $bad ? implode( ' · ', array_slice( $bad, 0, 3 ) ) : '' );
 				self::ingest( $key, (array) $rows );
 			} catch ( \Throwable $e ) {
 				Extra::src_health( 'news:' . $key, false, 0, 0, $e->getMessage() );
@@ -686,6 +702,82 @@ final class News {
 		if ( is_string( $m ) ) { $m = json_decode( $m, true ); }
 		$kind = is_array( $m ) ? (string) ( $m['kind'] ?? '' ) : '';
 		return false !== strpos( $kind, 'explosion' );
+	}
+
+	/**
+	 * WHAT EACH INSTRUMENT LAST SAID, IN PUBLIC (GET news/sources).
+	 *
+	 * ArtaNews' whole claim is that a stranger can re-run the evidence and contradict it. That claim
+	 * quietly excluded the one fact needed to audit it: whether the detectors are actually running.
+	 * The health map existed, but only an authenticated operator could see it — so when the Reddit
+	 * collector turned out to be blocked from every datacenter IP and returned nothing on every tick,
+	 * production looked exactly like a quiet news day. It hid for a whole deploy. A source that has
+	 * stopped answering is news about the news, and it belongs where anyone can check it.
+	 *
+	 * SILENCE IS REPORTED AS A STATE, not omitted. A detector that has never run and one that ran
+	 * successfully are different facts, and a reader must be able to tell them apart — that confusion
+	 * is precisely what this route exists to end.
+	 *
+	 * The note is passed through Extra's shape-based value mask before publication. These strings are
+	 * our own, but they can carry a provider's error text, and a second private rule about what may be
+	 * published is exactly how the Jetpack token got out — one place decides, and this defers to it.
+	 */
+	public static function sources_health() {
+		$h    = Extra::crawl_health();
+		$mask = static function ( $s ) {
+			$s = (string) $s;
+			return preg_match( Extra::REDACT_VALUE_RE, $s ) ? '••• withheld — the message carried a credential-shaped value' : $s;
+		};
+		$now  = time();
+		$out  = [];
+		// Every detector in the registry, plus the Tier-2 leg — named even when it has never run, so
+		// "missing" cannot be mistaken for "fine".
+		$legs = [];
+		foreach ( self::DETECTORS as $key => $d ) { $legs[ 'news:' . $key ] = $d['label'] . ' (detection)'; }
+		$legs['news:reddit'] = 'Reddit context (Tier 2 — never creates a detection)';
+		foreach ( $legs as $key => $label ) {
+			$r = is_array( $h[ $key ] ?? null ) ? $h[ $key ] : null;
+			if ( ! $r ) {
+				$out[] = [ 'source' => $key, 'label' => $label, 'state' => 'never run',
+					'note' => 'This leg has not reported since the server last restarted. That is not the same as healthy.' ];
+				continue;
+			}
+			$at   = (int) ( $r['at'] ?? 0 );
+			$note = $mask( $r['err'] ?? '' );
+			// FOUR DISTINCT STATES, because collapsing any two of them misinforms. 'dormant' is a
+			// credential-gated source switched off — working as designed, and calling it 'failing'
+			// would train a reader to ignore a red line. 'quiet' is a detector that ran and found
+			// nothing, which for a several-sigma price move is the normal state almost every day;
+			// calling THAT failing is the same error in the other direction, and it is what this map
+			// used to say about four of the six legs.
+			if ( empty( $r['ok'] ) ) {
+				$state = 0 === strpos( (string) ( $r['err'] ?? '' ), 'dormant' ) ? 'dormant' : 'failing';
+			} else {
+				$state = ( (int) ( $r['n'] ?? 0 ) ) > 0 ? 'ok' : 'quiet';
+			}
+			$out[] = [
+				'source'   => $key,
+				'label'    => $label,
+				'state'    => $state,
+				'last_run' => $at,
+				'last_run_iso' => $at ? gmdate( 'c', $at ) : '',
+				'age_s'    => $at ? max( 0, $now - $at ) : null,
+				'took_ms'  => (int) ( $r['ms'] ?? 0 ),
+				'returned' => (int) ( $r['n'] ?? 0 ),
+				'note'     => $note,
+			];
+		}
+		return [
+			'sources' => $out,
+			'note'    => 'What each ArtaNews instrument last reported. Detection is instruments only; the Reddit'
+				. ' leg is attributed context hung off a detection an instrument already made, and can never'
+				. ' create, rank or revise one. States: ok — ran and found something; quiet — ran and found'
+				. ' nothing, which for a several-sigma price move is the normal state almost every day;'
+				. ' dormant — switched off because its credential is absent; failing — the source did not'
+				. ' answer; never run — no report since the server last restarted, which is not the same as'
+				. ' healthy.',
+			'checked' => $now,
+		];
 	}
 
 	/**
@@ -2744,10 +2836,41 @@ final class News {
 	}
 
 	/** Bounded GET → body string ('' on any failure — a source outage is never fatal). */
+	/**
+	 * A REFUSED SOURCE AND A QUIET ONE MUST NOT LOOK THE SAME. This returned '' for every failure —
+	 * timeout, 500, 403, DNS — and every caller then produced no rows, which the tick recorded as an
+	 * ordinary empty result. So a feed that had stopped answering entirely was indistinguishable from
+	 * a world where nothing happened, which is the same blindness that let a wholly-blocked Reddit
+	 * path survive a full deploy. The failure is remembered here, at the one layer all six detectors
+	 * share, and detect_tick reads it rather than guessing from an empty array.
+	 *
+	 * ⚠️ 204 IS SUCCESS. EMSC answers 204 No Content when nothing matches the query — genuinely
+	 * common now the floors are right — and treating that as a failure would report the seismic leg
+	 * as broken on every quiet day.
+	 */
+	private static $fetch_fail = [];
+
+	/** Clear the failure buffer before a detector runs, and read it after. */
+	private static function fetch_failures( $reset = false ) {
+		$f = self::$fetch_fail;
+		if ( $reset ) { self::$fetch_fail = []; }
+		return $f;
+	}
+
 	private static function fetch( $url, $timeout = 20 ) {
-		$res = wp_remote_get( $url, [ 'timeout' => $timeout, 'redirection' => 3,
+		$res  = wp_remote_get( $url, [ 'timeout' => $timeout, 'redirection' => 3,
 			'user-agent' => 'ArtaQuest/1.0 (+https://artaquest.com; automated data monitoring)' ] );
-		if ( is_wp_error( $res ) || 200 !== (int) wp_remote_retrieve_response_code( $res ) ) { return ''; }
+		$host = (string) ( wp_parse_url( $url, PHP_URL_HOST ) ?: 'source' );
+		if ( is_wp_error( $res ) ) {
+			self::$fetch_fail[] = $host . ': ' . $res->get_error_message();
+			return '';
+		}
+		$code = (int) wp_remote_retrieve_response_code( $res );
+		if ( 204 === $code ) { return ''; }               // answered, and the answer is "nothing"
+		if ( $code < 200 || $code > 299 ) {
+			self::$fetch_fail[] = $host . ': HTTP ' . $code;
+			return '';
+		}
 		return (string) wp_remote_retrieve_body( $res );
 	}
 }
