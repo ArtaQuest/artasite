@@ -436,11 +436,21 @@ add_action(
 				'@id'         => $home . 'about/#aboutpage',
 				'url'         => $home . 'about/',
 				'name'        => 'About ArtaQuest',
-				'description' => 'ArtaQuest is a not-for-profit social media for science and education. Every post is a public Kaggle notebook that has been run, checked in the open against Kaggle\'s public record and published by its own author with a permanent citation link.',
+				// Describes what the PAGE is about, which since 2026-08-15 is chiefly its founder's own
+				// account. `mentions` names him as an entity and points at his profile, so a search for
+				// his name has an edge to follow from the page that actually tells his story.
+				'description' => 'Why ArtaQuest exists, in the words of the person who runs it. Arash Ashrafnejad — born in Tehran, 1994 — on leaving a PhD in artificial intelligence to return to teaching, and on building a not-for-profit feed where every post is a public Kaggle notebook anyone can run again and check.',
 				'inLanguage'  => aq_seo_bcp47(),
 				'isPartOf'    => array( '@id' => $home . '#website' ),
 				'about'       => array( '@id' => $home . '#org' ),
 				'mainEntity'  => array( '@id' => $home . '#org' ),
+				'mentions'    => array(
+					'@type' => 'Person',
+					'name'  => 'Arash Ashrafnejad',
+					'url'   => $home . 'u/arash/',
+					'jobTitle' => 'Founder',
+					'worksFor' => array( '@id' => $home . '#org' ),
+				),
 			);
 		}
 

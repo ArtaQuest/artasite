@@ -251,6 +251,16 @@ if [ -f tools/redaction-gate.php ]; then
   else printf '%s\n' "$out" | grep -E '^(FAIL|redaction-gate)' | sed 's/^/    /'; fail "redaction changed — a member datum is published, or the product was unpublished"; mark; fi
 else skip "tools/redaction-gate.php missing"; fi
 
+# ── 5d. The founder's note still matches its hand-written fa/ar ────────────────────────────────
+# AboutI18n keys Persian and Arabic on md5 of the ENGLISH source, so editing one character of a
+# paragraph in About.tsx orphans its translation — silently, in English, with nothing failing. The
+# page would fall back to machine output in exactly the two languages the note was written for.
+step "Founder's note still matches its fa/ar"
+if [ -f tools/about-i18n-gate.php ]; then
+  if out=$("$PHP" tools/about-i18n-gate.php 2>&1); then ok "$(printf '%s' "$out" | tail -1)"
+  else printf '%s\n' "$out" | sed 's/^/    /'; fail "the note drifted from its translations"; mark; fi
+else skip "tools/about-i18n-gate.php missing"; fi
+
 # ── 6. Typecheck, lint, build ──────────────────────────────────────────────────────────────────
 step "Typecheck, lint, build"
 if [ ! -d artaquest-web/node_modules ]; then

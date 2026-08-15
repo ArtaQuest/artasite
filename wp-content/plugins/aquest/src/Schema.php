@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.70.0';
+	const VERSION = '1.71.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -1757,6 +1757,17 @@ final class Schema {
 			$loaded = \AQ\Cities::seed();
 			if ( \AQ\Cities::count() > 0 ) { update_option( 'aq_cities_seeded', self::VERSION, true ); }
 			if ( $loaded ) { error_log( '[aq] cities gazetteer seeded: ' . $loaded . ' rows' ); }
+		}
+
+		// 2026-08-15 — the founder's note on /about in Persian and Arabic, hand-written rather than
+		// machine-translated (AboutI18n explains why, and how the rows survive the mesh). Presence-
+		// gated on its own option, and the seeder is idempotent, so this costs one get_option() once
+		// the seed has run. Guarded on the table existing because dbDelta can silently skip one.
+		if ( ! get_option( \AQ\AboutI18n::SEEDED )
+			&& self::table_exists( "{$p}aq_translations" )
+			&& class_exists( '\\AQ\\AboutI18n' ) ) {
+			$seeded = \AQ\AboutI18n::seed();
+			error_log( '[aq] about note fa/ar: ' . $seeded );
 		}
 
 		// 1.36.0 — GRANTS are now authored + editable in Studio: assign every author-less grant (existing

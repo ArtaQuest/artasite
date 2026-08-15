@@ -1373,11 +1373,17 @@ function aq_app_route_seo( $slug ) {
 				'The checklist states four things a stranger can check: the notebook is public, every one of its inputs is public, the run finished and produced these exact files, and it ran with the internet switched off on Kaggle\'s own record — or, if it did not, we say so plainly. Nothing is scored or ranked. You then publish it yourself: a single-use secret goes to your own registered email, and your click plus your device passkey mints the permanent DOI short link.',
 			),
 		),
+		// The page is now the founder's own account of why this exists, so the crawler-facing prose is
+		// too — it used to describe the product while the page described a person, which is the kind of
+		// mismatch that leaves a name unfindable. His name, birthplace, the PhD he left and the two
+		// organisations are the facts somebody searching for HIM would type, and each one is on the
+		// rendered page in his own words. Paragraph two keeps what the platform is, because an About
+		// page still has to answer that for a journalist or a donor.
 		'about'       => array(
 			'Work you can check for yourself',
 			array(
-				$b . ' is a not-for-profit social media for science and education. Every post is a public Kaggle notebook that has been run, checked in the open against Kaggle\'s own public record. Nothing is scored or judged, and only the member who brought a notebook here can publish it, from their own inbox — their click plus their device passkey mints the permanent citation link, which credits the notebook\'s Kaggle author.',
-				'It stays free to read, and anyone can run it again on Kaggle for as long as its author keeps it there — which is exactly why that citation link exists: a kernel is owner-editable and deletable, and the link outlives it. The Foundation runs on donations, and every number behind that — every coin, heart and donation — is public.',
+				$b . ' is run by one person: Arash Ashrafnejad, born in Tehran in 1994, who left a PhD in artificial intelligence in Montréal to return to teaching. He helped found Neuromatch Academy, an online school for science, and worked at the Center for Rigor on making science itself more honest. He writes here about why he stopped researching these systems and started teaching instead: an AI is trained to collapse a world of possibilities into its single most likely answer, and the danger he saw was less machines taking over than people quietly letting the machine think for them.',
+				$b . ' is the answer he built — a not-for-profit social media for science and education, run by no employer, funder or organisation. Every post is a public Kaggle notebook that has been run, checked in the open against Kaggle\'s own public record. Nothing is scored or judged, and only the member who brought a notebook here can publish it, from their own inbox — their click plus their device passkey mints the permanent citation link, which credits the notebook\'s Kaggle author. It stays free to read, and the Foundation runs on donations, with every coin, heart and donation public.',
 			),
 		),
 		// The courses economy this entry used to describe (enrolments, the creator ladder's revenue
