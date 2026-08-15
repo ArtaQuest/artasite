@@ -139,6 +139,15 @@ export default function Login() {
           text: "continue_with",
           width: w,
           logo_alignment: "center",
+          // THE FIELD THAT ACTUALLY SETS THE BUTTON'S LANGUAGE. `?hl=` on the gsi/client script URL
+          // is not it: with hl=en pinned and the rest of the page in English, a tr-TR browser still
+          // rendered "Google ile devam edin" — screenshotted from a Turkish-locale Chrome to be
+          // sure, because the iframe's TITLE attribute came back "Sign in with Google Button" in
+          // English while the visible label was Turkish. The accessible name and the drawn label do
+          // not come from the same place, so checking the title proves nothing about what a person
+          // sees. Without this, Google falls back to the browser/IP locale and the button disagrees
+          // with the language selector three inches above it.
+          locale: uiLang() || "en",
         });
       })
       .catch(() => {
