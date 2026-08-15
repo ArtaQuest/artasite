@@ -43,6 +43,11 @@ const SOCIALS: { label: string; href: string; path: string; viewBox?: string }[]
   // GitHub is not decoration: it is the source-code CDN every submitted notebook is mirrored to
   // as a public gist, which is what makes the one-click Colab link possible (src/Gist.php).
   { label: "GitHub", href: "https://github.com/ArtaQuest", path: "M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3z" },
+  // X, restored 2026-08-15 (operator). It was removed on 08-13 because the handle it pointed at,
+  // @arta_quest, is DEAD — re-checked today and it still answers 404, which is why the URL changed
+  // rather than the entry simply coming back. @artafather resolves 200 (checked before linking:
+  // a social row is the one place on the site where a broken link is the whole content of the link).
+  { label: "X", href: "https://x.com/artafather", path: "M18.9 1.15h3.68l-8.04 9.19L24 22.85h-7.4l-5.8-7.58-6.64 7.58H.48l8.6-9.83L0 1.15h7.59l5.24 6.93 6.07-6.93zm-1.29 19.5h2.04L6.48 3.24H4.29L17.61 20.65z" },
   // Kaggle is the least decorative link here (operator 2026-08-02): every submission IS a public
   // Kaggle notebook that has been run, and `artafather` is the account hosting the platform's own
   // heavy data — the model weights and dataset files this site serves. The mark is drawn on a 512

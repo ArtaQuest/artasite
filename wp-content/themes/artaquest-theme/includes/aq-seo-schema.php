@@ -66,10 +66,22 @@ function aq_social_profiles() {
 		// rather than the artafather account it used to (operator 2026-08-13): the org is the entity
 		// this schema is about, and a personal account is a different one.
 		'kaggle'    => get_option( 'aq_social_kaggle', 'https://www.kaggle.com/organizations/artaquest-foundation' ),
+		// X, restored 2026-08-15 (operator), pointing at @artafather. Two things worth knowing before
+		// anyone "corrects" this:
+		//   • It is NOT the old @arta_quest, which is dead — 404 on 2026-08-13 when X was pulled, and
+		//     404 again today. The handle changed; the entry did not merely come back.
+		//   • @artafather is the founder's handle, and the Kaggle line two rules up was deliberately
+		//     moved OFF that same account so `sameAs` would name the ORGANISATION. The difference is
+		//     that a Kaggle ORG account exists and an X one does not: there is no @artaquest to point
+		//     at, so this is the platform's only X presence, and the footer presents it as such.
+		//     If an organisation account is ever created, move this the way Kaggle was moved.
+		'x'         => get_option( 'aq_social_x', 'https://x.com/artafather' ),
 		/*
 		 * PARKED. 2026-07-31 (operator: "only keep ista, x, linked, github for now", then "replace
-		 * insta with youtube"); X removed 2026-08-13 (operator). These are OUT of both the footer and `sameAs` together, per the sync
-		 * rule above — a schema link the footer dropped is a claim about an account nobody can find.
+		 * insta with youtube"). X was removed 2026-08-13 and RESTORED 2026-08-15 under a new handle —
+		 * it is live above, not parked. These are OUT of both the footer and `sameAs` together, per
+		 * the sync rule above — a schema link the footer dropped is a claim about an account nobody
+		 * can find.
 		 * "For now": the handles are kept here so restoring one is a single uncommented line, and so
 		 * the next person does not have to go and rediscover them.
 		 *   'instagram' => 'https://www.instagram.com/arta_quest'   (resolves 200; swapped for YouTube)
