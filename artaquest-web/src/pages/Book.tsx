@@ -443,7 +443,30 @@ function DayGrid({ month, dayMap, todayKey, horizonKey, selected, onChoose, onMo
   onMonth: (m: string) => void;
 }) {
   const cells = useMemo(() => monthCells(month), [month]);
-  const [focusKey, setFocusKey] = useState(selected || cells.find(Boolean) || "");
+
+  /** The first square anybody can actually press. `cells.find(Boolean)` is the 1st of the month,
+   *  which on a mid-month visit is in the past — and once the dead weeks stop being drawn (below)
+   *  it is not on the page at all, so a roving stop pointing at it leaves Tab focusing nothing. */
+  const firstStop = useMemo(
+    () => cells.find((k) => k && k >= todayKey && k <= horizonKey) || cells.find(Boolean) || "",
+    [cells, todayKey, horizonKey],
+  );
+
+  /** Six weeks are drawn for a month; far fewer can be booked. With a seven-day horizon that is ONE
+   *  live week and five empty ones — ~230px of nothing on a phone, sitting between the day you tap
+   *  and the times you came for. Only weeks wholly BEFORE today or wholly PAST the horizon are
+   *  dropped, both of which are unreachable by pointer and by keyboard (`move` clamps to the same
+   *  two bounds), so this hides no bookable day. Blanks inside a kept row still hold their cell. */
+  const rows = useMemo(() => {
+    const all = [0, 1, 2, 3, 4, 5];
+    const live = (r: number) =>
+      cells.slice(r * 7, r * 7 + 7).some((k) => k && k >= todayKey && k <= horizonKey);
+    const first = all.findIndex(live);
+    if (first < 0) return all; // the whole month is outside the range — draw it as it is
+    return all.slice(first, all.length - [...all].reverse().findIndex(live));
+  }, [cells, todayKey, horizonKey]);
+
+  const [focusKey, setFocusKey] = useState(selected || firstStop);
   // Focus is moved ONLY when the keyboard asked for it. A grid that focuses itself on every re-render
   // steals the caret from whatever the member was actually typing in.
   const want = useRef("");
@@ -454,8 +477,8 @@ function DayGrid({ month, dayMap, todayKey, horizonKey, selected, onChoose, onMo
   useEffect(() => {
     setFocusKey((k) => (k && monthOf(k) === month ? k
       : selected && monthOf(selected) === month ? selected
-      : cells.find(Boolean) || ""));
-  }, [month, selected, cells]);
+      : firstStop));
+  }, [month, selected, firstStop]);
 
   useEffect(() => {
     if (!want.current) return;
@@ -510,7 +533,7 @@ function DayGrid({ month, dayMap, todayKey, horizonKey, selected, onChoose, onMo
 
   return (
     <div role="grid" aria-label="Days" className={cx(GRID_ROWS, "mt-2")} onKeyDown={onKey}>
-      {[0, 1, 2, 3, 4, 5].map((row) => (
+      {rows.map((row) => (
         // `contents` keeps one CSS grid for the geometry while giving assistive tech real rows.
         <div key={row} role="row" className="contents">
           {cells.slice(row * 7, row * 7 + 7).map((key, i) => {
