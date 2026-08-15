@@ -392,11 +392,34 @@ final class Verify {
 		delete_user_meta( $uid, 'aq_palm_file' );
 	}
 
-	/** Swap our stored avatar in for the gravatar default, everywhere get_avatar(_url) is used. */
+	/**
+	 * The picture we hold for a member, in precedence order, or '' if we hold none:
+	 * uploaded photo → single-select typology pick → their season sigil.
+	 *
+	 * ONE definition, because avatar_url() and filter_avatar() below must not drift. They did: the
+	 * filter knew only about the uploaded photo, so every caller that did NOT go through
+	 * avatar_url() — the schema.org Person emitter in aq-seo-schema.php, the comment templates, and
+	 * anything added later — fell through to a raw Gravatar URL. A Gravatar URL is a hash of the
+	 * member's email address, which turns an indexable page into an email-confirmation oracle:
+	 * guess an address, hash it, compare. We mask those addresses everywhere else now.
+	 */
+	private static function own_picture( $uid ) {
+		$uid = (int) $uid;
+		if ( $uid <= 0 ) { return ''; }
+		$up = (string) get_user_meta( $uid, 'aq_avatar_url', true );
+		if ( $up !== '' ) { return $up; }
+		$pick = (string) get_user_meta( $uid, 'aq_typology_pic', true );
+		if ( $pick !== '' ) { return $pick; }
+		return (string) Seasons::sigil_url( Seasons::of_user( $uid ) );
+	}
+
+	/** Swap our own picture in for the gravatar default, everywhere get_avatar(_url) is used —
+	 *  including callers we do not know about, which is the point of doing it here and not at each
+	 *  call site. Members for whom we hold nothing still get their genuine gravatar. */
 	public static function filter_avatar( $args, $id_or_email ) {
 		$uid = self::resolve_uid( $id_or_email );
 		if ( $uid ) {
-			$url = (string) get_user_meta( $uid, 'aq_avatar_url', true );
+			$url = self::own_picture( $uid );
 			if ( $url !== '' ) { $args['url'] = $url; }
 		}
 		return $args;
@@ -415,20 +438,14 @@ final class Verify {
 	public static function avatar_url( $uid, $size = 96 ) {
 		$uid = (int) $uid;
 		if ( $uid <= 0 ) { return ''; }
-		// No uploaded picture → the member's SEASON SIGIL (the dozenal-numeral emblem of their one
-		// subscribed season — operator directive 2026-07-10) becomes their profile picture on every
-		// surface. An uploaded aq_avatar_url still wins (user-managed pictures are never replaced);
-		// members with no season on record (no birthday, no subscription) keep the legacy
-		// gravatar-or-initial fallback.
-		if ( '' === (string) get_user_meta( $uid, 'aq_avatar_url', true ) ) {
-			// A single-select typology pick (e.g. "which Rick and Morty character do you like
-			// most?") becomes the profile picture, the same slot the season sigil fills — the
-			// member chose it, an uploaded photo still wins, and it's changeable any time.
-			$pick = (string) get_user_meta( $uid, 'aq_typology_pic', true );
-			if ( $pick !== '' ) { return $pick; }
-			$sigil = Seasons::sigil_url( Seasons::of_user( $uid ) );
-			if ( $sigil ) { return $sigil; }
-		}
+		// The member's own picture, if we hold one: uploaded photo (user-managed pictures are never
+		// replaced) → single-select typology pick → their SEASON SIGIL, the dozenal-numeral emblem of
+		// the one season they subscribe to (operator directive 2026-07-10). own_picture() is the one
+		// definition of that order, shared with filter_avatar() so the two cannot disagree.
+		$own = self::own_picture( $uid );
+		if ( $own !== '' ) { return $own; }
+		// Nothing on record — a genuine gravatar, or d=404 so the <img> onError draws the brand
+		// initial disc rather than leaving an empty ring (ticket #113).
 		return (string) get_avatar_url( $uid, [ 'size' => $size, 'default' => '404' ] );
 	}
 	private static function resolve_uid( $id_or_email ) {

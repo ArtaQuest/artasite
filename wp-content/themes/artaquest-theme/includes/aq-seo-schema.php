@@ -375,7 +375,11 @@ add_action(
 					'@id'   => $purl . '#person',
 					'name'  => $u->display_name,
 					'url'   => $purl,
-					'image' => get_avatar_url( $u->ID, array( 'size' => 160 ) ),
+					// Verify::avatar_url, not get_avatar_url — the picture the page actually shows, and
+					// never a Gravatar URL, which is a hash of the member's email address. The
+					// pre_get_avatar_data filter now covers the bare call too, but a schema.org emitter
+					// naming a real person should say which resolver it means.
+					'image' => class_exists( '\AQ\Verify' ) ? \AQ\Verify::avatar_url( $u->ID, 160 ) : '',
 				);
 				$bio = get_user_meta( $u->ID, 'description', true );
 				if ( $bio ) {
