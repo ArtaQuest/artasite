@@ -1337,7 +1337,7 @@ function VisitorPage({ handle }: { handle: string }) {
 
               <div className="mt-3">
                 {dayTimes.length > 0 ? (
-                  <div className="grid grid-cols-3 gap-2 md:max-h-[468px] md:grid-cols-1 md:gap-1.5 md:overflow-y-auto md:pe-1">
+                  <div className="grid grid-cols-3 gap-2 md:max-h-[444px] md:grid-cols-1 md:gap-1.5 md:overflow-y-auto md:pe-1">
                     {dayTimes.map((ts) => {
                       const on = ts === picked;
                       // A slot a re-read says has gone stays PUT, disabled and labelled — it must
