@@ -96,7 +96,13 @@ final class KaggleId {
 	public static function claim( $req ) {
 		$uid = Rest::uid();
 		if ( $uid <= 0 ) { return Rest::err( 'auth', 'Sign in first', 401 ); }
-		if ( ! Rest::throttle( 'kgclaim' . $uid, 10, 600 ) ) {
+		// Rest::throttle() returns TRUE when the caller is OVER the limit — the sense every other
+		// call site in the plugin uses. This test was inverted, which refused the first ten attempts
+		// and then let the eleventh through: the endpoint answered "Too many attempts" to a member's
+		// very FIRST claim and only worked once they had hammered it. Nobody could prove a handle by
+		// the intended route, and a legitimate path that cannot be walked is what pushes people to
+		// look for a way around the gate.
+		if ( Rest::throttle( 'kgclaim' . $uid, 10, 600 ) ) {
 			return Rest::err( 'slow_down', 'Too many attempts — wait a few minutes', 429 );
 		}
 		$h = self::norm( Rest::p( $req, 'handle', '' ) );
@@ -152,8 +158,11 @@ final class KaggleId {
 	public static function verify( $req ) {
 		$uid = Rest::uid();
 		if ( $uid <= 0 ) { return Rest::err( 'auth', 'Sign in first', 401 ); }
-		// This makes an outbound HTTP call, so it is an amplifier if left open.
-		if ( ! Rest::throttle( 'kgverify' . $uid, 12, 600 ) ) {
+		// This makes an outbound HTTP call, so it is an amplifier if left open. Same inverted test
+		// as claim() above: throttle() is TRUE when over the limit, so `!` refused every honest
+		// first attempt and opened the amplifier only to a caller who had already hammered it —
+		// exactly backwards on both counts.
+		if ( Rest::throttle( 'kgverify' . $uid, 12, 600 ) ) {
 			return Rest::err( 'slow_down', 'Too many attempts — wait a few minutes', 429 );
 		}
 		$h   = self::norm( Rest::p( $req, 'handle', '' ) );
