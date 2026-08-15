@@ -42,6 +42,14 @@ function BuyPanel({ opts, buyPrice, fiat, payments, onCredited }: { opts: Donate
   // `round($coins * $p['buy'], 2)` — never the typed amount — so the button used to quote a price
   // the checkout page then contradicted. Quote the server's own figure and nothing else.
   const charge = buyPrice > 0 ? Math.round(estCoins * buyPrice * 100) / 100 : cad;
+  // THE FLOOR, SAID OUT LOUD. Economy::buy refuses anything under MIN_BUY_CAD, and a card network
+  // will not accept a charge that small anyway (Stripe's CAD minimum is $0.50). Until now the button
+  // simply went dead below it with nothing to explain why — a member who wanted a couple of coins
+  // saw a disabled control and no reason. Say what the smallest purchase actually is, in coins,
+  // because coins are what they came for.
+  const MIN_BUY = 1;
+  const minCoins = buyPrice > 0 ? Math.floor(MIN_BUY / buyPrice) : 0;
+  const belowMin = cad > 0 && cad < MIN_BUY;
   // No inbound payment rail (Stripe not configured) → don't show a form the backend will refuse; coins
   // are minted ONLY against a captured payment, never for free.
   const noRails = !payments || (!!opts && opts.gateways.length === 0);
@@ -78,7 +86,7 @@ function BuyPanel({ opts, buyPrice, fiat, payments, onCredited }: { opts: Donate
     <Card as="form" onSubmit={submit} className="flex flex-col gap-4 p-6">
       <div>
         <h3 className="text-[18px] font-bold tracking-tight">Buy coins</h3>
-        <p className="mt-1 text-[13px] text-ink-3">Top up your wallet with gold-backed Arta Coins. {buyPrice > 0 && <>Currently {perCoin(buyPrice, fiat)} per <bdi dir="ltr" data-ay-skip="1">₳</bdi>.</>}</p>
+        <p className="mt-1 text-[13px] text-ink-3">Top up your wallet with Arta Coins. {buyPrice > 0 && <>Currently {perCoin(buyPrice, fiat)} per <bdi dir="ltr" data-ay-skip="1">₳</bdi>, smallest purchase {formatFiat(MIN_BUY, fiat)} (<Coins n={minCoins} />).</>}</p>
       </div>
       {noRails ? (
         <p className="rounded-field border border-line bg-space-1 px-4 py-3 text-[14px] text-ink-2">Online payment isn’t available in your country yet. You can still win coins by taking a challenge pool — at the full moon the most-hearted entry takes the whole thing.</p>
@@ -90,6 +98,11 @@ function BuyPanel({ opts, buyPrice, fiat, payments, onCredited }: { opts: Donate
           {buyPrice > 0
             ? <p className="-mt-1 text-[13px] text-ink-3"><span className="font-semibold text-yang"><Coins n={estCoins} /></span> at today’s price, charged at {formatFiat(charge, fiat)}. Coins are whole, so we round down and only charge for the coins you receive.</p>
             : <p className="-mt-1 text-[13px] text-ink-3">Your coins are calculated at today’s gold price when the payment is confirmed.</p>}
+          {belowMin && buyPrice > 0 && (
+            <p role="status" className="-mt-1 text-[13px] leading-relaxed text-yang">
+              The smallest card payment is {formatFiat(MIN_BUY, fiat)}, which is <Coins n={minCoins} /> at today’s price — a card network won’t process less. Enter {formatFiat(MIN_BUY, fiat)} or more.
+            </p>
+          )}
           <Field label={<>Email <span className="font-normal text-ink-3">— for your receipt (optional; we’ll use your account email)</span></>}>
             <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" placeholder="you@example.com" className="bg-space-1 px-3.5" />
           </Field>

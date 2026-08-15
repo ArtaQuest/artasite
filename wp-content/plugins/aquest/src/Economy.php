@@ -1131,7 +1131,16 @@ final class Economy {
 		// and amount_cents=-8446744073709551616. The coin count then travels to fulfilment in Stripe
 		// metadata and is minted verbatim, so the stated invariant below (fiat captured == coin value
 		// credited == gold backing added) held only by Stripe's own API refusing the charge.
-		if ( ! is_finite( $cad ) || $cad < 1 ) { return Rest::err( 'bad_input', 'Minimum purchase is $1.' ); }
+		// The floor is a CARD-NETWORK fact, not a policy: Stripe will not process a CAD charge under
+		// $0.50, and a single coin is worth about a fifth of that. Say what the minimum BUYS, since
+		// coins are what the buyer is here for — "Minimum purchase is $1" left them to do the division.
+		if ( ! is_finite( $cad ) || $cad < self::MIN_BUY_CAD ) {
+			$p_min = self::coin_price();
+			$n_min = $p_min['buy'] > 0 ? (int) floor( self::MIN_BUY_CAD / $p_min['buy'] ) : 0;
+			return Rest::err( 'bad_input', 'The smallest card payment is $' . number_format( self::MIN_BUY_CAD, 2 )
+				. ( $n_min > 0 ? ' — that is ₳' . $n_min . ' at today’s price.' : '.' )
+				. ' A card network will not process less.' );
+		}
 		if ( $cad > self::MAX_BUY_CAD ) {
 			return Rest::err( 'too_large', 'The most you can buy in one go is $' . number_format( self::MAX_BUY_CAD ) . '. Split it into smaller purchases.' );
 		}
@@ -1427,6 +1436,10 @@ final class Economy {
 	 *  keeps `(int)` casts of amount/coins far inside the integer range, and caps the damage of a
 	 *  fat-fingered or scripted amount. Stripe's own API refuses over 99,999,999 cents. */
 	const MAX_BUY_CAD = 10000.0;
+
+	/** Floor on a single coin purchase (CAD). Stripe refuses a CAD charge under $0.50, and this sits
+	 *  above it so the buyer never meets the gateway's own refusal instead of ours. */
+	const MIN_BUY_CAD = 1.0;
 
 	const ORACLE_MAX_AGE = 7 * DAY_IN_SECONDS;  // staleness alarm threshold (checked hourly by the Watchdog)
 	const SPOT_HARD_MIN  = 1000.0;              // USD/oz — outside these the feed is broken, full stop
