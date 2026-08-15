@@ -966,26 +966,31 @@ function VisitorPage({ handle }: { handle: string }) {
         {displayTz === VIEWER_TZ
           ? "That is your own zone"
           : <>That is <span data-ay-skip="1">{ownerName}</span>’s zone, not yours</>}
+        {bothZones && (
+          <>
+            {" · "}
+            <span data-ay-skip="1">{ownerName}</span> is on{" "}
+            <span data-ay-skip="1">{clockOnly(now, ownerTz)}</span>
+          </>
+        )}
       </p>
-    </div>
-  );
-
-  const zoneControls = (
-    <>
-      {!!ownerTz && ownerTz !== VIEWER_TZ && (
-        <Segmented className={cx("mt-2", SEG_HIT)} label="Show times in"
-          value={displayTz === ownerTz ? "them" : "you"}
-          onChange={(v) => setDisplayTz(v === "them" ? ownerTz : VIEWER_TZ)}
-          options={[{ value: "you", label: "Yours" }, { value: "them", label: "Theirs" }]} />
-      )}
-      <div className="mt-1">
+      <div className="mt-2 flex flex-col items-center gap-1">
+        {bothZones && (
+          <Segmented className={SEG_HIT} label="Show times in"
+            value={displayTz === ownerTz ? "them" : "you"}
+            onChange={(v) => setDisplayTz(v === "them" ? ownerTz : VIEWER_TZ)}
+            options={[{ value: "you", label: "Yours" }, { value: "them", label: "Theirs" }]} />
+        )}
         {zonePicker ? (
-          <Select className="mt-1 h-11 w-full" label="Show times in this zone" value={displayTz} onChange={setDisplayTz} options={ZONES} skipOptions />
+          <Select className="h-11 w-full max-w-[320px]" label="Show times in this zone"
+            value={displayTz} onChange={setDisplayTz} options={ZONES} skipOptions />
         ) : (
-          <LinkButton className={cx("text-[12.5px]", LINK_HIT)} onClick={() => setZonePicker(true)}>Not your zone?</LinkButton>
+          <LinkButton className={cx("text-[12.5px]", LINK_HIT)} onClick={() => setZonePicker(true)}>
+            Show a different zone
+          </LinkButton>
         )}
       </div>
-    </>
+    </div>
   );
 
   /* ── the confirm surface: ONE instance, two positions ──
@@ -1228,7 +1233,6 @@ function VisitorPage({ handle }: { handle: string }) {
             <TypeChooser offered={offered} current={type} onPick={(s) => { setTypeSlug(s); setPicked(0); setDay(""); }} />
           </div>
         )}
-        {zoneControls}
       </section>
 
 
@@ -1423,17 +1427,6 @@ function VisitorPage({ handle }: { handle: string }) {
           <MetaList type={type} className="mt-3.5 border-t border-line pt-3.5" />
         </section>
       )}
-
-      <section className="hidden rounded-card border border-line bg-space-2 p-4 md:block" aria-label="Times are shown in">
-        <h2 className="text-[14px] font-semibold text-ink">Times are shown in</h2>
-        {bothZones && (
-          <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-3">
-            <span data-ay-skip="1">{ownerName}</span> is in <span data-ay-skip="1">{ownerTz}</span> —{" "}
-            <span data-ay-skip="1">{clockOnly(now, ownerTz)}</span> there now
-          </p>
-        )}
-        {zoneControls}
-      </section>
 
       {confirmSurface}
 
