@@ -783,6 +783,11 @@ html[data-theme="light"] .aq-sig-img { filter: none; }
   .aq-cert { position: absolute; left: 0; top: 0; width: 100%; background: #fff !important; border: 3px solid #c49b1a !important;
     print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .aq-cert .aq-glow { display: none !important; }
+  /* The PARTICIPATION certificate carries its own single hairline on the inner panel (2026-08-15,
+     when it was stripped back to one rule and one mark). The 3px outer frame above belongs to the
+     course DIPLOMA, which still has no border of its own — leaving it on both would print the
+     participation document inside two frames and undo the thing that makes it minimal. */
+  .aq-cert.aq-cert-plain { border: none !important; }
 }
 
 /* uPlot — interactive research/field charts, themed dark to the two-colour brand (see ResearchCharts.tsx). */
