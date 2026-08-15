@@ -1,6 +1,5 @@
-import { useId } from "react";
 import type { PartCert } from "../lib/api";
-import { LogoMark, cx } from "./ui";
+import { cx } from "./ui";
 import { uiLocale } from "../lib/wp";
 
 const BASE = import.meta.env.BASE_URL || "/";
@@ -12,20 +11,30 @@ const BASE = import.meta.env.BASE_URL || "/";
  * certificate that already exists, never its precondition. So it can never read as a receipt for
  * charity, and an unsponsored certificate has no empty box where a benefactor should have been.
  *
- * It is a DIFFERENT OBJECT from the course diploma (pages/Certificate.tsx), not a reskin of it:
+ * ── WHAT THIS DOCUMENT IS, AFTER 2026-08-15 ────────────────────────────────────────────────────
+ * One rule, one mark, four facts, two names. Everything that was decoration is gone.
  *
- *            course diploma                    certificate of participation
- *   shape    portrait, centred, symmetrical    landscape, left-ranged, asymmetrical
- *   frame    gold outside, blue inside         blue outside, gold inside (inverted)
- *   mark     a struck podium medallion         an engraved lunar seal — 28 ticks, one per day of
- *                                              the synodic month the challenge ran to
- *   ground   concentric guilloché              a horizon rule under the record
- *   footer   one signature plate               two plates: the founder's, and the donor's
+ * It used to carry a double frame (blue outside, gold within), four engraver's register ticks, a
+ * corner glow, a gradient hairline, and a 168px LUNAR SEAL — a moon with twenty-eight rim ticks,
+ * one per day of the synodic month, with three maria engraved on its face. None of it said anything
+ * about the person holding it. A certificate earns attention with the name on it, and every stroke
+ * that is not that name is competing with it.
  *
- * PRINT. The app is a dark theme; index.css:740-747 isolates `.aq-cert`, forces text to near-black
- * and strips dark fills, while SVG `fill`/`stroke` ATTRIBUTES survive (print-color-adjust: exact).
- * So every colour here is an SVG attribute or an inline rgba border — never a CSS `color` — which is
- * why the seal, the frame and the signature keep their colour on paper. The frame values are
+ * The moon is gone entirely, and deliberately. A challenge does run to a full moon, and that is a
+ * lovely fact about the PLATFORM — but on a document about one person's work it was trivia, stated
+ * three times over: in the seal, in "closed at the full moon of …", and again in the placement line.
+ * What a reader of this certificate needs is who, what, when, and how to check it.
+ *
+ * The mark that replaced the seal is the ring-through-A itself, drawn once at a restrained size. It
+ * is the Foundation's own mark rather than a motif invented for this page, which is what makes the
+ * document bespoke rather than decorated.
+ *
+ * PRINT. The app is a dark theme; the @media print block in index.css isolates `.aq-cert`, forces
+ * text to near-black and strips dark fills, while SVG `fill`/`stroke` ATTRIBUTES survive
+ * (print-color-adjust: exact). So every colour here is an SVG attribute or an inline rgba border —
+ * never a CSS `color` — which is why the mark, the rule and the signature keep their colour on
+ * paper. `aq-cert-plain` switches OFF the 3px outer frame that block draws: that frame belongs to
+ * the course diploma, which has no border of its own, and this document brings its own hairline. The frame values are
  * deliberately FIXED literals rather than brand tokens: a certificate is a printed artefact, and it
  * must render identically for a reader whose ArtaContrast setting we will never know.
  *
@@ -34,8 +43,8 @@ const BASE = import.meta.env.BASE_URL || "/";
  */
 
 const GOLD = "#E8B923";
-const GOLD_DEEP = "#C49B1A";
-const BLUE = "#2352E8";   // the brand-blue SENTINEL — the global remap maps it to the live token
+const BLUE_INK = "#1746DC"; // the real yin. NOT the #2352E8 sentinel — that is remapped by ATTRIBUTE
+                            // selectors only, so it is right inside an SVG and wrong in a CSS border.
 
 function fmtDate(ts: number): string {
   return ts ? new Date(ts * 1000).toLocaleDateString(uiLocale(), { year: "numeric", month: "long", day: "numeric" }) : "—";
@@ -46,54 +55,17 @@ function ordinal(n: number): string {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-/* ───────────────────────── the lunar seal ─────────────────────────
- * A challenge runs to a FULL MOON, so the seal is a moon: 28 ticks around the rim, one for each day
- * of the synodic month, with the twelve-o'clock tick struck long and gold — the moon it closed at.
- * The disc is engraved rather than illustrated: three maria as flat deeper-gold shapes, no gradient,
- * so it prints as cleanly at 100mm as it renders at 168px. */
-function LunarSeal({ className }: { className?: string }) {
-  const id = useId();
-  const ticks = Array.from({ length: 28 }, (_, i) => {
-    const a = (i / 28) * Math.PI * 2 - Math.PI / 2;      // 0 = twelve o'clock
-    const full = i === 0;
-    const r0 = full ? 60 : 66, r1 = 72;
-    return {
-      x1: 80 + Math.cos(a) * r0, y1: 80 + Math.sin(a) * r0,
-      x2: 80 + Math.cos(a) * r1, y2: 80 + Math.sin(a) * r1,
-      w: full ? 3 : i % 7 === 0 ? 1.8 : 1,
-      o: full ? 1 : i % 7 === 0 ? 0.75 : 0.4,
-    };
-  });
+/* ───────────────────────── the mark ─────────────────────────
+ * The Foundation's own sigil — a gold A through a blue ring — struck once, quietly, at the head of
+ * the document. Two strokes and a circle: it holds its shape at 64px on screen and at 20mm on paper,
+ * and it needs no legend because it is the same mark that is on everything else the Foundation puts
+ * its name to. */
+function CertMark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 160 160" className={cx("h-auto", className)} role="img" aria-label="ArtaQuest lunar seal" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <clipPath id={`${id}-disc`}><circle cx="80" cy="80" r="47" /></clipPath>
-      </defs>
-      {/* rim: a blue outer ring, the 28 day-ticks, then a fine gold inner ring */}
-      <circle cx="80" cy="80" r="76" fill="none" stroke={BLUE} strokeWidth="1.6" strokeOpacity="0.7" />
-      {ticks.map((t, i) => (
-        <line key={i} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke={GOLD_DEEP} strokeWidth={t.w} strokeOpacity={t.o} strokeLinecap="round" />
-      ))}
-      <circle cx="80" cy="80" r="55" fill="none" stroke={GOLD_DEEP} strokeWidth="0.9" strokeOpacity="0.55" />
-      {/* the full moon itself */}
-      <circle cx="80" cy="80" r="47" fill={GOLD} fillOpacity="0.14" stroke={GOLD} strokeWidth="1.8" />
-      <g clipPath={`url(#${id}-disc)`} fill={GOLD_DEEP} fillOpacity="0.3">
-        <ellipse cx="64" cy="66" rx="16" ry="13" />
-        <ellipse cx="95" cy="88" rx="12" ry="10" />
-        <ellipse cx="70" cy="99" rx="8" ry="6.5" />
-      </g>
-      {/* the ring-through-A brand mark, engraved small at the moon's centre */}
-      <circle cx="80" cy="80" r="19" fill="none" stroke={BLUE} strokeWidth="2.2" />
-      <path d="M80 68 L88 92 M80 68 L72 92 M75.4 84 H84.6" fill="none" stroke={GOLD} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-/* A single corner tick — an engraver's register mark, not the diploma's flourish. */
-function CornerTick({ className, rotate }: { className: string; rotate: number }) {
-  return (
-    <svg className={cx("pointer-events-none absolute h-7 w-7", className)} viewBox="0 0 28 28" fill="none" aria-hidden style={{ transform: `rotate(${rotate}deg)` }}>
-      <path d="M2 9 V2 H9" stroke={GOLD_DEEP} strokeWidth="1.3" strokeLinecap="square" />
+    <svg viewBox="0 0 96 96" className={cx("h-auto", className)} role="img" aria-label="ArtaQuest" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="48" cy="48" r="30" fill="none" stroke={BLUE_INK} strokeWidth="2.4" />
+      <path d="M48 28 L61 68 M48 28 L35 68 M40.5 56 H55.5"
+        fill="none" stroke={GOLD} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -109,7 +81,7 @@ function FounderSignature() {
       src={`${BASE}signature.png`}
       alt="Arash Ashrafnejad signature"
       width={1400} height={516}
-      className="aq-sig-img block h-auto w-[150px] max-w-full object-contain"
+      className="aq-sig-img block h-auto w-[136px] max-w-full object-contain"
       data-ay-skip="1"
       onError={(e) => {
         const el = e.currentTarget;
@@ -128,121 +100,108 @@ export function ParticipationDoc({ cert, sample = false }: { cert: PartCert; sam
   const placed = cert.settled && cert.place > 0;
   const Name = sample ? "h3" : "h1";
   return (
-    <article className={cx("aq-cert relative mx-auto w-full max-w-5xl overflow-hidden rounded-card bg-space-2 p-2.5", sample && "select-none")}>
-      {/* inverted frame: fine BLUE outside, gold within — the diploma is the other way round.
-          NOTE the literal. The #2352E8 sentinel is remapped by ATTRIBUTE selectors only
-          (index.css:348 — [fill=]/[stroke=]/[stop-color=]), so it is correct inside the SVGs above
-          and WRONG here: a CSS border is never remapped, and #2352E8 is the retired blue that sums
-          to 267 with gold instead of to white. The frame uses the real yin, #1746DC. */}
-      <div className="relative rounded-[14px] border-2 p-1.5" style={{ borderColor: "rgba(23,70,220,0.5)" }}>
-        <div className="relative overflow-hidden rounded-[10px] border bg-space-1 px-6 py-9 sm:px-12 sm:py-11" style={{ borderColor: "rgba(232,185,35,0.5)" }}>
-          <div className="aq-glow pointer-events-none absolute -right-32 -top-32 h-80 w-80 rounded-full bg-yang/[0.08] blur-3xl" aria-hidden />
-          <CornerTick className="left-2 top-2" rotate={0} />
-          <CornerTick className="right-2 top-2" rotate={90} />
-          <CornerTick className="bottom-2 right-2" rotate={180} />
-          <CornerTick className="bottom-2 left-2" rotate={270} />
+    <article className={cx("aq-cert aq-cert-plain relative mx-auto w-full max-w-4xl overflow-hidden rounded-card bg-space-1", sample && "select-none")}>
+      {/* ONE rule. The old document had two nested frames and four corner ticks; a single hairline
+          says "this is a document" just as clearly and leaves the name the loudest thing on it. */}
+      <div className="relative px-7 py-10 sm:px-14 sm:py-14" style={{ border: "1px solid rgba(232,185,35,0.45)", borderRadius: "12px" }}>
 
-          {sample && (
-            <p className="aq-no-print absolute right-4 top-4 rounded-pill border border-line px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-3">
-              Sample
-            </p>
-          )}
-
-          {/* ── the record (left) and the seal (right) ── */}
-          <div className="relative grid grid-cols-1 gap-8 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start sm:gap-10">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2.5 text-ink">
-                <LogoMark className="h-7 w-7" />
-                <span className="text-[16px] font-bold tracking-tight" data-ay-skip="1">ArtaQuest</span>
-                <span className="text-[9px] font-semibold uppercase tracking-[0.28em] text-ink-2">Foundation</span>
-              </div>
-
-              <div className="mt-7 flex items-center gap-3">
-                <span className="whitespace-nowrap text-[10.5px] font-semibold uppercase tracking-[0.34em] text-yang">Certificate of Participation</span>
-                <span className="h-px flex-1 bg-yang/30" aria-hidden />
-              </div>
-
-              <p className="mt-6 text-[12.5px] italic leading-none text-ink-3">This records that</p>
-              {/* On its own page the holder's name IS the document's heading, so it is the h1 that
-                  ClientNav focuses on navigation. Embedded as a specimen on /donate it must NOT be a
-                  second h1 competing with the page's own — it sits under that page's "What they
-                  receive" h2, so it drops to h3. */}
-              <Name data-ay-skip="1" className="mt-3 font-display text-[clamp(1.7rem,4.2vw,2.6rem)] font-extrabold leading-[1.05] tracking-[-0.025em] text-ink">
-                {cert.member}
-              </Name>
-              <div className="mt-3.5 h-px w-full max-w-sm bg-gradient-to-r from-yang/55 to-transparent" aria-hidden />
-
-              <p className="mt-5 max-w-xl text-[13.5px] leading-relaxed text-ink-2">
-                entered the challenge{" "}
-                <span className="font-bold text-yang" data-ay-skip="1">{cert.challenge}</span>{" "}
-                with the work{" "}
-                <span className="font-semibold text-ink" data-ay-skip="1">{cert.work}</span>
-              </p>
-              <p className="mt-2 text-[11.5px] uppercase tracking-[0.14em] text-ink-3">
-                <span data-ay-skip="1">{cert.kind}</span> · <span data-ay-skip="1">{cert.topic}</span> · closed at the full moon of{" "}
-                <span data-ay-skip="1">{fmtDate(cert.moon_ts)}</span>
-              </p>
-
-              {/* Placement comes ONLY from the frozen settlement board, so nothing printed here can
-                  change afterwards. Until the moon there is simply no placement line — an entry that
-                  has not been judged is not a rank of zero. */}
-              {placed ? (
-                <p className="mt-5 inline-flex items-center gap-2 rounded-pill border border-yang/40 bg-yang/10 px-3.5 py-1.5 text-[12px] font-semibold text-yang" data-ay-skip="1">
-                  {ordinal(cert.place)} of {cert.field} by hearts
-                  {cert.prize > 0 ? <span className="font-extrabold">· ₳{cert.prize} won</span> : null}
-                </p>
-              ) : (
-                <p className="mt-5 text-[12px] text-ink-3">
-                  {cert.settled ? "Judged at the full moon" : "Open until the full moon — the placement is added when the challenge closes"}
-                </p>
-              )}
-            </div>
-
-            <div className="flex justify-center sm:block">
-              <LunarSeal className="w-[132px] sm:w-[164px]" />
-            </div>
-          </div>
-
-          {/* ── the horizon rule, then the plates ── */}
-          <div className="mt-9 h-px w-full bg-line" aria-hidden />
-          <div className={cx("mt-6 grid gap-x-10 gap-y-8", cert.sponsored ? "sm:grid-cols-[auto_1fr_auto]" : "sm:grid-cols-[auto_1fr]")}>
-            {/* the Foundation's plate */}
-            <div className="flex flex-col items-center sm:items-start">
-              <FounderSignature />
-              <div className="mt-1.5 w-full border-t border-line/70 pt-2 text-center sm:text-start">
-                <p className="text-[17px] font-semibold leading-none tracking-tight text-ink" data-ay-skip="1">Arash Ashrafnejad</p>
-                <p className="mt-1 whitespace-nowrap text-[9.5px] tracking-[0.01em] text-ink-2">Founder · ArtaQuest Foundation</p>
-              </div>
-            </div>
-
-            {/* the DONOR's plate — present only when a donor actually paid this entry fee. When they
-                did not, the grid collapses to two columns and there is no visible absence. */}
-            {cert.sponsored && (
-              <div className="flex flex-col justify-end sm:col-start-3 sm:items-end sm:text-end">
-                <span className="text-[9.5px] font-semibold uppercase tracking-[0.24em] text-yang">Entry fee given by</span>
-                <p className="mt-1.5 text-[17px] font-semibold leading-tight tracking-tight text-ink" data-ay-skip={cert.donor ? "1" : undefined}>
-                  {cert.donor || "A friend of ArtaQuest"}
-                </p>
-                {cert.slice && <p className="mt-1 max-w-[16rem] text-[10.5px] leading-snug text-ink-2">for {cert.slice}</p>}
-              </div>
-            )}
-
-            {/* the record line, centred between the plates on wide screens */}
-            <div className={cx("text-center", cert.sponsored ? "sm:col-start-2 sm:row-start-1 sm:self-end" : "sm:col-start-2 sm:self-end sm:text-end")}>
-              <p className="font-mono text-[12px] leading-none tracking-[0.14em] text-ink-2" data-ay-skip="1">{cert.code || "—"}</p>
-              <p className="mt-1 text-[9px] uppercase tracking-[0.14em] text-ink-2">Verification code</p>
-              <p className="mt-3 text-[11px] leading-none text-ink-2" data-ay-skip="1">{fmtDate(cert.entered_ts)}</p>
-              <p className="mt-1 text-[9px] uppercase tracking-[0.14em] text-ink-2">Date entered</p>
-            </div>
-          </div>
-
-          <p className="mx-auto mt-7 max-w-xl text-center text-[9.5px] leading-relaxed tracking-[0.02em] text-ink-2">
-            Issued by the ArtaQuest Foundation · anyone may confirm this certificate at{" "}
-            <span data-ay-skip="1">artaquest.com/verify</span>
+        {sample && (
+          <p className="aq-no-print absolute right-5 top-5 text-[9.5px] font-semibold uppercase tracking-[0.24em] text-ink-3">
+            Sample
           </p>
+        )}
+
+        {/* ── head: the mark, then who issued it ── */}
+        <div className="flex items-center gap-3">
+          <CertMark className="w-11 shrink-0" />
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-2 text-ink">
+              <span className="text-[15px] font-bold tracking-tight" data-ay-skip="1">ArtaQuest</span>
+              <span className="text-[9px] font-semibold uppercase tracking-[0.26em] text-ink-2">Foundation</span>
+            </div>
+            <p className="mt-0.5 text-[9.5px] font-semibold uppercase tracking-[0.3em] text-yang">Certificate of Participation</p>
+          </div>
         </div>
+
+        {/* ── the record ── */}
+        <p className="mt-11 text-[12px] italic leading-none text-ink-3">This records that</p>
+        {/* On its own page the holder's name IS the document's heading, so it is the h1 that
+            ClientNav focuses on navigation. Embedded as a specimen on /donate it must NOT be a
+            second h1 competing with the page's own — it sits under that page's "What they
+            receive" h2, so it drops to h3. */}
+        <Name data-ay-skip="1" className="mt-3 font-display text-[clamp(1.8rem,4.6vw,2.9rem)] font-extrabold leading-[1.03] tracking-[-0.028em] text-ink">
+          {cert.member}
+        </Name>
+
+        <p className="mt-5 max-w-2xl text-[13.5px] leading-relaxed text-ink-2">
+          entered the challenge{" "}
+          <span className="font-bold text-yang" data-ay-skip="1">{cert.challenge}</span>{" "}
+          with the work{" "}
+          <span className="font-semibold text-ink" data-ay-skip="1">{cert.work}</span>
+        </p>
+        {/* kind and topic stay: they say what KIND of thing was made and in what field, which is
+            the one piece of context a stranger reading this actually needs. The closing date does
+            not — it was the same fact as the seal and the placement line, said a third time. */}
+        <p className="mt-2 text-[11px] uppercase tracking-[0.14em] text-ink-3">
+          <span data-ay-skip="1">{cert.kind}</span> · <span data-ay-skip="1">{cert.topic}</span>
+        </p>
+
+        {/* Placement comes ONLY from the frozen settlement board, so nothing printed here can
+            change afterwards. Until it closes there is simply no placement line — an entry that
+            has not been judged is not a rank of zero. */}
+        {placed ? (
+          <p className="mt-6 text-[12.5px] font-semibold text-yang" data-ay-skip="1">
+            {ordinal(cert.place)} of {cert.field} by hearts
+            {cert.prize > 0 ? <span className="font-extrabold"> · ₳{cert.prize} won</span> : null}
+          </p>
+        ) : (
+          <p className="mt-6 text-[12px] text-ink-3">
+            {cert.settled ? "Judged when the challenge closed" : "The placement is added when the challenge closes"}
+          </p>
+        )}
+
+        {/* ── one hairline, then the plates ── */}
+        <div className="mt-11 h-px w-full" style={{ backgroundColor: "rgba(232,185,35,0.28)" }} aria-hidden />
+
+        <div className={cx("mt-7 grid gap-x-10 gap-y-8 sm:items-end", cert.sponsored ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+          {/* the Foundation's plate */}
+          <div className="flex flex-col items-center sm:items-start">
+            <FounderSignature />
+            <div className="mt-1.5 w-full pt-2 text-center sm:text-start" style={{ borderTop: "1px solid rgba(232,185,35,0.28)" }}>
+              <p className="text-[15.5px] font-semibold leading-none tracking-tight text-ink" data-ay-skip="1">Arash Ashrafnejad</p>
+              <p className="mt-1 whitespace-nowrap text-[9px] tracking-[0.02em] text-ink-2">Founder · ArtaQuest Foundation</p>
+            </div>
+          </div>
+
+          {/* the record line */}
+          <div className="text-center">
+            <p className="font-mono text-[12px] leading-none tracking-[0.14em] text-ink-2" data-ay-skip="1">{cert.code || "—"}</p>
+            <p className="mt-1 text-[8.5px] uppercase tracking-[0.16em] text-ink-3">Verification code</p>
+            <p className="mt-3 text-[11px] leading-none text-ink-2" data-ay-skip="1">{fmtDate(cert.entered_ts)}</p>
+            <p className="mt-1 text-[8.5px] uppercase tracking-[0.16em] text-ink-3">Date entered</p>
+          </div>
+
+          {/* the DONOR's plate — present only when a donor actually paid this entry fee. When they
+              did not, the grid collapses to two columns and there is no visible absence.
+              The name is the donor's FULL name: /donate seeds this field from aq_profile_name(),
+              not from the display handle it used to use — user_login on this platform is the local
+              part of a member's email address, and this document gets printed. */}
+          {cert.sponsored && (
+            <div className="flex flex-col items-center sm:items-end sm:text-end">
+              <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-yang">Entry fee given by</span>
+              <p className="mt-1.5 text-[15.5px] font-semibold leading-tight tracking-tight text-ink" data-ay-skip={cert.donor ? "1" : undefined}>
+                {cert.donor || "A friend of ArtaQuest"}
+              </p>
+              {cert.slice && <p className="mt-1 max-w-[16rem] text-[10px] leading-snug text-ink-2">for {cert.slice}</p>}
+            </div>
+          )}
+        </div>
+
+        <p className="mt-9 text-[9px] leading-relaxed tracking-[0.02em] text-ink-3">
+          Issued by the ArtaQuest Foundation · anyone may confirm this certificate at{" "}
+          <span data-ay-skip="1">artaquest.com/verify</span>
+        </p>
       </div>
     </article>
   );
 }
-

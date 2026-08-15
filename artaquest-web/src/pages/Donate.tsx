@@ -220,7 +220,10 @@ export default function Donate() {
     // by then. It can also be actively wrong: AQ_USER.name is display_name || user_login, so it may
     // be a handle, and when AQ_USER is absent it is empty — which would blank a name the donor typed
     // and print "A friend of ArtaQuest" on the certificate instead.
-    setDonorName((prev) => (prev.trim() ? prev : (me?.name || "").trim()));
+    // full_name FIRST. `name` is display_name ?: user_login, and user_login here is the local part
+    // of the member's email — so seeding the certificate plate from it would print a piece of the
+    // donor's address on a document meant to be printed and shared.
+    setDonorName((prev) => (prev.trim() ? prev : (me?.full_name || me?.name || "").trim()));
   }, [logged]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Returning from Stripe: confirm the payment and thank the donor HERE, where they gave.

@@ -245,9 +245,17 @@ export function isLoggedIn(): boolean {
   const v = (window as unknown as { AQ_LOGGED_IN?: boolean }).AQ_LOGGED_IN;
   return v === undefined ? true : !!v;
 }
-export function currentUser(): { name: string; avatar: string; slug?: string; country?: string; birthday?: string; nationality?: string; birth_min?: string; has_identity?: boolean; season?: number } | null {
+/** The signed-in member, as the shell injected it.
+ *
+ * `name` is display_name ?: user_login — a HANDLE. `full_name` is aq_profile_name(), which prefers
+ * the member's real `aq_full_name`. Anywhere a person's name is PRINTED for other people to read —
+ * a certificate plate above all — use full_name and fall back to name, never the other way round:
+ * user_login on this platform is the local part of the member's email address, so the handle path
+ * can publish a fragment of someone's address on a document that gets printed and shared.
+ */
+export function currentUser(): { name: string; full_name?: string; avatar: string; slug?: string; country?: string; birthday?: string; nationality?: string; birth_min?: string; has_identity?: boolean; season?: number } | null {
   if (typeof window === "undefined") return null;
-  return (window as unknown as { AQ_USER?: { name: string; avatar: string; slug?: string; country?: string; birthday?: string; nationality?: string; birth_min?: string; has_identity?: boolean; season?: number } }).AQ_USER ?? null;
+  return (window as unknown as { AQ_USER?: { name: string; full_name?: string; avatar: string; slug?: string; country?: string; birthday?: string; nationality?: string; birth_min?: string; has_identity?: boolean; season?: number } }).AQ_USER ?? null;
 }
 export function googleClientId(): string {
   if (typeof window === "undefined") return "";
