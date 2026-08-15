@@ -877,15 +877,7 @@ final class Extra {
 		// seal these into the room payload so the server never holds them at all, and it is named as
 		// the next step rather than implied by this line.
 		'aq_meets'      => [ 'title' => 'meeting title', 'agenda' => 'meeting agenda' ],
-		// A notification NAMES the other person: "Arash sent you an encrypted message", "Eceergun10
-		// started following you", "Arash is calling you" — four times over. Joined to `user_id` and
-		// `created` that is a member-to-member behavioural graph with timestamps: who contacted whom,
-		// when, and how insistently. Masking the two prose columns leaves `type`, `user_id`, `read`
-		// and `created` fully public, so the SHAPE stays auditable — how many security alarms fired
-		// and on which days, how much traffic each kind carries — while the row stops naming a person.
-		// The narrower fix than withholding the table, which would also have hidden the Watchdog
-		// security alarms that exist to be read.
-		'aq_notifications' => [ 'title' => 'names another member', 'body' => 'names another member' ],
+		// aq_notifications is NOT here — it is decided row by row, by `type`. See NOTIFY_PRIVATE.
 		// A public reset key is inert while password login is disabled, but it would become a takeover
 		// vector the moment the AQ_ALLOW_PASSWORD_LOGIN escape hatch were set — so it stays masked.
 		//
@@ -981,6 +973,33 @@ final class Extra {
 	 *  • `aq_gender` — Verify::set_gender documents this as "opt-in … ArtaCredits matching only", and
 	 *    no public route emits it. The DB export published it anyway, which makes it a broken promise
 	 *    rather than a transparency decision. */
+	/** aq_notifications, decided ROW BY ROW: `type` says whether the prose is about another member,
+	 *  about this member's own device, or about the platform — and only the first two are private.
+	 *
+	 *  A blanket column mask was wrong here, and I shipped it before catching that: it hid the
+	 *  Watchdog alarms ("FULL-RESERVE INVARIANT BROKEN — coins in circulation…") whose entire purpose
+	 *  is to be read by strangers, and it stamped "names another member" onto ~150 rows that name
+	 *  nobody. Withholding accountability records while claiming a privacy reason is worse than
+	 *  either choice made honestly.
+	 *
+	 *  • dm / follow / call — the TITLE is the naming ("Arash sent you an encrypted message",
+	 *    "Eceergun10 started following you", "Arash is calling you"). Joined to `user_id` and
+	 *    `created` these are a member-to-member behavioural graph with timestamps.
+	 *  • security — the TITLE is the public accountability headline and stays; the BODY does not,
+	 *    because Sessions.php:150 writes "A new sign-in to your account from <where> on <device>",
+	 *    i.e. a member's sign-in LOCATION and hardware.
+	 *  • everything else (artadev, system, ticket_shipped, research, profile, coins) is about the
+	 *    platform or about you, names no one, and is published in full.
+	 *
+	 *  `type`, `user_id`, `url`, `ref`, `read` and `created` are never touched, so the shape stays
+	 *  auditable: how many alarms fired, on which days, how much traffic each kind carries. */
+	const NOTIFY_PRIVATE = [
+		'dm'       => [ [ 'title', 'body' ], 'names another member' ],
+		'follow'   => [ [ 'title', 'body' ], 'names another member' ],
+		'call'     => [ [ 'title', 'body' ], 'names another member' ],
+		'security' => [ [ 'body' ], 'may carry a sign-in location and device' ],
+	];
+
 	const REDACT_IDENTITY = [
 		'aq_birthday'               => 'exact date of birth — the age is public on the profile',
 		'wpcom_user_data'           => 'platform account blob — carries the sign-in email address',
@@ -1017,6 +1036,16 @@ final class Extra {
 
 		foreach ( self::REDACT_COLUMNS[ $name ] ?? [] as $col => $why ) {
 			if ( ! empty( $row[ $col ] ) ) { $row[ $col ] = $msg . ' (' . $why . ')'; }
+		}
+
+		// A notification's OWN `type` decides whether its prose is private — see NOTIFY_PRIVATE. The
+		// only table where one row is public and the next is not, because it is the only table mixing
+		// a member-to-member event with a platform accountability record under one schema.
+		if ( 'aq_notifications' === $name && isset( $row['type'] ) ) {
+			[ $cols, $why ] = self::NOTIFY_PRIVATE[ (string) $row['type'] ] ?? [ [], '' ];
+			foreach ( $cols as $col ) {
+				if ( ! empty( $row[ $col ] ) ) { $row[ $col ] = $msg . ' (' . $why . ')'; }
+			}
 		}
 
 		if ( isset( self::REDACT_KEYED[ $name ] ) ) {

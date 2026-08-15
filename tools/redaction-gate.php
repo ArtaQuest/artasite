@@ -33,6 +33,7 @@ $want = [
 	'REDACT_IDENTITY'  => '/\tconst REDACT_IDENTITY = \[.*?\n\t\];/s',
 	'REDACT_PUBLIC'    => '/\tconst REDACT_PUBLIC = \[.*?\];/s',
 	'PRIVATE_TABLES'   => '/\tconst PRIVATE_TABLES = \[.*?\];/s',
+	'NOTIFY_PRIVATE'   => '/\tconst NOTIFY_PRIVATE = \[.*?\n\t\];/s',
 	'redact_row'       => '/\tpublic static function redact_row\(.*?\n\t\}/s',
 	'redact_reason'    => '/\tprivate static function redact_reason\(.*?\n\t\}/s',
 ];
@@ -82,10 +83,29 @@ foreach(['jetpack_private_options'=>true,'session_tokens'=>true,'auth_key'=>true
          'aq_recaptcha_site_key'=>false] as $k=>$w){
   $r=Extra::redact_row('wp_options',['option_name'=>$k,'option_value'=>'v']);
   $check("options.$k",$r['option_value'],$w); }
-// aq_notifications: the prose columns NAME another member; the shape stays auditable.
-$r=Extra::redact_row('wp_aq_notifications',['title'=>'X','body'=>'X','type'=>'dm','user_id'=>'1','created'=>'1','read'=>'0']);
-foreach(['title'=>true,'body'=>true,'type'=>false,'user_id'=>false,'created'=>false,'read'=>false] as $c=>$w){
-  $check("aq_notifications.$c",$r[$c],$w); }
+// aq_notifications is decided ROW BY ROW by `type` (Extra::NOTIFY_PRIVATE). Two directions matter
+// equally here: a member-to-member event must not name anyone, and a Watchdog alarm must stay
+// READABLE — its whole purpose is public accountability, and a blanket column mask silently hid it.
+$row=['title'=>'X','body'=>'X','url'=>'/u','ref'=>'r','type'=>'','user_id'=>'1','created'=>'1','read'=>'0'];
+foreach([
+  // type            title masked?  body masked?
+  ['dm',             true,  true ],
+  ['follow',         true,  true ],
+  ['call',           true,  true ],
+  ['security',       false, true ],   // headline public ("FULL-RESERVE INVARIANT BROKEN"), body private (sign-in location + device)
+  ['artadev',        false, false],
+  ['system',         false, false],
+  ['ticket_shipped', false, false],
+  ['research',       false, false],
+  ['profile',        false, false],
+  ['coins',          false, false],
+] as [$t,$wt,$wb]){
+  $r=Extra::redact_row('wp_aq_notifications',array_merge($row,['type'=>$t]));
+  $check("aq_notifications[$t].title",$r['title'],$wt);
+  $check("aq_notifications[$t].body",$r['body'],$wb);
+  // the shape stays auditable whatever the type
+  $check("aq_notifications[$t].type",$r['type'],false);
+  $check("aq_notifications[$t].created",$r['created'],false); }
 // aq_meets keeps its existing masks — no regression from the entry added beside it.
 $r=Extra::redact_row('wp_aq_meets',['title'=>'X','agenda'=>'X','id'=>'1']);
 $check('aq_meets.title',$r['title'],true);
