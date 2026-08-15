@@ -95,19 +95,11 @@ const WEEKDAY_NAMES = MON_FIRST.map((i) =>
 /** "" = whatever the reader's locale does; "12"/"24" = the reader has said, and it then governs
  *  EVERY clock face on the page (slot buttons, both zone clocks, the confirm restatement) and no
  *  date part, which stays locale-shaped. */
-type Clock = "" | "12" | "24";
-const CLOCK_KEY = "aq_book_clock";
-/** What the locale itself does, so the visible switch can show the default as a chosen segment
- *  rather than as two unlit buttons. */
-const LOCALE_24 = (() => {
-  try { return new Intl.DateTimeFormat(undefined, { hour: "numeric" }).resolvedOptions().hour12 === false; }
-  catch { return false; }
-})();
-
-/** hour12 and hourCycle fight each other when both are given, so give exactly one. */
-function hourOpts(c: Clock): Intl.DateTimeFormatOptions {
-  return c === "24" ? { hourCycle: "h23" } : c === "12" ? { hour12: true } : {};
-}
+/** THE PAGE SPEAKS am/pm, and only am/pm. There used to be a visible 12/24 switch beside the times:
+ *  one more decision on a page whose whole job is to make a single decision easy, and it could only
+ *  make a familiar row of times less familiar. hour12 and hourCycle fight each other when both are
+ *  given, so give exactly one. */
+const HOUR_OPTS: Intl.DateTimeFormatOptions = { hour12: true };
 
 function fmt(ts: number, opts: Intl.DateTimeFormatOptions, tz?: string): string {
   const d = new Date(Number(ts) * 1000);
@@ -124,12 +116,12 @@ function zoneName(ts: number, tz: string): string {
   return parts.find((p) => p.type === "timeZoneName")?.value || "";
 }
 
-const clockOnly = (ts: number, tz: string, c: Clock = "") =>
-  fmt(ts, { hour: "2-digit", minute: "2-digit", ...hourOpts(c) }, tz);
+const clockOnly = (ts: number, tz: string) =>
+  fmt(ts, { hour: "2-digit", minute: "2-digit", ...HOUR_OPTS }, tz);
 
 /** The whole instant, spelled out, with the zone NAMED — the one shape allowed on a confirmation. */
-const longInstant = (ts: number, tz: string, c: Clock = "") =>
-  fmt(ts, { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZoneName: "short", ...hourOpts(c) }, tz);
+const longInstant = (ts: number, tz: string) =>
+  fmt(ts, { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZoneName: "short", ...HOUR_OPTS }, tz);
 
 /** YYYY-MM-DD for an instant in a named zone — en-CA writes that order natively, and it is what the
  *  day grouping, the month grid and the Today comparison are all keyed on. */
@@ -244,9 +236,9 @@ function wallToTs(iso: string, min: number, tz: string): number {
 
 /** Minutes from midnight → the clock face the reader's locale writes ("2:00 pm" or "14:00"). Built
  *  on a fixed UTC day so the number is shown as itself, in nobody's zone. */
-function minuteClock(min: number, c: Clock = ""): string {
+function minuteClock(min: number): string {
   const m = Math.max(0, Math.min(1439, Math.round(min)));
-  return fmt(Math.round(Date.UTC(1970, 0, 1, 0, m) / 1000), { hour: "2-digit", minute: "2-digit", ...hourOpts(c) }, "UTC");
+  return fmt(Math.round(Date.UTC(1970, 0, 1, 0, m) / 1000), { hour: "2-digit", minute: "2-digit", ...HOUR_OPTS }, "UTC");
 }
 
 /** The 24-hour "HH:MM" an <input type="time"> speaks, and back. Never shown to a reader — that is
@@ -621,27 +613,6 @@ function MetaList({ type, className }: { type: BookRule; className?: string }) {
   );
 }
 
-function HowRows({ className }: { className?: string }) {
-  const rows: { label: string; body: string }[] = [
-    { label: "You pick, they're told", body: "It becomes an ordinary meeting straight away — nobody has to write back" },
-    { label: "Nobody sees their diary", body: "You can see when they're free, never what they're doing" },
-    { label: "You'll need an account", body: "Free, asked for once, at the last step" },
-  ];
-  return (
-    <section className={cx("rounded-card border border-line bg-space-2 p-4", className)} aria-label="How this goes">
-      <h2 className="text-[14px] font-semibold text-ink">How this goes</h2>
-      <ul className="mt-3 flex flex-col gap-3">
-        {rows.map((r) => (
-          <li key={r.label}>
-            <p className="text-[13px] font-semibold text-ink">{r.label}</p>
-            <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-3">{r.body}</p>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 function VisitorPage({ handle }: { handle: string }) {
   // Read ONCE, at mount: after a sign-in trip this is a fresh page load, and these are the crumbs
   // that trip left behind — the slot in the address bar, the note beside it in session storage.
@@ -657,9 +628,6 @@ function VisitorPage({ handle }: { handle: string }) {
   const [typeSlug, setTypeSlug] = useState(entry.type);
   const [displayTz, setDisplayTz] = useState(VIEWER_TZ);
   const [zonePicker, setZonePicker] = useState(false);
-  const [clock, setClock] = useState<Clock>(() => {
-    try { const v = window.localStorage.getItem(CLOCK_KEY); return v === "12" || v === "24" ? v : ""; } catch { return ""; }
-  });
   const [starts, setStarts] = useState<number[] | null>(null);
   // Instants this page HAD on screen that a re-read no longer offers. Held separately from `starts`
   // because they are no longer free and must not colour a density bar or count towards a day.
@@ -850,7 +818,6 @@ function VisitorPage({ handle }: { handle: string }) {
   // already selected — we hold the whole horizon, so a mandatory first click would be theatre.
   const activeKey = (picked ? dayKey(picked, displayTz) : day) || groups[0]?.key || "";
   const active = dayMap.get(activeKey) || null;
-  const effClock: "12" | "24" = clock || (LOCALE_24 ? "24" : "12");
 
   /** The times actually rendered for the chosen day: what is free, plus anything that has GONE since
    *  this visitor last looked, folded back in at its own place in the day. The set of free instants
@@ -893,11 +860,6 @@ function VisitorPage({ handle }: { handle: string }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [picked]);
-
-  function setClockPref(v: "12" | "24") {
-    setClock(v);
-    try { window.localStorage.setItem(CLOCK_KEY, v); } catch { /* a refused store costs a preference, not a booking */ }
-  }
 
   function chooseDay(key: string) {
     setDay(key);
@@ -981,7 +943,7 @@ function VisitorPage({ handle }: { handle: string }) {
   const zoneRow = (
     <p className="flex items-center gap-2 text-[13px] font-semibold text-ink">
       <span className="text-ink-3"><GlobeGlyph /></span>
-      <span className="min-w-0 break-words" data-ay-skip="1">{displayTz} · {clockOnly(now, displayTz, effClock)}</span>
+      <span className="min-w-0 break-words" data-ay-skip="1">{displayTz} · {clockOnly(now, displayTz)}</span>
     </p>
   );
 
@@ -1030,11 +992,11 @@ function VisitorPage({ handle }: { handle: string }) {
       {picked > 0 && type ? (
         <>
           <p className="text-[14px] font-semibold text-ink md:text-[15px]" data-ay-skip="1">
-            {longInstant(picked, displayTz, effClock)}
+            {longInstant(picked, displayTz)}
           </p>
           {bothZones && (
             <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">
-              which is <span data-ay-skip="1">{clockOnly(picked, ownerTz, effClock)}</span> for{" "}
+              which is <span data-ay-skip="1">{clockOnly(picked, ownerTz)}</span> for{" "}
               <span data-ay-skip="1">{ownerName}</span> in <span data-ay-skip="1">{ownerTz}</span>
             </p>
           )}
@@ -1081,12 +1043,6 @@ function VisitorPage({ handle }: { handle: string }) {
       ) : (
         <>
           <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-3">Pick a day, then a time</p>
-          {!signedIn && (
-            <p className="mt-2 text-[12.5px] leading-relaxed text-ink-2">
-              You don’t need an account to look. You’ll sign in once, at the last step — and land back on the
-              exact time you chose
-            </p>
-          )}
         </>
       )}
     </section>
@@ -1138,11 +1094,11 @@ function VisitorPage({ handle }: { handle: string }) {
         <CheckGlyph />
         <h2 ref={doneHead} tabIndex={-1} className="mt-3 text-[18px] font-bold text-ink outline-none">Booked</h2>
         <p className="mt-2 text-[15px] font-semibold text-ink" data-ay-skip="1">
-          {longInstant(booked.start, displayTz, effClock)}
+          {longInstant(booked.start, displayTz)}
         </p>
         {!!ownerTz && ownerTz !== displayTz && (
           <p className="mt-1 text-[13px] text-ink-3">
-            <span data-ay-skip="1">{clockOnly(booked.start, ownerTz, effClock)}</span> for{" "}
+            <span data-ay-skip="1">{clockOnly(booked.start, ownerTz)}</span> for{" "}
             <span data-ay-skip="1">{owner.name}</span> in <span data-ay-skip="1">{ownerTz}</span>
           </p>
         )}
@@ -1291,7 +1247,7 @@ function VisitorPage({ handle }: { handle: string }) {
           {soonest > 0 && (
             <p className="text-[13px] text-ink-3">
               Soonest free:{" "}
-              <span data-ay-skip="1">{dayHeading(groups[0].key, false)}, {clockOnly(soonest, displayTz, effClock)}</span>
+              <span data-ay-skip="1">{dayHeading(groups[0].key, false)}, {clockOnly(soonest, displayTz)}</span>
             </p>
           )}
 
@@ -1359,10 +1315,6 @@ function VisitorPage({ handle }: { handle: string }) {
                       </>
                     : <>Pick a day</>}
                 </h2>
-                {/* Beside the numbers it governs. Buried inside a timezone menu is where every other
-                    booking page puts it, and it is their most-reported friction. */}
-                <Segmented className={SEG_HIT} label="Clock" value={effClock} onChange={(v) => setClockPref(v === "24" ? "24" : "12")}
-                  options={[{ value: "12", label: "am/pm" }, { value: "24", label: "24h" }]} />
               </div>
 
               {/* A refused take is reported HERE, beside the times, and not on the confirm surface:
@@ -1390,8 +1342,8 @@ function VisitorPage({ handle }: { handle: string }) {
                               : on ? "border-yang bg-yang text-on-accent"
                               : "border-line text-ink-2 hover:border-yin-light hover:text-ink")}>
                           {dead
-                            ? <>Taken <span className="sr-only">— <span data-ay-skip="1">{clockOnly(ts, displayTz, effClock)}</span></span></>
-                            : <span data-ay-skip="1">{clockOnly(ts, displayTz, effClock)}</span>}
+                            ? <>Taken <span className="sr-only">— <span data-ay-skip="1">{clockOnly(ts, displayTz)}</span></span></>
+                            : <span data-ay-skip="1">{clockOnly(ts, displayTz)}</span>}
                         </button>
                       );
                     })}
@@ -1415,7 +1367,6 @@ function VisitorPage({ handle }: { handle: string }) {
         {activeKey ? <>. <span data-ay-skip="1">{dayHeadingLong(activeKey)}</span>, <span data-ay-skip="1">{active?.length || 0}</span> times free</> : null}
       </p>
 
-      <HowRows className="md:hidden" />
     </>,
     <>
       <section className="hidden rounded-card border border-line bg-space-2 p-4 md:block" aria-label="Who you’d be meeting">
@@ -1460,7 +1411,7 @@ function VisitorPage({ handle }: { handle: string }) {
         {bothZones && (
           <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-3">
             <span data-ay-skip="1">{ownerName}</span> is in <span data-ay-skip="1">{ownerTz}</span> —{" "}
-            <span data-ay-skip="1">{clockOnly(now, ownerTz, effClock)}</span> there now
+            <span data-ay-skip="1">{clockOnly(now, ownerTz)}</span> there now
           </p>
         )}
         <p className="mt-1.5 text-[12.5px] text-ink-3">
@@ -1474,7 +1425,6 @@ function VisitorPage({ handle }: { handle: string }) {
 
       {confirmSurface}
 
-      <HowRows className="hidden md:block" />
     </>,
   );
 }
