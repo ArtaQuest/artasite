@@ -241,23 +241,21 @@ final class Meetings {
 	 * makes; it defers to the public wrapper the moment Rooms exposes one, because two copies of
 	 * seal logic is how seal logic drifts.
 	 */
+	/**
+	 * Can this member open the room at all — on any of their devices?
+	 *
+	 * It used to compare the single sealed row against whichever key we believed was theirs right
+	 * now, so a member who had opened the room in a second browser stopped counting as a key-holder
+	 * in a room they could still open in the first. That is what emptied `present_holders` and left
+	 * the other guest reading "their browser is sealing the key to this device" about nobody.
+	 * Rooms::has_usable_key answers the same question for the same reason; keep them agreeing.
+	 */
 	private static function holds_key( $rid, $uid, $epoch ) {
 		if ( is_callable( [ Rooms::class, 'holds_key' ] ) ) { return (bool) Rooms::holds_key( $rid, $uid, $epoch ); }
-		$row = Data::one(
-			'SELECT from_uid, akid, bkid FROM ' . Data::t( 'aq_room_keys' ) . ' WHERE room_id = %d AND user_id = %d AND epoch = %d',
+		return (bool) Data::col(
+			'SELECT id FROM ' . Data::t( 'aq_room_keys' ) . ' WHERE room_id = %d AND user_id = %d AND epoch = %d LIMIT 1',
 			[ (int) $rid, (int) $uid, (int) $epoch ]
 		);
-		if ( ! $row ) { return false; }
-		$cur = (int) Data::col(
-			// The device in USE — must agree with Rooms::pending, or a holder is not counted as one.
-			'SELECT id FROM ' . Data::t( 'aq_chat_keys' ) . ' WHERE user_id = %d ORDER BY seen DESC, id DESC LIMIT 1',
-			[ (int) $uid ]
-		);
-		if ( ! $cur ) { return false; }
-		// akid belongs to the LOW uid of the sealing pair, bkid to the high — a self-seal names the
-		// same id twice, so the comparison holds there too.
-		$mine = (int) $uid < (int) $row['from_uid'] ? (int) $row['akid'] : (int) $row['bkid'];
-		return $mine === $cur;
 	}
 
 	/** Has this member ever registered a device key? Somebody with none cannot be sealed to at all
@@ -417,7 +415,12 @@ final class Meetings {
 		$sub = new \WP_REST_Request();
 		$sub->set_param( 'title',   $title );
 		$sub->set_param( 'agenda',  Rest::p( $req, 'agenda', '' ) );
-		$sub->set_param( 'start',   $now + 300 );   // the earliest create() accepts; retimed to $now below
+		// A MARGIN, not the exact boundary. create() re-reads the clock and refuses `start < now + 300`,
+		// so handing it exactly `now + 300` fails whenever those two reads land in different seconds —
+		// an intermittent "Schedule a meeting at least five minutes out" from the one button whose
+		// entire point is that there is nothing to schedule. The row is retimed to $now immediately
+		// below, so the value here is never seen by anyone.
+		$sub->set_param( 'start',   $now + 360 );
 		$sub->set_param( 'minutes', $minutes );
 		$sub->set_param( 'tz',      Rest::p( $req, 'tz', 'UTC' ) );
 		$sub->set_param( 'seats',   Rest::pint( $req, 'seats', self::SEATS_MAX ) );

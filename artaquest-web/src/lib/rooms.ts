@@ -16,7 +16,7 @@
  * copy, and an unwrapped group key sitting in IndexedDB is a worse trade than unwrapping it again.
  */
 import { chatRegisterKey, roomsGetKey, roomsPending, roomsPutKey, type Room } from "./api";
-import { deriveChatKey, ensureIdentity, importPeerPub, newRoomKey, openRoomKey, privForKid, sealRoomKey } from "./e2ee";
+import { deriveChatKey, ensureIdentity, importPeerPub, newRoomKey, openRoomKey, sealRoomKey } from "./e2ee";
 
 
 /** roomId → its key for the CURRENT epoch, plus which epoch that was. */
@@ -31,14 +31,24 @@ export function forgetRoomKey(roomId: number): void {
 }
 
 /** The pairwise key I share with `peer`, for the device-key epoch the server named. */
-async function pairKeyWith(me: number, peer: number, akid: number, bkid: number, pubs: Record<number, { user_id: number; pub: string }>) {
-  const id = await ensureIdentity();
+/**
+ * Derive the pairwise key a sealed row was made under.
+ *
+ * The pub to derive against is chosen BY KID — the named key that is not this device's own. It used
+ * to be chosen by user id ("whichever key belongs to the peer"), which is right for two people and
+ * wrong for the one case that matters most: a member sealing the room key to their OWN second
+ * browser. Both named keys belong to them, so picking by user id picked whichever came first in the
+ * map — frequently this device's own key, deriving a shared secret with itself and opening nothing.
+ * That is the case that lets somebody back in without waiting for another human to be online.
+ */
+async function pairKeyWith(mine: { kid: number; priv: CryptoKey }, me: number, peer: number,
+  akid: number, bkid: number, pubs: Record<number, { user_id: number; pub: string }>) {
   const low = Math.min(me, peer);
   const high = Math.max(me, peer);
-  // The peer's pub is whichever of the two named keys is not mine.
-  const peerEntry = Object.values(pubs).find((k) => k.user_id === peer);
-  if (!peerEntry) return null;
-  return deriveChatKey(id.priv, await importPeerPub(peerEntry.pub), low, high, akid, bkid);
+  const otherKid = akid === mine.kid ? bkid : akid;
+  const entry = pubs[otherKid];
+  if (!entry) return null;
+  return deriveChatKey(mine.priv, await importPeerPub(entry.pub), low, high, akid, bkid);
 }
 
 /**
@@ -57,29 +67,27 @@ export async function roomKey(room: Room, me: number): Promise<CryptoKey | null>
 
   const job = (async (): Promise<CryptoKey | null> => {
     try {
-      const r = await roomsGetKey(room.id);
+      // Register first, then ask. Registering is idempotent and returns THIS browser's kid — the row
+      // to ask for, and the key to derive with. It also marks the key as the one in use, which is
+      // what puts this device on the list a present key-holder seals to.
+      const mine = await myMintKid();
+      const r = await roomsGetKey(room.id, mine?.kid || 0);
       if (!r.key) {
-        // Nobody has sealed it to me. If I am ALONE in the room, there is nobody to wait for — this
-        // is a new room (or my own), so mint it here and seal it to myself.
-        if (room.count === 1 && room.members[0]?.id === me) {
+        // Nobody has sealed it to me. If I am ALONE in the room and the room has NO key at all, there
+        // is nobody to wait for — this is a new room, so mint it and seal it to myself.
+        //
+        // `sealed` is the whole guard. Rows are per device, so "no row for me" no longer means "no
+        // key exists": opening a room in a second browser finds no row of its own, and without this
+        // it would mint a SECOND key at the same epoch. Both devices would then hold a key, and
+        // neither could read anything the other sent.
+        if (!r.sealed && room.count === 1 && room.members[0]?.id === me) {
           const key = await newRoomKey();
           // MINT WITH THIS BROWSER'S OWN KEY, resolved from the identity rather than from the
           // server's idea of my newest one.
           //
-          // myDeviceKid answers "which registered key should I seal WITH", and it correctly refuses
-          // to name a kid whose private half this browser does not hold — that refusal is what fixed
-          // a permanent lockout. But for the MINT it was fatal: a member with more than one device
-          // (a second browser, a phone, or anyone who has been through key recovery) has a newest
-          // registered kid belonging to some OTHER device, so the lookup found nothing usable and
-          // returned null — and the mint then bailed SILENTLY, leaving a bound room with no key at
-          // all while the page told the member to "stay on this page, the first key-holder to arrive
-          // seals it to you". There are no key-holders. There never will be. The room is dead and
-          // nothing says so.
-          //
-          // Minting is the one case with no ambiguity: the key to seal with is THIS browser's, and
-          // registering our own public half returns its kid — idempotently, because Chat::set_key
-          // returns the existing id for a public key already in this member's history.
-          const mine = await myMintKid();
+          // The key to seal with is THIS browser's, and registering our own public half returns its
+          // kid — idempotently, because Chat::set_key returns the existing id for a public key
+          // already in this member's history.
           if (!mine) return null;
           const ok = await sealUsing(room.id, r.epoch, me, mine.kid, mine.priv, me, mine.kid, mine.pub, key);
           if (!ok) return null;
@@ -88,7 +96,8 @@ export async function roomKey(room: Room, me: number): Promise<CryptoKey | null>
         }
         return null;
       }
-      const pair = await pairKeyWith(me, r.key.from, r.key.akid, r.key.bkid, r.keys || {});
+      if (!mine) return null;
+      const pair = await pairKeyWith(mine, me, r.key.from, r.key.akid, r.key.bkid, r.keys || {});
       if (!pair) return null;
       const key = await openRoomKey(r.key.iv, r.key.ct, pair);
       if (key) keys.set(room.id, { epoch: r.key.epoch, key });
@@ -105,10 +114,11 @@ export async function roomKey(room: Room, me: number): Promise<CryptoKey | null>
 /**
  * The kid for THIS browser's own key, for minting.
  *
- * Deliberately not myDeviceKid: that one asks the server which key it thinks is current, which is a
- * question about the MEMBER. Minting is a question about this DEVICE — we are about to derive with a
- * private key we hold, and the row must name the public half of that exact key or nobody, including
- * us, can ever open it. Registering is how we learn the id, and doing so is safe to repeat.
+ * THE one question worth asking: which key does THIS browser hold? Everything that seals or unwraps
+ * needs that and nothing else. Asking the server which key is "the member's current one" is a
+ * different question with a different answer as soon as somebody opens a second browser, and every
+ * lockout in this file came from confusing the two. Registering is how we learn the id, and it is
+ * safe to repeat.
  */
 async function myMintKid(): Promise<{ kid: number; pub: string; priv: CryptoKey } | null> {
   try {
@@ -117,47 +127,6 @@ async function myMintKid(): Promise<{ kid: number; pub: string; priv: CryptoKey 
     const kid = reg?.key?.kid ?? 0;
     return kid ? { kid, pub: mine.pubB64, priv: mine.priv } : null;
   } catch { return null; }
-}
-
-/**
- * MY OWN current device key id, from the server.
- *
- * It used to come from the chat store — and that store is only booted by surfaces that show the
- * CONVERSATION list, so on the Rooms tab it was empty, `myKid` was undefined, and a brand-new room
- * silently never minted its key. The room API already reports it two ways, both authoritative:
- * `pending` lists me with my device key while I lack the room key, and once I hold it my own key row
- * names it. No second source of truth.
- */
-async function myDeviceKid(roomId: number, me: number): Promise<{ kid: number; pub: string; priv: CryptoKey } | null> {
-  // THE KID MUST NAME THE KEY WE ARE ABOUT TO SEAL WITH. Both sources below report the member's
-  // NEWEST registered key, which stops being this device's the moment they have two — a second
-  // browser, a phone, or the key-recovery migration. sealUsing then derived with THIS device's
-  // private key while labelling the row with that other device's kid, so the recipient derived
-  // against the wrong public key and got null. And because the row named their current kid,
-  // has_usable_key answered true: they dropped out of `pending`, the lobby listed them as a
-  // holder, and nobody ever re-sealed. A silent, permanent lockout from an ordinary two-device
-  // life. So: take the candidates the server offers, and keep only one whose PUB is this
-  // browser's own. Naming a key we cannot derive with is the bug.
-  const mine = await ensureIdentity();
-  // The private key for a candidate kid: this browser's own when the pub matches, otherwise the
-  // per-kid store the recovery work added, which holds every key this browser has registered.
-  const keyFor = async (kid: number, pub: string) =>
-    (pub === mine.pubB64 ? mine.priv : await privForKid(kid));
-
-  const { items } = await roomsPending(roomId);
-  const p = items.find((i) => i.user.id === me);
-  if (p) {
-    const priv = await keyFor(p.kid, p.pub);
-    if (priv) return { kid: p.kid, pub: p.pub, priv };
-  }
-  const k = await roomsGetKey(roomId);
-  if (!k.key) return null;
-  // akid belongs to the LOW uid of the sealing pair, bkid to the high.
-  const kid = me < k.key.from ? k.key.akid : k.key.bkid;
-  const pub = Object.values(k.keys || {}).find((e) => e.user_id === me)?.pub;
-  if (!pub) return null;
-  const priv = await keyFor(kid, pub);
-  return priv ? { kid, pub, priv } : null;
 }
 
 /**
@@ -170,14 +139,15 @@ async function sealUsing(roomId: number, epoch: number, me: number, myKid: numbe
   // no longer chooses; myDeviceKid resolves the pair together or returns nothing.
   const low = Math.min(me, target);
   const high = Math.max(me, target);
-  // Sealing to MYSELF is the pair (me, me): both ids are mine, and ECDH against my own public key
-  // is exactly what a self-chat already does.
+  // Sealing to MYSELF names both of my own keys — the same one twice when it is this very device
+  // (the mint), and two different ones when it is my other browser. The recipient picks the pub that
+  // is not its own, so both cases derive correctly.
   const akid = target === me ? myKid : (low === me ? myKid : targetKid);
-  const bkid = target === me ? myKid : (low === me ? targetKid : myKid);
+  const bkid = target === me ? targetKid : (low === me ? targetKid : myKid);
   const pair = await deriveChatKey(myPriv, await importPeerPub(targetPub), low, high, akid, bkid);
   const sealed = await sealRoomKey(key, pair);
   try {
-    await roomsPutKey(roomId, { for: target, epoch, akid, bkid, iv: sealed.iv, ct: sealed.ct });
+    await roomsPutKey(roomId, { for: target, for_kid: targetKid, epoch, akid, bkid, iv: sealed.iv, ct: sealed.ct });
     return true;
   } catch {
     return false;
@@ -197,10 +167,20 @@ export async function distributeRoomKey(room: Room, me: number): Promise<number>
   let sealed = 0;
   try {
     const { items, epoch } = await roomsPending(room.id);
-    const mine = await myDeviceKid(room.id, me);
+    // THIS DEVICE's key, asked directly. It used to ask the server which key was "mine", which is a
+    // question about the MEMBER — and the moment a second browser registered, the answer was that
+    // browser's. This one could not seal with a key it does not hold, so it returned nothing and
+    // sealed to nobody: the device that actually had the room key went quiet, and the new browser
+    // waited for a hand-over that was never coming. Registering is idempotent and returns the kid.
+    const mine = await myMintKid();
     if (!mine) return 0;
     for (const it of items) {
-      if (it.user.id === me) continue; // my own copy already exists, or roomKey() minted it
+      // MY OWN OTHER BROWSERS COUNT. This skipped every entry for me, on the assumption that my own
+      // copy must already exist — true when a member had one device, false the moment they had two.
+      // It meant the one person guaranteed to hold the key could not hand it to their own second
+      // browser, so getting back in needed somebody ELSE to be on the page at that moment. Only this
+      // device's own row is genuinely already there.
+      if (it.user.id === me && it.kid === mine.kid) continue;
       if (await sealUsing(room.id, epoch, me, mine.kid, mine.priv, it.user.id, it.kid, it.pub, key.key)) sealed++;
     }
   } catch { /* transient — the next room open tries again */ }

@@ -2655,11 +2655,13 @@ export function roomsLeave(id: number, user?: number) {
   return post<{ ok: boolean; deleted?: boolean; removed?: number }>("/rooms/leave", { id, ...(user ? { user } : {}) });
 }
 /** Store the room key sealed to ONE member. The server checks the envelope, never the contents. */
-export function roomsPutKey(id: number, b: { for: number; epoch: number; akid: number; bkid: number; iv: string; ct: string }) {
+export function roomsPutKey(id: number, b: { for: number; for_kid: number; epoch: number; akid: number; bkid: number; iv: string; ct: string }) {
   return post<{ ok: boolean }>("/rooms/key", { id, ...b });
 }
-export function roomsGetKey(id: number) {
-  return get<{ key: RoomKeyBlob | null; keys?: Record<number, { user_id: number; pub: string }>; epoch: number }>("/rooms/key", { id });
+/** `kid` names THIS device. The server keeps one sealed row per device, and a row sealed to another
+ *  browser of yours is ciphertext this one cannot open — so it must ask for its own. */
+export function roomsGetKey(id: number, kid = 0) {
+  return get<{ key: RoomKeyBlob | null; sealed?: boolean; keys?: Record<number, { user_id: number; pub: string }>; epoch: number }>("/rooms/key", { id, kid });
 }
 /** Members who do not yet hold this epoch's key, with the device pub to seal it to. */
 export function roomsPending(id: number) {

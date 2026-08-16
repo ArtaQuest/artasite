@@ -37,7 +37,12 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Rooms {
 
-	const TABLE_VERSION = '2';
+	const TABLE_VERSION = '3';
+
+	/** How many of a member's devices a room key is sealed to — the most recently used ones. Enough
+	 *  that a laptop, a phone and a spare browser all work; small enough that a member with a long
+	 *  key history does not cost a seal per key they have ever registered. */
+	const SEAL_DEVICES = 5;
 
 	/** Sealed room-key blob (base64) — a 32-byte key sealed with AES-GCM is tiny; this is slack. */
 	const KEY_CT_MAX = 2000;
@@ -104,14 +109,25 @@ final class Rooms {
 			KEY user_id (user_id)
 		) {$charset};" );
 
-		// The room key, sealed once per member per epoch. `from_uid`/`akid`/`bkid` name the pairwise
-		// ECDH epoch it was sealed under, so the recipient knows which device keys to derive with —
-		// the same bookkeeping aq_chat_msgs does, for the same reason.
+		/**
+		 * The room key, sealed once per DEVICE per epoch — `kid` is the recipient's device key.
+		 *
+		 * It used to be one row per MEMBER, which quietly made every member single-device: the row
+		 * named one device key, and the moment you opened the room in a second browser that browser
+		 * became your current key, the existing row no longer matched it, and the only seal slot you
+		 * had was re-used for the new device. The browser that was working stopped working. Worse,
+		 * getting back in needed somebody ELSE with the key to be on the page at that moment, so a
+		 * two-person meeting where the other person had closed their laptop was unrecoverable.
+		 *
+		 * Per device, a device that has ever been given the key keeps it. Opening a second browser
+		 * adds a row; it does not take one away.
+		 */
 		dbDelta( "CREATE TABLE {$p}aq_room_keys (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			room_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			epoch INT UNSIGNED NOT NULL DEFAULT 1,
+			kid BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			from_uid BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			akid BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			bkid BIGINT UNSIGNED NOT NULL DEFAULT 0,
@@ -119,8 +135,36 @@ final class Rooms {
 			ct VARCHAR(2048) NOT NULL DEFAULT '',
 			created INT UNSIGNED NOT NULL DEFAULT 0,
 			PRIMARY KEY  (id),
-			UNIQUE KEY room_user_epoch (room_id, user_id, epoch)
+			UNIQUE KEY room_user_epoch_kid (room_id, user_id, epoch, kid),
+			KEY room_user_epoch (room_id, user_id, epoch)
 		) {$charset};" );
+		// dbDelta will not drop the old UNIQUE (room_id,user_id,epoch), and leaving it there would
+		// still allow exactly one row per member — the whole defect. Add the column, back-fill `kid`
+		// from the seal each row already names, then swap the index. Each step is guarded so the
+		// migration is safe to re-run and safe on a table that never had the old shape.
+		$rk = "{$p}aq_room_keys";
+		$cols = $wpdb->get_col( "SHOW COLUMNS FROM $rk" );
+		if ( is_array( $cols ) && ! in_array( 'kid', $cols, true ) ) {
+			$wpdb->query( "ALTER TABLE $rk ADD COLUMN kid BIGINT UNSIGNED NOT NULL DEFAULT 0" );
+		}
+		// The recipient's own key is whichever of the pair belongs to them: akid for the LOW uid of
+		// the sealing pair, bkid for the high — the ordering every pairwise row here uses.
+		$wpdb->query( "UPDATE $rk SET kid = IF(user_id < from_uid, akid, bkid) WHERE kid = 0" );
+		$idx = $wpdb->get_results( "SHOW INDEX FROM $rk", ARRAY_A );
+		$names = is_array( $idx ) ? array_column( $idx, 'Key_name' ) : [];
+		if ( in_array( 'room_user_epoch', $names, true ) && ! in_array( 'room_user_epoch_kid', $names, true ) ) {
+			$wpdb->query( "ALTER TABLE $rk ADD UNIQUE KEY room_user_epoch_kid (room_id, user_id, epoch, kid)" );
+		}
+		$idx = $wpdb->get_results( "SHOW INDEX FROM $rk", ARRAY_A );
+		$names = is_array( $idx ) ? array_column( $idx, 'Key_name' ) : [];
+		$unique_member = false;
+		foreach ( (array) $idx as $r ) {
+			if ( 'room_user_epoch' === ( $r['Key_name'] ?? '' ) && '0' === (string) ( $r['Non_unique'] ?? '1' ) ) { $unique_member = true; }
+		}
+		if ( $unique_member && in_array( 'room_user_epoch_kid', $names, true ) ) {
+			$wpdb->query( "ALTER TABLE $rk DROP INDEX room_user_epoch" );
+			$wpdb->query( "ALTER TABLE $rk ADD INDEX room_user_epoch (room_id, user_id, epoch)" );
+		}
 
 		// Messages. Shape-identical to a DM's row on purpose: the public database should not be able
 		// to tell a group reaction from a group essay any more than it can for a pair.
@@ -220,23 +264,28 @@ final class Rooms {
 	 * So a stale seal counts as NOT having the key, which puts the member back in `pending` and lets
 	 * the next member who opens the room hand them a fresh copy. Rotation heals itself.
 	 */
+	/** Does this exact DEVICE hold the room key? One row per (member, device), so this is a lookup
+	 *  rather than a comparison against whichever key we currently believe is theirs. */
+	private static function device_has_key( $room_id, $uid, $epoch, $kid ) {
+		return (bool) Data::col(
+			'SELECT id FROM ' . Data::t( 'aq_room_keys' ) . ' WHERE room_id = %d AND user_id = %d AND epoch = %d AND kid = %d LIMIT 1',
+			[ (int) $room_id, (int) $uid, (int) $epoch, (int) $kid ]
+		);
+	}
+
+	/**
+	 * Does ANY device of theirs hold it?
+	 *
+	 * This is the question "can this member open the room", and it is the one every caller outside
+	 * the sealing loop actually means. It used to be "does their CURRENT key hold it", which made a
+	 * member with a second browser read as locked out of a room they could open perfectly well in
+	 * the first — and, through Meetings::holds_key, stop counting as someone who could let others in.
+	 */
 	private static function has_usable_key( $room_id, $uid, $epoch ) {
-		$row = Data::one(
-			'SELECT from_uid, akid, bkid FROM ' . Data::t( 'aq_room_keys' ) . ' WHERE room_id = %d AND user_id = %d AND epoch = %d',
+		return (bool) Data::col(
+			'SELECT id FROM ' . Data::t( 'aq_room_keys' ) . ' WHERE room_id = %d AND user_id = %d AND epoch = %d LIMIT 1',
 			[ (int) $room_id, (int) $uid, (int) $epoch ]
 		);
-		if ( ! $row ) { return false; }
-		$cur = (int) Data::col(
-			// The device in USE, not the newest ever minted — see Chat::active_key.
-			'SELECT id FROM ' . Data::t( 'aq_chat_keys' ) . ' WHERE user_id = %d ORDER BY seen DESC, id DESC LIMIT 1',
-			[ (int) $uid ]
-		);
-		if ( ! $cur ) { return false; }
-		// akid belongs to the LOW uid of the sealing pair, bkid to the high — the same ordering
-		// every pairwise row in this codebase uses.
-		$mine = (int) $uid < (int) $row['from_uid'] ? (int) $row['akid'] : (int) $row['bkid'];
-		// A self-seal names the same id twice, so the comparison holds there too.
-		return $mine === $cur;
 	}
 
 	/** A room as the client sees it: who is in it, my unread count, and whether I can read it yet
@@ -475,6 +524,19 @@ final class Rooms {
 		if ( ! $ka || ! $kb || (int) $ka['user_id'] !== $low || (int) $kb['user_id'] !== $high ) {
 			return Rest::err( 'bad_keys', 'Key ids do not match this pair.', 400 );
 		}
+		// WHICH DEVICE this row is for. Named by the sealer rather than inferred, because a member
+		// sealing to their OWN second browser is the one case where both ids belong to one person and
+		// there is nothing in the pair to infer it from — and that case is exactly how somebody gets
+		// back in without waiting for another human to be online.
+		$for_kid = Rest::pint( $req, 'for_kid', 0 );
+		if ( ! $for_kid ) { $for_kid = $for < $uid ? $akid : $bkid; }
+		$kf = Chat::key_by_id( $for_kid );
+		if ( ! $kf || (int) $kf['user_id'] !== (int) $for ) {
+			return Rest::err( 'bad_keys', 'That device key does not belong to the recipient.', 400 );
+		}
+		if ( $for_kid !== $akid && $for_kid !== $bkid ) {
+			return Rest::err( 'bad_keys', 'The recipient device must be one of the two named keys.', 400 );
+		}
 		// FIRST SEAL WINS, for anyone but yourself. This was an unconditional upsert, so any member of
 		// the room could replace another member's sealed row with ciphertext their device cannot open
 		// — and because the replacement still NAMES that member's current key id, has_usable_key kept
@@ -482,10 +544,14 @@ final class Rooms {
 		// nothing ever re-sealed. Locking someone out of a room they are in, silently and for good,
 		// must not be one ordinary request away. Re-sealing to YOURSELF stays legal: that is the mint
 		// path, and it can only ever lock out the person choosing to do it.
-		if ( $for !== $uid && self::has_usable_key( $rid, $for, $epoch ) ) {
+		// FIRST SEAL WINS PER DEVICE. Same protection as before — a member of the room must not be
+		// able to overwrite somebody's working key with ciphertext their device cannot open — but
+		// scoped to the device, so sealing to a member's SECOND browser no longer counts as
+		// overwriting the first. Re-sealing to yourself stays legal; it is the mint path.
+		if ( $for !== $uid && self::device_has_key( $rid, $for, $epoch, $for_kid ) ) {
 			return [ 'ok' => true, 'already' => true ];
 		}
-		Data::upsert( 'aq_room_keys', [ 'room_id' => $rid, 'user_id' => $for, 'epoch' => $epoch ], [
+		Data::upsert( 'aq_room_keys', [ 'room_id' => $rid, 'user_id' => $for, 'epoch' => $epoch, 'kid' => $for_kid ], [
 			'from_uid' => $uid, 'akid' => $akid, 'bkid' => $bkid,
 			'iv' => $iv, 'ct' => $ct, 'created' => Data::now(),
 		] );
@@ -500,17 +566,38 @@ final class Rooms {
 		$rid  = Rest::pint( $req, 'id', 0 );
 		$room = $rid ? self::room( $rid ) : null;
 		if ( ! $room || ! self::member( $rid, $uid ) ) { return Rest::err( 'not_found', 'No such room.', 404 ); }
-		$row = Data::one(
-			'SELECT * FROM ' . Data::t( 'aq_room_keys' ) . ' WHERE room_id = %d AND user_id = %d AND epoch = %d',
-			[ $rid, $uid, (int) $room['key_epoch'] ]
+		// THIS DEVICE's row. The caller names the key it holds, because only it knows that; a row
+		// sealed to some other browser of theirs is ciphertext this one cannot open, and handing it
+		// over would look exactly like a working key that silently fails to decrypt. `kid = 0` means
+		// a client that has not been updated yet — answer it the old way, with any row it may have.
+		$kid = Rest::pint( $req, 'kid', 0 );
+		$row = $kid
+			? Data::one(
+				'SELECT * FROM ' . Data::t( 'aq_room_keys' ) . ' WHERE room_id = %d AND user_id = %d AND epoch = %d AND kid = %d',
+				[ $rid, $uid, (int) $room['key_epoch'], $kid ]
+			)
+			: Data::one(
+				'SELECT * FROM ' . Data::t( 'aq_room_keys' ) . ' WHERE room_id = %d AND user_id = %d AND epoch = %d ORDER BY id DESC LIMIT 1',
+				[ $rid, $uid, (int) $room['key_epoch'] ]
+			);
+		// IS THIS ROOM KEYED AT ALL? Not "do I have a row" — whether anyone does. The client mints a
+		// room key when nobody has one, and with per-device rows "no row for MY device" stopped
+		// meaning "no key exists": a member opening a room in a second browser found no row of their
+		// own, believed the room unkeyed, and minted a SECOND key at the same epoch. Both devices then
+		// held a key and neither could read the other. The mint has to be gated on the room, not on
+		// the asker.
+		$sealed = (bool) Data::col(
+			'SELECT id FROM ' . Data::t( 'aq_room_keys' ) . ' WHERE room_id = %d AND epoch = %d LIMIT 1',
+			[ $rid, (int) $room['key_epoch'] ]
 		);
-		if ( ! $row ) { return [ 'key' => null, 'epoch' => (int) $room['key_epoch'] ]; }
+		if ( ! $row ) { return [ 'key' => null, 'sealed' => $sealed, 'epoch' => (int) $room['key_epoch'] ]; }
 		$keys = [];
 		foreach ( [ (int) $row['akid'], (int) $row['bkid'] ] as $kid ) {
 			$k = Chat::key_by_id( $kid );
 			if ( $k ) { $keys[ $kid ] = [ 'user_id' => (int) $k['user_id'], 'pub' => (string) $k['pub'] ]; }
 		}
 		return [
+			'sealed' => true,
 			'key' => [
 				'epoch' => (int) $row['epoch'], 'from' => (int) $row['from_uid'],
 				'akid' => (int) $row['akid'], 'bkid' => (int) $row['bkid'],
@@ -533,15 +620,18 @@ final class Rooms {
 		$out   = [];
 		foreach ( self::members_of( $rid ) as $m ) {
 			$target = (int) $m['user_id'];
-			if ( self::has_usable_key( $rid, $target, $epoch ) ) { continue; }
-			$k = Data::one(
-				// Seal to the device they are USING. Ordering by id sent every seal to whichever
-				// browser registered last, which is how a member with two devices locked themselves out.
-				'SELECT id, pub FROM ' . Data::t( 'aq_chat_keys' ) . ' WHERE user_id = %d ORDER BY seen DESC, id DESC LIMIT 1',
-				[ $target ]
+			// EVERY DEVICE THEY ACTUALLY USE, not just one. Asking for a single key is what limited a
+			// member to one working browser: whichever device we named got the seal and the others got
+			// nothing. Bounded to the few most recently used so a member with a long key history costs
+			// a few seals, not one per key they have ever registered.
+			$devs = Data::all(
+				'SELECT id, pub FROM ' . Data::t( 'aq_chat_keys' ) . ' WHERE user_id = %d ORDER BY seen DESC, id DESC LIMIT %d',
+				[ $target, self::SEAL_DEVICES ]
 			);
-			if ( ! $k ) { continue; } // no device key — they cannot be sealed to at all yet
-			$out[] = [ 'user' => self::card( $target ), 'kid' => (int) $k['id'], 'pub' => (string) $k['pub'] ];
+			foreach ( (array) $devs as $k ) {
+				if ( self::device_has_key( $rid, $target, $epoch, (int) $k['id'] ) ) { continue; }
+				$out[] = [ 'user' => self::card( $target ), 'kid' => (int) $k['id'], 'pub' => (string) $k['pub'] ];
+			}
 		}
 		return [ 'items' => $out, 'epoch' => $epoch ];
 	}
