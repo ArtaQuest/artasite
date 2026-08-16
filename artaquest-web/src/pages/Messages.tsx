@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RailSearch } from "../components/RightRail";
-import { useOwnsRail } from "../lib/rail";
 import { useSearchParams } from "react-router-dom";
 import {
   chatCall, chatEmailPrefs, chatGetKey, chatMembers, chatMessages, chatRelation, chatSend,
@@ -2025,8 +2024,6 @@ function RecoveryPanel() {
 }
 
 export default function Messages() {
-  // This page renders its own right column, so the shell must not add a second one.
-  useOwnsRail();
   const [sp, setSp] = useSearchParams();
   // ONE shared session with the chat dock (lib/chat-store): the same device identity, the same
   // conversation-list poller and the same decrypted-preview cache. Before this, having the dock in

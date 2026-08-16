@@ -5,7 +5,7 @@ import { LanguageSelector } from "./LanguageSelector";
 import { BackgroundSwitcher } from "./BackgroundSwitcher";
 import { Footer } from "./Footer";
 import { SearchSheet, ShellRail } from "./RightRail";
-import { openSearch, usePageOwnsRail } from "../lib/rail";
+import { openSearch } from "../lib/rail";
 import { UserMenu } from "./UserMenu";
 import { currentUser, isLoggedIn, localePath } from "../lib/wp";
 import { getChatState, subscribeChat } from "../lib/chat-store";
@@ -564,13 +564,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   // at the top of that rail (X's shape). The header's own field must not render beside it at lg, or
   // the page carries two search boxes a hand's width apart. "/" counts in BOTH states: a member gets
   // the feed there, and a signed-out visitor gets the landing page, which embeds the same feed.
-  // Search lives in the right column, so every page needs one. A page that brings its own (the
-  // feed's Highlights aside, PageRail's <WithRail>) says so through the registry in RightRail.tsx
-  // and the shell stands down; everything else gets <ShellRail>. App panes are the exception —
-  // ArtaChat and Meet size themselves to the viewport, and a sticky column beside a pane that owns
-  // the whole screen has nowhere to sit.
-  const pageOwnsRail = usePageOwnsRail();
-  const shellRail = !pageOwnsRail && !onAppPane;
+  // ONE right column, rendered here, on every page that has room for it. Pages no longer bring
+  // their own — they drop cards into this one through <RailPortal> — so there is no state in which
+  // a page can leave the reader with no column and no search (the bug on /calendar: it claimed the
+  // column and then, signed out, rendered nothing at all). App panes are the only exception:
+  // ArtaChat and Meet size themselves to the viewport and carry their own list beside the thread.
+  const shellRail = !onAppPane;
   // Arta needs a ledge. The two that exist — the messaging dock and the bottom tab bar — are BOTH
   // members-only, so a signed-out visitor has none and the figure stands on nothing.
   const signedIn = isLoggedIn();
