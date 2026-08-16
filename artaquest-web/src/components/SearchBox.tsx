@@ -44,8 +44,11 @@ function Group({ label, hits, cursor, base }: { label: string; hits: SearchHit[]
                     className="h-8 w-8 shrink-0 text-[12px] text-ink ring-1 ring-yin-light/40" />
                 ) : null}
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px] font-medium text-ink">{h.title}</span>
-                  {h.sub && <span className="block truncate text-[12px] text-ink-3">{h.sub}</span>}
+                  {/* A PERSON'S NAME IS NEVER SHORTENED (operator 2026-08-16): it wraps and the
+                      type steps down. A post's TITLE still truncates — a title is a sentence whose
+                      first line identifies it; half a name identifies nobody. */}
+                  <span className={`block font-medium text-ink ${h.person ? `break-words leading-tight ${h.title.length > 26 ? "text-[12px]" : h.title.length > 18 ? "text-[13px]" : "text-[14px]"}` : "truncate text-[14px]"}`}>{h.title}</span>
+                  {h.sub && <span className={`block text-[12px] text-ink-3 ${h.person ? "break-all leading-tight" : "truncate"}`}>{h.sub}</span>}
                 </span>
               </a>
             </li>
