@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   calendarAgenda, calendarCal,
@@ -6,7 +6,7 @@ import {
 } from "../lib/api";
 import { RailPortal } from "../components/RightRail";
 import { isLoggedIn, localePath } from "../lib/wp";
-import { Button, EmptyState, ErrorNote, PageHero, StatusNote, Toolbar, cx } from "../components/ui";
+import { Button, EmptyState, ErrorNote, PageHero, Segmented, StatusNote, Toolbar, cx } from "../components/ui";
 
 /**
  * ArtaCalendar — a member's dated life in one place.
@@ -168,7 +168,7 @@ function ItemActions({ it }: { it: CalendarItem }) {
           place for the same event's wording and instants to drift out of step with the .ics. */}
       {it.gcal_url && it.status !== "cancelled" && (
         <a href={it.gcal_url} target="_blank" rel="noopener noreferrer"
-          className={cx(ACTION, "px-2 text-ink-3 hover:text-ink")}>＋ Google Calendar</a>
+          className={cx(ACTION, "px-2 text-ink-2 hover:text-ink")}>＋ Google Calendar</a>
       )}
     </div>
   );
@@ -181,7 +181,7 @@ function ItemActions({ it }: { it: CalendarItem }) {
 function NextUp({ it, now }: { it: CalendarItem; now: number }) {
   return (
     <section aria-label="What is next" className="rounded-card border border-line bg-space-2 p-4 sm:p-5">
-      <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-ink-3">Next up</p>
+      <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-ink-2">Next up</p>
       <div className="mt-2 flex items-start gap-3">
         <span data-ay-skip="1" className="min-w-0 flex-1">
           <h2 className={cx("break-words text-[clamp(1.05rem,2.4vw,1.3rem)] font-bold leading-snug text-ink",
@@ -190,12 +190,12 @@ function NextUp({ it, now }: { it: CalendarItem; now: number }) {
         <KindTag kind={it.kind} timed={!it.all_day} />
       </div>
       <p className="mt-1.5 text-[14px] leading-relaxed text-ink-2" data-ay-skip="1">{whenLine(it)}</p>
-      <p className="mt-0.5 text-[12.5px] text-ink-3">
+      <p className="mt-0.5 text-[12.5px] text-ink-2">
         {it.status === "cancelled" ? "Cancelled — it stays here so nobody turns up to it by mistake" : (
           <>Starts <span data-ay-skip="1">{fmtRelative(it.start_ts, now)}</span></>
         )}
       </p>
-      {it.detail && <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-3" data-ay-skip="1">{it.detail}</p>}
+      {it.detail && <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-2" data-ay-skip="1">{it.detail}</p>}
       <ItemActions it={it} />
     </section>
   );
@@ -220,7 +220,7 @@ function ItemRow({ it, now }: { it: CalendarItem; now: number }) {
             <span className="block text-[14px] font-semibold tabular-nums text-yang" data-ay-skip="1">
               {fmt(it.start_ts, { hour: "2-digit", minute: "2-digit" })}
             </span>
-            <span className="block text-[11px] leading-tight text-ink-3" data-ay-skip="1">{zoneName(it.start_ts)}</span>
+            <span className="block text-[11px] leading-tight text-ink-2" data-ay-skip="1">{zoneName(it.start_ts)}</span>
           </>
         ) : (
           <span className="block text-[13px] font-semibold leading-tight text-yin-light">All day</span>
@@ -243,15 +243,15 @@ function ItemRow({ it, now }: { it: CalendarItem; now: number }) {
         </div>
 
         {timed && (
-          <p className="mt-0.5 text-[12px] text-ink-3">
+          <p className="mt-0.5 text-[12px] text-ink-2">
             <span data-ay-skip="1">
               until {fmt(it.end_ts, { hour: "2-digit", minute: "2-digit" })}
             </span>
             {!done && it.status !== "cancelled" && <> · <span data-ay-skip="1">{fmtRelative(it.start_ts, now)}</span></>}
           </p>
         )}
-        {it.detail && <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3" data-ay-skip="1">{it.detail}</p>}
-        {it.status === "cancelled" && <p className="mt-1 text-[12.5px] font-semibold text-ink-3">Cancelled</p>}
+        {it.detail && <p className="mt-1 text-[12.5px] leading-relaxed text-ink-2" data-ay-skip="1">{it.detail}</p>}
+        {it.status === "cancelled" && <p className="mt-1 text-[12.5px] font-semibold text-ink-2">Cancelled</p>}
         <ItemActions it={it} />
       </div>
     </article>
@@ -280,7 +280,7 @@ function SubscribePanel({ cal }: { cal: CalendarCal | null }) {
   return (
     <section className="rounded-card border border-line bg-space-2 p-4" aria-label="Calendar subscription">
       <h2 className="text-[14px] font-semibold text-ink">Subscribe to Calendar</h2>
-      <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-3">
+      <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-2">
         Your meetings, your deadlines and the challenges you entered — kept up to date wherever you keep the
         rest of your life
       </p>
@@ -298,8 +298,8 @@ function SubscribePanel({ cal }: { cal: CalendarCal | null }) {
               {copied ? "Copied" : "Copy the address"}
             </button>
           </div>
-          <p className="mt-2 break-all text-[11.5px] text-ink-3" data-ay-skip="1">{cal.ics}</p>
-          <p className="mt-2 text-[12px] leading-relaxed text-ink-3">
+          <p className="mt-2 break-all text-[11.5px] text-ink-2" data-ay-skip="1">{cal.ics}</p>
+          <p className="mt-2 text-[12px] leading-relaxed text-ink-2">
             Apple Calendar and Outlook take the Subscribe button. Google Calendar wants the address pasted into
             Other calendars → From URL
           </p>
@@ -314,7 +314,7 @@ function SubscribePanel({ cal }: { cal: CalendarCal | null }) {
  *  three sources are not obvious from the outside, and a page that only says "nothing here" leaves
  *  someone with no idea which door to knock on. */
 const SOURCES: { label: string; body: string; href: string; cta: string }[] = [
-  { label: "Meetings", body: "Every meeting you host or are invited to, from the moment you are invited", href: "/meet/", cta: "Meet" },
+  { label: "Meetings", body: "Every meeting you host or are invited to, from the moment you are invited", href: "/messages/?box=meetings", cta: "ArtaChat" },
   { label: "Deadlines", body: "The grants you registered to help us apply for, plus their working sessions", href: "/sponsors/", cta: "Sponsors" },
   { label: "Challenges", body: "The ones you entered, dated by their full-moon deadline", href: "/challenges/", cta: "Challenges" },
 ];
@@ -327,14 +327,14 @@ function SourcesPanel() {
         {SOURCES.map((s) => (
           <li key={s.href}>
             <p className="text-[13px] font-semibold text-ink">{s.label}</p>
-            <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-3">{s.body}</p>
-            <Link to={localePath(s.href)} className="-mx-1 mt-0.5 inline-flex h-10 items-center px-1 text-[12.5px] font-semibold text-ink-3 hover:text-ink">
+            <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-2">{s.body}</p>
+            <Link to={localePath(s.href)} className="-mx-1 mt-0.5 inline-flex h-10 items-center px-1 text-[12.5px] font-semibold text-ink-2 hover:text-ink">
               {s.cta} →
             </Link>
           </li>
         ))}
       </ul>
-      <p className="mt-3 border-t border-line pt-3 text-[12px] leading-relaxed text-ink-3">
+      <p className="mt-3 border-t border-line pt-3 text-[12px] leading-relaxed text-ink-2">
         Nothing is added here on your behalf. A date appears because you were invited, you registered, or you
         entered — and it leaves when that does
       </p>
@@ -346,7 +346,22 @@ function SourcesPanel() {
 
 type DayGroup = { key: string; label: string; literal: boolean; items: CalendarItem[] };
 
+/** Deferred: the booking module carries a calendar grid and slot maths that somebody reading their
+ *  week never needs loaded. */
+const Availability = lazy(() => import("./Availability"));
+
+/**
+ * Two halves of one question — your time.
+ *
+ * "Ahead" is what has already been claimed: meetings, deadlines, challenges. "When I'm free" is the
+ * other side of the same sheet: the hours you are happy to be ASKED for, and the link that shares
+ * them. Booking used to be a page of its own at /book, which meant the two answers to "what does my
+ * week look like" lived in different places and neither mentioned the other.
+ */
 export default function Calendar() {
+  const [view, setView] = useState<"ahead" | "free">(() =>
+    (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "free")
+      ? "free" : "ahead");
   const [days, setDays] = useState<number>(30);
   const [items, setItems] = useState<CalendarItem[] | null>(null);
   const [cal, setCal] = useState<CalendarCal | null>(null);
@@ -442,7 +457,15 @@ export default function Calendar() {
 
       <div className="mx-auto flex w-full max-w-[1076px] flex-col gap-4 md:flex-row md:items-start lg:gap-7">
         <main className="flex w-full min-w-0 flex-col gap-4 md:max-w-2xl md:flex-1">
-          {failed ? (
+          <Segmented className="[&>button]:h-10" label="Your time" value={view}
+            onChange={(v) => setView(v as "ahead" | "free")}
+            options={[{ value: "ahead", label: "Ahead" }, { value: "free", label: "When I’m free" }]} />
+
+          {view === "free" ? (
+            <Suspense fallback={<StatusNote>Loading your availability…</StatusNote>}>
+              <Availability share="inline" />
+            </Suspense>
+          ) : failed ? (
             <ErrorNote>
               Couldn’t load your calendar.{" "}
               <button type="button" className="-my-1 inline-block py-1 font-semibold underline" onClick={() => load(days)}>Try again</button>
@@ -490,7 +513,7 @@ export default function Calendar() {
               body="A date lands here on its own: when someone invites you to a meeting, when you register on a grant we are applying for, or when you enter a challenge. Nothing is ever added here on your behalf."
               action={
                 <div className="flex flex-wrap justify-center gap-2">
-                  <Button href="/meet/">Schedule a meeting</Button>
+                  <Button href="/messages/?box=meetings">Schedule a meeting</Button>
                   <Button href="/challenges/" variant="outline">Find a challenge</Button>
                 </div>
               } />
@@ -498,7 +521,7 @@ export default function Calendar() {
 
           {groups.map((g) => (
             <section key={g.key} aria-label={g.label}>
-              <h2 className="sticky top-topbar z-10 -mx-1 bg-space-1/85 px-1 py-1.5 text-[13px] font-semibold uppercase tracking-wide text-ink-3 backdrop-blur supports-[backdrop-filter]:bg-space-1/70">
+              <h2 className="sticky top-topbar z-10 -mx-1 bg-space-1/85 px-1 py-1.5 text-[13px] font-semibold uppercase tracking-wide text-ink-2 backdrop-blur supports-[backdrop-filter]:bg-space-1/70">
                 {g.literal ? g.label : <span data-ay-skip="1">{g.label}</span>}
               </h2>
               <ul className="mt-1.5 flex flex-col gap-2.5">

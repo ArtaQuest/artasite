@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   chatCall, chatEmailPrefs, chatGetKey, chatMembers, chatMessages, chatRelation, chatSend,
@@ -31,6 +31,10 @@ import { QUICK_REACTIONS } from "../components/chat/emoji";
 import { MessageBody } from "../components/chat/MessageBody";
 import { insideFence } from "../components/chat/fence";
 import { knownSticker, stickerLabel, stickerUrl } from "../components/chat/stickers";
+
+/** Deferred: the meetings module carries lobby polling, room binding and the call surface, none of
+ *  which a member reading their messages needs loaded. */
+const Meetings = lazy(() => import("./MeetingsEmbed"));
 
 /**
  * Messages — end-to-end encrypted DMs. The best of every messenger, sealed on-device:
@@ -2050,10 +2054,16 @@ export default function Messages() {
    * handle that matches nobody in the current list still finds the member, so "message someone" is
    * no longer a separate input with its own button next to a search box that looked identical.
    */
-  type Side = ChatBox | "people" | "rooms";
+  /** ArtaChat's modes. "meetings" is not a list of conversations but the diary that produces them:
+   *  a meeting is a call with a time on it, and the room it opens is one of these rooms — so the
+   *  two were never separate things, only separate pages. */
+  type Side = ChatBox | "people" | "rooms" | "meetings";
   const [side, setSide] = useState<Side>((sp.get("box") as Side) || "chats");
-  // Only the conversation BOXES drive the store's list; "people" and "rooms" are their own sources.
-  useEffect(() => { if (side !== "people" && side !== "rooms") setBox(side); }, [side]);
+  // Only the conversation BOXES drive the store's list; people, rooms and meetings are their own
+  // sources and must not be handed to the poller as if they were a mailbox.
+  useEffect(() => {
+    if (side !== "people" && side !== "rooms" && side !== "meetings") setBox(side);
+  }, [side]);
   // The box lives in the shared store (the poller owns it), which the always-mounted dock reads
   // too — so leaving this page on Requests would have left the dock listing requests under its own
   // "Messaging" heading. The page hands the store back the way it found it.
@@ -2210,7 +2220,7 @@ export default function Messages() {
   if (!isLoggedIn()) {
     return (
       <div className="flex flex-col gap-6 pb-12">
-        <PageHero eyebrow="Community" title="Chat" lede="Private, end-to-end encrypted conversations between members." />
+        <PageHero eyebrow="Community" title="ArtaChat" lede="Private, end-to-end encrypted conversations, rooms and meetings." />
         <EmptyState title="Sign in to use Chat" body="Your messages are sealed on your own device — sign in and this browser will create its encryption key."
           action={<Button href="/login/">Sign in</Button>} />
       </div>
@@ -2230,8 +2240,8 @@ export default function Messages() {
       {/* The hero shares the row's measure. At full container width it began 75px to the start of
           the columns beneath it, so the page had two different left edges. */}
       <div className={`mx-auto w-full max-w-[1076px] ${peer ? "hidden md:block" : ""}`}>
-        <PageHero eyebrow="Community" title="Chat"
-          lede="Private conversations, sealed on your own device — nobody else can read them, not even us." />
+        <PageHero eyebrow="Community" title="ArtaChat"
+          lede="Conversations, rooms and meetings in one place — sealed on your own device, so nobody else can read them, not even us." />
       </div>
       {fatal ? (
         <ErrorNote>{fatal}</ErrorNote>
@@ -2283,7 +2293,7 @@ export default function Messages() {
                 scrollbar is hidden because four tabs on one line should not look like a document. */}
             <div className="flex shrink-0 overflow-x-auto overflow-y-hidden rounded-pill border border-line [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               role="tablist" aria-label="Sidebar">
-              {([["chats", "Chats"], ["requests", "Requests"], ["rooms", "Rooms"], ["people", "People"]] as const).map(([k, label]) => (
+              {([["chats", "Chats"], ["requests", "Requests"], ["rooms", "Rooms"], ["meetings", "Meetings"], ["people", "People"]] as const).map(([k, label]) => (
                 <button key={k} type="button" role="tab" aria-selected={side === k}
                   onClick={() => setSide(k)}
                   /* FOUR tabs in a 288px column, one of them carrying a count badge. Equal widths
@@ -2554,7 +2564,16 @@ export default function Messages() {
               </p>
             </details>
           </aside>
-          {roomId && me ? (
+          {side === "meetings" ? (
+            /* The diary, in the main pane. It is full-width content rather than a conversation, so
+               it takes the place a thread would — the sidebar beside it still lists the rooms those
+               meetings open into. */
+            <div className="flex min-w-0 flex-1 flex-col gap-4">
+              <Suspense fallback={<StatusNote>Loading your meetings…</StatusNote>}>
+                <Meetings />
+              </Suspense>
+            </div>
+          ) : roomId && me ? (
             <RoomThread roomId={roomId} me={me} onLeave={closeRoom} managed={roomManaged}
               renderCall={(room, key, meId, leaveCall) => (room.in_call.includes(meId)
                 ? <RoomCall room={room} roomKey={key} me={meId} onLeft={leaveCall} />

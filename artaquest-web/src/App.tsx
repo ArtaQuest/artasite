@@ -119,12 +119,12 @@ const ROUTE_TITLES: Record<string, string> = {
   "/my-library": "My Library",
   "/ceo": "CEO",
   "/library": "Library",
-  "/messages": "Chat",
-  "/meet": "Meet",
+  "/messages": "ArtaChat",
+  "/meet": "ArtaChat",
   "/calendar": "Calendar",
   // Every /book/<handle> too — this is the one URL in the product designed to be handed to a
   // stranger, and a tab reading "Page not found" is the first thing they would see.
-  "/book": "Book a meeting",
+  "/book": "Calendar",
   "/login": "Sign in", "/sponsors": "Sponsors",
   "/fearometer": "ArtaMod",
   "/works": "Home", "/challenges": "Challenges", "/rankings": "Rankings", "/studio": "Your Studio", "/console": "Operator console",
@@ -417,13 +417,16 @@ export default function App() {
           <Route path="/about/" element={<About />} />
           <Route path="/wallet" element={<Wallet />} />
           <Route path="/wallet/" element={<Wallet />} />
-          <Route path="/book" element={<Book />} />
-          <Route path="/book/" element={<Book />} />
+          {/* Booking moved under Calendar and meetings under ArtaChat, so these two URLs — which
+              people have bookmarked and which the emails link to — now lead there rather than to a
+              page of their own. The handle form of /book stays: that is the public one. */}
+          <Route path="/book" element={<Navigate to="/calendar/?tab=free" replace />} />
+          <Route path="/book/" element={<Navigate to="/calendar/?tab=free" replace />} />
           <Route path="/book/:handle" element={<Book />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/calendar/" element={<Calendar />} />
-          <Route path="/meet" element={<Meet />} />
-          <Route path="/meet/" element={<Meet />} />
+          <Route path="/meet" element={<Navigate to="/messages/?box=meetings" replace />} />
+          <Route path="/meet/" element={<Navigate to="/messages/?box=meetings" replace />} />
           <Route path="/meet/:id" element={<Meet />} />
           <Route path="/messages" element={<Messages />} />
           <Route path="/messages/" element={<Messages />} />

@@ -973,7 +973,7 @@ function VisitorPage({ handle }: { handle: string }) {
             not resolve — so the honest door is the front of the site. */}
         <EmptyState title="This page isn’t open" body={pageErr}
           action={isLoggedIn()
-            ? <Button href={localePath("/meet/")}>Meet</Button>
+            ? <Button href={localePath("/messages/?box=meetings")}>Your meetings</Button>
             : <Button href={localePath("/works")} variant="outline">Look around ArtaQuest</Button>} />
       </div>
     );
@@ -1213,7 +1213,7 @@ function VisitorPage({ handle }: { handle: string }) {
              (`localePath` on both, which the /meet/ link had been missing — a bare path drops a
              reader out of their language.) */
           action={isLoggedIn()
-            ? <Button href={localePath("/meet/")} variant="outline">Schedule a meeting instead</Button>
+            ? <Button href={localePath("/messages/?box=meetings")} variant="outline">Schedule a meeting instead</Button>
             : owner.slug
               ? <Button href={localePath(`/u/${encodeURIComponent(owner.slug)}`)} variant="outline">See their profile</Button>
               : null}
@@ -1754,7 +1754,18 @@ function HowPanel() {
   );
 }
 
-function OwnerPage() {
+/**
+ * The owner's half of booking: the windows of your week you are happy to be asked for, and the one
+ * link that shares them.
+ *
+ * Exported WITHOUT a page frame so it can be mounted anywhere. It lives on /meet — beside the
+ * meetings it produces, which is where somebody goes when they are thinking about their week — and
+ * /book keeps rendering it inside its own hero for anyone who has that URL.
+ *
+ * `share` says where the link card goes: "rail" portals it into the app's right column (the /book
+ * layout), "inline" puts it at the top of the panel (embedded, where the host page owns its rail).
+ */
+export function AvailabilityPanel({ share = "rail" }: { share?: "rail" | "inline" }) {
   const me = currentUser();
   const [items, setItems] = useState<BookRule[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -1795,28 +1806,17 @@ function OwnerPage() {
   }
 
   if (!isLoggedIn()) {
-    // PageHero owns the page's one <h1>, so the gate is an EmptyState rather than SignInGate — the
-    // shell's route-change focus has to land on exactly one heading.
     return (
-      <div className="mx-auto flex w-full max-w-[1076px] flex-col gap-6 pb-12">
-        <PageHero eyebrow="Community" title="Let people book you"
-          lede="Offer the hours of your week you are happy to be asked for, and share one link." />
-        <EmptyState title="Sign in to offer your time"
-          body="Your availability is yours: which hours of your own week you are happy to be asked for, and who has taken one. None of it exists for anyone who is not signed in as you."
-          action={<Button href="/login/">Sign in</Button>} />
-      </div>
+      <EmptyState title="Sign in to offer your time"
+        body="Your availability is yours: which hours of your own week you are happy to be asked for, and who has taken one. None of it exists for anyone who is not signed in as you."
+        action={<Button href="/login/">Sign in</Button>} />
     );
   }
 
   return (
-    <div className="flex flex-col gap-5 pb-12">
-      <div className="mx-auto w-full max-w-[1076px]">
-        <PageHero eyebrow="Community" title="Let people book you"
-          lede="Say which hours of your own week you are happy to be asked for. Share one link — anybody can see when you are free without an account, and taking a time makes an ordinary meeting." />
-      </div>
-
-      <div className="mx-auto flex w-full max-w-[1076px] flex-col gap-4 md:flex-row md:items-start lg:gap-7">
-        <main className="flex w-full min-w-0 flex-col gap-4 md:max-w-2xl md:flex-1">
+    <>
+      {share === "inline" && handle && <ShareCard handle={handle} url={shareUrl} />}
+      <div className="flex w-full min-w-0 flex-col gap-4">
           {failed ? (
             <ErrorNote>
               Couldn’t load your availability.{" "}
@@ -1853,12 +1853,30 @@ function OwnerPage() {
               <Button variant="outline" onClick={() => setEditing(BLANK)} className="h-11">Offer another kind of meeting</Button>
             </div>
           )}
-        </main>
+      </div>
 
+      {share === "rail" && (
         <RailPortal>
           {handle ? <ShareCard handle={handle} url={shareUrl} /> : null}
           <HowPanel />
         </RailPortal>
+      )}
+    </>
+  );
+}
+
+/** /book with no handle — the panel above, in its own page frame. */
+function OwnerPage() {
+  return (
+    <div className="flex flex-col gap-5 pb-12">
+      <div className="mx-auto w-full max-w-[1076px]">
+        <PageHero eyebrow="Community" title="Let people book you"
+          lede="Say which hours of your own week you are happy to be asked for. Share one link — anybody can see when you are free without an account, and taking a time makes an ordinary meeting." />
+      </div>
+      <div className="mx-auto flex w-full max-w-[1076px] flex-col gap-4 md:flex-row md:items-start lg:gap-7">
+        <main className="flex w-full min-w-0 flex-col gap-4 md:max-w-2xl md:flex-1">
+          <AvailabilityPanel />
+        </main>
       </div>
     </div>
   );

@@ -113,7 +113,7 @@ function BottomTabs() {
   const T = [
     { href: "/", d: "home" as IconKey, label: "Home" },
     { href: "/studio/", d: "book" as IconKey, label: "Studio" },
-    { href: "/messages/", d: "chat" as IconKey, label: "Chat" },
+    { href: "/messages/", d: "chat" as IconKey, label: "ArtaChat" },
     { href: me?.slug ? `/u/${me.slug}/` : "/user-account/", d: "profile" as IconKey, label: "Profile" },
   ];
   const tab = (t: (typeof T)[number]) => {
@@ -125,7 +125,7 @@ function BottomTabs() {
     <a key={t.href} href={localePath(t.href)}
       aria-label={t.href === "/messages/" && unread > 0 ? `${t.label} — ${unread} unread` : t.label}
       aria-current={on ? "page" : undefined}
-      className={`relative grid min-h-12 flex-1 place-items-center transition-colors hover:text-ink ${on ? "text-ink" : "text-ink-3"}`}>
+      className={`relative grid min-h-12 flex-1 place-items-center transition-colors hover:text-ink ${on ? "text-ink" : "text-ink-2"}`}>
       <Icon d={t.d} />
       {/* The active dot — one glyph per tab is X's bar; a label under each would not fit five
           slots on a 360px phone, and a coloured icon would spend the brand on furniture. */}
@@ -187,8 +187,7 @@ const NAV: { label: string; href: string; icon: IconKey; divider?: boolean; exte
   // invisible: a shared shelf nobody can find is not a shared shelf.
   { label: "Library", href: "/library/", icon: "book", external: true },
   // ArtaChat — end-to-end encrypted DMs; keys live on the member's device, the DB holds ciphertext.
-  { label: "Chat", href: "/messages/", icon: "mail", external: true, auth: true },
-  { label: "Meet", href: "/meet/", icon: "calendar", external: true, auth: true },
+  { label: "ArtaChat", href: "/messages/", icon: "mail", external: true, auth: true },
   { label: "Calendar", href: "/calendar/", icon: "calendar", external: true, auth: true },
   { label: "Rankings", href: "/rankings/", icon: "trophy", external: true },
   // UNLISTED, not retired (operator 2026-08-03): /topics/ and /issues/ still resolve and still
@@ -325,7 +324,7 @@ function CreateMenu({ expanded, onNavigate }: { expanded: boolean; onNavigate: (
               <span className="mt-0.5 shrink-0 text-ink-3"><Icon d={c.d} /></span>
               <span className="min-w-0">
                 <span className="block text-[14px] font-semibold text-ink">{c.label}</span>
-                <span className="block text-[12px] leading-snug text-ink-3">{c.hint}</span>
+                <span className="block text-[12px] leading-snug text-ink-2">{c.hint}</span>
               </span>
             </a>
           ))}
@@ -443,7 +442,7 @@ function Sidebar({ active, expanded, onNavigate, onToggle }: { active: string; e
             </span>
             <span className={`min-w-0 pe-3 transition-opacity duration-200 ${labelShow}`}>
               <span className="block truncate text-[14px] font-bold text-ink">{me.name}</span>
-              <span className="block truncate text-[13px] text-ink-3" data-ay-skip="1">@{me.slug}</span>
+              <span className="block truncate text-[13px] text-ink-2" data-ay-skip="1">@{me.slug}</span>
             </span>
           </a>
         ) : null}

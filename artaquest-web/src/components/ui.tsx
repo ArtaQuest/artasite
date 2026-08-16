@@ -1014,7 +1014,9 @@ export function Toolbar({ search, filters, trailing, count, sticky = false, clas
         {filters && <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:w-auto">{filters}</div>}
         {trailing && <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:ms-auto sm:w-auto sm:justify-end">{trailing}</div>}
       </div>
-      {count != null && count !== false && <p role="status" aria-live="polite" className="text-[13px] text-ink-3">{count}</p>}
+      {/* ink-2: this line names the zone every time on it is read in, which is the last thing that
+          should be the faintest text on the page. */}
+      {count != null && count !== false && <p role="status" aria-live="polite" className="text-[13px] text-ink-2">{count}</p>}
     </div>
   );
 }
@@ -1061,7 +1063,7 @@ const FACET_STRIP = "aq-scroll-fade-r -mx-gutter flex snap-x gap-2 overflow-x-au
 function FacetChip({ active, count, href, onClick, children }: { active: boolean; count?: number; href?: string; onClick?: () => void; children: ReactNode }) {
   return (
     <Chip active={active} href={href} onClick={onClick}>
-      {children}{count != null && <span className="ms-1.5 tabular-nums text-ink-3">{count}</span>}
+      {children}{count != null && <span className="ms-1.5 tabular-nums text-ink-2">{count}</span>}
     </Chip>
   );
 }

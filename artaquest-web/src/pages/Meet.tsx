@@ -583,7 +583,7 @@ const CalPlusGlyph = ({ size = 17 }: { size?: number }) => (
   </svg>
 );
 
-function MeetList() {
+function MeetList({ embedded = false }: { embedded?: boolean }) {
   const nav = useNavigate();
   const [scope, setScope] = useState<"upcoming" | "past">("upcoming");
   const [items, setItems] = useState<MeetRow[] | null>(null);
@@ -682,15 +682,12 @@ function MeetList() {
     );
   }
 
-  return (
-    <div className="flex flex-col gap-5 pb-12">
-      <div className="mx-auto w-full max-w-[1076px]">
-        <PageHero eyebrow="Community" title="Meet"
-          lede="In your calendar, in a room nobody else can listen to — not even us." />
-      </div>
-
-      <div className="mx-auto flex w-full max-w-[1076px] flex-col gap-4 md:flex-row md:items-start lg:gap-7">
-        <main className="flex w-full min-w-0 flex-col gap-4 md:max-w-2xl md:flex-1">
+  /* The list WITHOUT a page around it, so ArtaChat can hold it beside the conversations. A meeting
+     is a call with a time on it and the room it opens is an ArtaChat room, so the two were never
+     separate things — only separate pages. `rail` is the calendar-subscription column, which the
+     host page owns when this is embedded. */
+  const body = (
+    <>
           <Toolbar
             filters={
               <Segmented className={SEG_HIT} label="Which meetings" value={scope} onChange={(v) => setScope(v as "upcoming" | "past")}
@@ -770,7 +767,20 @@ function MeetList() {
               {next != null && <LoadMoreButton onClick={() => load(next)} loading={more} />}
             </>
           )}
-        </main>
+    </>
+  );
+
+  if (embedded) return body;
+
+  return (
+    <div className="flex flex-col gap-5 pb-12">
+      <div className="mx-auto w-full max-w-[1076px]">
+        <PageHero eyebrow="Community" title="Meet"
+          lede="In your calendar, in a room nobody else can listen to — not even us." />
+      </div>
+
+      <div className="mx-auto flex w-full max-w-[1076px] flex-col gap-4 md:flex-row md:items-start lg:gap-7">
+        <main className="flex w-full min-w-0 flex-col gap-4 md:max-w-2xl md:flex-1">{body}</main>
 
         <aside className="flex w-full flex-col gap-3 md:order-2 md:w-[300px] md:shrink-0 lg:w-[330px]"
           aria-label="Search, calendar and what Meet is">
@@ -781,6 +791,9 @@ function MeetList() {
     </div>
   );
 }
+
+/** The meetings list, mounted inside ArtaChat. */
+export function MeetingsPanel() { return <MeetList embedded />; }
 
 /* ───────────────────────── /meet/:id — one meeting ───────────────────────── */
 
@@ -1300,7 +1313,7 @@ function MeetingPage({ id }: { id: number }) {
         {gone ? (
           <EmptyState title="This meeting isn’t open to you"
             body="Either it doesn’t exist or you’re not on its guest list. Ask the host to invite you."
-            action={<Button href="/meet/">Your meetings</Button>} />
+            action={<Button href="/messages/?box=meetings">Your meetings</Button>} />
         ) : loading ? (
           <StatusNote>Opening the meeting…</StatusNote>
         ) : (
@@ -1349,7 +1362,7 @@ function MeetingPage({ id }: { id: number }) {
             /* Not `compact`: the full form is the one that caps its own height on a phone
                (100dvh − chrome) and hands the sizing to the row on desktop. Compact has neither,
                so the transcript would push the composer off the bottom of a phone screen. */
-            <RoomThread managed roomId={roomId} me={me} onLeave={() => nav(localePath("/meet/"))}
+            <RoomThread managed roomId={roomId} me={me} onLeave={() => nav(localePath("/messages/?box=meetings"))}
               /* NEVER the call surface without a key: without one every offer and answer is dropped
                  before it is sent, so the camera opens and nobody can see or hear you. */
               renderCall={(room, key, meId, leaveCall) => (key && room.in_call.includes(meId)
@@ -1480,7 +1493,7 @@ function MeetingPage({ id }: { id: number }) {
           )}
 
           <PrivacyNote />
-          <Link to={localePath("/meet/")} className="inline-flex min-h-[40px] items-center text-[13px] font-semibold text-ink-2 hover:text-ink">
+          <Link to={localePath("/messages/?box=meetings")} className="inline-flex min-h-[40px] items-center text-[13px] font-semibold text-ink-2 hover:text-ink">
             ← All your meetings
           </Link>
         </aside>
