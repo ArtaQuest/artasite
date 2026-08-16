@@ -11,7 +11,7 @@ import { currentUser, isLoggedIn, localePath } from "../lib/wp";
 import { getChatState, subscribeChat } from "../lib/chat-store";
 import { cartCount, onCartChange } from "../lib/cart";
 import { CHECKOUT_LIVE } from "../lib/wp";
-import { Button, IconButton, Logo, LogoMark } from "./ui";
+import { Avatar, Button, IconButton, Logo, LogoMark } from "./ui";
 
 const w = (typeof window !== "undefined" ? (window as unknown as Record<string, string>) : {}) || {};
 
@@ -276,27 +276,26 @@ function CreateMenu({ expanded, onNavigate }: { expanded: boolean; onNavigate: (
         onClick={onNavigate}
         aria-label="Create — sign in to publish"
         title="Sign in to publish"
-        className={`mb-1 mt-3 flex h-10 shrink-0 items-center self-start overflow-hidden rounded-pill border border-line bg-space-3 font-semibold text-ink transition-colors hover:border-yang/50 hover:bg-space-2 ${expanded ? "mx-2 w-auto" : "mx-[14px] w-10 justify-center"}`}
+        className={`mb-1 mt-3 flex h-12 shrink-0 items-center justify-center gap-2 overflow-hidden rounded-pill bg-yang font-bold text-on-accent shadow-sm transition-opacity hover:opacity-90 ${expanded ? "mx-3 w-[calc(100%-1.5rem)]" : "mx-[14px] w-10 self-start"}`}
       >
         {/* Expanded, the + must stay on the SAME 34px axis as every nav glyph below it, or it
              visibly jumps sideways as the rail widens. mx-2 (8) + w-[52px] centre = 34px. */}
-        <span className={`grid shrink-0 place-items-center ${expanded ? "w-[52px]" : "w-10"}`}>
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden className="text-yang"><path d="M12 5v14M5 12h14" /></svg>
-        </span>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" aria-hidden className="shrink-0"><path d="M12 5v14M5 12h14" /></svg>
         {/* NOT RENDERED when collapsed, rather than hidden. Measured on prod: with the label present
               at opacity-0 the + sat at x=-6 — off the left of the window — because a 40px button
               cannot hold a 40px icon box plus a label and its pe-4. `max-w-0` was not enough either;
               the text still contributed width and left the glyph outside its own button. Removing it
               from the tree puts the + dead-centre (x=25..43 in a 14..54 button). */}
-        {expanded ? <span className="whitespace-nowrap pe-4 text-[14px] transition-opacity duration-200">Create</span> : null}
+        {expanded ? <span className="whitespace-nowrap text-[15px]">Create</span> : null}
       </a>
     );
   }
 
   return (
-    // `self-start` on a flex-column child is what stops the pill spanning the whole rail;
-    // the wrapper needs it too, or the wrapper stretches and the button fills the wrapper.
-    <div ref={wrapRef} className="relative self-start">
+    // X's Post button spans the rail's label column when it is open, so the wrapper must stretch
+    // with it — and go back to `self-start` when the rail is a 68px icon strip, where a full-width
+    // button would be a 68px slab.
+    <div ref={wrapRef} className={`relative shrink-0 ${expanded ? "mx-3" : "mx-[14px] self-start"}`}>
       <button
         ref={btnRef}
         type="button"
@@ -305,26 +304,24 @@ function CreateMenu({ expanded, onNavigate }: { expanded: boolean; onNavigate: (
         aria-expanded={open}
         aria-label="Create"
         title="Create"
-        className={`mb-1 mt-3 flex h-10 shrink-0 items-center self-start overflow-hidden rounded-pill border font-semibold text-ink transition-colors ${open ? "border-yang/60 bg-space-2" : "border-line bg-space-3 hover:border-yang/50 hover:bg-space-2"} ${expanded ? "mx-2 w-auto" : "mx-[14px] w-10 justify-center"}`}
+        className={`mb-1 mt-3 flex h-12 shrink-0 items-center justify-center gap-2 overflow-hidden rounded-pill bg-yang font-bold text-on-accent shadow-sm transition-opacity hover:opacity-90 ${open ? "opacity-90" : ""} ${expanded ? "w-full" : "w-10"}`}
       >
         {/* Expanded, the + must stay on the SAME 34px axis as every nav glyph below it, or it
              visibly jumps sideways as the rail widens. mx-2 (8) + w-[52px] centre = 34px. */}
-        <span className={`grid shrink-0 place-items-center ${expanded ? "w-[52px]" : "w-10"}`}>
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden className="text-yang"><path d="M12 5v14M5 12h14" /></svg>
-        </span>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" aria-hidden className="shrink-0"><path d="M12 5v14M5 12h14" /></svg>
         {/* NOT RENDERED when collapsed, rather than hidden. Measured on prod: with the label present
               at opacity-0 the + sat at x=-6 — off the left of the window — because a 40px button
               cannot hold a 40px icon box plus a label and its pe-4. `max-w-0` was not enough either;
               the text still contributed width and left the glyph outside its own button. Removing it
               from the tree puts the + dead-centre (x=25..43 in a 14..54 button). */}
-        {expanded ? <span className="whitespace-nowrap pe-4 text-[14px] transition-opacity duration-200">Create</span> : null}
+        {expanded ? <span className="whitespace-nowrap text-[15px]">Create</span> : null}
       </button>
 
       {open && (
         <div
           role="menu"
           aria-label="Create"
-          className="absolute start-2 z-50 mt-1 w-[16.5rem] overflow-hidden rounded-card border border-line bg-space-2 shadow-card"
+          className="absolute start-0 z-50 mt-1 w-[16.5rem] overflow-hidden rounded-card border border-line bg-space-2 shadow-card"
         >
           {CREATE_ITEMS.map((c) => (
             <a
@@ -354,6 +351,8 @@ function Sidebar({ active, expanded, onNavigate, onToggle }: { active: string; e
   // ONE sidebar for both shells (Kaggle shows signed-out visitors the same rail): the
   // member-only (`auth`) rows simply drop out when nobody is signed in.
   const items = isLoggedIn() ? NAV : NAV.filter((n) => !n.auth);
+  // The account row at the foot needs the viewer; server-injected, so it is static for the page.
+  const me = isLoggedIn() ? currentUser() : null;
   return (
     <aside
       // Two behaviours, exactly like Kaggle:
@@ -447,6 +446,24 @@ function Sidebar({ active, expanded, onNavigate, onToggle }: { active: string; e
             );
           })}
         </nav>
+
+        {/* THE ACCOUNT ROW (operator 2026-08-16: "make the left bar like X"). X ends its left rail
+            with the signed-in member — face, name, handle — and so do we. It is a link to the
+            member's own profile; the account MENU stays in the header, where the notifications
+            badge lives, so this row cannot become a second, competing door to the same drawer. */}
+        {me ? (
+          <a href={localePath(me.slug ? `/u/${me.slug}/` : "/user-account/")} onClick={onNavigate}
+            aria-label={`${me.name} — your profile`}
+            className="mx-2 mb-3 mt-1 flex h-14 shrink-0 items-center rounded-pill transition-colors hover:bg-veil/[0.06]">
+            <span className="grid w-[52px] shrink-0 place-items-center">
+              <Avatar src={me.avatar} name={me.name} className="h-9 w-9 text-[13px] text-ink ring-1 ring-yin-light/50" />
+            </span>
+            <span className={`min-w-0 pe-3 transition-opacity duration-200 ${labelShow}`}>
+              <span className="block truncate text-[14px] font-bold text-ink">{me.name}</span>
+              <span className="block truncate text-[13px] text-ink-3" data-ay-skip="1">@{me.slug}</span>
+            </span>
+          </a>
+        ) : null}
       </div>
     </aside>
   );
@@ -640,7 +657,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             A footer below that is a screen's worth of page nobody can reach without scrolling past a
             pane already as tall as the window — and its existence is what made the whole page scroll
             instead of just the conversation. That is layout mechanics, not editorial. */}
-        {onAppPane ? null : <Footer />}
+        {/* THE FOOTER IS NOW THE RAIL'S FOOT ON A WIDE SCREEN (operator 2026-08-16). Below lg there
+            is no right column, so the full-width footer still runs there — the legal links are not
+            optional furniture. App panes keep neither, as before. */}
+        {onAppPane ? null : <div className="lg:hidden"><Footer /></div>}
       <BottomTabs />
       {/* One search sheet for the whole app — the phone's search surface. */}
       <SearchSheet />

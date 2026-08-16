@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { RailSearch } from "../components/RightRail";
+import { useOwnsRail } from "../lib/rail";
 import { useParams } from "react-router-dom";
 import {
   ApiError, bookPage, bookRuleOff, bookRules, bookSetRule, bookSlots, bookTake,
@@ -1120,6 +1122,8 @@ function VisitorPage({ handle }: { handle: string }) {
         <main className="flex w-full min-w-0 flex-col gap-4 md:max-w-2xl md:flex-1">{main}</main>
         <aside className="flex w-full flex-col gap-3 md:order-2 md:w-[300px] md:shrink-0 lg:w-[330px]"
           aria-label="Who you’d be meeting, and in whose clock">
+          {/* Search heads the right column on every page (operator 2026-08-16). */}
+          <div className="max-md:hidden"><RailSearch /></div>
           {rail}
         </aside>
       </div>
@@ -1857,6 +1861,7 @@ function OwnerPage() {
 
         <aside className="flex w-full flex-col gap-3 md:order-2 md:w-[300px] md:shrink-0 lg:w-[330px]"
           aria-label="Your link and how booking works">
+          <div className="max-md:hidden"><RailSearch /></div>
           {handle ? <ShareCard handle={handle} url={shareUrl} /> : null}
           <HowPanel />
         </aside>
@@ -1868,6 +1873,8 @@ function OwnerPage() {
 /* ───────────────────────── the route ───────────────────────── */
 
 export default function Book() {
+  // This page renders its own right column, so the shell must not add a second one.
+  useOwnsRail();
   const { handle } = useParams();
   return handle ? <VisitorPage key={handle} handle={handle} /> : <OwnerPage />;
 }

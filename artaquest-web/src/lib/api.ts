@@ -1827,6 +1827,15 @@ export type NbPulse = {
   calm_thresholds: number[];
 };
 
+/** A member as every public surface shapes them (Social::members, suggest_follow, author_card). */
+export type MemberCard = { id: number; name: string; slug: string; avatar: string; country?: string; verified?: boolean; followers?: number };
+
+/** GET /members?q= — people search, the search field's People group. Display name + slug only:
+ *  the endpoint deliberately cannot see the email-derived login (see Social::members). */
+export function searchMembers(q: string, limit = 6) {
+  return get<{ items: MemberCard[]; next: number | null }>("members", { q, limit });
+}
+
 export function listNotebooks(params?: { kind?: NbKind; q?: string; sort?: "new" | "top"; cursor?: number; following?: 1; author?: string; calm_min?: number }) {
   return get<Page<NotebookCard>>("/notebooks", { ...(params || {}) } as Record<string, string | number>);
 }

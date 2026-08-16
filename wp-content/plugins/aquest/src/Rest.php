@@ -112,6 +112,7 @@ final class Rest {
 		[ 'GET',  'suggest/follow',                'Social::suggest_follow', 'public' ], // "Who to follow" rail: top notebook authors by hearts (unpersonalised, CDN-safe)
 		[ 'GET',  'feed',                          'Social::feed',      'user'   ], // home-page activity of the people you follow
 		[ 'GET',  'profile',                       'Social::profile',   'public' ],
+		[ 'GET',  'members',                       'Social::members',   'public' ], // people search (the search field's People group) — display name + slug only, never the email-derived login
 		[ 'GET',  'profile/follows',               'Social::follows',   'public' ], // the lists behind a profile's follower/following counts
 		[ 'GET',  'notifications',                 'Notify::list',      'user'   ],
 		[ 'POST', 'notifications/read',            'Notify::mark_read', 'user'   ],

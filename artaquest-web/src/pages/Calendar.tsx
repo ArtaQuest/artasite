@@ -4,6 +4,8 @@ import {
   calendarAgenda, calendarCal,
   type CalendarCal, type CalendarItem, type CalendarKind,
 } from "../lib/api";
+import { RailFoot, RailSearch } from "../components/RightRail";
+import { useOwnsRail } from "../lib/rail";
 import { isLoggedIn, localePath } from "../lib/wp";
 import { Button, EmptyState, ErrorNote, PageHero, StatusNote, Toolbar, cx } from "../components/ui";
 
@@ -346,6 +348,8 @@ function SourcesPanel() {
 type DayGroup = { key: string; label: string; literal: boolean; items: CalendarItem[] };
 
 export default function Calendar() {
+  // This page renders its own right column, so the shell must not add a second one.
+  useOwnsRail();
   const [days, setDays] = useState<number>(30);
   const [items, setItems] = useState<CalendarItem[] | null>(null);
   const [cal, setCal] = useState<CalendarCal | null>(null);
@@ -522,8 +526,12 @@ export default function Calendar() {
 
         <aside className="flex w-full flex-col gap-3 md:order-2 md:w-[300px] md:shrink-0 lg:w-[330px]"
           aria-label="Subscription and what lands here">
+          {/* Search heads the right column on every page (operator 2026-08-16) — hidden below md,
+              where this aside stacks under the page and the bottom bar's Search tab is the door. */}
+          <div className="max-md:hidden"><RailSearch /></div>
           <SubscribePanel cal={cal} />
           <SourcesPanel />
+          <div className="max-md:hidden"><RailFoot /></div>
         </aside>
       </div>
     </div>
