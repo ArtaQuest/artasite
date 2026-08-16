@@ -135,7 +135,11 @@ export default function MyLibrary() {
 
   const buyCapacity = useCallback(async () => {
     const per = quota ? Math.round(quota.bytes_per_coin / 1e6) : 100;
-    const raw = window.prompt(`How many Arta Coin would you like to spend?\n\nEach coin adds ${per} MB of permanent shelf space. You have ₳${quota?.balance ?? 0}.`, "1");
+    // Same rule as the wallet: state a balance only when we HAVE one. `quota?.balance ?? 0` told a
+    // member "You have ₳0" whenever the quota fetch had not answered — a claim about their money,
+    // made from a fetch that failed, in a modal they cannot inspect.
+    const have = quota ? `You have ₳${quota.balance}.` : "";
+    const raw = window.prompt(`How many Arta Coin would you like to spend?\n\nEach coin adds ${per} MB of permanent shelf space.${have ? " " + have : ""}`, "1");
     const coins = Number(raw);
     if (!raw || !Number.isFinite(coins) || coins < 1) return;
     try { const r = await cloudBuy(Math.floor(coins)); setNote(`Added ${fmtSize(r.bytes)}. Balance ₳${r.balance}.`); await refreshCloud(); }
