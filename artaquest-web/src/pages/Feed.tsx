@@ -23,8 +23,7 @@ import { LibraryMedia, LibraryPicker } from "../components/library";
 
 import { PostThread } from "./NotebookPage";
 import { Avatar, Button, cx, EmptyState, HeartGlyph } from "../components/ui";
-import { RailFoot, RailSearch } from "../components/RightRail";
-import { useOwnsRail } from "../lib/rail";
+import { RailPortal } from "../components/RightRail";
 import { isLoggedIn } from "../lib/auth";
 // localePath: a programmatic redirect is NOT intercepted by AppShell's locale safety net (that only
 // rewrites clicks on real <a> elements), so a signed-out reader on /fa/ was dropped on the English
@@ -880,8 +879,6 @@ function Composer({ onPosted }: { onPosted: (p: FeedPostT) => void }) {
  * five backend calls are pure cost on a marketing page.
  */
 export default function Feed({ initialKind, embedded = false }: { initialKind?: NbKind; embedded?: boolean }) {
-  // This page brings its own right column, so the shell must not add a second one.
-  useOwnsRail();
   const nav = useNavigate();
   const [kind, setKind] = useState<NbKind | "">(initialKind || "");
   const rail = useRail(!embedded);
@@ -1045,21 +1042,15 @@ export default function Feed({ initialKind, embedded = false }: { initialKind?: 
           they fund, not beside somebody's post. Sticky, and it SCROLLS (each card is shrink-0 so an
           overflowing column scrolls instead of squashing cards). Phones get the same modules
           inline (above). */}
-      <aside className="hidden w-[330px] shrink-0 lg:block" aria-label="Highlights">
-        {/* The fixed signed-out join banner was removed 2026-07-16 (operator: not pushy) — the
-            topbar's Sign in / Register covers conversion, so the rail needs no extra clearance. */}
-        <div className="sticky top-4 flex max-h-[calc(100vh-2rem)] flex-col gap-4 overflow-y-auto pb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {/* SEARCH, at the top of the right column — X's shape exactly. Sticky WITHIN the rail's
-              own scroller, so it stays reachable while the cards below scroll past. */}
-          <RailSearch />
-          <TodaysNewsCard items={rail.headlines} />
-          <HappeningCard items={rail.topics} />
-          <ChallengesCard items={rail.challenges} />
-          <WhoToFollowCard items={rail.who} />
-          <NewsCard items={rail.news} />
-          <RailFoot />
-        </div>
-      </aside>
+      {/* The feed's cards, in THE right column (RightRail.tsx). `mobile="none"` because a phone
+          already gets these same modules interleaved between posts, a few posts down, X-style. */}
+      <RailPortal mobile="none">
+        <TodaysNewsCard items={rail.headlines} />
+        <HappeningCard items={rail.topics} />
+        <ChallengesCard items={rail.challenges} />
+        <WhoToFollowCard items={rail.who} />
+        <NewsCard items={rail.news} />
+      </RailPortal>
     </div>
   );
 }

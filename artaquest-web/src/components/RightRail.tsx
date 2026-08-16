@@ -1,22 +1,27 @@
 /**
  * THE RIGHT COLUMN — where search lives, on every page (operator 2026-08-16: "the search bar must be
- * in the right column … I don't want it in the top bar at all anywhere. like X").
+ * in the right column … I don't want it in the top bar at all anywhere. like X", and then "ensure
+ * that there is universally 3 columns everywhere").
  *
  * X has no search field in its header on any surface. Search is the top of the right column on a
- * wide screen, and a tab on a phone. This module is what makes that true HERE, where — unlike X —
- * only some pages brought a right column of their own:
+ * wide screen and a tab on a phone. Here that is ONE column, rendered by AppShell on every page
+ * that has room for it:
  *
- *   • A page that already has one (the feed's Highlights aside, PageRail's <WithRail>) puts the
- *     field at the top of ITS column and calls `useOwnsRail()` to say so.
- *   • Every other page gets `<ShellRail>` from AppShell — the same column, carrying the field and
- *     the quick links, so no page is left without a search.
- *   • Below lg there is no column at all, so the phone reaches search through `<SearchSheet>`:
- *     a full-screen field opened from the bottom tab bar or the nav drawer. Never the header.
+ *   • <ShellRail> is the column: search, then whatever the page contributed, then the foot (the
+ *     legal links and accounts that used to be the page footer).
+ *   • A page adds cards with <RailPortal> — the feed's highlights, a work's cite/run cards, the
+ *     calendar's subscribe panel. It cannot switch the column off, which is the whole point: the
+ *     first design let a page CLAIM the column and then render nothing, and a signed-out reader on
+ *     /calendar was left with no column and no search at all.
+ *   • Below lg there is no column, so the phone reaches search through <SearchSheet>: a full-screen
+ *     field opened from the bottom tab bar or the nav drawer. Never the header.
  *
- * The ownership registry that decides between those first two lives in `lib/rail.ts` — a component
- * module cannot also export plain functions without breaking Fast Refresh.
+ * The portal target and the lg media query live in `lib/rail.ts` — a component module cannot also
+ * export plain functions without breaking Fast Refresh.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { setRailNode, useRailNode, useWide } from "../lib/rail";
 import { SearchBox } from "./SearchBox";
 import { LEGAL, SOCIALS } from "../lib/brand-links";
 
@@ -64,18 +69,41 @@ export function RailSearch() {
 }
 
 /**
- * The right column for pages that do not bring their own. Same 330px width and sticky behaviour as
- * the feed's, so search sits in the same place on the screen whatever page you are reading.
+ * THE right column — one per page, rendered by the shell, on every page that has room for it.
+ *
+ * Its middle is a portal target: a page drops its own cards in through <RailPortal> and they land
+ * between the search field and the foot. Nothing can switch this column off, which is the point —
+ * the previous design let a page claim the column and then render nothing, and a signed-out reader
+ * on /calendar got neither cards nor search.
  */
 export function ShellRail() {
   return (
-    <aside className="hidden w-[330px] shrink-0 lg:block" aria-label="Search">
+    <aside className="hidden w-[330px] shrink-0 lg:block" aria-label="Search and highlights">
       <div className="sticky top-4 flex max-h-[calc(100vh-2rem)] flex-col gap-4 overflow-y-auto pb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <RailSearch />
+        {/* Where every page's cards land. Empty on a page that contributes none — the column is
+            then just search and the foot, which is exactly what X shows on its quieter surfaces. */}
+        <div ref={setRailNode} className="contents" />
         <RailFoot />
       </div>
     </aside>
   );
+}
+
+/**
+ * A page's cards, placed in THE right column.
+ *
+ * At lg+ they are portalled into <ShellRail>. Below lg there is no column: `mobile="inline"` leaves
+ * them where they sit in the page (the old behaviour of every page-level aside), and `mobile="none"`
+ * drops them for pages that already render their own phone copies — the feed interleaves its
+ * modules between posts, and PageRail pages carry <RailInline>. Rendering both would show the cards
+ * twice on a phone.
+ */
+export function RailPortal({ children, mobile = "inline" }: { children: ReactNode; mobile?: "inline" | "none" }) {
+  const node = useRailNode();
+  const wide = useWide();
+  if (wide) return node ? createPortal(children, node) : null;
+  return mobile === "inline" ? <>{children}</> : null;
 }
 
 /**

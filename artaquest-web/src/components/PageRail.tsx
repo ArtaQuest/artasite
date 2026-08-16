@@ -26,8 +26,7 @@
  *     max-w-content with px-gutter; a second wrapper is what made the work page's column drift.
  */
 import type { ReactNode } from "react";
-import { RailFoot, RailSearch } from "./RightRail";
-import { useOwnsRail } from "../lib/rail";
+import { RailPortal } from "./RightRail";
 
 /** Width of the desktop rail. One number, so the Lab and the work page cannot disagree. */
 export const RAIL_W = 320;
@@ -35,46 +34,24 @@ export const RAIL_W = 320;
 export function WithRail({
   children,
   rail,
-  label = "About this work",
-  /** Vertical offset for the sticky rail — clears AppShell's sticky topbar. */
-  top = "5rem",
+  label,
+  top,
 }: {
   children: ReactNode;
   rail: ReactNode;
+  /** Unused since the rail became one shared column; kept so callers need no edit. */
   label?: string;
   top?: string;
 }) {
-  // This is a right column, so it is where search lives (operator 2026-08-16 — the header carries
-  // none at any width). Registering also tells AppShell to stand its own column down, or the page
-  // would carry two.
-  useOwnsRail();
+  void label; void top;
+  // The page's cards go into THE right column (AppShell renders it, RightRail.tsx defines it).
+  // `mobile="none"`: below lg every caller already renders the same cards with <RailInline>, and
+  // two copies on a phone is what the old separate aside was carefully avoiding.
   return (
-    <div className="flex w-full items-start gap-6">
-      {/* min-w-0: see the docblock — this is what lets a wide child scroll instead of shoving the
-          rail out of the viewport. */}
-      <div className="min-w-0 flex-1">{children}</div>
-      <aside
-        aria-label={label}
-        style={{ width: RAIL_W, top, maxHeight: `calc(100vh - ${top} - 1rem)` }}
-        /* `hidden lg:block` (not lg:visible): out of the flow entirely below lg, so a phone gets a
-           single column rather than a collapsed 320px track it has to lay out around.
-           THE MAX-HEIGHT IS WHAT MAKES IT STICK. `position: sticky` only pins an element that FITS
-           the viewport; a rail taller than the screen scrolls away with the page until its bottom
-           arrives, which is exactly what "the cards should always be there" rules out — measured on
-           prod, the rail's top reached -145px. Cap it to the viewport and let the rail itself
-           scroll. The scrollbar is hidden so a pinned column does not grow furniture, matching the
-           feed rail. */
-        className="sticky hidden shrink-0 self-start overflow-y-auto lg:block [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        {/* Search first, then the page's own cards — the same order as the feed's column, so the
-            field is in the same place on the screen whatever page you are reading. */}
-        <div className="flex flex-col gap-4 pb-2">
-          <RailSearch />
-          {rail}
-          <RailFoot />
-        </div>
-      </aside>
-    </div>
+    <>
+      {children}
+      <RailPortal mobile="none">{rail}</RailPortal>
+    </>
   );
 }
 
