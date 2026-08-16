@@ -332,7 +332,10 @@ export function Chip({ active, onClick, href, className, children }: { active?: 
 /* ───────────────────────── Pill / Badge ───────────────────────── */
 /** Small gold badge (a tier, price, or status label). Override padding/size/tone via className. */
 export function Pill({ className, children }: { className?: string; children: ReactNode }) {
-  return <span className={cx("inline-flex items-center rounded-pill bg-yang/15 px-2 py-0.5 text-[11px] font-semibold text-yang", className)}>{children}</span>;
+  // 12px, not 11. A chip is small by design, but 11px is under the floor the rest of the site keeps
+  // and these carry real words — "Cancelled", "Happening now", a duration. The change only ever
+  // makes text bigger, and a pill sets its own width from its padding, so nothing is squeezed.
+  return <span className={cx("inline-flex items-center rounded-pill bg-yang/15 px-2 py-0.5 text-[12px] font-semibold text-yang", className)}>{children}</span>;
 }
 
 // "Certificate earned" badge — one source of truth so the account + dashboard course cards match.

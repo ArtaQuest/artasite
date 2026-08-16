@@ -17,7 +17,7 @@ import { CallModeChoice } from "../components/chat/CallPanel";
 import { CALL_MODES, callModePref, deviceSuggestedMode, rememberCallMode } from "../components/chat/callmode";
 import type { CallMode } from "../lib/webrtc";
 import {
-  Avatar, Button, EmptyState, ErrorNote, Field, Input, LoadMoreButton, PageHero,
+  Avatar, Button, cx, EmptyState, ErrorNote, Field, Input, LoadMoreButton, PageHero,
   Pill, Segmented, Select, SignInGate, StatusNote, Textarea, Toolbar,
 } from "../components/ui";
 
@@ -81,12 +81,18 @@ const longWhen = (ts: number, tz?: string) => fmt(ts, {
   hour: "2-digit", minute: "2-digit", timeZoneName: "short",
 }, tz);
 
-const shortWhen = (ts: number) => fmt(ts, {
-  weekday: "short", day: "numeric", month: "short",
-  hour: "2-digit", minute: "2-digit", timeZoneName: "short",
-});
 
 const clockOnly = (ts: number, tz?: string) => fmt(ts, { hour: "2-digit", minute: "2-digit" }, tz);
+
+/* A control a thumb has to find needs 40px, and three of the ones on this page were built at 32
+   and 36 — the size a dense toolbar wants and a phone cannot use. Raised HERE, per surface, rather
+   than in the shared primitives, where the same change would move every toolbar on the site. */
+const SEG_HIT = "[&>button]:h-10";
+const BTN_HIT = "h-10 px-4 text-[13.5px]";
+
+/** The day a meeting falls on, in the READER's zone — the key the agenda groups by. */
+const dayKeyOf = (ts: number) => fmt(ts, { year: "numeric", month: "2-digit", day: "2-digit" });
+const dayHeading = (ts: number) => fmt(ts, { weekday: "long", day: "numeric", month: "long" });
 
 function fmtRelative(ts: number, now: number): string {
   const d = Number(ts) - now;
@@ -161,12 +167,15 @@ function oneEventIcs(subscription: string, id: number): string {
 
 /** The server derives `phase` from the timestamps on every read; trust that over anything computed
  *  here, so one meeting never reads as two different things on two surfaces. */
-function StatusPill({ meet }: { meet: MeetRow }) {
-  if (meet.phase === "cancelled") return <Pill className="bg-veil/10 text-ink-3">Cancelled</Pill>;
-  if (meet.phase === "ended") return <Pill className="bg-veil/10 text-ink-3">Ended</Pill>;
+function StatusPill({ meet, quiet = false }: { meet: MeetRow; quiet?: boolean }) {
+  if (meet.phase === "cancelled") return <Pill className="bg-veil/10 text-ink-2">Cancelled</Pill>;
+  if (meet.phase === "ended") return <Pill className="bg-veil/10 text-ink-2">Ended</Pill>;
   if (meet.phase === "live") return <Pill>Happening now</Pill>;
   if (meet.phase === "open") return <Pill>Open now</Pill>;
-  return <Pill className="bg-veil/10 text-ink-2">Scheduled</Pill>;
+  // "Scheduled" on every row of a list of scheduled meetings is the same word five times, telling
+  // the reader nothing that the list they are looking at has not already told them. In a list it
+  // is suppressed; on the meeting's own page, where there is no surrounding context, it stays.
+  return quiet ? null : <Pill className="bg-veil/10 text-ink-2">Scheduled</Pill>;
 }
 
 /** The host chose the time somewhere; say where, but only when it is somewhere else. */
@@ -191,7 +200,7 @@ function RsvpControl({ mine, busy, onPick }: { mine: MeetRsvp; busy: boolean; on
       <div className="flex flex-wrap gap-1.5">
         {(["yes", "maybe", "no"] as const).map((r) => (
           <button key={r} type="button" disabled={busy} onClick={() => onPick(r)} aria-pressed={mine === r}
-            className={`h-9 rounded-pill border px-3.5 text-[13px] font-semibold transition-colors disabled:opacity-50 ${
+            className={`h-10 rounded-pill border px-3.5 text-[13px] font-semibold transition-colors disabled:opacity-50 ${
               mine === r ? "border-yin bg-yin/15 text-yang" : "border-line text-ink-2 hover:border-yin-light hover:text-ink"}`}>
             {RSVP_LABEL[r]}
           </button>
@@ -226,12 +235,12 @@ function GuestList({ guests, seats, hostId, isHost, bound, busy, onRemove }: {
               <Avatar src={g.avatar} name={g.name} className="h-8 w-8 shrink-0" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[14px] text-ink">{g.name}</span>
-                <span className="block truncate text-[11.5px] text-ink-3">{standing(g)}</span>
+                <span className="block truncate text-[12px] text-ink-2">{standing(g)}</span>
               </span>
             </span>
             {isHost && g.id !== hostId && onRemove && (
               <button type="button" disabled={busy} onClick={() => onRemove(g.id)}
-                className="shrink-0 rounded-pill border border-line px-2.5 py-1 text-[12px] font-semibold text-ink-3 hover:border-yin-light hover:text-ink disabled:opacity-50">
+                className="inline-flex h-10 shrink-0 items-center rounded-pill border border-line px-3.5 text-[12.5px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink disabled:opacity-50">
                 Remove
               </button>
             )}
@@ -240,8 +249,8 @@ function GuestList({ guests, seats, hostId, isHost, bound, busy, onRemove }: {
       </ul>
       {isHost && (
         <p className="mt-3 text-[12px] leading-relaxed text-ink-3">
-          Removing someone takes them off the guest list and out of the room. It is not a lock changed behind them —
-          anyone ever handed this room’s key can still read what was said in it, which is one call and no more
+          Removing someone takes them out of the room. It is not a new lock: anyone handed this room’s key
+          keeps it, and the key is good for this call only
         </p>
       )}
     </section>
@@ -251,8 +260,7 @@ function GuestList({ guests, seats, hostId, isHost, bound, busy, onRemove }: {
 function PrivacyNote() {
   return (
     <p className="rounded-card border border-line bg-space-2 p-4 text-[12.5px] leading-relaxed text-ink-3">
-      Meet holds five people on a call. There’s no server in the middle, so nothing is recorded and nobody,
-      including ArtaQuest, can listen in.
+      Five people to a call, peer to peer. Nothing is recorded, and nobody — us included — can listen in.
     </p>
   );
 }
@@ -293,40 +301,39 @@ function CalendarPanel({ cal, onRotate }: { cal: MeetCal | null; onRotate: (c: M
     <section className="rounded-card border border-line bg-space-2 p-4" aria-label="Calendar subscription">
       <h2 className="text-[14px] font-semibold text-ink">Add Meet to your calendar</h2>
       <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-3">
-        Every meeting you’re invited to, kept up to date — retimed, cancelled and all
+        Every meeting you’re invited to, kept up to date
       </p>
       {!cal ? (
         <StatusNote className="py-6">Fetching your calendar address…</StatusNote>
       ) : (
         <>
           <div className="mt-3 flex flex-wrap gap-2">
-            <a href={cal.webcal} className="inline-flex h-9 items-center rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent transition-colors hover:bg-yin hover:text-white">
+            <a href={cal.webcal} className="inline-flex h-10 items-center rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent transition-colors hover:bg-yin hover:text-white">
               Subscribe
             </a>
             <button type="button" onClick={() => void copy()}
-              className="inline-flex h-9 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink">
+              className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink">
               {copied ? "Copied" : "Copy the address"}
             </button>
           </div>
-          <p className="mt-2 break-all text-[11.5px] text-ink-3" data-ay-skip="1">{cal.ics}</p>
+          <p className="mt-2 break-all font-mono text-[12px] leading-relaxed text-ink-2" data-ay-skip="1">{cal.ics}</p>
           <p className="mt-2 text-[12px] leading-relaxed text-ink-3">
-            Apple Calendar and Outlook take the Subscribe button. Google Calendar wants the address pasted into
-            Other calendars → From URL
+            Apple and Outlook take the button. Google wants the address: Other calendars → From URL
           </p>
           <div className="mt-3 border-t border-line pt-3">
             {confirming ? (
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[12.5px] text-ink-2">Every calendar you’ve added this to stops updating.</span>
                 <button type="button" disabled={busy} onClick={() => void rotate()}
-                  className="h-9 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">
+                  className="h-10 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">
                   Reset it
                 </button>
                 <button type="button" onClick={() => setConfirming(false)}
-                  className="h-9 rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2">Keep it</button>
+                  className="h-10 rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2">Keep it</button>
               </div>
             ) : (
               <button type="button" onClick={() => setConfirming(true)}
-                className="text-[12.5px] font-semibold text-ink-3 hover:text-ink">Reset this link</button>
+                className="inline-flex min-h-[40px] items-center text-[12.5px] font-semibold text-ink-2 hover:text-ink">Reset this link</button>
             )}
           </div>
         </>
@@ -353,14 +360,14 @@ function MeetEmailToggle() {
   useEffect(() => { meetEmailPrefs().then((r) => setOn(!!r.email_on)).catch(() => setOn(null)); }, []);
   if (on === null) return null;
   return (
-    <label className="mt-3 flex cursor-pointer items-start gap-2 border-t border-line pt-3 text-[12.5px] leading-relaxed text-ink-3">
-      <input type="checkbox" checked={on} className="mt-0.5 accent-yang"
+    <label className="mt-3 flex min-h-[40px] cursor-pointer items-center gap-2.5 border-t border-line pt-3 text-[12.5px] leading-relaxed text-ink-2">
+      <input type="checkbox" checked={on} className="h-[18px] w-[18px] shrink-0 accent-yang"
         onChange={(e) => {
           const next = e.target.checked;
           setOn(next);
           meetEmailPrefs(next).catch(() => setOn(!next)); // put it back if the server disagrees
         }} />
-      <span>Email me about my meetings — booked, moved, cancelled, and before they start</span>
+      <span>Email me about my meetings</span>
     </label>
   );
 }
@@ -496,38 +503,87 @@ function NewMeetingForm({ seatsMax, onDone, onClose }: {
   );
 }
 
-function MeetingCard({ meet, now, calIcs }: { meet: MeetRow; now: number; calIcs: string }) {
+/**
+ * One line of the agenda.
+ *
+ * It was a card built the way a search result is built: title, then the full date, then a gold
+ * button, on every row. Seven meetings on one afternoon therefore restated the same Wednesday seven
+ * times, said "Scheduled" five times, and offered seven identical gold buttons — including one on a
+ * meeting that had been cancelled. Nothing in it answered the question a diary is opened to answer,
+ * which is *what is next*.
+ *
+ * The day is now said ONCE, by the heading above the group. What is left on the row is the part
+ * that differs: the time, big and tabular so a column of them scans; the title; who is in it. The
+ * whole row is the link, which is also what fixes the tap target — the old one was a 24px line of
+ * text inside a 100px card, so most of what looked pressable was not.
+ *
+ * Only the NEXT meeting carries the gold. Gold is the accent that means "this one" and repeating it
+ * down a list spends it on nothing; the rest are quiet until their turn comes, and a live meeting
+ * takes it back with a ring.
+ */
+function MeetingRow({ meet, calIcs, lead }: { meet: MeetRow; calIcs: string; lead: boolean }) {
   const ics = oneEventIcs(calIcs, Number(meet.id));
+  const dead = meet.phase === "cancelled" || meet.phase === "ended";
+  const hot = meet.phase === "live" || meet.phase === "open";
   return (
-    <article className="rounded-card border border-line bg-space-2 p-4">
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <span data-ay-skip="1">
-            <Link to={localePath(`/meet/${meet.id}`)}
-              className={`block truncate text-[16px] font-semibold text-ink hover:text-yang ${meet.status === "cancelled" ? "line-through" : ""}`}>
-              {meet.title}
-            </Link>
+    <article className={cx("group relative rounded-card border transition-colors",
+      hot ? "border-yang/50 bg-yang/[0.06]" : dead ? "border-line bg-space-2/60" : "border-line bg-space-2 hover:border-yang/40")}>
+      {/* ONE link, stretched over the whole row. A nested <a> would be invalid inside it, so the
+          calendar link sits outside the stretched area and lifts itself above with a z-index. */}
+      <Link to={localePath(`/meet/${meet.id}`)}
+        className="flex min-h-[76px] items-center gap-3 p-3 outline-none sm:gap-4 sm:p-4">
+        {/* Wide enough for "10:56 AM" on ONE line, and told never to wrap. At 72px the chip broke a
+            twelve-hour clock across three lines — "10:56 / AM / 11:26 AM" — which is the one element
+            on the row that has to be scannable down a column. */}
+        <span aria-hidden
+          className={cx("flex w-[84px] shrink-0 flex-col items-center justify-center rounded-card px-1 py-1.5 text-center sm:w-[94px]",
+            hot ? "bg-yang text-on-accent" : dead ? "bg-veil/5 text-ink-3" : "bg-veil/[0.06] text-ink")}>
+          <span className="whitespace-nowrap text-[14.5px] font-bold leading-tight tabular-nums sm:text-[16px]" data-ay-skip="1">
+            {clockOnly(meet.start_ts)}
           </span>
-          <p className="mt-1 text-[13px] text-ink-2">
-            <span data-ay-skip="1">{shortWhen(meet.start_ts)}</span> – {clockOnly(meet.end_ts)}
-          </p>
+          <span className={cx("whitespace-nowrap text-[12px] leading-tight tabular-nums", hot ? "text-on-accent/80" : "text-ink-3")} data-ay-skip="1">
+            {clockOnly(meet.end_ts)}
+          </span>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className={cx("block truncate text-[15px] font-semibold sm:text-[16px]",
+            dead ? "text-ink-2 line-through" : "text-ink group-hover:text-yang")} data-ay-skip="1">
+            {meet.title}
+          </span>
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px] text-ink-2">
+            <span data-ay-skip="1">{durationLabel(minutesOf(meet))}</span>
+            <StatusPill meet={meet} quiet />
+          </span>
           <HostZoneLine meet={meet} />
-        </div>
-        <StatusPill meet={meet} />
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <Link to={localePath(`/meet/${meet.id}`)}
-          className="inline-flex h-9 items-center rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent transition-colors hover:bg-yin hover:text-white">
-          {meet.phase === "open" || meet.phase === "live" ? "Join" : "Open"}
-        </Link>
-        {ics && meet.phase !== "cancelled" && (
-          <a href={ics} className="text-[12.5px] font-semibold text-ink-3 hover:text-ink">Add this one to your calendar</a>
-        )}
-        <span className="text-[12.5px] text-ink-3"><span data-ay-skip="1">{fmtRelative(meet.start_ts, now)}</span></span>
-      </div>
+        </span>
+        {/* The action reads as an action only where there is one to take. Everywhere else the row
+            itself is the link and a second gold button beside it would be the same tap twice. */}
+        {hot ? (
+          <span className="hidden shrink-0 items-center rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent shadow-card sm:inline-flex sm:h-10">
+            Join
+          </span>
+        ) : lead && !dead ? (
+          <span className="hidden shrink-0 items-center rounded-pill border border-yang/50 px-4 text-[13px] font-bold text-yang sm:inline-flex sm:h-10">
+            Open
+          </span>
+        ) : null}
+      </Link>
+      {ics && !dead && (
+        <a href={ics} aria-label="Add this meeting to your calendar" title="Add this one to your calendar"
+          className="absolute end-2 top-2 z-10 grid h-10 w-10 place-items-center rounded-card text-ink-3 transition-colors hover:bg-veil/10 hover:text-ink">
+          <CalPlusGlyph />
+        </a>
+      )}
     </article>
   );
 }
+
+const CalPlusGlyph = ({ size = 17 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden
+    fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3.5" y="5.5" width="17" height="15" rx="3" /><path d="M8 3.5v4M16 3.5v4M3.5 10.5h17M12 13.5v4.5M9.75 15.75h4.5" />
+  </svg>
+);
 
 function MeetList() {
   const nav = useNavigate();
@@ -574,6 +630,29 @@ function MeetList() {
 
   useEffect(() => { setItems(null); load(); }, [load]);
 
+  /** The list, cut into days. The server already returns them in order, so this is a fold rather
+   *  than a sort — and it stays a fold, because re-sorting here would silently disagree with the
+   *  cursor the "load more" button pages on. */
+  const groupedByDay = useMemo(() => {
+    const out: { key: string; heading: string; items: MeetRow[] }[] = [];
+    for (const m of items || []) {
+      const key = dayKeyOf(m.start_ts);
+      const last = out[out.length - 1];
+      if (last && last.key === key) { last.items.push(m); continue; }
+      out.push({ key, heading: dayHeading(m.start_ts), items: [m] });
+    }
+    return out;
+  }, [items]);
+
+  /** The one meeting worth pointing at: the soonest that has not been cancelled or finished. In the
+   *  past scope there is no such thing, and nothing is accented — a diary of what already happened
+   *  has no next. */
+  const leadId = useMemo(() => {
+    if (scope !== "upcoming") return -1;
+    const m = (items || []).find((x) => x.phase !== "cancelled" && x.phase !== "ended");
+    return m ? m.id : -1;
+  }, [items, scope]);
+
   /** One press: a meeting that has already started, and straight into it. `starting` is NOT cleared
    *  on the way out — the navigation is the success, and re-enabling the button during it is how a
    *  second press books a second meeting nobody asked for. */
@@ -596,7 +675,7 @@ function MeetList() {
       <div className="flex flex-col gap-6 pb-12">
         <div className="mx-auto w-full max-w-[1076px]">
           <PageHero eyebrow="Community" title="Meet"
-            lede="Meetings you can put in your calendar, held in a room nobody else can listen to." />
+            lede="In your calendar, in a room nobody else can listen to." />
         </div>
         <EmptyState className="mx-auto w-full max-w-[1076px]" title="Sign in to see your meetings"
           body="Your meetings, the people in them and the key that opens the room all belong to your account — there is no link that lets anybody else in."
@@ -609,24 +688,24 @@ function MeetList() {
     <div className="flex flex-col gap-5 pb-12">
       <div className="mx-auto w-full max-w-[1076px]">
         <PageHero eyebrow="Community" title="Meet"
-          lede="Meetings you can put in your calendar, held in a room nobody else can listen to — not even us." />
+          lede="In your calendar, in a room nobody else can listen to — not even us." />
       </div>
 
       <div className="mx-auto flex w-full max-w-[1076px] flex-col gap-4 md:flex-row md:items-start lg:gap-7">
         <main className="flex w-full min-w-0 flex-col gap-4 md:max-w-2xl md:flex-1">
           <Toolbar
             filters={
-              <Segmented label="Which meetings" value={scope} onChange={(v) => setScope(v as "upcoming" | "past")}
+              <Segmented className={SEG_HIT} label="Which meetings" value={scope} onChange={(v) => setScope(v as "upcoming" | "past")}
                 options={[{ value: "upcoming", label: "Upcoming" }, { value: "past", label: "Past" }]} />
             }
             trailing={!composing && (
               <>
                 {/* The loudest control on the page, because it is the shortest path in the product:
                     nothing → a room you are already in. Scheduling is the considered thing next to it. */}
-                <Button size="sm" disabled={starting} onClick={() => void startNow()}>
+                <Button className={BTN_HIT} disabled={starting} onClick={() => void startNow()}>
                   {starting ? "Starting…" : "Meet now"}
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setComposing(true)}>New meeting</Button>
+                <Button className={BTN_HIT} variant="outline" onClick={() => setComposing(true)}>New meeting</Button>
               </>
             )}
           />
@@ -667,11 +746,29 @@ function MeetList() {
                 : undefined} />
           ) : (
             <>
-              <ul className="flex flex-col gap-3">
-                {items.map((m) => (
-                  <li key={m.id}><MeetingCard meet={m} now={now} calIcs={cal?.ics || ""} /></li>
+              {/* Grouped by the day it falls on, in the READER's zone. The day was previously
+                  repeated in full on every row, so an afternoon of seven meetings said the same
+                  Wednesday seven times and the eye had nothing to hold on to. The lead meeting —
+                  the first one still ahead — is the only row that carries the accent. */}
+              <div className="flex flex-col gap-5">
+                {groupedByDay.map((g) => (
+                  <section key={g.key} aria-label={g.heading}>
+                    <h2 className="mb-2 flex flex-wrap items-baseline gap-x-2 px-0.5 text-[13px] font-bold uppercase tracking-[0.07em] text-ink-2">
+                      <span data-ay-skip="1">{g.heading}</span>
+                      <span className="text-[12px] font-semibold normal-case tracking-normal text-ink-3" data-ay-skip="1">
+                        {fmtRelative(g.items[0].start_ts, now)}
+                      </span>
+                    </h2>
+                    <ul className="flex flex-col gap-2">
+                      {g.items.map((m) => (
+                        <li key={m.id}>
+                          <MeetingRow meet={m} calIcs={cal?.ics || ""} lead={m.id === leadId} />
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
                 ))}
-              </ul>
+              </div>
               {next != null && <LoadMoreButton onClick={() => load(next)} loading={more} />}
             </>
           )}
@@ -722,12 +819,15 @@ function HostControls({ meet, busy, onInvite, onRetime, onCancel }: {
         {/* Refill from the meeting each time the panel opens. Initialising the fields once meant
             that after a successful retime the form still showed the OLD time, and a second edit
             would quietly move the meeting back to it. */}
+        {/* A REAL control. The host's two levers — move it, call it off — were 19px runs of text
+            stacked between hairlines, which reads as a list of headings and sits well under any
+            reasonable thumb. They are buttons now, at the height every other control here uses. */}
         <button type="button" aria-expanded={open}
           onClick={() => setOpen((o) => {
             if (!o) { setDate(from.date); setTime(from.time); setMinutes(minutesOf(meet)); }
             return !o;
           })}
-          className="text-[12.5px] font-semibold text-ink-3 hover:text-ink">
+          className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink">
           {open ? "Keep the time" : "Change the time"}
         </button>
         {open && (
@@ -744,11 +844,11 @@ function HostControls({ meet, busy, onInvite, onRetime, onCancel }: {
             <div>
               <button type="button" disabled={busy || !date || !time}
                 onClick={() => onRetime(zonedToTs(date, time, tz), minutes, tz)}
-                className="h-9 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">
+                className="h-10 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">
                 Move the meeting
               </button>
               <p className="mt-1.5 text-[12px] leading-relaxed text-ink-3">
-                Everyone invited is told, and every calendar subscribed to it updates in place
+                Everyone invited is told, and every subscribed calendar updates itself
               </p>
             </div>
           </div>
@@ -760,13 +860,13 @@ function HostControls({ meet, busy, onInvite, onRetime, onCancel }: {
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[12.5px] text-ink-2">Everyone invited is told, and it shows as cancelled in their calendar.</span>
             <button type="button" disabled={busy} onClick={onCancel}
-              className="h-9 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">Cancel it</button>
+              className="h-10 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">Cancel it</button>
             <button type="button" onClick={() => setConfirming(false)}
-              className="h-9 rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2">Keep it</button>
+              className="h-10 rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2">Keep it</button>
           </div>
         ) : (
           <button type="button" onClick={() => setConfirming(true)}
-            className="text-[12.5px] font-semibold text-ink-3 hover:text-ink">Cancel this meeting</button>
+            className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink">Cancel this meeting</button>
         )}
       </div>
     </section>
@@ -879,8 +979,8 @@ function JoinPanel({ lobby, busy, now, opening, onOpen, guests }: {
       <div className="rounded-card border border-line bg-space-2 p-5">
         <p className="text-[15px] font-semibold text-ink">Opens <span data-ay-skip="1">{fmtRelative(Number(meet.start_ts) - 900, now)}</span></p>
         <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-2">
-          The room is made fifteen minutes before the meeting and thrown away after, so an invitation sent weeks
-          ago still works on a laptop you bought yesterday
+          The room is made fifteen minutes before and thrown away after, so an old invitation still
+          works on a new laptop
         </p>
         <JoinAs />
       </div>
@@ -1300,9 +1400,9 @@ function MeetingPage({ id }: { id: number }) {
                         className="h-10 rounded-field border border-line bg-space-2 px-3 text-[14px] text-ink outline-none focus:border-yin-light" />
                       <div className="flex flex-wrap gap-2">
                         <button type="button" disabled={busy || !askAt} onClick={() => void doAsk()}
-                          className="h-9 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">Ask</button>
+                          className="h-10 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">Ask</button>
                         <button type="button" onClick={() => { setAskOpen(false); setAskAt(""); }}
-                          className="h-9 rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2">Never mind</button>
+                          className="h-10 rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2">Never mind</button>
                       </div>
                     </div>
                   ) : (
@@ -1319,9 +1419,9 @@ function MeetingPage({ id }: { id: number }) {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[12.5px] text-ink-2">The hour goes back on offer.</span>
                       <button type="button" disabled={busy} onClick={() => { setConfirmDrop(false); void doCancel(); }}
-                        className="h-9 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">Cancel it</button>
+                        className="h-10 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">Cancel it</button>
                       <button type="button" onClick={() => setConfirmDrop(false)}
-                        className="h-9 rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2">Keep it</button>
+                        className="h-10 rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2">Keep it</button>
                     </div>
                   ) : (
                     <button type="button" onClick={() => setConfirmDrop(true)}
@@ -1350,9 +1450,9 @@ function MeetingPage({ id }: { id: number }) {
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="button" disabled={busy} onClick={() => void doAnswerAsk(true)}
-                  className="h-9 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">Move it</button>
+                  className="h-10 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">Move it</button>
                 <button type="button" disabled={busy} onClick={() => void doAnswerAsk(false)}
-                  className="h-9 rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 disabled:opacity-50">Keep the time</button>
+                  className="h-10 rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 disabled:opacity-50">Keep the time</button>
               </div>
             </section>
           )}
@@ -1382,7 +1482,7 @@ function MeetingPage({ id }: { id: number }) {
           )}
 
           <PrivacyNote />
-          <Link to={localePath("/meet/")} className="text-[13px] font-semibold text-ink-3 hover:text-ink">
+          <Link to={localePath("/meet/")} className="inline-flex min-h-[40px] items-center text-[13px] font-semibold text-ink-2 hover:text-ink">
             ← All your meetings
           </Link>
         </aside>
