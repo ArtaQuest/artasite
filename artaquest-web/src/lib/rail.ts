@@ -76,31 +76,67 @@ export function openSearch() {
 
 /** `enabled=false` (the embedded landing feed) skips the rail entirely — five extra backend calls
  *  a marketing page has no use for, on the one visit where speed matters most. */
-export function useRail(enabled = true) {
-  const [challenges, setChallenges] = useState<Challenge[] | null>(null);
-  const [news, setNews] = useState<NewsItem[] | null>(null);
-  const [headlines, setHeadlines] = useState<TrendingKindItem[] | null>(null);
-  const [topics, setTopics] = useState<TrendingTopic[] | null>(null);
-  const [who, setWho] = useState<FollowSuggestion[] | null>(null);
-  useEffect(() => {
-    if (!enabled) { setChallenges([]); setWho([]); setNews([]); setHeadlines([]); setTopics([]); return; }
-    listChallenges().then((r) => setChallenges([...r.current].sort((a, b) => a.deadline - b.deadline))).catch(() => setChallenges([]));
-    listNews(4).then((r) => setNews(r.items)).catch(() => setNews([]));
+export type RailData = {
+  challenges: Challenge[] | null; news: NewsItem[] | null;
+  headlines: TrendingKindItem[] | null; topics: TrendingTopic[] | null; who: FollowSuggestion[] | null;
+};
+
+/**
+ * ONE fetch for the whole session, not one per page.
+ *
+ * These cards used to live on the feed alone, so a fetch per mount cost five requests on the one
+ * page a member lands on. They are now in the right column of EVERY page (operator 2026-08-16:
+ * "put some stuff to the right"), which turns the same code into five requests per navigation —
+ * for cards whose sources refresh on a 6-hour crawl and a challenge deadline measured in weeks.
+ *
+ * So the payload is cached at module scope with a TTL, and concurrent mounts share the SAME
+ * in-flight promise rather than racing five duplicate requests each. Nothing here is personal
+ * beyond the follow filter, which is applied per-viewer on read.
+ */
+const RAIL_TTL_MS = 5 * 60 * 1000;
+let cache: { at: number; data: RailData } | null = null;
+let inflight: Promise<RailData> | null = null;
+
+const EMPTY_RAIL: RailData = { challenges: [], news: [], headlines: [], topics: [], who: [] };
+
+function fetchRail(): Promise<RailData> {
+  if (cache && Date.now() - cache.at < RAIL_TTL_MS) return Promise.resolve(cache.data);
+  if (inflight) return inflight;
+  const me = currentUser();
+  inflight = Promise.all([
+    listChallenges().then((r) => [...r.current].sort((a, b) => a.deadline - b.deadline)).catch(() => [] as Challenge[]),
+    listNews(4).then((r) => r.items).catch(() => [] as NewsItem[]),
     // ONE fetch feeds both X-style cards (operator 2026-07-30). The headlines and the topics come
     // out of the same 6h-refreshed crawl, so the two can never disagree about what is trending.
-    scholarTrending().then((r) => {
-      setHeadlines(r.kinds?.find((k) => k.kind === "news")?.items ?? []);
-      setTopics(r.topics ?? []);
-    }).catch(() => { setHeadlines([]); setTopics([]); });
-    const me = currentUser();
-    Promise.all([
-      suggestFollow().then((r) => r.items).catch(() => [] as FollowSuggestion[]),
-      // The suggestions GET is unpersonalised (CDN-safe); the viewer + already-followed drop here.
-      isLoggedIn() ? Social.feed(0, 1).then((r) => r.followed || []).catch(() => [] as number[]) : Promise.resolve([] as number[]),
-    ]).then(([items, followed]) => {
-      const skip = new Set<number>(followed);
-      setWho(items.filter((s) => s.slug !== me?.slug && !skip.has(s.id)).slice(0, 3));
-    });
+    scholarTrending().then((r) => ({
+      headlines: r.kinds?.find((k) => k.kind === "news")?.items ?? [],
+      topics: r.topics ?? [],
+    })).catch(() => ({ headlines: [] as TrendingKindItem[], topics: [] as TrendingTopic[] })),
+    suggestFollow().then((r) => r.items).catch(() => [] as FollowSuggestion[]),
+    // The suggestions GET is unpersonalised (CDN-safe); the viewer + already-followed drop here.
+    isLoggedIn() ? Social.feed(0, 1).then((r) => r.followed || []).catch(() => [] as number[]) : Promise.resolve([] as number[]),
+  ]).then(([challenges, news, trending, suggestions, followed]) => {
+    const skip = new Set<number>(followed);
+    const data: RailData = {
+      challenges, news,
+      headlines: trending.headlines, topics: trending.topics,
+      who: suggestions.filter((s) => s.slug !== me?.slug && !skip.has(s.id)).slice(0, 3),
+    };
+    cache = { at: Date.now(), data };
+    inflight = null;
+    return data;
+  }).catch(() => { inflight = null; return EMPTY_RAIL; });
+  return inflight;
+}
+
+export function useRail(enabled = true): RailData {
+  // Served straight from cache on a second page, so the column paints filled instead of empty.
+  const [data, setData] = useState<RailData>(() => (cache ? cache.data : { challenges: null, news: null, headlines: null, topics: null, who: null }));
+  useEffect(() => {
+    if (!enabled) { setData(EMPTY_RAIL); return; }
+    let live = true;
+    fetchRail().then((d) => { if (live) setData(d); });
+    return () => { live = false; };
   }, [enabled]);
-  return { challenges, news, headlines, topics, who };
+  return data;
 }
