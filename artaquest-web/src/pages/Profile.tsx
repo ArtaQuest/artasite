@@ -295,13 +295,20 @@ export default function Profile() {
     ? `${localePath("/login/")}?redirect_to=${encodeURIComponent(window.location.pathname)}`
     : localePath("/login/");
 
-  /** Shown to a signed-in visitor beside Message, and to a signed-out one beside Follow — the same
-   *  element either way, so the two branches cannot drift. Never gated on a session: the booking
-   *  page it points at is public on purpose. */
+  /** Shown to a signed-in visitor beside Message, to a signed-out one beside Follow, and — since
+   *  2026-08-16 — to the MEMBER THEMSELVES beside Edit profile. The same element in all three
+   *  branches, so they cannot drift. Never gated on a session: the booking page it points at is
+   *  public on purpose.
+   *
+   *  The owner's copy is what was missing, and it is the copy that matters most: /book/<handle> is
+   *  the link a member hands to somebody else, and their own profile is where they would go to find
+   *  it. Every other route to it — the Meet page, the share card on the booking page itself —
+   *  assumes you already know the URL exists. The label changes because the act does: a visitor
+   *  takes a time, an owner copies the link they are about to send. */
   const bookButton = p ? (
     <Button href={localePath(`/book/${encodeURIComponent(p.slug)}`)} variant="outline"
-      className="h-10 px-5 text-[14px]" title="See when they are free and take a time">
-      Book a time
+      className="h-10 px-5 text-[14px]" title={isOwn ? "Your public booking page — the link you share" : "See when they are free and take a time"}>
+      {isOwn ? "Book me" : "Book a time"}
     </Button>
   ) : null;
 
@@ -390,9 +397,12 @@ export default function Profile() {
                   booking page says plainly when somebody is not offering any time, so it never leads
                   anywhere embarrassing. */}
               {isOwn ? (
-                <a href={localePath("/user-account/?settings=1")} className="shrink-0 self-start text-[13.5px] font-semibold text-ink-3 transition-colors hover:text-yang sm:self-auto sm:pb-1">
-                  Edit profile <span aria-hidden className="inline-block rtl:-scale-x-100">→</span>
-                </a>
+                <div className="flex shrink-0 flex-wrap items-center gap-3 sm:pb-1">
+                  {bookButton}
+                  <a href={localePath("/user-account/?settings=1")} className="self-start text-[13.5px] font-semibold text-ink-3 transition-colors hover:text-yang sm:self-auto">
+                    Edit profile <span aria-hidden className="inline-block rtl:-scale-x-100">→</span>
+                  </a>
+                </div>
               ) : isLoggedIn() ? (
                 /* Follow + Message. Until this existed the ONLY way to open a conversation was typing
                    a member's exact @handle into the ArtaChat sidebar — this is the entry point the
