@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Chat {
 
-	const TABLE_VERSION = '5';
+	const TABLE_VERSION = '6';
 
 	/** Uncompressed P-256 point (0x04 ‖ X ‖ Y = 65 bytes) as base64 — the only accepted pub format. */
 	const PUB_B64_LEN = 88;
@@ -78,13 +78,17 @@ final class Chat {
 			KEY user_id_id (user_id, id),
 			KEY user_id_seen (user_id, seen)
 		) {$charset};" );
-		// dbDelta silently skips an ADD COLUMN under Studio's SQLite, so the column is added
-		// explicitly and back-filled from `created` — which is what `seen` meant before it existed.
+		// dbDelta silently skips an ADD COLUMN under Studio's SQLite, so add it explicitly there.
 		$cols = $wpdb->get_col( "SHOW COLUMNS FROM {$p}aq_chat_keys" );
 		if ( is_array( $cols ) && ! in_array( 'seen', $cols, true ) ) {
 			$wpdb->query( "ALTER TABLE {$p}aq_chat_keys ADD COLUMN seen INT UNSIGNED NOT NULL DEFAULT 0" );
-			$wpdb->query( "UPDATE {$p}aq_chat_keys SET seen = created WHERE seen = 0" );
 		}
+		// BACK-FILL UNCONDITIONALLY. This was nested inside the guard above, and on MySQL dbDelta had
+		// already added the column by the time the guard ran — so the guard skipped, and every
+		// existing row stayed at the DEFAULT 0. With the whole table at zero, `ORDER BY seen DESC,
+		// id DESC` degenerates to exactly the `id DESC` this change exists to replace. The two are
+		// separate questions: who adds the column, and whether the rows have a value.
+		$wpdb->query( "UPDATE {$p}aq_chat_keys SET seen = created WHERE seen = 0 AND created > 0" );
 
 		/**
 		 * THE ESCROW. One row per member: their own private key, sealed in their browser under a
