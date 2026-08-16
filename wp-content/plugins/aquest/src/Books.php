@@ -1188,10 +1188,15 @@ final class Books {
 				. '"specified Canadian recipient". CRA is explicit that a specified supply to such a recipient is '
 				. 'CONSIDERED TO BE MADE IN CANADA and that 5% is required to be charged and collected, by the SUPPLIER. '
 				. 'A supply made in Canada is not an imported taxable supply, so the self-assessment provisions do not '
-				. 'engage and form GST59 is the wrong instrument. CA$42.00 was accrued on the opposite reading and has '
-				. 'been reversed by a correcting entry; the original entries remain in the ledger, because a mistake that '
-				. 'is deleted cannot be audited. Two consequences for the operator: stop giving this supplier the business '
-				. 'number, and expect these subscriptions to cost 5% more once it starts charging what it should.',
+				. 'engage and form GST59 is the wrong instrument; CA$42.00 accrued on that reading has been reversed by a '
+				. 'correcting entry, with the original entries left in the ledger because a mistake that is deleted cannot '
+				. 'be audited. WHO CARRIES THE UNCHARGED TAX IS NOT SETTLED. The Act protects a supplier who relied in good '
+				. 'faith on false evidence of registration and moves the liability, with a penalty, onto the recipient who '
+				. 'gave it. Whether that describes what happened turns on whether supplying a number labelled as a business '
+				. 'number amounted to representing registration — the invoices show it as "CA BN", not as a GST/HST number. '
+				. 'Disclosed as a contingency and not accrued, because it is genuinely uncertain and an accrual would state '
+				. 'a conclusion the Foundation has not reached. Put it to an adviser. Whatever the answer for the past, '
+				. 'giving that number again in order to avoid the charge is the conduct the provision names.',
 		];
 		$notes[] = [
 			'title' => 'Superseded — GST self-assessment',
@@ -2184,7 +2189,7 @@ final class Books {
 	];
 
 	/** The tax position every one of these invoices carries, recorded once rather than three times. */
-	const FOUNDING_TAX_NOTE = 'Invoiced at 0% on a reverse-charge basis against CA BN ' . self::BN . '. The Foundation is NOT registered under the normal GST/HST regime, so 5% should have been charged BY THE SUPPLIER. Not a liability of the Foundation.';
+	const FOUNDING_TAX_NOTE = 'Invoiced at 0% on a reverse-charge basis against CA BN ' . self::BN . '. The Foundation is NOT registered under the normal GST/HST regime, so 5% should have been charged. Who carries the uncharged tax is an open question — see the note.';
 
 	/**
 	 * GST self-assessed on the founding costs.
@@ -2308,7 +2313,7 @@ final class Books {
 		if ( ! get_option( 'aq_books_genesis' ) )     { self::genesis(); }
 		if ( ! get_option( 'aq_books_seeded' ) )      { self::seed_founding_costs(); }
 		if ( ! get_option( 'aq_books_gst_accrued' ) ) { self::accrue_founding_gst(); }
-		if ( ! get_option( 'aq_books_taxnote_v3' ) )   { self::refresh_founding_tax_note(); }
+		if ( ! get_option( 'aq_books_taxnote_v4' ) )   { self::refresh_founding_tax_note(); }
 		if ( ! get_option( 'aq_books_fy_end' ) )       { self::record_year_end( self::FY_END_DEFAULT, '2026-08-14' ); }
 		if ( ! get_option( 'aq_books_signer_last' ) )  { self::seed_signer(); }
 		if ( ! get_option( 'aq_books_gst_reversed' ) ) { self::reverse_gst_self_assessment(); }
@@ -2425,7 +2430,7 @@ final class Books {
 			}
 		}
 		if ( $n < count( self::FOUNDING_COSTS ) ) { return 'incomplete ' . $n; }
-		update_option( 'aq_books_taxnote_v3', self::today(), true );
+		update_option( 'aq_books_taxnote_v4', self::today(), true );
 		return 'refreshed ' . $n;
 	}
 
