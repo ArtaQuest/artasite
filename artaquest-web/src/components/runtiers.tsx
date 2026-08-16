@@ -56,8 +56,12 @@ export function RunTiers({ id, slug, kaggleUrl, colabUrl, className }: Props) {
   // of the page — the primary action should not be the hardest thing on it to tap.
   const act = "inline-block py-1 text-[13px] font-semibold text-yin-ink underline-offset-2 hover:underline";
 
+  // A CARD, not a landmark. This sits INSIDE the page's right column, which is itself the
+  // complementary landmark — nesting <aside> in <aside> announces three "complementary" regions to a
+  // screen reader where the page has one, and the two inner ones have no name at all. Its own <h2>
+  // is what identifies it in the heading list, which is how a reader actually finds it.
   return (
-    <aside className={cx("flex flex-col gap-3 rounded-card border border-line bg-space-2 p-4", className)}>
+    <section className={cx("flex flex-col gap-3 rounded-card border border-line bg-space-2 p-4", className)}>
       <div>
         <h2 className="text-sm font-bold uppercase tracking-wider text-ink-3">Run it yourself</h2>
         <p className="mt-1 text-[13px] leading-relaxed text-ink-3">
@@ -127,6 +131,6 @@ export function RunTiers({ id, slug, kaggleUrl, colabUrl, className }: Props) {
         </a>
         {" "}and run it wherever you like.
       </p>
-    </aside>
+    </section>
   );
 }
