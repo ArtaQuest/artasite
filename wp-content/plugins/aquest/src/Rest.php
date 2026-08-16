@@ -194,6 +194,7 @@ final class Rest {
 		// confirmation (Account.php). request = email the code; confirm = verify code + phrase, then purge.
 		[ 'POST', 'me/delete/request',             'Account::delete_request', 'user' ],
 		[ 'POST', 'me/delete/confirm',             'Account::delete_confirm', 'user' ],
+		[ 'GET',  'me/footprint',                  'Account::footprint',      'user' ], // what a purge destroys, counted — the confirm screen reads it
 
 		// ── Identity + verification (blue check) ──────────────────────────────
 		[ 'GET',  'verify/status',                 'Verify::status',          'user' ],

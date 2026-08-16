@@ -866,9 +866,17 @@ export const apiDocs = () => get<ApiDocs>("/api/docs");
 
 // ── Account deletion (irreversible profile purge) ─────────────────────────────
 // Two-step, two-factor guard so an accidental or hijacked-session click can't fire it:
+export type Footprint = {
+  works_published: number; works_drafts: number; works_with_doi: number; posts: number; comments: number;
+  hearts_given: number; files: number; messages: number; meetings_hosted: number; challenges_founded: number;
+  followers: number; following: number; other: Record<string, number>;
+};
 // request emails a 6-digit re-auth code; confirm needs that code AND the typed word DELETE, then
 // the backend purges the whole profile and signs the member out (see Account.php).
 export const Account = {
+  /** GET /me/footprint — what a purge destroys, counted. `other` is the sweep's long tail:
+   *  table.column → rows, for the tables nobody thinks about. */
+  footprint: () => get<Footprint>("/me/footprint"),
   deleteRequest: () => post<{ ok: true; email: string; expires_in: number }>("/me/delete/request", {}),
   deleteConfirm: (code: string, confirm: string) =>
     post<{ ok: true; redirect: string }>("/me/delete/confirm", { code, confirm }),

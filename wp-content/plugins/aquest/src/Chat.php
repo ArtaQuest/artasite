@@ -1471,6 +1471,25 @@ final class Chat {
 	 * attachment) from the database. Pairs with a sealed delete-marker the client sends so the
 	 * peer's open screen drops the bubble immediately; this removes the public record itself.
 	 */
+	/**
+	 * Erase one member from ArtaChat — every message they SENT (ciphertext row + attachment blob),
+	 * every conversation they were party to, their device keys and their recovery escrow.
+	 * Called by Account::purge. The other party's messages in a shared conversation are the other
+	 * party's and stay; a messenger that deletes your account clears your side, not theirs.
+	 */
+	public static function purge_member( $uid ) {
+		global $wpdb;
+		$uid = (int) $uid;
+		$M = Data::t( 'aq_chat_msgs' ); $C = Data::t( 'aq_chats' );
+		foreach ( Data::all( "SELECT blob FROM $M WHERE sender_id = %d AND blob <> ''", [ $uid ] ) as $r ) {
+			self::unlink_blob( (string) $r['blob'] );
+		}
+		$wpdb->delete( $M, [ 'sender_id' => $uid ] );
+		$wpdb->query( $wpdb->prepare( "DELETE FROM $C WHERE a_uid = %d OR b_uid = %d", $uid, $uid ) );
+		$wpdb->delete( Data::t( 'aq_chat_keys' ),  [ 'user_id' => $uid ] );
+		$wpdb->delete( Data::t( 'aq_chat_vault' ), [ 'user_id' => $uid ] );
+	}
+
 	public static function unsend( $req ) {
 		self::ensure_tables();
 		if ( Rest::throttle( 'aq_chat_unsend', 30, 60 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }

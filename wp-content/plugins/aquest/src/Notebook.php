@@ -1074,7 +1074,7 @@ final class Notebook {
 	public static function get( $req ) {
 		self::ensure_tables();
 		$r = self::row( Rest::pint( $req, 'id' ) );
-		if ( ! $r || $r['status'] === 'removed' ) { return Rest::err( 'not_found', 'No such notebook', 404 ); }
+		if ( ! $r || self::gone( $r ) ) { return Rest::err( 'not_found', 'No such notebook', 404 ); }
 		$owner = self::can_edit( $r, Rest::uid() );
 		if ( $r['status'] !== 'published' && ! $owner ) { return Rest::err( 'not_found', 'No such notebook', 404 ); }
 		if ( $r['status'] === 'published' && ! $owner ) { Data::bump( 'aq_notebooks', [ 'id' => (int) $r['id'] ], 'view_count' ); }
@@ -1089,7 +1089,7 @@ final class Notebook {
 		// Drafts serve too: the entire database is public by design (the /data explorer shows every
 		// draft's source anyway), so gating the raw file added zero secrecy and broke browser runs —
 		// feed invisibility, not file secrecy, is what "draft" means here (operator 2026-07-15).
-		if ( ! $r || $r['status'] === 'removed' ) { return Rest::err( 'not_found', 'No such post', 404 ); }
+		if ( ! $r || self::gone( $r ) ) { return Rest::err( 'not_found', 'No such post', 404 ); }
 		$body = (string) ( $r['ipynb_out'] ?? '' );
 		if ( '' === $body ) { $body = (string) ( $r['ipynb'] ?? '' ); }
 		$resp = new \WP_REST_Response( json_decode( $body ) );
@@ -1432,7 +1432,7 @@ final class Notebook {
 			'id' => (int) $p['id'], 'body' => (string) $p['body'], 'hearts' => (int) $p['hearts'],
 			'reposts' => (int) ( $p['reposts'] ?? 0 ), 'created' => (int) $p['created'],
 			'author' => self::author_card( $p['author_id'] ),
-			'nb' => $nb && $nb['status'] !== 'removed' ? self::card( $nb ) : null,
+			'nb' => $nb && ! self::gone( $nb ) ? self::card( $nb ) : null,
 			'media' => $media,
 			'repost' => $re,
 		];
@@ -1530,12 +1530,35 @@ final class Notebook {
 		$uid = Rest::uid();
 		$p   = Data::one( 'SELECT * FROM ' . Data::t( 'aq_posts' ) . ' WHERE id = %d', [ Rest::pint( $req, 'id' ) ] );
 		if ( ! $p || ( (int) $p['author_id'] !== $uid && ! current_user_can( 'manage_options' ) ) ) { return Rest::err( 'not_found', 'No such post', 404 ); }
+		self::purge_post( $p );
+		return [ 'ok' => true ];
+	}
+
+	/**
+	 * Destroy one post: its row, its attachment links, the hearts on it, and every bare repost of
+	 * it. Called by post_delete and by Account::purge.
+	 *
+	 * A REPOST with no words of its own is the original wearing another name; when the original goes,
+	 * so does it (X does the same). A QUOTE — a repost with a body — is the other member's own
+	 * sentence about something that is now gone, so it stays and renders its target as unavailable.
+	 * The `reposts` counter on a quoted original is moot once the original is deleted; the counter on
+	 * a target this post was itself reposting is decremented as before.
+	 */
+	/** A row that no reader may see: unlisted (legacy 'removed') or destroyed to a DOI tombstone ('deleted'). */
+	public static function gone( $r ) {
+		return ! $r || in_array( (string) ( $r['status'] ?? '' ), [ 'removed', 'deleted' ], true );
+	}
+
+	public static function purge_post( $p ) {
 		global $wpdb;
+		$id = (int) $p['id'];
 		if ( (int) $p['repost_id'] ) {
 			$wpdb->query( $wpdb->prepare( 'UPDATE ' . Data::t( 'aq_posts' ) . ' SET reposts = GREATEST(reposts - 1, 0) WHERE id = %d', (int) $p['repost_id'] ) );
 		}
-		$wpdb->delete( Data::t( 'aq_posts' ), [ 'id' => (int) $p['id'] ] );
-		return [ 'ok' => true ];
+		$wpdb->delete( Data::t( 'aq_post_media' ), [ 'post_id' => $id ] );
+		$wpdb->delete( Data::t( 'aq_votes' ), [ 'target_type' => 'post', 'target_id' => $id ] );
+		$wpdb->query( $wpdb->prepare( 'DELETE FROM ' . Data::t( 'aq_posts' ) . " WHERE repost_id = %d AND body = ''", $id ) );
+		$wpdb->delete( Data::t( 'aq_posts' ), [ 'id' => $id ] );
 	}
 
 	/** POST notebooks/{id}/comments/{cid}/edit {body} — the commenter revises their reply. */
@@ -1570,7 +1593,7 @@ final class Notebook {
 	public static function mine( $req ) {
 		self::ensure_tables();
 		$cursor = Rest::pint( $req, 'cursor', 0 );
-		[ $rows, $next ] = Data::page( 'aq_notebooks', "author_id = %d AND status <> 'removed'", [ Rest::uid() ], $cursor, self::PAGE );
+		[ $rows, $next ] = Data::page( 'aq_notebooks', "author_id = %d AND status NOT IN ('removed','deleted')", [ Rest::uid() ], $cursor, self::PAGE );
 		return [ 'items' => array_map( [ self::class, 'card' ], $rows ), 'next' => $next ];
 	}
 
@@ -1586,7 +1609,7 @@ final class Notebook {
 		$uid = Rest::uid();
 		$r   = self::row( Rest::pint( $req, 'id' ) );
 		if ( ! self::can_edit( $r, $uid ) ) { return Rest::err( 'not_found', 'No such notebook', 404 ); }
-		if ( $r['status'] === 'removed' ) { return Rest::err( 'gone', 'Removed', 410 ); }
+		if ( self::gone( $r ) ) { return Rest::err( 'gone', 'Removed', 410 ); }
 		// TITLE AND ABSTRACT ONLY (operator 2026-07-28). The source of record is the author's Kaggle
 		// kernel: `ipynb` holds what we pulled from it, and sig() over that value is what the confirm
 		// link, the review ledger and the database publish-guard are all keyed on. Letting a client
@@ -1638,7 +1661,7 @@ final class Notebook {
 		$uid = Rest::uid();
 		$r   = self::row( Rest::pint( $req, 'id' ) );
 		if ( ! self::can_edit( $r, $uid ) ) { return Rest::err( 'not_found', 'No such notebook', 404 ); }
-		if ( $r['status'] === 'removed' ) { return Rest::err( 'gone', 'Removed', 410 ); }
+		if ( self::gone( $r ) ) { return Rest::err( 'gone', 'Removed', 410 ); }
 		if ( (string) $r['ipynb'] === '' ) { return Rest::err( 'empty', 'Nothing to run yet' ); }
 		// A usage-policy refusal is PERMANENT for this exact source (nb 31 was retried 5× in a
 		// loop by an authoring agent) — refuse to re-queue until the draft actually changes.
@@ -2323,20 +2346,96 @@ final class Notebook {
 		return 'doi=' . ( $r['doi'] ?: 'none' ) . ' kaggle=' . ( $r['kaggle_url'] ?: 'none' );
 	}
 
-	/** POST studio/notebooks/{id}/delete — drafts vanish for good; published works are only unlisted (their DOI lives on). */
+	/**
+	 * POST studio/notebooks/{id}/delete — PERMANENT (operator 2026-08-16: "all contents deletable
+	 * permanently by users"). It used to unlist a published work and keep everything — row, files,
+	 * comments, hearts, Library rows — under status 'removed'. Now purge_work destroys all of it; the
+	 * only thing that outlives a deleted work is a tombstone for its DOI, and only when it has one.
+	 */
 	public static function remove( $req ) {
 		self::ensure_tables();
 		$uid = Rest::uid();
 		$r   = self::row( Rest::pint( $req, 'id' ) );
 		if ( ! self::can_edit( $r, $uid ) ) { return Rest::err( 'not_found', 'No such notebook', 404 ); }
-		Data::update( 'aq_notebooks', [ 'status' => 'removed', 'updated' => Data::now() ], [ 'id' => (int) $r['id'] ] );
-		// Take its Library listings down with it. Mirroring happens at publish REQUEST, so a work
-		// that is removed before (or after) approval had already put rows on the shared shelf; the
-		// listing endpoint hides them by joining on a PUBLISHED work, but the rows accumulate
-		// forever — prod carried eight belonging to four removed works. Rows already attached to
-		// someone's post are kept by prune, deliberately.
-		Kernel::unlist( $r );
-		return [ 'ok' => true ];
+		$how = self::purge_work( $r );
+		return [ 'ok' => true, 'tombstone' => 'tombstone' === $how ];
+	}
+
+	/**
+	 * DESTROY ONE WORK — everything of it we hold. Returns 'deleted' or 'tombstone'.
+	 *
+	 * What goes: the Library rows it published (and their CDN objects, unless another work still
+	 * serves the same content-addressed key), every attachment of those files in ANYBODY's post (the
+	 * file is the author's; a post that borrowed it loses the picture, exactly as a quote loses a
+	 * deleted original), its challenge entries, its comments and the votes on them, the hearts on
+	 * it, its own timeline post (via purge_post, so reposts follow), the teasers/thumb/assets on our
+	 * storage, and its review/run rows.
+	 *
+	 * What stays, and why: a work that MINTED A DOI leaves a tombstone — the row survives with every
+	 * content column blanked, author_id 0, status 'deleted' — because a DOI is a promise that a URL
+	 * resolves. It resolves to "the author deleted this work", which is what DataCite and Zenodo
+	 * themselves do. Its author confirmation rows (aq_nb_reviews model='author') stay with it: they
+	 * are the ledger of the publish act, sig-bound, and carry no personal data. A work with no DOI
+	 * has made no such promise and its row is simply deleted.
+	 *
+	 * We CANNOT withdraw the copy Zenodo archived at publication — its API deletes drafts only — and
+	 * the confirmation UI says so before the author commits. Overclaiming "gone everywhere" would be
+	 * the one dishonest sentence on a platform whose whole pitch is checkable claims.
+	 */
+	public static function purge_work( $r ) {
+		global $wpdb;
+		self::ensure_tables();
+		$id  = (int) $r['id'];
+		$L   = Data::t( 'aq_library' );
+		$PM  = Data::t( 'aq_post_media' );
+
+		// 1. Library rows + their objects. Shared-key check: another work's row on the same key
+		//    means the bytes are still someone's, so the object stays and only this row goes.
+		foreach ( Data::all( "SELECT id, cdn_key FROM $L WHERE nb_id = %d", [ $id ] ) as $lib ) {
+			$lid = (int) $lib['id'];
+			$key = (string) $lib['cdn_key'];
+			$wpdb->delete( $PM, [ 'lib_id' => $lid ] );
+			$wpdb->delete( $L, [ 'id' => $lid ] );
+			if ( '' !== $key ) {
+				Media::destroy( $key, static function ( $k ) use ( $L, $lid ) {
+					return (int) Data::col( "SELECT COUNT(*) FROM $L WHERE cdn_key = %s AND id <> %d", [ $k, $lid ] ) > 0;
+				} );
+			}
+		}
+		// 2. Its own media on our storage. These keys are per-work (teaser-<id>-…), never shared.
+		foreach ( [ 'thumb', 'teaser', 'teaser_light' ] as $col ) {
+			if ( '' !== (string) ( $r[ $col ] ?? '' ) ) { Media::destroy( (string) $r[ $col ] ); }
+		}
+		foreach ( (array) ( Data::dec( $r['assets'] ?? '' ) ?: [] ) as $a ) {
+			$u = is_array( $a ) ? (string) ( $a['url'] ?? $a['src'] ?? '' ) : (string) $a;
+			if ( '' !== $u ) { Media::destroy( $u ); }
+		}
+		// 3. Social footprint on the work.
+		$C = Data::t( 'aq_comments' ); $V = Data::t( 'aq_votes' );
+		$wpdb->query( $wpdb->prepare( "DELETE FROM $V WHERE target_type = 'comment' AND target_id IN ( SELECT id FROM $C WHERE context_type = 'notebook' AND context_id = %d )", $id ) );
+		$wpdb->delete( $C, [ 'context_type' => 'notebook', 'context_id' => $id ] );
+		$wpdb->delete( $V, [ 'target_type' => 'notebook', 'target_id' => $id ] );
+		$wpdb->delete( Data::t( 'aq_nb_entries' ), [ 'nb_id' => $id ] );
+		foreach ( Data::all( 'SELECT * FROM ' . Data::t( 'aq_posts' ) . ' WHERE nb_id = %d', [ $id ] ) as $post ) { self::purge_post( $post ); }
+		$wpdb->delete( Data::t( 'aq_nb_runs' ), [ 'nb_id' => $id ] );
+
+		// 4. The row: tombstone if it minted a DOI, gone otherwise.
+		if ( '' !== trim( (string) ( $r['doi'] ?? '' ) ) ) {
+			$blank = [];
+			foreach ( [ 'title', 'abstract', 'ipynb', 'requirements', 'ipynb_out', 'out_sig', 'assets', 'thumb', 'teaser', 'teaser_light',
+				'colab_url', 'kaggle_url', 'hf_url', 'kg_owner', 'kg_slug', 'kg_url', 'kg_facts', 'checks', 'selection', 'decision_note',
+				'author_token', 'author_nonce', 'approve_sig', 'req_sig' ] as $col ) { $blank[ $col ] = ''; }
+			$blank['author_id'] = 0;
+			$blank['status']    = 'deleted';
+			$blank['hearts']    = 0;
+			$blank['comments']  = 0;
+			$blank['updated']   = Data::now();
+			Data::update( 'aq_notebooks', $blank, [ 'id' => $id ] );
+			return 'tombstone';
+		}
+		$wpdb->delete( Data::t( 'aq_nb_reviews' ), [ 'nb_id' => $id ] );
+		$wpdb->delete( Data::t( 'aq_notebooks' ), [ 'id' => $id ] );
+		return 'deleted';
 	}
 
 	// ── Relay (worker auth) — REMOVED with the local-execution pipeline (2026-07-28) ──────

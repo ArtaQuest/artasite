@@ -449,8 +449,25 @@ function WorkFlow({ id }: { id: number }) {
       .finally(() => setBusy(""));
   };
 
+  // PERMANENT (operator 2026-08-16). It used to unlist a published work and keep everything under
+  // the hood; now the row, its files on our storage, its Library listings (and their attachments in
+  // anybody's post), its comments, hearts and challenge entries are all destroyed. Two things must
+  // be said before the click, because they are the two things a member would be right to be angry
+  // about afterwards: a minted DOI keeps resolving (to a "deleted by the author" notice — a DOI is a
+  // promise that a link resolves), and the copy Zenodo archived at publication is NOT ours to
+  // withdraw. The confirmation is a typed word, not a native confirm(): a native dialog is one
+  // reflexive Enter away from destroying a published work.
   const drop = () => {
-    if (!window.confirm("Delete this submission? Your notebook on Kaggle is left untouched.")) return;
+    const doi = !!(nb?.doi_link);
+    const lines = [
+      "This deletes the work permanently from ArtaQuest — the notebook copy, its published files, its comments and hearts.",
+      doi ? "Its DOI stays a valid link and will say the work was deleted by its author. The copy Zenodo archived when it was published is outside our control." : "",
+      "Your notebook on Kaggle is untouched.",
+      "",
+      "Type DELETE to confirm.",
+    ].filter(Boolean).join("\n");
+    const typed = window.prompt(lines);
+    if (typed !== "DELETE") return;
     deleteNotebook(id).then(() => { window.location.href = "/studio"; });
   };
 
