@@ -132,7 +132,7 @@ function BuyPanel({ opts, buyPrice, fiat, payments, reserveKnown, onRetry, onCre
 }
 
 /* Cash out Arta Coins for fiat. */
-function SellPanel({ balance, sellPrice, fiat, cashout, onSold }: { balance: number; sellPrice: number; fiat: string; cashout: boolean; onSold: (b: number) => void }) {
+function SellPanel({ balance, balanceKnown, sellPrice, fiat, cashout, reserveKnown, onRetry, onSold }: { balance: number; balanceKnown: boolean; sellPrice: number; fiat: string; cashout: boolean; reserveKnown: boolean; onRetry: () => void; onSold: (b: number) => void }) {
   const [coins, setCoins] = useState("");
   const [busy, setBusy] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -177,6 +177,24 @@ function SellPanel({ balance, sellPrice, fiat, cashout, onSold }: { balance: num
   // Cash-out is disabled until a real fiat payout rail exists (reserve.cashout). Show a calm, honest
   // "coming soon" rather than a form the backend would reject. (This used to add "coins stay fully
   // gold-backed"; they do not — /reserve publishes the live ratio and it is currently 0.)
+  // WE COULD NOT ASK. `cashout` arrives as `reserve?.cashout ?? false`, so a dead /reserve fetch
+  // announced "cash-out is coming soon" while the rail was in fact LIVE — the same collapse of
+  // unknown into a confident no that told a member their country was unsupported on the Buy side.
+  if (!reserveKnown) {
+    return (
+      <Card className="flex flex-col gap-4 p-6">
+        <div>
+          <h3 className="text-[18px] font-bold tracking-tight">Cash out</h3>
+          <p className="mt-1 text-[13px] text-ink-3">Redeem coins for cash at the published sell price.</p>
+        </div>
+        <div className="rounded-field border border-line bg-space-1 px-4 py-3">
+          <p className="text-[14px] text-ink-2">We couldn’t reach the price just now, so this is waiting rather than guessing. Nothing is wrong with your account.</p>
+          <Button variant="outline" onClick={onRetry} className="mt-3 h-9 px-4 text-[13px]">Try again</Button>
+        </div>
+      </Card>
+    );
+  }
+
   if (!cashout) {
     return (
       <Card className="flex flex-col gap-4 p-6">
@@ -185,6 +203,22 @@ function SellPanel({ balance, sellPrice, fiat, cashout, onSold }: { balance: num
           <p className="mt-1 text-[13px] text-ink-3">Redeem coins for cash at the published sell price.</p>
         </div>
         <p className="rounded-field border border-line bg-space-1 px-4 py-3 text-[14px] text-ink-2">Cash-out is coming soon — spend or hold your coins now, and you’ll be able to redeem for cash the moment it launches. How much gold currently stands behind the coin is published live on <a href="/reserve/" className="font-semibold text-yang hover:underline">the reserve page</a>.</p>
+      </Card>
+    );
+  }
+
+  // NEVER SAY "you have no coins" ON A BALANCE WE DID NOT LOAD. `balance` falls back to 0 when both
+  // the wallet and dashboard fetches fail, and this branch then states it as fact — a member holding
+  // 500 ₳ reads "You have no coins yet." Of every version of this bug on the page, that is the one
+  // that would make someone think their money had gone.
+  if (!balanceKnown) {
+    return (
+      <Card className="flex flex-col gap-4 p-6">
+        <div>
+          <h3 className="text-[18px] font-bold tracking-tight">Cash out</h3>
+          <p className="mt-1 text-[13px] text-ink-3">Redeem coins for cash at the published sell price.</p>
+        </div>
+        <p className="rounded-field border border-line bg-space-1 px-4 py-3 text-[14px] text-ink-2">We couldn’t load your balance just now — reload the page to try again. Your coins are safe; this screen simply has not been told about them yet.</p>
       </Card>
     );
   }
@@ -341,7 +375,7 @@ export default function Wallet() {
         // straight to the Buy-coins form; scroll-mt clears the 60px sticky topbar.
         <div id="buy" className="grid scroll-mt-24 gap-5 lg:grid-cols-2">
           <BuyPanel opts={opts} buyPrice={reserve?.buy ?? 0} fiat={fiat} payments={reserve?.payments ?? false} reserveKnown={!!reserve} onRetry={loadReserve} onCredited={refreshWallet} />
-          <SellPanel balance={bal} sellPrice={reserve?.sell ?? 0} fiat={fiat} cashout={reserve?.cashout ?? false} onSold={() => refreshWallet()} />
+          <SellPanel balance={bal} balanceKnown={balance != null || !!dash} sellPrice={reserve?.sell ?? 0} fiat={fiat} cashout={reserve?.cashout ?? false} reserveKnown={!!reserve} onRetry={loadReserve} onSold={() => refreshWallet()} />
         </div>
       ) : (
         // Buy/cash-out is retired (see CHECKOUT_LIVE) — the BuyPanel filled then failed on submit
