@@ -5,6 +5,7 @@ import { LanguageSelector } from "./LanguageSelector";
 import { BackgroundSwitcher } from "./BackgroundSwitcher";
 import { Footer } from "./Footer";
 import { SearchSheet, ShellRail } from "./RightRail";
+import { SearchBox } from "./SearchBox";
 import { openSearch } from "../lib/rail";
 import { UserMenu } from "./UserMenu";
 import { currentUser, isLoggedIn, localePath } from "../lib/wp";
@@ -145,17 +146,7 @@ function BottomTabs() {
        rendered, because each is hidden at the other's breakpoint. */
     <nav aria-label="Quick navigation" data-floor="top" data-floor-home
       className="fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-line bg-space-1/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
-      {T.slice(0, 1).map(tab)}
-      {/* SEARCH — X's second tab. The header carries no field at any width (operator 2026-08-16),
-          and below lg there is no right column either, so this button IS search on a phone: it
-          opens the full-screen sheet (RightRail.tsx). A button, not a link: there is no /search
-          route to send anyone to, and inventing a top-level slug that prefixes a WP page is how a
-          new route ends up 301'd on production. */}
-      <button type="button" onClick={openSearch} aria-label="Search"
-        className="relative grid min-h-12 flex-1 place-items-center text-ink-3 transition-colors hover:text-ink">
-        <Icon d="search" />
-      </button>
-      {T.slice(1, 2).map(tab)}
+      {T.slice(0, 2).map(tab)}
       {/* ArtaBot in the centre slot — the same glassy gold/blue circle as the floating launcher,
           so "the A button" keeps its identity. The event toggles the chat panel (ArtaBot.tsx
           listens; fire-and-forget across trees, same pattern as "aq-cart"). */}
@@ -394,14 +385,6 @@ function Sidebar({ active, expanded, onNavigate, onToggle }: { active: string; e
             dead-ending CTA is worse than an honest one. */}
         <CreateMenu expanded={expanded} onNavigate={onNavigate} />
 
-        {/* SEARCH, as a nav row (operator 2026-08-16). On lg+ the right column already carries the
-            field, so this is the phone's second door to it — and the ONLY one for a signed-out
-            visitor, who gets no bottom tab bar. Geometry matches every row below it exactly. */}
-        <button type="button" onClick={() => { onNavigate(); openSearch(); }} aria-label="Search"
-          className="group relative mx-2 mt-2 flex h-12 shrink-0 items-center rounded-pill text-[15.5px] text-ink-2 transition-colors hover:bg-veil/[0.04] hover:text-ink max-md:h-11 lg:hidden">
-          <span className="grid w-[52px] shrink-0 place-items-center text-ink-3 group-hover:text-ink-2"><Icon d="search" /></span>
-          <span className={`whitespace-nowrap pe-3 transition-opacity duration-200 ${labelShow}`}>Search</span>
-        </button>
 
         {/* nav — scrolls on its own; the hidden scrollbar keeps the rail clean. Each icon box
             is exactly w-rail wide, so the glyph is centred in the collapsed rail and the label
@@ -490,12 +473,19 @@ function CartButton() {
 }
 
 /**
- * THE HEADER CARRIES NO SEARCH — none, at any width (operator 2026-08-16).
+ * REDDIT'S HEADER — the search field is back, and it is CENTRED (operator 2026-08-16, superseding
+ * the X-shaped header of earlier the same day; the right column keeps everything else).
  *
- * X does not put a search field in its header on any surface, and neither do we now. Search is the
- * top of the RIGHT COLUMN on a wide screen (every page has one — see RightRail.tsx) and a
- * full-screen sheet on a phone, opened from the bottom tab bar or the nav drawer. What is left here
- * is what the header is actually for: the brand on the left, the member's controls on the right.
+ * Reddit's bar is three zones, not a row that packs to one side: brand at the start, ONE wide
+ * rounded field centred in the bar whatever the controls on either side weigh, and the member's
+ * controls at the end. That centring is the whole point of the shape, so it is done with three
+ * flex zones of equal weight (`flex-1` on both sides, the field `mx-auto` in the middle) rather
+ * than a spacer — a spacer centres the field between its NEIGHBOURS, which drifts as the language
+ * pill changes width from one locale to the next.
+ *
+ * The field is md+ only. On a 390px phone the row already carries the menu, the lockup, the theme
+ * toggle, the language pill and the avatar; a field squeezed in beside them would be ~130px of
+ * input. The phone keeps the magnifier, which opens the full-screen sheet (RightRail.tsx).
  */
 function Topbar({ onMenu }: { onMenu: () => void }) {
   // Phone gaps tighten to gap-1.5 — with the compact language pill + the phone-size lockup the
@@ -511,38 +501,60 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
   const onAuthPage = /(^|\/)(login|sign-in|signin)\/?$/.test(aqPath.replace(/\/+$/, "/"));
   return (
     <header className="sticky top-0 z-30 border-b border-line/70 bg-space-1/80 backdrop-blur-md">
-      <div className="flex h-topbar items-center gap-1.5 px-3 md:gap-3 md:px-4 md:ps-12 md:pe-14">
+      <div className="flex h-topbar items-center gap-1.5 px-3 md:gap-3 md:px-12">
+        {/* THREE ZONES, and the outer two carry equal weight — that is what puts the field on
+            the bar's own centre line. Centring it between its NEIGHBOURS instead leaves it
+            short by whatever the controls weigh, and drifts with the language pill's width
+            from one locale to the next (measured: 12px off at 1440 before this). */}
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 md:gap-3">
         {/* Phone has no rail, so the menu trigger lives here. Desktop's trigger is in the rail. */}
-        <IconButton label="Open menu" onClick={onMenu} className="h-9 w-9 shrink-0 md:hidden">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M3 6h18M3 12h18M3 18h18" /></svg>
+          <IconButton label="Open menu" onClick={onMenu} className="h-9 w-9 shrink-0 md:hidden">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M3 6h18M3 12h18M3 18h18" /></svg>
+          </IconButton>
+          {/* mobile: brand lockup beside the menu button (phone-size — this instance is phone-only) */}
+          <a href={localePath("/")} aria-label="ArtaQuest — home" className="shrink-0 md:hidden"><Logo size="text-xl" /></a>
+        </div>
+        {/* THE SEARCH FIELD, centred (Reddit). Capped at Reddit's own ~690px so it stays a utility
+            on a wide screen instead of a banner across the whole bar. */}
+        <div className="hidden w-full max-w-[690px] shrink md:block"><SearchBox compact /></div>
+        {/* Phone: the magnifier opens the full-screen sheet — see the docblock. */}
+        <IconButton label="Search" onClick={openSearch} className="h-9 w-9 shrink-0 md:hidden">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.5-4.5" strokeLinecap="round" /></svg>
         </IconButton>
-        {/* mobile: brand lockup beside the menu button (phone-size — this instance is phone-only) */}
-        <a href={localePath("/")} aria-label="ArtaQuest — home" className="shrink-0 md:hidden"><Logo size="text-xl" /></a>
-        {/* Pushes everything after it to the right edge, on every viewport: the header's job is now
-            a brand on the left and controls on the right, with nothing claiming the middle. */}
-        <div className="flex-1" aria-hidden />
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5 md:gap-3">
         <CartButton />
-        {/* Language selector lives in the topbar so it is visible on EVERY surface —
-            mobile, desktop, and when the sidebar is collapsed (the sidebar foot, where
-            it used to live, is off-canvas on mobile and hidden when collapsed). */}
-        <BackgroundSwitcher />
-        <LanguageSelector compact />
-        {/* Signed in → the account drawer; signed out → the auth CTAs (both go to the same
-            email-code/Google flow — "Sign in" is the returning-member label, phone shows only
-            the Register pill to keep the compact row inside a 360px viewport). */}
-        {isLoggedIn() ? (
-          <UserMenu />
-        ) : (
-          // On the auth page itself: no CTAs. Both of these lead here, so on /login/ they are two
-          // competing buttons to the current page, sitting above a form that already asks for the
-          // one thing they would ask for. Everywhere else they stay exactly as they were.
-          onAuthPage ? null : (
-          <>
-            <a href={localePath(login)} className="hidden h-9 items-center whitespace-nowrap px-2 text-[14px] font-semibold text-ink-2 transition-colors hover:text-ink md:flex">Sign in</a>
-            <Button href={login} className="h-9 shrink-0 px-3 text-[14px] md:px-4">Register</Button>
-          </>
-          )
-        )}
+          {/* ARTABOT, in the bar (operator 2026-08-16) — Reddit keeps a chat button up here and this
+              is ours. It fires the same "aq:artabot" event as the phone's centre tab, so the panel
+              has one owner (ArtaBot.tsx) whichever door opened it. Members only: the assistant is,
+              and the routes behind it are 'user'-auth regardless of what the UI shows. */}
+          {isLoggedIn() ? (
+            <IconButton label="ArtaBot" onClick={() => window.dispatchEvent(new Event("aq:artabot"))}
+              className="h-9 w-9 shrink-0 max-md:hidden">
+              <LogoMark className="h-6 w-6" />
+            </IconButton>
+          ) : null}
+          {/* Language selector lives in the topbar so it is visible on EVERY surface —
+              mobile, desktop, and when the sidebar is collapsed (the sidebar foot, where
+              it used to live, is off-canvas on mobile and hidden when collapsed). */}
+          <BackgroundSwitcher />
+          <LanguageSelector compact />
+          {/* Signed in → the account drawer; signed out → the auth CTAs (both go to the same
+              email-code/Google flow — "Sign in" is the returning-member label, phone shows only
+              the Register pill to keep the compact row inside a 360px viewport). */}
+          {isLoggedIn() ? (
+            <UserMenu />
+          ) : (
+            // On the auth page itself: no CTAs. Both of these lead here, so on /login/ they are two
+            // competing buttons to the current page, sitting above a form that already asks for the
+            // one thing they would ask for. Everywhere else they stay exactly as they were.
+            onAuthPage ? null : (
+            <>
+              <a href={localePath(login)} className="hidden h-9 items-center whitespace-nowrap px-2 text-[14px] font-semibold text-ink-2 transition-colors hover:text-ink md:flex">Sign in</a>
+              <Button href={login} className="h-9 shrink-0 px-3 text-[14px] md:px-4">Register</Button>
+            </>
+            )
+          )}
+        </div>
       </div>
     </header>
   );
