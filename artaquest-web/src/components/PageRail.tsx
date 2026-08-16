@@ -26,6 +26,8 @@
  *     max-w-content with px-gutter; a second wrapper is what made the work page's column drift.
  */
 import type { ReactNode } from "react";
+import { RailSearch } from "./RightRail";
+import { useOwnsRail } from "../lib/rail";
 
 /** Width of the desktop rail. One number, so the Lab and the work page cannot disagree. */
 export const RAIL_W = 320;
@@ -42,6 +44,10 @@ export function WithRail({
   label?: string;
   top?: string;
 }) {
+  // This is a right column, so it is where search lives (operator 2026-08-16 — the header carries
+  // none at any width). Registering also tells AppShell to stand its own column down, or the page
+  // would carry two.
+  useOwnsRail();
   return (
     <div className="flex w-full items-start gap-6">
       {/* min-w-0: see the docblock — this is what lets a wide child scroll instead of shoving the
@@ -60,7 +66,12 @@ export function WithRail({
            feed rail. */
         className="sticky hidden shrink-0 self-start overflow-y-auto lg:block [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        <div className="flex flex-col gap-4 pb-2">{rail}</div>
+        {/* Search first, then the page's own cards — the same order as the feed's column, so the
+            field is in the same place on the screen whatever page you are reading. */}
+        <div className="flex flex-col gap-4 pb-2">
+          <RailSearch />
+          {rail}
+        </div>
       </aside>
     </div>
   );

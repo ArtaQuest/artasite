@@ -23,7 +23,8 @@ import { LibraryMedia, LibraryPicker } from "../components/library";
 
 import { PostThread } from "./NotebookPage";
 import { Avatar, Button, cx, EmptyState, HeartGlyph } from "../components/ui";
-import { SearchBox } from "../components/SearchBox";
+import { RailLinks, RailSearch } from "../components/RightRail";
+import { useOwnsRail } from "../lib/rail";
 import { isLoggedIn } from "../lib/auth";
 // localePath: a programmatic redirect is NOT intercepted by AppShell's locale safety net (that only
 // rewrites clicks on real <a> elements), so a signed-out reader on /fa/ was dropped on the English
@@ -700,19 +701,6 @@ function WhoToFollowCard({ items }: { items: FollowSuggestion[] | null }) {
 
 /** The rail's tiny footer, X-style — the page footer sits far below an infinite timeline, so the
  *  essential destinations get a quiet second home that's always on screen. */
-function RailLinks() {
-  const L = [
-    { label: "About", href: "/about/" }, { label: "Donations", href: "/donate/" }, { label: "Data", href: "/data/" },
-    { label: "FAQ", href: "/faq-contact/" }, { label: "Privacy", href: "/privacy-policy/" }, { label: "Terms", href: "/terms-and-conditions/" },
-  ];
-  return (
-    <nav aria-label="Quick links" className="flex flex-wrap gap-x-3 gap-y-1 px-3 text-[12px] text-ink-3">
-      {L.map((l) => <a key={l.href} href={l.href} className="-mx-1 inline-block px-1 py-1 transition-colors hover:text-ink-2 hover:underline">{l.label}</a>)}
-      <span>© {new Date().getFullYear()} ArtaQuest</span>
-    </nav>
-  );
-}
-
 /** Phones only: open challenges as a swipeable strip under the composer (the rail is lg+). */
 function ChallengesStrip({ items }: { items: Challenge[] | null }) {
   if (!items || !items.length) return null;
@@ -892,6 +880,8 @@ function Composer({ onPosted }: { onPosted: (p: FeedPostT) => void }) {
  * five backend calls are pure cost on a marketing page.
  */
 export default function Feed({ initialKind, embedded = false }: { initialKind?: NbKind; embedded?: boolean }) {
+  // This page brings its own right column, so the shell must not add a second one.
+  useOwnsRail();
   const nav = useNavigate();
   const [kind, setKind] = useState<NbKind | "">(initialKind || "");
   const rail = useRail(!embedded);
@@ -1059,11 +1049,9 @@ export default function Feed({ initialKind, embedded = false }: { initialKind?: 
         {/* The fixed signed-out join banner was removed 2026-07-16 (operator: not pushy) — the
             topbar's Sign in / Register covers conversion, so the rail needs no extra clearance. */}
         <div className="sticky top-4 flex max-h-[calc(100vh-2rem)] flex-col gap-4 overflow-y-auto pb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {/* SEARCH, at the top of the right column — X's shape exactly (operator 2026-08-15). It is
-              sticky WITHIN the rail's own scroller (top-0, and the rail's own top padding moved onto
-              THIS element so nothing shows through above it), so it stays reachable while the cards
-              below scroll past. AppShell drops the header's field on these routes — one search. */}
-          <div className="sticky top-0 z-10 bg-space-1 pb-1 pt-3"><SearchBox /></div>
+          {/* SEARCH, at the top of the right column — X's shape exactly. Sticky WITHIN the rail's
+              own scroller, so it stays reachable while the cards below scroll past. */}
+          <RailSearch />
           <TodaysNewsCard items={rail.headlines} />
           <HappeningCard items={rail.topics} />
           <ChallengesCard items={rail.challenges} />
