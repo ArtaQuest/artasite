@@ -1181,16 +1181,27 @@ final class Books {
 				. 'The reserve shortfall is stated openly on the reserve page rather than smoothed over.',
 		];
 		$notes[] = [
-			'title' => 'GST self-assessed on imported services',
+			'title' => 'GST that was never charged, and is not ours to pay',
+			'body'  => 'The supplier is registered under CRA\'s simplified regime for non-resident digital suppliers and '
+				. 'charged 0% because a Canadian business number was supplied. A business number is not a GST/HST '
+				. 'registration number, and the Foundation is not registered under the normal regime — which makes it a '
+				. '"specified Canadian recipient". CRA is explicit that a specified supply to such a recipient is '
+				. 'CONSIDERED TO BE MADE IN CANADA and that 5% is required to be charged and collected, by the SUPPLIER. '
+				. 'A supply made in Canada is not an imported taxable supply, so the self-assessment provisions do not '
+				. 'engage and form GST59 is the wrong instrument. CA$42.00 was accrued on the opposite reading and has '
+				. 'been reversed by a correcting entry; the original entries remain in the ledger, because a mistake that '
+				. 'is deleted cannot be audited. Two consequences for the operator: stop giving this supplier the business '
+				. 'number, and expect these subscriptions to cost 5% more once it starts charging what it should.',
+		];
+		$notes[] = [
+			'title' => 'Superseded — GST self-assessment',
 			'body'  => 'The supplier is registered under CRA\'s simplified regime for non-resident digital suppliers and charged '
 				. '0% because a Canadian business number was supplied. That relief is for a recipient who provides a GST/HST '
 				. 'REGISTRATION number, and the Foundation is not a registrant — so the tax was not extinguished, it moved. A '
 				. 'non-registrant acquiring an imported taxable supply of services self-assesses the tax and remits it on form '
-				. 'GST59. It is accrued here at ' . self::GST_RATE_PCT . '% (' . self::GST_JURISDICTION . ') and is NOT '
-				. 'recoverable, because an input tax credit requires a registration the Foundation does not hold — which makes '
-				. 'it part of the cost of the subscriptions rather than a balance to net off. Two things follow for the '
-				. 'operator: stop giving this supplier the business number as though it were a GST/HST registration, and put '
-				. 'both the rate and the remittance deadline to an adviser before filing.',
+				. 'GST59. THIS READING WAS WRONG and is retained only so the correcting entry above can be followed. It '
+				. 'missed that the simplified regime deems such a supply to be made IN Canada, which puts the duty to '
+				. 'charge on the supplier and takes the transaction outside the self-assessment provisions entirely.',
 		];
 		$notes[] = [
 			'title' => 'GIFI balance-sheet subtotals are not asserted here',
@@ -1830,16 +1841,26 @@ final class Books {
 		self::ensure_tables();
 		$done = get_option( 'aq_books_gst_remitted', [] );
 		if ( ! is_array( $done ) ) { $done = []; }
+		// NET the debits against the credits. Summing credits alone means a reversing entry never
+		// clears the obligation — the tax would go on being "due" after the books had said it was not
+		// owed, which is the shape of a permanent false alarm.
 		$by = [];
-		foreach ( Data::all( 'SELECT e.on_date, l.credit FROM ' . Data::t( 'aq_books_line' ) . ' l JOIN '
-			. Data::t( 'aq_books_entry' ) . " e ON e.id = l.entry_id WHERE l.account = 'gst_payable' AND l.credit > 0" ) as $r ) {
+		foreach ( Data::all( 'SELECT e.on_date, l.credit, l.debit FROM ' . Data::t( 'aq_books_line' ) . ' l JOIN '
+			. Data::t( 'aq_books_entry' ) . " e ON e.id = l.entry_id WHERE l.account = 'gst_payable'" ) as $r ) {
 			$month = substr( (string) $r['on_date'], 0, 7 );
-			$by[ $month ] = ( $by[ $month ] ?? 0 ) + (int) $r['credit'];
+			$by[ $month ] = ( $by[ $month ] ?? 0 ) + (int) $r['credit'] - (int) $r['debit'];
 		}
+		// A reversal is dated when it was recognised, not when the tax arose, so it can land in a later
+		// month and leave the original one still showing a balance. Net across months, oldest first.
 		ksort( $by );
+		$net = array_sum( $by );
 		$out = [];
 		foreach ( $by as $month => $cents ) {
-			$out[] = [ 'month' => $month, 'cents' => $cents,
+			if ( $net <= 0 ) { break; }
+			$take = min( $cents, $net );
+			if ( $take <= 0 ) { continue; }
+			$net -= $take;
+			$out[] = [ 'month' => $month, 'cents' => $take,
 				'due' => self::month_end_after( $month . '-01' ), 'remitted' => (string) ( $done[ $month ] ?? '' ) ];
 		}
 		return $out;
@@ -2163,7 +2184,7 @@ final class Books {
 	];
 
 	/** The tax position every one of these invoices carries, recorded once rather than three times. */
-	const FOUNDING_TAX_NOTE = 'Invoiced at 0% on a reverse-charge basis against CA BN ' . self::BN . '. The Foundation is NOT a GST/HST registrant, so the tax is self-assessed here rather than avoided.';
+	const FOUNDING_TAX_NOTE = 'Invoiced at 0% on a reverse-charge basis against CA BN ' . self::BN . '. The Foundation is NOT registered under the normal GST/HST regime, so 5% should have been charged BY THE SUPPLIER. Not a liability of the Foundation.';
 
 	/**
 	 * GST self-assessed on the founding costs.
@@ -2287,9 +2308,58 @@ final class Books {
 		if ( ! get_option( 'aq_books_genesis' ) )     { self::genesis(); }
 		if ( ! get_option( 'aq_books_seeded' ) )      { self::seed_founding_costs(); }
 		if ( ! get_option( 'aq_books_gst_accrued' ) ) { self::accrue_founding_gst(); }
-		if ( ! get_option( 'aq_books_taxnote_v2' ) )   { self::refresh_founding_tax_note(); }
+		if ( ! get_option( 'aq_books_taxnote_v3' ) )   { self::refresh_founding_tax_note(); }
 		if ( ! get_option( 'aq_books_fy_end' ) )       { self::record_year_end( self::FY_END_DEFAULT, '2026-08-14' ); }
 		if ( ! get_option( 'aq_books_signer_last' ) )  { self::seed_signer(); }
+		if ( ! get_option( 'aq_books_gst_reversed' ) ) { self::reverse_gst_self_assessment(); }
+	}
+
+	/**
+	 * Reverse the self-assessed GST. It was never the Foundation's to pay.
+	 *
+	 * The reasoning that booked it ran: supplier charged 0%, we are not a registrant, therefore we
+	 * self-assess on an imported taxable supply and remit on GST59. The middle step is wrong, and CRA
+	 * says so in terms. Under the simplified regime a "specified supply" to a "specified Canadian
+	 * recipient" is CONSIDERED TO BE MADE IN CANADA, and 5% "is required to be charged and collected"
+	 * — by the SUPPLIER. A specified Canadian recipient is precisely one who has NOT provided
+	 * satisfactory evidence of registration under the NORMAL regime, which describes this Foundation
+	 * exactly. A supply made in Canada is not an imported taxable supply, so section 218 never
+	 * engages and GST59 is the wrong form.
+	 *
+	 * What actually happened is that a plain business number was supplied and the supplier's system
+	 * took it for a GST/HST registration number, so it did not charge tax it was required to charge.
+	 * That is the supplier's collection failure, not a liability of the recipient — and it is
+	 * disclosed rather than quietly dropped, because the cost of these subscriptions is about to rise
+	 * by 5% once the supplier stops being given a number that is not a registration.
+	 *
+	 * APPEND-ONLY: the original entries stay exactly where they are and a correcting entry is posted
+	 * against them. A ledger that deletes its mistakes cannot be audited, and the mistake is part of
+	 * the record.
+	 */
+	public static function reverse_gst_self_assessment() {
+		self::ensure_tables();
+		$owed = 0;
+		foreach ( self::movement() as $code => $cents ) {
+			if ( 'gst_payable' === $code ) { $owed = $cents; }
+		}
+		if ( $owed <= 0 ) { update_option( 'aq_books_gst_reversed', self::today(), true ); return 'nothing to reverse'; }
+
+		$eid = self::journal( 'gst-reversal:v1', self::today(),
+			'Self-assessed GST reversed - the supplier was required to charge it', [
+				[ 'account' => 'gst_payable', 'debit'  => $owed, 'memo' => 'Not an imported taxable supply: a specified supply to a specified Canadian recipient is made IN Canada' ],
+				[ 'account' => 'software',    'credit' => $owed, 'memo' => 'Cost restated to what the supplier actually billed' ],
+			], 'tax', 0 );
+		if ( ! $eid ) { error_log( 'AQ Books: GST reversal did not post' ); return 'failed'; }
+
+		// Retire the reminders it raised. They were alarms about an obligation that did not exist,
+		// and leaving their markers behind would neither un-send them nor let a real one re-fire.
+		$sent = get_option( 'aq_books_deadline_sent', [] );
+		if ( is_array( $sent ) ) {
+			update_option( 'aq_books_deadline_sent',
+				array_values( array_filter( $sent, fn( $k ) => strpos( (string) $k, 'gst59:' ) !== 0 ) ), true );
+		}
+		update_option( 'aq_books_gst_reversed', self::today(), true );
+		return 'reversed ' . $owed;
 	}
 
 	/**
@@ -2355,7 +2425,7 @@ final class Books {
 			}
 		}
 		if ( $n < count( self::FOUNDING_COSTS ) ) { return 'incomplete ' . $n; }
-		update_option( 'aq_books_taxnote_v2', self::today(), true );
+		update_option( 'aq_books_taxnote_v3', self::today(), true );
 		return 'refreshed ' . $n;
 	}
 
