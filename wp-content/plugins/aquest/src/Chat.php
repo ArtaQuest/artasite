@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Chat {
 
-	const TABLE_VERSION = '4';
+	const TABLE_VERSION = '5';
 
 	/** Uncompressed P-256 point (0x04 ‖ X ‖ Y = 65 bytes) as base64 — the only accepted pub format. */
 	const PUB_B64_LEN = 88;
@@ -65,16 +65,26 @@ final class Chat {
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		$charset = $wpdb->get_charset_collate();
 		$p       = $wpdb->prefix;
-		// Append-only key registry: one row per registered device key, latest row per user = active.
+		// Append-only key registry: one row per registered device key. The member's ACTIVE key is the
+		// most recently PRESENTED one (`seen`), not the most recently created — see set_key().
 		dbDelta( "CREATE TABLE {$p}aq_chat_keys (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			pub VARCHAR(96) NOT NULL DEFAULT '',
 			fp VARCHAR(64) NOT NULL DEFAULT '',
 			created INT UNSIGNED NOT NULL DEFAULT 0,
+			seen INT UNSIGNED NOT NULL DEFAULT 0,
 			PRIMARY KEY  (id),
-			KEY user_id_id (user_id, id)
+			KEY user_id_id (user_id, id),
+			KEY user_id_seen (user_id, seen)
 		) {$charset};" );
+		// dbDelta silently skips an ADD COLUMN under Studio's SQLite, so the column is added
+		// explicitly and back-filled from `created` — which is what `seen` meant before it existed.
+		$cols = $wpdb->get_col( "SHOW COLUMNS FROM {$p}aq_chat_keys" );
+		if ( is_array( $cols ) && ! in_array( 'seen', $cols, true ) ) {
+			$wpdb->query( "ALTER TABLE {$p}aq_chat_keys ADD COLUMN seen INT UNSIGNED NOT NULL DEFAULT 0" );
+			$wpdb->query( "UPDATE {$p}aq_chat_keys SET seen = created WHERE seen = 0" );
+		}
 
 		/**
 		 * THE ESCROW. One row per member: their own private key, sealed in their browser under a
@@ -253,12 +263,33 @@ final class Chat {
 		return self::chat_row( $uid, $peer );
 	}
 
-	/** A member's ACTIVE (latest) public key row, or null when they never enabled chat. */
+	/**
+	 * A member's ACTIVE public key row — the one most recently PRESENTED by a device, not the one
+	 * most recently created.
+	 *
+	 * It used to be `ORDER BY id DESC`, i.e. the newest key ever minted, and that silently locked
+	 * members out of their own rooms. Seals are addressed to exactly one kid per member, and
+	 * set_key() is idempotent across the whole key history — so a member with several devices got
+	 * every seal addressed to whichever device registered LAST, and every other browser of theirs
+	 * derived against a kid whose private half it does not hold. It could not open the room, and no
+	 * amount of waiting would help: the next seal went to the same wrong kid. The member sat on
+	 * "their browser is sealing the key to this device" for the length of the meeting.
+	 *
+	 * Ordering by `seen` makes the active key follow the device actually in use: bootChat presents
+	 * this browser's key on every boot, so opening the page is what makes you the seal target, and
+	 * the present key-holder's next tick reaches you.
+	 */
 	private static function active_key( $uid ) {
 		return Data::one(
-			'SELECT id, pub, fp, created FROM ' . Data::t( 'aq_chat_keys' ) . ' WHERE user_id = %d ORDER BY id DESC LIMIT 1',
+			'SELECT id, pub, fp, created FROM ' . Data::t( 'aq_chat_keys' ) . ' WHERE user_id = %d ORDER BY seen DESC, id DESC LIMIT 1',
 			[ (int) $uid ]
 		);
+	}
+
+	/** Mark a registered key as the one this member is using right now. Cheap and idempotent; it is
+	 *  called on every key presentation, which is once per chat boot. */
+	private static function touch_key( $kid ) {
+		Data::update( 'aq_chat_keys', [ 'seen' => Data::now() ], [ 'id' => (int) $kid ] );
 	}
 
 	private static function user_card( $uid ) {
@@ -630,6 +661,7 @@ final class Chat {
 		}
 		$cur = self::active_key( $uid );
 		if ( $cur && hash_equals( (string) $cur['pub'], $pub ) ) {
+			self::touch_key( (int) $cur['id'] );
 			return [ 'ok' => true, 'key' => self::key_payload( $cur ), 'rotated' => false ];
 		}
 		// IDEMPOTENT ACROSS THE MEMBER'S WHOLE KEY HISTORY, not just their newest key. A member who
@@ -641,12 +673,18 @@ final class Chat {
 			[ $uid, $pub ]
 		);
 		if ( $known ) {
+			// THE PATH THAT WAS THE BUG. A second device presenting a key it registered long ago gets
+			// its original id back — correct, and until now that was the end of it, so the member's
+			// active key stayed whatever some other device had registered later. Presenting it is the
+			// device saying "I am the one being used"; that is what makes it the seal target.
+			self::touch_key( (int) $known['id'] );
 			return [ 'ok' => true, 'key' => self::key_payload( $known ), 'rotated' => false ];
 		}
 		$id = Data::insert( 'aq_chat_keys', [
 			'user_id' => $uid,
 			'pub'     => $pub,
 			'fp'      => hash( 'sha256', $raw ),
+			'seen'    => Data::now(),
 			'created' => Data::now(),
 		] );
 		return [ 'ok' => true, 'key' => self::key_payload( self::active_key( $uid ) ), 'rotated' => (bool) $cur, 'id' => $id ];

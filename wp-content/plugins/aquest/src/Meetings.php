@@ -249,7 +249,8 @@ final class Meetings {
 		);
 		if ( ! $row ) { return false; }
 		$cur = (int) Data::col(
-			'SELECT id FROM ' . Data::t( 'aq_chat_keys' ) . ' WHERE user_id = %d ORDER BY id DESC LIMIT 1',
+			// The device in USE — must agree with Rooms::pending, or a holder is not counted as one.
+			'SELECT id FROM ' . Data::t( 'aq_chat_keys' ) . ' WHERE user_id = %d ORDER BY seen DESC, id DESC LIMIT 1',
 			[ (int) $uid ]
 		);
 		if ( ! $cur ) { return false; }

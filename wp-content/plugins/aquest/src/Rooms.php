@@ -227,7 +227,8 @@ final class Rooms {
 		);
 		if ( ! $row ) { return false; }
 		$cur = (int) Data::col(
-			'SELECT id FROM ' . Data::t( 'aq_chat_keys' ) . ' WHERE user_id = %d ORDER BY id DESC LIMIT 1',
+			// The device in USE, not the newest ever minted — see Chat::active_key.
+			'SELECT id FROM ' . Data::t( 'aq_chat_keys' ) . ' WHERE user_id = %d ORDER BY seen DESC, id DESC LIMIT 1',
 			[ (int) $uid ]
 		);
 		if ( ! $cur ) { return false; }
@@ -534,7 +535,9 @@ final class Rooms {
 			$target = (int) $m['user_id'];
 			if ( self::has_usable_key( $rid, $target, $epoch ) ) { continue; }
 			$k = Data::one(
-				'SELECT id, pub FROM ' . Data::t( 'aq_chat_keys' ) . ' WHERE user_id = %d ORDER BY id DESC LIMIT 1',
+				// Seal to the device they are USING. Ordering by id sent every seal to whichever
+				// browser registered last, which is how a member with two devices locked themselves out.
+				'SELECT id, pub FROM ' . Data::t( 'aq_chat_keys' ) . ' WHERE user_id = %d ORDER BY seen DESC, id DESC LIMIT 1',
 				[ $target ]
 			);
 			if ( ! $k ) { continue; } // no device key — they cannot be sealed to at all yet
