@@ -22,7 +22,8 @@
  */
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { setRailNode, useRailNode, useWide } from "../lib/rail";
+import { setRailNode, useIsFilling, useRail, useRailFilled, useRailNode, useWide } from "../lib/rail";
+import { ChallengesCard, HappeningCard, NewsCard, TodaysNewsCard, WhoToFollowCard } from "./RailCards";
 import { SearchBox } from "./SearchBox";
 import { LEGAL, SOCIALS } from "../lib/brand-links";
 
@@ -76,9 +77,13 @@ export function ShellRail() {
   return (
     <aside className="hidden w-[330px] shrink-0 lg:block" aria-label="Search and highlights">
       <div className="sticky top-4 flex max-h-[calc(100vh-2rem)] flex-col gap-4 overflow-y-auto pb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {/* Where every page's cards land. Empty on a page that contributes none — the column is
-            then just search and the foot, which is exactly what X shows on its quieter surfaces. */}
+        {/* Where the page's own cards land (a work's cite/run cards, the calendar's subscribe
+            panel, the feed's highlights). */}
         <div ref={setRailNode} className="contents" />
+        {/* …and when the page brought none, the column carries the platform's own discovery cards
+            rather than a field over a row of links (operator 2026-08-16: "put some stuff to the
+            right"). One fetch, and only on the pages that actually render them. */}
+        <RailDefaults />
         <RailFoot />
       </div>
     </aside>
@@ -94,7 +99,23 @@ export function ShellRail() {
  * modules between posts, and PageRail pages carry <RailInline>. Rendering both would show the cards
  * twice on a phone.
  */
+function RailDefaults() {
+  const filled = useRailFilled();
+  const rail = useRail(!filled);
+  if (filled) return null;
+  return (
+    <>
+      <TodaysNewsCard items={rail.headlines} />
+      <HappeningCard items={rail.topics} />
+      <ChallengesCard items={rail.challenges} />
+      <WhoToFollowCard items={rail.who} />
+      <NewsCard items={rail.news} />
+    </>
+  );
+}
+
 export function RailPortal({ children, mobile = "inline" }: { children: ReactNode; mobile?: "inline" | "none" }) {
+  useIsFilling();
   const node = useRailNode();
   const wide = useWide();
   if (wide) return node ? createPortal(children, node) : null;
