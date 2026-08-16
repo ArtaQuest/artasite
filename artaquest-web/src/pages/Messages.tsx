@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { RailSearch } from "../components/RightRail";
 import { useSearchParams } from "react-router-dom";
 import {
   chatCall, chatEmailPrefs, chatGetKey, chatMembers, chatMessages, chatRelation, chatSend,
@@ -2275,7 +2274,6 @@ export default function Messages() {
                 being crushed to TWO PIXELS with its labels sliced through the middle by its own
                 `overflow-hidden`, which is what the operator screenshotted. Only the list is allowed
                 to give up height. */}
-            <div className="shrink-0 max-md:hidden"><RailSearch /></div>
             {/* THREE tabs, not two lists and a form. Chats · Requests · People covers everything
                 the sidebar is for, and the two rarely-wanted boxes (archived, blocked) hang off the
                 end where they don't compete for attention with the inbox. */}

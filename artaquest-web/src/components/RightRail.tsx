@@ -7,8 +7,9 @@
  * wide screen and a tab on a phone. Here that is ONE column, rendered by AppShell on every page
  * that has room for it:
  *
- *   • <ShellRail> is the column: search, then whatever the page contributed, then the foot (the
- *     legal links and accounts that used to be the page footer).
+ *   • <ShellRail> is the column: whatever the page contributed, then the foot (the legal links and
+ *     accounts that used to be the page footer). The SEARCH FIELD is the header's again since the
+ *     operator asked for Reddit's centred bar — see AppShell's Topbar.
  *   • A page adds cards with <RailPortal> — the feed's highlights, a work's cite/run cards, the
  *     calendar's subscribe panel. It cannot switch the column off, which is the whole point: the
  *     first design let a page CLAIM the column and then render nothing, and a signed-out reader on
@@ -63,11 +64,6 @@ export function RailFoot() {
   );
 }
 
-/** The search field as the rail's first card — the shape every rail opens with. */
-export function RailSearch() {
-  return <div className="sticky top-0 z-10 bg-space-1 pb-1 pt-3"><SearchBox /></div>;
-}
-
 /**
  * THE right column — one per page, rendered by the shell, on every page that has room for it.
  *
@@ -80,7 +76,6 @@ export function ShellRail() {
   return (
     <aside className="hidden w-[330px] shrink-0 lg:block" aria-label="Search and highlights">
       <div className="sticky top-4 flex max-h-[calc(100vh-2rem)] flex-col gap-4 overflow-y-auto pb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <RailSearch />
         {/* Where every page's cards land. Empty on a page that contributes none — the column is
             then just search and the foot, which is exactly what X shows on its quieter surfaces. */}
         <div ref={setRailNode} className="contents" />
