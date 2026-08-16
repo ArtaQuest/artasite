@@ -411,7 +411,10 @@ function WeekdayStrip() {
   return (
     // The row carries the skip, not the leaves: these are formatted names, and the mesh would
     // otherwise persist seven abbreviations into the public translations table.
-    <div data-ay-skip="1" aria-hidden className={cx(GRID_ROWS, "mt-3 text-[11px] uppercase tracking-[0.14em] text-ink-3")}>
+    // aria-hidden because each day's sr-only name already carries its weekday — but SIGHTED readers
+    // find Saturday by this row, so it is real text at a real size and a real contrast tier, not
+    // 11px of ink-3.
+    <div data-ay-skip="1" aria-hidden className={cx(GRID_ROWS, "mt-3 text-[12px] font-semibold uppercase tracking-[0.12em] text-ink-2")}>
       {MON_FIRST.map((i) => <span key={i} className="text-center">{WEEKDAY_NAMES[i]}</span>)}
     </div>
   );
@@ -548,7 +551,7 @@ function DayGrid({ month, dayMap, todayKey, horizonKey, selected, onChoose, onMo
                 <div key={key} role="gridcell" aria-disabled="true" tabIndex={roving} ref={setRef}
                   {...(isToday ? { "aria-current": "date" as const } : {})}
                   style={{ position: "relative" }}
-                  className={cx("grid place-items-center text-[15px] font-normal tabular-nums text-ink-3 outline-none md:text-[17px]",
+                  className={cx("grid place-items-center text-[15px] font-normal tabular-nums text-ink-2 outline-none md:text-[17px]",
                     CELL_H)}>
                   {isToday && <span aria-hidden className="pointer-events-none absolute h-9 w-9 rounded-full ring-1 ring-inset ring-yin-light/60 md:h-11 md:w-11" />}
                   {/* The numeral is the DECORATION and the sr-only line is the NAME: a reader who
@@ -608,7 +611,7 @@ function TypeChooser({ offered, current, onPick }: { offered: BookRule[]; curren
             className={cx("flex min-h-[56px] w-full items-center justify-between gap-3 rounded-field border p-3 text-start transition-colors duration-150",
               on ? "border-yang bg-yang/12" : "border-line hover:border-yin-light")}>
             <span className="min-w-0 text-[14px] font-semibold text-ink" data-ay-skip="1">{t.title}</span>
-            <span className="shrink-0 text-[12.5px] text-ink-3"><DurationText m={Number(t.minutes) || 30} /></span>
+            <span className="shrink-0 text-[12.5px] text-ink-2"><DurationText m={Number(t.minutes) || 30} /></span>
           </button>
         );
       })}
@@ -1065,7 +1068,7 @@ function VisitorPage({ handle }: { handle: string }) {
             {longInstant(picked, displayTz)}
           </p>
           {bothZones && (
-            <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">
+            <p className="mt-1 text-[12.5px] leading-relaxed text-ink-2">
               which is <span data-ay-skip="1">{clockOnly(picked, ownerTz)}</span> for{" "}
               <span data-ay-skip="1">{ownerName}</span> in <span data-ay-skip="1">{ownerTz}</span>
             </p>
@@ -1102,7 +1105,7 @@ function VisitorPage({ handle }: { handle: string }) {
               gone: on a phone this surface is a FIXED BAR, so every line in it is permanent
               furniture standing over the calendar, and that one said what the button says. */}
           {signedIn && (
-            <p className="mt-2 flex items-center gap-2 text-[12.5px] text-ink-3">
+            <p className="mt-2 flex items-center gap-2 text-[12.5px] text-ink-2">
               <Avatar src={me?.avatar} name={me?.name} className="h-5 w-5 text-[10px]" />
               <span>Booking as <span data-ay-skip="1">{me?.name || "you"}</span></span>
             </p>
@@ -1139,7 +1142,7 @@ function VisitorPage({ handle }: { handle: string }) {
         <WeekdayStrip />
         <GridSkeleton />
         <div className="mt-4 min-h-[236px] border-t border-line pt-4 md:min-h-[156px]">
-          <p className="text-[13px] text-ink-3">Loading this booking page…</p>
+          <p className="text-[13px] text-ink-2">Loading this booking page…</p>
         </div>
       </section>,
       <SkeletonCard media={false} />,
@@ -1159,7 +1162,7 @@ function VisitorPage({ handle }: { handle: string }) {
           {longInstant(booked.start, displayTz)}
         </p>
         {!!ownerTz && ownerTz !== displayTz && (
-          <p className="mt-1 text-[13px] text-ink-3">
+          <p className="mt-1 text-[13px] text-ink-2">
             <span data-ay-skip="1">{clockOnly(booked.start, ownerTz)}</span> for{" "}
             <span data-ay-skip="1">{owner.name}</span> in <span data-ay-skip="1">{ownerTz}</span>
           </p>
@@ -1180,7 +1183,7 @@ function VisitorPage({ handle }: { handle: string }) {
           <Avatar src={owner.avatar} name={owner.name} className="h-14 w-14" priority />
           <div className="min-w-0">
             <p className="text-[15px] font-semibold text-ink" data-ay-skip="1">{owner.name}</p>
-            {owner.slug && <p className="text-[12.5px] text-ink-3" data-ay-skip="1">@{owner.slug}</p>}
+            {owner.slug && <p className="text-[12.5px] text-ink-2" data-ay-skip="1">@{owner.slug}</p>}
           </div>
         </div>
       </section>,
@@ -1298,7 +1301,7 @@ function VisitorPage({ handle }: { handle: string }) {
       ) : (
         <>
           {soonest > 0 && (
-            <p className="text-[13px] text-ink-3">
+            <p className="text-[13px] text-ink-2">
               Soonest free:{" "}
               <span data-ay-skip="1">{dayHeading(groups[0].key, false)}, {clockOnly(soonest, displayTz)}</span>
             </p>
@@ -1327,7 +1330,7 @@ function VisitorPage({ handle }: { handle: string }) {
             {starts === null && !slotsFailed ? (
               <>
                 <GridSkeleton />
-                <p className="mt-3 text-[13px] text-ink-3">Finding their free times…</p>
+                <p className="mt-3 text-[13px] text-ink-2">Finding their free times…</p>
               </>
             ) : (
               <div className="relative">
@@ -1350,7 +1353,7 @@ function VisitorPage({ handle }: { handle: string }) {
                         </LinkButton>
                       )}
                       {!laterMonth && (
-                        <p className="mt-1 text-[12.5px] text-ink-3">
+                        <p className="mt-1 text-[12.5px] text-ink-2">
                           <span data-ay-skip="1">{owner.name}</span> takes bookings up to{" "}
                           <span data-ay-skip="1">{horizonD}</span> days ahead
                         </p>
@@ -1400,7 +1403,7 @@ function VisitorPage({ handle }: { handle: string }) {
                         <button key={ts} type="button" aria-pressed={on} disabled={dead}
                           onClick={() => { setPicked(ts); setTakeErr(""); setGone(false); }}
                           className={cx("h-12 rounded-field border text-[15px] font-semibold tabular-nums transition-colors duration-150 md:h-11 md:text-[14.5px]",
-                            dead ? "cursor-not-allowed border-line text-ink-3"
+                            dead ? "cursor-not-allowed border-line text-ink-2"
                               : on ? "border-yang bg-yang text-on-accent"
                               : "border-line text-ink-2 hover:border-yin-light hover:text-ink")}>
                           {dead
@@ -1411,11 +1414,11 @@ function VisitorPage({ handle }: { handle: string }) {
                     })}
                   </div>
                 ) : slotsFailed ? (
-                  <p className="rounded-card border border-line p-4 text-[13px] text-ink-3">
+                  <p className="rounded-card border border-line p-4 text-[13px] text-ink-2">
                     The free times couldn’t be loaded — nothing here is a statement about this week
                   </p>
                 ) : starts === null ? null : (
-                  <p className="rounded-card border border-line p-4 text-[13px] text-ink-3">All taken — try another day</p>
+                  <p className="rounded-card border border-line p-4 text-[13px] text-ink-2">All taken — try another day</p>
                 )}
               </div>
             </div>
@@ -1438,7 +1441,7 @@ function VisitorPage({ handle }: { handle: string }) {
           <Avatar src={owner.avatar} name={owner.name} className="h-14 w-14" priority />
           <div className="min-w-0">
             <p className="text-[15px] font-semibold text-ink" data-ay-skip="1">{owner.name}</p>
-            {owner.slug && <p className="text-[12.5px] text-ink-3" data-ay-skip="1">@{owner.slug}</p>}
+            {owner.slug && <p className="text-[12.5px] text-ink-2" data-ay-skip="1">@{owner.slug}</p>}
           </div>
         </div>
         {owner.slug && (
@@ -1561,7 +1564,7 @@ function RuleForm({ rule, onSaved, onCancel }: { rule: BookRule; onSaved: (r: Bo
               return (
                 <button key={i} type="button" aria-pressed={on} onClick={() => toggleDay(i)}
                   className={cx("h-10 min-w-[52px] rounded-pill border px-3 text-[13px] font-semibold transition-colors",
-                    on ? "border-yang bg-yang/15 text-yang" : "border-line text-ink-3 hover:border-yin-light hover:text-ink")}>
+                    on ? "border-yang bg-yang/15 text-yang" : "border-line text-ink-2 hover:border-yin-light hover:text-ink")}>
                   <span data-ay-skip="1">{WEEKDAY_NAMES[i]}</span>
                 </button>
               );
@@ -1569,11 +1572,11 @@ function RuleForm({ rule, onSaved, onCancel }: { rule: BookRule; onSaved: (r: Bo
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
             <button type="button" onClick={() => setDays("1111111")}
-              className="inline-flex h-10 items-center rounded-pill border border-line px-3.5 text-[12.5px] font-semibold text-ink-3 hover:border-yin-light hover:text-ink">
+              className="inline-flex h-10 items-center rounded-pill border border-line px-3.5 text-[12.5px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink">
               Any day
             </button>
             <button type="button" onClick={() => setDays("1111100")}
-              className="inline-flex h-10 items-center rounded-pill border border-line px-3.5 text-[12.5px] font-semibold text-ink-3 hover:border-yin-light hover:text-ink">
+              className="inline-flex h-10 items-center rounded-pill border border-line px-3.5 text-[12.5px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink">
               Weekdays
             </button>
           </div>
@@ -1622,7 +1625,7 @@ function RuleForm({ rule, onSaved, onCancel }: { rule: BookRule; onSaved: (r: Bo
             <span data-ay-skip="1">{tz}</span>
             {local && <> — which is <span data-ay-skip="1">{local}</span> on the clock you are reading this on</>}
           </p>
-          <p className="mt-1.5 text-ink-3">
+          <p className="mt-1.5 text-ink-2">
             Anyone with your link sees{" "}
             <DaysText days={days} />, <span data-ay-skip="1">{minuteClock(fromMin)} – {minuteClock(toMin)}</span>, your time
           </p>
@@ -1635,7 +1638,7 @@ function RuleForm({ rule, onSaved, onCancel }: { rule: BookRule; onSaved: (r: Bo
             {busy ? "Saving…" : rule.id ? "Save" : "Start offering this"}
           </Button>
           <button type="button" onClick={onCancel}
-            className="inline-flex h-11 items-center px-2 text-[13.5px] font-semibold text-ink-3 hover:text-ink">
+            className="inline-flex h-11 items-center px-2 text-[13.5px] font-semibold text-ink-2 hover:text-ink">
             Cancel
           </button>
         </div>
@@ -1654,22 +1657,22 @@ function RuleCard({ rule, onEdit, onOff, onOn, busy }: { rule: BookRule; onEdit:
           <h3 className="text-[16px] font-bold text-ink" data-ay-skip="1">{rule.title}</h3>
           {rule.blurb && <p className="mt-1 max-w-prose text-[13.5px] leading-relaxed text-ink-2" data-ay-skip="1">{rule.blurb}</p>}
         </div>
-        {off ? <Pill className="bg-veil/10 text-ink-3">Not offered</Pill> : <Pill>Open</Pill>}
+        {off ? <Pill className="bg-veil/10 text-ink-2">Not offered</Pill> : <Pill>Open</Pill>}
       </div>
 
       <dl className="mt-3 grid gap-x-6 gap-y-1.5 text-[13px] sm:grid-cols-2">
-        <div className="flex gap-2"><dt className="text-ink-3">Length</dt>
+        <div className="flex gap-2"><dt className="text-ink-2">Length</dt>
           <dd className="text-ink-2"><DurationText m={Number(rule.minutes) || 30} /></dd></div>
-        <div className="flex gap-2"><dt className="text-ink-3">Days</dt>
+        <div className="flex gap-2"><dt className="text-ink-2">Days</dt>
           <dd className="text-ink-2"><DaysText days={rule.days} /></dd></div>
-        <div className="flex gap-2"><dt className="text-ink-3">Hours</dt>
+        <div className="flex gap-2"><dt className="text-ink-2">Hours</dt>
           <dd className="text-ink-2" data-ay-skip="1">{hoursLabel(rule)} · {rule.tz}</dd></div>
-        <div className="flex gap-2"><dt className="text-ink-3">Notice</dt>
+        <div className="flex gap-2"><dt className="text-ink-2">Notice</dt>
           <dd className="text-ink-2"><NoticeText h={Number(rule.notice_h) || 0} /></dd></div>
-        <div className="flex gap-2"><dt className="text-ink-3">Ahead</dt>
+        <div className="flex gap-2"><dt className="text-ink-2">Ahead</dt>
           <dd className="text-ink-2" data-ay-skip="1">{Number(rule.horizon_d) || 21} days</dd></div>
         {local && (
-          <div className="flex gap-2"><dt className="text-ink-3">Your clock</dt>
+          <div className="flex gap-2"><dt className="text-ink-2">Your clock</dt>
             <dd className="text-ink-2" data-ay-skip="1">{local}</dd></div>
         )}
       </dl>
@@ -1685,7 +1688,7 @@ function RuleCard({ rule, onEdit, onOff, onOn, busy }: { rule: BookRule; onEdit:
           </button>
         ) : (
           <button type="button" onClick={onOff} disabled={busy}
-            className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-3 transition-colors hover:border-yin-light hover:text-ink disabled:opacity-50">
+            className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink disabled:opacity-50">
             Stop offering it
           </button>
         )}
@@ -1714,7 +1717,7 @@ function ShareCard({ handle, url: given }: { handle: string; url?: string }) {
   return (
     <section className="rounded-card border border-line bg-space-2 p-4" aria-label="Your booking link">
       <h2 className="text-[14px] font-semibold text-ink">Your link</h2>
-      <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-3">
+      <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-2">
         Send this to anybody. They can see when you are free without an account, and only sign in to take a time
       </p>
       <p className="mt-2 break-all text-[12px] text-ink-2" data-ay-skip="1">{url}</p>
@@ -1746,7 +1749,7 @@ function HowPanel() {
         {rows.map((r) => (
           <li key={r.label}>
             <p className="text-[13px] font-semibold text-ink">{r.label}</p>
-            <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-3">{r.body}</p>
+            <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-2">{r.body}</p>
           </li>
         ))}
       </ul>

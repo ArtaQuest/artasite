@@ -43,22 +43,27 @@ export function RailFoot() {
   const year = new Date().getFullYear();
   return (
     <div className="flex flex-col gap-3 px-3 pb-2">
-      <nav aria-label="Quick links" className="flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-ink-3">
+      {/* ink-2: these are links a reader is meant to find and follow, and ink-3's 3:1 tier is for
+          rules and glyphs. Measured at 3.68:1 on the light canvas before this. */}
+      {/* Each link is a 40px-tall target with its text kept on the same visual line: the vertical
+          padding is cancelled by a negative margin, so the row does not grow while the thumb gets
+          the room it needs. They were 26px. */}
+      <nav aria-label="Quick links" className="flex flex-wrap gap-x-3 gap-y-0 text-[12px] text-ink-2">
         {[{ label: "About", href: "/about/" }, { label: "Donations", href: "/donate/" }, { label: "Data", href: "/data/" }, { label: "FAQ", href: "/faq-contact/" }, ...LEGAL]
-          .map((l) => <a key={l.href} href={l.href} className="-mx-1 inline-block px-1 py-1 transition-colors hover:text-ink-2 hover:underline">{l.label}</a>)}
+          .map((l) => <a key={l.href} href={l.href} className="-mx-1 -my-2 inline-flex min-h-[40px] items-center px-1 transition-colors hover:text-ink hover:underline">{l.label}</a>)}
       </nav>
       <div className="flex items-center gap-2">
         {SOCIALS.map((sIcon) => (
           <a key={sIcon.href} href={sIcon.href} target="_blank" rel="noopener noreferrer" aria-label={sIcon.label} title={sIcon.label}
-            className="grid h-8 w-8 place-items-center rounded-full border border-line text-ink-3 transition-colors hover:border-yin-light hover:text-ink">
+            className="grid h-10 w-10 place-items-center rounded-full border border-line text-ink-2 transition-colors hover:border-yin-light hover:text-ink">
             <svg viewBox={sIcon.viewBox || "0 0 24 24"} width="15" height="15" fill="currentColor" aria-hidden><path d={sIcon.path} /></svg>
           </a>
         ))}
       </div>
-      <p className="text-[12px] text-ink-3">
+      <p className="text-[12px] text-ink-2">
         © {year} ArtaQuest ·{" "}
         <a href="https://ised-isde.canada.ca/cc/lgcy/fdrlCrpDtls.html?corpId=17948328" target="_blank" rel="noopener noreferrer"
-          className="underline underline-offset-2 transition-colors hover:text-yang">registered</a>{" "}
+          className="-my-2 inline-flex min-h-[40px] items-center underline underline-offset-2 transition-colors hover:text-yang">registered</a>{" "}
         not-for-profit
       </p>
     </div>

@@ -299,7 +299,7 @@ function Media({ att, url, onZoom }: { att: SealedAttachment; url: string | null
         {att.name ? <span className="max-w-[240px] truncate text-[12px] text-ink-2">{att.name}</span> : null}
         <span className="flex items-center gap-2">
           <audio controls src={url} preload="metadata" className="h-10 max-w-[240px]" />
-          {att.dur ? <span className="text-[11px] text-ink-2">{Math.floor(att.dur / 60)}:{String(att.dur % 60).padStart(2, "0")}</span> : null}
+          {att.dur ? <span className="text-[12px] text-ink-2">{Math.floor(att.dur / 60)}:{String(att.dur % 60).padStart(2, "0")}</span> : null}
         </span>
       </span>
     );
@@ -310,7 +310,7 @@ function Media({ att, url, onZoom }: { att: SealedAttachment; url: string | null
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-veil/[0.07] text-ink-2"><Ic d={IC.file} size={17} /></span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13px] font-semibold text-ink">{att.name || "File"}</span>
-        <span className="block text-[11px] text-ink-2">{fmtSize(att.size)}</span>
+        <span className="block text-[12px] text-ink-2">{fmtSize(att.size)}</span>
       </span>
       <span className="shrink-0 text-ink-3" aria-hidden><Ic d={IC.down} size={15} /></span>
     </a>
@@ -1428,7 +1428,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
               {/* ink-2, not ink-3: at 11.5px this is the line that says whether the conversation is
                   encrypted, muted, or the other person is typing — text a member reads, and ink-3 is
                   the 3.0:1 tier the contrast engine reserves for non-text marks. */}
-              <span className="truncate text-[11.5px] text-ink-2" aria-live="polite">
+              <span className="truncate text-[12px] text-ink-2" aria-live="polite">
                 {live.typing ? "typing…" : live.online ? "Active now" : rel.muted ? "Muted" : "End-to-end encrypted"}
               </span>
             </span>
@@ -1556,7 +1556,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                 live.ttl === t.v ? "border-yang text-ink" : "border-line text-ink-2 hover:border-yin-light hover:text-ink"
               }`}>{t.label}</button>
           ))}
-          <span className="w-full text-[11px] text-ink-2">Expiry hard-deletes the sealed rows and attachments from the public database for both of you.</span>
+          <span className="w-full text-[12px] text-ink-2">Expiry hard-deletes the sealed rows and attachments from the public database for both of you.</span>
         </div>
       )}
       {panel === "search" && (
@@ -1605,7 +1605,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
           </div>
         )}
         {live.ttl > 0 && (
-          <p className="pb-2 text-center text-[11px] text-ink-2">⏱ Messages disappear after {ttlLabel(live.ttl).toLowerCase()}</p>
+          <p className="pb-2 text-center text-[12px] text-ink-2">⏱ Messages disappear after {ttlLabel(live.ttl).toLowerCase()}</p>
         )}
         {view.rows.length === 0 ? (
           <p className="py-12 text-center text-[14px] text-ink-2">No messages yet — everything you send is sealed on this device before it leaves.</p>
@@ -1625,13 +1625,13 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                 return (
                   <li key={m.id}>
                     {newDay && (
-                      <p className="py-3 text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-2">{fmtDay(m.at)}</p>
+                      <p className="py-3 text-center text-[12px] font-semibold uppercase tracking-[0.14em] text-ink-2">{fmtDay(m.at)}</p>
                     )}
                     <div className="my-2.5 rounded-card border border-line bg-veil/[0.04] px-3 py-2.5 text-center">
                       <p className="text-[12.5px] font-semibold text-ink-2">
                         <span data-ay-skip="1">{sealedRun.n}</span> messages can’t be opened on this device
                       </p>
-                      <p className="mt-1 text-[11.5px] leading-relaxed text-ink-2">
+                      <p className="mt-1 text-[12px] leading-relaxed text-ink-2">
                         They were sealed to an encryption key this browser no longer has — clearing this site’s data,
                         or signing in from a different device, creates a new one. Nobody can recover them for you, and
                         that is the point: not us, and not anyone who takes the database. The other person still reads
@@ -1656,7 +1656,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
               return (
                 <li key={m.id} ref={(el) => { if (el) rowRefs.current.set(m.id, el); else rowRefs.current.delete(m.id); }}>
                   {newDay && (
-                    <p className="py-3 text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-2">{fmtDay(m.at)}</p>
+                    <p className="py-3 text-center text-[12px] font-semibold uppercase tracking-[0.14em] text-ink-2">{fmtDay(m.at)}</p>
                   )}
                   <div className={`group flex items-end gap-2 ${mine ? "justify-end" : "justify-start"} ${groupWithPrev ? "mt-0.5" : "mt-2.5"}`}>
                     {/* peer avatar on the last bubble of their group (iMessage) */}
@@ -1678,19 +1678,19 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                         onBlur={() => setFocusedActions((v) => (v === m.id ? 0 : v))}>
                         {p.t === "text" && (
                           <button type="button" aria-label="Edit" onClick={() => { setEditing(m); setReplyTo(null); }}
-                            className="inline-flex min-h-9 items-center rounded px-2 py-0.5 text-[11px] font-semibold text-ink-2 hover:bg-veil/[0.07] hover:text-ink">Edit</button>
+                            className="inline-flex min-h-9 items-center rounded px-2 py-0.5 text-[12px] font-semibold text-ink-2 hover:bg-veil/[0.07] hover:text-ink">Edit</button>
                         )}
                         {/* Two-step: "Unsend" → "Delete?" → gone. See confirmUnsend. */}
                         {confirmUnsend === m.id ? (
                           <>
                             <button type="button" onClick={() => { setConfirmUnsend(0); unsend(m); }}
-                              className="inline-flex min-h-9 items-center rounded px-2 py-0.5 text-[11px] font-bold text-yang hover:bg-veil/[0.07]">Delete?</button>
+                              className="inline-flex min-h-9 items-center rounded px-2 py-0.5 text-[12px] font-bold text-yang hover:bg-veil/[0.07]">Delete?</button>
                             <button type="button" aria-label="Keep this message" onClick={() => setConfirmUnsend(0)}
-                              className="inline-flex min-h-9 items-center rounded px-2 py-0.5 text-[11px] font-semibold text-ink-2 hover:text-ink">Keep</button>
+                              className="inline-flex min-h-9 items-center rounded px-2 py-0.5 text-[12px] font-semibold text-ink-2 hover:text-ink">Keep</button>
                           </>
                         ) : (
                           <button type="button" aria-label="Unsend" onClick={() => setConfirmUnsend(m.id)}
-                            className="inline-flex min-h-9 items-center rounded px-2 py-0.5 text-[11px] font-semibold text-ink-2 hover:bg-veil/[0.07] hover:text-ink">Unsend</button>
+                            className="inline-flex min-h-9 items-center rounded px-2 py-0.5 text-[12px] font-semibold text-ink-2 hover:bg-veil/[0.07] hover:text-ink">Unsend</button>
                         )}
                       </span>
                     )}
@@ -1802,7 +1802,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                               className="rounded-full px-1 text-[15px] transition-transform hover:scale-125">{e}</button>
                           ))}
                           <button type="button" aria-label="Reply" onClick={() => { setReplyTo(m); setEditing(null); }}
-                            className="ms-0.5 inline-flex min-h-9 items-center rounded px-2 text-[11px] font-semibold text-ink-2 hover:text-ink">Reply</button>
+                            className="ms-0.5 inline-flex min-h-9 items-center rounded px-2 text-[12px] font-semibold text-ink-2 hover:text-ink">Reply</button>
                         </div>
                       )}
                     </div>
@@ -1943,7 +1943,7 @@ function RecoveryPanel() {
     return (
       <div className="rounded-card border border-yang bg-yang/[0.06] p-3">
         <p className="text-[12.5px] font-semibold text-ink">Write this down now</p>
-        <p className="mt-1 text-[11.5px] leading-relaxed text-ink-2">
+        <p className="mt-1 text-[12px] leading-relaxed text-ink-2">
           It is the only thing that opens your messages on another device. Nobody can look it up for
           you — not us, not from the database. If you lose it, this history stays sealed.
         </p>
@@ -1951,7 +1951,7 @@ function RecoveryPanel() {
           {code}
         </p>
         {migrated && (
-          <p className="mt-2 text-[11.5px] leading-relaxed text-ink-2">
+          <p className="mt-2 text-[12px] leading-relaxed text-ink-2">
             Messages from before today were sealed to this browser’s previous key, which was built so
             that it could never be exported — by us or anyone. They stay readable here, but this code
             cannot carry them to another device. Everything from now on, it can.
@@ -1979,14 +1979,14 @@ function RecoveryPanel() {
     return (
       <div className="rounded-card border border-line bg-veil/[0.04] p-3">
         <p className="text-[12.5px] font-semibold text-ink">Open your messages on this device</p>
-        <p className="mt-1 text-[11.5px] leading-relaxed text-ink-2">
+        <p className="mt-1 text-[12px] leading-relaxed text-ink-2">
           Your conversations were sealed to a key this browser doesn’t have yet. Enter your recovery
           code and they open here too — on every device, not instead of the others.
         </p>
         <input value={entry} onChange={(e) => { setEntry(e.target.value); setErr(""); }}
           aria-label="Recovery code" placeholder="XXXX-XXXX-XXXX-XXXX…" autoComplete="off" spellCheck={false}
           className="aq-code mt-2 w-full rounded-field border border-line bg-space-1 px-2.5 py-1.5 text-[12.5px] text-ink" />
-        {err && <p className="mt-1 text-[11.5px] text-yang">{err}</p>}
+        {err && <p className="mt-1 text-[12px] text-yang">{err}</p>}
         <button type="button" disabled={busy || entry.trim().length < 8}
           onClick={() => {
             setBusy(true); setErr("");
@@ -2007,11 +2007,11 @@ function RecoveryPanel() {
   return (
     <div className="rounded-card border border-line bg-veil/[0.04] p-3">
       <p className="text-[12.5px] font-semibold text-ink">These messages exist only in this browser</p>
-      <p className="mt-1 text-[11.5px] leading-relaxed text-ink-2">
+      <p className="mt-1 text-[12px] leading-relaxed text-ink-2">
         Clear this site’s data or move to another device and they cannot be opened again — by anyone,
         including us. A recovery code fixes that: keep it, and your messages follow you.
       </p>
-      {err && <p className="mt-1 text-[11.5px] text-yang">{err}</p>}
+      {err && <p className="mt-1 text-[12px] text-yang">{err}</p>}
       <button type="button" disabled={busy}
         onClick={() => {
           setBusy(true); setErr("");
@@ -2019,7 +2019,7 @@ function RecoveryPanel() {
             .catch(() => setErr("Couldn’t save the recovery key — try again."))
             .finally(() => setBusy(false));
         }}
-        className="mt-2 rounded-pill bg-yang px-3 py-1 text-[12px] font-bold text-on-accent hover:opacity-90 disabled:opacity-50">
+        className="mt-2 inline-flex h-10 items-center rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent hover:opacity-90 disabled:opacity-50">
         {busy ? "Setting up…" : "Set up recovery"}
       </button>
     </div>
@@ -2302,7 +2302,7 @@ export default function Messages() {
                      badge inside its own cell. `grow basis-auto` starts each tab at its content
                      width and shares out only the LEFTOVER space, so nothing is ever cut and the
                      row still fills the column. */
-                  className={`grow basis-auto whitespace-nowrap px-2 py-1.5 text-[12.5px] font-semibold transition-colors ${
+                  className={`inline-flex min-h-[40px] grow basis-auto items-center justify-center whitespace-nowrap px-2 text-[12.5px] font-semibold transition-colors ${
                     side === k ? "bg-veil/[0.10] text-ink" : "text-ink-2 hover:bg-veil/[0.05] hover:text-ink"
                   }`}>
                   {label}
@@ -2313,7 +2313,7 @@ export default function Messages() {
                     <span className="ms-1 rounded-pill bg-yang px-1 text-[10.5px] font-bold text-on-accent">{requests}</span>
                   )}
                   {k === "people" && dir && dir.online > 0 && (
-                    <span className="ms-1.5 text-[11px] font-bold text-yang">{dir.online}</span>
+                    <span className="ms-1.5 text-[12px] font-bold text-yang">{dir.online}</span>
                   )}
                 </button>
               ))}
@@ -2368,7 +2368,7 @@ export default function Messages() {
                         </span>
                       </span>
                       {r.unread > 0 && !r.muted && (
-                        <span className="rounded-pill bg-yang px-2 py-0.5 text-[11px] font-bold text-on-accent">{r.unread}</span>
+                        <span className="rounded-pill bg-yang px-2 py-0.5 text-[12px] font-bold text-on-accent">{r.unread}</span>
                       )}
                     </button>
                   ))}
@@ -2377,7 +2377,7 @@ export default function Messages() {
                   className="self-start rounded-pill bg-yang px-4 py-1.5 text-[12.5px] font-bold text-on-accent hover:opacity-90 disabled:opacity-50">
                   {makingRoom ? "Opening…" : "New room"}
                 </button>
-                <p className="px-1 text-[11.5px] leading-relaxed text-ink-2">
+                <p className="px-1 text-[12px] leading-relaxed text-ink-2">
                   Rooms are sealed with one key shared between their members. Up to {rooms?.[0]?.max_members ?? 12} people,
                   and up to {rooms?.[0]?.max_call ?? 5} on a call — calls go directly between everyone, so there is no
                   server to carry more.
@@ -2468,7 +2468,7 @@ export default function Messages() {
                         <span className="flex items-baseline gap-2">
                           <span className={`min-w-0 flex-1 truncate text-[14px] text-ink ${c.unread && !c.muted ? "font-bold" : "font-semibold"}`}>{c.peer.name}</span>
                           {c.last_at > 0 && (
-                            <span className={`shrink-0 text-[11px] ${c.unread && !c.muted ? "font-semibold text-yang" : "text-ink-2"}`}>
+                            <span className={`shrink-0 text-[12px] ${c.unread && !c.muted ? "font-semibold text-yang" : "text-ink-2"}`}>
                               {fmtDay(c.last_at) === "Today" ? fmtTime(c.last_at) : fmtDay(c.last_at)}
                             </span>
                           )}
@@ -2491,15 +2491,15 @@ export default function Messages() {
                     {side === "requests" ? (
                       <span className="flex shrink-0 items-center gap-1.5">
                         <button type="button" onClick={() => void answer(c, "decline")} disabled={acting === c.peer.id}
-                          className="rounded-pill border border-line px-2.5 py-1 text-[11.5px] font-semibold text-ink-2 hover:border-yang hover:text-ink disabled:opacity-50">Decline</button>
+                          className="rounded-pill border border-line px-2.5 py-1 text-[12px] font-semibold text-ink-2 hover:border-yang hover:text-ink disabled:opacity-50">Decline</button>
                         <button type="button" onClick={() => void answer(c, "accept")} disabled={acting === c.peer.id}
-                          className="rounded-pill bg-yang px-3 py-1 text-[11.5px] font-bold text-on-accent hover:opacity-90 disabled:opacity-50">Accept</button>
+                          className="rounded-pill bg-yang px-3 py-1 text-[12px] font-bold text-on-accent hover:opacity-90 disabled:opacity-50">Accept</button>
                       </span>
                     ) : (
                       <span className="flex shrink-0 items-center gap-1.5 self-center text-ink-2">
                         {c.pinned && <span title="Pinned" aria-label="Pinned"><Ic d={IC.pin} size={13} /></span>}
                         {c.muted && <span title="Muted" aria-label="Muted"><Ic d={IC.mute} size={13} /></span>}
-                        {c.unread > 0 && !c.muted && <span className="rounded-pill bg-yang px-2 py-0.5 text-[11px] font-bold text-on-accent">{c.unread}</span>}
+                        {c.unread > 0 && !c.muted && <span className="rounded-pill bg-yang px-2 py-0.5 text-[12px] font-bold text-on-accent">{c.unread}</span>}
                         {c.unread > 0 && c.muted && <span className="h-2 w-2 rounded-full bg-ink-3" aria-label={`${c.unread} unread, muted`} />}
                       </span>
                     )}
@@ -2514,7 +2514,7 @@ export default function Messages() {
               <div className="flex gap-3 px-1 text-[12px]">
                 {([["archived", "Archived"], ["blocked", "Blocked"]] as const).map(([k, label]) => (
                   <button key={k} type="button" onClick={() => setSide(side === k ? "chats" : k)}
-                    className={side === k ? "font-semibold text-ink" : "text-ink-2 hover:text-ink"}>
+                    className={`-my-2 inline-flex min-h-[40px] items-center ${side === k ? "font-semibold text-ink" : "text-ink-2 hover:text-ink"}`}>
                     {side === k ? "← Back to inbox" : label}
                   </button>
                 ))}
@@ -2523,8 +2523,8 @@ export default function Messages() {
             {/* Email me when a message lands while I'm away. On by default — an unread message
                 nobody is told about is a broken inbox — and off with one tap. */}
             {emailOn !== null && (
-              <label className="flex cursor-pointer items-start gap-2 text-[12px] leading-relaxed text-ink-2">
-                <input type="checkbox" checked={emailOn} className="mt-0.5 accent-yang"
+              <label className="flex min-h-[40px] cursor-pointer items-center gap-2.5 text-[12.5px] leading-relaxed text-ink-2">
+                <input type="checkbox" checked={emailOn} className="h-[18px] w-[18px] shrink-0 accent-yang"
                   onChange={(e) => {
                     const on = e.target.checked;
                     setEmailOn(on);

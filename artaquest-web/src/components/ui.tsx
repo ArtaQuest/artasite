@@ -420,7 +420,10 @@ export function Tabs({ tabs, active, onChange, className, label = "Tabs", border
 export function LinkButton({ onClick, disabled, className, children, ...rest }: { onClick?: () => void; disabled?: boolean; className?: string; children: ReactNode } & ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button type="button" onClick={onClick} disabled={disabled}
-      className={cx("text-[13px] text-ink-3 underline-offset-2 transition-colors hover:text-ink hover:underline disabled:opacity-50", className)} {...rest}>
+      // ink-2. A LinkButton is a control that reads as text — "Show a different zone", "Add a line
+      // about it" — and ink-3's 3:1 tier is for rules and glyphs, not for the words on something
+      // a reader has to find and press.
+      className={cx("text-[13px] text-ink-2 underline-offset-2 transition-colors hover:text-ink hover:underline disabled:opacity-50", className)} {...rest}>
       {children}
     </button>
   );

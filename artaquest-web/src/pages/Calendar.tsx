@@ -208,33 +208,34 @@ function ItemRow({ it, now }: { it: CalendarItem; now: number }) {
   const done = Number(it.end_ts) <= now;
   return (
     <article className={cx(
-      "flex gap-3 rounded-card border border-s-[3px] border-line bg-space-2 p-3.5",
+      "group relative flex gap-3 rounded-card border border-s-[3px] border-line bg-space-2 p-3.5",
       timed ? "border-s-yang" : "border-s-yin-light",
       (done || it.status === "cancelled") && "opacity-60",
     )}>
-      {/* The time column is what makes a list of rows read as a day. It stacks rather than
-          truncates, so a long zone abbreviation wraps under the clock instead of being clipped. */}
-      <div className="w-[62px] shrink-0 sm:w-[76px]">
+      {/* THE WHOLE ROW IS THE LINK. It used to be the title alone — a 23px line inside a 70px
+          card, so most of what looked pressable was not. A stretched <a> behind the content, with
+          the content ignoring the pointer so a tap anywhere on the row lands on it. */}
+      {it.url && <Link to={localePath(it.url)} className="absolute inset-0 z-0 rounded-card outline-none" aria-label={it.title} />}
+      {/* The time column is what makes a list of rows read as a day. The zone is NOT repeated here:
+          the toolbar above says once, in words, which zone every time on the page is in, and a
+          two-letter code under each clock was the same fact forty times at 11px. */}
+      <div className="pointer-events-none relative z-[1] w-[62px] shrink-0 sm:w-[76px]">
         {timed ? (
-          <>
-            <span className="block text-[14px] font-semibold tabular-nums text-yang" data-ay-skip="1">
-              {fmt(it.start_ts, { hour: "2-digit", minute: "2-digit" })}
-            </span>
-            <span className="block text-[11px] leading-tight text-ink-2" data-ay-skip="1">{zoneName(it.start_ts)}</span>
-          </>
+          <span className="block text-[14px] font-semibold tabular-nums text-yang" data-ay-skip="1">
+            {fmt(it.start_ts, { hour: "2-digit", minute: "2-digit" })}
+          </span>
         ) : (
           <span className="block text-[13px] font-semibold leading-tight text-yin-light">All day</span>
         )}
       </div>
 
-      <div className="min-w-0 flex-1">
+      <div className="pointer-events-none relative z-[1] min-w-0 flex-1">
         <div className="flex items-start gap-2">
           <span data-ay-skip="1" className="min-w-0 flex-1">
             {it.url ? (
-              <Link to={localePath(it.url)}
-                className={cx("block break-words text-[15px] font-semibold text-ink hover:text-yang", it.status === "cancelled" && "line-through")}>
+              <span className={cx("block break-words text-[15px] font-semibold text-ink group-hover:text-yang", it.status === "cancelled" && "line-through")}>
                 {it.title}
-              </Link>
+              </span>
             ) : (
               <span className={cx("block break-words text-[15px] font-semibold text-ink", it.status === "cancelled" && "line-through")}>{it.title}</span>
             )}
@@ -250,9 +251,15 @@ function ItemRow({ it, now }: { it: CalendarItem; now: number }) {
             {!done && it.status !== "cancelled" && <> · <span data-ay-skip="1">{fmtRelative(it.start_ts, now)}</span></>}
           </p>
         )}
-        {it.detail && <p className="mt-1 text-[12.5px] leading-relaxed text-ink-2" data-ay-skip="1">{it.detail}</p>}
+        {/* Two lines, then an ellipsis. A grant's `detail` is its whole eligibility paragraph, and
+            unclamped it turned one row of a diary into fifteen lines of prose — the row is the
+            pointer, the page it links to is the reading. */}
+        {it.detail && <p className="mt-1 line-clamp-2 text-[12.5px] leading-relaxed text-ink-2" data-ay-skip="1">{it.detail}</p>}
         {it.status === "cancelled" && <p className="mt-1 text-[12.5px] font-semibold text-ink-2">Cancelled</p>}
-        <ItemActions it={it} />
+        {/* The row's own buttons take the pointer back — the wrapper gave it up so the row-link
+            beneath could have it, and a control that inherits that is a control that cannot be
+            pressed. */}
+        <div className="pointer-events-auto"><ItemActions it={it} /></div>
       </div>
     </article>
   );
@@ -298,7 +305,7 @@ function SubscribePanel({ cal }: { cal: CalendarCal | null }) {
               {copied ? "Copied" : "Copy the address"}
             </button>
           </div>
-          <p className="mt-2 break-all text-[11.5px] text-ink-2" data-ay-skip="1">{cal.ics}</p>
+          <p className="mt-2 break-all font-mono text-[12px] leading-relaxed text-ink-2" data-ay-skip="1">{cal.ics}</p>
           <p className="mt-2 text-[12px] leading-relaxed text-ink-2">
             Apple Calendar and Outlook take the Subscribe button. Google Calendar wants the address pasted into
             Other calendars → From URL
