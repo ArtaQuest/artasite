@@ -169,21 +169,21 @@ function oneEventIcs(subscription: string, id: number): string {
 /** The server derives `phase` from the timestamps on every read; trust that over anything computed
  *  here, so one meeting never reads as two different things on two surfaces. */
 function StatusPill({ meet, quiet = false }: { meet: MeetRow; quiet?: boolean }) {
-  if (meet.phase === "cancelled") return <Pill className="bg-veil/10 text-ink-2">Cancelled</Pill>;
-  if (meet.phase === "ended") return <Pill className="bg-veil/10 text-ink-2">Ended</Pill>;
+  if (meet.phase === "cancelled") return <Pill className="bg-veil/10 text-ink">Cancelled</Pill>;
+  if (meet.phase === "ended") return <Pill className="bg-veil/10 text-ink">Ended</Pill>;
   if (meet.phase === "live") return <Pill>Happening now</Pill>;
   if (meet.phase === "open") return <Pill>Open now</Pill>;
   // "Scheduled" on every row of a list of scheduled meetings is the same word five times, telling
   // the reader nothing that the list they are looking at has not already told them. In a list it
   // is suppressed; on the meeting's own page, where there is no surrounding context, it stays.
-  return quiet ? null : <Pill className="bg-veil/10 text-ink-2">Scheduled</Pill>;
+  return quiet ? null : <Pill className="bg-veil/10 text-ink">Scheduled</Pill>;
 }
 
 /** The host chose the time somewhere; say where, but only when it is somewhere else. */
 function HostZoneLine({ meet }: { meet: MeetRow }) {
   if (!meet.tz || meet.tz === VIEWER_TZ) return null;
   return (
-    <p className="text-[12.5px] text-ink-3">
+    <p className="text-[12.5px] text-ink-2">
       {clockOnly(meet.start_ts, meet.tz)} in the host’s time {/* data-ay-skip: a formatted date is machine output, and the i18n mesh persists every
             reachable string into the PUBLIC aq_translations table — one new row per meeting,
             forever, and the date itself machine-translated in place. */}
@@ -227,18 +227,21 @@ function GuestList({ guests, seats, hostId, isHost, bound, busy, onRemove }: {
   return (
     <section className="rounded-card border border-line bg-space-2 p-4" aria-label="Who is invited">
       <h2 className="text-[14px] font-semibold text-ink">
-        Invited <span className="font-normal text-ink-3">· {guests.length} of {seats}</span>
+        Invited <span className="font-normal text-ink-2">· {guests.length} of {seats}</span>
       </h2>
       <ul className="mt-3 flex flex-col gap-2">
         {guests.map((g) => (
           <li key={g.id} className="flex items-center gap-2.5">
-            <span data-ay-skip="1" className="flex min-w-0 flex-1 items-center gap-2.5">
+            {/* A name in a guest list is a person you may not know yet, and it went nowhere. It is
+                a link to their profile now — the only route this page offered to anyone in it. */}
+            <Link to={localePath(`/u/${g.slug}`)} data-ay-skip="1"
+              className="group flex min-h-[40px] min-w-0 flex-1 items-center gap-2.5 outline-none">
               <Avatar src={g.avatar} name={g.name} className="h-8 w-8 shrink-0" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[14px] text-ink">{g.name}</span>
+                <span className="block truncate text-[14px] text-ink group-hover:text-yang">{g.name}</span>
                 <span className="block truncate text-[12px] text-ink-2">{standing(g)}</span>
               </span>
-            </span>
+            </Link>
             {isHost && g.id !== hostId && onRemove && (
               <button type="button" disabled={busy} onClick={() => onRemove(g.id)}
                 className="inline-flex h-10 shrink-0 items-center rounded-pill border border-line px-3.5 text-[12.5px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink disabled:opacity-50">
@@ -249,7 +252,7 @@ function GuestList({ guests, seats, hostId, isHost, bound, busy, onRemove }: {
         ))}
       </ul>
       {isHost && (
-        <p className="mt-3 text-[12px] leading-relaxed text-ink-3">
+        <p className="mt-3 text-[12px] leading-relaxed text-ink-2">
           Removing someone takes them out of the room. It is not a new lock: anyone handed this room’s key
           keeps it, and the key is good for this call only
         </p>
@@ -260,7 +263,7 @@ function GuestList({ guests, seats, hostId, isHost, bound, busy, onRemove }: {
 
 function PrivacyNote() {
   return (
-    <p className="rounded-card border border-line bg-space-2 p-4 text-[12.5px] leading-relaxed text-ink-3">
+    <p className="rounded-card border border-line bg-space-2 p-4 text-[12.5px] leading-relaxed text-ink-2">
       Five people to a call, peer to peer. Nothing is recorded, and nobody — us included — can listen in.
     </p>
   );
@@ -301,7 +304,7 @@ function CalendarPanel({ cal, onRotate }: { cal: MeetCal | null; onRotate: (c: M
   return (
     <section className="rounded-card border border-line bg-space-2 p-4" aria-label="Calendar subscription">
       <h2 className="text-[14px] font-semibold text-ink">Add Meet to your calendar</h2>
-      <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-3">
+      <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-2">
         Every meeting you’re invited to, kept up to date
       </p>
       {!cal ? (
@@ -318,7 +321,7 @@ function CalendarPanel({ cal, onRotate }: { cal: MeetCal | null; onRotate: (c: M
             </button>
           </div>
           <p className="mt-2 break-all font-mono text-[12px] leading-relaxed text-ink-2" data-ay-skip="1">{cal.ics}</p>
-          <p className="mt-2 text-[12px] leading-relaxed text-ink-3">
+          <p className="mt-2 text-[12px] leading-relaxed text-ink-2">
             Apple and Outlook take the button. Google wants the address: Other calendars → From URL
           </p>
           <div className="mt-3 border-t border-line pt-3">
@@ -436,7 +439,7 @@ function NewMeetingForm({ seatsMax, onDone, onClose }: {
       </Field>
       {/* NOT a policy page. title, agenda, time and the whole guest list are plaintext rows served
           in full at /data/ — so the sentence belongs where the host is typing them. */}
-      <p className="-mt-2 text-[12px] leading-relaxed text-ink-3">
+      <p className="-mt-2 text-[12px] leading-relaxed text-ink-2">
         Anyone can see that this meeting exists, when it is, and who is invited. Its title and agenda are
         withheld from the public data explorer, but they are not encrypted the way the call is: we can read
         them, and they travel in calendar invitations. Nobody but the people in it can see or hear what
@@ -526,52 +529,47 @@ function MeetingRow({ meet, calIcs, lead }: { meet: MeetRow; calIcs: string; lea
   const ics = oneEventIcs(calIcs, Number(meet.id));
   const dead = meet.phase === "cancelled" || meet.phase === "ended";
   const hot = meet.phase === "live" || meet.phase === "open";
+  const action = hot ? "Join" : lead && !dead ? "Open" : "";
   return (
-    <article className={cx("group relative rounded-card border transition-colors",
+    <article className={cx("group relative flex min-h-[76px] items-center gap-3 rounded-card border p-3 transition-colors sm:gap-4 sm:p-4",
       hot ? "border-yang/50 bg-yang/[0.06]" : dead ? "border-line bg-space-2/60" : "border-line bg-space-2 hover:border-yang/40")}>
-      {/* ONE link, stretched over the whole row. A nested <a> would be invalid inside it, so the
-          calendar link sits outside the stretched area and lifts itself above with a z-index. */}
-      <Link to={localePath(`/meet/${meet.id}`)}
-        className="flex min-h-[76px] items-center gap-3 p-3 outline-none sm:gap-4 sm:p-4">
-        {/* Wide enough for "10:56 AM" on ONE line, and told never to wrap. At 72px the chip broke a
-            twelve-hour clock across three lines — "10:56 / AM / 11:26 AM" — which is the one element
-            on the row that has to be scannable down a column. */}
-        <span aria-hidden
-          className={cx("flex w-[84px] shrink-0 flex-col items-center justify-center rounded-card px-1 py-1.5 text-center sm:w-[94px]",
-            hot ? "bg-yang text-on-accent" : dead ? "bg-veil/5 text-ink-3" : "bg-veil/[0.06] text-ink")}>
-          <span className="whitespace-nowrap text-[14.5px] font-bold leading-tight tabular-nums sm:text-[16px]" data-ay-skip="1">
-            {clockOnly(meet.start_ts)}
-          </span>
-          <span className={cx("whitespace-nowrap text-[12px] leading-tight tabular-nums", hot ? "text-on-accent/80" : "text-ink-3")} data-ay-skip="1">
-            {clockOnly(meet.end_ts)}
-          </span>
+      {/* A STRETCHED link rather than a wrapping one: the calendar button is a second destination on
+          the same row, and nesting it inside the row's own <a> is invalid HTML. The overlay sits at
+          z-0 so everything paints above it, and the content ignores the pointer so clicks fall
+          through to it — the calendar button takes its own back. Absolutely positioning that button
+          over the row instead is what put it on top of the Open pill. */}
+      <Link to={localePath(`/meet/${meet.id}`)} className="absolute inset-0 z-0 rounded-card outline-none"
+        aria-label={meet.title} />
+      <span aria-hidden
+        className={cx("pointer-events-none relative z-[1] flex w-[84px] shrink-0 flex-col items-center justify-center rounded-card px-1 py-1.5 text-center sm:w-[94px]",
+          hot ? "bg-yang text-on-accent" : dead ? "bg-veil/5 text-ink-2" : "bg-veil/[0.06] text-ink")}>
+        <span className="whitespace-nowrap text-[14.5px] font-bold leading-tight tabular-nums sm:text-[16px]" data-ay-skip="1">
+          {clockOnly(meet.start_ts)}
         </span>
-        <span className="min-w-0 flex-1">
-          <span className={cx("block truncate text-[15px] font-semibold sm:text-[16px]",
-            dead ? "text-ink-2 line-through" : "text-ink group-hover:text-yang")} data-ay-skip="1">
-            {meet.title}
-          </span>
-          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px] text-ink-2">
-            <span data-ay-skip="1">{durationLabel(minutesOf(meet))}</span>
-            <StatusPill meet={meet} quiet />
-          </span>
-          <HostZoneLine meet={meet} />
+        <span className={cx("whitespace-nowrap text-[12px] leading-tight tabular-nums", hot ? "text-on-accent/80" : "text-ink-2")} data-ay-skip="1">
+          {clockOnly(meet.end_ts)}
         </span>
-        {/* The action reads as an action only where there is one to take. Everywhere else the row
-            itself is the link and a second gold button beside it would be the same tap twice. */}
-        {hot ? (
-          <span className="hidden shrink-0 items-center rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent shadow-card sm:inline-flex sm:h-10">
-            Join
-          </span>
-        ) : lead && !dead ? (
-          <span className="hidden shrink-0 items-center rounded-pill border border-yang/50 px-4 text-[13px] font-bold text-yang sm:inline-flex sm:h-10">
-            Open
-          </span>
-        ) : null}
-      </Link>
+      </span>
+      <span className="pointer-events-none relative z-[1] min-w-0 flex-1">
+        <span className={cx("block truncate text-[15px] font-semibold sm:text-[16px]",
+          dead ? "text-ink-2 line-through" : "text-ink group-hover:text-yang")} data-ay-skip="1">
+          {meet.title}
+        </span>
+        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px] text-ink-2">
+          <span data-ay-skip="1">{durationLabel(minutesOf(meet))}</span>
+          <StatusPill meet={meet} quiet />
+        </span>
+        <HostZoneLine meet={meet} />
+      </span>
+      {action && (
+        <span className={cx("pointer-events-none relative z-[1] hidden shrink-0 items-center rounded-pill px-4 text-[13px] font-bold sm:inline-flex sm:h-10",
+          hot ? "bg-yang text-on-accent shadow-card" : "border border-yang/50 text-yang")}>
+          {action}
+        </span>
+      )}
       {ics && !dead && (
         <a href={ics} aria-label="Add this meeting to your calendar" title="Add this one to your calendar"
-          className="absolute end-2 top-2 z-10 grid h-10 w-10 place-items-center rounded-card text-ink-3 transition-colors hover:bg-veil/10 hover:text-ink">
+          className="relative z-[1] grid h-10 w-10 shrink-0 place-items-center rounded-card text-ink-3 transition-colors hover:bg-veil/10 hover:text-ink">
           <CalPlusGlyph />
         </a>
       )}
@@ -756,7 +754,7 @@ function MeetList() {
                   <section key={g.key} aria-label={g.heading}>
                     <h2 className="mb-2 flex flex-wrap items-baseline gap-x-2 px-0.5 text-[13px] font-bold uppercase tracking-[0.07em] text-ink-2">
                       <span data-ay-skip="1">{g.heading}</span>
-                      <span className="text-[12px] font-semibold normal-case tracking-normal text-ink-3" data-ay-skip="1">
+                      <span className="text-[12px] font-semibold normal-case tracking-normal text-ink-2" data-ay-skip="1">
                         {fmtRelative(g.items[0].start_ts, now)}
                       </span>
                     </h2>
@@ -851,7 +849,7 @@ function HostControls({ meet, busy, onInvite, onRetime, onCancel }: {
                 className="h-10 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">
                 Move the meeting
               </button>
-              <p className="mt-1.5 text-[12px] leading-relaxed text-ink-3">
+              <p className="mt-1.5 text-[12px] leading-relaxed text-ink-2">
                 Everyone invited is told, and every subscribed calendar updates itself
               </p>
             </div>
@@ -905,16 +903,16 @@ function JoinAs() {
         {/* 40px of height even though it reads as a link: it is the one control on this panel a
             member on a phone actually has to hit. */}
         <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
-          className="inline-flex h-10 items-center text-[12.5px] font-semibold text-ink-3 underline underline-offset-2 hover:text-ink">
+          className="inline-flex h-10 items-center text-[12.5px] font-semibold text-ink-2 underline underline-offset-2 hover:text-ink">
           {open ? "Keep it" : "Change"}
         </button>
       </div>
-      {!open && chosen && <p className="mt-1 text-[12px] leading-relaxed text-ink-3">{chosen.blurb}</p>}
+      {!open && chosen && <p className="mt-1 text-[12px] leading-relaxed text-ink-2">{chosen.blurb}</p>}
       {open && (
         <div className="mt-2.5">
           <CallModeChoice value={mode} suggested={suggested}
             onChange={(m) => { setMode(m); rememberCallMode(m); setOpen(false); }} />
-          <p className="mt-2 text-[12px] leading-relaxed text-ink-3">
+          <p className="mt-2 text-[12px] leading-relaxed text-ink-2">
             A call with no server in it means everyone sends their own camera to everyone else, so on a
             small connection the picture is what has to give — never the voice. You can change this during
             the meeting
@@ -1340,11 +1338,11 @@ function MeetingPage({ id }: { id: number }) {
             </div>
             <p className="text-[14px] text-ink-2">
               <span data-ay-skip="1">{longWhen(meet.start_ts)}</span> – {clockOnly(meet.end_ts)}
-              <span className="text-ink-3"> · {durationLabel(minutes)}</span>
+              <span className="text-ink-2"> · {durationLabel(minutes)}</span>
             </p>
             <HostZoneLine meet={meet} />
             {meet.status !== "cancelled" && now < Number(meet.end_ts) && (
-              <p className="text-[12.5px] text-ink-3">Starts <span data-ay-skip="1">{fmtRelative(meet.start_ts, now)}</span></p>
+              <p className="text-[12.5px] text-ink-2">Starts <span data-ay-skip="1">{fmtRelative(meet.start_ts, now)}</span></p>
             )}
           </header>
 

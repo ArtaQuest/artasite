@@ -982,7 +982,7 @@ export function PageHero({ eyebrow, glyph, title, lede, aside, className }: {
     <header className={cx("relative flex items-start justify-between gap-6", className)}>
       <div className="min-w-0 flex-1">
         {eyebrow && (
-          <p className="mb-2 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.2em] text-ink-3">
+          <p className="mb-2 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.2em] text-ink-2">
             {glyph}{eyebrow}
           </p>
         )}
