@@ -43,8 +43,12 @@ export function CiteBox({ nb }: { nb: NotebookFull }) {
   const copy = (label: string, text: string) => {
     navigator.clipboard?.writeText(text).then(() => { setCopied(label); setTimeout(() => setCopied(""), 1600); });
   };
+  // A CARD, not a landmark. This sits INSIDE the page's right column, which is itself the
+  // complementary landmark — nesting <aside> in <aside> announces three "complementary" regions to a
+  // screen reader where the page has one, and the two inner ones have no name at all. Its own <h2>
+  // is what identifies it in the heading list, which is how a reader actually finds it.
   return (
-    <aside className="flex flex-col gap-3 rounded-card border border-line bg-space-2 p-4">
+    <section className="flex flex-col gap-3 rounded-card border border-line bg-space-2 p-4">
       <h2 className="text-sm font-bold uppercase tracking-wider text-ink-3">Cite this work</h2>
       {nb.doi_link ? (
         <button type="button" onClick={() => copy("doi", nb.doi_link)} className="break-all text-start text-sm text-yin-ink hover:underline" title="Copy the permanent link">
@@ -61,7 +65,7 @@ export function CiteBox({ nb }: { nb: NotebookFull }) {
       </div>
       {copied ? <p className="text-xs text-yang-ink">Copied the {copied === "doi" ? "permanent link" : "BibTeX entry"}.</p> : null}
 
-    </aside>
+    </section>
   );
 }
 
