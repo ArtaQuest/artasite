@@ -76,7 +76,10 @@ export function RailFoot() {
 export function ShellRail() {
   return (
     <aside className="hidden w-[330px] shrink-0 lg:block" aria-label="Search and highlights">
-      <div className="sticky top-4 flex max-h-[calc(100vh-2rem)] flex-col gap-4 overflow-y-auto pb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* top = the bar (60px) + a 16px breath, and the height subtracts the same, or the column
+          pins UNDER the bar and loses its first card. Measured on a work page before this: the
+          column's top sat at -143px with 204px of it behind the bar. */}
+      <div className="sticky top-[calc(var(--spacing-topbar)+1rem)] flex max-h-[calc(100vh-var(--spacing-topbar)-2rem)] flex-col gap-4 overflow-y-auto pb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {/* Where the page's own cards land (a work's cite/run cards, the calendar's subscribe
             panel, the feed's highlights). */}
         <div ref={setRailNode} className="contents" />

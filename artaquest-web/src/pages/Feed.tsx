@@ -680,7 +680,10 @@ export default function Feed({ initialKind, embedded = false }: { initialKind?: 
             kind shelf still exists as its own route (/music, /datasets…), which is where a filter
             belongs — a destination, not a permanent control eating the top of every phone screen.
             What is left is X's secondary-column header: a title, and a back arrow on a shelf. */}
-        <div className="sticky top-0 z-10 border-b border-line bg-space-1/85 backdrop-blur">
+        {/* Under the bar, not behind it: the full-bleed header is 60px of fixed chrome, so a
+            timeline header pinned at top-0 spends its whole life hidden by it (measured: 61px of it,
+            i.e. all of it). */}
+        <div className="sticky top-topbar z-10 border-b border-line bg-space-1/85 backdrop-blur">
           <div className="flex min-h-[52px] items-center">
             {meta ? (
               <div className="flex min-w-0 flex-1 items-center gap-1 px-2">

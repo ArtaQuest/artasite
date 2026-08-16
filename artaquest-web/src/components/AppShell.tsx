@@ -520,16 +520,8 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
         </IconButton>
         <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5 md:gap-3">
         <CartButton />
-          {/* ARTABOT, in the bar (operator 2026-08-16) — Reddit keeps a chat button up here and this
-              is ours. It fires the same "aq:artabot" event as the phone's centre tab, so the panel
-              has one owner (ArtaBot.tsx) whichever door opened it. Members only: the assistant is,
-              and the routes behind it are 'user'-auth regardless of what the UI shows. */}
-          {isLoggedIn() ? (
-            <IconButton label="ArtaBot" onClick={() => window.dispatchEvent(new Event("aq:artabot"))}
-              className="h-9 w-9 shrink-0 max-md:hidden">
-              <LogoMark className="h-6 w-6" />
-            </IconButton>
-          ) : null}
+          {/* ArtaBot's button moved INTO the search field's end corner (SearchBox.tsx) — one door,
+              where the operator asked for it, instead of a second icon in this row. */}
           {/* Language selector lives in the topbar so it is visible on EVERY surface —
               mobile, desktop, and when the sidebar is collapsed (the sidebar foot, where
               it used to live, is off-canvas on mobile and hidden when collapsed). */}
@@ -661,7 +653,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {/* min-w-0 on the content is load-bearing: without it a wide child (a table, a chart, a
               code block) sets the flex base and pushes the column off-screen instead of scrolling
               inside its own box — the same rule PageRail documents. */}
-          <div className={`mx-auto max-w-content px-gutter py-7 ${shellRail ? "flex items-start gap-6" : ""}`}>
+          <div className={`mx-auto max-w-content px-gutter py-7 ${shellRail ? "flex gap-6" : ""}`}>
             {shellRail ? <div className="min-w-0 flex-1">{children}</div> : children}
             {shellRail ? <ShellRail /> : null}
           </div>
