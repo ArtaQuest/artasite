@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { localePath } from "../lib/wp";
 import { listNotebooks, normalizeNbKind, searchMembers, type MemberCard } from "../lib/api";
 import { NB_KIND_META } from "./nbview";
@@ -7,6 +7,28 @@ import { Avatar } from "./ui";
 type SearchHit = { url: string; title: string; sub?: string; person?: MemberCard };
 type SearchResults = { q: string; people: SearchHit[]; posts: SearchHit[] };
 const EMPTY: SearchResults = { q: "", people: [], posts: [] };
+
+/**
+ * RECENT SEARCHES — the field forgot everything the moment it closed, which is the one thing a
+ * search box is expected to remember. Reddit and X both open on your last few queries, and it is
+ * the cheapest help there is: the query you want next is usually one you have typed before.
+ *
+ * On the device only (localStorage), never sent anywhere. This platform publishes its entire
+ * database, so a member's search history must never become a row in it. Storage can be blocked
+ * (private mode, a strict browser); every read and write is guarded, and where it is blocked the
+ * feature simply does not appear.
+ */
+const RECENT_KEY = "aq_recent_searches";
+const RECENT_MAX = 6;
+function readRecent(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string").slice(0, RECENT_MAX) : [];
+  } catch { return []; }
+}
+function writeRecent(list: string[]) {
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_MAX))); } catch { /* storage blocked */ }
+}
 
 /**
  * SEARCH LIVES ON THE RIGHT (operator 2026-08-15, "make it more like X").
@@ -111,6 +133,39 @@ export function SearchBox({ autoFocus = false, compact = false }: { autoFocus?: 
     return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
   }, []);
 
+  // "/" jumps to search, as it does on X, Reddit and GitHub — but only for the field that is
+  // actually on screen (the header's at md+, the sheet's on a phone), and never while the member is
+  // typing somewhere else. Without the visibility test both instances would grab the same keypress
+  // and the hidden one would win by mounting order.
+  useEffect(() => {
+    const onSlash = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      const input = inputRef.current;
+      if (!input || input.offsetParent === null) return;
+      e.preventDefault();
+      input.focus();
+    };
+    document.addEventListener("keydown", onSlash);
+    return () => document.removeEventListener("keydown", onSlash);
+  }, []);
+
+  // The last few queries, read once on mount so a blocked localStorage costs nothing per render.
+  const [recent, setRecent] = useState<string[]>(() => readRecent());
+  const remember = useCallback((term: string) => {
+    const t = term.trim();
+    if (t.length < 2) return;
+    setRecent((cur) => {
+      const next = [t, ...cur.filter((x) => x.toLowerCase() !== t.toLowerCase())].slice(0, RECENT_MAX);
+      writeRecent(next);
+      return next;
+    });
+  }, []);
+  const forget = useCallback((term: string) => {
+    setRecent((cur) => { const next = cur.filter((x) => x !== term); writeRecent(next); return next; });
+  }, []);
+
   // One flat list for the arrow keys, People first — the order the panel renders them in.
   const hits = useMemo(() => [...res.people, ...res.posts], [res]);
   const total = hits.length;
@@ -119,7 +174,9 @@ export function SearchBox({ autoFocus = false, compact = false }: { autoFocus?: 
   // Enter → the highlighted hit, else the first one; nothing to open leaves the member where they
   // are (the inline panel IS the search surface — there is no results page to land on).
   function go(hit?: SearchHit) {
-    if (hit) window.location.href = localePath(hit.url);
+    if (!hit) return;
+    remember(q);
+    window.location.href = localePath(hit.url);
   }
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -176,6 +233,33 @@ export function SearchBox({ autoFocus = false, compact = false }: { autoFocus?: 
       <p className="sr-only" role="status" aria-live="polite">
         {q.trim().length >= 2 && !loading ? (total === 0 ? `No results for ${q.trim()}.` : `${total} result${total === 1 ? "" : "s"} for ${q.trim()}.`) : ""}
       </p>
+
+      {/* AN EMPTY, FOCUSED FIELD SHOWS YOUR LAST FEW QUERIES rather than nothing at all — the one
+          thing a search box is expected to remember, and it never leaves the device. */}
+      {open && q.trim().length < 2 && recent.length > 0 && (
+        <div className="absolute left-0 right-0 top-full z-40 mt-2 overflow-hidden rounded-card border border-line bg-space-1 shadow-2xl">
+          <div className="flex items-baseline justify-between px-4 pb-1 pt-3">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-2">Recent</span>
+            <button type="button" onClick={() => { setRecent([]); writeRecent([]); }}
+              className="text-[12px] font-semibold text-ink-3 transition-colors hover:text-yang">Clear all</button>
+          </div>
+          <ul className="pb-1">
+            {recent.map((term) => (
+              <li key={term} className="flex items-center gap-2 px-2 hover:bg-veil/5">
+                <button type="button" onClick={() => { setQ(term); inputRef.current?.focus(); }}
+                  className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-2 text-start">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden className="shrink-0 text-ink-3"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" strokeLinecap="round" /></svg>
+                  <span className="truncate text-[14px] text-ink">{term}</span>
+                </button>
+                <button type="button" onClick={() => forget(term)} aria-label={`Forget ${term}`}
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-ink-3 transition-colors hover:bg-veil/10 hover:text-ink">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {showPanel && (
         <div className="absolute left-0 right-0 top-full z-40 mt-2 overflow-hidden rounded-card border border-line bg-space-1 shadow-2xl">

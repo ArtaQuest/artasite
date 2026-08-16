@@ -622,6 +622,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   // rows and the Topbar swaps the account drawer for Sign in / Register when nobody is signed in.
   return (
     <div className="min-h-screen bg-space-1 text-ink">
+      {/* SKIP TO THE CONTENT (WCAG 2.4.1). Before this, a keyboard or screen-reader visitor crossed
+          the bar and every row of the rail — twenty-odd links — to reach the page, on every single
+          navigation. Visible only when focused, which is the point: it is furniture for the people
+          who need it and invisible to everyone else. */}
+      <a href="#aq-main"
+        className="sr-only z-[60] rounded-pill bg-yang px-4 py-2 text-[14px] font-semibold text-on-accent focus:not-sr-only focus:fixed focus:start-3 focus:top-3">
+        Skip to content
+      </a>
       {/* THE BAR SPANS THE WINDOW, and the rail starts under it (operator 2026-08-16, "it must be
           centred like this" + a Reddit bar). This is the only geometry in which the search field is
           on the window's centre line: while the bar began after the rail, a field centred in it sat
@@ -649,7 +657,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             Android, and clobbered while the drawer's scroll-lock sets body{overflow:hidden}), and
             `clip` (unlike `hidden`) creates no scroll container, so the sticky Topbar — a sibling of
             <main> — and any in-page sticky/fixed still resolve to the viewport. */}
-        <main className="overflow-x-clip">
+        <main id="aq-main" tabIndex={-1} className="overflow-x-clip focus:outline-none">
           {/* min-w-0 on the content is load-bearing: without it a wide child (a table, a chart, a
               code block) sets the flex base and pushes the column off-screen instead of scrolling
               inside its own box — the same rule PageRail documents. */}
