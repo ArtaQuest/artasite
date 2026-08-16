@@ -337,6 +337,72 @@ final class Social {
 	 * the `followed` ids that GET /feed already ships). Bots (`_aq_is_bot`) and deleted accounts
 	 * never surface. One bounded GROUP BY over the (small) published set + one IN() for followers.
 	 */
+	/**
+	 * GET /members?q=&cursor=&limit= — PEOPLE SEARCH, the other half of the search field.
+	 *
+	 * The field searched works only, so typing a member's name found nothing and read as a broken
+	 * search (operator 2026-08-16: "it should be able to show all users"). This is the public
+	 * people lookup behind it, and it returns exactly the card every other public surface shows —
+	 * `suggest_follow` and `Notebook::author_card` — so a member looks the same wherever they appear.
+	 *
+	 * WHAT IT MUST NEVER TOUCH: `user_login` and `user_email`. `user_login` IS the email local part
+	 * on this platform, so matching on either would turn a public type-ahead into an address oracle —
+	 * type "arash" and the hit list confirms the mailbox; type a guessed address and it confirms the
+	 * account. The operator console searches those columns because it is operators-only (Console::
+	 * members, gated). This endpoint is public and searches the two fields a member CHOSE to publish:
+	 * their display name and their profile slug.
+	 *
+	 * Keyset on ID like every other list here — no OFFSET — and bots are dropped after the fetch,
+	 * the same way suggest_follow drops them.
+	 */
+	public static function members( $req ) {
+		global $wpdb;
+		$q      = trim( (string) Rest::p( $req, 'q', '' ) );
+		$limit  = max( 1, min( 20, Rest::pint( $req, 'limit', 8 ) ) );
+		$cursor = Rest::pint( $req, 'cursor', 0 );
+		// Empty query → empty page. Never scan the user table for nothing.
+		if ( $q === '' ) { return [ 'items' => [], 'next' => null ]; }
+		if ( Rest::throttle( 'members_search', 60, 60 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
+
+		$like = '%' . $wpdb->esc_like( $q ) . '%';
+		// One row over the limit is the keyset probe: it says whether a next page exists without
+		// counting the table.
+		$rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT ID, display_name, user_nicename FROM {$wpdb->users}"
+			. ' WHERE ( display_name LIKE %s OR user_nicename LIKE %s ) AND ID > %d'
+			. ' ORDER BY ID ASC LIMIT %d',
+			$like, $like, $cursor, $limit + 1
+		) );
+		$more = count( (array) $rows ) > $limit;
+		$rows = array_slice( (array) $rows, 0, $limit );
+
+		$ids = array_map( static fn( $u ) => (int) $u->ID, $rows );
+		$followers = [];
+		if ( $ids ) {
+			$in = implode( ',', array_map( 'intval', $ids ) );
+			foreach ( Data::all( 'SELECT target_id, COUNT(*) AS n FROM ' . Data::t( 'aq_follows' ) . " WHERE target_id IN ($in) GROUP BY target_id" ) as $f ) {
+				$followers[ (int) $f['target_id'] ] = (int) $f['n'];
+			}
+		}
+		$items = [];
+		foreach ( $rows as $u ) {
+			$uid = (int) $u->ID;
+			if ( get_user_meta( $uid, '_aq_is_bot', true ) ) { continue; }
+			$items[] = [
+				'id'        => $uid,
+				'name'      => (string) $u->display_name,
+				'slug'      => (string) $u->user_nicename,
+				'avatar'    => Verify::avatar_url( $uid, 96 ),
+				'verified'  => Verify::is_verified( $uid ),
+				'followers' => $followers[ $uid ] ?? 0,
+			];
+		}
+		// The cursor is the last row READ, not the last row kept — a page made entirely of bots
+		// would otherwise hand back the cursor it started from and page forever.
+		$next = $more && $rows ? (int) end( $rows )->ID : null;
+		return [ 'items' => $items, 'next' => $next ];
+	}
+
 	public static function suggest_follow() {
 		$rows = Data::all(
 			'SELECT author_id, SUM(hearts) AS hearts, COUNT(*) AS works, MAX(published_at) AS latest FROM '

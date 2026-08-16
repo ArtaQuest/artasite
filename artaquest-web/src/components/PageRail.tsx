@@ -26,7 +26,7 @@
  *     max-w-content with px-gutter; a second wrapper is what made the work page's column drift.
  */
 import type { ReactNode } from "react";
-import { RailSearch } from "./RightRail";
+import { RailFoot, RailSearch } from "./RightRail";
 import { useOwnsRail } from "../lib/rail";
 
 /** Width of the desktop rail. One number, so the Lab and the work page cannot disagree. */
@@ -71,6 +71,7 @@ export function WithRail({
         <div className="flex flex-col gap-4 pb-2">
           <RailSearch />
           {rail}
+          <RailFoot />
         </div>
       </aside>
     </div>

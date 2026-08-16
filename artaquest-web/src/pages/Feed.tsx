@@ -23,7 +23,7 @@ import { LibraryMedia, LibraryPicker } from "../components/library";
 
 import { PostThread } from "./NotebookPage";
 import { Avatar, Button, cx, EmptyState, HeartGlyph } from "../components/ui";
-import { RailLinks, RailSearch } from "../components/RightRail";
+import { RailFoot, RailSearch } from "../components/RightRail";
 import { useOwnsRail } from "../lib/rail";
 import { isLoggedIn } from "../lib/auth";
 // localePath: a programmatic redirect is NOT intercepted by AppShell's locale safety net (that only
@@ -1057,7 +1057,7 @@ export default function Feed({ initialKind, embedded = false }: { initialKind?: 
           <ChallengesCard items={rail.challenges} />
           <WhoToFollowCard items={rail.who} />
           <NewsCard items={rail.news} />
-          <RailLinks />
+          <RailFoot />
         </div>
       </aside>
     </div>

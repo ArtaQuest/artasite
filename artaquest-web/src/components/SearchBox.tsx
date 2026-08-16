@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { localePath } from "../lib/wp";
-import { listNotebooks, normalizeNbKind } from "../lib/api";
+import { listNotebooks, normalizeNbKind, searchMembers, type MemberCard } from "../lib/api";
 import { NB_KIND_META } from "./nbview";
+import { Avatar } from "./ui";
 
-type SearchHit = { url: string; title: string; sub?: string };
-type SearchResults = { q: string; posts: SearchHit[] };
-const EMPTY: SearchResults = { q: "", posts: [] };
+type SearchHit = { url: string; title: string; sub?: string; person?: MemberCard };
+type SearchResults = { q: string; people: SearchHit[]; posts: SearchHit[] };
+const EMPTY: SearchResults = { q: "", people: [], posts: [] };
 
 /**
  * SEARCH LIVES ON THE RIGHT (operator 2026-08-15, "make it more like X").
@@ -34,10 +35,18 @@ function Group({ label, hits, cursor, base }: { label: string; hits: SearchHit[]
                 id={`aq-search-opt-${base + i}`}
                 aria-selected={on}
                 href={localePath(h.url)}
-                className={`block px-4 py-2 ${on ? "bg-veil/[0.08]" : "hover:bg-veil/5"}`}
+                className={`flex items-center gap-2.5 px-4 py-2 ${on ? "bg-veil/[0.08]" : "hover:bg-veil/5"}`}
               >
-                <div className="truncate text-[14px] font-medium text-ink">{h.title}</div>
-                {h.sub && <div className="truncate text-[12px] text-ink-3">{h.sub}</div>}
+                {/* A person is a face first — the same avatar the feed and the rail show, so one
+                    member is recognisable in every list on the platform. */}
+                {h.person ? (
+                  <Avatar src={h.person.avatar} name={h.person.name}
+                    className="h-8 w-8 shrink-0 text-[12px] text-ink ring-1 ring-yin-light/40" />
+                ) : null}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[14px] font-medium text-ink">{h.title}</span>
+                  {h.sub && <span className="block truncate text-[12px] text-ink-3">{h.sub}</span>}
+                </span>
               </a>
             </li>
           );
@@ -64,15 +73,24 @@ export function SearchBox({ autoFocus = false, compact = false }: { autoFocus?: 
     if (term.length < 2) { setRes(EMPTY); setLoading(false); return; }
     setLoading(true);
     const t = setTimeout(() => {
-      listNotebooks({ q: term })
-        .then((r) => {
+      // PEOPLE AND POSTS TOGETHER (operator 2026-08-16: "it should be able to show all users"). The
+      // field searched works only, so typing a member's name found nothing and read as broken.
+      // allSettled, not all: one half failing must never blank the other.
+      Promise.allSettled([searchMembers(term), listNotebooks({ q: term })])
+        .then(([people, posts]) => {
           setRes({
             q: term,
-            posts: r.items.slice(0, 8).map((nb) => ({
+            people: people.status === "fulfilled" ? people.value.items.slice(0, 6).map((m) => ({
+              url: `/u/${m.slug}`,
+              title: m.name,
+              sub: `@${m.slug}${m.followers ? ` · ${m.followers} follower${m.followers === 1 ? "" : "s"}` : ""}`,
+              person: m,
+            })) : [],
+            posts: posts.status === "fulfilled" ? posts.value.items.slice(0, 8).map((nb) => ({
               url: `/nb/${nb.id}/${nb.slug}`,
               title: nb.title,
               sub: `${NB_KIND_META[normalizeNbKind(nb.kind)]?.label || nb.kind} · ${nb.author.name}`,
-            })),
+            })) : [],
           });
           setLoading(false);
         })
@@ -90,7 +108,8 @@ export function SearchBox({ autoFocus = false, compact = false }: { autoFocus?: 
     return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
   }, []);
 
-  const hits = useMemo(() => res.posts, [res]);
+  // One flat list for the arrow keys, People first — the order the panel renders them in.
+  const hits = useMemo(() => [...res.people, ...res.posts], [res]);
   const total = hits.length;
   const showPanel = open && q.trim().length >= 2;
 
@@ -163,7 +182,8 @@ export function SearchBox({ autoFocus = false, compact = false }: { autoFocus?: 
             <div className="px-4 py-5 text-[13px] text-ink-3">No results for “{q.trim()}”.</div>
           ) : (
             <ul id="aq-search-results" role="listbox" aria-label="Search results" className="max-h-[60vh] overflow-y-auto py-1">
-              <Group label="Posts" hits={hits} cursor={cursor} base={0} />
+              <Group label="People" hits={res.people} cursor={cursor} base={0} />
+              <Group label="Posts" hits={res.posts} cursor={cursor} base={res.people.length} />
             </ul>
           )}
         </div>

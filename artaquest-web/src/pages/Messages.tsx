@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { RailSearch } from "../components/RightRail";
+import { useOwnsRail } from "../lib/rail";
 import { useSearchParams } from "react-router-dom";
 import {
   chatCall, chatEmailPrefs, chatGetKey, chatMembers, chatMessages, chatRelation, chatSend,
@@ -2023,6 +2025,8 @@ function RecoveryPanel() {
 }
 
 export default function Messages() {
+  // This page renders its own right column, so the shell must not add a second one.
+  useOwnsRail();
   const [sp, setSp] = useSearchParams();
   // ONE shared session with the chat dock (lib/chat-store): the same device identity, the same
   // conversation-list poller and the same decrypted-preview cache. Before this, having the dock in
@@ -2265,6 +2269,10 @@ export default function Messages() {
               is one pane at a time anyway, and the rail is a rail only from `md` up.
               Hidden on phones while a thread is open (single-pane). */}
           <aside className={`w-full flex-col gap-3 md:order-2 md:flex md:w-[300px] md:shrink-0 md:min-h-0 md:overflow-y-auto lg:w-[330px] ${peer || roomId > 0 ? "hidden" : "flex"}`} aria-label="Conversations">
+            {/* Site search heads this column too — ArtaChat had none anywhere on the page once the
+                header lost its field (operator 2026-08-16: "or this (missing)"). The box below it is
+                a different thing: it filters THIS list / starts a chat by @username. */}
+            <div className="max-md:hidden"><RailSearch /></div>
             {/* THREE tabs, not two lists and a form. Chats · Requests · People covers everything
                 the sidebar is for, and the two rarely-wanted boxes (archived, blocked) hang off the
                 end where they don't compete for attention with the inbox. */}

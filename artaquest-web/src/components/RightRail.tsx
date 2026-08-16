@@ -18,18 +18,43 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { SearchBox } from "./SearchBox";
+import { LEGAL, SOCIALS } from "../lib/brand-links";
 
-/** The rail's foot: the links a footer would carry, for the pages that have no footer. */
-export function RailLinks() {
-  const L = [
-    { label: "About", href: "/about/" }, { label: "Donations", href: "/donate/" }, { label: "Data", href: "/data/" },
-    { label: "FAQ", href: "/faq-contact/" }, { label: "Privacy", href: "/privacy-policy/" }, { label: "Terms", href: "/terms-and-conditions/" },
-  ];
+/**
+ * THE RAIL'S FOOT — what used to be the page footer (operator 2026-08-16: "all of these should be
+ * in the right panel").
+ *
+ * On a wide screen the right column now ends the page the way X's does: the legal links, the
+ * official accounts and the copyright, small and quiet, under whatever cards the page put above
+ * them. The full-width <Footer> still renders BELOW lg, where there is no column to carry it — the
+ * legal links are not optional furniture, and a phone would otherwise lose them entirely.
+ *
+ * Same data as the footer (lib/brand-links.ts), so the two cannot drift, and the schema mirror
+ * documented there still governs the account list.
+ */
+export function RailFoot() {
+  const year = new Date().getFullYear();
   return (
-    <nav aria-label="Quick links" className="flex flex-wrap gap-x-3 gap-y-1 px-3 text-[12px] text-ink-3">
-      {L.map((l) => <a key={l.href} href={l.href} className="-mx-1 inline-block px-1 py-1 transition-colors hover:text-ink-2 hover:underline">{l.label}</a>)}
-      <span>© {new Date().getFullYear()} ArtaQuest</span>
-    </nav>
+    <div className="flex flex-col gap-3 px-3 pb-2">
+      <nav aria-label="Quick links" className="flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-ink-3">
+        {[{ label: "About", href: "/about/" }, { label: "Donations", href: "/donate/" }, { label: "Data", href: "/data/" }, { label: "FAQ", href: "/faq-contact/" }, ...LEGAL]
+          .map((l) => <a key={l.href} href={l.href} className="-mx-1 inline-block px-1 py-1 transition-colors hover:text-ink-2 hover:underline">{l.label}</a>)}
+      </nav>
+      <div className="flex items-center gap-2">
+        {SOCIALS.map((sIcon) => (
+          <a key={sIcon.href} href={sIcon.href} target="_blank" rel="noopener noreferrer" aria-label={sIcon.label} title={sIcon.label}
+            className="grid h-8 w-8 place-items-center rounded-full border border-line text-ink-3 transition-colors hover:border-yin-light hover:text-ink">
+            <svg viewBox={sIcon.viewBox || "0 0 24 24"} width="15" height="15" fill="currentColor" aria-hidden><path d={sIcon.path} /></svg>
+          </a>
+        ))}
+      </div>
+      <p className="text-[12px] text-ink-3">
+        © {year} ArtaQuest ·{" "}
+        <a href="https://ised-isde.canada.ca/cc/lgcy/fdrlCrpDtls.html?corpId=17948328" target="_blank" rel="noopener noreferrer"
+          className="underline underline-offset-2 transition-colors hover:text-yang">registered</a>{" "}
+        not-for-profit
+      </p>
+    </div>
   );
 }
 
@@ -47,7 +72,7 @@ export function ShellRail() {
     <aside className="hidden w-[330px] shrink-0 lg:block" aria-label="Search">
       <div className="sticky top-4 flex max-h-[calc(100vh-2rem)] flex-col gap-4 overflow-y-auto pb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <RailSearch />
-        <RailLinks />
+        <RailFoot />
       </div>
     </aside>
   );
