@@ -654,7 +654,6 @@ final class Chat {
 
 	public static function set_key( $req ) {
 		self::ensure_tables();
-		if ( Rest::throttle( 'aq_chat_key', 10, 60 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$uid = Rest::uid();
 		$pub = trim( (string) Rest::p( $req, 'pub', '' ) );
 		$raw = base64_decode( $pub, true );
@@ -684,6 +683,14 @@ final class Chat {
 			self::touch_key( (int) $known['id'] );
 			return [ 'ok' => true, 'key' => self::key_payload( $known ), 'rotated' => false ];
 		}
+		// THROTTLE THE WRITE, NOT THE PRESENTATION. This bucket used to sit at the top of the route,
+		// so re-presenting a key the server already knew — which every room open, every chat boot
+		// and every meeting poll now does, on purpose, so the seal follows the device in use — spent
+		// one of ten per minute. A member with a couple of tabs open exhausted it on their own, the
+		// route answered 429, and the page read that as "Couldn't set up encrypted messaging" and
+		// went blank. A known key answers from its row and costs nothing; only minting a NEW row is
+		// rate-limited, because only that grows the table.
+		if ( Rest::throttle( 'aq_chat_key', 10, 60 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$id = Data::insert( 'aq_chat_keys', [
 			'user_id' => $uid,
 			'pub'     => $pub,

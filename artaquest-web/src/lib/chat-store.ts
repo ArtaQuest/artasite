@@ -141,9 +141,19 @@ export function bootChat(): Promise<void> {
       // sealed to it even after a later restore replaces the active identity.
       if (reg.key?.kid) await rememberKid(reg.key.kid, { privateKey: identity.priv, publicKey: identity.pub });
       await refresh(true);
-    } catch {
+    } catch (e) {
+      // A RATE LIMIT IS NOT A BROKEN DEVICE. It is the server saying "not this second", and the right
+      // answer is to try again in a moment — not a full-page "Couldn't set up encrypted messaging"
+      // over an empty screen, which is what a 429 on the key registration produced. Back off and
+      // re-boot; the fatal is reserved for failures a retry cannot fix.
+      const status = (e as { status?: number })?.status ?? 0;
+      bootPromise = null; // retryable either way: a transient failure must not disable messaging for the visit
+      if (status === 429 || status === 503) {
+        set({ fatal: null });
+        window.setTimeout(() => { void bootChat(); }, 2500 + Math.random() * 1500);
+        return;
+      }
       set({ fatal: "Couldn’t set up encrypted messaging — refresh to try again." });
-      bootPromise = null; // retryable: a transient failure must not disable messaging for the visit
     }
   })();
   return bootPromise;

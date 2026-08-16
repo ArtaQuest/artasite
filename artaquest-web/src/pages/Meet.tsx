@@ -826,6 +826,10 @@ function HostControls({ meet, busy, onInvite, onRetime, onCancel }: {
         </button>
       </div>
 
+      {/* Not while it is happening. Moving a meeting that has already started is not a thing a
+          host does — they invite the missing person, or they end it — and the server would refuse
+          the new start as being in the past anyway. */}
+      {meet.status === "scheduled" && (
       <div className="mt-3 border-t border-line pt-3">
         {/* Refill from the meeting each time the panel opens. Initialising the fields once meant
             that after a successful retime the form still showed the OLD time, and a second edit
@@ -865,6 +869,7 @@ function HostControls({ meet, busy, onInvite, onRetime, onCancel }: {
           </div>
         )}
       </div>
+      )}
 
       <div className="mt-3 border-t border-line pt-3">
         {confirming ? (
@@ -1418,7 +1423,7 @@ function MeetingPage({ id }: { id: number }) {
                     </div>
                   ) : (
                     <button type="button" onClick={() => setAskOpen(true)}
-                      className="text-[12.5px] font-semibold text-ink-2 hover:text-ink">Ask for a different time</button>
+                      className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink">Ask for a different time</button>
                   )}
                 </div>
               )}
@@ -1436,7 +1441,7 @@ function MeetingPage({ id }: { id: number }) {
                     </div>
                   ) : (
                     <button type="button" onClick={() => setConfirmDrop(true)}
-                      className="text-[12.5px] font-semibold text-ink-2 hover:text-ink">Cancel this booking</button>
+                      className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink">Cancel this booking</button>
                   )}
                 </div>
               )}
@@ -1468,7 +1473,12 @@ function MeetingPage({ id }: { id: number }) {
             </section>
           )}
 
-          {isHost && meet.status === "scheduled" && (
+          {/* LIVE COUNTS. A "Meet now" meeting is live from the moment it exists, and a scheduled
+              one goes live at T-15 — and this gate was `status === "scheduled"`, so the host of a
+              meeting that had actually started lost every control: no way to invite the person
+              they were waiting for, no way to call it off. The server accepts both (Meetings::invite,
+              ::cancel); only the page said no. */}
+          {isHost && (meet.status === "scheduled" || meet.status === "live") && (
             <HostControls meet={meet} busy={busy}
               onInvite={doInvite}
               onRetime={(s, m, tz) => void doRetime(s, m, tz)}
