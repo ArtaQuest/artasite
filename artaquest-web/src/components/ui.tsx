@@ -1148,7 +1148,9 @@ export function EmptyState({ icon, title, body, action, className }: {
     <div role="status" className={cx("flex flex-col items-center gap-3 rounded-card border border-dashed border-line bg-space-2/40 px-6 py-16 text-center", className)}>
       {icon && <span aria-hidden className="grid h-12 w-12 place-items-center rounded-full bg-veil/[0.04] text-ink-3">{icon}</span>}
       <p className="text-[16px] font-semibold text-ink">{title}</p>
-      {body && <p className="max-w-sm text-[14px] leading-relaxed text-ink-3">{body}</p>}
+      {/* ink-2, not ink-3. ink-3 clamps to 3:1 — a tier for rules and glyphs — and this is the
+          sentence that explains an empty screen, i.e. the one thing on it worth reading. */}
+      {body && <p className="max-w-sm text-[14px] leading-relaxed text-ink-2">{body}</p>}
       {action && <div className="mt-1">{action}</div>}
     </div>
   );

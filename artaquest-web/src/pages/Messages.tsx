@@ -169,7 +169,7 @@ function Ticks({ pending, read, delivered }: { pending?: boolean; read: boolean;
   const label = pending ? "Sending" : read ? "Read" : delivered ? "Delivered" : "Sent";
   return (
     <span role="img" aria-label={label} title={label}
-      className={`inline-flex shrink-0 ${read ? "text-yin-ink" : "text-ink-3"}`}>
+      className={`inline-flex shrink-0 ${read ? "text-yin-ink" : "text-ink-2"}`}>
       <Ic d={pending ? IC.clock : read || delivered ? IC.check2 : IC.check1} size={13} />
     </span>
   );
@@ -238,7 +238,7 @@ function VoiceButton({ disabled, onDone, onError }: { disabled?: boolean; onDone
           {Math.floor(secs / 60)}:{String(secs % 60).padStart(2, "0")}
         </span>
         <button type="button" aria-label="Discard recording" onClick={() => { keep.current = false; rec.stop(); }}
-          className="grid h-9 w-9 place-items-center rounded-full text-ink-3 hover:bg-veil/[0.07] hover:text-ink"><Ic d={IC.x} /></button>
+          className="grid h-9 w-9 place-items-center rounded-full text-ink-2 hover:bg-veil/[0.07] hover:text-ink"><Ic d={IC.x} /></button>
         <button type="button" aria-label="Send voice message" onClick={() => { keep.current = true; rec.stop(); }}
           className="grid h-9 w-9 place-items-center rounded-full bg-yang text-on-accent hover:opacity-90"><Ic d={IC.send} /></button>
       </span>
@@ -246,7 +246,7 @@ function VoiceButton({ disabled, onDone, onError }: { disabled?: boolean; onDone
   }
   return (
     <button type="button" aria-label="Record a voice message" disabled={disabled} onClick={start}
-      className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-3 transition-colors hover:bg-veil/[0.07] hover:text-ink disabled:opacity-40"><Ic d={IC.mic} size={18} /></button>
+      className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-veil/[0.07] hover:text-ink disabled:opacity-40"><Ic d={IC.mic} size={18} /></button>
   );
 }
 
@@ -257,7 +257,7 @@ function fmtSize(n: number): string {
 /** Decrypted-attachment media (image → lightbox; video → inline player; voice/audio → player;
  *  anything else → a download chip). Object URLs cached upstream. */
 function Media({ att, url, onZoom }: { att: SealedAttachment; url: string | null; onZoom: (u: string, mime: string) => void }) {
-  if (!url) return <p className="text-[13px] italic text-ink-3">Couldn’t open this attachment.</p>;
+  if (!url) return <p className="text-[13px] italic text-ink-2">Couldn’t open this attachment.</p>;
   if (att.mime.startsWith("image/")) {
     const ratio = att.w && att.h ? att.w / att.h : undefined;
     return (
@@ -296,7 +296,7 @@ function Media({ att, url, onZoom }: { att: SealedAttachment; url: string | null
         {att.name ? <span className="max-w-[240px] truncate text-[12px] text-ink-2">{att.name}</span> : null}
         <span className="flex items-center gap-2">
           <audio controls src={url} preload="metadata" className="h-10 max-w-[240px]" />
-          {att.dur ? <span className="text-[11px] text-ink-3">{Math.floor(att.dur / 60)}:{String(att.dur % 60).padStart(2, "0")}</span> : null}
+          {att.dur ? <span className="text-[11px] text-ink-2">{Math.floor(att.dur / 60)}:{String(att.dur % 60).padStart(2, "0")}</span> : null}
         </span>
       </span>
     );
@@ -307,7 +307,7 @@ function Media({ att, url, onZoom }: { att: SealedAttachment; url: string | null
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-veil/[0.07] text-ink-2"><Ic d={IC.file} size={17} /></span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13px] font-semibold text-ink">{att.name || "File"}</span>
-        <span className="block text-[11px] text-ink-3">{fmtSize(att.size)}</span>
+        <span className="block text-[11px] text-ink-2">{fmtSize(att.size)}</span>
       </span>
       <span className="shrink-0 text-ink-3" aria-hidden><Ic d={IC.down} size={15} /></span>
     </a>
@@ -392,12 +392,12 @@ function Composer({
       {(replyTo || editing) && (
         /* Quotes the message being replied to / edited — decrypted plaintext. */
         <div data-ay-skip="1" className="mb-2 flex items-center gap-2 rounded-field border-s-2 border-yin-light/70 bg-veil/[0.05] px-3 py-1.5">
-          <p className="min-w-0 flex-1 truncate text-[12px] text-ink-3">
+          <p className="min-w-0 flex-1 truncate text-[12px] text-ink-2">
             <span className="font-semibold text-ink-2">{editing ? "Editing your message" : `Replying to ${replyPreview ? peerName : peerName}`}</span>
             {!editing && replyPreview && <> — {replyPreview}</>}
           </p>
           <button type="button" aria-label="Cancel" onClick={onCancel}
-            className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-ink-3 hover:bg-veil/[0.07] hover:text-ink"><Ic d={IC.x} size={13} /></button>
+            className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-veil/[0.07] hover:text-ink"><Ic d={IC.x} size={13} /></button>
         </div>
       )}
       {panel && (
@@ -412,7 +412,7 @@ function Composer({
           }} />
       )}
       {asked ? (
-        <p className="mb-2 px-1 text-[12px] text-ink-3">
+        <p className="mb-2 px-1 text-[12px] text-ink-2">
           Message request — {requestLeft} of 3 messages left until they accept.
         </p>
       ) : willRequest ? (
@@ -420,7 +420,7 @@ function Composer({
            only be true once a message exists, so someone writing to a stranger used to learn their
            message was a request — capped at three, delivered only if the other side agrees — from a
            line that appeared afterwards. */
-        <p className="mb-2 px-1 text-[12px] text-ink-3">
+        <p className="mb-2 px-1 text-[12px] text-ink-2">
           <span data-ay-skip="1" className="font-semibold text-ink-2">{peerName}</span>{" "}
           <span>doesn’t follow you, so this starts as a message request: up to three messages, and they
           arrive once it’s accepted.</span>
@@ -430,9 +430,9 @@ function Composer({
         <button type="button" aria-label="Emoji, stickers and GIFs" title="Emoji, stickers, GIFs"
           aria-expanded={panel} onClick={() => setPanel((v) => !v)}
           className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition-colors hover:bg-veil/[0.07] hover:text-ink ${
-            panel ? "bg-veil/[0.10] text-ink" : "text-ink-3"}`}><Ic d={IC.smile} size={18} /></button>
+            panel ? "bg-veil/[0.10] text-ink" : "text-ink-2"}`}><Ic d={IC.smile} size={18} /></button>
         <label aria-label="Send an encrypted photo, video or file" title="Photo, video or file"
-          className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-ink-3 transition-colors hover:bg-veil/[0.07] hover:text-ink">
+          className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-full text-ink-2 transition-colors hover:bg-veil/[0.07] hover:text-ink">
           <Ic d={IC.clip} size={18} />
           <input type="file" className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f, f.type); e.target.value = ""; }} />
@@ -1432,7 +1432,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
           </>
         )}
         {compact && (
-          <p className="min-w-0 flex-1 truncate text-[12px] text-ink-3" aria-live="polite">
+          <p className="min-w-0 flex-1 truncate text-[12px] text-ink-2" aria-live="polite">
             {live.typing ? "typing…" : live.online ? "Active now" : rel.muted ? "Muted" : "End-to-end encrypted"}
           </p>
         )}
@@ -1442,13 +1442,13 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
           title={requestPending ? "You can call once they accept your message request" : "Video call"}
           disabled={!canCall || callState !== "idle" || !!offer}
           onClick={() => void startCall()}
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-3 transition-colors hover:bg-veil/[0.07] hover:text-ink disabled:opacity-30">
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-veil/[0.07] hover:text-ink disabled:opacity-30">
           <Ic d={IC.video} size={18} />
         </button>
         <div className="relative shrink-0" ref={menuRef}>
           <button type="button" aria-label="Conversation options" aria-expanded={panel === "menu"}
             onClick={() => setPanel((p) => (p === "menu" ? "" : "menu"))}
-            className={`grid h-9 w-9 place-items-center rounded-full transition-colors hover:bg-veil/[0.07] ${panel === "menu" ? "text-ink" : "text-ink-3 hover:text-ink"}`}>
+            className={`grid h-9 w-9 place-items-center rounded-full transition-colors hover:bg-veil/[0.07] ${panel === "menu" ? "text-ink" : "text-ink-2 hover:text-ink"}`}>
             <Ic d={IC.more} size={17} />
           </button>
           {panel === "menu" && confirmBlock && (
@@ -1530,7 +1530,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
             <span>is calling</span>
           </p>
           <button type="button" onClick={() => hangUp(true, "declined")}
-            className="rounded-pill border border-line px-2.5 py-1 text-[12px] font-semibold text-ink-3 hover:text-ink">Decline</button>
+            className="rounded-pill border border-line px-2.5 py-1 text-[12px] font-semibold text-ink-2 hover:text-ink">Decline</button>
           <button type="button" onClick={() => void answerCall()}
             className="rounded-pill bg-yang px-3 py-1 text-[12px] font-bold text-on-accent hover:opacity-90">Answer</button>
         </div>
@@ -1545,7 +1545,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
       )}
       {panel === "timer" && (
         <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
-          <span className="text-[12px] text-ink-3">Messages disappear after</span>
+          <span className="text-[12px] text-ink-2">Messages disappear after</span>
           {TTL_CHOICES.map((t) => (
             <button key={t.v} type="button"
               onClick={() => { chatSetTtl(peer.id, t.v).then(() => setLive((l) => ({ ...l, ttl: t.v }))).catch(() => undefined); setPanel(""); }}
@@ -1553,7 +1553,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                 live.ttl === t.v ? "border-yang text-ink" : "border-line text-ink-2 hover:border-yin-light hover:text-ink"
               }`}>{t.label}</button>
           ))}
-          <span className="w-full text-[11px] text-ink-3">Expiry hard-deletes the sealed rows and attachments from the public database for both of you.</span>
+          <span className="w-full text-[11px] text-ink-2">Expiry hard-deletes the sealed rows and attachments from the public database for both of you.</span>
         </div>
       )}
       {panel === "search" && (
@@ -1561,7 +1561,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
         <div data-ay-skip="1" className="flex items-center gap-2 border-b border-line px-4 py-2.5">
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search decrypted messages (stays on this device)" autoFocus aria-label="Search this conversation" />
           {query.trim() && (
-            <span className="flex shrink-0 items-center gap-1 text-[12px] text-ink-3">
+            <span className="flex shrink-0 items-center gap-1 text-[12px] text-ink-2">
               {matches.length ? `${matchIdx + 1}/${matches.length}` : "0"}
               <button type="button" aria-label="Previous match" disabled={!matches.length} onClick={() => setMatchIdx((i) => (i - 1 + matches.length) % matches.length)} className="rounded px-1.5 py-0.5 hover:bg-veil/[0.07] disabled:opacity-40">↑</button>
               <button type="button" aria-label="Next match" disabled={!matches.length} onClick={() => setMatchIdx((i) => (i + 1) % matches.length)} className="rounded px-1.5 py-0.5 hover:bg-veil/[0.07] disabled:opacity-40">↓</button>
@@ -1602,10 +1602,10 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
           </div>
         )}
         {live.ttl > 0 && (
-          <p className="pb-2 text-center text-[11px] text-ink-3">⏱ Messages disappear after {ttlLabel(live.ttl).toLowerCase()}</p>
+          <p className="pb-2 text-center text-[11px] text-ink-2">⏱ Messages disappear after {ttlLabel(live.ttl).toLowerCase()}</p>
         )}
         {view.rows.length === 0 ? (
-          <p className="py-12 text-center text-[14px] text-ink-3">No messages yet — everything you send is sealed on this device before it leaves.</p>
+          <p className="py-12 text-center text-[14px] text-ink-2">No messages yet — everything you send is sealed on this device before it leaves.</p>
         ) : (
           <ol className="flex flex-col">
             {view.rows.map((m, i) => {
@@ -1622,13 +1622,13 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                 return (
                   <li key={m.id}>
                     {newDay && (
-                      <p className="py-3 text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-3">{fmtDay(m.at)}</p>
+                      <p className="py-3 text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-2">{fmtDay(m.at)}</p>
                     )}
                     <div className="my-2.5 rounded-card border border-line bg-veil/[0.04] px-3 py-2.5 text-center">
                       <p className="text-[12.5px] font-semibold text-ink-2">
                         <span data-ay-skip="1">{sealedRun.n}</span> messages can’t be opened on this device
                       </p>
-                      <p className="mt-1 text-[11.5px] leading-relaxed text-ink-3">
+                      <p className="mt-1 text-[11.5px] leading-relaxed text-ink-2">
                         They were sealed to an encryption key this browser no longer has — clearing this site’s data,
                         or signing in from a different device, creates a new one. Nobody can recover them for you, and
                         that is the point: not us, and not anyone who takes the database. The other person still reads
@@ -1653,7 +1653,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
               return (
                 <li key={m.id} ref={(el) => { if (el) rowRefs.current.set(m.id, el); else rowRefs.current.delete(m.id); }}>
                   {newDay && (
-                    <p className="py-3 text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-3">{fmtDay(m.at)}</p>
+                    <p className="py-3 text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-2">{fmtDay(m.at)}</p>
                   )}
                   <div className={`group flex items-end gap-2 ${mine ? "justify-end" : "justify-start"} ${groupWithPrev ? "mt-0.5" : "mt-2.5"}`}>
                     {/* peer avatar on the last bubble of their group (iMessage) */}
@@ -1711,12 +1711,12 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                       } ${m.pending ? "opacity-70" : ""} ${m.failed ? "opacity-60 ring-1 ring-yang" : ""}`}>
                         {replyRef && (
                           <button type="button" onClick={() => rowRefs.current.get(replyRef)?.scrollIntoView({ block: "center" })}
-                            className="mb-1.5 block w-full truncate rounded border-s-2 border-yin-light/70 bg-veil/[0.06] px-2 py-1 text-start text-[12px] text-ink-3">
+                            className="mb-1.5 block w-full truncate rounded border-s-2 border-yin-light/70 bg-veil/[0.06] px-2 py-1 text-start text-[12px] text-ink-2">
                             {view.textOf.get(replyRef) || "Earlier message"}
                           </button>
                         )}
                         {p === null ? (
-                          <p className="italic text-ink-3">Sealed to a previous device key — this device cannot open it.</p>
+                          <p className="italic text-ink-2">Sealed to a previous device key — this device cannot open it.</p>
                         ) : p.t === "img" || p.t === "voice" || p.t === "file" ? (
                           <>
                             <Media att={p.att} url={media[m.id] ?? null} onZoom={(u, mime) => setZoom({ url: u, mime })} />
@@ -1727,7 +1727,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                             ? <img src={stickerUrl(p.id)} alt={stickerLabel(p.id)} className="h-24 w-24 object-contain" />
                             /* A sticker id this build doesn't ship — a newer client, or one we
                                retired. Say what it was rather than showing a broken image. */
-                            : <p className="italic text-ink-3">A sticker this version doesn’t have</p>
+                            : <p className="italic text-ink-2">A sticker this version doesn’t have</p>
                         ) : p.t === "call" ? (
                           /* The readable record of a call. `why` is what makes the history honest
                              months later: "missed" and "declined" are different events, and a log
@@ -1868,7 +1868,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
           /* Four different reasons the composer is closed, each said in its own words — and the one
              the member can undo comes with the button that undoes it. The name is skipped; the
              sentence beside it stays one whole translatable unit. */
-          <div className="flex flex-wrap items-center gap-2 px-1 text-[13px] leading-relaxed text-ink-3">
+          <div className="flex flex-wrap items-center gap-2 px-1 text-[13px] leading-relaxed text-ink-2">
             {rel.blocked ? (
               <>
                 <p className="min-w-0 flex-1">
@@ -1940,7 +1940,7 @@ function RecoveryPanel() {
     return (
       <div className="rounded-card border border-yang bg-yang/[0.06] p-3">
         <p className="text-[12.5px] font-semibold text-ink">Write this down now</p>
-        <p className="mt-1 text-[11.5px] leading-relaxed text-ink-3">
+        <p className="mt-1 text-[11.5px] leading-relaxed text-ink-2">
           It is the only thing that opens your messages on another device. Nobody can look it up for
           you — not us, not from the database. If you lose it, this history stays sealed.
         </p>
@@ -1948,7 +1948,7 @@ function RecoveryPanel() {
           {code}
         </p>
         {migrated && (
-          <p className="mt-2 text-[11.5px] leading-relaxed text-ink-3">
+          <p className="mt-2 text-[11.5px] leading-relaxed text-ink-2">
             Messages from before today were sealed to this browser’s previous key, which was built so
             that it could never be exported — by us or anyone. They stay readable here, but this code
             cannot carry them to another device. Everything from now on, it can.
@@ -1976,7 +1976,7 @@ function RecoveryPanel() {
     return (
       <div className="rounded-card border border-line bg-veil/[0.04] p-3">
         <p className="text-[12.5px] font-semibold text-ink">Open your messages on this device</p>
-        <p className="mt-1 text-[11.5px] leading-relaxed text-ink-3">
+        <p className="mt-1 text-[11.5px] leading-relaxed text-ink-2">
           Your conversations were sealed to a key this browser doesn’t have yet. Enter your recovery
           code and they open here too — on every device, not instead of the others.
         </p>
@@ -2004,7 +2004,7 @@ function RecoveryPanel() {
   return (
     <div className="rounded-card border border-line bg-veil/[0.04] p-3">
       <p className="text-[12.5px] font-semibold text-ink">These messages exist only in this browser</p>
-      <p className="mt-1 text-[11.5px] leading-relaxed text-ink-3">
+      <p className="mt-1 text-[11.5px] leading-relaxed text-ink-2">
         Clear this site’s data or move to another device and they cannot be opened again — by anyone,
         including us. A recovery code fixes that: keep it, and your messages follow you.
       </p>
@@ -2269,11 +2269,22 @@ export default function Messages() {
             {/* Site search heads this column too — ArtaChat had none anywhere on the page once the
                 header lost its field (operator 2026-08-16: "or this (missing)"). The box below it is
                 a different thing: it filters THIS list / starts a chat by @username. */}
-            <div className="max-md:hidden"><RailSearch /></div>
+            {/* `shrink-0` on every piece of furniture in this column. The column is a flex box with
+                `min-h-0 overflow-y-auto`, so by default flexbox is free to squeeze its children —
+                and it does, the moment the conversations are taller than the space. The tab row was
+                being crushed to TWO PIXELS with its labels sliced through the middle by its own
+                `overflow-hidden`, which is what the operator screenshotted. Only the list is allowed
+                to give up height. */}
+            <div className="shrink-0 max-md:hidden"><RailSearch /></div>
             {/* THREE tabs, not two lists and a form. Chats · Requests · People covers everything
                 the sidebar is for, and the two rarely-wanted boxes (archived, blocked) hang off the
                 end where they don't compete for attention with the inbox. */}
-            <div className="flex overflow-hidden rounded-pill border border-line" role="tablist" aria-label="Sidebar">
+            {/* Scrolls rather than hides. `overflow-hidden` kept the pill's rounded corners and threw
+                away whatever did not fit — at a larger text size "People" simply vanished off the
+                end of the row, with nothing to say it was there. Now the row can be swiped; the
+                scrollbar is hidden because four tabs on one line should not look like a document. */}
+            <div className="flex shrink-0 overflow-x-auto overflow-y-hidden rounded-pill border border-line [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              role="tablist" aria-label="Sidebar">
               {([["chats", "Chats"], ["requests", "Requests"], ["rooms", "Rooms"], ["people", "People"]] as const).map(([k, label]) => (
                 <button key={k} type="button" role="tab" aria-selected={side === k}
                   onClick={() => setSide(k)}
@@ -2283,8 +2294,8 @@ export default function Messages() {
                      badge inside its own cell. `grow basis-auto` starts each tab at its content
                      width and shares out only the LEFTOVER space, so nothing is ever cut and the
                      row still fills the column. */
-                  className={`grow basis-auto px-2 py-1.5 text-[12.5px] font-semibold transition-colors ${
-                    side === k ? "bg-veil/[0.10] text-ink" : "text-ink-3 hover:bg-veil/[0.05] hover:text-ink"
+                  className={`grow basis-auto whitespace-nowrap px-2 py-1.5 text-[12.5px] font-semibold transition-colors ${
+                    side === k ? "bg-veil/[0.10] text-ink" : "text-ink-2 hover:bg-veil/[0.05] hover:text-ink"
                   }`}>
                   {label}
                   {k === "rooms" && rooms && rooms.some((r) => r.unread > 0) && (
@@ -2302,15 +2313,15 @@ export default function Messages() {
             {/* ONE field. It filters what is on screen, and when nothing matches it offers to open a
                 conversation with that handle — so "search" and "start a new chat" stopped being two
                 identical-looking inputs stacked on top of each other. */}
-            <Input value={filter} onChange={(e) => setFilter(e.target.value)}
+            <Input className="shrink-0" value={filter} onChange={(e) => setFilter(e.target.value)}
               placeholder={side === "people" ? "Search members" : "Search or type a @username"}
               aria-label={side === "people" ? "Search members" : "Search conversations, or type a username to start one"}
               onKeyDown={(e) => { if (e.key === "Enter" && filter.trim()) void openNew(filter); }} />
             {currentUser()?.slug ? (
               <button type="button" onClick={() => void openNew(currentUser()!.slug!)}
-                className="self-start text-[12px] text-yin-ink hover:underline">Notes to yourself <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></button>
+                className="shrink-0 self-start text-[12px] text-yin-ink hover:underline">Notes to yourself <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></button>
             ) : null}
-            {note && <p className="text-[13px] text-ink-3">{note}</p>}
+            {note && <p className="text-[13px] text-ink-2">{note}</p>}
 
             {side === "rooms" ? (
               <>
@@ -2322,14 +2333,18 @@ export default function Messages() {
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-yang/20 text-[17px]">🌓</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[14px] font-semibold text-ink">Your room</span>
-                    <span className="block truncate text-[12px] text-ink-3">Sit here alone, or invite people in</span>
+                    <span className="block truncate text-[12px] text-ink-2">Sit here alone, or invite people in</span>
                   </span>
                 </button>
-                <nav className="flex flex-col overflow-hidden rounded-card border border-line bg-space-2 shadow-card" aria-label="Rooms">
+                {/* `shrink-0` on all three list cards. Each keeps `overflow-hidden` so its rounded
+                    corners clip the rows inside, which means any height flexbox takes off the card
+                    is taken off the LAST row — cut in half at the card's bottom edge, with nothing
+                    to scroll to reach it. The column above already scrolls; let it. */}
+                <nav className="flex shrink-0 flex-col overflow-hidden rounded-card border border-line bg-space-2 shadow-card" aria-label="Rooms">
                   {rooms === null ? (
-                    <p className="px-4 py-6 text-center text-[13px] text-ink-3">Loading…</p>
+                    <p className="px-4 py-6 text-center text-[13px] text-ink-2">Loading…</p>
                   ) : rooms.filter((r) => !r.personal).length === 0 ? (
-                    <p className="px-4 py-6 text-center text-[13px] leading-relaxed text-ink-3">
+                    <p className="px-4 py-6 text-center text-[13px] leading-relaxed text-ink-2">
                       No group rooms yet. A room is a conversation with more than two people in it — and a place to call.
                     </p>
                   ) : rooms.filter((r) => !r.personal).map((r) => (
@@ -2340,7 +2355,7 @@ export default function Messages() {
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className={`block truncate text-[14px] text-ink ${r.unread ? "font-bold" : "font-semibold"}`}>{r.title}</span>
-                        <span className="block truncate text-[12px] text-ink-3">
+                        <span className="block truncate text-[12px] text-ink-2">
                           {r.in_call.length ? `${r.in_call.length} in the call now` : r.members.map((m) => m.name).join(", ")}
                         </span>
                       </span>
@@ -2354,7 +2369,7 @@ export default function Messages() {
                   className="self-start rounded-pill bg-yang px-4 py-1.5 text-[12.5px] font-bold text-on-accent hover:opacity-90 disabled:opacity-50">
                   {makingRoom ? "Opening…" : "New room"}
                 </button>
-                <p className="px-1 text-[11.5px] leading-relaxed text-ink-3">
+                <p className="px-1 text-[11.5px] leading-relaxed text-ink-2">
                   Rooms are sealed with one key shared between their members. Up to {rooms?.[0]?.max_members ?? 12} people,
                   and up to {rooms?.[0]?.max_call ?? 5} on a call — calls go directly between everyone, so there is no
                   server to carry more.
@@ -2362,11 +2377,11 @@ export default function Messages() {
               </>
             ) : side === "people" ? (
               <>
-                <nav className="flex flex-col overflow-hidden rounded-card border border-line bg-space-2 shadow-card" aria-label="Members">
+                <nav className="flex shrink-0 flex-col overflow-hidden rounded-card border border-line bg-space-2 shadow-card" aria-label="Members">
                   {dir === null ? (
-                    <p className="px-4 py-6 text-center text-[13px] text-ink-3">Loading…</p>
+                    <p className="px-4 py-6 text-center text-[13px] text-ink-2">Loading…</p>
                   ) : dir.items.length === 0 ? (
-                    <p className="px-4 py-6 text-center text-[13px] text-ink-3">
+                    <p className="px-4 py-6 text-center text-[13px] text-ink-2">
                       {filter.trim() ? "Nobody matches that search." : "No other members yet."}
                     </p>
                   ) : (
@@ -2385,7 +2400,7 @@ export default function Messages() {
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[14px] font-semibold text-ink">{m.name}</span>
-                          <span className="block truncate text-[12px] text-ink-3">
+                          <span className="block truncate text-[12px] text-ink-2">
                             {m.online ? "Active now" : m.has_key ? `@${m.slug}` : "Not set up for messages yet"}
                           </span>
                         </span>
@@ -2394,22 +2409,22 @@ export default function Messages() {
                   )}
                 </nav>
                 {dir && (
-                  <p className="text-[12px] text-ink-3">
+                  <p className="text-[12px] text-ink-2">
                     {dir.online} of {dir.listed} {dir.listed === 1 ? "member" : "members"} online
                     {dir.capped ? ` · showing ${dir.listed} of ${dir.total} — search to find anyone else` : ""}
                   </p>
                 )}
               </>
             ) : (
-            <nav className="flex flex-col overflow-hidden rounded-card border border-line bg-space-2 shadow-card"
+            <nav className="flex shrink-0 flex-col overflow-hidden rounded-card border border-line bg-space-2 shadow-card"
               aria-label={side === "requests" ? "Message requests" : side === "archived" ? "Archived" : side === "blocked" ? "Blocked" : "Conversations"}>
               {chats === null ? (
-                <p className="px-4 py-6 text-center text-[13px] text-ink-3">Loading…</p>
+                <p className="px-4 py-6 text-center text-[13px] text-ink-2">Loading…</p>
               ) : shown.length === 0 && filter.trim() ? (
                 /* A SEARCH miss. Gated on there being a search — without that gate, an empty
                    Requests box with a conversation open fell through to here and told the member
                    their (nonexistent) query matched nothing. */
-                <p className="px-4 py-6 text-center text-[13px] text-ink-3">
+                <p className="px-4 py-6 text-center text-[13px] text-ink-2">
                   Nothing matches that. Press Enter to start a conversation with that username.
                 </p>
               ) : chats.length === 0 ? (
@@ -2417,7 +2432,7 @@ export default function Messages() {
                    is open, since "no conversations yet" beside one you are looking at is a lie. */
                 peer && side === "chats" ? null : (
                   <div className="px-4 py-7 text-center">
-                    <p className="text-[13px] leading-relaxed text-ink-3">{
+                    <p className="text-[13px] leading-relaxed text-ink-2">{
                       side === "requests" ? "No message requests waiting. Anyone you don’t follow reaches you here first, so you decide before they land in your inbox."
                       : side === "archived" ? "Nothing archived. Archiving a conversation tucks it out of the inbox without losing it."
                       : side === "blocked" ? "You haven’t blocked anyone."
@@ -2445,7 +2460,7 @@ export default function Messages() {
                         <span className="flex items-baseline gap-2">
                           <span className={`min-w-0 flex-1 truncate text-[14px] text-ink ${c.unread && !c.muted ? "font-bold" : "font-semibold"}`}>{c.peer.name}</span>
                           {c.last_at > 0 && (
-                            <span className={`shrink-0 text-[11px] ${c.unread && !c.muted ? "font-semibold text-yang" : "text-ink-3"}`}>
+                            <span className={`shrink-0 text-[11px] ${c.unread && !c.muted ? "font-semibold text-yang" : "text-ink-2"}`}>
                               {fmtDay(c.last_at) === "Today" ? fmtTime(c.last_at) : fmtDay(c.last_at)}
                             </span>
                           )}
@@ -2455,7 +2470,7 @@ export default function Messages() {
                         {/* An unsent draft beats the last message as the useful thing to say about a
                             conversation — it is the reason you are coming back to it. Shown only for
                             chats that are NOT open, since the open one has the text right there. */}
-                        <span className={`block truncate text-[12px] ${c.unread && !c.muted ? "text-ink-2" : "text-ink-3"}`} dir="auto">
+                        <span className={`block truncate text-[12px] ${c.unread && !c.muted ? "text-ink-2" : "text-ink-2"}`} dir="auto">
                           {peer?.id !== c.peer.id && drafts.get(c.peer.id)
                             ? <><span className="font-semibold text-yang">Draft: </span>{drafts.get(c.peer.id)}</>
                             : c.asked ? "Request sent — waiting for them to accept"
@@ -2468,12 +2483,12 @@ export default function Messages() {
                     {side === "requests" ? (
                       <span className="flex shrink-0 items-center gap-1.5">
                         <button type="button" onClick={() => void answer(c, "decline")} disabled={acting === c.peer.id}
-                          className="rounded-pill border border-line px-2.5 py-1 text-[11.5px] font-semibold text-ink-3 hover:border-yang hover:text-ink disabled:opacity-50">Decline</button>
+                          className="rounded-pill border border-line px-2.5 py-1 text-[11.5px] font-semibold text-ink-2 hover:border-yang hover:text-ink disabled:opacity-50">Decline</button>
                         <button type="button" onClick={() => void answer(c, "accept")} disabled={acting === c.peer.id}
                           className="rounded-pill bg-yang px-3 py-1 text-[11.5px] font-bold text-on-accent hover:opacity-90 disabled:opacity-50">Accept</button>
                       </span>
                     ) : (
-                      <span className="flex shrink-0 items-center gap-1.5 self-center text-ink-3">
+                      <span className="flex shrink-0 items-center gap-1.5 self-center text-ink-2">
                         {c.pinned && <span title="Pinned" aria-label="Pinned"><Ic d={IC.pin} size={13} /></span>}
                         {c.muted && <span title="Muted" aria-label="Muted"><Ic d={IC.mute} size={13} /></span>}
                         {c.unread > 0 && !c.muted && <span className="rounded-pill bg-yang px-2 py-0.5 text-[11px] font-bold text-on-accent">{c.unread}</span>}
@@ -2491,7 +2506,7 @@ export default function Messages() {
               <div className="flex gap-3 px-1 text-[12px]">
                 {([["archived", "Archived"], ["blocked", "Blocked"]] as const).map(([k, label]) => (
                   <button key={k} type="button" onClick={() => setSide(side === k ? "chats" : k)}
-                    className={side === k ? "font-semibold text-ink" : "text-ink-3 hover:text-ink"}>
+                    className={side === k ? "font-semibold text-ink" : "text-ink-2 hover:text-ink"}>
                     {side === k ? "← Back to inbox" : label}
                   </button>
                 ))}
@@ -2500,7 +2515,7 @@ export default function Messages() {
             {/* Email me when a message lands while I'm away. On by default — an unread message
                 nobody is told about is a broken inbox — and off with one tap. */}
             {emailOn !== null && (
-              <label className="flex cursor-pointer items-start gap-2 text-[12px] leading-relaxed text-ink-3">
+              <label className="flex cursor-pointer items-start gap-2 text-[12px] leading-relaxed text-ink-2">
                 <input type="checkbox" checked={emailOn} className="mt-0.5 accent-yang"
                   onChange={(e) => {
                     const on = e.target.checked;
@@ -2516,7 +2531,7 @@ export default function Messages() {
             {/* Folded away. It is important and it is TRUE, but it is a paragraph about key
                 management sitting permanently under a list of friends — read once, then in the way
                 forever. A summary line that opens is the same information without the weight. */}
-            <details className="text-[12px] leading-relaxed text-ink-3">
+            <details className="text-[12px] leading-relaxed text-ink-2">
               <summary className="cursor-pointer list-none text-yin-ink hover:underline">How this works ↓</summary>
               <p className="mt-1.5">
                 <span className="font-semibold text-ink-2">Encryption.</span>{" "}
