@@ -36,6 +36,7 @@ const PLAIN: Record<string, string> = {
   coin_liability: "ArtaCoin the Foundation has issued and is obliged to honour. A debt, not income.",
   deferred: "Money received for a period that has not run yet.",
   gst_payable: "Sales tax the Foundation owes CRA directly on services bought from abroad.",
+  gst_receivable: "Sales tax paid on costs that comes back from CRA as an input tax credit.",
   donations: "Gifts received.",
   grants_in: "Grants and subsidies received.",
   activity_revenue: "Earned by supplying something — including ArtaCoin spent on platform services.",

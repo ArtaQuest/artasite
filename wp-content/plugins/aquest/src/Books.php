@@ -88,6 +88,8 @@ final class Books {
 			'Deposits in Canadian banks and institutions – Canadian currency' ],
 		'prepaid' => [ 'Prepaid expenses', 'asset', '1484', '1480',
 			'Subscription time paid for but not yet consumed at the year end' ],
+		'gst_receivable' => [ 'GST/HST recoverable', 'asset', '1483', '1480',
+			'Taxes recoverable/refundable. Input tax credits a registrant claims back on tax paid for its commercial activity' ],
 
 		'due_director' => [ 'Due to a director', 'liability', '2780', '2780',
 			'Current amounts due to shareholder(s)/director(s), such as advances, loans, and notes' ],
@@ -650,6 +652,8 @@ final class Books {
 				'kind'          => 'Canadian non-profit corporation, paragraph 149(1)(l) — NOT a registered charity',
 				'incorporated'  => self::INCORPORATED,
 				'province'      => self::PROVINCE,
+				'gst_registered' => '' !== (string) get_option( 'aq_books_gst_rt', '' ),
+				'gst_rt'         => (string) get_option( 'aq_books_gst_rt', '' ),
 				'receipts'      => false,
 				'receipts_note' => 'A non-profit organisation cannot issue official donation receipts for income tax purposes (CRA Summary Policy CSP-N03). Gifts to the Foundation are not tax-deductible.',
 			],
@@ -1183,12 +1187,15 @@ final class Books {
 		$notes[] = [
 			'title' => 'Sales tax on the subscriptions',
 			'body'  => 'The supplier charged no GST because a Canadian business number was on file, and a business number '
-				. 'is not a GST/HST registration. The Foundation is not registered, so 5% should have been on these '
-				. 'invoices. CA$42.00 was once accrued as if the Foundation had to self-assess and remit it; that was the '
-				. 'wrong mechanism and it has been reversed, with the original entries left in place. Who owes the '
-				. 'uncharged tax on the three invoices already paid is unresolved and disclosed rather than accrued. '
-				. 'Going forward the number has been removed from the supplier, so tax appears on the invoice and is '
-				. 'simply part of the cost — nothing to compute, file or remit.',
+				. 'is not a GST/HST registration. CA$42.00 was once accrued as if the Foundation had to self-assess it; '
+				. 'that was the wrong mechanism and has been reversed, with the original entries left in place. The '
+				. 'Foundation intends to register for the GST/HST voluntarily, which a small supplier engaged in commercial '
+				. 'activity may do. Once registered, the number given to suppliers IS a registration number, they '
+				. 'lawfully charge no tax under the simplified regime, and any GST the Foundation does pay on inputs to '
+				. 'its commercial activity is recovered as an input tax credit. Its platform revenue is largely supplied '
+				. 'to non-residents, and exports of services are zero-rated. Until the RT account is issued the number '
+				. 'has been removed from the supplier, so any tax charged in the interim is simply part of the cost. The '
+				. 'three invoices already paid remain an unresolved contingency, disclosed and not accrued.',
 		];
 		$notes[] = [
 			'title' => 'Superseded — GST self-assessment',
@@ -1319,11 +1326,23 @@ final class Books {
 
 		// A cost paid personally by a director is owed back to them; one paid from a Foundation
 		// account reduces cash. Both are the same expense.
-		$funded = $payer > 0 ? 'due_director' : 'cash';
-		$eid = self::journal( 'inv:' . $number, $paid, $vendor . ' — ' . ( $desc ?: $number ), [
-			[ 'account' => $acct,   'debit'  => $cad, 'memo' => $vendor . ' ' . $number ],
-			[ 'account' => $funded, 'credit' => $cad, 'party_uid' => $payer, 'memo' => $payer > 0 ? 'Paid personally by a director' : 'Paid from Foundation funds' ],
-		], 'invoice', $id );
+		//
+		// TAX ON THE INVOICE. Once the Foundation is a GST/HST registrant, tax a supplier charges is
+		// not part of the cost — it comes back as an input tax credit, so it is booked to a receivable
+		// and the expense carries the net. Before registration there is nothing to claim it back
+		// against, so it IS the cost. The register keeps the gross either way; only the ledger split
+		// changes. Only CAD tax is treated as recoverable: a foreign VAT on a foreign invoice is a
+		// foreign tax, and no ITC exists for it. invoices_tie_to_expenses sums ALL debits of an invoice
+		// entry, so the receivable line keeps that check green.
+		$funded     = $payer > 0 ? 'due_director' : 'cash';
+		$registered = '' !== (string) get_option( 'aq_books_gst_rt', '' );
+		$tax_cad    = ( $registered && self::CURRENCY === $cur ) ? max( 0, min( $tax, $cad ) ) : 0;
+		$lines      = [ [ 'account' => $acct, 'debit' => $cad - $tax_cad, 'memo' => $vendor . ' ' . $number ] ];
+		if ( $tax_cad > 0 ) {
+			$lines[] = [ 'account' => 'gst_receivable', 'debit' => $tax_cad, 'memo' => 'GST/HST on ' . $number . ' — recoverable as an input tax credit' ];
+		}
+		$lines[] = [ 'account' => $funded, 'credit' => $cad, 'party_uid' => $payer, 'memo' => $payer > 0 ? 'Paid personally by a director' : 'Paid from Foundation funds' ];
+		$eid = self::journal( 'inv:' . $number, $paid, $vendor . ' — ' . ( $desc ?: $number ), $lines, 'invoice', $id );
 		// A register row with no double entry is worse than no row: it shows on the public statement,
 		// burns the invoice number against the UNIQUE key so the cost can never be re-entered, and
 		// breaks invoices_tie_to_expenses forever. If the journal refused, take the row back out.
@@ -1906,6 +1925,24 @@ final class Books {
 			];
 		}
 
+		// GST/HST registration. Not a legal deadline — a business decision the operator has taken —
+		// but the same shape as one: something a human must do, with a cost for every month it is not.
+		// It clears when the RT programme account is recorded, and the alert stops with it.
+		if ( '' === (string) get_option( 'aq_books_gst_rt', '' ) ) {
+			$target = (string) get_option( 'aq_books_gst_register_by', '2026-09-30' );
+			$out[]  = [
+				'key' => 'gst-register', 'title' => 'Register the Foundation for the GST/HST',
+				'authority' => 'Canada Revenue Agency (Business Registration Online, or form RC1)',
+				'due' => $target, 'days' => $days( $target ), 'done' => '', 'amount' => null,
+				'consequence' => 'Every month unregistered, 5% is either charged by suppliers and unrecoverable, or not '
+					. 'charged on the strength of a number that is not a registration.',
+				'detail' => 'Voluntary registration is open to a small supplier engaged in commercial activity in Canada. '
+					. 'The RT account number is what suppliers under the simplified regime need to lawfully charge no '
+					. 'tax, and it lets GST paid on commercial inputs come back as input tax credits. Record the RT '
+					. 'number here when it arrives; the reminder stops.',
+			];
+		}
+
 		// Financial statements go to Corporations Canada only if the corporation is SOLICITING: public
 		// donations and/or government grants over $10,000 in a single financial year. Computed from the
 		// ledger like the T1044 test, and absent from this list until the threshold is actually crossed.
@@ -2066,6 +2103,17 @@ final class Books {
 			$r = self::mark_filed( $fy, $which, (string) Rest::p( $req, 'filed_on', '' ) );
 			if ( 'recorded' !== $r ) { return Rest::err( 'bad_input', 'That period is not one the books know about.' ); }
 			$out['filed'] = $fy . ':' . $which;
+		}
+		$rt = Rest::p( $req, 'gst_rt', null );
+		if ( null !== $rt ) {
+			$rt = strtoupper( preg_replace( '/\s+/', '', (string) $rt ) );
+			// A GST/HST account is the 9-digit BN followed by RT and a 4-digit reference: 779107374RT0001.
+			if ( '' !== $rt && ! preg_match( '/^' . self::BN . 'RT\d{4}$/', $rt ) ) {
+				return Rest::err( 'bad_input', 'A GST/HST account number is the business number followed by RT and four digits, e.g. ' . self::BN . 'RT0001.' );
+			}
+			update_option( 'aq_books_gst_rt', $rt, true );
+			if ( '' !== $rt ) { update_option( 'aq_books_gst_rt_since', self::today(), true ); }
+			$out['gst_rt'] = $rt;
 		}
 		$done_key = sanitize_text_field( (string) Rest::p( $req, 'done_key', '' ) );
 		if ( '' !== $done_key ) {
@@ -2305,7 +2353,7 @@ final class Books {
 		if ( ! get_option( 'aq_books_genesis' ) )     { self::genesis(); }
 		if ( ! get_option( 'aq_books_seeded' ) )      { self::seed_founding_costs(); }
 		if ( ! get_option( 'aq_books_gst_accrued' ) ) { self::accrue_founding_gst(); }
-		if ( ! get_option( 'aq_books_taxnote_v5' ) )   { self::refresh_founding_tax_note(); }
+		if ( ! get_option( 'aq_books_taxnote_v6' ) )   { self::refresh_founding_tax_note(); }
 		if ( ! get_option( 'aq_books_fy_end' ) )       { self::record_year_end( self::FY_END_DEFAULT, '2026-08-14' ); }
 		if ( ! get_option( 'aq_books_signer_last' ) )  { self::seed_signer(); }
 		if ( ! get_option( 'aq_books_gst_reversed' ) ) { self::reverse_gst_self_assessment(); }
@@ -2422,7 +2470,7 @@ final class Books {
 			}
 		}
 		if ( $n < count( self::FOUNDING_COSTS ) ) { return 'incomplete ' . $n; }
-		update_option( 'aq_books_taxnote_v5', self::today(), true );
+		update_option( 'aq_books_taxnote_v6', self::today(), true );
 		return 'refreshed ' . $n;
 	}
 

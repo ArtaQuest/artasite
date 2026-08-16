@@ -896,7 +896,7 @@ export type BookAmount = { account: string; label: string; gifi: string; gifi_sh
 export type BookFy = { label: string; start: string; end: string; first: boolean };
 export type BookCheck = { check: string; ok: boolean; detail: string };
 export type Statements = {
-  entity: { name: string; bn: string; kind: string; incorporated: string; province: string; receipts: boolean; receipts_note: string };
+  entity: { name: string; bn: string; kind: string; incorporated: string; province: string; gst_registered: boolean; gst_rt: string; receipts: boolean; receipts_note: string };
   currency: string;
   fiscal: {
     year_end: string; year_end_chosen: string; year_end_settled: boolean; max_first_end: string;
