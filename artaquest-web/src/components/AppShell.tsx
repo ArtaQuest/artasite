@@ -99,6 +99,11 @@ function BottomTabs() {
   // below, because they must be called in the same order on every render.
   const [unread, setUnread] = useState(0);
   useEffect(() => subscribeChat(() => setUnread(getChatState().unread)), []);
+  // "Where am I" — the bar rendered every tab in the same grey, so on a phone (where this bar IS
+  // the navigation) nothing said which surface was open. X marks the active tab in full-strength
+  // ink; the same first-segment match the sidebar uses decides it.
+  const { pathname } = useLocation();
+  const here = "/" + (pathname.split("/")[1] || "");
 
   if (!isLoggedIn()) return null;
   const me = currentUser();
@@ -108,18 +113,28 @@ function BottomTabs() {
     { href: "/messages/", d: "chat" as IconKey, label: "Chat" },
     { href: me?.slug ? `/u/${me.slug}/` : "/user-account/", d: "profile" as IconKey, label: "Profile" },
   ];
-  const tab = (t: (typeof T)[number]) => (
+  const tab = (t: (typeof T)[number]) => {
+    // Home covers /works and every kind shelf too — they are the same timeline under a filter, so
+    // the tab that took the member there must stay lit while they are on it.
+    const seg = "/" + (t.href.split("/").filter(Boolean)[0] || "");
+    const on = seg === "/" ? here === "/" || here === "/works" || FEED_SHELVES.has(here) : seg === here;
+    return (
     <a key={t.href} href={localePath(t.href)}
       aria-label={t.href === "/messages/" && unread > 0 ? `${t.label} — ${unread} unread` : t.label}
-      className="relative grid min-h-12 flex-1 place-items-center text-ink-3 transition-colors hover:text-ink">
+      aria-current={on ? "page" : undefined}
+      className={`relative grid min-h-12 flex-1 place-items-center transition-colors hover:text-ink ${on ? "text-ink" : "text-ink-3"}`}>
       <Icon d={t.d} />
+      {/* The active dot — one glyph per tab is X's bar; a label under each would not fit five
+          slots on a 360px phone, and a coloured icon would spend the brand on furniture. */}
+      {on ? <span aria-hidden className="absolute bottom-1 h-1 w-1 rounded-full bg-yang" /> : null}
       {t.href === "/messages/" && unread > 0 && (
         <span aria-hidden className="absolute end-[22%] top-1.5 grid min-w-[17px] place-items-center rounded-pill border-2 border-space-1 bg-yang px-1 text-[10px] font-bold leading-[13px] text-on-accent">
           {unread > 99 ? "99+" : unread}
         </span>
       )}
     </a>
-  );
+    );
+  };
   return (
     /* Arta's home on a phone. The message dock is hidden at this size, so this
        bar is the only surface always on screen with clear page above it — and
@@ -140,6 +155,15 @@ function BottomTabs() {
     </nav>
   );
 }
+
+// The routes that mount <Feed> (App.tsx's route table) — i.e. the ones that render their own right
+// rail. Keep in sync with it: a shelf missing here shows the header's search field beside the
+// rail's, which is the one thing the move to the right was meant to stop.
+const FEED_SHELVES = new Set([
+  "/works", "/surveys", "/datasets", "/models", "/articles",
+  "/2d-illustrations", "/3d-illustrations", "/2d-animations", "/3d-animations",
+  "/2d-games", "/3d-games", "/music",
+]);
 
 const NAV: { label: string; href: string; icon: IconKey; divider?: boolean; external?: boolean; auth?: boolean }[] = [
   { label: "Profile", href: ME_SLUG ? `/u/${ME_SLUG}/` : "/user-account/", icon: "profile", external: true, auth: true },
@@ -372,7 +396,11 @@ function Sidebar({ active, expanded, onNavigate, onToggle }: { active: string; e
             // even the follow-up solid-gold FILL still read as "coloured" to the member. Selection now
             // reads purely through a faint NEUTRAL wash (bg-veil — the same hover tint, a touch stronger)
             // plus a semibold, full-strength-ink label + icon: a clear "you are here" on both themes, no hue.
-            const cls = `group relative mx-2 flex h-11 shrink-0 items-center rounded-field text-[15px] transition-colors max-md:h-10 ${
+            // Pill-shaped rows with a soft hover fill — X's nav geometry (the icon column keeps its
+            // 52px axis, so nothing moves as the rail widens; only the row's corner radius and its
+            // height change). A little taller than the old 44px row: these are the app's primary
+            // destinations and they were the smallest touch targets on the page.
+            const cls = `group relative mx-2 flex h-12 shrink-0 items-center rounded-pill text-[15.5px] transition-colors max-md:h-11 ${
               on ? "bg-veil/[0.08] font-semibold text-ink" : "text-ink-2 hover:bg-veil/[0.04] hover:text-ink"
             }`;
             const inner = (<>
@@ -423,60 +451,92 @@ function CartButton() {
   );
 }
 
-function Topbar({ onMenu }: { onMenu: () => void }) {
+/**
+ * SEARCH IS A RIGHT-HAND CONTROL (operator 2026-08-15, "make it more like X").
+ *
+ * It used to be a 520px field parked in the MIDDLE of the header — the widest thing on the page,
+ * directly above a 576px feed column, so the first object a member's eye landed on was a utility.
+ * X never does that: on desktop search sits at the top of the RIGHT column, and on a phone it is a
+ * magnifier that opens a full-width field.
+ *
+ * Three surfaces, one rule — search is always on the right:
+ *   • lg+ on a page with its own right rail (the feed) — the rail carries it, pinned (Feed.tsx).
+ *   • md → lg, and every page without a rail — this header, right-aligned before the controls.
+ *   • below md — the magnifier here, which drops a full-width field under the bar.
+ * `railSearch` is what stops the field being rendered twice at lg on the feed.
+ */
+function Topbar({ onMenu, railSearch }: { onMenu: () => void; railSearch: boolean }) {
   // Phone gaps tighten to gap-1.5 — with the compact language pill + the phone-size lockup the
-  // whole row (menu · lockup · toggle · language · avatar/Register) fits a 360px viewport with
-  // slack, instead of shoving the theme toggle against its neighbours and clipping the trailing
-  // control off-screen (ticket #47).
+  // whole row (menu · lockup · search · toggle · language · avatar/Register) fits a 360px viewport
+  // with slack, instead of shoving the theme toggle against its neighbours and clipping the
+  // trailing control off-screen (ticket #47). Measured again after the magnifier joined it: the
+  // row ends at 378px of a 390px viewport.
   const login = w.AQ_LOGIN_URL || "/login/";
   // Are we ALREADY on the auth page? Then the two CTAs below point at the page you are reading, and
   // a sign-in page whose loudest control is a Sign in button is a page arguing with itself. Compared
   // on the path so a locale prefix (/fa/login/) and a trailing slash both match.
   const { pathname: aqPath } = useLocation();
   const onAuthPage = /(^|\/)(login|sign-in|signin)\/?$/.test(aqPath.replace(/\/+$/, "/"));
+  const [searching, setSearching] = useState(false);
+  // Navigating away closes the phone search sheet — it is a transient surface, not a mode the
+  // member has to dismiss on the next page.
+  useEffect(() => { setSearching(false); }, [aqPath]);
   return (
-    <header className="sticky top-0 z-30 flex h-topbar items-center gap-1.5 border-b border-line/70 bg-space-1/80 px-3 backdrop-blur-md md:gap-3 md:px-4 md:ps-12 md:pe-14">
-      {/* Phone has no rail, so the menu trigger lives here. Desktop's trigger is in the rail. */}
-      <IconButton label="Open menu" onClick={onMenu} className="h-9 w-9 shrink-0 md:hidden">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M3 6h18M3 12h18M3 18h18" /></svg>
-      </IconButton>
-      {/* mobile: brand lockup beside the menu button (phone-size — this instance is phone-only) */}
-      <a href={localePath("/")} aria-label="ArtaQuest — home" className="shrink-0 md:hidden"><Logo size="text-xl" /></a>
-      <div className="flex-1 md:hidden" aria-hidden />
-      {/* desktop: full search bar */}
-      {/* CAPPED, not flex-1. Measured at 1440px: the search field rendered 670px wide — WIDER than
-          the 576px feed column beside it — so the loudest element on the page was a utility, and the
-          content it searches looked secondary to it. A search field only needs room for a query, not
-          every pixel the header can spare. */}
-      <div className="hidden w-full max-w-[520px] md:block"><SearchBox /></div>
-      {/* Pushes everything after it to the right edge. The search field is deliberately CAPPED
-          rather than flex-1 (see above), so without a spacer the whole row packs to the left and
-          leaves a wide gap after Register — the controls read as floating in the middle of the bar
-          instead of anchored to its edge. The phone spacer above does the same job where the search
-          field is not rendered. */}
-      <div className="hidden flex-1 md:block" aria-hidden />
-      <CartButton />
-      {/* Language selector lives in the topbar so it is visible on EVERY surface —
-          mobile, desktop, and when the sidebar is collapsed (the sidebar foot, where
-          it used to live, is off-canvas on mobile and hidden when collapsed). */}
-      <BackgroundSwitcher />
-      <LanguageSelector compact />
-      {/* Signed in → the account drawer; signed out → the auth CTAs (both go to the same
-          email-code/Google flow — "Sign in" is the returning-member label, phone shows only
-          the Register pill to keep the compact row inside a 360px viewport). */}
-      {isLoggedIn() ? (
-        <UserMenu />
-      ) : (
-        // On the auth page itself: no CTAs. Both of these lead here, so on /login/ they are two
-        // competing buttons to the current page, sitting above a form that already asks for the
-        // one thing they would ask for. Everywhere else they stay exactly as they were.
-        onAuthPage ? null : (
-        <>
-          <a href={localePath(login)} className="hidden h-9 items-center whitespace-nowrap px-2 text-[14px] font-semibold text-ink-2 transition-colors hover:text-ink md:flex">Sign in</a>
-          <Button href={login} className="h-9 shrink-0 px-3 text-[14px] md:px-4">Register</Button>
-        </>
-        )
-      )}
+    <header className="sticky top-0 z-30 border-b border-line/70 bg-space-1/80 backdrop-blur-md">
+      <div className="flex h-topbar items-center gap-1.5 px-3 md:gap-3 md:px-4 md:ps-12 md:pe-14">
+        {/* Phone has no rail, so the menu trigger lives here. Desktop's trigger is in the rail. */}
+        <IconButton label="Open menu" onClick={onMenu} className="h-9 w-9 shrink-0 md:hidden">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M3 6h18M3 12h18M3 18h18" /></svg>
+        </IconButton>
+        {/* mobile: brand lockup beside the menu button (phone-size — this instance is phone-only) */}
+        <a href={localePath("/")} aria-label="ArtaQuest — home" className="shrink-0 md:hidden"><Logo size="text-xl" /></a>
+        {/* Pushes everything after it to the right edge, on every viewport: the header's job is now
+            a brand on the left and controls on the right, with nothing claiming the middle. */}
+        <div className="flex-1" aria-hidden />
+        {/* Desktop search — capped and right-aligned, never flex-1. At lg the feed's rail takes over
+            (railSearch), so between md and lg — where that rail is out of the flow — this is still
+            the search for those pages, and it disappears only once the rail is actually on screen. */}
+        <div className={`hidden w-[220px] shrink-0 md:block lg:w-[300px] xl:w-[330px] ${railSearch ? "lg:hidden" : ""}`}>
+          <SearchBox compact />
+        </div>
+        {/* Phone: the magnifier. X's phone header has no permanent field — it would eat a third of a
+            360px row that already carries the menu, the lockup, language and the avatar. */}
+        <IconButton label={searching ? "Close search" : "Search"} onClick={() => setSearching((v) => !v)}
+          aria-expanded={searching} className="h-9 w-9 shrink-0 md:hidden">
+          {searching ? (
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+          ) : (
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.5-4.5" strokeLinecap="round" /></svg>
+          )}
+        </IconButton>
+        <CartButton />
+        {/* Language selector lives in the topbar so it is visible on EVERY surface —
+            mobile, desktop, and when the sidebar is collapsed (the sidebar foot, where
+            it used to live, is off-canvas on mobile and hidden when collapsed). */}
+        <BackgroundSwitcher />
+        <LanguageSelector compact />
+        {/* Signed in → the account drawer; signed out → the auth CTAs (both go to the same
+            email-code/Google flow — "Sign in" is the returning-member label, phone shows only
+            the Register pill to keep the compact row inside a 360px viewport). */}
+        {isLoggedIn() ? (
+          <UserMenu />
+        ) : (
+          // On the auth page itself: no CTAs. Both of these lead here, so on /login/ they are two
+          // competing buttons to the current page, sitting above a form that already asks for the
+          // one thing they would ask for. Everywhere else they stay exactly as they were.
+          onAuthPage ? null : (
+          <>
+            <a href={localePath(login)} className="hidden h-9 items-center whitespace-nowrap px-2 text-[14px] font-semibold text-ink-2 transition-colors hover:text-ink md:flex">Sign in</a>
+            <Button href={login} className="h-9 shrink-0 px-3 text-[14px] md:px-4">Register</Button>
+          </>
+          )
+        )}
+      </div>
+      {/* The phone search sheet — full width under the bar, focused on open, so the field is as big
+          as the query deserves and the results panel has the whole screen to fall into. */}
+      {searching ? (
+        <div className="border-t border-line/70 px-3 py-2 md:hidden"><SearchBox autoFocus /></div>
+      ) : null}
     </header>
   );
 }
@@ -493,6 +553,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   // page nobody can see without scrolling PAST a pane that is already the height of the screen
   // — and its existence is what made the whole page scroll instead of just the conversation.
   const onAppPane = active === "/messages" || active === "/meet";
+  // Every route that mounts <Feed> — which brings its own right rail, and with it the pinned search
+  // at the top of that rail (X's shape). The header's own field must not render beside it at lg, or
+  // the page carries two search boxes a hand's width apart. "/" counts in BOTH states: a member gets
+  // the feed there, and a signed-out visitor gets the landing page, which embeds the same feed.
+  const railSearch = active === "/" || FEED_SHELVES.has(active);
   // Arta needs a ledge. The two that exist — the messaging dock and the bottom tab bar — are BOTH
   // members-only, so a signed-out visitor has none and the figure stands on nothing.
   const signedIn = isLoggedIn();
@@ -551,7 +616,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           over the page; menu and content stay complementary, side by side. Padding animates
           on the same 240ms ease-out as the panel width. Phone: full width; drawer slides over. */}
       <div className={`transition-[padding] duration-[240ms] ease-out ${expanded ? "md:ps-sidebar" : "md:ps-rail"}`}>
-        <Topbar onMenu={() => setExpanded(true)} />
+        <Topbar onMenu={() => setExpanded(true)} railSearch={railSearch} />
         {/* overflow-x-clip: a hard, deterministic horizontal containment so no page's content can
             bleed past the viewport — what made the page overflow out beneath the open mobile nav
             drawer (ticket #16). It does NOT rely on the body→viewport overflow propagation (flaky on

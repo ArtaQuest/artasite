@@ -23,6 +23,7 @@ import { LibraryMedia, LibraryPicker } from "../components/library";
 
 import { PostThread } from "./NotebookPage";
 import { Avatar, Button, cx, EmptyState, HeartGlyph } from "../components/ui";
+import { SearchBox } from "../components/SearchBox";
 import { isLoggedIn } from "../lib/auth";
 // localePath: a programmatic redirect is NOT intercepted by AppShell's locale safety net (that only
 // rewrites clicks on real <a> elements), so a signed-out reader on /fa/ was dropped on the English
@@ -1057,7 +1058,12 @@ export default function Feed({ initialKind, embedded = false }: { initialKind?: 
       <aside className="hidden w-[330px] shrink-0 lg:block" aria-label="Highlights">
         {/* The fixed signed-out join banner was removed 2026-07-16 (operator: not pushy) — the
             topbar's Sign in / Register covers conversion, so the rail needs no extra clearance. */}
-        <div className="sticky top-4 flex max-h-[calc(100vh-2rem)] flex-col gap-4 overflow-y-auto pb-6 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="sticky top-4 flex max-h-[calc(100vh-2rem)] flex-col gap-4 overflow-y-auto pb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {/* SEARCH, at the top of the right column — X's shape exactly (operator 2026-08-15). It is
+              sticky WITHIN the rail's own scroller (top-0, and the rail's own top padding moved onto
+              THIS element so nothing shows through above it), so it stays reachable while the cards
+              below scroll past. AppShell drops the header's field on these routes — one search. */}
+          <div className="sticky top-0 z-10 bg-space-1 pb-1 pt-3"><SearchBox /></div>
           <TodaysNewsCard items={rail.headlines} />
           <HappeningCard items={rail.topics} />
           <ChallengesCard items={rail.challenges} />
