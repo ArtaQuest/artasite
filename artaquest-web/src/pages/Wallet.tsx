@@ -26,7 +26,7 @@ const GATEWAY_DESC: Record<string, string> = {
 };
 
 /* Buy Arta Coins with fiat — mirrors the Checkout result/gateway UI. */
-function BuyPanel({ opts, buyPrice, fiat, payments, onCredited }: { opts: DonateOptions | null; buyPrice: number; fiat: string; payments: boolean; onCredited: () => void }) {
+function BuyPanel({ opts, buyPrice, fiat, payments, reserveKnown, onRetry, onCredited }: { opts: DonateOptions | null; buyPrice: number; fiat: string; payments: boolean; reserveKnown: boolean; onRetry: () => void; onCredited: () => void }) {
   const [amount, setAmount] = useState("20");
   const [email, setEmail] = useState("");
   const [picked, setPicked] = useState("");
@@ -50,9 +50,20 @@ function BuyPanel({ opts, buyPrice, fiat, payments, onCredited }: { opts: Donate
   const MIN_BUY = 1;
   const minCoins = buyPrice > 0 ? Math.floor(MIN_BUY / buyPrice) : 0;
   const belowMin = cad > 0 && cad < MIN_BUY;
-  // No inbound payment rail (Stripe not configured) → don't show a form the backend will refuse; coins
-  // are minted ONLY against a captured payment, never for free.
-  const noRails = !payments || (!!opts && opts.gateways.length === 0);
+  // NO INBOUND RAIL vs. WE COULD NOT ASK. These are different facts and only one of them is about
+  // the member.
+  //
+  // `payments` arrives as `reserve?.payments ?? false`, so a /reserve fetch that failed — an offline
+  // moment, a blocked request, a cold edge — collapsed to the same `false` as a genuinely disabled
+  // rail, and this panel then told the member "online payment isn't available in your country yet".
+  // That is a false statement about where someone lives, produced by a network hiccup, on the one
+  // screen where the answer decides whether they can pay at all. A member in a supported country
+  // reads it, believes it, and leaves; nothing on the page invites them to try again.
+  //
+  // So the country line is reserved for a rail we actually KNOW is off, and an unanswered reserve
+  // says only that, with a retry.
+  const railsOff = reserveKnown && (!payments || (!!opts && opts.gateways.length === 0));
+  const rateUnknown = !reserveKnown;
 
   async function submit(e: FormEvent) {
     e.preventDefault(); setErr(""); setBusy(true);
@@ -88,7 +99,12 @@ function BuyPanel({ opts, buyPrice, fiat, payments, onCredited }: { opts: Donate
         <h3 className="text-[18px] font-bold tracking-tight">Buy coins</h3>
         <p className="mt-1 text-[13px] text-ink-3">Top up your wallet with Arta Coins. {buyPrice > 0 && <>Currently {perCoin(buyPrice, fiat)} per <bdi dir="ltr" data-ay-skip="1">₳</bdi>, smallest purchase {formatFiat(MIN_BUY, fiat)} (<Coins n={minCoins} />).</>}</p>
       </div>
-      {noRails ? (
+      {rateUnknown ? (
+        <div className="rounded-field border border-line bg-space-1 px-4 py-3">
+          <p className="text-[14px] text-ink-2">We couldn’t load today’s coin price just now, so the form is waiting rather than guessing at it. Nothing is wrong with your account.</p>
+          <Button variant="outline" onClick={onRetry} className="mt-3 h-9 px-4 text-[13px]">Try again</Button>
+        </div>
+      ) : railsOff ? (
         <p className="rounded-field border border-line bg-space-1 px-4 py-3 text-[14px] text-ink-2">Online payment isn’t available in your country yet. You can still win coins by taking a challenge pool — at the full moon the most-hearted entry takes the whole thing.</p>
       ) : (
         <>
@@ -231,11 +247,17 @@ export default function Wallet() {
 
   const logged = isLoggedIn();
   const refreshWallet = () => getWallet().then((wd) => { if (wd) { setWallet(wd); setBalance(wd.coins); } });
+  // Named so the Buy panel's "Try again" can re-run exactly what the mount ran. Clearing `failed`
+  // first matters: without it a retry that succeeds leaves the page still showing the failure copy.
+  const loadReserve = () => {
+    setFailed(false);
+    return getReserve().then((d) => { if (d) setReserve(d); else setFailed(true); }).catch(() => setFailed(true));
+  };
   useEffect(() => {
     if (!logged) return;
     getDashboard().then((d) => { setDash(d); if (d) setBalance(d.coins); });
     getDonateOptions().then(setOpts);
-    getReserve().then((d) => { if (d) setReserve(d); else setFailed(true); }).catch(() => setFailed(true));
+    loadReserve();
     refreshWallet();
   }, [logged]);
 
@@ -318,7 +340,7 @@ export default function Wallet() {
         // #buy is the scroll target for "Top up your wallet" CTAs (e.g. ArtaBot) so landing here goes
         // straight to the Buy-coins form; scroll-mt clears the 60px sticky topbar.
         <div id="buy" className="grid scroll-mt-24 gap-5 lg:grid-cols-2">
-          <BuyPanel opts={opts} buyPrice={reserve?.buy ?? 0} fiat={fiat} payments={reserve?.payments ?? false} onCredited={refreshWallet} />
+          <BuyPanel opts={opts} buyPrice={reserve?.buy ?? 0} fiat={fiat} payments={reserve?.payments ?? false} reserveKnown={!!reserve} onRetry={loadReserve} onCredited={refreshWallet} />
           <SellPanel balance={bal} sellPrice={reserve?.sell ?? 0} fiat={fiat} cashout={reserve?.cashout ?? false} onSold={() => refreshWallet()} />
         </div>
       ) : (
