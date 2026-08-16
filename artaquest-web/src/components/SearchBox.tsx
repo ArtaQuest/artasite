@@ -40,7 +40,7 @@ function Group({ label, hits, cursor, base }: { label: string; hits: SearchHit[]
                 {/* A person is a face first — the same avatar the feed and the rail show, so one
                     member is recognisable in every list on the platform. */}
                 {h.person ? (
-                  <Avatar src={h.person.avatar} name={h.person.name} country={h.person.country}
+                  <Avatar src={h.person.avatar} name={h.person.name}
                     className="h-8 w-8 shrink-0 text-[12px] text-ink ring-1 ring-yin-light/40" />
                 ) : null}
                 <span className="min-w-0 flex-1">

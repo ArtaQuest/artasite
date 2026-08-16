@@ -393,7 +393,6 @@ final class Social {
 				'name'      => (string) $u->display_name,
 				'slug'      => (string) $u->user_nicename,
 				'avatar'    => Verify::avatar_url( $uid, 96 ),
-				'country'   => Verify::badge_country( $uid ),
 				'verified'  => Verify::is_verified( $uid ),
 				'followers' => $followers[ $uid ] ?? 0,
 			];
