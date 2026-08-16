@@ -11,6 +11,7 @@ import { isLoggedIn, localePath } from "../lib/wp";
 import { bootChat, getChatState, subscribeChat } from "../lib/chat-store";
 import { distributeRoomKey, roomKey } from "../lib/rooms";
 import { shouldAnchor } from "../lib/anchor";
+import { RailSearch } from "../components/RightRail";
 import { RoomThread } from "../components/chat/RoomThread";
 import { RoomCall } from "../components/chat/RoomCall";
 import { CallModeChoice } from "../components/chat/CallPanel";
@@ -775,7 +776,10 @@ function MeetList() {
         </main>
 
         <aside className="flex w-full flex-col gap-3 md:order-2 md:w-[300px] md:shrink-0 lg:w-[330px]"
-          aria-label="Calendar and what Meet is">
+          aria-label="Search, calendar and what Meet is">
+          {/* Search sits at the top of the right column here as everywhere else. Hidden below md,
+              where this aside stacks UNDER the page and the bottom bar's Search tab is the door. */}
+          <div className="max-md:hidden"><RailSearch /></div>
           <CalendarPanel cal={cal} onRotate={setCal} />
           <PrivacyNote />
         </aside>
@@ -1372,7 +1376,8 @@ function MeetingPage({ id }: { id: number }) {
         </main>
 
         <aside className={`flex w-full flex-col gap-3 md:order-2 md:w-[300px] md:shrink-0 lg:w-[330px] ${
-          live ? "md:min-h-0 md:overflow-y-auto" : ""}`} aria-label="Guests and calendar">
+          live ? "md:min-h-0 md:overflow-y-auto" : ""}`} aria-label="Search, guests and calendar">
+          <div className="max-md:hidden"><RailSearch /></div>
           {meet.status !== "cancelled" && me > 0 && !isHost && (
             <div className="rounded-card border border-line bg-space-2 p-4">
               <RsvpControl mine={myRsvp} busy={busy} onPick={(r) => void doRsvp(r)} />

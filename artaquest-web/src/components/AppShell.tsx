@@ -4,7 +4,8 @@ import Arta from "../generated/arta/render/Arta";
 import { LanguageSelector } from "./LanguageSelector";
 import { BackgroundSwitcher } from "./BackgroundSwitcher";
 import { Footer } from "./Footer";
-import { SearchBox } from "./SearchBox";
+import { SearchSheet, ShellRail } from "./RightRail";
+import { openSearch, usePageOwnsRail } from "../lib/rail";
 import { UserMenu } from "./UserMenu";
 import { currentUser, isLoggedIn, localePath } from "../lib/wp";
 import { getChatState, subscribeChat } from "../lib/chat-store";
@@ -56,6 +57,7 @@ const I = {
   bag: <><path d="M6 8h12l-1 12H7Z" /><path d="M9 8V6a3 3 0 0 1 6 0v2" /></>,
   medal: <><circle cx="12" cy="15" r="6" /><path d="M12 12v.01M8.5 9.5 6 3M15.5 9.5 18 3M10 3l2 4 2-4" /></>,
   mail: <><rect x="3" y="5.5" width="18" height="13" rx="2" /><path d="m3.5 7 8.5 6 8.5-6" /></>,
+  search: <><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.5-4.5" /></>,
 } as const;
 
 type IconKey = keyof typeof I;
@@ -143,7 +145,17 @@ function BottomTabs() {
        rendered, because each is hidden at the other's breakpoint. */
     <nav aria-label="Quick navigation" data-floor="top" data-floor-home
       className="fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-line bg-space-1/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
-      {T.slice(0, 2).map(tab)}
+      {T.slice(0, 1).map(tab)}
+      {/* SEARCH — X's second tab. The header carries no field at any width (operator 2026-08-16),
+          and below lg there is no right column either, so this button IS search on a phone: it
+          opens the full-screen sheet (RightRail.tsx). A button, not a link: there is no /search
+          route to send anyone to, and inventing a top-level slug that prefixes a WP page is how a
+          new route ends up 301'd on production. */}
+      <button type="button" onClick={openSearch} aria-label="Search"
+        className="relative grid min-h-12 flex-1 place-items-center text-ink-3 transition-colors hover:text-ink">
+        <Icon d="search" />
+      </button>
+      {T.slice(1, 2).map(tab)}
       {/* ArtaBot in the centre slot — the same glassy gold/blue circle as the floating launcher,
           so "the A button" keeps its identity. The event toggles the chat panel (ArtaBot.tsx
           listens; fire-and-forget across trees, same pattern as "aq-cart"). */}
@@ -383,6 +395,15 @@ function Sidebar({ active, expanded, onNavigate, onToggle }: { active: string; e
             dead-ending CTA is worse than an honest one. */}
         <CreateMenu expanded={expanded} onNavigate={onNavigate} />
 
+        {/* SEARCH, as a nav row (operator 2026-08-16). On lg+ the right column already carries the
+            field, so this is the phone's second door to it — and the ONLY one for a signed-out
+            visitor, who gets no bottom tab bar. Geometry matches every row below it exactly. */}
+        <button type="button" onClick={() => { onNavigate(); openSearch(); }} aria-label="Search"
+          className="group relative mx-2 mt-2 flex h-12 shrink-0 items-center rounded-pill text-[15.5px] text-ink-2 transition-colors hover:bg-veil/[0.04] hover:text-ink max-md:h-11 lg:hidden">
+          <span className="grid w-[52px] shrink-0 place-items-center text-ink-3 group-hover:text-ink-2"><Icon d="search" /></span>
+          <span className={`whitespace-nowrap pe-3 transition-opacity duration-200 ${labelShow}`}>Search</span>
+        </button>
+
         {/* nav — scrolls on its own; the hidden scrollbar keeps the rail clean. Each icon box
             is exactly w-rail wide, so the glyph is centred in the collapsed rail and the label
             (which starts past the rail edge) is clipped until the aside widens. */}
@@ -452,20 +473,14 @@ function CartButton() {
 }
 
 /**
- * SEARCH IS A RIGHT-HAND CONTROL (operator 2026-08-15, "make it more like X").
+ * THE HEADER CARRIES NO SEARCH — none, at any width (operator 2026-08-16).
  *
- * It used to be a 520px field parked in the MIDDLE of the header — the widest thing on the page,
- * directly above a 576px feed column, so the first object a member's eye landed on was a utility.
- * X never does that: on desktop search sits at the top of the RIGHT column, and on a phone it is a
- * magnifier that opens a full-width field.
- *
- * Three surfaces, one rule — search is always on the right:
- *   • lg+ on a page with its own right rail (the feed) — the rail carries it, pinned (Feed.tsx).
- *   • md → lg, and every page without a rail — this header, right-aligned before the controls.
- *   • below md — the magnifier here, which drops a full-width field under the bar.
- * `railSearch` is what stops the field being rendered twice at lg on the feed.
+ * X does not put a search field in its header on any surface, and neither do we now. Search is the
+ * top of the RIGHT COLUMN on a wide screen (every page has one — see RightRail.tsx) and a
+ * full-screen sheet on a phone, opened from the bottom tab bar or the nav drawer. What is left here
+ * is what the header is actually for: the brand on the left, the member's controls on the right.
  */
-function Topbar({ onMenu, railSearch }: { onMenu: () => void; railSearch: boolean }) {
+function Topbar({ onMenu }: { onMenu: () => void }) {
   // Phone gaps tighten to gap-1.5 — with the compact language pill + the phone-size lockup the
   // whole row (menu · lockup · search · toggle · language · avatar/Register) fits a 360px viewport
   // with slack, instead of shoving the theme toggle against its neighbours and clipping the
@@ -477,10 +492,6 @@ function Topbar({ onMenu, railSearch }: { onMenu: () => void; railSearch: boolea
   // on the path so a locale prefix (/fa/login/) and a trailing slash both match.
   const { pathname: aqPath } = useLocation();
   const onAuthPage = /(^|\/)(login|sign-in|signin)\/?$/.test(aqPath.replace(/\/+$/, "/"));
-  const [searching, setSearching] = useState(false);
-  // Navigating away closes the phone search sheet — it is a transient surface, not a mode the
-  // member has to dismiss on the next page.
-  useEffect(() => { setSearching(false); }, [aqPath]);
   return (
     <header className="sticky top-0 z-30 border-b border-line/70 bg-space-1/80 backdrop-blur-md">
       <div className="flex h-topbar items-center gap-1.5 px-3 md:gap-3 md:px-4 md:ps-12 md:pe-14">
@@ -493,22 +504,6 @@ function Topbar({ onMenu, railSearch }: { onMenu: () => void; railSearch: boolea
         {/* Pushes everything after it to the right edge, on every viewport: the header's job is now
             a brand on the left and controls on the right, with nothing claiming the middle. */}
         <div className="flex-1" aria-hidden />
-        {/* Desktop search — capped and right-aligned, never flex-1. At lg the feed's rail takes over
-            (railSearch), so between md and lg — where that rail is out of the flow — this is still
-            the search for those pages, and it disappears only once the rail is actually on screen. */}
-        <div className={`hidden w-[220px] shrink-0 md:block lg:w-[300px] xl:w-[330px] ${railSearch ? "lg:hidden" : ""}`}>
-          <SearchBox compact />
-        </div>
-        {/* Phone: the magnifier. X's phone header has no permanent field — it would eat a third of a
-            360px row that already carries the menu, the lockup, language and the avatar. */}
-        <IconButton label={searching ? "Close search" : "Search"} onClick={() => setSearching((v) => !v)}
-          aria-expanded={searching} className="h-9 w-9 shrink-0 md:hidden">
-          {searching ? (
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
-          ) : (
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.5-4.5" strokeLinecap="round" /></svg>
-          )}
-        </IconButton>
         <CartButton />
         {/* Language selector lives in the topbar so it is visible on EVERY surface —
             mobile, desktop, and when the sidebar is collapsed (the sidebar foot, where
@@ -532,11 +527,6 @@ function Topbar({ onMenu, railSearch }: { onMenu: () => void; railSearch: boolea
           )
         )}
       </div>
-      {/* The phone search sheet — full width under the bar, focused on open, so the field is as big
-          as the query deserves and the results panel has the whole screen to fall into. */}
-      {searching ? (
-        <div className="border-t border-line/70 px-3 py-2 md:hidden"><SearchBox autoFocus /></div>
-      ) : null}
     </header>
   );
 }
@@ -557,7 +547,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   // at the top of that rail (X's shape). The header's own field must not render beside it at lg, or
   // the page carries two search boxes a hand's width apart. "/" counts in BOTH states: a member gets
   // the feed there, and a signed-out visitor gets the landing page, which embeds the same feed.
-  const railSearch = active === "/" || FEED_SHELVES.has(active);
+  // Search lives in the right column, so every page needs one. A page that brings its own (the
+  // feed's Highlights aside, PageRail's <WithRail>) says so through the registry in RightRail.tsx
+  // and the shell stands down; everything else gets <ShellRail>. App panes are the exception —
+  // ArtaChat and Meet size themselves to the viewport, and a sticky column beside a pane that owns
+  // the whole screen has nowhere to sit.
+  const pageOwnsRail = usePageOwnsRail();
+  const shellRail = !pageOwnsRail && !onAppPane;
   // Arta needs a ledge. The two that exist — the messaging dock and the bottom tab bar — are BOTH
   // members-only, so a signed-out visitor has none and the figure stands on nothing.
   const signedIn = isLoggedIn();
@@ -616,7 +612,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           over the page; menu and content stay complementary, side by side. Padding animates
           on the same 240ms ease-out as the panel width. Phone: full width; drawer slides over. */}
       <div className={`transition-[padding] duration-[240ms] ease-out ${expanded ? "md:ps-sidebar" : "md:ps-rail"}`}>
-        <Topbar onMenu={() => setExpanded(true)} railSearch={railSearch} />
+        <Topbar onMenu={() => setExpanded(true)} />
         {/* overflow-x-clip: a hard, deterministic horizontal containment so no page's content can
             bleed past the viewport — what made the page overflow out beneath the open mobile nav
             drawer (ticket #16). It does NOT rely on the body→viewport overflow propagation (flaky on
@@ -624,7 +620,13 @@ export function AppShell({ children }: { children: ReactNode }) {
             `clip` (unlike `hidden`) creates no scroll container, so the sticky Topbar — a sibling of
             <main> — and any in-page sticky/fixed still resolve to the viewport. */}
         <main className="overflow-x-clip">
-          <div className="mx-auto max-w-content px-gutter py-7">{children}</div>
+          {/* min-w-0 on the content is load-bearing: without it a wide child (a table, a chart, a
+              code block) sets the flex base and pushes the column off-screen instead of scrolling
+              inside its own box — the same rule PageRail documents. */}
+          <div className={`mx-auto max-w-content px-gutter py-7 ${shellRail ? "flex items-start gap-6" : ""}`}>
+            {shellRail ? <div className="min-w-0 flex-1">{children}</div> : children}
+            {shellRail ? <ShellRail /> : null}
+          </div>
         </main>
         {/* The feed used to be excluded here on the grounds that it is a stream, not a document,
             and that a footer under an endless column of posts is furniture nobody scrolled for.
@@ -640,6 +642,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             instead of just the conversation. That is layout mechanics, not editorial. */}
         {onAppPane ? null : <Footer />}
       <BottomTabs />
+      {/* One search sheet for the whole app — the phone's search surface. */}
+      <SearchSheet />
       {/*
         THE SPACE ARTA OCCUPIES, RESERVED BY THE PAGE.
 
