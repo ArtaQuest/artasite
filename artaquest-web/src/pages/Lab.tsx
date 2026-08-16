@@ -530,7 +530,7 @@ export default function Lab() {
       ) : null}
 
       {/* toolbar */}
-      <div className="sticky top-0 z-10 mb-3 flex flex-wrap items-center gap-2 border-b border-line bg-space-1/90 py-2 backdrop-blur">
+      <div className="sticky top-topbar z-10 mb-3 flex flex-wrap items-center gap-2 border-b border-line bg-space-1/90 py-2 backdrop-blur">
         <span className="max-w-[30ch] overflow-hidden text-ellipsis whitespace-nowrap rounded-pill border border-line px-2.5 py-0.5 text-xs text-ink-2" id="fname">{name}</span>
         {NB_ID ? (
           <>
