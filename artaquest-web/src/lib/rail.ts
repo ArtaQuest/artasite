@@ -13,7 +13,13 @@
  * no column, so a page's cards must stay where they are in the flow (or be suppressed, for pages
  * that already render their own phone copies).
  */
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from "react";
+import {
+  listChallenges, listNews, scholarTrending, suggestFollow, Social,
+  type Challenge, type FollowSuggestion, type NewsItem, type TrendingKindItem, type TrendingTopic,
+} from "./api";
+import { isLoggedIn } from "./auth";
+import { currentUser } from "./wp";
 
 let node: HTMLElement | null = null;
 const listeners = new Set<() => void>();
@@ -45,7 +51,56 @@ export function useWide() {
   return wide;
 }
 
+let fillers = 0;
+const fillerListeners = new Set<() => void>();
+const fillerEmit = () => fillerListeners.forEach((f) => f());
+const fillerSub = (f: () => void) => { fillerListeners.add(f); return () => { fillerListeners.delete(f); }; };
+
+/** A <RailPortal> announces itself here so the column knows the page brought its own cards. */
+export function useIsFilling() {
+  useLayoutEffect(() => {
+    fillers += 1; fillerEmit();
+    return () => { fillers -= 1; fillerEmit(); };
+  }, []);
+}
+
+/** True while some page is contributing cards — the column then skips its default content. */
+export function useRailFilled() {
+  return useSyncExternalStore(fillerSub, () => fillers > 0, () => false);
+}
+
 /** Open the phone's search surface from anywhere (bottom tab bar, nav drawer). */
 export function openSearch() {
   window.dispatchEvent(new Event("aq:search"));
+}
+
+/** `enabled=false` (the embedded landing feed) skips the rail entirely — five extra backend calls
+ *  a marketing page has no use for, on the one visit where speed matters most. */
+export function useRail(enabled = true) {
+  const [challenges, setChallenges] = useState<Challenge[] | null>(null);
+  const [news, setNews] = useState<NewsItem[] | null>(null);
+  const [headlines, setHeadlines] = useState<TrendingKindItem[] | null>(null);
+  const [topics, setTopics] = useState<TrendingTopic[] | null>(null);
+  const [who, setWho] = useState<FollowSuggestion[] | null>(null);
+  useEffect(() => {
+    if (!enabled) { setChallenges([]); setWho([]); setNews([]); setHeadlines([]); setTopics([]); return; }
+    listChallenges().then((r) => setChallenges([...r.current].sort((a, b) => a.deadline - b.deadline))).catch(() => setChallenges([]));
+    listNews(4).then((r) => setNews(r.items)).catch(() => setNews([]));
+    // ONE fetch feeds both X-style cards (operator 2026-07-30). The headlines and the topics come
+    // out of the same 6h-refreshed crawl, so the two can never disagree about what is trending.
+    scholarTrending().then((r) => {
+      setHeadlines(r.kinds?.find((k) => k.kind === "news")?.items ?? []);
+      setTopics(r.topics ?? []);
+    }).catch(() => { setHeadlines([]); setTopics([]); });
+    const me = currentUser();
+    Promise.all([
+      suggestFollow().then((r) => r.items).catch(() => [] as FollowSuggestion[]),
+      // The suggestions GET is unpersonalised (CDN-safe); the viewer + already-followed drop here.
+      isLoggedIn() ? Social.feed(0, 1).then((r) => r.followed || []).catch(() => [] as number[]) : Promise.resolve([] as number[]),
+    ]).then(([items, followed]) => {
+      const skip = new Set<number>(followed);
+      setWho(items.filter((s) => s.slug !== me?.slug && !skip.has(s.id)).slice(0, 3));
+    });
+  }, [enabled]);
+  return { challenges, news, headlines, topics, who };
 }

@@ -334,7 +334,7 @@ function CreateMenu({ expanded, onNavigate }: { expanded: boolean; onNavigate: (
   );
 }
 
-function Sidebar({ active, expanded, onNavigate, onToggle }: { active: string; expanded: boolean; onNavigate: () => void; onToggle: () => void }) {
+function Sidebar({ active, expanded, onNavigate }: { active: string; expanded: boolean; onNavigate: () => void }) {
   // Labels are visible only when expanded; in the condensed rail they fade fully out so the
   // rail shows icons alone (the icon column keeps its layout slot either way).
   const labelShow = expanded ? "opacity-100" : "opacity-0";
@@ -353,7 +353,7 @@ function Sidebar({ active, expanded, onNavigate, onToggle }: { active: string; e
       //     move and only the label column is revealed.
       // One element drives both: mobile animates transform, desktop animates width. 240ms on
       // Kaggle's decelerate curve (ease-out). overflow-hidden clips the labels in the rail.
-      className={`fixed inset-y-0 start-0 z-50 flex w-sidebar flex-col overflow-hidden border-e border-line bg-space-1 transition-[width,transform] duration-[240ms] ease-out md:translate-x-0 ${
+      className={`fixed bottom-0 top-topbar start-0 z-40 flex w-sidebar flex-col overflow-hidden border-e border-line bg-space-1 transition-[width,transform] duration-[240ms] ease-out md:translate-x-0 ${
         expanded
           ? "max-md:translate-x-0 max-md:shadow-[0_0_8px_rgba(0,0,0,0.28)] md:w-sidebar"
           : "max-md:ltr:-translate-x-full max-md:rtl:translate-x-full md:w-rail"
@@ -361,18 +361,10 @@ function Sidebar({ active, expanded, onNavigate, onToggle }: { active: string; e
     >
       {/* Inner is pinned to the full expanded width so nothing reflows as the aside clips it. */}
       <div className="flex h-full w-sidebar shrink-0 flex-col">
-        {/* top: hamburger (toggle) centred in the rail, then the lockup in the label column */}
-        <div className="flex h-topbar shrink-0 items-center">
-          <button onClick={onToggle} aria-label={expanded ? "Collapse menu" : "Expand menu"}
-            className="grid h-11 w-rail shrink-0 place-items-center text-ink-2 transition-colors hover:text-ink">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M3 6h18M3 12h18M3 18h18" /></svg>
-          </button>
-          {/* Every label/text fades out in the condensed rail so ONLY icons show — the few px of
-              clip overlap never leak a stray glyph. It fades back in as the panel widens. */}
-          <a href={localePath("/")} aria-label="ArtaQuest — home" className={`shrink-0 transition-opacity duration-200 ${labelShow}`}><Logo /></a>
-        </div>
-        {/* duality hairline: blue (How) → gold (Why) */}
-        <div className="mx-3 h-px bg-gradient-to-r rtl:bg-gradient-to-l from-yin-light/55 via-veil/12 to-yang/55" aria-hidden />
+        {/* No lockup and no toggle here any more: both live in the full-width bar above, where
+            Reddit keeps them, and stacking a second wordmark directly under the first is exactly
+            what the hoist was meant to stop. The hairline stays as the rail's own top edge. */}
+        <div className="mx-3 mt-3 h-px bg-gradient-to-r rtl:bg-gradient-to-l from-yin-light/55 via-veil/12 to-yang/55" aria-hidden />
 
         {/* THE CREATE BUTTON (operator 2026-07-28) — Kaggle's shape, and the platform's one primary
             action. It was pulled in 2026-06-23 because it pointed at /discussions/ and nobody could
@@ -436,13 +428,18 @@ function Sidebar({ active, expanded, onNavigate, onToggle }: { active: string; e
         {me ? (
           <a href={localePath(me.slug ? `/u/${me.slug}/` : "/user-account/")} onClick={onNavigate}
             aria-label={`${me.name} — your profile`}
-            className="mx-2 mb-3 mt-1 flex h-14 shrink-0 items-center rounded-pill transition-colors hover:bg-veil/[0.06]">
+            className="mx-2 mb-3 mt-1 flex min-h-14 shrink-0 items-center rounded-pill py-1 transition-colors hover:bg-veil/[0.06]">
             <span className="grid w-[52px] shrink-0 place-items-center">
               <Avatar src={me.avatar} name={me.name} className="h-9 w-9 text-[13px] text-ink ring-1 ring-yin-light/50" />
             </span>
+            {/* A NAME IS NEVER SHORTENED (operator 2026-08-16). It wraps and the type steps down —
+                it does not take an ellipsis through the middle of somebody's name. `truncate` is the
+                lazy answer and it is wrong here: "Arash Ashrafne…" in the one place the product
+                addresses a member by name is worse than a line of 12px text. Stepped by length, not
+                by measurement, so it cannot depend on a font that has not loaded yet. */}
             <span className={`min-w-0 pe-3 transition-opacity duration-200 ${labelShow}`}>
-              <span className="block truncate text-[14px] font-bold text-ink">{me.name}</span>
-              <span className="block truncate text-[13px] text-ink-2" data-ay-skip="1">@{me.slug}</span>
+              <span className={`block break-words font-bold leading-tight text-ink ${me.name.length > 22 ? "text-[12px]" : me.name.length > 16 ? "text-[13px]" : "text-[14px]"}`}>{me.name}</span>
+              <span className={`block break-all leading-tight text-ink-2 ${(me.slug || "").length > 18 ? "text-[11px]" : "text-[13px]"}`} data-ay-skip="1">@{me.slug}</span>
             </span>
           </a>
         ) : null}
@@ -499,19 +496,20 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
   const { pathname: aqPath } = useLocation();
   const onAuthPage = /(^|\/)(login|sign-in|signin)\/?$/.test(aqPath.replace(/\/+$/, "/"));
   return (
-    <header className="sticky top-0 z-30 border-b border-line/70 bg-space-1/80 backdrop-blur-md">
-      <div className="flex h-topbar items-center gap-1.5 px-3 md:gap-3 md:px-12">
+    <header className="sticky top-0 z-50 border-b border-line/70 bg-space-1/80 backdrop-blur-md">
+      <div className="flex h-topbar items-center gap-1.5 px-3 md:gap-3 md:px-4">
         {/* THREE ZONES, and the outer two carry equal weight — that is what puts the field on
             the bar's own centre line. Centring it between its NEIGHBOURS instead leaves it
             short by whatever the controls weigh, and drifts with the language pill's width
             from one locale to the next (measured: 12px off at 1440 before this). */}
         <div className="flex min-w-0 flex-1 items-center gap-1.5 md:gap-3">
         {/* Phone has no rail, so the menu trigger lives here. Desktop's trigger is in the rail. */}
-          <IconButton label="Open menu" onClick={onMenu} className="h-9 w-9 shrink-0 md:hidden">
+          {/* The rail's toggle, at every width — the rail no longer has a top row of its own. */}
+          <IconButton label="Toggle menu" onClick={onMenu} className="h-9 w-9 shrink-0">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M3 6h18M3 12h18M3 18h18" /></svg>
           </IconButton>
-          {/* mobile: brand lockup beside the menu button (phone-size — this instance is phone-only) */}
-          <a href={localePath("/")} aria-label="ArtaQuest — home" className="shrink-0 md:hidden"><Logo size="text-xl" /></a>
+          {/* The one lockup, at the window's start edge, where Reddit puts its own. */}
+          <a href={localePath("/")} aria-label="ArtaQuest — home" className="shrink-0"><Logo size="text-xl" /></a>
         </div>
         {/* THE SEARCH FIELD, centred (Reddit). Capped at Reddit's own ~690px so it stays a utility
             on a wide screen instead of a banner across the whole bar. */}
@@ -624,13 +622,19 @@ export function AppShell({ children }: { children: ReactNode }) {
   // rows and the Topbar swaps the account drawer for Sign in / Register when nobody is signed in.
   return (
     <div className="min-h-screen bg-space-1 text-ink">
+      {/* THE BAR SPANS THE WINDOW, and the rail starts under it (operator 2026-08-16, "it must be
+          centred like this" + a Reddit bar). This is the only geometry in which the search field is
+          on the window's centre line: while the bar began after the rail, a field centred in it sat
+          128px right of the window centre with the rail open and 34px with it collapsed — centred
+          on the bar, never on the screen, and it MOVED when the rail did. */}
+      <Topbar onMenu={() => setExpanded((v) => !v)} />
       {/* One integrated sidebar: static icon rail that widens in place when expanded. */}
-      <Sidebar active={active} expanded={expanded} onNavigate={collapse} onToggle={() => setExpanded((v) => !v)} />
+      <Sidebar active={active} expanded={expanded} onNavigate={collapse} />
       {/* Scrim — only while expanded, and only on phones (Kaggle leaves desktop un-dimmed
           since the widened panel just overlays beside the content). Fades to match the
           240ms width animation; tap anywhere to collapse. */}
       <div
-        className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-[240ms] ease-out md:hidden ${expanded ? "touch-none opacity-100" : "pointer-events-none opacity-0"}`}
+        className={`fixed inset-0 top-topbar z-30 bg-black/50 transition-opacity duration-[240ms] ease-out md:hidden ${expanded ? "touch-none opacity-100" : "pointer-events-none opacity-0"}`}
         aria-hidden
         onClick={collapse}
       />
@@ -639,7 +643,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           over the page; menu and content stay complementary, side by side. Padding animates
           on the same 240ms ease-out as the panel width. Phone: full width; drawer slides over. */}
       <div className={`transition-[padding] duration-[240ms] ease-out ${expanded ? "md:ps-sidebar" : "md:ps-rail"}`}>
-        <Topbar onMenu={() => setExpanded(true)} />
         {/* overflow-x-clip: a hard, deterministic horizontal containment so no page's content can
             bleed past the viewport — what made the page overflow out beneath the open mobile nav
             drawer (ticket #16). It does NOT rely on the body→viewport overflow propagation (flaky on
