@@ -592,6 +592,46 @@ final class Media {
 		return trailingslashit( self::cdn_base() ) . $stored;
 	}
 
+	/**
+	 * DESTROY a stored file wherever its bytes live — the origin mirror AND the CDN object.
+	 *
+	 * The one primitive behind "permanently deletable" (operator 2026-08-16: all content deletable
+	 * permanently; authors purge all their data). A row deleted while its object stays on R2 is not
+	 * deleted at all — the URL keeps answering — so every purge path calls this rather than
+	 * `$wpdb->delete` alone. Accepts a stored key OR a full URL on this origin / the CDN, because
+	 * the tables hold both shapes (Media::URL_COLUMNS documents which).
+	 *
+	 * `$shared_check` is a callable answering "does anything ELSE still reference this key?" — the
+	 * Library is content-addressed (key = sha256), so two works can serve one object, and deleting it
+	 * for one would 404 the other. When the callable says yes, the object stays and only the caller's
+	 * row goes. Best-effort and quiet on purpose: a purge must never abort half-way because a CDN
+	 * request timed out; the reap crons pick up stragglers.
+	 */
+	public static function destroy( $stored, $shared_check = null ) {
+		$key = trim( (string) $stored );
+		if ( '' === $key || false !== strpos( $key, '..' ) ) { return false; }
+		// A URL → its key: strip this origin's aq-media base or the CDN base.
+		$up   = wp_upload_dir();
+		$base = trailingslashit( $up['baseurl'] ) . 'aq-media/';
+		if ( 0 === strpos( $key, $base ) ) { $key = substr( $key, strlen( $base ) ); }
+		$cdn = trailingslashit( self::cdn_base() );
+		if ( '' !== trim( self::cdn_base() ) && 0 === strpos( $key, $cdn ) ) { $key = substr( $key, strlen( $cdn ) ); }
+		if ( preg_match( '#^https?://#i', $key ) ) {
+			// Some other origin (Kaggle, Zenodo, YouTube) — not ours to delete, and not our copy.
+			return false;
+		}
+		$key = ltrim( $key, '/' );
+		if ( is_callable( $shared_check ) && $shared_check( $key ) ) { return false; }
+		$done = false;
+		$path = trailingslashit( $up['basedir'] ) . 'aq-media/' . $key;
+		if ( is_file( $path ) ) { $done = @unlink( $path ) || $done; }
+		if ( self::r2_ready() ) {
+			[ $code ] = self::r2( 'DELETE', $key );
+			$done = $done || ( $code >= 200 && $code < 300 ) || 404 === $code;
+		}
+		return $done;
+	}
+
 	// ── quota ────────────────────────────────────────────────────────────────
 
 	/** Bytes of capacity this member has: the free grant plus everything they have bought. Derived

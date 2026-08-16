@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { DobWheel } from "../components/DobWheel";
 import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, LANGS_MAX, postProfileUpdate, PROFILE_LINKS, RELATIONSHIPS, type CourseCard, type Dashboard, type UsernameCheck } from "../lib/wp";
-import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, KaggleIds, Passkeys, ShellAccount, UsageApi, myParticipation, setGender as setGender_, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type KaggleIdItem, type SessionItem, type ShellInfo, type ShellKey, type UsageInfo, type BursaryResult, type BursaryStatus, type ShareKit } from "../lib/api";
+import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, KaggleIds, Passkeys, ShellAccount, UsageApi, myParticipation, setGender as setGender_, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type KaggleIdItem, type SessionItem, type ShellInfo, type ShellKey, type UsageInfo, type BursaryResult, type BursaryStatus, type ShareKit , type Footprint } from "../lib/api";
 import { signOut } from "../lib/auth";
 import { VerifyApi, fileToImage, type VerifyStatus } from "../lib/verify";
 import { BlueCheck } from "../components/BlueCheck";
@@ -885,6 +885,13 @@ function DeleteAccount() {
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // WHAT WILL GO, IN NUMBERS (operator 2026-08-16: authors purge ALL their data). Read when the
+  // panel opens, so the confirmation is a list of the member's own things rather than adjectives.
+  const [fp, setFp] = useState<Footprint | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    AccountApi.footprint().then(setFp).catch(() => setFp(null));
+  }, [open]);
 
   function reset() {
     setOpen(false); setStage("intro"); setCode(""); setConfirm(""); setErr("");
@@ -916,7 +923,7 @@ function DeleteAccount() {
     <Card as="section" className="flex flex-col gap-3 border-rose-400/25 p-5">
       <h2 className="text-[15px] font-bold text-rose-300">Delete account</h2>
       <p className="text-[13px] leading-relaxed text-ink-3">
-        Permanently erase your profile from ArtaQuest — your identity, posts, replies, course progress and certificates. The whole database is public, so this removes you from it for good. It can't be undone.
+        Permanently erase you from ArtaQuest — your identity and everything you made here: works and their published files, posts, replies, hearts, uploads, your side of every conversation, meetings, keys and tokens. The whole database is public, so this removes you from it for good. It can't be undone.
       </p>
 
       {!open ? (
@@ -929,6 +936,34 @@ function DeleteAccount() {
         <div className="flex flex-col gap-4">
           {stage === "intro" ? (
             <>
+              {fp ? (
+                <div className="rounded-card border border-line bg-space-1 p-4 text-[13px] leading-relaxed text-ink-2">
+                  <p className="mb-2 font-semibold text-ink">This will destroy:</p>
+                  <ul className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3">
+                    {([
+                      ["works", fp.works_published + fp.works_drafts],
+                      ["posts", fp.posts], ["replies", fp.comments], ["hearts you gave", fp.hearts_given],
+                      ["files", fp.files], ["messages", fp.messages],
+                      ["meetings you host", fp.meetings_hosted], ["challenges you founded", fp.challenges_founded],
+                    ] as [string, number][]).map(([label, n]) => (
+                      <li key={label} className={n ? "" : "text-ink-3"}><strong className="tabular-nums">{n}</strong> {label}</li>
+                    ))}
+                  </ul>
+                  {fp.works_with_doi > 0 && (
+                    <p className="mt-3 text-[12.5px] text-ink-3">
+                      {fp.works_with_doi} of your works minted a DOI. A DOI is a promise that a link resolves, so each will keep resolving — to a notice that the work was deleted by its author. The copy Zenodo archived when it was published is outside our control.
+                    </p>
+                  )}
+                  {fp.challenges_founded > 0 && (
+                    <p className="mt-2 text-[12.5px] text-ink-3">
+                      A challenge you founded that already holds other members' entry fees is kept, without your name on it — the pool is their money and settles on its own deadline.
+                    </p>
+                  )}
+                  <p className="mt-2 text-[12.5px] text-ink-3">
+                    Kept, without a name attached: the coin and points ledgers and any invoices — money records the Foundation must retain, none of which resolve to a person once your account is gone.
+                  </p>
+                </div>
+              ) : null}
               <p className="text-[14px] text-ink-2">
                 To be sure it's really you, we'll email a confirmation code to your address. You'll enter it together with the word <strong className="text-ink">DELETE</strong> to finish.
               </p>
