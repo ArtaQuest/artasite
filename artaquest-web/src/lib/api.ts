@@ -877,6 +877,10 @@ export const Account = {
   /** GET /me/footprint — what a purge destroys, counted. `other` is the sweep's long tail:
    *  table.column → rows, for the tables nobody thinks about. */
   footprint: () => get<Footprint>("/me/footprint"),
+  /** Destroy everything the member MADE, keeping their account — same two-key guard as deletion. */
+  contentPurgeRequest: () => post<{ ok: true; email: string; expires_in: number }>("/me/content/purge/request", {}),
+  contentPurgeConfirm: (code: string, confirm: string) =>
+    post<{ ok: true; works: number; posts: number; comments: number; books: number; uploads: number }>("/me/content/purge/confirm", { code, confirm }),
   deleteRequest: () => post<{ ok: true; email: string; expires_in: number }>("/me/delete/request", {}),
   deleteConfirm: (code: string, confirm: string) =>
     post<{ ok: true; redirect: string }>("/me/delete/confirm", { code, confirm }),
@@ -1880,6 +1884,11 @@ export function saveNotebook(id: number, b: { title?: string; abstract?: string 
 export function publishNotebook(id: number) {
   return post<NotebookFull & { emailed?: boolean }>(`/studio/notebooks/${id}/publish`, {});
 }
+/** The file's AUTHOR removes one published Library file — its bytes and its attachments go with it. */
+export function deleteLibraryFile(id: number) {
+  return post<{ ok: boolean }>(`/library/files/${id}/delete`, {});
+}
+
 export function deleteNotebook(id: number) {
   return post<{ ok: boolean }>(`/studio/notebooks/${id}/delete`, {});
 }
@@ -1973,6 +1982,8 @@ export type NbChecklist = {
 export type LibraryItem = {
   id: number;
   nb_id: number;
+  /** True when the viewer is the file's author — the Library shows them a delete control. */
+  mine?: boolean;
   name: string;
   label: string;
   // "scene" is SVG — a vector scene, not a picture of one. It is its own class because a card

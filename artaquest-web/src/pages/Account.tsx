@@ -872,6 +872,107 @@ function PasskeyManager() {
 }
 
 // ── Danger zone · delete account ────────────────────────────────────────────
+/**
+ * DELETE EVERYTHING I MADE, AND KEEP MY ACCOUNT (operator 2026-08-16: contents and posts fully
+ * deletable and purgable by authors and users).
+ *
+ * Account deletion already destroyed all of this — while taking the account with it. A member who
+ * wants their work down and their account open (a rethink, a job, a change of mind about publishing
+ * in public) otherwise had to delete a hundred things by hand, or delete themselves.
+ *
+ * Same two-key guard as deletion, because it is equally irreversible: a code emailed to the
+ * registered address and the typed word. The scope is stated plainly — what goes, and what stays.
+ */
+function PurgeContent() {
+  const [open, setOpen] = useState(false);
+  const [stage, setStage] = useState<"intro" | "code" | "done">("intro");
+  const [sentTo, setSentTo] = useState("");
+  const [code, setCode] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [fp, setFp] = useState<Footprint | null>(null);
+  const [done, setDone] = useState<{ works: number; posts: number; comments: number; books: number; uploads: number } | null>(null);
+  useEffect(() => { if (open) AccountApi.footprint().then(setFp).catch(() => setFp(null)); }, [open]);
+
+  async function sendCode() {
+    setBusy(true); setErr("");
+    try {
+      const r = await AccountApi.contentPurgeRequest();
+      setSentTo(r.email || "your email address");
+      setStage("code");
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Couldn't send the code — please try again.");
+    } finally { setBusy(false); }
+  }
+  async function run() {
+    if (confirm !== "DELETE" || code.length < 6 || busy) return;
+    setBusy(true); setErr("");
+    try {
+      const r = await AccountApi.contentPurgeConfirm(code, confirm);
+      setDone({ works: r.works, posts: r.posts, comments: r.comments, books: r.books, uploads: r.uploads });
+      setStage("done");
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Couldn't delete your content — please try again.");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <Card as="section" className="flex flex-col gap-3 p-5">
+      <h2 className="text-[15px] font-bold text-ink">Delete everything you've made</h2>
+      <p className="text-[13px] leading-relaxed text-ink-3">
+        Destroy all your works, posts, replies, books and uploads — permanently, including the files themselves — and keep your account. Your identity, follows, conversations, meetings and wallet are untouched.
+      </p>
+      {!open ? (
+        <div><Button variant="outline" onClick={() => setOpen(true)}>Delete all my content…</Button></div>
+      ) : stage === "done" && done ? (
+        <p className="text-[14px] text-ink-2">
+          Done — {done.works} work{done.works === 1 ? "" : "s"}, {done.posts} post{done.posts === 1 ? "" : "s"}, {done.comments} repl{done.comments === 1 ? "y" : "ies"}, {done.books} book{done.books === 1 ? "" : "s"} and {done.uploads} upload{done.uploads === 1 ? "" : "s"} deleted. Your account is still yours.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {stage === "intro" ? (
+            <>
+              {fp ? (
+                <div className="rounded-card border border-line bg-space-1 p-4 text-[13px] leading-relaxed text-ink-2">
+                  <p className="mb-1"><strong className="text-ink">{fp.works_published + fp.works_drafts}</strong> works · <strong className="text-ink">{fp.posts}</strong> posts · <strong className="text-ink">{fp.comments}</strong> replies · <strong className="text-ink">{fp.files}</strong> files</p>
+                  {fp.works_with_doi > 0 && (
+                    <p className="text-[12.5px] text-ink-3">{fp.works_with_doi} minted a DOI: each stays a valid link that will say the work was deleted by its author, and Zenodo's archived copy is outside our control.</p>
+                  )}
+                </div>
+              ) : null}
+              <p className="text-[14px] text-ink-2">We'll email a confirmation code, which you enter with the word <strong className="text-ink">DELETE</strong>.</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button onClick={() => void sendCode()} disabled={busy} className="h-10 px-5 text-[14px]">{busy ? "Sending…" : "Email me a confirmation code"}</Button>
+                <Button variant="ghost" onClick={() => { setOpen(false); setErr(""); }} disabled={busy} className="h-10 px-4 text-[14px]">Cancel</Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-[14px] text-ink-2">We emailed a 6-digit code to <strong className="text-ink">{sentTo}</strong>.</p>
+              <Field label="Confirmation code">
+                <Input value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  inputMode="numeric" autoComplete="one-time-code" placeholder="123456" className="bg-space-1 px-3.5 tracking-[0.3em]" />
+              </Field>
+              <Field label="Type DELETE to confirm">
+                <Input value={confirm} onChange={(e) => setConfirm(e.target.value)}
+                  autoCapitalize="characters" autoCorrect="off" spellCheck={false} placeholder="DELETE" className="bg-space-1 px-3.5" />
+              </Field>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button onClick={() => void run()} disabled={busy || confirm !== "DELETE" || code.length < 6} className="h-10 px-5 text-[14px] disabled:opacity-40">
+                  {busy ? "Deleting…" : "Permanently delete my content"}
+                </Button>
+                <Button variant="ghost" onClick={() => { setOpen(false); setStage("intro"); setErr(""); }} disabled={busy} className="h-10 px-4 text-[14px]">Cancel</Button>
+              </div>
+            </>
+          )}
+          {err ? <p className="text-[13px] text-rose-300">{err}</p> : null}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // Irreversibly purges the member's entire profile from the (public) database — identity, posts,
 // progress, certificates. Because that can't be undone, it's guarded by BOTH a typed confirmation
 // (the word DELETE) AND a re-auth code emailed to the member (passwordless re-auth), so neither an
@@ -1664,6 +1765,7 @@ export default function Account() {
       <ShellManager />
       <PasskeyManager />
 
+      <PurgeContent />
       <DeleteAccount />
     </div>
   );

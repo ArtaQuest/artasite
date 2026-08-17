@@ -18,7 +18,7 @@
    never disagree about what a file is called or how big it is. */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { libraryItems, type LibraryItem } from "../lib/api";
+import { deleteLibraryFile, libraryItems, type LibraryItem } from "../lib/api";
 import { listItems, saveFromUrl } from "../lib/media-store";
 import { useMotionOff } from "../lib/theme";
 import AudioPlayer from "./audio-player";
@@ -581,9 +581,42 @@ export function LibraryCard({ item, onPick, picked, compact }: {
       {thumb}
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         {head}{prov}
-        <SaveOffline item={item} />
+        <div className="flex flex-wrap items-center gap-2">
+          <SaveOffline item={item} />
+          <DeleteFile item={item} />
+        </div>
       </div>
     </Card>
+  );
+}
+
+/**
+ * THE FILE'S AUTHOR TAKES IT DOWN (operator 2026-08-16: contents fully deletable by authors).
+ *
+ * A published file could only be removed by deleting the whole work — one wrong file in a run of
+ * twelve cost the other eleven. This removes the row, the bytes, and its attachments in anybody's
+ * post; the work, its DOI and its other files stay.
+ *
+ * Shown only to the author (`item.mine`, decided by the server), and the server checks again.
+ */
+function DeleteFile({ item }: { item: LibraryItem }) {
+  const [state, setState] = useState<"idle" | "busy" | "gone">("idle");
+  if (!item.mine || state === "gone") return null;
+  const drop = () => {
+    if (window.prompt(`Delete “${item.label || item.name}” permanently? It is removed from the Library, from any post it was attached to, and its file is destroyed. The work itself stays.\n\nType DELETE to confirm.`) !== "DELETE") return;
+    setState("busy");
+    deleteLibraryFile(item.id)
+      .then(() => setState("gone"))
+      .catch(() => setState("idle"));
+  };
+  return (
+    <button type="button" onClick={drop} disabled={state === "busy"}
+      className="inline-flex items-center gap-1.5 rounded-pill border border-line px-2.5 py-1 text-[12px] text-ink-3 transition-colors hover:border-rose-400/60 hover:text-rose-300 disabled:opacity-50">
+      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" />
+      </svg>
+      {state === "busy" ? "Deleting…" : "Delete"}
+    </button>
   );
 }
 
