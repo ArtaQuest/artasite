@@ -1,4 +1,4 @@
-import { type ReactNode, Fragment, useEffect, useRef, useState } from "react";
+import { type ReactNode, Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import Arta from "../generated/arta/render/Arta";
 import { LanguageSelector } from "./LanguageSelector";
@@ -6,7 +6,7 @@ import { BackgroundSwitcher } from "./BackgroundSwitcher";
 import { Footer } from "./Footer";
 import { SearchSheet, ShellRail } from "./RightRail";
 import { SearchBox } from "./SearchBox";
-import { openSearch } from "../lib/rail";
+import { openSearch, useWide } from "../lib/rail";
 import { UserMenu } from "./UserMenu";
 import { currentUser, isLoggedIn, localePath } from "../lib/wp";
 import { getChatState, subscribeChat } from "../lib/chat-store";
@@ -483,7 +483,87 @@ function CartButton() {
  * toggle, the language pill and the avatar; a field squeezed in beside them would be ~130px of
  * input. The phone keeps the magnifier, which opens the full-screen sheet (RightRail.tsx).
  */
+/**
+ * The header follows the CONTENT FRAME (operator 2026-08-16: "make the size and position of the
+ * search bar match the content frame … right-align the top corner button with the top corner of the
+ * right [column] to keep a constant and uniform gap from the sides").
+ *
+ * The frame moves — it is centred in whatever the rail leaves, and the rail is 256px or 68px — so no
+ * fixed offset can align to it. The header MEASURES it instead: a ResizeObserver on #aq-content-col
+ * and #aq-frame gives the column's left/width and the frame's right edge, and the field and the
+ * row's end padding are set from those numbers, so they track the rail's 240ms width animation
+ * frame by frame and any width the frame ends up at. Below lg there is no right column and the row
+ * is too short for this to make sense; the field stays centred in the flow there.
+ */
+function useContentFrame(enabled: boolean) {
+  const [f, setF] = useState<{ left: number; width: number; right: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!enabled) { setF(null); return; }
+    const frame = document.getElementById("aq-frame");
+    if (!frame) return;
+    const measure = () => {
+      const col = document.getElementById("aq-content-col") || frame;
+      const fr = frame.getBoundingClientRect();
+      const cs = getComputedStyle(frame);
+      const cr = col.getBoundingClientRect();
+      const inner = col === frame
+        ? { left: fr.left + parseFloat(cs.paddingLeft), right: fr.right - parseFloat(cs.paddingRight) }
+        : { left: cr.left, right: cr.right };
+      setF({ left: inner.left, width: inner.right - inner.left, right: fr.right - parseFloat(cs.paddingRight) });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(frame);
+    const col = document.getElementById("aq-content-col");
+    if (col) ro.observe(col);
+    window.addEventListener("resize", measure);
+    // A ResizeObserver fires on a SIZE change and never on a pure move — and at 1440 the frame is
+    // already at max-w-content, so collapsing the rail slides it 94px without resizing it. Follow the
+    // wrapper's padding transition frame by frame instead: rAF from transitionstart to transitionend,
+    // then one final measure for the settled position.
+    let raf = 0;
+    const tick = () => { measure(); raf = requestAnimationFrame(tick); };
+    const onStart = (e: TransitionEvent) => { if (e.propertyName.startsWith("padding") && !raf) raf = requestAnimationFrame(tick); };
+    const onEnd = (e: TransitionEvent) => { if (e.propertyName.startsWith("padding")) { cancelAnimationFrame(raf); raf = 0; measure(); } };
+    document.addEventListener("transitionstart", onStart);
+    document.addEventListener("transitionend", onEnd);
+    document.addEventListener("transitioncancel", onEnd);
+    return () => {
+      ro.disconnect(); window.removeEventListener("resize", measure); cancelAnimationFrame(raf);
+      document.removeEventListener("transitionstart", onStart); document.removeEventListener("transitionend", onEnd); document.removeEventListener("transitioncancel", onEnd);
+    };
+  }, [enabled]);
+  return f;
+}
+
 function Topbar({ onMenu }: { onMenu: () => void }) {
+  const wide = useWide();
+  const frame = useContentFrame(wide);
+  const leftRef = useRef<HTMLDivElement | null>(null);
+  const rightRef = useRef<HTMLDivElement | null>(null);
+  // The field must never run under the lockup on the left or the controls on the right — with the
+  // rail collapsed at 1024px the content column starts under the wordmark. Clamp to the gap between
+  // the two zones, keeping the frame's edges wherever they already fit.
+  const fieldStyle = (() => {
+    if (!wide || !frame) return undefined;
+    // The CONTROLS, not the zones: both zones are flex-1 and meet at the middle of the row, so
+    // clamping to their boxes squeezed the field to its 160px floor. The last child of the left zone
+    // is the lockup; the first VISIBLE child of the right zone is its innermost control.
+    const kids = (el: HTMLElement | null) => el ? ([...el.children] as HTMLElement[]).filter((k) => k.offsetParent !== null && k.getBoundingClientRect().width > 0) : [];
+    const lk = kids(leftRef.current); const rk = kids(rightRef.current);
+    const minLeft = (lk.length ? lk[lk.length - 1].getBoundingClientRect().right : 0) + 16;
+    const maxRight = (rk.length ? rk[0].getBoundingClientRect().left : window.innerWidth) - 16;
+    const left = Math.max(frame.left, minLeft);
+    const right = Math.min(frame.left + frame.width, maxRight);
+    return { left, width: Math.max(160, right - left) };
+  })();
+  // The row's END padding puts the last control's edge on the right column's edge — the same gap
+  // from the window's side as the column keeps. Physical, so it is right in RTL too.
+  const endPad = (() => {
+    if (!wide || !frame) return undefined;
+    const rtl = document.documentElement.dir === "rtl";
+    return { paddingInlineEnd: Math.max(16, rtl ? frame.left : window.innerWidth - frame.right) };
+  })();
   // Phone gaps tighten to gap-1.5 — with the compact language pill + the phone-size lockup the
   // whole row (menu · lockup · search · toggle · language · avatar/Register) fits a 360px viewport
   // with slack, instead of shoving the theme toggle against its neighbours and clipping the
@@ -497,13 +577,12 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
   const onAuthPage = /(^|\/)(login|sign-in|signin)\/?$/.test(aqPath.replace(/\/+$/, "/"));
   return (
     <header className="sticky top-0 z-50 border-b border-line/70 bg-space-1/80 backdrop-blur-md">
-      <div className="flex h-topbar items-center gap-1.5 px-3 md:gap-3 md:px-4">
+      <div className="relative flex h-topbar items-center gap-1.5 px-3 md:gap-3 md:px-4" style={endPad}>
         {/* THREE ZONES, and the outer two carry equal weight — that is what puts the field on
             the bar's own centre line. Centring it between its NEIGHBOURS instead leaves it
             short by whatever the controls weigh, and drifts with the language pill's width
             from one locale to the next (measured: 12px off at 1440 before this). */}
-        <div className="flex min-w-0 flex-1 items-center gap-1.5 md:gap-3">
-        {/* Phone has no rail, so the menu trigger lives here. Desktop's trigger is in the rail. */}
+        <div ref={leftRef} className="flex min-w-0 flex-1 items-center gap-1.5 md:gap-3">
           {/* The rail's toggle, at every width — the rail no longer has a top row of its own. */}
           <IconButton label="Toggle menu" onClick={onMenu} className="h-9 w-9 shrink-0">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M3 6h18M3 12h18M3 18h18" /></svg>
@@ -511,14 +590,17 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
           {/* The one lockup, at the window's start edge, where Reddit puts its own. */}
           <a href={localePath("/")} aria-label="ArtaQuest — home" className="shrink-0"><Logo size="text-xl" /></a>
         </div>
-        {/* THE SEARCH FIELD, centred (Reddit). Capped at Reddit's own ~690px so it stays a utility
-            on a wide screen instead of a banner across the whole bar. */}
-        <div className="hidden w-full max-w-[690px] shrink md:block"><SearchBox compact /></div>
+        {/* THE SEARCH FIELD. At lg+ it is positioned OVER THE CONTENT COLUMN — same left edge, same
+            width — from the measured frame (see useContentFrame); between md and lg it is centred in
+            the flow, Reddit-style, capped at ~690px. One instance either way. */}
+        <div className={wide ? "absolute top-0 flex h-full items-center" : "hidden w-full max-w-[690px] shrink md:block"} style={fieldStyle}>
+          <SearchBox compact />
+        </div>
         {/* Phone: the magnifier opens the full-screen sheet — see the docblock. */}
         <IconButton label="Search" onClick={openSearch} className="h-9 w-9 shrink-0 md:hidden">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.5-4.5" strokeLinecap="round" /></svg>
         </IconButton>
-        <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5 md:gap-3">
+        <div ref={rightRef} className="flex min-w-0 flex-1 items-center justify-end gap-1.5 md:gap-3">
         <CartButton />
           {/* ArtaBot's button moved INTO the search field's end corner (SearchBox.tsx) — one door,
               where the operator asked for it, instead of a second icon in this row. */}
@@ -653,8 +735,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           {/* min-w-0 on the content is load-bearing: without it a wide child (a table, a chart, a
               code block) sets the flex base and pushes the column off-screen instead of scrolling
               inside its own box — the same rule PageRail documents. */}
-          <div className={`mx-auto max-w-content px-gutter py-7 ${shellRail ? "flex gap-6" : ""}`}>
-            {shellRail ? <div className="min-w-0 flex-1">{children}</div> : children}
+          {/* `aq-frame` / `aq-content-col`: the header measures these to put the search field over
+              the content column and its controls on the right column's edge (Topbar). */}
+          <div id="aq-frame" className={`mx-auto max-w-content px-gutter py-7 ${shellRail ? "flex gap-6" : ""}`}>
+            {shellRail ? <div id="aq-content-col" className="min-w-0 flex-1">{children}</div> : children}
             {shellRail ? <ShellRail /> : null}
           </div>
         </main>
