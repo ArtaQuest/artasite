@@ -362,6 +362,35 @@ final class Account {
 		$wpdb->delete( $MG, [ 'user_id' => $uid ] );
 		$wpdb->delete( Data::t( 'aq_meet_rules' ), [ 'user_id' => $uid ] );
 
+		// BOOKS (ArtaRead documents) — through Library::purge_doc, so the sources, the cover and the
+		// extracted body text go, not just the row. The sweep alone would delete rows and leave files.
+		if ( class_exists( '\\AQ\\Library' ) && method_exists( '\\AQ\\Library', 'purge_doc' ) ) {
+			foreach ( Data::all( 'SELECT * FROM ' . Data::t( 'aq_documents' ) . ' WHERE author_id = %d', [ $uid ] ) as $doc ) {
+				Library::purge_doc( $doc );
+			}
+		}
+		// THE RETIRED KINDS' FILES. Their tables are swept by author_id, but a swept row leaves its
+		// bytes on disk — so unlink the file columns FIRST, while the rows are still readable. Each
+		// pair is table => [url columns]; every one of these deletes already worked this way per item.
+		foreach ( [
+			'aq_films'         => [ 'video_url', 'poster' ],
+			'aq_illustrations' => [ 'image_url' ],
+			'aq_animations'    => [ 'video_url', 'poster' ],
+			'aq_tracks'        => [ 'audio_url', 'cover' ],
+			'aq_narrations'    => [ 'audio_url' ],
+		] as $tbl => $cols ) {
+			$t = Data::t( $tbl );
+			// The retired kinds' tables may not exist on a fresh install (their seeders were removed
+			// with the platform), and SELECTing from a missing table is a fatal, not an empty set.
+			if ( ! Data::col( 'SHOW TABLES LIKE %s', [ $t ] ) ) { continue; }
+			foreach ( Data::all( "SELECT * FROM $t WHERE author_id = %d", [ $uid ] ) as $row ) {
+				foreach ( $cols as $c ) {
+					$u = (string) ( $row[ $c ] ?? '' );
+					if ( '' !== $u ) { Media::destroy( $u ); }
+				}
+			}
+		}
+
 		// Credentials and identities: API tokens, passkeys, shell keys, the Kaggle handle proof.
 		foreach ( [ 'aq_api_tokens', 'aq_passkeys', 'aq_shell_keys', 'aq_kaggle_ids', 'aq_artabot_sessions' ] as $t ) {
 			$wpdb->delete( Data::t( $t ), [ 'user_id' => $uid ] );

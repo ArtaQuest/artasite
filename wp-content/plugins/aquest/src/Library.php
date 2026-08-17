@@ -341,19 +341,44 @@ final class Library {
 		return self::detail( $row );
 	}
 
-	/** POST library/documents/{id}/delete — owner or operator takedown (removes the row + all source files). */
+	/**
+	 * POST library/documents/{id}/delete — PERMANENT (operator 2026-08-16: "all contents deletable
+	 * permanently by users"). It used to unlink the source files and leave the row behind as
+	 * status='removed', so the book's title, summary, extracted body text and cover stayed in a
+	 * PUBLIC database forever — a member who deleted a book they should not have uploaded had not in
+	 * fact deleted it. Now the row goes with its sources, and the cover with it.
+	 *
+	 * A book has no DOI and nothing cites it, so there is nothing to tombstone: unlike a work, it can
+	 * simply cease to exist.
+	 */
 	public static function remove( $req ) {
 		self::ensure_tables();
 		$row = self::row( Rest::pint( $req, 'id' ) );
 		if ( ! $row ) { return Rest::err( 'not_found', 'Book not found', 404 ); }
 		if ( ! self::can_edit( $row ) ) { return Rest::err( 'forbidden', 'Not your book', 403 ); }
-		foreach ( Data::all( 'SELECT file_url FROM ' . Data::t( 'aq_doc_sources' ) . ' WHERE doc_id = %d', [ (int) $row['id'] ] ) as $s ) {
-			self::unlink_file( (string) $s['file_url'] );
-		}
-		global $wpdb;
-		$wpdb->delete( Data::t( 'aq_doc_sources' ), [ 'doc_id' => (int) $row['id'] ] );
-		Data::update( 'aq_documents', [ 'status' => 'removed', 'updated' => Data::now() ], [ 'id' => (int) $row['id'] ] );
+		self::purge_doc( $row );
 		return [ 'ok' => true ];
+	}
+
+	/** Destroy one book: its sources (files + rows), its cover, and the row itself. Also called by
+	 *  Account::purge, so deleting one book and purging an account cannot diverge. */
+	public static function purge_doc( $row ) {
+		global $wpdb;
+		$id = (int) $row['id'];
+		foreach ( Data::all( 'SELECT file_url FROM ' . Data::t( 'aq_doc_sources' ) . ' WHERE doc_id = %d', [ $id ] ) as $s ) {
+			self::unlink_file( (string) $s['file_url'] );
+			// unlink_file only knows this origin's library-sources directory; a file that was moved to
+			// the CDN needs the object removed too, or the URL keeps answering.
+			if ( class_exists( '\\AQ\\Media' ) ) { Media::destroy( (string) $s['file_url'] ); }
+		}
+		$wpdb->delete( Data::t( 'aq_doc_sources' ), [ 'doc_id' => $id ] );
+		// The cover, written by cover_from_bytes() as uploads/library/book-<id>-cover.<ext>.
+		$up = wp_upload_dir();
+		if ( empty( $up['error'] ) ) {
+			foreach ( glob( $up['basedir'] . '/library/book-' . $id . '-cover.*' ) ?: [] as $f ) { @unlink( $f ); }
+		}
+		if ( '' !== (string) ( $row['thumb'] ?? '' ) && class_exists( '\\AQ\\Media' ) ) { Media::destroy( (string) $row['thumb'] ); }
+		$wpdb->delete( Data::t( 'aq_documents' ), [ 'id' => $id ] );
 	}
 
 	// ── ArtaPublishing relay (auth: 'worker') — the brief→original-book write ───────────────────────
