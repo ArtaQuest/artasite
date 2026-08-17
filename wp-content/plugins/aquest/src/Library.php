@@ -590,6 +590,12 @@ final class Library {
 	private static function unlink_file( $url ) {
 		$up = wp_upload_dir();
 		if ( ! empty( $up['error'] ) || $url === '' ) { return; }
+		// AND THE CDN OBJECT. A file that was migrated to the CDN no longer matches the origin prefix
+		// tested below, so this helper used to do NOTHING for it — the row went and the bytes stayed
+		// downloadable. Media::destroy resolves a CDN URL to its key and deletes the object; it
+		// refuses any other origin, so an external URL is never touched.
+		if ( class_exists( '\\AQ\\Media' ) ) { Media::destroy( $url ); }
+
 		if ( strpos( $url, $up['baseurl'] . '/library-sources/' ) !== 0 ) { return; }
 		$path = $up['basedir'] . '/library-sources/' . basename( $url );
 		if ( is_file( $path ) ) { @unlink( $path ); }
