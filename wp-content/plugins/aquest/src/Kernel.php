@@ -1211,20 +1211,35 @@ class Kernel {
 	 *
 	 * DELETE rather than orphan with nb_id = 0: UNIQUE (nb_id, name_key) means the SECOND
 	 * de-selection of the same filename would collide with the first orphan and the update would
-	 * silently fail, leaving a live Library row for a file the author had removed. The bytes stay
-	 * on the CDN — content-addressed, and possibly shared with another work — only the listing goes.
+	 * silently fail, leaving a live Library row for a file the author had removed. The OBJECT goes
+	 * too, unless another Library row still names the same content-addressed key — de-selecting a
+	 * file has to stop it being downloadable, not merely stop it being listed.
 	 */
 	private static function prune( $r, $sel ) {
 		global $wpdb;
+		$L    = Data::t( 'aq_library' );
 		$keys = array_map( 'sha1', (array) $sel );
-		$rows = Data::all( 'SELECT id, name_key FROM ' . Data::t( 'aq_library' ) . ' WHERE nb_id = %d', [ (int) $r['id'] ] );
+		$rows = Data::all( "SELECT id, name_key, cdn_key FROM $L WHERE nb_id = %d", [ (int) $r['id'] ] );
 		foreach ( $rows as $row ) {
 			if ( in_array( (string) $row['name_key'], $keys, true ) ) { continue; }
 			// Anything already attached to a post keeps its row: deleting it would blank an
 			// attachment sitting in someone's timeline. It stops being newly attachable anyway,
 			// because Kernel::library joins on a PUBLISHED work.
 			if ( (int) Data::col( 'SELECT COUNT(*) FROM ' . Data::t( 'aq_post_media' ) . ' WHERE lib_id = %d', [ (int) $row['id'] ] ) > 0 ) { continue; }
-			$wpdb->delete( Data::t( 'aq_library' ), [ 'id' => (int) $row['id'] ], [ '%d' ] );
+			$id  = (int) $row['id'];
+			$key = (string) $row['cdn_key'];
+			$wpdb->delete( $L, [ 'id' => $id ], [ '%d' ] );
+			// AND THE BYTES (2026-08-16). Deleting the row alone left the object on the CDN with its
+			// URL still answering — and the likeliest reason an author drops a file from their
+			// selection is that it should not have been published at all. "Unlisted but still
+			// downloadable by anyone who has the link" is not what un-publishing means, and the note
+			// that used to be here ("the key is the sha256, so another work may be serving the very
+			// same object") was a reason to CHECK, not a reason to keep every object forever.
+			if ( '' !== $key ) {
+				Media::destroy( $key, static function ( $k ) use ( $L ) {
+					return (int) Data::col( "SELECT COUNT(*) FROM $L WHERE cdn_key = %s", [ $k ] ) > 0;
+				} );
+			}
 		}
 	}
 
@@ -1233,9 +1248,8 @@ class Kernel {
 	 *
 	 * `prune` with an EMPTY selection is exactly "nothing of this work stays listed", including its
 	 * own skip for rows already attached to a post: a removed work must stop feeding the shared
-	 * shelf, but it must not blank an attachment sitting in someone's timeline. The CDN bytes stay
-	 * for the reason prune states — the key is the sha256, so another work may be serving the very
-	 * same object.
+	 * shelf, but it must not blank an attachment sitting in someone's timeline. Each object goes with
+	 * its row unless another row still names the same key (prune's shared-key check).
 	 */
 	public static function unlist( $r ) {
 		if ( ! $r || ! isset( $r['id'] ) ) { return; }
