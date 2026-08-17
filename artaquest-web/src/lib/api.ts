@@ -2293,6 +2293,11 @@ export type ChatRelation =
 export function chatGetKey(user: string | number) {
   return get<{ user: ChatUserCard; key: ChatKey | null }>("/chat/keys", { user });
 }
+/** "I'd like to talk" to somebody with no device key yet — rings and emails them; stores no text.
+ *  `has_key: true` means they DO have one now and the caller should seal and send instead. */
+export function chatKnock(to: string) {
+  return post<{ ok: boolean; has_key: boolean; chat_id?: number; rang?: boolean }>("/chat/knock", { to });
+}
 export function chatRegisterKey(pub: string) {
   return post<{ ok: boolean; key: ChatKey; rotated: boolean }>("/chat/keys", { pub });
 }

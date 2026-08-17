@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  chatCall, chatEmailPrefs, chatGetKey, chatMembers, chatMessages, chatRelation, chatSend,
+  chatCall, chatEmailPrefs, chatGetKey, chatKnock, chatMembers, chatMessages, chatRelation, chatSend,
   chatSetTtl, chatTyping, chatUnsend, chatUploadBlob,
   type ChatBox, type ChatDirectory, type ChatKey, type ChatListItem, type ChatMessages,
   type ChatRelation, type ChatUserCard,
@@ -113,6 +113,25 @@ const nowMs = () => Date.now();
  * around after the tab closes. A refresh loses it; switching chats does not.
  */
 const drafts = new Map<number, string>();
+
+/**
+ * Messages HELD for a peer who has no device key yet — on disk, not in memory. In-memory would
+ * mean closing the tab loses the one message a stranger was told to expect; on disk it survives
+ * until the peer's key appears and whichever tab sees it first sends and clears it. Plaintext,
+ * but this device's own local storage, which already holds the identity's private key material —
+ * nothing here is more sensitive than what is beside it.
+ */
+const HELD_KEY = "aq_dm_held";
+function heldFor(peer: number): string {
+  try { return (JSON.parse(localStorage.getItem(HELD_KEY) || "{}") as Record<string, string>)[String(peer)] || ""; } catch { return ""; }
+}
+function setHeldFor(peer: number, text: string): void {
+  try {
+    const all = JSON.parse(localStorage.getItem(HELD_KEY) || "{}") as Record<string, string>;
+    if (text) all[String(peer)] = text; else delete all[String(peer)];
+    localStorage.setItem(HELD_KEY, JSON.stringify(all));
+  } catch { /* storage full or blocked — the in-memory copy still carries it for this tab */ }
+}
 
 function fmtTime(ts: number): string {
   return new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -332,6 +351,7 @@ function Media({ att, url, onZoom }: { att: SealedAttachment; url: string | null
  */
 function Composer({
   peerId, peerName, compact, editing, replyTo, replyPreview, busy, asked, willRequest, requestLeft,
+  noKey = false, held = false,
   initialText, onSend, onCancel, onPick, onFile, onNote,
 }: {
   peerId: number; peerName: string; compact: boolean;
@@ -339,6 +359,10 @@ function Composer({
   onNote?: (m: string) => void;
   editing: boolean; replyTo: boolean; replyPreview: string; busy: boolean;
   asked: boolean; willRequest: boolean; requestLeft: number;
+  /** They have never opened Chat: no device key, so a message cannot be sealed yet. */
+  noKey?: boolean;
+  /** A message is being held on this device until their key appears. */
+  held?: boolean;
   initialText: string;
   onSend: (text: string) => void;
   onCancel: () => void;
@@ -414,7 +438,20 @@ function Composer({
             onPick(r);
           }} />
       )}
-      {asked ? (
+      {held ? (
+        /* THE HELD STATE, in one line the sender can see. Their message is on this device, the other
+           person has been told, and it goes out the moment they open Chat — which is also why the
+           box stays open: they can change their mind and write something else. */
+        <p className="mb-2 px-1 text-[12px] text-ink-2">
+          <span data-ay-skip="1" className="font-semibold text-ink-2">{peerName}</span>{" "}
+          <span>has been told you’d like to talk. Your message is held on this device and goes out, sealed, the moment they open Chat.</span>
+        </p>
+      ) : noKey ? (
+        <p className="mb-2 px-1 text-[12px] text-ink-2">
+          <span data-ay-skip="1" className="font-semibold text-ink-2">{peerName}</span>{" "}
+          <span>hasn’t opened Chat yet. Write anyway — sending tells them, and your message goes out sealed the moment they do.</span>
+        </p>
+      ) : asked ? (
         <p className="mb-2 px-1 text-[12px] text-ink-2">
           Message request — {requestLeft} of 3 messages left until they accept.
         </p>
@@ -441,7 +478,7 @@ function Composer({
             onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f, f.type); e.target.value = ""; }} />
         </label>
         <GrowingTextarea value={draft} onChange={change}
-          placeholder={editing ? "Edit your message…" : "Write an encrypted message…"}
+          placeholder={editing ? "Edit your message…" : noKey ? "Write your first message — it waits for them, sealed" : "Write an encrypted message…"}
           onKeyDown={(e) => {
             // ENTER SENDS — unless the draft is mid-code-fence, where it adds a line instead.
             // Writing a function into a box that fires on Enter is otherwise a fight, and
@@ -495,6 +532,10 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   const [replyTo, setReplyTo] = useState<Item | null>(null);
   const [editing, setEditing] = useState<Item | null>(null);
   const [busy, setBusy] = useState(false);
+  /** A message written to somebody with no key yet — held on this device, sent the moment their key
+   *  appears. A ref for the text (it must not re-render the thread) and a flag for the UI. */
+  const heldText = useRef(heldFor(peer.id));
+  const [held, setHeld] = useState(() => !!heldFor(peer.id));
   const [failed, setFailed] = useState(false);
   const [failMsg, setFailMsg] = useState("");
   /* THE BANNER IS TWO PIECES OF STATE AND THEY MUST MOVE TOGETHER. I added failMsg so a server
@@ -1103,7 +1144,11 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
   // Four separate reasons the composer can be closed, and they are NOT the same message: no device
   // key to seal to · they blocked me · I blocked them · my request is used up. Collapsing them into
   // one "you can't send" would leave three of the four unexplainable and unfixable.
-  const canSend = !!peerKey && !rel.blocked && !rel.blocked_by && !(rel.asked && rel.request_left <= 0);
+  // The KEY is no longer a condition of writing. Without one the message cannot be sealed yet, but
+  // the sender can still say they want to talk — that is what a message request IS — and the text
+  // is held here until the key appears. Blocking, and a used-up request, still close the box.
+  const canSend = !rel.blocked && !rel.blocked_by && !(rel.asked && rel.request_left <= 0);
+  const noKeyYet = !peerKey;
   /* CALLING is not the same permission as WRITING. While a message request is unanswered you may
      still write (that is what the three-message allowance is for), but Chat::send counts every row
      from you against it — and a call seals TWO: the rtc offer and the "call" bubble. The ring then
@@ -1112,7 +1157,8 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
      chance to be heard on machinery the peer never sees, and watched a call that could not ring.
      A request that has not been accepted cannot be called — say so on the button instead. */
   const requestPending = !!rel.asked || !!rel.will_request;
-  const canCall = canSend && !requestPending;
+  // A call needs the key NOW — there is no holding a WebRTC offer for someone who is not there.
+  const canCall = canSend && !noKeyYet && !requestPending;
 
   async function sealAndSend(payload: ChatPayload, blobName?: string): Promise<boolean> {
     if (!peerKey) return false;
@@ -1180,12 +1226,47 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
     setBusy(false);
   }
 
+  // THE FLUSH. peerKey goes from null to a value exactly when the recipient opens Chat for the first
+  // time (the poll re-reads it every tick). If a message was held for them, it goes now — sealed,
+  // like any other — and the composer is cleared of it. One shot: the flag is dropped first so a
+  // failed send does not loop.
+  useEffect(() => {
+    if (!peerKey || !held || !heldText.current) return;
+    const text = heldText.current;
+    heldText.current = ""; setHeld(false); setHeldFor(peer.id, "");
+    void (async () => {
+      const ok = await sealAndSend({ v: 2, t: "text", body: text });
+      setNote(ok ? `${peer.name} opened Chat — your held message has been sent.` : "Their key arrived but the held message could not be sent — it is back in the box.");
+      if (!ok) { heldText.current = text; setHeldFor(peer.id, text); setHeld(true); }
+    })();
+    // sealAndSend is stable enough for this purpose; re-running on its identity would resend.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [peerKey, held]);
+
   async function submit(text: string) {
     if (!text || busy || !canSend) return;
     setBusy(true);
     const payload: ChatPayload = editing
       ? { v: 2, t: "edit", ref: editing.id, body: text }
       : { v: 2, t: "text", body: text, ...(replyTo ? { ref: replyTo.id } : {}) };
+    if (noKeyYet) {
+      // KNOCK, AND HOLD THE MESSAGE. There is no public key to seal to, so the text stays in this
+      // browser (drafts already persist per peer) and the server is told only that somebody wants
+      // to talk — it rings the bell and sends the "wants to message you" email. When they open Chat
+      // their key is minted, our poll sees it, and the held message goes out sealed. Nothing
+      // plaintext ever leaves this device.
+      try {
+        const r = await chatKnock(peer.slug || String(peer.id));
+        if (r.has_key) { setBusy(false); return; }        // it arrived between our read and now — the poll will pick it up
+        heldText.current = text; setHeldFor(peer.id, text);
+        setHeld(true);
+        setNote(`${peer.name} has been told you’d like to talk. Your message is held on this device and goes out, sealed, the moment they open Chat.`);
+      } catch (e) {
+        setNote(e instanceof ApiError && e.message ? e.message : "Couldn’t send the request — try again.");
+      }
+      setBusy(false);
+      return;
+    }
     const ok = await sealAndSend(payload);
     if (ok) { setReplyTo(null); setEditing(null); }
     setBusy(false);
@@ -1236,6 +1317,10 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
 
   /** The File/Blob front door onto sendBytes — the file input, paste, drop and the voice recorder. */
   async function sendFile(file: File | Blob, mime: string, extra?: { dur?: number; voice?: boolean }) {
+    // Only TEXT can be held for a keyless peer. An attachment is sealed at upload and its key rides
+    // inside the message, so there is nothing to hold it under yet — say so, rather than let
+    // sealAndSend return false and the picture vanish without a word.
+    if (noKeyYet) { setNote(`Text first — ${peer.name} hasn’t opened Chat yet, so a file can’t be sealed to them until they do.`); return; }
     const name = file instanceof File && file.name ? file.name : undefined;
     await sendBytes(await file.arrayBuffer(), mime, { ...extra, name });
   }
@@ -1862,6 +1947,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
             editing={!!editing} replyTo={!!replyTo}
             replyPreview={replyTo ? (view.textOf.get(replyTo.id) || "message") : ""}
             busy={busy} asked={rel.asked} willRequest={rel.will_request} requestLeft={rel.request_left}
+            noKey={noKeyYet} held={held}
             initialText={editing ? (view.edits.get(editing.id) ?? (editing.payload && "body" in editing.payload ? editing.payload.body ?? "" : "")) : (drafts.get(peer.id) ?? "")}
             onSend={(text) => void submit(text)}
             onCancel={() => { setReplyTo(null); setEditing(null); }}
@@ -1894,9 +1980,11 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                 <span>can accept it whenever they like, and then you can write again.</span>
               </p>
             ) : (
+              // Unreachable now that a missing key no longer closes the composer, kept as the
+              // last branch so an unforeseen state still says SOMETHING rather than nothing.
               <p>
                 <span data-ay-skip="1" className="font-semibold text-ink-2">{peer.name}</span>{" "}
-                <span>hasn’t opened Chat yet, so there is no device key to seal anything to. Once they open it once, you can write.</span>
+                <span>can’t receive messages right now.</span>
               </p>
             )}
           </div>
@@ -2179,7 +2267,7 @@ export default function Messages() {
       setPeer(k.user);
       setFilter("");
       setSp((cur) => { cur.set("with", k.user.slug); return cur; }, { replace: true });
-      if (!k.key) setNote(`${k.user.name} hasn’t opened Chat yet, so they can’t receive encrypted messages until they do.`);
+      if (!k.key) setNote(`${k.user.name} hasn’t opened Chat yet. Write anyway — they’ll be told, and your message goes out sealed the moment they do.`);
     } catch {
       setNote("No member found with that username.");
     }

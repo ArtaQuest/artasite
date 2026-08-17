@@ -586,6 +586,7 @@ final class Rest {
 		[ 'GET',  'chat/list',                     'Chat::list_chats', 'user'   ], // ?box=chats|requests|archived|blocked → conversations + unread counts
 		[ 'GET',  'chat/members',                  'Chat::members',    'user'   ], // the member directory + live presence (online first)
 		[ 'GET',  'chat/unread',                   'Chat::unread',     'user'   ], // badge only (+waiting requests, +inbound call) — deliberately does NOT mark presence (see Chat::mark_presence)
+		[ 'POST', 'chat/knock',                    'Chat::knock',      'user'   ], // {to} — "I'd like to talk" to somebody with no device key yet; rings + emails, stores no text
 		[ 'POST', 'chat/relation',                 'Chat::relation',   'user'   ], // accept|decline|block|unblock|mute|unmute|pin|unpin|archive|unarchive one conversation
 		[ 'POST', 'chat/call',                     'Chat::call',       'user'   ], // ring/stop ringing a peer; the ROOM never reaches the server (it rides inside the sealed message)
 		[ 'POST', 'chat/fetch',                    'Chat::fetch_url',  'user'   ],

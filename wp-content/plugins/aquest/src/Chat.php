@@ -867,6 +867,44 @@ final class Chat {
 	 * the thread, does not reach into the other person's copy of a conversation they can still see.
 	 * It is reversible from the Blocked list; nothing here destroys a message.
 	 */
+	/**
+	 * POST chat/knock {to} — say "I'd like to talk" to somebody who has NO device key yet.
+	 *
+	 * The whole point of a message request is reaching a person who has not shown up, and until
+	 * this the composer told a sender: "they haven't opened Chat yet, so there is no device key to
+	 * seal anything to." True, and useless — the one thing that would make them open Chat is
+	 * hearing that somebody is waiting.
+	 *
+	 * So this mints the conversation as a REQUEST with no message in it (which is exactly what a
+	 * request row is), rings the bell, and sends the same email a first message would. Nothing
+	 * plaintext is stored: there is no message yet. The sender's browser keeps what they typed and
+	 * seals it the moment the recipient's key appears — the recipient opening Chat once is what
+	 * mints that key, and this is what gets them to. Idempotent per pair: knock twice, one row.
+	 */
+	public static function knock( $req ) {
+		self::ensure_tables();
+		if ( Rest::throttle( 'aq_chat_knock', 12, 3600 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
+		$uid  = Rest::uid();
+		$to   = trim( (string) Rest::p( $req, 'to', '' ) );
+		$user = ctype_digit( $to ) ? get_userdata( (int) $to ) : get_user_by( 'slug', sanitize_title( $to ) );
+		if ( ! $user || (int) $user->ID === $uid ) { return Rest::err( 'no_member', 'No member with that username.', 404 ); }
+		$peer = (int) $user->ID;
+		// If they DO have a key, this is the wrong door — the client should seal and send.
+		if ( self::active_key( $peer ) ) { return [ 'ok' => true, 'has_key' => true ]; }
+		$chat = self::ensure_chat( $uid, $peer );
+		if ( ! $chat ) { return Rest::err( 'server_error', 'Could not open the conversation.', 500 ); }
+		if ( self::peer_flag( $chat, $uid, 'block' ) ) {
+			return Rest::err( 'blocked', 'This member isn’t accepting messages from you.', 403 );
+		}
+		// Ring once per pair, ever — the ref makes Notify::push idempotent, and email_dm keeps its
+		// own cooldown. Knocking again is allowed and does nothing loud.
+		$me   = get_userdata( $uid );
+		$name = $me ? $me->display_name : 'A member';
+		$rang = Notify::push( $peer, 'dm', $name . ' wants to message you', '', '/messages/', 'knock' . (int) $chat['id'] );
+		if ( $rang ) { self::email_dm( $peer, $uid, $name, (int) $chat['id'], 0, true ); }
+		return [ 'ok' => true, 'has_key' => false, 'chat_id' => (int) $chat['id'], 'rang' => (bool) $rang ];
+	}
+
 	public static function relation( $req ) {
 		self::ensure_tables();
 		if ( Rest::throttle( 'aq_chat_rel', 40, 60 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
