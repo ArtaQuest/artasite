@@ -21,7 +21,7 @@ import {
 import { NB_KIND_META } from "../components/nbview";
 import { LibraryMedia, SaveOffline, foldScene, sceneSet } from "../components/library";
 import { WithRail, RailInline } from "../components/PageRail";
-import { WorkEdit, EditLink } from "../components/WorkEdit";
+import { WorkEdit, EditLink, DeleteWork } from "../components/WorkEdit";
 import { WorkRail } from "../components/WorkRail";
 import { fmtBytes } from "../lib/bytes";
 import { labRunUrl } from "../lib/pykernel";
@@ -399,7 +399,10 @@ export default function NotebookPage() {
             {nb.abstract ? (
               <p className="max-w-3xl border-s-2 border-yang/50 ps-4 text-[15px] leading-relaxed text-ink-2"><span className="font-semibold text-ink">Abstract.</span> {nb.abstract}</p>
             ) : null}
-            <EditLink own={own} onClick={() => setEditing(true)} />
+            <div className="flex flex-wrap items-center gap-2">
+              <EditLink own={own} onClick={() => setEditing(true)} />
+              <DeleteWork own={own} id={nb.id} doi={nb.doi_link} />
+            </div>
             <p className="text-[12px] text-ink-3">
               <span data-ay-skip="1">{nb.kaggle?.author || nb.author.name}</span> · published <span data-ay-skip="1">{new Date((nb.published_at || nb.created) * 1000).toLocaleDateString(uiLocale(), { year: "numeric", month: "long", day: "numeric" })}</span>
               {nb.doi_link ? <> · <a href={nb.doi_link} className="inline-block py-1 text-yin-ink hover:underline">{nb.doi_link.replace(/^https?:\/\//, "")}</a></> : null}
@@ -409,7 +412,10 @@ export default function NotebookPage() {
           <>
             <h1 className="text-2xl font-bold leading-tight text-ink sm:text-3xl">{nb.title}</h1>
             {nb.abstract ? <p className="max-w-3xl text-sm leading-relaxed text-ink-2">{nb.abstract}</p> : null}
-            <EditLink own={own} onClick={() => setEditing(true)} />
+            <div className="flex flex-wrap items-center gap-2">
+              <EditLink own={own} onClick={() => setEditing(true)} />
+              <DeleteWork own={own} id={nb.id} doi={nb.doi_link} />
+            </div>
           </>
         )}
         <div className="flex flex-wrap items-center gap-3">

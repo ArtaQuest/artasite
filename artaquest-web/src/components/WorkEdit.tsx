@@ -19,7 +19,7 @@
  */
 import { useState } from "react";
 import { Button } from "./ui";
-import { saveNotebook, type NotebookFull } from "../lib/api";
+import { deleteNotebook, saveNotebook, type NotebookFull } from "../lib/api";
 
 const field =
   "w-full rounded-field border border-line bg-space-1 px-3 py-2 text-ink outline-none transition-colors focus:border-yin-light";
@@ -111,6 +111,45 @@ export function WorkEdit({
 }
 
 /** The "Edit" affordance on the work's own page — nothing at all for anyone but the author. */
+/**
+ * DELETE, on the work's own page (operator 2026-08-16: "I want to be able to delete it here").
+ *
+ * The only delete lived in the Studio, so an author reading their own work had to remember where
+ * else to go — and the Studio lists submissions, not the thing they are looking at. It sits beside
+ * Edit because they are the same kind of act: this is mine, and I am changing it.
+ *
+ * The confirmation is a typed word rather than a native confirm(), and it says the two things that
+ * cannot be taken back — a minted DOI keeps resolving to a deleted-by-author notice, and Zenodo's
+ * archived copy is outside our control. Same wording as the Studio's, because it is the same act.
+ */
+export function DeleteWork({ own, id, doi }: { own: boolean; id: number; doi?: string }) {
+  const [busy, setBusy] = useState(false);
+  if (!own) return null;
+  const drop = () => {
+    const lines = [
+      "This deletes the work permanently from ArtaQuest — the notebook copy, its published files, its comments and hearts.",
+      doi ? "Its DOI stays a valid link and will say the work was deleted by its author. The copy Zenodo archived when it was published is outside our control." : "",
+      "Your notebook on Kaggle is untouched.",
+      "",
+      "Type DELETE to confirm.",
+    ].filter(Boolean).join("\n");
+    if (window.prompt(lines) !== "DELETE") return;
+    setBusy(true);
+    deleteNotebook(id)
+      .then(() => { window.location.href = "/works"; })
+      .catch(() => setBusy(false));
+  };
+  return (
+    <button type="button" onClick={drop} disabled={busy}
+      className="inline-flex w-fit items-center gap-1.5 rounded-pill border border-line px-3 py-1 text-[13px] text-ink-3 transition-colors hover:border-rose-400/60 hover:text-rose-300 disabled:opacity-50">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" />
+      </svg>
+      {busy ? "Deleting…" : "Delete"}
+    </button>
+  );
+}
+
 export function EditLink({ own, onClick }: { own: boolean; onClick: () => void }) {
   if (!own) return null;
   return (

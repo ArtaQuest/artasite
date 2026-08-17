@@ -1269,7 +1269,45 @@ class Kernel {
 			'sha256' => (string) $row['sha256'],
 			'url'    => Media::url( (string) $row['cdn_key'] ),
 			'uses'   => (int) $row['uses'],
+			// Whose file it is, so the Library can offer its author a delete control and nobody else
+			// (the backend decides again on the way in — this is only what the UI may show).
+			'mine'   => Rest::uid() > 0 && (int) $row['author_id'] === Rest::uid(),
 		];
+	}
+
+	/**
+	 * POST library/files/{id}/delete — THE AUTHOR REMOVES ONE PUBLISHED FILE (operator 2026-08-16:
+	 * contents fully deletable by authors).
+	 *
+	 * Until this existed, a member who wanted one file gone had to delete the whole work: the only
+	 * path that dropped a Library row was re-selecting in the Studio, and a published work's
+	 * selection is fixed. One wrong file in a run of twelve should not cost the other eleven.
+	 *
+	 * It takes the bytes (unless another row still names the same content-addressed key) and the
+	 * attachments of that file in ANY member's post — the file is the author's, and a post that
+	 * borrowed it loses the picture, exactly as a quote loses a deleted original. The work itself,
+	 * its DOI and its other files are untouched.
+	 */
+	public static function file_delete( $req ) {
+		global $wpdb;
+		Notebook::ensure_tables();
+		$uid = Rest::uid();
+		$L   = Data::t( 'aq_library' );
+		$row = Data::one( "SELECT * FROM $L WHERE id = %d", [ Rest::pint( $req, 'id' ) ] );
+		if ( ! $row ) { return Rest::err( 'not_found', 'No such file', 404 ); }
+		if ( (int) $row['author_id'] !== $uid && ! current_user_can( 'manage_options' ) ) {
+			return Rest::err( 'forbidden', 'Not your file', 403 );
+		}
+		$id  = (int) $row['id'];
+		$key = (string) $row['cdn_key'];
+		$wpdb->delete( Data::t( 'aq_post_media' ), [ 'lib_id' => $id ] );
+		$wpdb->delete( $L, [ 'id' => $id ] );
+		if ( '' !== $key ) {
+			Media::destroy( $key, static function ( $k ) use ( $L ) {
+				return (int) Data::col( "SELECT COUNT(*) FROM $L WHERE cdn_key = %s", [ $k ] ) > 0;
+			} );
+		}
+		return [ 'ok' => true ];
 	}
 
 	/**

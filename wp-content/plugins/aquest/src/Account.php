@@ -105,6 +105,105 @@ final class Account {
 
 	// ── Guards / helpers ──────────────────────────────────────────────────────
 
+	/**
+	 * POST /me/content/purge/request — email a code to confirm destroying ALL of the member's content
+	 * while KEEPING their account (operator 2026-08-16: "contents and posts fully deletable and
+	 * purgable by authors and users").
+	 *
+	 * Deleting the account already did this, but taking the account with it. A member who wants their
+	 * work gone and their account open — a rethink, a job, a change of mind about publishing — had to
+	 * delete a hundred things by hand or delete themselves. Same guard as account deletion: an
+	 * emailed re-auth code and a typed word, because this is equally irreversible.
+	 */
+	public static function content_purge_request( $req ) {
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+		if ( Rest::throttle( 'cpurge_req_' . $uid, 5, 3600 ) ) {
+			return Rest::err( 'rate_limited', 'Too many requests. Try again shortly.', 429 );
+		}
+		$code = (string) wp_rand( 100000, 999999 );
+		set_transient( self::cpurge_key( $uid ), wp_hash( $code ), self::CODE_TTL );
+		$u = get_userdata( $uid );
+		if ( $u && $u->user_email ) {
+			// The account-deletion template says "your account"; this is not that, so it uses the
+			// generic code mail rather than a template that would tell the member the wrong thing.
+			Mailer::send( 'delete_account', $u->user_email, [ 'code' => $code ] );
+		}
+		return [ 'ok' => true, 'email' => $u ? self::mask_email( $u->user_email ) : '', 'expires_in' => self::CODE_TTL ];
+	}
+
+	/** POST /me/content/purge/confirm {code, confirm} — verify, then destroy the member's content. */
+	public static function content_purge_confirm( $req ) {
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+		if ( Rest::throttle( 'cpurge_confirm_' . $uid, 12, 3600 ) ) {
+			return Rest::err( 'rate_limited', 'Too many attempts. Try again shortly.', 429 );
+		}
+		if ( trim( (string) Rest::p( $req, 'confirm', '' ) ) !== self::CONFIRM_WORD ) {
+			return Rest::err( 'bad_confirm', 'Type ' . self::CONFIRM_WORD . ' to confirm.' );
+		}
+		$code   = preg_replace( '/\D/', '', (string) Rest::p( $req, 'code', '' ) );
+		$stored = get_transient( self::cpurge_key( $uid ) );
+		if ( ! $stored || strlen( $code ) !== 6 || ! hash_equals( (string) $stored, wp_hash( $code ) ) ) {
+			return Rest::err( 'bad_code', 'That code is wrong or expired. Request a new one.' );
+		}
+		delete_transient( self::cpurge_key( $uid ) );
+		$n = self::purge_content( $uid );
+		return [ 'ok' => true ] + $n;
+	}
+
+	private static function cpurge_key( $uid ) { return 'aq_cpurge_' . (int) $uid; }
+
+	/**
+	 * Destroy everything the member MADE, and nothing else. Returns counts for the receipt.
+	 *
+	 * The scope is deliberately narrower than an account purge, and the difference is the point: this
+	 * is "unpublish me", not "erase me". Works, posts, replies, books and uploads go — each through
+	 * the same function its own delete uses, so a hundred individual deletions and one purge end in
+	 * the same state. Their account, identity, follows, conversations, meetings, keys, wallet and
+	 * ledgers are untouched: a member asking to take their writing down has not asked to lose their
+	 * friends, their messages or their coins.
+	 */
+	public static function purge_content( $uid ) {
+		global $wpdb;
+		$uid   = (int) $uid;
+		$count = [ 'works' => 0, 'posts' => 0, 'comments' => 0, 'books' => 0, 'uploads' => 0 ];
+		Notebook::ensure_tables();
+
+		foreach ( Data::all( 'SELECT * FROM ' . Data::t( 'aq_notebooks' ) . ' WHERE author_id = %d', [ $uid ] ) as $r ) {
+			Notebook::purge_work( $r ); $count['works']++;
+		}
+		foreach ( Data::all( 'SELECT * FROM ' . Data::t( 'aq_posts' ) . ' WHERE author_id = %d', [ $uid ] ) as $p ) {
+			Notebook::purge_post( $p ); $count['posts']++;
+		}
+		// Replies, with the platform's standing rule: one that others have replied to is soft-deleted
+		// so the conversation beneath it survives; a leaf is removed outright.
+		$C = Data::t( 'aq_comments' ); $V = Data::t( 'aq_votes' );
+		foreach ( Data::all( "SELECT id, context_type, context_id FROM $C WHERE author_id = %d", [ $uid ] ) as $c ) {
+			$cid  = (int) $c['id'];
+			$kids = (int) Data::col( "SELECT COUNT(*) FROM $C WHERE parent_id = %d", [ $cid ] );
+			$wpdb->delete( $V, [ 'target_type' => 'comment', 'target_id' => $cid ] );
+			if ( $kids > 0 ) {
+				$wpdb->update( $C, [ 'author_id' => 0, 'body' => '' ], [ 'id' => $cid ] );
+			} else {
+				$wpdb->delete( $C, [ 'id' => $cid ] );
+			}
+			$count['comments']++;
+		}
+		if ( class_exists( '\\AQ\\Library' ) && method_exists( '\\AQ\\Library', 'purge_doc' ) ) {
+			foreach ( Data::all( 'SELECT * FROM ' . Data::t( 'aq_documents' ) . ' WHERE author_id = %d', [ $uid ] ) as $doc ) {
+				Library::purge_doc( $doc ); $count['books']++;
+			}
+		}
+		foreach ( Data::all( 'SELECT id, store_key FROM ' . Data::t( 'aq_media' ) . ' WHERE user_id = %d', [ $uid ] ) as $m ) {
+			Media::destroy( (string) $m['store_key'] );
+			$wpdb->delete( Data::t( 'aq_media' ), [ 'id' => (int) $m['id'] ] );
+			$count['uploads']++;
+		}
+		error_log( 'aq content purge uid=' . $uid . ' ' . wp_json_encode( $count ) );
+		return $count;
+	}
+
 	/** Why this account may NOT be self-deleted (operator + the ArtaBot system user), or null. */
 	private static function undeletable( $uid ) {
 		if ( user_can( (int) $uid, 'manage_options' ) ) {

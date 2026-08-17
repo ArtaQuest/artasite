@@ -311,7 +311,9 @@ function CreateMenu({ expanded, onNavigate }: { expanded: boolean; onNavigate: (
         <div
           role="menu"
           aria-label="Create"
-          className="absolute start-0 z-50 mt-1 w-[16.5rem] overflow-hidden rounded-card border border-line bg-space-2 shadow-card"
+          /* Upward: the button now sits at the FOOT of the rail, so a downward panel would open
+             past the bottom of the window. */
+          className="absolute bottom-full start-0 z-50 mb-1 w-[16.5rem] overflow-hidden rounded-card border border-line bg-space-2 shadow-card"
         >
           {CREATE_ITEMS.map((c) => (
             <a
@@ -366,15 +368,6 @@ function Sidebar({ active, expanded, onNavigate }: { active: string; expanded: b
             what the hoist was meant to stop. The hairline stays as the rail's own top edge. */}
         <div className="mx-3 mt-3 h-px bg-gradient-to-r rtl:bg-gradient-to-l from-yin-light/55 via-veil/12 to-yang/55" aria-hidden />
 
-        {/* THE CREATE BUTTON (operator 2026-07-28) — Kaggle's shape, and the platform's one primary
-            action. It was pulled in 2026-06-23 because it pointed at /discussions/ and nobody could
-            tell what it would create; that objection is answered rather than overruled, because the
-            reset gave publishing exactly ONE front door — paste a Kaggle notebook link in the
-            Studio. Geometry follows the rail: the icon box is w-rail so the + never moves when the
-            sidebar widens, and only the label column is revealed, exactly like every nav row below.
-            Signed-out visitors are sent to sign in — the destination is theirs either way, and a
-            dead-ending CTA is worse than an honest one. */}
-        <CreateMenu expanded={expanded} onNavigate={onNavigate} />
 
 
         {/* nav — scrolls on its own; the hidden scrollbar keeps the rail clean. Each icon box
@@ -420,6 +413,17 @@ function Sidebar({ active, expanded, onNavigate }: { active: string; expanded: b
             );
           })}
         </nav>
+        {/* CREATE — BELOW THE NAV (operator 2026-08-16: "the Create button should be in the bottom
+            like X"). X puts Post under its nav list, not above it, and the reason shows on a short
+            window: pinned to the top, the primary action sits furthest from the thumb and from the
+            member's own row. Here it lands with the account row at the end of the rail, where the
+            hand already is, and the nav reads as one uninterrupted list.
+
+            It keeps everything the 2026-07-28 pass decided: the platform's ONE primary action, three
+            honest front doors behind a menu (submit a run notebook, write one in the Lab, found a
+            challenge) rather than a button that pretends publishing is the only thing to start, and
+            a signed-out visitor sent to sign in rather than into a menu that would bounce them. */}
+        <CreateMenu expanded={expanded} onNavigate={onNavigate} />
 
         {/* THE ACCOUNT ROW (operator 2026-08-16: "make the left bar like X"). X ends its left rail
             with the signed-in member — face, name, handle — and so do we. It is a link to the

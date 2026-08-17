@@ -195,6 +195,9 @@ final class Rest {
 		[ 'POST', 'me/delete/request',             'Account::delete_request', 'user' ],
 		[ 'POST', 'me/delete/confirm',             'Account::delete_confirm', 'user' ],
 		[ 'GET',  'me/footprint',                  'Account::footprint',      'user' ], // what a purge destroys, counted — the confirm screen reads it
+		// Destroy everything the member MADE and keep their account — 'unpublish me', not 'erase me'.
+		[ 'POST', 'me/content/purge/request',       'Account::content_purge_request', 'user' ],
+		[ 'POST', 'me/content/purge/confirm',       'Account::content_purge_confirm', 'user' ],
 
 		// ── Identity + verification (blue check) ──────────────────────────────
 		[ 'GET',  'verify/status',                 'Verify::status',          'user' ],
@@ -690,6 +693,7 @@ final class Rest {
 		[ 'GET',  'studio/notebooks/(?P<id>[0-9]+)/outputs', 'Kernel::outputs',          'user'   ], // the run's output files, for the picker
 		[ 'POST', 'studio/notebooks/(?P<id>[0-9]+)/select',  'Kernel::select',           'user'   ], // {files[]} → choose, derive the kind, re-check
 		[ 'GET',  'library',                                 'Kernel::library',          'public' ], // every published file, attachable by anyone
+		[ 'POST', 'library/files/(?P<id>[0-9]+)/delete',      'Kernel::file_delete',      'user'   ], // the file's AUTHOR removes one published file (bytes + attachments)
 		// The six relay/nb/* worker routes (poll · beat · review · update · complete · release) drove
 		// the local offline executor + AI review panel, retired 2026-07-28. Nothing enqueues a run any
 		// more (the studio run route went with it), no client in the tree calls them, and relay/nb/update
