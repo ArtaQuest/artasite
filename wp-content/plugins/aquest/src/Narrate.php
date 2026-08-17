@@ -265,6 +265,8 @@ final class Narrate {
 			$up = wp_upload_dir();
 			$p  = $up['basedir'] . '/narrations/' . basename( (string) $row['audio_url'] );
 			if ( is_file( $p ) ) { @unlink( $p ); }
+			// The CDN object too, for a narration whose audio was migrated (see Media::destroy).
+			if ( class_exists( '\\AQ\\Media' ) ) { Media::destroy( (string) $row['audio_url'] ); }
 		}
 		global $wpdb;
 		$wpdb->delete( Data::t( 'aq_narrations' ), [ 'id' => (int) $row['id'] ] );
