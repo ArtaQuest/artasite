@@ -551,8 +551,14 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
     // is the lockup; the first VISIBLE child of the right zone is its innermost control.
     const kids = (el: HTMLElement | null) => el ? ([...el.children] as HTMLElement[]).filter((k) => k.offsetParent !== null && k.getBoundingClientRect().width > 0) : [];
     const lk = kids(leftRef.current); const rk = kids(rightRef.current);
-    const minLeft = (lk.length ? lk[lk.length - 1].getBoundingClientRect().right : 0) + 16;
-    const maxRight = (rk.length ? rk[0].getBoundingClientRect().left : window.innerWidth) - 16;
+    // GAP 8, not 16. The clamp exists to stop the field running UNDER the lockup or the controls;
+    // it is not a layout margin. At 1440 the controls begin 14.9px after the content column ends, so
+    // a 16px demand shaved 1.08px off a field that would otherwise match the column exactly — the
+    // clamp biting when there was nothing to prevent. At 8 it only engages where the column really
+    // would collide (a collapsed rail at 1024, where it starts under the wordmark).
+    const GAP = 8;
+    const minLeft = (lk.length ? lk[lk.length - 1].getBoundingClientRect().right : 0) + GAP;
+    const maxRight = (rk.length ? rk[0].getBoundingClientRect().left : window.innerWidth) - GAP;
     const left = Math.max(frame.left, minLeft);
     const right = Math.min(frame.left + frame.width, maxRight);
     return { left, width: Math.max(160, right - left) };
