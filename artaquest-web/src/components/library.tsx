@@ -22,7 +22,7 @@ import { deleteLibraryFile, libraryItems, type LibraryItem } from "../lib/api";
 import { listItems, saveFromUrl } from "../lib/media-store";
 import { useMotionOff } from "../lib/theme";
 import AudioPlayer from "./audio-player";
-import {
+import { ConfirmDialog,
   Avatar, Button, Card, Chip, EmptyState, IconButton, LoadMoreButton,
   SearchPill, SkeletonGrid, StatusNote, cx,
 } from "./ui";
@@ -600,23 +600,35 @@ export function LibraryCard({ item, onPick, picked, compact }: {
  * Shown only to the author (`item.mine`, decided by the server), and the server checks again.
  */
 function DeleteFile({ item }: { item: LibraryItem }) {
+  const [ask, setAsk] = useState(false);
   const [state, setState] = useState<"idle" | "busy" | "gone">("idle");
   if (!item.mine || state === "gone") return null;
-  const drop = () => {
-    if (window.prompt(`Delete “${item.label || item.name}” permanently? It is removed from the Library, from any post it was attached to, and its file is destroyed. The work itself stays.\n\nType DELETE to confirm.`) !== "DELETE") return;
-    setState("busy");
-    deleteLibraryFile(item.id)
-      .then(() => setState("gone"))
-      .catch(() => setState("idle"));
-  };
   return (
-    <button type="button" onClick={drop} disabled={state === "busy"}
-      className="inline-flex items-center gap-1.5 rounded-pill border border-line px-2.5 py-1 text-[12px] text-ink-3 transition-colors hover:border-rose-400/60 hover:text-rose-300 disabled:opacity-50">
-      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" />
-      </svg>
-      {state === "busy" ? "Deleting…" : "Delete"}
-    </button>
+    <>
+      <button type="button" onClick={() => setAsk(true)}
+        className="inline-flex items-center gap-1.5 rounded-pill border border-line px-2.5 py-1 text-[12px] text-ink-3 transition-colors hover:border-rose-400/60 hover:text-rose-300">
+        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" />
+        </svg>
+        Delete
+      </button>
+      <ConfirmDialog
+        open={ask}
+        busy={state === "busy"}
+        word="DELETE"
+        title="Delete this file permanently?"
+        confirmLabel="Delete for good"
+        onCancel={() => setAsk(false)}
+        onConfirm={() => {
+          setState("busy");
+          deleteLibraryFile(item.id).then(() => { setState("gone"); setAsk(false); }).catch(() => { setState("idle"); setAsk(false); });
+        }}
+        body={<>
+          <p><span data-ay-skip="1" className="font-semibold text-ink">{item.label || item.name}</span> is removed from the Library and from any post it was attached to, and its file is destroyed.</p>
+          <p className="text-ink-3">The work it came from, its DOI and its other files stay.</p>
+        </>}
+      />
+    </>
   );
 }
 

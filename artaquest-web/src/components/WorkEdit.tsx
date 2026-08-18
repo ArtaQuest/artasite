@@ -18,7 +18,7 @@
  * surprise, so it is stated before the save, not reported after it.
  */
 import { useState } from "react";
-import { Button } from "./ui";
+import { ConfirmDialog, Button } from "./ui";
 import { deleteNotebook, saveNotebook, type NotebookFull } from "../lib/api";
 
 const field =
@@ -123,30 +123,36 @@ export function WorkEdit({
  * archived copy is outside our control. Same wording as the Studio's, because it is the same act.
  */
 export function DeleteWork({ own, id, doi }: { own: boolean; id: number; doi?: string }) {
+  const [ask, setAsk] = useState(false);
   const [busy, setBusy] = useState(false);
   if (!own) return null;
-  const drop = () => {
-    const lines = [
-      "This deletes the work permanently from ArtaQuest — the notebook copy, its published files, its comments and hearts.",
-      doi ? "Its DOI stays a valid link and will say the work was deleted by its author. The copy Zenodo archived when it was published is outside our control." : "",
-      "Your notebook on Kaggle is untouched.",
-      "",
-      "Type DELETE to confirm.",
-    ].filter(Boolean).join("\n");
-    if (window.prompt(lines) !== "DELETE") return;
-    setBusy(true);
-    deleteNotebook(id)
-      .then(() => { window.location.href = "/works"; })
-      .catch(() => setBusy(false));
-  };
   return (
-    <button type="button" onClick={drop} disabled={busy}
-      className="inline-flex w-fit items-center gap-1.5 rounded-pill border border-line px-3 py-1 text-[13px] text-ink-3 transition-colors hover:border-rose-400/60 hover:text-rose-300 disabled:opacity-50">
-      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" />
-      </svg>
-      {busy ? "Deleting…" : "Delete"}
-    </button>
+    <>
+      <button type="button" onClick={() => setAsk(true)}
+        className="inline-flex w-fit items-center gap-1.5 rounded-pill border border-line px-3 py-1 text-[13px] text-ink-3 transition-colors hover:border-rose-400/60 hover:text-rose-300">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" />
+        </svg>
+        Delete
+      </button>
+      <ConfirmDialog
+        open={ask}
+        busy={busy}
+        word="DELETE"
+        title="Delete this work permanently?"
+        confirmLabel="Delete for good"
+        onCancel={() => setAsk(false)}
+        onConfirm={() => {
+          setBusy(true);
+          deleteNotebook(id).then(() => { window.location.href = "/works"; }).catch(() => { setBusy(false); setAsk(false); });
+        }}
+        body={<>
+          <p>The notebook copy, its published files, its comments and its hearts are destroyed. This cannot be undone.</p>
+          {doi ? <p>Its DOI stays a valid link and will say the work was deleted by its author. The copy Zenodo archived when it was published is outside our control.</p> : null}
+          <p className="text-ink-3">Your notebook on Kaggle is untouched.</p>
+        </>}
+      />
+    </>
   );
 }
 

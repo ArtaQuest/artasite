@@ -30,7 +30,7 @@ import {
 import { isLoggedIn } from "../lib/auth";
 import { Checklist, KernelFacts } from "../components/checklist";
 import { NB_KIND_META } from "../components/nbview";
-import {
+import { ConfirmDialog,
   BackLink, Button, Card, Chip, EmptyState, Field, Input, PageHero, SearchPill, Select, SignInGate,
   SkeletonGrid, StatusNote, cx,
 } from "../components/ui";
@@ -397,6 +397,11 @@ function FilePicker({ nb, selection, kind, onSaved }: { nb: number; selection: s
 
 function WorkFlow({ id }: { id: number }) {
   const [nb, setNb] = useState<NotebookFull | null>(null);
+  // Delete-confirmation state lives up here with the rest: this component returns early while the
+  // work is loading, and a hook declared after that return would run in a different order on the
+  // first render than on the second.
+  const [askDrop, setAskDrop] = useState(false);
+  const [dropping, setDropping] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState("");
   const [note, setNote] = useState("");
@@ -457,22 +462,32 @@ function WorkFlow({ id }: { id: number }) {
   // promise that a link resolves), and the copy Zenodo archived at publication is NOT ours to
   // withdraw. The confirmation is a typed word, not a native confirm(): a native dialog is one
   // reflexive Enter away from destroying a published work.
-  const drop = () => {
-    const doi = !!(nb?.doi_link);
-    const lines = [
-      "This deletes the work permanently from ArtaQuest — the notebook copy, its published files, its comments and hearts.",
-      doi ? "Its DOI stays a valid link and will say the work was deleted by its author. The copy Zenodo archived when it was published is outside our control." : "",
-      "Your notebook on Kaggle is untouched.",
-      "",
-      "Type DELETE to confirm.",
-    ].filter(Boolean).join("\n");
-    const typed = window.prompt(lines);
-    if (typed !== "DELETE") return;
-    deleteNotebook(id).then(() => { window.location.href = "/studio"; });
-  };
+  // Confirmed in OUR surface, not the browser's: window.prompt is unstyleable, blocks the tab,
+  // is truncated to a strip by Safari — hiding the very sentences that say what cannot be undone —
+  // and can be permanently suppressed in Firefox, which would leave a delete button that silently
+  // does nothing. Same ConfirmDialog the work's own page uses, so the two doors to one act cannot
+  // describe it differently.
+  const drop = () => setAskDrop(true);
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-8">
+      <ConfirmDialog
+        open={askDrop}
+        busy={dropping}
+        word="DELETE"
+        title="Delete this submission permanently?"
+        confirmLabel="Delete for good"
+        onCancel={() => setAskDrop(false)}
+        onConfirm={() => {
+          setDropping(true);
+          deleteNotebook(id).then(() => { window.location.href = "/studio"; }).catch(() => { setDropping(false); setAskDrop(false); });
+        }}
+        body={<>
+          <p>The notebook copy, its published files, its comments and its hearts are destroyed. This cannot be undone.</p>
+          {nb?.doi_link ? <p>Its DOI stays a valid link and will say the work was deleted by its author. The copy Zenodo archived when it was published is outside our control.</p> : null}
+          <p className="text-ink-3">Your notebook on Kaggle is untouched.</p>
+        </>}
+      />
       <BackLink href="/studio">All submissions</BackLink>
 
       <PageHero
