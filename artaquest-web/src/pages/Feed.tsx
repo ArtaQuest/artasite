@@ -22,7 +22,7 @@ import { NB_KIND_META, teaserSrc, TeaserVideo, useAqTheme, useCalmFlag } from ".
 import { LibraryMedia, LibraryPicker } from "../components/library";
 
 import { PostThread } from "./NotebookPage";
-import { Avatar, Button, cx, EmptyState, HeartGlyph } from "../components/ui";
+import { ConfirmDialog, Avatar, Button, cx, EmptyState, HeartGlyph } from "../components/ui";
 import { RailPortal } from "../components/RightRail";
 import { ChallengesCard, HappeningCard, NewsCard, TodaysNewsCard, WhoToFollowCard } from "../components/RailCards";
 import { useRail } from "../lib/rail";
@@ -251,6 +251,10 @@ function FeedPost({ post, onDeleted, hearted }: { post: FeedPostT; onDeleted?: (
   const own = !!me?.slug && me.slug === post.author.slug;
   const [body, setBody] = useState(post.body);
   const [editing, setEditing] = useState(false);
+  // The post's own confirmation, in our surface rather than the browser's (ui.tsx ConfirmDialog).
+  // No typed word here: a post is one sentence and deleting it is not a DOI-bearing act — the guard
+  // is the second deliberate click, not a spelling test.
+  const [askDelete, setAskDelete] = useState(false);
   const [draft, setDraft] = useState(post.body);
   // Save and Delete used to have no .catch at all: a stale nonce, a rate limit or an offline moment
   // rejected silently, the button looked like it had done nothing, and a member retyping the same
@@ -315,16 +319,24 @@ function FeedPost({ post, onDeleted, hearted }: { post: FeedPostT; onDeleted?: (
             <span className="text-ink-3">·</span>
             <time className="shrink-0 text-ink-3" dateTime={new Date(post.created * 1000).toISOString()}>{timeAgo(post.created)}</time>
             {own ? (
-              <OwnMenu onEdit={() => setEditing(true)}
-                onDelete={() => {
-                  if (!window.confirm("Delete this post?")) return;
-                  setWriteErr("");
-                  deletePost(post.id)
-                    .then(() => onDeleted?.(post.id))
-                    .catch((e) => setWriteErr(e instanceof Error && e.message ? e.message : "Couldn't delete that post."));
-                }} />
+              <OwnMenu onEdit={() => setEditing(true)} onDelete={() => setAskDelete(true)} />
             ) : null}
           </div>
+          <ConfirmDialog
+            open={askDelete}
+            danger
+            title="Delete this post?"
+            confirmLabel="Delete"
+            onCancel={() => setAskDelete(false)}
+            onConfirm={() => {
+              setAskDelete(false);
+              setWriteErr("");
+              deletePost(post.id)
+                .then(() => onDeleted?.(post.id))
+                .catch((e) => setWriteErr(e instanceof Error && e.message ? e.message : "Couldn't delete that post."));
+            }}
+            body={<p>It goes for good, with its attachments, its hearts and any bare reposts of it. Quotes of it stay, and will show the post as unavailable.</p>}
+          />
           <Collapse>
             {editing ? (
               <div onClick={(e) => e.stopPropagation()} className="mt-1">

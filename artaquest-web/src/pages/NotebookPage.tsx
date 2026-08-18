@@ -26,7 +26,7 @@ import { WorkRail } from "../components/WorkRail";
 import { fmtBytes } from "../lib/bytes";
 import { labRunUrl } from "../lib/pykernel";
 import { watchMath } from "../lib/math";
-import { Avatar, Button, Chip, EmptyState, HeartGlyph, SectionHeader, Textarea, cx } from "../components/ui";
+import { ConfirmDialog, Avatar, Button, Chip, EmptyState, HeartGlyph, SectionHeader, Textarea, cx } from "../components/ui";
 import { Checklist } from "../components/checklist";
 import { isLoggedIn } from "../lib/auth";
 import { uiLocale, currentUser } from "../lib/wp";
@@ -183,6 +183,7 @@ function CommentRow({ c, nbId, mine, onReply, onDeleted, depth }: { c: NbComment
   const [votes, setVotes] = useState(c.votes);
   const [body, setBody] = useState(c.body);
   const [editing, setEditing] = useState(false);
+  const [askDelete, setAskDelete] = useState(false);
   const [draft, setDraft] = useState(c.body);
   // Save and Delete had no .catch: a rejected write (stale nonce, ArtaMod refusal, offline) did
   // nothing visible, so the member pressed the same button again and again against the same wall.
@@ -231,14 +232,22 @@ function CommentRow({ c, nbId, mine, onReply, onDeleted, depth }: { c: NbComment
           {own ? (
             <>
               <button type="button" onClick={() => setEditing(true)} className="hover:text-ink-2">Edit</button>
-              <button type="button" className="hover:text-yang-ink"
-                onClick={() => {
-                  if (!window.confirm("Delete this reply?")) return;
+              <button type="button" className="hover:text-yang-ink" onClick={() => setAskDelete(true)}>Delete</button>
+              <ConfirmDialog
+                open={askDelete}
+                danger
+                title="Delete this reply?"
+                confirmLabel="Delete"
+                onCancel={() => setAskDelete(false)}
+                onConfirm={() => {
+                  setAskDelete(false);
                   setWriteErr("");
                   deleteComment(nbId, c.id)
                     .then(onDeleted)
                     .catch((e) => setWriteErr(e instanceof Error && e.message ? e.message : "Couldn't delete that reply."));
-                }}>Delete</button>
+                }}
+                body={<p>Your reply and any replies beneath it are removed.</p>}
+              />
             </>
           ) : null}
         </div>

@@ -5,10 +5,11 @@
 // PiP; PDFs open in the ArtaRead BOOK. Sharing hands the actual file to other apps via the system
 // share sheet (AirDrop/WhatsApp/…) — nothing ever uploads to a server. (Distinct from /library,
 // the platform's published-works Library.)
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { importFiles, listItems, removeItem, shareItem, storageEstimate, getFile, coverUrl, reconcile, isPersisted, continueList, type Progress, type MediaItem, type MediaKind } from "../lib/media-store";
 import { usePlayer, usePlayerCtx, VideoLightbox, PlayerBar as PlayerBarFallback } from "../components/player";
 import { BookReader } from "../components/book";
+import { ConfirmDialog } from "../components/ui";
 import { openPdf, type PdfBook } from "../lib/pdf-extract";
 import { cloudList, cloudUpload, cloudDelete, cloudBuy, type CloudItem, type CloudQuota } from "../lib/api";
 import { isLoggedIn } from "../lib/wp";
@@ -111,9 +112,19 @@ export default function MyLibrary() {
 
   /** Copy one device file up to the member's PUBLIC shelf. The confirm is deliberate: this is the
    *  moment a private file stops being private, and it must never happen by a mis-tap. */
-  const publish = useCallback(async (item: MediaItem) => {
-    if (!isLoggedIn()) { setNote("Sign in to use your cloud shelf."); window.setTimeout(() => setNote(""), 5000); return; }
-    if (!window.confirm(`Publish “${item.title}” to your cloud shelf?\n\nIt becomes PUBLIC — anyone with the link can play or download it, and it appears on your Library page. Files you keep on this device stay private.`)) return;
+  /**
+   * THE CONFIRMATION, IN OUR SURFACE (ui.tsx ConfirmDialog) rather than the browser's. All three
+   * were window.confirm, and the publish one matters most: it is the moment a private file stops
+   * being private, and Safari draws a native confirm as a strip that truncates exactly the sentence
+   * saying so.
+   *
+   * A pending ACTION, not a pending id: each of these is an async callback carrying its own closure,
+   * so the dialog holds the words to show and the thing to run. Sharing one boolean between three
+   * confirmations is how the wrong one fires.
+   */
+  const [pending, setPending] = useState<{ title: string; body: ReactNode; label: string; danger: boolean; run: () => void } | null>(null);
+
+  const doPublish = useCallback(async (item: MediaItem) => {
     setPub({ id: item.id, frac: 0 });
     try {
       const file = await getFile(item);
@@ -126,8 +137,7 @@ export default function MyLibrary() {
     } finally { setPub(null); window.setTimeout(() => setNote(""), 6000); }
   }, [refreshCloud]);
 
-  const unpublish = useCallback(async (c: CloudItem) => {
-    if (!window.confirm(`Remove “${c.title}” from your cloud shelf?\n\nIt stops being public. Your copy on this device is untouched.`)) return;
+  const doUnpublish = useCallback(async (c: CloudItem) => {
     try { const r = await cloudDelete(c.id); setQuota(r.quota); await refreshCloud(); setNote("Removed from your cloud shelf."); }
     catch { setNote("Could not remove it — try again."); }
     window.setTimeout(() => setNote(""), 5000);
@@ -160,17 +170,56 @@ export default function MyLibrary() {
     window.setTimeout(() => setNote(""), 4000);
   }, []);
 
-  const del = useCallback(async (item: MediaItem) => {
-    if (!window.confirm(`Remove “${item.title}” from your library? The file is deleted from this device.`)) return;
+  const doDelete = useCallback(async (item: MediaItem) => {
     if (player.state.current?.id === item.id) player.stop();
     await removeItem(item);
     await refresh();
   }, [player, refresh]);
 
+  const publish = useCallback((item: MediaItem) => {
+    if (!isLoggedIn()) { setNote("Sign in to use your cloud shelf."); window.setTimeout(() => setNote(""), 5000); return; }
+    setPending({
+      title: "Publish to your cloud shelf?",
+      label: "Publish",
+      danger: false,
+      body: <><p><span data-ay-skip="1" className="font-semibold text-ink">{item.title}</span> becomes PUBLIC — anyone with the link can play or download it, and it appears on your Library page.</p><p className="text-ink-3">Files you keep on this device stay private.</p></>,
+      run: () => { void doPublish(item); },
+    });
+  }, [doPublish]);
+
+  const unpublish = useCallback((c: CloudItem) => {
+    setPending({
+      title: "Remove from your cloud shelf?",
+      label: "Remove",
+      danger: true,
+      body: <><p><span data-ay-skip="1" className="font-semibold text-ink">{c.title}</span> stops being public and its link stops working.</p><p className="text-ink-3">Your copy on this device is untouched.</p></>,
+      run: () => { void doUnpublish(c); },
+    });
+  }, [doUnpublish]);
+
+  const del = useCallback((item: MediaItem) => {
+    setPending({
+      title: "Remove from this device?",
+      label: "Remove",
+      danger: true,
+      body: <p>The file for <span data-ay-skip="1" className="font-semibold text-ink">{item.title}</span> is deleted from this device. Anything on your cloud shelf stays there.</p>,
+      run: () => { void doDelete(item); },
+    });
+  }, [doDelete]);
+
   if (book) return <BookReader book={book} onClose={() => setBook(null)} />;
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-28 pt-8" onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={(e) => { e.preventDefault(); setDrag(false); void doImport(e.dataTransfer.files); }}>
+      <ConfirmDialog
+        open={!!pending}
+        title={pending?.title ?? ""}
+        body={pending?.body}
+        confirmLabel={pending?.label ?? "Confirm"}
+        danger={pending?.danger ?? true}
+        onCancel={() => setPending(null)}
+        onConfirm={() => { const p = pending; setPending(null); p?.run(); }}
+      />
       <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">My Library</p>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="mt-1 text-[26px] font-extrabold text-ink">Your music, videos and documents</h1>
