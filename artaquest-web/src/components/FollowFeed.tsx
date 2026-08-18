@@ -117,7 +117,7 @@ function GroupRow({ g, voteBusy, voteErr, onVote }: {
         {profile
           ? <a href={profile} aria-label={actor.name}><Avatar src={actor.avatar} name={actor.name} className="h-9 w-9 text-sm ring-1 ring-line" /></a>
           : <Avatar src={actor.avatar} name={actor.name} className="h-9 w-9 text-sm ring-1 ring-line" />}
-        {/* Verified-nationality flag bottom-LEFT — the bottom-right corner belongs to the event glyph. */}
+        {/* Nationality flag bottom-LEFT — the bottom-right corner belongs to the event glyph. */}
         <FlagBadge country={actor.country} className="-left-1 right-auto w-4" />
         {single && <Glyph type={items[0].type} solid className="absolute -bottom-1 -right-1" />}
       </div>

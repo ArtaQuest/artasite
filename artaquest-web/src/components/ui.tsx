@@ -294,7 +294,7 @@ function FlipAvatar({ src, name, country, alt, className, palm, priority }: { sr
         className={cx("relative block rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-light", className)}
         style={{ transformStyle: "preserve-3d", transition: "transform 0.5s", transform: flipped ? "rotateY(180deg)" : undefined }}
       >
-        {/* Front — the normal avatar + verified-nationality flag */}
+        {/* Front — the normal avatar + nationality flag */}
         <span className="absolute inset-0" style={hidden3d}>
           {face}
           {flagEmoji(country) ? <FlagBadge country={country} /> : null}

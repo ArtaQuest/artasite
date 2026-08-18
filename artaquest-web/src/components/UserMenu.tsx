@@ -118,7 +118,7 @@ export function UserMenu() {
   const name = d?.user.name || me?.name || "Account";
   const avatar = d?.user.avatar || me?.avatar;
   const slug = d?.user.slug || me?.slug;
-  const country = d?.user.country || me?.country; // verified nationality → avatar flag
+  const country = d?.user.country || me?.country; // stated nationality → avatar flag (a claim; the blue check is the verification signal)
   const initial = (name[0] || "A").toUpperCase();
   // The avatar URL can 404 — a member with no uploaded photo and no gravatar (the backend asks
   // gravatar for d=404 so the empty-ring placeholder never renders); fall back to the initial. (#113)
