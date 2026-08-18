@@ -366,7 +366,15 @@
 // static KaTeX, then the book re-typesets with theme-native, scalable equations (no more blurry
 // image cards). Runs once in the background, memory-gated, fails soft to crops; a "Sharpening
 // equations" indicator shows progress. Chunk-only — bump.
-const VERSION = "aq-sw-v58";
+// v59: NATIONALITY (2026-08-18) — the profile shows the member's flag after their date of birth,
+// the header stops squeezing the name to one character beside the action buttons and never
+// truncates a name, sign-up asks a nationality (defaulted from the visitor's country), and Donate
+// aims a gift at a nationality instead of a gender. Two chunk-only deploys (theme 1.8.127/128) with
+// an UNCHANGED sw.js — the v5/v7/… failure mode: the operator's own SW-cached browser kept the
+// pre-fix Profile chunk (ellipsis in the name, "Book me" clipped, no flag) an hour after production
+// was executing the fix. Bump so cached devices re-install, purge the stale shell/asset caches,
+// re-precache the current build, and auto-reload once onto it (src/main.tsx).
+const VERSION = "aq-sw-v59";
 const SHELL = "aq-shell-v42";   // last good app-shell HTML (any route boots the SPA offline)
 const ASSETS = "aq-assets-v42"; // hashed JS/CSS from the theme's app/ build dir
 const IMG = "aq-img-v4";

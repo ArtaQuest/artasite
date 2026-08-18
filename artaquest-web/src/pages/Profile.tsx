@@ -18,7 +18,6 @@ import {
 } from "../lib/wp";
 import { Coins } from "../lib/currency";
 import { sendCoins } from "../lib/api";
-import { countryName, flagEmoji } from "../lib/flags";
 import { nameClass } from "../lib/fmt";
 
 /** The feed API filters by author (GET /notebooks?author=<slug>); the shared params type
@@ -371,10 +370,12 @@ export default function Profile() {
                 the action buttons, and both of those are `shrink-0` — so the name block was the only
                 thing that could give. It gave until it was one character wide ("r" over "@") while
                 Send coins ran off the edge of the card. Now the row may wrap on sm+, and the name block
-                asks for 20rem before it will share a line (`sm:basis-80`): whenever the actions cannot
-                fit beside avatar + name they drop to a line of their own underneath, and the name is
-                never squeezed. Only the avatar stays `shrink-0`; below `sm` the column layout is
-                unchanged.
+                asks for ITS OWN single-line width before it will share a line (`sm:basis-auto` — the
+                flex base size of an auto-basis item is its max-content width, i.e. the name on one
+                line): whenever the actions cannot fit beside avatar + name-on-one-line they drop to a
+                line of their own underneath, and the name is never squeezed and never wrapped merely
+                because buttons took its room. Only the avatar stays `shrink-0`; below `sm` the column
+                layout is unchanged.
 
                 THE ACTIONS MAY SHRINK TOO (`min-w-0 max-w-full`, not `shrink-0`). The shell gives this
                 page a column that is often narrower than the viewport — ~410px beside the right rail on
@@ -385,24 +386,29 @@ export default function Profile() {
                 share a line with the name; they only fold once they are on a line of their own. Both
                 states measured at 700px, 1100px and 390px through ArtaFocus before shipping.
 
-                20rem, not 14: measured live on the signed-out profile at 1440px (a ~686px column, two
-                buttons instead of four), 14rem let the actions share the name's line and left the
-                name 268px — "Arash Ashrafnejad" at 30px is ~282px, so it broke into two lines with the
-                whole row full. Twenty rem is what a two-word Persian or Turkish name needs on one line;
-                with it the two-button row drops under the name at 686px, and the four-button row still
-                shares the line at the page's full 976px width (976 − 128 − 20 − 20 − 480 = 328 ≥ 320). */}
+                AUTO, not a fixed rem (third round, operator screenshot the same day): 14rem let the
+                two-button signed-out row share the name's line at a ~686px column and left the name
+                268px — "Arash Ashrafnejad" at 30px is ~282px, so it broke in two with the row full;
+                20rem fixed that name and would have failed the next longer one. With the name's own
+                width as the ask, a name only ever wraps when it does not fit beside the avatar ALONE
+                (then it takes a line under the avatar, still whole); at the page's full 976px the
+                four-button row still shares the line (128 + 20 + 282 + 20 + 480 = 930 ≤ 976). Measured
+                at 390/700/1100/1440 through ArtaFocus. */}
             <div className="relative z-10 -mt-10 flex flex-col gap-3 sm:-mt-14 sm:flex-row sm:flex-wrap sm:items-end sm:gap-x-5 sm:gap-y-3">
               {/* priority: above the fold and normally this page's LCP element — lazy-loading it
                   made the browser wait for layout before even starting the request. Carries the
-                  STATED nationality flag and the opt-in palm flip. The flag is a claim, exactly like
-                  the date of birth below — the member picked it (operator 2026-08-18, reversing the
-                  2026-08-11 removal); the blue check beside the name is the verification signal, not
-                  the flag. `country` is what the backend chose to expose and today carries the same
-                  value; the claim is read first so the flag never depends on which one arrived. */}
+                  STATED nationality flag and the opt-in palm flip. THE FLAG CHIP ON THE AVATAR IS THE
+                  ONE PLACE the nationality shows on this page (operator 2026-08-18, settled after two
+                  rounds: "this is enough, no need for separate section or after dob") — no
+                  "Nationality" row in the About card, nothing after the date of birth. The flag is a
+                  claim, exactly like the date of birth below — the member picked it; the blue check
+                  beside the name is the verification signal, not the flag. `country` is what the
+                  backend chose to expose and today carries the same value; the claim is read first
+                  so the flag never depends on which one arrived. */}
               <Avatar priority src={p.avatar} name={p.name} palm={p.palm || undefined}
                 country={p.nationality || p.country || undefined}
                 className="h-24 w-24 shrink-0 bg-space-2 text-3xl ring-4 ring-space-2 sm:h-32 sm:w-32" />
-              <div className="min-w-0 grow shrink basis-0 sm:basis-80 sm:pb-1">
+              <div className="min-w-0 grow shrink basis-0 sm:basis-auto sm:pb-1">
                 {/* THE REAL NAME IS THE HEADING. `p.name` is display_name — the handle a member is
                     addressed by, and frequently not a name at all ("Arash" for Arash Ashrafnejad).
                     full_name is what the identity gate collected and what the page title, description
@@ -556,7 +562,7 @@ export default function Profile() {
           derived from an IP address or a header. Rows appear only when there is something to say —
           a member who has filled none of this in gets no card at all, rather than a grid of blanks
           advertising what they declined to answer. */}
-      {p && (isOwn || relationshipLabel(p.relationship) || p.location?.trim() || (p.languages?.length ?? 0) > 0 || fmtBirthday(p.birthday) || p.nationality) ? (
+      {p && (isOwn || relationshipLabel(p.relationship) || p.location?.trim() || (p.languages?.length ?? 0) > 0 || fmtBirthday(p.birthday)) ? (
         <section className="grid gap-x-8 gap-y-5 rounded-card border border-line bg-space-2 px-5 py-5 sm:grid-cols-2 lg:grid-cols-4" aria-label="About">
           {relationshipLabel(p.relationship) ? (
             <Fact label="Relationship" icon={<svg {...FACT_SVG}><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9z" /></svg>}>
@@ -593,21 +599,10 @@ export default function Profile() {
               {fmtBirthday(p.birthday)}
             </Fact>
           ) : null}
-          {/* NATIONALITY — back on the profile (operator 2026-08-18, reversing the 2026-08-11 removal).
-              A CLAIM, exactly like the date of birth: the member picked it at sign-up (the picker was
-              pre-filled from their IP country, but only what they submitted is ever stored), and it is
-              one of the three facts — name, date of birth, nationality — the blue check reads off the
-              government ID. The blue check beside the name is the ONLY verification signal on this
-              page; nothing is written next to the country, because a check granted before 2026-08-18
-              never read one, and a nationality set by hand (the operator did, for every existing
-              account) is not something a check ever agreed with. The country name is already in the
-              active language (Intl.DisplayNames), so the mesh must not translate it a second time —
-              hence data-ay-skip. */}
-          {p.nationality ? (
-            <Fact label="Nationality" icon={<svg {...FACT_SVG}><path d="M5 21V4m0 0h11l-2 4 2 4H5" /></svg>}>
-              <span data-ay-skip="1"><span aria-hidden>{flagEmoji(p.nationality)}</span> {countryName(p.nationality)}</span>
-            </Fact>
-          ) : null}
+          {/* NO "Nationality" row here, and no flag after the date (operator 2026-08-18: "this is
+              enough, no need for separate section or after dob") — the flag chip on the avatar in the
+              header is the one place the stated nationality shows on this page. It is a claim, like
+              the date of birth; the blue check beside the name is the only verification signal. */}
           {/* YOUR OWN profile, and something is unsaid. A card holding one lonely row reads as broken
               rather than as sparse, and the member looking at it is the one person who can fix that —
               so the gaps become an invitation instead of empty space. Shown to NOBODY else: a visitor
