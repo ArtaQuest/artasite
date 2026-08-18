@@ -371,7 +371,7 @@ export default function Profile() {
                 the action buttons, and both of those are `shrink-0` — so the name block was the only
                 thing that could give. It gave until it was one character wide ("r" over "@") while
                 Send coins ran off the edge of the card. Now the row may wrap on sm+, and the name block
-                asks for 14rem before it will share a line (`sm:basis-56`): whenever the actions cannot
+                asks for 20rem before it will share a line (`sm:basis-80`): whenever the actions cannot
                 fit beside avatar + name they drop to a line of their own underneath, and the name is
                 never squeezed. Only the avatar stays `shrink-0`; below `sm` the column layout is
                 unchanged.
@@ -383,7 +383,14 @@ export default function Profile() {
                 be). Capped at the line, the row's own flex-wrap folds the buttons onto two rows instead.
                 Line-breaking still happens BEFORE any shrinking, so the actions never shrink while they
                 share a line with the name; they only fold once they are on a line of their own. Both
-                states measured at 700px, 1100px and 390px through ArtaFocus before shipping. */}
+                states measured at 700px, 1100px and 390px through ArtaFocus before shipping.
+
+                20rem, not 14: measured live on the signed-out profile at 1440px (a ~686px column, two
+                buttons instead of four), 14rem let the actions share the name's line and left the
+                name 268px — "Arash Ashrafnejad" at 30px is ~282px, so it broke into two lines with the
+                whole row full. Twenty rem is what a two-word Persian or Turkish name needs on one line;
+                with it the two-button row drops under the name at 686px, and the four-button row still
+                shares the line at the page's full 976px width (976 − 128 − 20 − 20 − 480 = 328 ≥ 320). */}
             <div className="relative z-10 -mt-10 flex flex-col gap-3 sm:-mt-14 sm:flex-row sm:flex-wrap sm:items-end sm:gap-x-5 sm:gap-y-3">
               {/* priority: above the fold and normally this page's LCP element — lazy-loading it
                   made the browser wait for layout before even starting the request. Carries the
@@ -395,7 +402,7 @@ export default function Profile() {
               <Avatar priority src={p.avatar} name={p.name} palm={p.palm || undefined}
                 country={p.nationality || p.country || undefined}
                 className="h-24 w-24 shrink-0 bg-space-2 text-3xl ring-4 ring-space-2 sm:h-32 sm:w-32" />
-              <div className="min-w-0 grow shrink basis-0 sm:basis-56 sm:pb-1">
+              <div className="min-w-0 grow shrink basis-0 sm:basis-80 sm:pb-1">
                 {/* THE REAL NAME IS THE HEADING. `p.name` is display_name — the handle a member is
                     addressed by, and frequently not a name at all ("Arash" for Arash Ashrafnejad).
                     full_name is what the identity gate collected and what the page title, description
