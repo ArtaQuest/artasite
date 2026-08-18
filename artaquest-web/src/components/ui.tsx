@@ -1240,3 +1240,94 @@ export function LoadMoreButton({ onClick, loading, label = "Load more", classNam
     </div>
   );
 }
+
+/**
+ * CONFIRM A DESTRUCTIVE ACT — in the page, not in the browser's own dialog.
+ *
+ * The delete paths added this week used `window.prompt("… type DELETE")`, which is the clumsiest
+ * thing on the platform: a system-styled box with the site's voice nowhere in it, unstyleable,
+ * blocking the whole tab, and rendered by Safari as a cramped strip that truncates the very
+ * sentences that explain what cannot be undone. Firefox lets a member suppress it permanently, which
+ * would leave a delete button that silently does nothing.
+ *
+ * This is the same guard, in our own surface: the consequences readable, and — when `word` is given
+ * — a typed confirmation, so a destructive click is never one reflexive Enter away.
+ *
+ * Accessibility is the part worth getting right, because a dialog nobody can escape is worse than no
+ * dialog: `role="dialog" aria-modal`, focus moved in on open and RESTORED to the trigger on close,
+ * Escape and backdrop both cancel, and Tab is trapped inside — a screen reader that wanders back out
+ * to the page behind is reading a page it cannot act on.
+ */
+export function ConfirmDialog({ open, title, body, confirmLabel = "Delete", word, danger = true, busy, onConfirm, onCancel }: {
+  open: boolean;
+  title: ReactNode;
+  body: ReactNode;
+  confirmLabel?: string;
+  /** Require this word to be typed. Omit for a plain confirm. */
+  word?: string;
+  danger?: boolean;
+  busy?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const [typed, setTyped] = useState("");
+  const panel = useRef<HTMLDivElement | null>(null);
+  const restore = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    restore.current = document.activeElement as HTMLElement | null;
+    setTyped("");
+    const t = setTimeout(() => {
+      const el = panel.current?.querySelector<HTMLElement>("input, button");
+      el?.focus();
+    }, 20);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); onCancel(); return; }
+      if (e.key !== "Tab" || !panel.current) return;
+      const f = [...panel.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input, [tabindex]:not([tabindex="-1"])')];
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+      restore.current?.focus?.();
+    };
+  }, [open, onCancel]);
+
+  if (!open) return null;
+  const ready = !busy && (!word || typed.trim() === word);
+  return (
+    <div className="fixed inset-0 z-[70] grid place-items-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" aria-hidden onClick={onCancel} />
+      <div ref={panel} role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : "Confirm"}
+        className="relative w-full max-w-md rounded-card border border-line bg-space-1 p-5 shadow-2xl">
+        <h2 className="text-[16px] font-bold text-ink">{title}</h2>
+        <div className="mt-2 flex flex-col gap-2 text-[13.5px] leading-relaxed text-ink-2">{body}</div>
+        {word ? (
+          <label className="mt-4 block">
+            <span className="mb-1 block text-[12.5px] font-semibold text-ink-2">Type {word} to confirm</span>
+            <input value={typed} onChange={(e) => setTyped(e.target.value)}
+              autoCapitalize="characters" autoCorrect="off" spellCheck={false} placeholder={word}
+              onKeyDown={(e) => { if (e.key === "Enter" && ready) onConfirm(); }}
+              className="h-10 w-full rounded-field border border-line bg-space-2 px-3 text-[14px] text-ink placeholder:text-ink-3 focus:border-yin-light focus:outline-none" />
+          </label>
+        ) : null}
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <Button variant="ghost" onClick={onCancel} disabled={busy} className="h-10 px-4 text-[14px]">Cancel</Button>
+          <Button onClick={onConfirm} disabled={!ready}
+            className={cx("h-10 px-5 text-[14px] disabled:opacity-40", danger && "bg-rose-500 text-white hover:bg-rose-400")}>
+            {busy ? "Deleting…" : confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
