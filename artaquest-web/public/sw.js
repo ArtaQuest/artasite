@@ -374,7 +374,9 @@
 // pre-fix Profile chunk (ellipsis in the name, "Book me" clipped, no flag) an hour after production
 // was executing the fix. Bump so cached devices re-install, purge the stale shell/asset caches,
 // re-precache the current build, and auto-reload once onto it (src/main.tsx).
-const VERSION = "aq-sw-v59";
+// v60: the profile's action buttons sit at the right and the flag chip is smaller (operator
+// 2026-08-18) — chunk-only again, so bump for SW-cached devices.
+const VERSION = "aq-sw-v60";
 const SHELL = "aq-shell-v42";   // last good app-shell HTML (any route boots the SPA offline)
 const ASSETS = "aq-assets-v42"; // hashed JS/CSS from the theme's app/ build dir
 const IMG = "aq-img-v4";

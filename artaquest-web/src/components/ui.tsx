@@ -144,7 +144,10 @@ export function FlagBadge({ country, className }: { country?: string; className?
   const label = countryName(country);
   return (
     <span role="img" aria-label={label} title={label}
-      className={cx("absolute -bottom-[10%] -right-[10%] grid aspect-square w-[44%] min-w-3.5 place-items-center overflow-hidden rounded-full border border-line bg-space-2", className)}>
+      // 36% of the avatar, not 44: on the 128px profile picture 44% was a 56px disc that competed
+      // with the portrait (operator 2026-08-18, "flag a bit smaller"); 36% (46px there, 35px on the
+      // 96px phone avatar) reads as a badge on the picture. min-w-3.5 still floors it on tiny avatars.
+      className={cx("absolute -bottom-[10%] -right-[10%] grid aspect-square w-[36%] min-w-3.5 place-items-center overflow-hidden rounded-full border border-line bg-space-2", className)}>
       <svg viewBox="0 0 24 24" className="h-full w-full" aria-hidden focusable="false">
         <text x="12" y="13" textAnchor="middle" dominantBaseline="central" fontSize="15">{flag}</text>
       </svg>
