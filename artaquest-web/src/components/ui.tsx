@@ -311,8 +311,10 @@ function FlipAvatar({ src, name, country, alt, className, palm, priority }: { sr
             ? <img src={palm} alt={who ? `${who}’s palm` : "Palm verification photo"} loading="lazy" decoding="async" onError={() => setPalmFailed(true)} className="h-full w-full rounded-full object-cover" />
             : <span aria-hidden className="text-xl text-ink-2">✋</span>}
         </span>
-        {/* A small corner hint that the picture flips — front face only (top-right, clear of the flag) */}
-        <span aria-hidden className="pointer-events-none absolute -top-[6%] -right-[6%] grid aspect-square w-[34%] min-w-3.5 max-w-5 place-items-center rounded-full border border-line bg-space-2/95 text-ink-2" style={hidden3d}>
+        {/* A small corner hint that the picture flips — front face only, BOTTOM-LEFT (operator
+            2026-08-18, "put this to the bottom left"): the flag owns the bottom-right corner, and the
+            top-right sat on the cover gradient where a grey disc read as a stray control. */}
+        <span aria-hidden className="pointer-events-none absolute -bottom-[6%] -left-[6%] grid aspect-square w-[34%] min-w-3.5 max-w-5 place-items-center rounded-full border border-line bg-space-2/95 text-ink-2" style={hidden3d}>
           <svg viewBox="0 0 24 24" className="h-[58%] w-[58%]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden focusable="false">
             <path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M21 3v5h-5" />
           </svg>

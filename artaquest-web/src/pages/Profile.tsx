@@ -365,42 +365,18 @@ export default function Profile() {
                 returned the cover's gradient div. Positioning this row puts it in the same paint
                 step, where later-in-DOM wins.
 
-                THE ROW WRAPS, AND THE NAME HAS A MINIMUM (operator screenshot, 2026-08-18). Just past
-                the `sm` breakpoint the identity block shared one non-wrapping row with the avatar and
-                the action buttons, and both of those are `shrink-0` — so the name block was the only
-                thing that could give. It gave until it was one character wide ("r" over "@") while
-                Send coins ran off the edge of the card. Now the row may wrap on sm+, and the name block
-                asks for ITS OWN single-line width before it will share a line (`sm:basis-auto` — the
-                flex base size of an auto-basis item is its max-content width, i.e. the name on one
-                line): whenever the actions cannot fit beside avatar + name-on-one-line they drop to a
-                line of their own underneath, and the name is never squeezed and never wrapped merely
-                because buttons took its room. Only the avatar stays `shrink-0`; below `sm` the column
-                layout is unchanged.
-
-                THE ACTIONS SIT AT THE RIGHT (`sm:ms-auto sm:justify-end`, operator 2026-08-18: "these
-                should be to the right"). On the name's line the growing name block already leaves them
-                at the end; on a line of their own the auto start-margin pushes them to the far edge,
-                and when they must fold in a narrow column the buttons pack toward the right. Below `sm`
-                the column layout keeps them under the name at the start.
-
-                THE ACTIONS MAY SHRINK TOO (`min-w-0 max-w-full`, not `shrink-0`). The shell gives this
-                page a column that is often narrower than the viewport — ~410px beside the right rail on
-                a 1100px window, where `sm:` styles still apply — and a `shrink-0` button row wider than
-                that line simply ran out of the card and was clipped ("Ser…" where Send coins should
-                be). Capped at the line, the row's own flex-wrap folds the buttons onto two rows instead.
-                Line-breaking still happens BEFORE any shrinking, so the actions never shrink while they
-                share a line with the name; they only fold once they are on a line of their own. Both
-                states measured at 700px, 1100px and 390px through ArtaFocus before shipping.
-
-                AUTO, not a fixed rem (third round, operator screenshot the same day): 14rem let the
-                two-button signed-out row share the name's line at a ~686px column and left the name
-                268px — "Arash Ashrafnejad" at 30px is ~282px, so it broke in two with the row full;
-                20rem fixed that name and would have failed the next longer one. With the name's own
-                width as the ask, a name only ever wraps when it does not fit beside the avatar ALONE
-                (then it takes a line under the avatar, still whole); at the page's full 976px the
-                four-button row still shares the line (128 + 20 + 282 + 20 + 480 = 930 ≤ 976). Measured
-                at 390/700/1100/1440 through ArtaFocus. */}
-            <div className="relative z-10 -mt-10 flex flex-col gap-3 sm:-mt-14 sm:flex-row sm:flex-wrap sm:items-end sm:gap-x-5 sm:gap-y-3">
+                THIS ROW IS AVATAR + NAME, NOTHING ELSE (operator, four screenshots on 2026-08-18). It
+                began the day as avatar + name + the action buttons on one non-wrapping row, where the
+                name block was the only thing that could give — it gave until it was one character
+                wide ("r" over "@") while Send coins ran off the card. The buttons moved through
+                "wrap under the name", then "at the right", and finally to the STANDING line below,
+                where the member's chips and follow counts fill the space to their left ("forgot to fit
+                the rest of data"). What stays here: the name block is `min-w-0 grow shrink basis-0
+                sm:basis-auto` — its flex base size is the name on ONE line — and it wraps only when it
+                does not fit beside the avatar alone (then it takes a line under the avatar, whole,
+                thanks to `wrap-anywhere`); the avatar stays `shrink-0`; below `sm` the column layout is
+                unchanged. A name is never truncated. Measured at 390/700/1100/1440 through ArtaFocus. */}
+            <div className="relative z-10 -mt-10 flex flex-col gap-3 sm:-mt-14 sm:flex-row sm:items-end sm:gap-5">
               {/* priority: above the fold and normally this page's LCP element — lazy-loading it
                   made the browser wait for layout before even starting the request. Carries the
                   STATED nationality flag and the opt-in palm flip. THE FLAG CHIP ON THE AVATAR IS THE
@@ -443,61 +419,22 @@ export default function Profile() {
                   </p>
                 )}
               </div>
-              {/* The actions sit at the RIGHT of the header (operator 2026-08-18) — see the layout note
-                  above the row for how they share the name's line or take one of their own.
-
-                  ONE definition, rendered from two branches. Beside Message it reads as the same act
-                  at two speeds — say something now, or take some of their time later — and on its own
-                  it is the only thing a signed-out reader can actually do with this person. Written
-                  once because the last time it existed in only one branch, that was the bug. The
-                  booking page says plainly when somebody is not offering any time, so it never leads
-                  anywhere embarrassing. */}
-              {isOwn ? (
-                <div className="flex min-w-0 max-w-full flex-wrap items-center gap-3 sm:ms-auto sm:justify-end sm:pb-1">
-                  {bookButton}
-                  <a href={localePath("/user-account/?settings=1")} className="self-start text-[13.5px] font-semibold text-ink-3 transition-colors hover:text-yang sm:self-auto">
-                    Edit profile <span aria-hidden className="inline-block rtl:-scale-x-100">→</span>
-                  </a>
-                </div>
-              ) : isLoggedIn() ? (
-                /* Follow + Message. Until this existed the ONLY way to open a conversation was typing
-                   a member's exact @handle into the ArtaChat sidebar — this is the entry point the
-                   /messages/?with= deep link was always built for. */
-                <div className="flex min-w-0 max-w-full flex-wrap gap-2 sm:ms-auto sm:justify-end sm:pb-1">
-                  <Button type="button" onClick={toggleFollow} disabled={followBusy}
-                    variant={following ? "outline" : "primaryYin"}
-                    className="h-10 px-6 text-[14px] disabled:opacity-60">
-                    {following ? "Following" : "Follow"}
-                  </Button>
-                  <Button href={localePath(`/messages/?with=${encodeURIComponent(p.slug)}`)} variant="outline"
-                    className="h-10 px-5 text-[14px]" title="Send an encrypted message">
-                    Message
-                  </Button>
-                  {bookButton}
-                  <SendCoins slug={p.slug} name={p.fullName?.trim() || p.name} onSent={() => undefined} />
-                </div>
-              ) : (
-                /* SIGNED OUT — and a booking link belongs HERE most of all. Every other action on
-                   this page needs an account, so they were all correctly behind one, and "Book a
-                   time" got swept along with them. It should not have been: book/page and book/slots
-                   are deliberately public, the booking page is built to be readable by a stranger,
-                   and this profile is the thing a member actually shares. Hiding the link from
-                   signed-out visitors meant the one audience it exists for could not see it. */
-                <div className="flex min-w-0 max-w-full flex-wrap gap-2 sm:ms-auto sm:justify-end sm:pb-1">
-                  <Button href={loginHref} variant="primaryYin" className="h-10 px-6 text-[14px]">Follow</Button>
-                  {bookButton}
-                </div>
-              )}
             </div>
 
-            {/* THE BIO, directly under the name where it is read. It used to sit below two rows of
-                counters and a wall of chips. */}
-            {p.bio && <p className="mt-4 max-w-2xl whitespace-pre-wrap text-[15px] leading-relaxed text-ink-2">{p.bio}</p>}
 
-            {/* STANDING + ACTIVITY. Kept as chips and kept together, because they are one category —
-                what this member has earned and when they were last around — and deliberately NOT
-                mixed in with the stated facts below, which are a different kind of claim entirely. */}
-            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-ink-3">
+            {/* STANDING + ACTIVITY + FOLLOW COUNTS on ONE line, with the ACTIONS at its right (operator
+                2026-08-18, "forgot to fit the rest of data": the button row had been sitting alone at
+                the right of an empty line, with three short left-aligned rows stacked under it). The
+                meta block asks for 18rem (`sm:basis-72`) and then grows: with less than that left
+                beside the buttons it would crumble into one chip per line (measured: four buttons in a
+                686px column left it 190px), so instead the buttons drop to a line of their own — still
+                at the right, `ms-auto`, folding toward it in a narrow shell column — and the meta takes
+                the whole line above them. When there IS room (two buttons at 686px, four at 976px) they
+                share the line, meta left, buttons right. Below `sm` the two stack.
+                Chips kept as chips and kept together: what this member has earned and when they were
+                last around are one category, deliberately NOT mixed with the stated facts below. */}
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-2">
+            <div className="flex min-w-0 grow shrink basis-0 flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-ink-3 sm:basis-72">
               {p.tier && <Pill className="px-3 py-0.5 text-[13px]">{p.tier}</Pill>}
               {/* ONE currency on this page: ArtaCoin (operator 2026-08-15). The lifetime points score
                   used to sit here in gold beside it, and two numbers in two currencies on one line is
@@ -517,31 +454,82 @@ export default function Profile() {
                   to publish. lastSeenLabel says only what that granularity supports; relAgo would
                   render the same value as "9h ago" and invent precision. */}
               {p.lastSeen ? <span>{lastSeenLabel(p.lastSeen)}</span> : null}
+              {/* Each count is a live control: tap it to open the respective list below. Kept as one
+                  unit ("2 followers · 2 following") so a wrap never splits the pair. */}
+              <span className="whitespace-nowrap text-[13.5px]">
+                <button type="button" onClick={() => setListDir((d) => (d === "followers" ? null : "followers"))}
+                  aria-expanded={listDir === "followers"} title="Show the followers list"
+                  className="group -my-2 py-2 transition-colors hover:text-yang">
+                  <b className="text-ink-2 tabular-nums transition-colors group-hover:text-yang">{followers.toLocaleString()}</b> follower{followers === 1 ? "" : "s"}
+                </button>
+                {" · "}
+                <button type="button" onClick={() => setListDir((d) => (d === "following" ? null : "following"))}
+                  aria-expanded={listDir === "following"} title="Show the following list"
+                  className="group -my-2 py-2 transition-colors hover:text-yang">
+                  <b className="text-ink-2 tabular-nums transition-colors group-hover:text-yang">{(p.stats?.following ?? 0).toLocaleString()}</b> following
+                </button>
+              </span>
+            </div>
+              {/* The actions sit at the RIGHT of this row (operator 2026-08-18), with the member's
+                  standing and activity filling the space to their left — see the note above the row.
+
+                  ONE definition, rendered from two branches. Beside Message it reads as the same act
+                  at two speeds — say something now, or take some of their time later — and on its own
+                  it is the only thing a signed-out reader can actually do with this person. Written
+                  once because the last time it existed in only one branch, that was the bug. The
+                  booking page says plainly when somebody is not offering any time, so it never leads
+                  anywhere embarrassing. */}
+              {isOwn ? (
+                <div className="flex min-w-0 max-w-full flex-wrap items-center gap-3 sm:ms-auto sm:justify-end">
+                  {bookButton}
+                  <a href={localePath("/user-account/?settings=1")} className="self-start text-[13.5px] font-semibold text-ink-3 transition-colors hover:text-yang sm:self-auto">
+                    Edit profile <span aria-hidden className="inline-block rtl:-scale-x-100">→</span>
+                  </a>
+                </div>
+              ) : isLoggedIn() ? (
+                /* Follow + Message. Until this existed the ONLY way to open a conversation was typing
+                   a member's exact @handle into the ArtaChat sidebar — this is the entry point the
+                   /messages/?with= deep link was always built for. */
+                <div className="flex min-w-0 max-w-full flex-wrap gap-2 sm:ms-auto sm:justify-end">
+                  <Button type="button" onClick={toggleFollow} disabled={followBusy}
+                    variant={following ? "outline" : "primaryYin"}
+                    className="h-10 px-6 text-[14px] disabled:opacity-60">
+                    {following ? "Following" : "Follow"}
+                  </Button>
+                  <Button href={localePath(`/messages/?with=${encodeURIComponent(p.slug)}`)} variant="outline"
+                    className="h-10 px-5 text-[14px]" title="Send an encrypted message">
+                    Message
+                  </Button>
+                  {bookButton}
+                  <SendCoins slug={p.slug} name={p.fullName?.trim() || p.name} onSent={() => undefined} />
+                </div>
+              ) : (
+                /* SIGNED OUT — and a booking link belongs HERE most of all. Every other action on
+                   this page needs an account, so they were all correctly behind one, and "Book a
+                   time" got swept along with them. It should not have been: book/page and book/slots
+                   are deliberately public, the booking page is built to be readable by a stranger,
+                   and this profile is the thing a member actually shares. Hiding the link from
+                   signed-out visitors meant the one audience it exists for could not see it. */
+                <div className="flex min-w-0 max-w-full flex-wrap gap-2 sm:ms-auto sm:justify-end">
+                  <Button href={loginHref} variant="primaryYin" className="h-10 px-6 text-[14px]">Follow</Button>
+                  {bookButton}
+                </div>
+              )}
             </div>
 
-            {/* Each count is a live control: tap it to open the respective list below. */}
-            <div className="mt-2.5 text-[13.5px] text-ink-3">
-              <button type="button" onClick={() => setListDir((d) => (d === "followers" ? null : "followers"))}
-                aria-expanded={listDir === "followers"} title="Show the followers list"
-                className="group -my-2 py-2 transition-colors hover:text-yang">
-                <b className="text-ink-2 tabular-nums transition-colors group-hover:text-yang">{followers.toLocaleString()}</b> follower{followers === 1 ? "" : "s"}
-              </button>
-              {" · "}
-              <button type="button" onClick={() => setListDir((d) => (d === "following" ? null : "following"))}
-                aria-expanded={listDir === "following"} title="Show the following list"
-                className="group -my-2 py-2 transition-colors hover:text-yang">
-                <b className="text-ink-2 tabular-nums transition-colors group-hover:text-yang">{(p.stats?.following ?? 0).toLocaleString()}</b> following
-              </button>
-            </div>
+            {/* THE BIO, under the standing line — the actions stay near the top whatever its length. */}
+            {p.bio && <p className="mt-4 max-w-2xl whitespace-pre-wrap text-[15px] leading-relaxed text-ink-2">{p.bio}</p>}
 
-            {/* WHERE ELSE THEY ARE. Text, not brand logos: seven third-party marks would be seven
+            {/* WHERE ELSE THEY ARE — at the RIGHT on sm+, under the actions (operator 2026-08-18: "make
+                these social icons like to the right"), so the header reads as facts on the left and
+                things-to-do on the right. Text, not brand logos: seven third-party marks would be seven
                 trademarks to keep current and the only place on this site with colours outside the
                 two. Every href was host-checked server-side (AQ\Auth::LINKS) before it was stored.
                 rel: "me" states this is the same person — the claim the sameAs schema makes, in the
                 markup a human-readable indexer reads; "nofollow ugc" because these are member-supplied
                 and there must be no ranking to farm by putting a link here. */}
             {p.links && Object.keys(p.links).length > 0 && (
-              <ul className="mt-3 flex flex-wrap items-center gap-1.5">
+              <ul className="mt-3 flex flex-wrap items-center gap-1.5 sm:justify-end">
                 {PROFILE_LINKS.filter(([k]) => p.links?.[k]).map(([k, label]) => (
                   <li key={k}>
                     <a href={p.links![k]} target="_blank" rel="me nofollow ugc noopener noreferrer"
@@ -568,8 +556,12 @@ export default function Profile() {
           derived from an IP address or a header. Rows appear only when there is something to say —
           a member who has filled none of this in gets no card at all, rather than a grid of blanks
           advertising what they declined to answer. */}
+      {/* AUTO-FIT columns, not `lg:grid-cols-4`: the shell gives this page a ~686px column at a
+          1440px window (and ~410px at 1100px), where four fixed columns were 137px each and
+          "February 15, 1994" broke after the comma (operator's Born screenshot, 2026-08-18). Each
+          fact now asks for 11rem and the row holds as many as fit — three at 686px, one on a phone. */}
       {p && (isOwn || relationshipLabel(p.relationship) || p.location?.trim() || (p.languages?.length ?? 0) > 0 || fmtBirthday(p.birthday)) ? (
-        <section className="grid gap-x-8 gap-y-5 rounded-card border border-line bg-space-2 px-5 py-5 sm:grid-cols-2 lg:grid-cols-4" aria-label="About">
+        <section className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-x-8 gap-y-5 rounded-card border border-line bg-space-2 px-5 py-5" aria-label="About">
           {relationshipLabel(p.relationship) ? (
             <Fact label="Relationship" icon={<svg {...FACT_SVG}><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9z" /></svg>}>
               {relationshipLabel(p.relationship)}
@@ -602,7 +594,7 @@ export default function Profile() {
               it. `p.age` still arrives from the API for other clients — do not render it here. */}
           {fmtBirthday(p.birthday) ? (
             <Fact label="Born" icon={<svg {...FACT_SVG}><path d="M4 20h16v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2Zm0-3h16" /><path d="M12 12V8m0-4v1.5M8 12V9m8 3V9" /></svg>}>
-              {fmtBirthday(p.birthday)}
+              <span className="whitespace-nowrap">{fmtBirthday(p.birthday)}</span>
             </Fact>
           ) : null}
           {/* NO "Nationality" row here, and no flag after the date (operator 2026-08-18: "this is

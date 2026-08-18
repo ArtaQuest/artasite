@@ -268,17 +268,14 @@ function CreateMenu({ expanded, onNavigate }: { expanded: boolean; onNavigate: (
         onClick={onNavigate}
         aria-label="Create — sign in to publish"
         title="Sign in to publish"
-        className={`mb-1 mt-3 flex h-12 shrink-0 items-center justify-center gap-2 overflow-hidden rounded-pill bg-yang font-bold text-on-accent shadow-sm transition-opacity hover:opacity-90 ${expanded ? "mx-3 w-[calc(100%-1.5rem)]" : "mx-[14px] w-10 self-start"}`}
+        className={`mb-1 mt-3 flex h-10 shrink-0 items-center justify-center overflow-hidden rounded-pill bg-yang font-bold text-on-accent shadow-sm transition-opacity hover:opacity-90 ${expanded ? "mx-3 self-start px-7" : "mx-[14px] w-10 self-start"}`}
       >
-        {/* Expanded, the + must stay on the SAME 34px axis as every nav glyph below it, or it
-             visibly jumps sideways as the rail widens. mx-2 (8) + w-[52px] centre = 34px. */}
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" aria-hidden className="shrink-0"><path d="M12 5v14M5 12h14" /></svg>
-        {/* NOT RENDERED when collapsed, rather than hidden. Measured on prod: with the label present
-              at opacity-0 the + sat at x=-6 — off the left of the window — because a 40px button
-              cannot hold a 40px icon box plus a label and its pe-4. `max-w-0` was not enough either;
-              the text still contributed width and left the glyph outside its own button. Removing it
-              from the tree puts the + dead-centre (x=25..43 in a 14..54 button). */}
-        {expanded ? <span className="whitespace-nowrap text-[15px]">Create</span> : null}
+        {/* SMALLER, AND JUST THE WORD (operator 2026-08-18: "the + Create button should just say
+             Create and be smaller"): 40px tall, a word-wide pill at the rail's start instead of a
+             full-width slab, and no + beside the label. Collapsed, the + is the whole button. */}
+        {expanded
+          ? <span className="whitespace-nowrap text-[15px]">Create</span>
+          : <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" aria-hidden className="shrink-0"><path d="M12 5v14M5 12h14" /></svg>}
       </a>
     );
   }
@@ -287,7 +284,7 @@ function CreateMenu({ expanded, onNavigate }: { expanded: boolean; onNavigate: (
     // X's Post button spans the rail's label column when it is open, so the wrapper must stretch
     // with it — and go back to `self-start` when the rail is a 68px icon strip, where a full-width
     // button would be a 68px slab.
-    <div ref={wrapRef} className={`relative shrink-0 ${expanded ? "mx-3" : "mx-[14px] self-start"}`}>
+    <div ref={wrapRef} className={`relative shrink-0 self-start ${expanded ? "mx-3" : "mx-[14px]"}`}>
       <button
         ref={btnRef}
         type="button"
@@ -296,17 +293,12 @@ function CreateMenu({ expanded, onNavigate }: { expanded: boolean; onNavigate: (
         aria-expanded={open}
         aria-label="Create"
         title="Create"
-        className={`mb-1 mt-3 flex h-12 shrink-0 items-center justify-center gap-2 overflow-hidden rounded-pill bg-yang font-bold text-on-accent shadow-sm transition-opacity hover:opacity-90 ${open ? "opacity-90" : ""} ${expanded ? "w-full" : "w-10"}`}
+        className={`mb-1 mt-3 flex h-10 shrink-0 items-center justify-center overflow-hidden rounded-pill bg-yang font-bold text-on-accent shadow-sm transition-opacity hover:opacity-90 ${open ? "opacity-90" : ""} ${expanded ? "px-7" : "w-10"}`}
       >
-        {/* Expanded, the + must stay on the SAME 34px axis as every nav glyph below it, or it
-             visibly jumps sideways as the rail widens. mx-2 (8) + w-[52px] centre = 34px. */}
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" aria-hidden className="shrink-0"><path d="M12 5v14M5 12h14" /></svg>
-        {/* NOT RENDERED when collapsed, rather than hidden. Measured on prod: with the label present
-              at opacity-0 the + sat at x=-6 — off the left of the window — because a 40px button
-              cannot hold a 40px icon box plus a label and its pe-4. `max-w-0` was not enough either;
-              the text still contributed width and left the glyph outside its own button. Removing it
-              from the tree puts the + dead-centre (x=25..43 in a 14..54 button). */}
-        {expanded ? <span className="whitespace-nowrap text-[15px]">Create</span> : null}
+        {/* SMALLER, AND JUST THE WORD (operator 2026-08-18): see the signed-out twin above. */}
+        {expanded
+          ? <span className="whitespace-nowrap text-[15px]">Create</span>
+          : <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" aria-hidden className="shrink-0"><path d="M12 5v14M5 12h14" /></svg>}
       </button>
 
       {open && (
@@ -432,8 +424,8 @@ function Sidebar({ active, expanded, onNavigate }: { active: string; expanded: b
       <div className="flex h-full w-sidebar shrink-0 flex-col">
         {/* No lockup and no toggle here any more: both live in the full-width bar above, where
             Reddit keeps them, and stacking a second wordmark directly under the first is exactly
-            what the hoist was meant to stop. The hairline stays as the rail's own top edge. */}
-        <div className="mx-3 mt-3 h-px bg-gradient-to-r rtl:bg-gradient-to-l from-yin-light/55 via-veil/12 to-yang/55" aria-hidden />
+            what the hoist was meant to stop. No hairline either (operator 2026-08-18, "make the left
+            menu like X"): X's rail is a bare list from its first row. */}
 
 
 
@@ -443,7 +435,14 @@ function Sidebar({ active, expanded, onNavigate }: { active: string; expanded: b
         <nav className="mt-2 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain pb-4 max-md:gap-0 max-md:pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {items.map((n, idx) => {
             const navSeg = "/" + (n.href.split("/").filter(Boolean)[0] || "");
-            const on = navSeg === active;
+            // Profile (/user-account/) and Settings (/user-account/?settings=1) share a first
+            // segment, so both used to light up on the account page — two "you are here" in one
+            // list. The query decides: a row that names one is current only when the address
+            // carries it, and its plain sibling only when the address does not.
+            const wantsQuery = n.href.includes("?") ? n.href.split("?")[1].split("=")[0] : "";
+            const search = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+            const hasSettings = !!search?.has("settings");
+            const on = navSeg === active && (wantsQuery ? hasSettings : !(navSeg === "/user-account" && hasSettings));
             // Active item: a NEUTRAL selected state — no brand colour, at the member's request (ticket
             // #149). Earlier passes coloured the active pill gold: as TEXT it deepened to a muddy amber on
             // the light canvas (text-yang → --color-yang-ink #8a6300, unfixable without failing WCAG), and
@@ -454,8 +453,14 @@ function Sidebar({ active, expanded, onNavigate }: { active: string; expanded: b
             // 52px axis, so nothing moves as the rail widens; only the row's corner radius and its
             // height change). A little taller than the old 44px row: these are the app's primary
             // destinations and they were the smallest touch targets on the page.
-            const cls = `group relative mx-2 flex h-12 shrink-0 items-center rounded-pill text-[15.5px] transition-colors max-md:h-11 ${
-              on ? "bg-veil/[0.08] font-semibold text-ink" : "text-ink-2 hover:bg-veil/[0.04] hover:text-ink"
+            // LIKE X (operator 2026-08-18): the current page is told by WEIGHT alone — a bold,
+            // full-ink label and icon — with no fill behind it; the fill is hover only. The neutral
+            // wash of ticket #149 sat on TWO rows at once whenever Profile and Settings shared a
+            // path, and read as boxes in a list that X draws as plain rows. Type at 17px, a step up
+            // from 15.5: these are the app's primary destinations, and X sets its at 20 on a wider
+            // rail. Row height unchanged.
+            const cls = `group relative mx-2 flex h-12 shrink-0 items-center rounded-pill text-[17px] transition-colors max-md:h-11 ${
+              on ? "font-bold text-ink" : "text-ink-2 hover:bg-veil/[0.05] hover:text-ink"
             }`;
             const inner = (<>
               <span className={`grid w-[52px] shrink-0 place-items-center ${on ? "text-ink" : "text-ink-3 group-hover:text-ink-2"}`}><Icon d={n.icon} /></span>
@@ -636,7 +641,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
   const { pathname: aqPath } = useLocation();
   const onAuthPage = /(^|\/)(login|sign-in|signin)\/?$/.test(aqPath.replace(/\/+$/, "/"));
   return (
-    <header className="sticky top-0 z-50 border-b border-line/70 bg-space-1/80 backdrop-blur-md">
+    <header className="sticky top-0 z-50 bg-space-1/80 backdrop-blur-md">
       <div className="relative flex h-topbar items-center gap-1.5 px-3 md:gap-3 md:px-4" style={endPad}>
         {/* THREE ZONES, and the outer two carry equal weight — that is what puts the field on
             the bar's own centre line. Centring it between its NEIGHBOURS instead leaves it
