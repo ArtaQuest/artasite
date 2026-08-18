@@ -104,8 +104,25 @@ export function TodaysNewsCard({ items }: { items: TrendingKindItem[] | null }) 
       {items.slice(0, 4).map((n) => (
         // Headline, byline and summary are all THIRD-PARTY text: skipped, so the i18n mesh cannot
         // publish another newsroom's copy into the public aq_translations table.
+        // A HEADLINE WITH NOWHERE TO GO IS A DEAD END. `url` was carried all the way here and spent
+        // only as a React key — the card named a story and its publisher, then offered no way to
+        // read it. Linking OUT is not republishing: the summary stays the AI one-liner rather than
+        // the newsroom's own copy, which is what the no-republished-copy rule protects. nofollow
+        // and noreferrer, because pointing at a story is not endorsing it and a reader's interest
+        // is theirs, not the publisher's.
         <article key={n.url || n.title} className="px-4 py-2.5" data-ay-skip="1">
-          <p className="line-clamp-2 text-[14px] font-bold leading-snug text-ink">{n.title}</p>
+          {n.url ? (
+            <a
+              className="line-clamp-2 block text-[14px] font-bold leading-snug text-ink hover:text-yin-light hover:underline"
+              href={n.url}
+              rel="noreferrer nofollow"
+              target="_blank"
+            >
+              {n.title}
+            </a>
+          ) : (
+            <p className="line-clamp-2 text-[14px] font-bold leading-snug text-ink">{n.title}</p>
+          )}
           {n.summary ? <p className="mt-1 line-clamp-2 text-[12.5px] leading-snug text-ink-2">{n.summary}</p> : null}
           <p className="mt-1 text-[12px] leading-tight text-ink-3">
             {n.by || "Newsroom"}{n.ts ? ` · ${timeAgo(n.ts)}` : ""}
