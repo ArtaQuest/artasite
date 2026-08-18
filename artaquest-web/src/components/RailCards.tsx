@@ -17,7 +17,7 @@ import {
   type Challenge, type FollowSuggestion, type NewsItem, type TrendingKindItem, type TrendingTopic,
 } from "../lib/api";
 import { Avatar, cx } from "./ui";
-import { closesIn, timeAgo } from "../lib/fmt";
+import { nameClass, closesIn, timeAgo } from "../lib/fmt";
 import { NB_KIND_META } from "./nbview";
 import { isLoggedIn } from "../lib/auth";
 import { localePath } from "../lib/wp";
@@ -239,7 +239,7 @@ export function WhoToFollowCard({ items }: { items: FollowSuggestion[] | null })
         <div key={s.id} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-veil/[0.04]">
           <Link to={`/u/${s.slug}`} className="shrink-0"><Avatar name={s.name} src={s.avatar} className="h-10 w-10" /></Link>
           <div className="min-w-0 flex-1">
-            <Link to={`/u/${s.slug}`} className="block truncate text-[14px] font-bold text-ink hover:underline">{s.name}</Link>
+            <Link to={`/u/${s.slug}`} className={`block font-bold text-ink hover:underline ${nameClass(s.name)}`}>{s.name}</Link>
             <p className="truncate text-[12px] text-ink-3">{s.hearts} ♥ · {s.works} work{s.works === 1 ? "" : "s"}{s.followers ? ` · ${s.followers} follower${s.followers === 1 ? "" : "s"}` : ""}</p>
           </div>
           <FollowButton id={s.id} />

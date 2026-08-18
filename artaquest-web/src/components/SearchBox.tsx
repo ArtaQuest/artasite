@@ -3,6 +3,7 @@ import { localePath } from "../lib/wp";
 import { listNotebooks, normalizeNbKind, searchMembers, type MemberCard } from "../lib/api";
 import { NB_KIND_META } from "./nbview";
 import { Avatar, LogoMark } from "./ui";
+import { nameClass } from "../lib/fmt";
 import { isLoggedIn } from "../lib/auth";
 
 type SearchHit = { url: string; title: string; sub?: string; person?: MemberCard };
@@ -70,7 +71,7 @@ function Group({ label, hits, cursor, base }: { label: string; hits: SearchHit[]
                   {/* A PERSON'S NAME IS NEVER SHORTENED (operator 2026-08-16): it wraps and the
                       type steps down. A post's TITLE still truncates — a title is a sentence whose
                       first line identifies it; half a name identifies nobody. */}
-                  <span className={`block font-medium text-ink ${h.person ? `break-words leading-tight ${h.title.length > 26 ? "text-[12px]" : h.title.length > 18 ? "text-[13px]" : "text-[14px]"}` : "truncate text-[14px]"}`}>{h.title}</span>
+                  <span className={`block font-medium text-ink ${h.person ? nameClass(h.title) : "truncate text-[14px]"}`}>{h.title}</span>
                   {h.sub && <span className={`block text-[12px] text-ink-3 ${h.person ? "break-all leading-tight" : "truncate"}`}>{h.sub}</span>}
                 </span>
               </a>

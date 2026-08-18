@@ -7,6 +7,7 @@ import { Footer } from "./Footer";
 import { SearchSheet, ShellRail } from "./RightRail";
 import { SearchBox } from "./SearchBox";
 import { openSearch, useWide } from "../lib/rail";
+import { nameClass, nameSize } from "../lib/fmt";
 import { UserMenu } from "./UserMenu";
 import { currentUser, isLoggedIn, localePath } from "../lib/wp";
 import { getChatState, subscribeChat } from "../lib/chat-store";
@@ -442,8 +443,8 @@ function Sidebar({ active, expanded, onNavigate }: { active: string; expanded: b
                 addresses a member by name is worse than a line of 12px text. Stepped by length, not
                 by measurement, so it cannot depend on a font that has not loaded yet. */}
             <span className={`min-w-0 pe-3 transition-opacity duration-200 ${labelShow}`}>
-              <span className={`block break-words font-bold leading-tight text-ink ${me.name.length > 22 ? "text-[12px]" : me.name.length > 16 ? "text-[13px]" : "text-[14px]"}`}>{me.name}</span>
-              <span className={`block break-all leading-tight text-ink-2 ${(me.slug || "").length > 18 ? "text-[11px]" : "text-[13px]"}`} data-ay-skip="1">@{me.slug}</span>
+              <span className={`block font-bold text-ink ${nameClass(me.name)}`}>{me.name}</span>
+              <span className={`block break-all leading-tight text-ink-2 ${nameSize(me.slug || "", 13)}`} data-ay-skip="1">@{me.slug}</span>
             </span>
           </a>
         ) : null}
