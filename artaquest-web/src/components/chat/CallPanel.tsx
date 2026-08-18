@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CallMode, CallState, LinkReport } from "../../lib/webrtc";
 import { Avatar } from "../ui";
+import { nameClass } from "../../lib/fmt";
 import { CALL_MODES, callModePref, linkShortfall, useVideoLive } from "./callmode";
 
 /**
@@ -308,7 +309,7 @@ export function IncomingCall({ name, avatar, onAnswer, onDismiss }: {
         <span className="absolute -inset-1 animate-ping rounded-full border border-yang/50" aria-hidden />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13.5px] font-semibold text-ink" data-ay-skip="1">{name}</span>
+        <span className={`block font-semibold text-ink ${nameClass(name, 13)}`} data-ay-skip="1">{name}</span>
         <span className="block text-[11.5px] text-ink-3">is calling you</span>
       </span>
       <button type="button" onClick={onDismiss}

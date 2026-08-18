@@ -70,9 +70,10 @@ function Group({ label, hits, cursor, base }: { label: string; hits: SearchHit[]
                 <span className="min-w-0 flex-1">
                   {/* A PERSON'S NAME IS NEVER SHORTENED (operator 2026-08-16): it wraps and the
                       type steps down. A post's TITLE still truncates — a title is a sentence whose
-                      first line identifies it; half a name identifies nobody. */}
+                      first line identifies it; half a name identifies nobody. A post's sub-line
+                      carries the work's AUTHOR name ("Article · <author>"), so it wraps too. */}
                   <span className={`block font-medium text-ink ${h.person ? nameClass(h.title) : "truncate text-[14px]"}`}>{h.title}</span>
-                  {h.sub && <span className={`block text-[12px] text-ink-3 ${h.person ? "break-all leading-tight" : "truncate"}`}>{h.sub}</span>}
+                  {h.sub && <span className={`block text-[12px] text-ink-3 ${h.person ? "break-all leading-tight" : "break-words leading-tight"}`}>{h.sub}</span>}
                 </span>
               </a>
             </li>

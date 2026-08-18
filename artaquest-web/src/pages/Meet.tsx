@@ -8,6 +8,7 @@ import {
   type Meet as MeetRow, type MeetCal, type MeetGuest, type MeetLobby, type MeetRsvp,
 } from "../lib/api";
 import { isLoggedIn, localePath } from "../lib/wp";
+import { nameClass } from "../lib/fmt";
 import { bootChat, getChatState, subscribeChat } from "../lib/chat-store";
 import { distributeRoomKey, roomKey } from "../lib/rooms";
 import { shouldAnchor } from "../lib/anchor";
@@ -237,7 +238,7 @@ function GuestList({ guests, seats, hostId, isHost, bound, busy, onRemove }: {
               className="group flex min-h-[40px] min-w-0 flex-1 items-center gap-2.5 outline-none">
               <Avatar src={g.avatar} name={g.name} className="h-8 w-8 shrink-0" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[14px] text-ink group-hover:text-yang">{g.name}</span>
+                <span className={cx("block text-ink group-hover:text-yang", nameClass(g.name, 14))}>{g.name}</span>
                 <span className="block truncate text-[12px] text-ink-2">{standing(g)}</span>
               </span>
             </Link>

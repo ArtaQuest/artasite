@@ -7,7 +7,8 @@ import {
 } from "../lib/wp";
 import { isLorem, loremCourse } from "../lib/lorem";
 import { Coins } from "../lib/currency";
-import { Avatar, Button, MetricChip, StatusNote, Tabs } from "../components/ui";
+import { Avatar, Button, MetricChip, StatusNote, Tabs, cx } from "../components/ui";
+import { nameClass } from "../lib/fmt";
 import { SYSTEMS, loadTypologies, typologiesReady } from "../lib/typologies";
 import { type TypologySystem } from "../lib/typology-meta";
 import { SharePanel } from "../components/SharePanel";
@@ -173,7 +174,7 @@ function CourseRankingsPanel({ courseId }: { courseId: number }) {
                   <td className="py-3 align-middle">
                     <a href={localePath(`/u/${it.slug}/`)} className="group flex min-w-0 items-center gap-2.5">
                       <Avatar src={it.avatar} name={it.name} country={it.country} className="h-7 w-7 text-[12px]" />
-                      <span className="truncate text-[14px] font-semibold text-ink group-hover:text-yang">{it.name}</span>
+                      <span className={cx("min-w-0 font-semibold text-ink group-hover:text-yang", nameClass(it.name, 14))}>{it.name}</span>
                       {it.certified && <span title="Certified — eligible to collect" className="shrink-0 rounded-pill bg-yin/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yin-light">cert</span>}
                     </a>
                   </td>

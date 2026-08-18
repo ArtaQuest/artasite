@@ -451,7 +451,7 @@ function ChallengesStrip({ items }: { items: Challenge[] | null }) {
         {items.slice(0, 6).map((c) => (
           <Link key={c.id} to="/challenges" className="min-w-[220px] max-w-[240px] shrink-0 snap-start rounded-2xl border border-line bg-space-2 p-3 transition-colors hover:border-yin-ink">
             <div className="flex items-baseline justify-between gap-2">
-              <p className="min-w-0 truncate text-[13.5px] font-bold text-ink">{c.title}</p>
+              <p className={`min-w-0 font-bold text-ink ${nameClass(c.title, 13)}`}>{c.title}</p>
               <span className="shrink-0 text-[14px] font-extrabold text-yang">₳{c.pool}</span>
             </div>
             <p className="mt-0.5 truncate text-[11.5px] text-ink-3">{NB_KIND_META[c.kind]?.label} · closes {closesIn(c.deadline)}</p>

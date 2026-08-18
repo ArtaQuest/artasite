@@ -4,6 +4,7 @@ import { ArtaBot as Api, ApiError, BotSessions, chatGetKey, chatMembers, type Ar
 import { uiLocale, currentUser, isLoggedIn, localePath, renderRich } from "../lib/wp";
 import { armAutoAnswer, clearRing, getChatState, markSeen, subscribeChat, watchList } from "../lib/chat-store";
 import { useTypewriter } from "../lib/useTypewriter";
+import { nameClass } from "../lib/fmt";
 import { Avatar, Button, LogoMark, RichText } from "./ui";
 import Arta from "../generated/arta/render/Arta";
 import { IncomingCall } from "./chat/CallPanel";
@@ -918,7 +919,7 @@ function DockBody({ view, setView }: {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline gap-2">
-                    <span className={`min-w-0 flex-1 truncate text-[14px] text-ink ${c.unread ? "font-bold" : "font-semibold"}`}>{c.peer.name}</span>
+                    <span className={`min-w-0 flex-1 text-ink ${c.unread ? "font-bold" : "font-semibold"} ${nameClass(c.peer.name, 14)}`}>{c.peer.name}</span>
                     <span className={`shrink-0 text-[11px] ${c.unread ? "font-semibold text-yang-ink" : "text-ink-3"}`}>{relTime(c.last_at)}</span>
                   </span>
                   <span className={`block truncate text-[12px] ${c.unread ? "text-ink-2" : "text-ink-3"}`} dir="auto">
@@ -941,8 +942,8 @@ function DockBody({ view, setView }: {
                       {m.online && <span aria-hidden className="absolute -bottom-0.5 -end-0.5 h-3 w-3 rounded-full border-2 border-space-2 bg-yang" />}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[14px] font-semibold text-ink">{m.name}</span>
-                      <span className="block truncate text-[12px] text-ink-3">
+                      <span className={`block font-semibold text-ink ${nameClass(m.name, 14)}`}>{m.name}</span>
+                      <span className="block break-words text-[12px] text-ink-3">
                         {m.online ? "Active now" : m.has_key ? `@${m.slug}` : "Not set up for messages yet"}
                       </span>
                     </span>
@@ -1218,11 +1219,11 @@ export function ArtaBot() {
             aria-expanded={open}
             aria-controls="aq-dock-body"
             aria-describedby={!open && unread > 0 ? "aq-dock-unread" : undefined}
-            className="min-w-0 flex-1 truncate text-start"
+            className="min-w-0 flex-1 text-start"
           >
             {/* A member's name is member-authored: skipped so the i18n mesh can't publish it into
                 the public aq_translations. The static titles are left translatable. */}
-            <span className="block truncate text-[15px] font-bold leading-tight text-ink"
+            <span className={`block font-bold text-ink ${nameClass(title, 15)}`}
               {...(dockView.k === "dm" ? { "data-ay-skip": "1" } : {})}>{title}</span>
             {!inThread && unread > 0 && (
               /* The count lives in its OWN text node, skipped: the i18n mesh collects rendered

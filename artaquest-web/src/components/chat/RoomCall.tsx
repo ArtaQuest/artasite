@@ -899,7 +899,7 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
           </button>
         ))}
         {Object.entries(hands).some(([, up]) => up) && (
-          <span className="ms-auto truncate text-[11.5px] text-yang" data-ay-skip="1">
+          <span className="ms-auto min-w-0 break-words text-[11.5px] leading-tight text-yang" data-ay-skip="1">
             ✋ {Object.entries(hands).filter(([, up]) => up).map(([u]) => nameOf(Number(u))?.name || "Someone").join(", ")}
           </span>
         )}

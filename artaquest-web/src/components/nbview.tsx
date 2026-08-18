@@ -24,6 +24,7 @@ import { calmStop } from "../lib/theme";
 import { MarkdownLite } from "./reader";
 import { watchMath } from "../lib/math";
 import { Avatar, Chip, cx, HeartGlyph } from "./ui";
+import { nameClass } from "../lib/fmt";
 import { LibraryMedia } from "./library";
 
 /** blurb = the feed one-liner; contract = what a work of this kind typically ships.
@@ -77,6 +78,7 @@ export type NbOutput = {
 export type NbCell = { cell_type: "markdown" | "code" | "raw"; source: string | string[]; outputs?: NbOutput[]; execution_count?: number | null };
 
 const joinSrc = (s: string | string[] | undefined) => (Array.isArray(s) ? s.join("") : String(s ?? ""));
+// eslint-disable-next-line no-control-regex -- the ESC byte is the point: this strips ANSI colour codes from a cell's stdout
 const stripAnsi = (s: string) => s.replace(/\[[0-9;]*m/g, "");
 
 export function parseNb(ipynb: string): NbCell[] {
@@ -527,7 +529,7 @@ export function NbCard({ nb, to, badge }: { nb: NotebookCard; to?: string; badge
           {nb.abstract ? <p className="line-clamp-2 text-xs leading-relaxed text-ink-3">{nb.abstract}</p> : null}
           <div className="mt-auto flex items-center gap-2 pt-1 text-xs text-ink-3">
             <Avatar name={nb.author.name} src={nb.author.avatar} className="h-[18px] w-[18px] text-[9px]" />
-            <span className="truncate">{nb.author.name}</span>
+            <span className={cx("min-w-0", nameClass(nb.author.name, 12))}>{nb.author.name}</span>
             <span className="ml-auto inline-flex items-center gap-1"><HeartGlyph size={13} /> {nb.hearts}</span>
           </div>
         </div>

@@ -10,6 +10,7 @@ import {
 } from "../../lib/e2ee";
 import { Avatar, ErrorNote, Input } from "../ui";
 import { watchMath } from "../../lib/math";
+import { nameClass } from "../../lib/fmt";
 import { MessageBody } from "./MessageBody";
 import { insideFence } from "./fence";
 
@@ -267,7 +268,7 @@ export function RoomThread({
         <button type="button" onClick={onLeave} aria-label="Back"
           className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-veil/[0.07] ${compact ? "hidden" : "md:hidden"}`}>‹</button>
         <span className="min-w-0 flex-1" data-ay-skip="1">
-          <span className="block truncate text-[15px] font-semibold text-ink">{room.title}</span>
+          <span className={`block font-semibold text-ink ${nameClass(room.title, 15)}`}>{room.title}</span>
           <span className="block truncate text-[11.5px] text-ink-3">
             {room.count} {room.count === 1 ? "member" : "members"}
             {room.in_call.length > 0 ? ` · ${room.in_call.length} in the call` : ""}

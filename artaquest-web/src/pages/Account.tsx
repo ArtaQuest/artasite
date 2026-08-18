@@ -11,6 +11,7 @@ import { Avatar, Button, Card, CertBadge, Chip, ErrorNote, Field, Input, Pill, S
 import { availableLangs } from "../lib/i18n";
 import CitySelect from "../components/CitySelect";
 import { cityLabel } from "../lib/api";
+import { nameClass } from "../lib/fmt";
 
 /** code → LangMeta, built once: the picker and the chips both resolve names, and availableLangs()
  *  rebuilds an array of 132 on every call. */
@@ -1642,7 +1643,7 @@ function ParticipationCerts() {
         {items.map((c) => (
           <li key={c.challenge_id}>
             <Card as="a" href={localePath(c.url)} className="group block w-full px-4 py-3 hover:border-yin-light/40">
-              <span className="block truncate text-[15px] font-semibold transition-colors group-hover:text-yang" data-ay-skip="1">{c.challenge}</span>
+              <span className={`block font-semibold transition-colors group-hover:text-yang ${nameClass(c.challenge, 15)}`} data-ay-skip="1">{c.challenge}</span>
               <span className="mt-0.5 block text-[12px] text-ink-2">
                 <span data-ay-skip="1">{c.kind} · {c.topic}</span> ·{" "}
                 {c.settled ? "settled at its full moon" : "open until its full moon"}
@@ -1697,8 +1698,8 @@ export default function Account() {
 
   return (
     <div className="flex flex-col gap-8">
-      <header className="flex flex-col items-start gap-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4">
+      <header className="flex flex-col items-start gap-5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex min-w-0 grow shrink basis-0 items-center gap-4 sm:basis-auto">
           <div className="relative shrink-0">
             <Avatar src={d.user.avatar} name={d.user.name} palm={d.user.palm} className="h-16 w-16 ring-2 ring-line" />
             <button type="button" data-goal="change-photo" onClick={() => photoRef.current?.click()} disabled={photoBusy}
@@ -1710,8 +1711,8 @@ export default function Account() {
             </button>
             <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={(e) => changePhoto(e.target.files?.[0] || null)} />
           </div>
-          <div>
-            <h1 className="text-[26px] font-bold leading-tight tracking-tight">{d.user.name}</h1>
+          <div className="min-w-0">
+            <h1 className="text-[26px] font-bold leading-tight tracking-tight wrap-anywhere">{d.user.name}</h1>
             {photoErr && <p className="mt-0.5 text-[12px] text-yin-light">{photoErr}</p>}
             <div className="mt-1 flex items-center gap-2">
               {d.tier.next
@@ -1721,7 +1722,7 @@ export default function Account() {
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex min-w-0 max-w-full flex-wrap gap-2">
           <Button variant="outline" onClick={() => setEditing((v) => !v)} aria-pressed={editing} className="h-10 px-4 text-[14px]">{editing ? "Close" : "Edit profile"}</Button>
           <Button variant="outline" href="/issues/" className="h-10 px-4 text-[14px]">Report an issue</Button>
           {/* Immediate sign-out via the API (#42) — the WP logout URL's baked nonce can be stale

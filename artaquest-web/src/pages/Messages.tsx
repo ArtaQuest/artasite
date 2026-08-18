@@ -13,6 +13,7 @@ import {
   takeAutoAnswer, watchList,
 } from "../lib/chat-store";
 import { watchMath } from "../lib/math";
+import { nameClass } from "../lib/fmt";
 import MediaViewer from "../components/chat/MediaViewer";
 import {
   decodePayload, deriveChatKey, encodePayload, importPeerPub, privForKid,
@@ -419,9 +420,9 @@ function Composer({
       {(replyTo || editing) && (
         /* Quotes the message being replied to / edited — decrypted plaintext. */
         <div data-ay-skip="1" className="mb-2 flex items-center gap-2 rounded-field border-s-2 border-yin-light/70 bg-veil/[0.05] px-3 py-1.5">
-          <p className="min-w-0 flex-1 truncate text-[12px] text-ink-2">
-            <span className="font-semibold text-ink-2">{editing ? "Editing your message" : `Replying to ${replyPreview ? peerName : peerName}`}</span>
-            {!editing && replyPreview && <> — {replyPreview}</>}
+          <p className="min-w-0 flex-1 text-[12px] text-ink-2">
+            <span className="wrap-anywhere font-semibold text-ink-2">{editing ? "Editing your message" : `Replying to ${replyPreview ? peerName : peerName}`}</span>
+            {!editing && replyPreview && <span className="block truncate">— {replyPreview}</span>}
           </p>
           <button type="button" aria-label="Cancel" onClick={onCancel}
             className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-veil/[0.07] hover:text-ink"><Ic d={IC.x} size={13} /></button>
@@ -1509,7 +1510,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                   negative margin, so nothing on the header moves. */}
               <a href={localePath(`/u/${peer.slug}/`)} data-ay-skip="1"
                 title="See their profile"
-                className="-my-3 truncate py-3 text-[15px] font-semibold text-ink hover:text-yin-light">{peer.name}</a>
+                className={`-my-3 py-3 font-semibold text-ink hover:text-yin-light ${nameClass(peer.name, 15)}`}>{peer.name}</a>
               {/* ink-2, not ink-3: at 11.5px this is the line that says whether the conversation is
                   encrypted, muted, or the other person is typing — text a member reads, and ink-3 is
                   the 3.0:1 tier the contrast engine reserves for non-text marks. */}
@@ -2450,8 +2451,8 @@ export default function Messages() {
                         {r.count}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className={`block truncate text-[14px] text-ink ${r.unread ? "font-bold" : "font-semibold"}`}>{r.title}</span>
-                        <span className="block truncate text-[12px] text-ink-2">
+                        <span className={`block text-ink ${r.unread ? "font-bold" : "font-semibold"} ${nameClass(r.title, 14)}`}>{r.title}</span>
+                        <span className="block break-words text-[12px] leading-tight text-ink-2">
                           {r.in_call.length ? `${r.in_call.length} in the call now` : r.members.map((m) => m.name).join(", ")}
                         </span>
                       </span>
@@ -2495,8 +2496,8 @@ export default function Messages() {
                           {m.online && <span aria-hidden className="absolute -bottom-0.5 -end-0.5 h-3 w-3 rounded-full border-2 border-space-2 bg-yang" />}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[14px] font-semibold text-ink">{m.name}</span>
-                          <span className="block truncate text-[12px] text-ink-2">
+                          <span className={`block font-semibold text-ink ${nameClass(m.name, 14)}`}>{m.name}</span>
+                          <span className="block break-words text-[12px] text-ink-2">
                             {m.online ? "Active now" : m.has_key ? `@${m.slug}` : "Not set up for messages yet"}
                           </span>
                         </span>
@@ -2554,7 +2555,7 @@ export default function Messages() {
                       {/* Member name + the decrypted preview — both must stay off the mesh. */}
                       <span data-ay-skip="1" className="min-w-0 flex-1">
                         <span className="flex items-baseline gap-2">
-                          <span className={`min-w-0 flex-1 truncate text-[14px] text-ink ${c.unread && !c.muted ? "font-bold" : "font-semibold"}`}>{c.peer.name}</span>
+                          <span className={`min-w-0 flex-1 text-ink ${c.unread && !c.muted ? "font-bold" : "font-semibold"} ${nameClass(c.peer.name, 14)}`}>{c.peer.name}</span>
                           {c.last_at > 0 && (
                             <span className={`shrink-0 text-[12px] ${c.unread && !c.muted ? "font-semibold text-yang" : "text-ink-2"}`}>
                               {fmtDay(c.last_at) === "Today" ? fmtTime(c.last_at) : fmtDay(c.last_at)}

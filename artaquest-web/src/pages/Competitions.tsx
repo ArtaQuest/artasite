@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Competitions, type CompetitionCard } from "../lib/api";
-import { Button, Card, Pill } from "../components/ui";
+import { Button, Card, Pill, cx } from "../components/ui";
+import { nameClass } from "../lib/fmt";
 import { WithRail, RailInline } from "../components/PageRail";
 import { localePath, relAgo } from "../lib/wp";
 
@@ -45,8 +46,8 @@ function CompetitionRow({ c }: { c: CompetitionCard }) {
       <Card className="p-4 transition-colors hover:border-yin-light sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="truncate text-[17px] font-bold tracking-tight">{c.title}</h2>
-            <p className="mt-0.5 truncate text-[13px] text-ink-3">by {c.owner || "ArtaQuest"}</p>
+            <h2 className={cx("font-bold tracking-tight", nameClass(c.title, 17))}>{c.title}</h2>
+            <p className={cx("mt-0.5 text-ink-3", nameClass(c.owner || "ArtaQuest", 13))}>by {c.owner || "ArtaQuest"}</p>
           </div>
           {c.metric && <Pill className="shrink-0">{c.metric}</Pill>}
         </div>

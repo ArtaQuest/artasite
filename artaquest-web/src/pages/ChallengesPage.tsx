@@ -13,6 +13,7 @@ import { Avatar, Button, Chip, cx, EmptyState, HeartGlyph, PageHero, SectionHead
 import { CommoditiesCard } from "../components/commodities";
 import { isLoggedIn } from "../lib/auth";
 import { uiLocale } from "../lib/wp";
+import { nameClass } from "../lib/fmt";
 
 function moonLabel(ts: number) {
   return new Date(ts * 1000).toLocaleDateString(uiLocale(), { month: "long", day: "numeric" }) + " (full moon)";
@@ -262,12 +263,12 @@ export default function ChallengesPage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {past.map((c) => (
               <div key={c.id} className="rounded-2xl border border-line bg-space-2 p-4">
-                <h3 className="truncate text-sm font-bold text-ink">{c.title}</h3>
+                <h3 className={cx("font-bold text-ink", nameClass(c.title, 14))}>{c.title}</h3>
                 <p className="text-[11px] uppercase tracking-wider text-ink-3">{NB_KIND_META[c.kind]?.label} · {c.topic}</p>
                 {(c.results?.podium || []).slice(0, 1).map((w) => (
                   <p key={w.nb_id} className="mt-2 flex items-center gap-2 text-[13px] text-ink-2">
                     <Avatar name={w.author.name} src={w.author.avatar} className="h-5 w-5 text-[9px]" />
-                    <span className="truncate">{w.author.name}</span>
+                    <span className={cx("min-w-0", nameClass(w.author.name, 13))}>{w.author.name}</span>
                     <span className="ml-auto font-extrabold text-yang">₳{w.prize}</span>
                   </p>
                 ))}

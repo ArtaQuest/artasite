@@ -17,6 +17,7 @@
  */
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { cx } from "./ui";
+import { nameClass } from "../lib/fmt";
 import { searchCities, cityForTimezone, type City } from "../lib/api";
 
 /** ISO 3166 alpha-2 → the reader's own name for that country, from the platform's active language. */
@@ -114,7 +115,7 @@ export default function CitySelect({ value, onPick, onClear, id, required, inval
           strokeLinejoin="round" aria-hidden className="shrink-0 text-yang">
           <path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11z" /><circle cx="12" cy="10" r="2.6" />
         </svg>
-        <span data-ay-skip="1" className="min-w-0 flex-1 truncate text-[15px] text-ink">{value}</span>
+        <span data-ay-skip="1" className={cx("min-w-0 flex-1 text-ink", nameClass(value, 15))}>{value}</span>
         <button type="button" onClick={() => { onClear(); setQ(""); setOpen(false); }}
           className="-my-2 shrink-0 rounded-pill px-2 py-2 text-[13px] font-semibold text-ink-3 transition-colors hover:text-yang">
           Change
@@ -184,7 +185,7 @@ export default function CitySelect({ value, onPick, onClear, id, required, inval
                     className={cx("flex min-h-11 w-full items-center gap-2 px-3.5 py-2 text-start transition-colors",
                       i === active ? "bg-veil/[0.08]" : "hover:bg-veil/[0.05]")}
                   >
-                    <span data-ay-skip="1" className="min-w-0 flex-1 truncate text-[14.5px] text-ink">
+                    <span data-ay-skip="1" className={cx("min-w-0 flex-1 text-ink", nameClass(c.name, 14))}>
                       {c.name}
                       {/* The state, ONLY where the code is letters — otherwise five Springfields in
                           five different states are five identical rows a member cannot choose between. */}

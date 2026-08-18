@@ -13,6 +13,7 @@ import { postDiscVote, getVoters, localePath, isLoggedIn, type Voter, type Voter
 import { createVoteCaster } from "../lib/votes";
 import { watchMath } from "../lib/math";
 import { countryName, flagEmoji } from "../lib/flags";
+import { nameClass } from "../lib/fmt";
 
 /** Classname joiner with Tailwind conflict resolution (last wins) — so a primitive's
  *  default utilities can be safely overridden by a caller's className. */
@@ -575,7 +576,7 @@ function VoterColumn({ dir, voters }: { dir: 1 | -1; voters: Voter[] }) {
         {voters.map((v, i) => (
           <li key={`${v.slug || "x"}-${i}`} className="flex items-center gap-1.5">
             <Avatar src={v.avatar} name={v.name} country={v.country} className="h-5 w-5 text-[9px]" />
-            <span data-ay-skip="1" className="truncate text-ink-2">{v.name}</span>
+            <span data-ay-skip="1" className={cx("min-w-0 text-ink-2", nameClass(v.name, 12))}>{v.name}</span>
           </li>
         ))}
       </ul>

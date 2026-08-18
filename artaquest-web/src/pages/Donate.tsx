@@ -6,6 +6,7 @@ import {
 import { creditOptions, creditReach, myCredits, sampleCert, widenCredit, type CreditOptions, type CreditReach, type CreditGift } from "../lib/api";
 import { Coins, formatFiat, sanitizeDecimal } from "../lib/currency";
 import { countryOptions, flagEmoji } from "../lib/flags";
+import { nameClass } from "../lib/fmt";
 import { Button, Card, Chip, PageHero, StatusNote, cx } from "../components/ui";
 import { DomainGlyph } from "../components/catalogue";
 import { ParticipationDoc } from "../components/participation";
@@ -93,7 +94,7 @@ function FoundationBooks({ fin }: { fin: FoundationFinances }) {
                       given to it. `crd_` is an ArtaCredits slice; `typ_` is a sponsored topic, which
                       the chip used to call "type". */}
                   <div className="flex items-center justify-between gap-4">
-                    <span className="min-w-0 truncate text-[14px] text-ink">{e.label} <span className="text-[12px] text-ink-3">· {e.bucket.startsWith("crd_") ? "credits" : e.kind === "cty" ? "country" : e.kind === "grp" ? "group" : "topic"}</span></span>
+                    <span className={cx("min-w-0 text-ink", nameClass(e.label, 14))}>{e.label} <span className="text-[12px] text-ink-3">· {e.bucket.startsWith("crd_") ? "credits" : e.kind === "cty" ? "country" : e.kind === "grp" ? "group" : "topic"}</span></span>
                     <span className="shrink-0 text-[14px] font-semibold tabular-nums text-yang">{formatFiat(e.dollars, fin.fiat)}</span>
                   </div>
                   <div className="mt-1.5 h-1.5 overflow-hidden rounded-pill bg-veil/5"><div className="h-full rounded-pill bg-yang" style={{ width: `${Math.max(4, Math.round((e.dollars / maxE) * 100))}%` }} /></div>

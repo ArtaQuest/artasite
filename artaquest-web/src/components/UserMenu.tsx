@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { uiLocale, localePath, currentUser, getDashboard, type Dashboard } from "../lib/wp";
 import { signOut } from "../lib/auth";
 import { CoinMark } from "../lib/currency";
+import { nameClass } from "../lib/fmt";
 import { Avatar, FlagBadge, IconButton } from "./ui";
 import { Notifications as NotifyApi, type Notification } from "../lib/api";
 
@@ -129,7 +130,7 @@ export function UserMenu() {
   const headerInner = (
     <>
       <Avatar src={avatar} name={name} country={country} className="h-8 w-8 text-[13px] text-ink ring-1 ring-yin-light/50" />
-      <span className="truncate text-[17px] font-bold text-ink">{name}</span>
+      <span className={`min-w-0 font-bold text-ink ${nameClass(name, 17)}`}>{name}</span>
     </>
   );
 

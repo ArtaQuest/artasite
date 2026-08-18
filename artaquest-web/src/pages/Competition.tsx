@@ -21,7 +21,8 @@ const isPhaseMetric = (m?: string) => m === "phase-r2";
 /** Score formatting: chant = seconds (lower wins); phase = a 0-100 board score (2dp); plain R² = 5dp. */
 const fmtScore = (x: number, phase?: boolean, naming?: boolean) =>
   naming ? `${x.toFixed(1)}s` : phase ? x.toFixed(2) : x.toFixed(5);
-import { Button, Card, ErrorNote, Pill, Tabs, Textarea, type Tab } from "../components/ui";
+import { Button, Card, ErrorNote, Pill, Tabs, Textarea, cx, type Tab } from "../components/ui";
+import { nameClass } from "../lib/fmt";
 import { currentUser, isLoggedIn, localePath, relAgo } from "../lib/wp";
 import { WorkHeart } from "../components/studio";
 import { CompResultsChart, FreqBars } from "../components/ResearchCharts";
@@ -196,10 +197,10 @@ function Overview({ c, onTab }: { c: CompetitionDetail; onTab: (k: string) => vo
       <section>
         <h2 className="mb-1.5 text-[12px] font-semibold uppercase tracking-[0.12em] text-ink-3">Host</h2>
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-card border border-line bg-space-2 px-4 py-3">
-          <div className="min-w-0 truncate text-[14px]">
+          <div className="min-w-0 text-[14px]">
             {c.owner_slug
-              ? <a href={localePath(`/u/${c.owner_slug}`)} className="font-semibold text-ink hover:text-yin-light">{c.owner || "ArtaQuest"}</a>
-              : <span className="font-semibold text-ink">{c.owner || "ArtaQuest"}</span>}
+              ? <a href={localePath(`/u/${c.owner_slug}`)} className={cx("font-semibold text-ink hover:text-yin-light", nameClass(c.owner || "ArtaQuest", 14))}>{c.owner || "ArtaQuest"}</a>
+              : <span className={cx("font-semibold text-ink", nameClass(c.owner || "ArtaQuest", 14))}>{c.owner || "ArtaQuest"}</span>}
             {Number.isFinite(createdTs) && (
               <span className="ms-2 text-[12.5px] text-ink-3">hosted {relAgo(Math.floor(createdTs / 1000))}</span>
             )}
@@ -682,7 +683,7 @@ function Solutions({ slug, naming, phase }: { slug: string; naming?: boolean; ph
             return (
               <div key={s.submission_id} className="rounded-card border border-line bg-space-2 px-4 py-3">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px]">
-                  <a href={localePath(`/u/${s.slug}`)} className="min-w-0 truncate font-semibold text-ink hover:text-yin-light">{s.name}</a>
+                  <a href={localePath(`/u/${s.slug}`)} className={cx("min-w-0 font-semibold text-ink hover:text-yin-light", nameClass(s.name, 13))}>{s.name}</a>
                   <span className="tabular-nums text-ink-2">{fmt(s.score)}</span>
                   <ReviewStatePill review={s.review} verified={s.verified} chant={naming} />
                   {s.code_url && (

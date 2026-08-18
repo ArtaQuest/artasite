@@ -15,6 +15,7 @@ import { type ReactNode } from "react";
 import { localePath } from "../lib/wp";
 import { CoinMark, formatDuration } from "../lib/currency";
 import { Avatar, MetricChip, cx } from "./ui";
+import { nameClass } from "../lib/fmt";
 import { thumbSrc, thumbSrcSet, CARD_THUMB_SIZES } from "../lib/img";
 import { CATEGORY_GROUPS, STYLE_HOW, STYLE_LABEL, AXIS_COLOR } from "../lib/typology-meta";
 
@@ -264,7 +265,7 @@ export function ResultCard(p: ResultCardProps) {
         <div className="flex flex-1 flex-col gap-2 p-4">
           <span className="grid h-9 w-9 place-items-center rounded-card bg-yang/10 text-yang"><DomainGlyph domain="grant" className="h-5 w-5" /></span>
           <h3 className={cx(titleCls, "line-clamp-2 text-[15px]")}>{p.title}</h3>
-          {(p.funder || p.country) && <p className="truncate text-[13px] text-ink-3">{[p.funder, p.country].filter(Boolean).join(" · ")}</p>}
+          {(p.funder || p.country) && <p className={cx("text-ink-3", nameClass([p.funder, p.country].filter(Boolean).join(" · "), 13))}>{[p.funder, p.country].filter(Boolean).join(" · ")}</p>}
           <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
             {p.amount && <MetricChip tone="gold">{p.amount}</MetricChip>}
             {p.deadline && !p.rolling ? <MetricChip tone={soon != null && soon <= 30 ? "gold" : "neutral"}>{fmtDate(p.deadline)}</MetricChip> : <MetricChip>Rolling</MetricChip>}
@@ -290,7 +291,7 @@ export function ResultCard(p: ResultCardProps) {
               {p.pinned && <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" className="shrink-0 text-yang" aria-label="Pinned"><path d="M16 3l5 5-4 1-4 4 1 5-3 1-2-2-7 7v-2l7-7-2-2 1-3 5 1 4-4z" /></svg>}
               <span {...trMark} className={cx(titleCls, "truncate text-[14px]")}>{p.title}</span>
             </span>
-            <span className="mt-0.5 block truncate text-[12px] text-ink-3">{[p.author, rel(p.at)].filter(Boolean).join(" · ")}</span>
+            <span className={cx("mt-0.5 block text-ink-3", nameClass(p.author || "", 12))}>{[p.author, rel(p.at)].filter(Boolean).join(" · ")}</span>
           </span>
           <span className="flex shrink-0 items-center gap-3 text-[12px]">
             <span className={cx("inline-flex items-center gap-1 font-semibold tabular-nums", scoreColor)}>

@@ -1,5 +1,6 @@
 import { type FormEvent, useMemo, useState } from "react";
 import { Avatar, Button, RichText, VoteControl, cx } from "../ui";
+import { nameClass } from "../../lib/fmt";
 import { Composer } from "../Composer";
 import { VerifyApi } from "../../lib/verify";
 import { ipCountry } from "../../lib/geo";
@@ -226,7 +227,7 @@ function CommentNode(p: NodeProps) {
               className="mt-2 block rounded-card border border-line bg-veil/[0.03] p-3 transition-colors hover:border-yin-light/40">
               <div className="flex items-center gap-2">
                 <Avatar src={c.ytRef.avatar} name={c.ytRef.author} className="h-7 w-7 text-[11px]" />
-                <span className="min-w-0 truncate text-[13px] font-semibold text-ink-2">{c.ytRef.author}</span>
+                <span className={cx("min-w-0 font-semibold text-ink-2", nameClass(c.ytRef.author, 13))}>{c.ytRef.author}</span>
                 <span className="ms-auto inline-flex shrink-0 items-center gap-1 text-[12px] tabular-nums text-ink-3" title="thumbs-up on YouTube">
                   <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden><path d="M2 10h3v11H2zM22 11c0-1.1-.9-2-2-2h-5.3l.8-3.9c0-.2.1-.4.1-.6 0-.4-.2-.8-.4-1L14 2 7.6 8.4c-.4.4-.6.9-.6 1.4V19c0 1.1.9 2 2 2h7.5c.8 0 1.5-.5 1.8-1.2l2.5-5.9c.1-.2.1-.4.1-.7v-2.2z" /></svg>
                   {c.ytRef.likes.toLocaleString("en")}

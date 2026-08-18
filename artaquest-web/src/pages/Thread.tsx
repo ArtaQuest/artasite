@@ -5,7 +5,8 @@ import {
 } from "../lib/wp";
 import { createVoteCaster } from "../lib/votes";
 import { isLorem, loremThread } from "../lib/lorem";
-import { Avatar, Input, RichText, StatusNote, VotePill } from "../components/ui";
+import { Avatar, Input, RichText, StatusNote, VotePill, cx } from "../components/ui";
+import { nameClass } from "../lib/fmt";
 import { Composer } from "../components/Composer";
 import { CommentThread } from "../components/discussion/CommentThread";
 import { threadCommentToBoard } from "../components/discussion/adapters";
@@ -181,7 +182,7 @@ export default function Thread({ forum, slug }: { forum: string; slug: string })
               <div className="min-w-0">
                 <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-ink-3">
                   <Avatar name={d.author} className="h-6 w-6 text-[11px] font-normal" />
-                  <span className="truncate"><span data-ay-skip="1">{d.author}</span>{d.time && ` · ${d.time}`}{d.edited && " · edited"} in {prettyForum}</span>
+                  <span className={cx("min-w-0", nameClass(d.author, 12))}><span data-ay-skip="1">{d.author}</span>{d.time && ` · ${d.time}`}{d.edited && " · edited"} in {prettyForum}</span>
                 </div>
                 <h1 data-ay-tr="1" data-ay-src={d.lang || "en"} className="mt-2 text-[26px] font-bold leading-tight tracking-tight">{d.title}</h1>
               </div>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ApiError, Courses, Economy, Learn, Social, type CourseCard, type FeedItem, type FeedTarget, type LeaderRow } from "../lib/api";
+import { nameClass } from "../lib/fmt";
 import { currentUser, localePath, relAgo } from "../lib/wp";
 import { Avatar, Button, Card, Chip, FlagBadge, LoadMoreButton, SectionHeader, VoteControl, cx } from "./ui";
 
@@ -204,8 +205,8 @@ function PeerRail({ followedIds, onFollowed }: { followedIds: number[]; onFollow
                 : <Avatar src={p.avatar} name={p.name} className="h-9 w-9 text-sm ring-1 ring-line" />}
               <div className="min-w-0 flex-1">
                 {profile
-                  ? <a href={profile} data-ay-skip="1" className="block truncate text-[14px] font-semibold text-ink transition-colors hover:text-yang">{p.name}</a>
-                  : <span data-ay-skip="1" className="block truncate text-[14px] font-semibold text-ink">{p.name}</span>}
+                  ? <a href={profile} data-ay-skip="1" className={`block font-semibold text-ink transition-colors hover:text-yang ${nameClass(p.name)}`}>{p.name}</a>
+                  : <span data-ay-skip="1" className={`block font-semibold text-ink ${nameClass(p.name)}`}>{p.name}</span>}
                 <p className="truncate text-[12px] text-ink-3">{p.tier} · {p.points.toLocaleString()} points</p>
               </div>
               {done

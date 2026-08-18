@@ -8,6 +8,7 @@ import { getChallenge, listChallenges, type Challenge } from "../lib/api";
 import { NB_KIND_META } from "../components/nbview";
 import { Avatar, Button, Chip, cx, EmptyState, HeartGlyph, PageHero } from "../components/ui";
 import { isLoggedIn } from "../lib/auth";
+import { nameClass } from "../lib/fmt";
 
 function closesIn(ts: number) {
   const s = Math.max(0, ts - Math.floor(Date.now() / 1000));
@@ -59,7 +60,7 @@ export default function Rankings() {
                         <p className="truncate text-[15px] font-semibold text-ink">{e.title}</p>
                         <p className="mt-0.5 flex items-center gap-2 text-[12px] text-ink-3">
                           <Avatar name={e.author.name} src={e.author.avatar} className="h-[18px] w-[18px] text-[8px]" />
-                          <span className="truncate">{e.author.name}</span>
+                          <span className={cx("min-w-0", nameClass(e.author.name, 12))}>{e.author.name}</span>
                         </p>
                       </div>
                       <span className="inline-flex shrink-0 items-center gap-1.5 text-sm text-ink-2"><HeartGlyph size={14} /> {e.hearts}</span>

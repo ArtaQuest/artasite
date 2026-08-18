@@ -4,7 +4,8 @@ import {
   type LessonData, type CurriculumItem,
 } from "../lib/wp";
 import { SectionBoardView } from "../components/discussion/SectionBoardView";
-import { Avatar } from "../components/ui";
+import { Avatar, cx } from "../components/ui";
+import { nameClass } from "../lib/fmt";
 import { getMediaBlobURL, getCaptionVTT, getTranscript, dropMedia } from "../lib/offline/store";
 import { currentLang } from "../lib/i18n";
 
@@ -43,7 +44,7 @@ function VideoMeta({ d }: { d: LessonData }) {
           <Avatar src={channel.avatar} name={channel.name} className="h-10 w-10 text-[15px] ring-1 ring-line" />
           <div className="min-w-0">
             <div className="flex items-center gap-1">
-              <span className="truncate text-[15px] font-semibold text-ink">{channel.name}</span>
+              <span className={cx("min-w-0 font-semibold text-ink", nameClass(channel.name, 15))}>{channel.name}</span>
               {channel.verified && (
                 <svg viewBox="0 0 24 24" width="15" height="15" className="shrink-0 text-ink-3" aria-label="Verified">
                   <title>Verified</title>

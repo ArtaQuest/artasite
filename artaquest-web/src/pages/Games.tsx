@@ -18,6 +18,7 @@ import {
 } from "../lib/api";
 import { isLoggedIn } from "../lib/api";
 import { localePath } from "../lib/wp";
+import { nameClass } from "../lib/fmt";
 import { HandDefs, HandGlyph, HandLive, HandThrow } from "../components/Hand";
 import { LAWS, TOOL_KEYS, TOOL_NAME, type ToolKey } from "../lib/hands";
 import { Avatar, Button, Card, EmptyState, MetricChip, PageHero, Pill, SignInGate, StatusNote, Tabs, cx } from "../components/ui";
@@ -132,7 +133,7 @@ function PlayerBar({ p, score, you, pending, clock, running, showClock }: {
     <div className={cx("flex items-center gap-3 rounded-card border px-3.5 py-2.5", running ? "border-yang/40 bg-yang/[0.04]" : "border-line bg-veil/[0.04]")}>
       <Avatar name={p ? p.name : "ArtaBot"} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[14.5px] font-bold">
+        <p className={cx("font-bold", nameClass(p ? p.name : "ArtaBot", 15))}>
           {p && p.slug ? <a className="hover:underline" href={`/u/${p.slug}`}>{p.name}</a> : (p ? p.name : "ArtaBot")}
           {you && <span className="ms-2 rounded-pill bg-yin/15 px-1.5 py-0.5 text-[10.5px] font-semibold text-yin-light">you</span>}
         </p>
@@ -762,7 +763,7 @@ function GameHub({ game, embedded }: { game: GameDef; embedded?: boolean }) {
                   <div key={l.id} className="flex items-center gap-3 rounded-card border border-line px-3.5 py-2.5">
                     <Avatar name={l.by.name} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[14px] font-semibold">{l.by.name} <RatingPill p={l.by} /></p>
+                      <p className={cx("font-semibold", nameClass(l.by.name, 14))}>{l.by.name} <RatingPill p={l.by} /></p>
                       <p className="text-[12px] text-ink-3">◍ {gameTitle(l.game || l.ring)} · rated · 10-min clock</p>
                     </div>
                     <Button size="sm" disabled={!logged || busy || l.by.uid === board.me?.uid} onClick={() => join(l.id)}>Accept</Button>
@@ -812,7 +813,7 @@ function GameHub({ game, embedded }: { game: GameDef; embedded?: boolean }) {
                       <td className="py-2.5 pe-3">
                         <span className="flex items-center gap-2">
                           <Avatar name={r.name} />
-                          {r.slug ? <a className="truncate font-semibold hover:underline" href={`/u/${r.slug}`}>{r.name}</a> : <span className="truncate font-semibold">{r.name}</span>}
+                          {r.slug ? <a className={cx("min-w-0 font-semibold hover:underline", nameClass(r.name, 14))} href={`/u/${r.slug}`}>{r.name}</a> : <span className={cx("min-w-0 font-semibold", nameClass(r.name, 14))}>{r.name}</span>}
                           {board.me?.uid === r.uid && <span className="rounded-pill bg-yin/15 px-1.5 py-0.5 text-[10.5px] font-semibold text-yin-light">you</span>}
                         </span>
                       </td>
