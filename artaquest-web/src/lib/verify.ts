@@ -13,8 +13,10 @@ const NONCE =
 
 export type VerifyStatus = {
   full_name: string; birthday: string; has_identity: boolean;
-  /** '' unless the member chose to say. Read by exactly one thing — ArtaCredits matching. */
-  gender?: string;
+  /** The member's stated nationality (ISO 3166-1 alpha-2), '' until stated. Asked at sign-up
+   *  (defaulted from the visitor's country), shown as a flag on the public profile, and checked
+   *  against the ID by the blue check (operator 2026-08-18). */
+  nationality: string;
   verified: boolean; verified_at: number; last_note: string;
   configured: boolean;
 };
@@ -51,13 +53,13 @@ export async function profileVerification(slug: string): Promise<{ verified: boo
 
 export const VerifyApi = {
   status: () => req<VerifyStatus>("/verify/status", "GET"),
-  // `nationality` (ISO alpha-2) is optional — posting never needs it, the blue check does; an
-  // omitted/empty value leaves the stored claim untouched server-side.
-  // Name + date of birth. Nationality and place of birth were removed on 2026-08-11 — the server
-  // no longer reads either, and sending them would be a no-op that reads like a live field.
-  setIdentity: (full_name: string, birthday: string) =>
-    req<{ ok?: boolean; error?: string; message?: string; full_name?: string; birthday?: string }>(
-      "/identity", "POST", { full_name, birthday }),
+  // Name + date of birth + nationality (ISO 3166-1 alpha-2). Nationality came back on 2026-08-18
+  // (operator; it had gone on 08-11): the server REQUIRES a valid code until the account has one on
+  // record, and thereafter an omitted/empty value leaves the stored claim untouched — so a form that
+  // only edits the name still works, and a first-time member is never let through without one.
+  setIdentity: (full_name: string, birthday: string, nationality?: string) =>
+    req<{ ok?: boolean; error?: string; message?: string; full_name?: string; birthday?: string; nationality?: string }>(
+      "/identity", "POST", nationality ? { full_name, birthday, nationality } : { full_name, birthday }),
   // Save the "fine-tune" birth time (minutes past local midnight) that positions the member's long-term goal.
   setBirthTime: (min: number) => req<{ ok?: boolean; min?: number }>("/identity/birthtime", "POST", { min }),
   verify: (imgs: { profile_pic: string; id_front: string; id_back: string; selfie: string }) =>

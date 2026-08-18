@@ -1425,7 +1425,9 @@ export async function verifyCertificate(c: number, u: number, k: string): Promis
 export type CheckoutResult = { ok: boolean; already?: boolean; order?: string; total?: number; currency?: string; total_display?: string; course: string; items?: string[]; gateway?: string; instructions?: string; url?: string; redirect?: boolean };
 /** A donation's ArtaCredits targeting — the slice of the membership whose challenge entry fees this
  *  gift will cover. Every axis is optional; omitting one means "no preference" on it. */
-export type DonationCredit = { country?: string; gender?: string; band?: string; fee_cap?: number; name?: string };
+/** The slice an ArtaCredits gift is aimed at: a nationality (ISO 3166-1 alpha-2, '' = anyone) and an
+ *  age band ('' = any age). Gender was an axis until 2026-08-18; nationality replaced it (operator). */
+export type DonationCredit = { country?: string; band?: string; fee_cap?: number; name?: string };
 export async function postCourseCheckout(body: { slug?: string; slugs?: string[]; donations?: { amount: number; countries?: string[]; groups?: string[]; credit?: DonationCredit }[]; email: string; name: string; gateway: string }): Promise<CheckoutResult> {
   return post(`${AQ}/course-checkout`, { ...body, country: aqCountryId() });
 }

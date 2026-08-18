@@ -17,6 +17,12 @@ export type Geo = {
   currency: string;
   symbol: string;
   countries: GeoCountry[];
+  /** The visitor's country as the EDGE saw it — the raw CF-IPCountry / WP.com geo header, an ISO
+   *  3166-1 alpha-2 code, or '' when no header reached us (local dev, a proxy that strips it). It
+   *  is NOT `iso2` above: that one is the price/currency selector, which falls back to a saved
+   *  cookie, then the UI locale, then Canada — three answers that say nothing about where the
+   *  visitor is. Read it through ipCountry(). */
+  ip_iso2?: string;
 };
 
 // A world-atlas country feature (Natural Earth 110m, numeric ISO 3166-1 ids).
@@ -42,6 +48,19 @@ export function geo(): Geo | null {
   if (typeof window === "undefined") return null;
   const v = (window as unknown as { AQ_GEO?: Geo }).AQ_GEO;
   return v && Array.isArray(v.countries) && v.countries.length ? v : null;
+}
+
+/**
+ * The visitor's country from their IP, as a valid ISO 3166-1 alpha-2 code — or '' when the edge
+ * did not say. Used for exactly one thing: the DEFAULT in the nationality picker at sign-up
+ * (operator 2026-08-18, "defaulted using IP"). It is a suggestion the member sees and can change
+ * before anything is saved; nothing is ever stored from it without the member submitting the form.
+ * Never fall back to the selector's `iso2` here — that defaults to Canada when nothing is known,
+ * and a wrong prefilled nationality is worse than an empty one.
+ */
+export function ipCountry(): string {
+  const c = (geo()?.ip_iso2 || "").trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(c) ? c : "";
 }
 
 const COOKIE = "aq_country_id";

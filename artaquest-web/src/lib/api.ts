@@ -2159,8 +2159,10 @@ export function chEnter(id: number, nbId: number, acceptCredit = false) {
 export type CreditOffer = { donor: string; named: boolean; slice: string; fee: number; notice: string };
 export type CreditUsed = { donor: string; named: boolean; fee: number };
 export type CreditOptions = {
+  /** Every ISO 3166-1 alpha-2 code with its English name — the API's copy of the picker
+   *  vocabulary. The Donate page renders countryOptions() from lib/flags instead (the same codes,
+   *  localized and sorted for the active language). No member counts, ever — see Credits::options. */
   countries: { iso: string; name: string }[];
-  genders: { key: string; label: string }[];
   bands: { key: string; label: string }[];
   fee_cap: number; moon_cap: number; reach_min: number; symbol: string;
 };
@@ -2176,8 +2178,11 @@ export type CreditGift = {
 };
 
 export function creditOptions() { return get<CreditOptions>("/credits/options"); }
-export function creditReach(country: string, gender: string, band: string) {
-  return get<CreditReach>("/credits/reach", { country, gender, band });
+/** How many members a slice reaches. `country` is an ISO 3166-1 alpha-2 nationality ('' = any),
+ *  `band` an age band key ('' = any). Gender stopped being an axis on 2026-08-18 (operator):
+ *  nationality took its place. */
+export function creditReach(country: string, band: string) {
+  return get<CreditReach>("/credits/reach", { country, band });
 }
 export function myCredits() { return get<{ items: CreditGift[] }>("/credits/mine"); }
 /** Release an unspent, targeted gift to the general slice, where every member is eligible. The only
@@ -2185,7 +2190,6 @@ export function myCredits() { return get<{ items: CreditGift[] }>("/credits/mine
 export function widenCredit(id: number) {
   return post<{ ok: boolean; moved_cents: number; entries: number; message: string }>("/credits/widen", { id });
 }
-/** State, change, or clear ("clear") your gender. Opt-in, revocable, never inferred. */
 /** One city from the gazetteer (AQ\Cities). `admin1` is a GeoNames code and is never shown. */
 export type City = { name: string; country: string; admin1: string; lat: number; lon: number; tz: string };
 
@@ -2219,8 +2223,6 @@ export function searchCities(q: string) {
 export function cityForTimezone(tz: string) {
   return get<{ items: City[] }>("/cities", { tz });
 }
-
-export function setGender(gender: string) { return post<{ ok: boolean; gender: string }>("/identity/gender", { gender }); }
 
 /* ── Certificate of Participation ────────────────────────────────────────────
    Every challenge entrant holds one. `place` is read from the FROZEN settlement board, so a printed

@@ -315,6 +315,20 @@ function aq_geo_round( $amount, $code ) {
 function aq_geo_js_config() {
 	$id   = aq_geo_current_id();
 	$c    = aq_geo_country( $id );
+	// The RAW edge geo header, separately from the selector: `iso2` below falls back to a saved
+	// cookie, the UI locale and finally Canada, so it cannot say whether the visitor's country is
+	// actually known. The sign-up nationality picker defaults from THIS (operator 2026-08-18,
+	// "defaulted using IP") and shows an empty choice when no header reached us — a wrong prefilled
+	// nationality is worse than none. Same header list, same order, as aq_geo_current_id().
+	$ip_iso2 = '';
+	foreach ( array( 'HTTP_CF_IPCOUNTRY', 'HTTP_CF_IP_COUNTRY', 'GEOIP_COUNTRY_CODE', 'HTTP_X_COUNTRY_CODE' ) as $h ) {
+		if ( ! empty( $_SERVER[ $h ] ) ) {
+			$v = strtoupper( substr( sanitize_text_field( wp_unslash( $_SERVER[ $h ] ) ), 0, 2 ) );
+			// Cloudflare sends XX (unknown) and T1 (Tor); neither is a country.
+			if ( preg_match( '/^[A-Z]{2}$/', $v ) && 'XX' !== $v ) { $ip_iso2 = $v; }
+			break;
+		}
+	}
 	$list = array();
 	foreach ( aq_geo_countries() as $row ) {
 		$list[] = array(
@@ -333,6 +347,7 @@ function aq_geo_js_config() {
 		'currency'  => $c['currency'],
 		'symbol'    => aq_geo_symbol( $c['currency'] ),
 		'countries' => $list,
+		'ip_iso2'   => $ip_iso2,
 	);
 }
 
