@@ -268,11 +268,12 @@ function CreateMenu({ expanded, onNavigate }: { expanded: boolean; onNavigate: (
         onClick={onNavigate}
         aria-label="Create — sign in to publish"
         title="Sign in to publish"
-        className={`mb-1 mt-3 flex h-10 shrink-0 items-center justify-center overflow-hidden rounded-pill bg-yang font-bold text-on-accent shadow-sm transition-opacity hover:opacity-90 ${expanded ? "mx-3 self-start px-7" : "mx-[14px] w-10 self-start"}`}
+        className={`mb-1 mt-3 flex h-11 shrink-0 items-center justify-center overflow-hidden rounded-pill bg-yang font-bold text-on-accent shadow-sm transition-opacity hover:opacity-90 ${expanded ? "mx-2 w-[calc(100%-1rem)]" : "mx-[14px] w-10 self-start"}`}
       >
-        {/* SMALLER, AND JUST THE WORD (operator 2026-08-18: "the + Create button should just say
-             Create and be smaller"): 40px tall, a word-wide pill at the rail's start instead of a
-             full-width slab, and no + beside the label. Collapsed, the + is the whole button. */}
+        {/* JUST THE WORD, CENTRED, AS WIDE AS THE ACCOUNT ROW (operator 2026-08-18, with X's Post
+             button beside its account row: "centered and same length as the profile bar"): the same
+             mx-2 as the AccountRow below, so the two pills share their edges; 44px tall (smaller than
+             the 48px slab it replaced); no + beside the label. Collapsed, the + is the whole button. */}
         {expanded
           ? <span className="whitespace-nowrap text-[15px]">Create</span>
           : <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" aria-hidden className="shrink-0"><path d="M12 5v14M5 12h14" /></svg>}
@@ -284,7 +285,7 @@ function CreateMenu({ expanded, onNavigate }: { expanded: boolean; onNavigate: (
     // X's Post button spans the rail's label column when it is open, so the wrapper must stretch
     // with it — and go back to `self-start` when the rail is a 68px icon strip, where a full-width
     // button would be a 68px slab.
-    <div ref={wrapRef} className={`relative shrink-0 self-start ${expanded ? "mx-3" : "mx-[14px]"}`}>
+    <div ref={wrapRef} className={`relative shrink-0 ${expanded ? "mx-2" : "mx-[14px] self-start"}`}>
       <button
         ref={btnRef}
         type="button"
@@ -293,9 +294,10 @@ function CreateMenu({ expanded, onNavigate }: { expanded: boolean; onNavigate: (
         aria-expanded={open}
         aria-label="Create"
         title="Create"
-        className={`mb-1 mt-3 flex h-10 shrink-0 items-center justify-center overflow-hidden rounded-pill bg-yang font-bold text-on-accent shadow-sm transition-opacity hover:opacity-90 ${open ? "opacity-90" : ""} ${expanded ? "px-7" : "w-10"}`}
+        className={`mb-1 mt-3 flex h-11 shrink-0 items-center justify-center overflow-hidden rounded-pill bg-yang font-bold text-on-accent shadow-sm transition-opacity hover:opacity-90 ${open ? "opacity-90" : ""} ${expanded ? "w-full" : "w-10"}`}
       >
-        {/* SMALLER, AND JUST THE WORD (operator 2026-08-18): see the signed-out twin above. */}
+        {/* JUST THE WORD, CENTRED, AS WIDE AS THE ACCOUNT ROW (operator 2026-08-18): see the signed-out
+             twin above; the wrapper carries the mx-2 that lines it up with the row below. */}
         {expanded
           ? <span className="whitespace-nowrap text-[15px]">Create</span>
           : <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" aria-hidden className="shrink-0"><path d="M12 5v14M5 12h14" /></svg>}
@@ -424,8 +426,9 @@ function Sidebar({ active, expanded, onNavigate }: { active: string; expanded: b
       <div className="flex h-full w-sidebar shrink-0 flex-col">
         {/* No lockup and no toggle here any more: both live in the full-width bar above, where
             Reddit keeps them, and stacking a second wordmark directly under the first is exactly
-            what the hoist was meant to stop. No hairline either (operator 2026-08-18, "make the left
-            menu like X"): X's rail is a bare list from its first row. */}
+            what the hoist was meant to stop. No hairline of its own either: the gold→blue line under
+            the top bar now runs the full window width, rail included, so a second short one here
+            would double it (operator 2026-08-18). */}
 
 
 
@@ -642,6 +645,12 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
   const onAuthPage = /(^|\/)(login|sign-in|signin)\/?$/.test(aqPath.replace(/\/+$/, "/"));
   return (
     <header className="sticky top-0 z-50 bg-space-1/80 backdrop-blur-md">
+      {/* THE BRAND HAIRLINE under the bar — gold at the start, blue at the end, the full width of the
+          window (operator 2026-08-18: "I want it to be a gradient of gold to blue"). It replaced a
+          plain grey border the same day, and the rail's own short blue→gold hairline retired with it:
+          one line, the platform's two colours meeting, spanning rail and page alike. Mirrored in RTL
+          so gold still sits at the reading start. */}
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-yang to-yin rtl:bg-gradient-to-l" />
       <div className="relative flex h-topbar items-center gap-1.5 px-3 md:gap-3 md:px-4" style={endPad}>
         {/* THREE ZONES, and the outer two carry equal weight — that is what puts the field on
             the bar's own centre line. Centring it between its NEIGHBOURS instead leaves it
