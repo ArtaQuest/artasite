@@ -371,7 +371,16 @@ export default function Profile() {
                 asks for 14rem before it will share a line (`sm:basis-56`): whenever the actions cannot
                 fit beside avatar + name they drop to a line of their own underneath, and the name is
                 never squeezed. Only the avatar stays `shrink-0`; below `sm` the column layout is
-                unchanged. */}
+                unchanged.
+
+                THE ACTIONS MAY SHRINK TOO (`min-w-0 max-w-full`, not `shrink-0`). The shell gives this
+                page a column that is often narrower than the viewport — ~410px beside the right rail on
+                a 1100px window, where `sm:` styles still apply — and a `shrink-0` button row wider than
+                that line simply ran out of the card and was clipped ("Ser…" where Send coins should
+                be). Capped at the line, the row's own flex-wrap folds the buttons onto two rows instead.
+                Line-breaking still happens BEFORE any shrinking, so the actions never shrink while they
+                share a line with the name; they only fold once they are on a line of their own. Both
+                states measured at 700px, 1100px and 390px through ArtaFocus before shipping. */}
             <div className="relative z-10 -mt-10 flex flex-col gap-3 sm:-mt-14 sm:flex-row sm:flex-wrap sm:items-end sm:gap-x-5 sm:gap-y-3">
               {/* priority: above the fold and normally this page's LCP element — lazy-loading it
                   made the browser wait for layout before even starting the request. Carries the
@@ -422,7 +431,7 @@ export default function Profile() {
                   booking page says plainly when somebody is not offering any time, so it never leads
                   anywhere embarrassing. */}
               {isOwn ? (
-                <div className="flex shrink-0 flex-wrap items-center gap-3 sm:pb-1">
+                <div className="flex min-w-0 max-w-full flex-wrap items-center gap-3 sm:pb-1">
                   {bookButton}
                   <a href={localePath("/user-account/?settings=1")} className="self-start text-[13.5px] font-semibold text-ink-3 transition-colors hover:text-yang sm:self-auto">
                     Edit profile <span aria-hidden className="inline-block rtl:-scale-x-100">→</span>
@@ -432,7 +441,7 @@ export default function Profile() {
                 /* Follow + Message. Until this existed the ONLY way to open a conversation was typing
                    a member's exact @handle into the ArtaChat sidebar — this is the entry point the
                    /messages/?with= deep link was always built for. */
-                <div className="flex shrink-0 flex-wrap gap-2 sm:pb-1">
+                <div className="flex min-w-0 max-w-full flex-wrap gap-2 sm:pb-1">
                   <Button type="button" onClick={toggleFollow} disabled={followBusy}
                     variant={following ? "outline" : "primaryYin"}
                     className="h-10 px-6 text-[14px] disabled:opacity-60">
@@ -452,7 +461,7 @@ export default function Profile() {
                    are deliberately public, the booking page is built to be readable by a stranger,
                    and this profile is the thing a member actually shares. Hiding the link from
                    signed-out visitors meant the one audience it exists for could not see it. */
-                <div className="flex shrink-0 flex-wrap gap-2 sm:pb-1">
+                <div className="flex min-w-0 max-w-full flex-wrap gap-2 sm:pb-1">
                   <Button href={loginHref} variant="primaryYin" className="h-10 px-6 text-[14px]">Follow</Button>
                   {bookButton}
                 </div>
