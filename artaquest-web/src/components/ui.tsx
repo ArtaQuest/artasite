@@ -132,8 +132,9 @@ export function Card({ as: As = "div", className, children, ...rest }: { as?: El
 }
 
 /* ───────────────────────── Avatar ───────────────────────── */
-/** Country-flag chip on an avatar — the VERIFIED-nationality badge (ticket #30; '' until the member
- *  passes the blue check, so it can't render an unverified claim). Defaults assume a `relative`
+/** Country-flag chip on an avatar — the member's STATED nationality (ticket #30; since 2026-08-18 a
+ *  claim like the date of birth, '' until stated — the blue check is the verification signal, not
+ *  this chip). Defaults assume a `relative`
  *  parent and scale with it (percentage box, emoji in an SVG so the glyph scales to ANY chip size);
  *  override position/size via className for custom spots (e.g. the feed rows, the topbar trigger). */
 export function FlagBadge({ country, className }: { country?: string; className?: string }) {
@@ -220,7 +221,7 @@ function useTopicIconMarkup(url: string | undefined): string | undefined {
 }
 
 /** Image or initial-badge. Size + ring via className (e.g. "h-9 w-9 text-sm"). Pass `country`
- *  (a verified nationality, ISO alpha-2 — see FlagBadge) to overlay the member's flag. Pass `alt`
+ *  (the member's stated nationality, ISO alpha-2 — see FlagBadge) to overlay their flag. Pass `alt`
  *  to give the image descriptive alt text — used where the picture is content the image search
  *  should index (e.g. a topic/group profile picture: alt = the topic or group name). Omit it
  *  (default "") where the image is decorative because an adjacent text label already names it. */
@@ -271,7 +272,7 @@ export function Avatar({ src, name, country, alt, className, palm, priority }: {
 /** Avatar that flips on tap/click (and keyboard) to reveal the member's palm "back photo" — an
  *  opt-in, public self-verification image (ticket #94), distinct from the blue check. The picture
  *  itself is the button: the size/ring `className` lands on it; the two faces fill it and rotate in
- *  3D. The verified-nationality flag and a small flip hint sit on the front face only. */
+ *  3D. The nationality flag and a small flip hint sit on the front face only. */
 function FlipAvatar({ src, name, country, alt, className, palm, priority }: { src?: string; name?: string; country?: string; alt?: string; className?: string; palm: string; priority?: boolean }) {
   const initial = (name?.trim()?.[0] || "?").toUpperCase();
   const who = name?.trim();

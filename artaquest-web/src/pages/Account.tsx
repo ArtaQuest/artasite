@@ -1197,6 +1197,11 @@ function IdentityVerification() {
   // offers every country, localised + sorted for the active language (no allow-list — see
   // lib/flags.ts), built once: the language is boot config and cannot change under a mounted page.
   const [nat, setNat] = useState("");
+  // True while the picker shows a value that came from the visitor's connection and the member has
+  // not touched it — the same hint the sign-up gate shows, for the same reason: this field saves
+  // with the name and the date under one Save button, so a member correcting a typo in their name
+  // would otherwise publish a nationality they never chose.
+  const [guessed, setGuessed] = useState(false);
   const countries = useMemo(() => countryOptions(), []);
   const load = () => VerifyApi.status().then((s) => {
     if (s && !("error" in s && (s as { error?: string }).error)) {
@@ -1204,7 +1209,9 @@ function IdentityVerification() {
       // A member with no nationality on record sees their IP country PRE-SELECTED — a suggestion,
       // never a fact: nothing is stored until they press Save, and ipCountry() is '' when the
       // visitor's country is unknown (it never guesses), which leaves the picker on "Choose…".
-      setNat(s.nationality || ipCountry());
+      const guess = s.nationality ? "" : ipCountry();
+      setNat(s.nationality || guess);
+      setGuessed(guess !== "");
     }
   });
   useEffect(() => { load(); }, []);
@@ -1269,13 +1276,14 @@ function IdentityVerification() {
               name and date of birth on Save — never on change — so an IP-suggested default is
               only ever stored once the member has confirmed it. */}
           <Field label="Nationality" required hint="Public on your profile as your country's flag, and checked against your ID by the blue check.">
-            <select value={nat} onChange={(e) => setNat(e.target.value)} aria-label="Nationality"
+            <select value={nat} onChange={(e) => { setNat(e.target.value); setGuessed(false); }} aria-label="Nationality"
               className="h-11 w-full rounded-field border border-line bg-space-1 px-3.5 text-[15px] text-ink outline-none focus:border-yin-light">
               <option value="">Choose your nationality…</option>
               {countries.map(({ code, name: cn }) => (
                 <option key={code} value={code}>{`${flagEmoji(code)} ${cn}`}</option>
               ))}
             </select>
+            {guessed && <span className="mt-1 block text-[12px] text-ink-3">Guessed from your connection — change it if it is wrong.</span>}
           </Field>
         </div>
         <div className="flex items-center gap-3">
@@ -1290,7 +1298,8 @@ function IdentityVerification() {
         {st?.verified ? (
           <div className="flex items-center gap-2 text-[15px] font-semibold text-yin-light">
             <BlueCheck size={18} /> Verified{st.verified_at ? ` · ${new Date(st.verified_at * 1000).toLocaleDateString()}` : ""}
-            {/* The flag the check confirmed — the same one the public profile shows. */}
+            {/* The flag beside the check — the nationality on record, which every check granted since
+                2026-08-18 canonicalised to the ID. */}
             {flagEmoji(st.nationality) && (
               <span role="img" aria-label={countryName(st.nationality)} title={`${countryName(st.nationality)} — shown on your profile`} className="text-[17px] leading-none">{flagEmoji(st.nationality)}</span>
             )}
@@ -1302,7 +1311,7 @@ function IdentityVerification() {
         ) : (
           <>
             <h3 className="text-[16px] font-bold">Get the blue check</h3>
-            <p className="text-[13px] text-ink-3">Verifying is free. Add a clear photo of your face (it becomes your profile picture), the front and back of any government photo ID — passport, national ID, driver licence, residence permit, from any country — and a selfie. Claude confirms the ID is genuine and that the name (given name and surname), date of birth and nationality on it are yours, and that the same face appears on the ID, the selfie and your photo. Every nationality is accepted — the check is only that what you stated matches your ID. Your ID and selfie are used only for this check and are never stored.</p>
+            <p className="text-[13px] text-ink-3">Verifying is free. Add a clear photo of your face (it becomes your profile picture), the front and back of a government photo ID from any country — a passport or national ID card, which establish nationality; a driver licence or residence permit can confirm your name and date of birth but not your nationality — and a selfie. Claude confirms the ID is genuine and that the name (given name and surname), date of birth and nationality on it are yours, and that the same face appears on the ID, the selfie and your photo. Every nationality is accepted — the check is only that what you stated matches your ID. Your ID and selfie are used only for this check and are never stored.</p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <PhotoTile label="Profile photo" hint="your face" value={imgs.profile_pic} onPick={(f) => pick("profile_pic", f)} />
               <PhotoTile label="ID front" hint="government ID" value={imgs.id_front} onPick={(f) => pick("id_front", f)} />

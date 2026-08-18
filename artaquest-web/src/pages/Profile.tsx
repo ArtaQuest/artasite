@@ -237,7 +237,10 @@ export default function Profile() {
     relationshipLabel(p.relationship) ? "" : "Relationship",
     p.location?.trim() ? "" : "Where you live",
     (p.languages?.length ?? 0) > 0 ? "" : "Languages you speak",
-    p.nationality ? "" : "Nationality",
+    // Nationality is deliberately NOT listed: this card links to the settings editor, and the
+    // nationality picker lives in the Identity section further down the Account page — a prompt
+    // that lands somewhere without the field is worse than none. Every member states one at
+    // sign-up now, and the operator set the existing accounts' by hand (2026-08-18).
   ].filter(Boolean);
   const [missing, setMissing] = useState(false);
   useEffect(() => {
@@ -587,14 +590,15 @@ export default function Profile() {
               A CLAIM, exactly like the date of birth: the member picked it at sign-up (the picker was
               pre-filled from their IP country, but only what they submitted is ever stored), and it is
               one of the three facts — name, date of birth, nationality — the blue check reads off the
-              government ID. So the flag on the avatar says what they stated, and the small "verified"
-              here says the ID agreed; without the check it stays a claim. The country name is already
-              in the active language (Intl.DisplayNames), so the mesh must not translate it a second
-              time — hence data-ay-skip on the name, and not on the word "verified". */}
+              government ID. The blue check beside the name is the ONLY verification signal on this
+              page; nothing is written next to the country, because a check granted before 2026-08-18
+              never read one, and a nationality set by hand (the operator did, for every existing
+              account) is not something a check ever agreed with. The country name is already in the
+              active language (Intl.DisplayNames), so the mesh must not translate it a second time —
+              hence data-ay-skip. */}
           {p.nationality ? (
             <Fact label="Nationality" icon={<svg {...FACT_SVG}><path d="M5 21V4m0 0h11l-2 4 2 4H5" /></svg>}>
               <span data-ay-skip="1"><span aria-hidden>{flagEmoji(p.nationality)}</span> {countryName(p.nationality)}</span>
-              {p.verified && <span className="text-[12.5px] text-ink-3"> · verified</span>}
             </Fact>
           ) : null}
           {/* YOUR OWN profile, and something is unsaid. A card holding one lonely row reads as broken

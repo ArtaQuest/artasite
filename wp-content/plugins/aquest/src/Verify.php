@@ -166,10 +166,15 @@ final class Verify {
 		if ( ! self::valid_birthday( $bday ) ) { return Rest::err( 'bad_birthday', 'Enter a valid birthday (you must be at least ' . self::MIN_AGE . ').' ); }
 		if ( $nat !== '' && ! self::valid_country( $nat ) ) { return Rest::err( 'bad_country', 'Pick your nationality from the list.' ); }
 		if ( $nat === '' && self::claimed_country( $uid ) === '' ) { return Rest::err( 'bad_country', 'Choose your nationality — it shows as your country\'s flag on your profile.' ); }
-		$nat_changed = $nat !== '' && $nat !== self::claimed_country( $uid );
-		// Editing identity after being verified invalidates the check (the verified facts changed) —
-		// the nationality included, because the ID was checked against the one stated at the time.
-		if ( self::is_verified( $uid ) && ( $name !== self::full_name( $uid ) || $bday !== self::birthday( $uid ) || $nat_changed ) ) {
+		$prev        = self::claimed_country( $uid );
+		$nat_changed = $nat !== '' && $nat !== $prev;
+		// Editing identity after being verified invalidates the check (the verified facts changed).
+		// The nationality counts only when a stated one is REPLACED: a check granted since 2026-08-18
+		// canonicalised the claim to the ID, so changing it afterwards contradicts the ID and the check
+		// must go — but a member verified before that date, when the check read only the name and the
+		// date, has no claim on record, and their FIRST statement contradicts nothing. Revoking on it
+		// would strip a valid check the moment they filled in a field the form now marks required.
+		if ( self::is_verified( $uid ) && ( $name !== self::full_name( $uid ) || $bday !== self::birthday( $uid ) || ( $nat_changed && $prev !== '' ) ) ) {
 			delete_user_meta( $uid, 'aq_verified' );
 		}
 		update_user_meta( $uid, 'aq_full_name', $name );
@@ -306,7 +311,7 @@ final class Verify {
 			'1) genuine_id: do the FRONT and BACK together look like a real government-issued photo ID (not a screen photo of a photo, not obviously edited, has a portrait + machine/printed data)?',
 			'2) name_match: does the name on the ID — given name(s) AND surname — match the CLAIMED full name? Allow ordering, capitalisation, accents, middle names/initials, and transliteration differences. Read name_on_id off the ID.',
 			'3) dob_match: does the date of birth on the ID match the CLAIMED birthday (same calendar date)? Read dob_on_id off the ID in strict YYYY-MM-DD.',
-			'4) nationality_match: does the nationality on the ID match the CLAIMED nationality (an ISO 3166-1 alpha-2 code)? Use the ID\'s nationality/citizenship field when it has one (passports, national IDs); when it has none (most driver licences, residence permits), use the issuing country. EVERY nationality is equally acceptable — this gate only checks that the claim is accurate, never which country it names. Report country_on_id as the ISO 3166-1 alpha-2 code you read.',
+			'4) nationality_match: does the ID ESTABLISH the CLAIMED nationality (an ISO 3166-1 alpha-2 code)? Read it from the document\'s own nationality/citizenship field when it has one (passports; many national ID cards and residence permits print it). A passport or a NATIONAL ID card is issued only to that country\'s own nationals, so its issuing country establishes nationality even without a printed field. A driver licence, a residence permit without a nationality field, or any document issued to residents regardless of citizenship CANNOT establish nationality — never infer it from where such a document was issued (a residence permit is by definition held by a foreign national). If the document cannot establish nationality, set nationality_match to false and say in "reason" that a passport or national ID is needed to confirm nationality; leave country_on_id empty. EVERY nationality is equally acceptable — this gate only checks that the claim is accurate, never which country it names. Report country_on_id as the ISO 3166-1 alpha-2 code the document establishes.',
 			'5) selfie_matches_id: is the SELFIE the same person as the ID portrait?',
 			'6) profile_matches: is the PROFILE PHOTO the same person as the SELFIE / ID portrait (a clear photo of that person\'s face)?',
 			'Do NOT consider ethnicity or place of birth. They are not collected, not stored, and must not influence the verdict.',

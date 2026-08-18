@@ -1,6 +1,7 @@
 // Country / currency layer — mirrors window.AQ_GEO injected by the theme
 // (includes/aq-geo.php). A visitor's country drives the UI language, the
 // display currency, the PPP-equity price, and which payment rails appear.
+import { COUNTRY_CODES } from "./flags";
 
 export type GeoCountry = {
   id: string;        // selector id (multilingual countries carry a -lang suffix, e.g. "CA-fr")
@@ -60,7 +61,10 @@ export function geo(): Geo | null {
  */
 export function ipCountry(): string {
   const c = (geo()?.ip_iso2 || "").trim().toUpperCase();
-  return /^[A-Z]{2}$/.test(c) ? c : "";
+  // Only a code the picker can show and the server will accept. Cloudflare and MaxMind both emit
+  // XK for Kosovo, and legacy MaxMind can say EU or AP — none of them in ISO 3166-1, so a controlled
+  // <select> seeded with one would sit on "Choose…" while the form believed a country was chosen.
+  return COUNTRY_CODES.includes(c) ? c : "";
 }
 
 const COOKIE = "aq_country_id";

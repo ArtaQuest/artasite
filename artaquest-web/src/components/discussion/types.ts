@@ -8,7 +8,7 @@ export type BoardComment = {
   author: string;
   authorSlug?: string;      // section comments link the author to /u/<slug>; thread comments don't
   avatar?: string;
-  country?: string;         // verified nationality (ISO alpha-2) → avatar flag; absent until verified
+  country?: string;         // stated nationality (ISO alpha-2) → avatar flag; absent when the payload carries none
   bodyHtml: string;         // ALWAYS html — the section adapter runs renderRich() on the raw body
   bodyMd?: string;          // present only when editable (thread comments) — round-trips the Composer
   timeLabel: string;        // pre-formatted relative time

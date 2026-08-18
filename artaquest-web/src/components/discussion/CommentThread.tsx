@@ -15,8 +15,11 @@ function IdentityPrompt() {
   const [name, setName] = useState("");
   const [bday, setBday] = useState("");
   // Seeded from the visitor's country as the edge saw it (ipCountry(), '' when unknown) — a
-  // suggestion they can change; nothing is stored until Save.
+  // suggestion they can change; nothing is stored until Save. `guessed` keeps the hint under the
+  // field until they touch it, as the sign-up gate does — a wrong prefilled nationality would
+  // otherwise be saved by someone who did not notice it.
   const [nat, setNat] = useState(() => ipCountry());
+  const [guessed, setGuessed] = useState(() => ipCountry() !== "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   // Every country, localised + sorted for the active language; only this prompt needs the list.
@@ -44,12 +47,13 @@ function IdentityPrompt() {
           <input value={bday} onChange={(e) => setBday(e.target.value)} type="date" aria-label="Date of birth" className={f} />
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <select value={nat} onChange={(e) => setNat(e.target.value)} aria-label="Nationality" className={f}>
+          <select value={nat} onChange={(e) => { setNat(e.target.value); setGuessed(false); }} aria-label="Nationality" className={f}>
             <option value="">Choose your nationality…</option>
             {countries.map((c) => <option key={c.code} value={c.code}>{`${flagEmoji(c.code)} ${c.name}`}</option>)}
           </select>
           <Button onClick={save} disabled={busy || !name.trim() || !bday || !nat} className="h-10 shrink-0 px-5 text-[14px] disabled:opacity-50">{busy ? "Saving…" : "Save & post"}</Button>
         </div>
+        {guessed && <span className="text-[12px] text-ink-3">Nationality guessed from your connection — change it if it is wrong.</span>}
       </div>
       {err && <p className="mt-1.5 text-[12px] text-yin-light">{err}</p>}
     </div>

@@ -1,7 +1,9 @@
 /**
- * Country flags for verified nationality (ticket #30). A member's verified nationality arrives on
- * user cards as `country` (ISO 3166-1 alpha-2, '' until they pass the blue-check verification —
- * AQ\Verify::badge_country). The flag overlays the avatar everywhere via <Avatar country={…}>.
+ * Country flags for a member's nationality (ticket #30; re-shaped 2026-08-18). A member's STATED
+ * nationality arrives on a payload as `country` (ISO 3166-1 alpha-2, '' until they have stated
+ * one — AQ\Verify::claimed_country). It is a claim, exactly like the date of birth beside it; the
+ * blue check is the verification signal, not the flag. The flag overlays the avatar wherever a
+ * payload carries it, via <Avatar country={…}> — today the public profile.
  *
  * Zero-dependency by design: flags are EMOJI (two regional-indicator code points — no sprite sheet,
  * no flag CDN that would leak page views to a third party), and country NAMES come from the

@@ -82,8 +82,10 @@
  *
  * ── WHAT IT WRITES, AND HOW IT GIVES IT BACK ────────────────────────────────────────────────────
  * Scratch users 770000-770099 (it aborts if a real account holds an id in that range), a scratch
- * slice earmark `crd_zz_x_x` (zz is unassigned in ISO 3166-1, so it can never be a real donor's
- * slice), four gifts, four challenges and five notebooks. Cleanup deletes exactly those rows and
+ * slice earmark `crd_hm_x` (HM, Heard Island and McDonald Islands — a real ISO 3166-1 code, so
+ * bucket() keeps it, and uninhabited, so no member can ever state it and be matched into it — the
+ * earlier `zz` was unassigned and since 2026-08-18 collapses to the general slice), four gifts,
+ * four challenges and five notebooks. Cleanup deletes exactly those rows and
  * walks the two projection counters (coins_issued, backing_mg) and every fund bucket back by exactly
  * what it removed. Deleting ledger rows is forbidden in the platform and stays forbidden — this is a
  * harness removing its OWN scratch rows, the same discipline verify-creator-split.php uses, and it
@@ -158,8 +160,14 @@ $GIFT_CENTS = 2 * $UNIT * $CAP;   // what a 2-entry gift costs its donor
 $SEED_SLICE = 2 * $GIFT_CENTS;    // TWO donors' gifts share one slice earmark (that is the point)
 $SEED_GEN   = $UNIT * $CAP;       // the 1-entry control gift, in the general slice
 
-$B_SLICE = \AQ\Credits::bucket( 'zz', 'x', 'x' );   // built through production code so the key can never drift
-$B_GEN   = \AQ\Credits::bucket( 'x', 'x', 'x' );
+// Built through production code so the key can never drift. The scratch slice is Heard Island and
+// McDonald Islands (HM) — a real ISO 3166-1 code, so bucket() keeps it (anything not in
+// Verify::COUNTRIES collapses to the general slice, which would make every slice-vs-general
+// assertion below compare one bucket with itself), and an uninhabited territory, so no member can
+// ever state it and be matched into the harness's earmark. Two axes since 2026-08-18: nationality
+// and age band; the old middle (gender) segment is gone.
+$B_SLICE = \AQ\Credits::bucket( 'hm', 'x' );
+$B_GEN   = \AQ\Credits::bucket( 'x', 'x' );
 
 // ── cleanup (runs first, and again at the end) ───────────────────────────────────────────────────
 
@@ -203,7 +211,7 @@ $cleanup = function () use ( $wpdb, $LO, $HI, $B_SLICE ) {
 	$wpdb->query( $wpdb->prepare( 'DELETE FROM ' . \AQ\Data::t( 'aq_notebooks' ) . ' WHERE slug LIKE %s', $wpdb->esc_like( 'aq-test-credits-' ) . '%' ) );
 	$wpdb->query( $wpdb->prepare( 'DELETE FROM ' . \AQ\Data::t( 'aq_notifications' ) . ' WHERE user_id BETWEEN %d AND %d', $LO, $HI ) );
 
-	// The scratch slice's projection row, once it is back at zero: a stray `fund_crd_zz_x_x` would
+	// The scratch slice's projection row, once it is back at zero: a stray `fund_crd_hm_x` would
 	// stand in the public books as a slice nobody ever gave to.
 	$wpdb->query( $wpdb->prepare( 'DELETE FROM ' . \AQ\Data::t( 'aq_counters' ) . ' WHERE name = %s AND value = 0', 'fund_' . $B_SLICE ) );
 

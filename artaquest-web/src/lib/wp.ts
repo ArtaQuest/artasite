@@ -1002,7 +1002,7 @@ export type Profile = {
   /** UTC midnight of the day they were last around; 0 when never recorded. Day-granular by
    *  design — render it with lastSeenLabel(), never relAgo(). */
   lastSeen?: number;
-  country?: string; // verified nationality (ISO alpha-2) → avatar flag; '' until verified
+  country?: string; // the STATED nationality (ISO alpha-2) → avatar flag; a claim like the birthday, '' until stated
   // Public identity facts (radical transparency — the same values the /data/ explorer serves, and
   // required of every member at signup).
   //
@@ -1015,7 +1015,7 @@ export type Profile = {
   verified?: boolean; // the blue check (Verify::is_verified)
   season?: number; // the ONE season this member follows (1…12 cycle position; 0 = none on record)
   palm?: string; // opt-in palm "back photo" (ticket #94) → the avatar flips to it; '' if unset
-  nationality?: string; // self-entered nationality claim (ISO alpha-2) → header flag detail; '' if unset (shown unverified, like the birthday)
+  nationality?: string; // the same stated claim as `country`, for the labelled "Nationality" fact; '' if unset (shown unverified, like the birthday — the blue check is the verification signal)
   /** Self-declared, both. `relationship` is a RELATIONSHIPS key ('' = not saying); `location` is
    *  whatever the member typed and is NEVER inferred from an IP address (see AQ\Auth::location). */
   relationship?: string;
@@ -1129,6 +1129,11 @@ export async function getProfile(slug: string): Promise<Profile | null> {
       id: pr.id, name: pr.name, slug: pr.slug, avatar: pr.avatar, palm: pr.palm || "", email: pr.email || "", bio: pr.bio || "", links: pr.links || undefined, lastSeen: pr.last_seen || 0,
       // Public identity facts the endpoint has always emitted but the SPA used to drop on the floor.
       age: pr.age ?? 0, birthday: pr.birthday || "", fullName: pr.full_name || "", season: pr.season ?? 0, verified: !!pr.verified,
+      // The stated nationality (back on 2026-08-18) — mapped EXPLICITLY, because this object is built
+      // field by field with no spread: the plumbing for these two was cut on 2026-08-12 and a server
+      // that emits them again is not enough on its own. Both are the same claim; `country` is the name
+      // every <Avatar country> reads for its flag, `nationality` the labelled fact.
+      country: pr.country || "", nationality: pr.nationality || "",
       relationship: pr.relationship || "", location: pr.location || "", languages: pr.languages ?? [],
       coins: pr.coins ?? 0, points: pr.points, completed: pr.completed ?? 0,
       breakdown: { ...ZERO_TRACKS, ...pr.breakdown, total: pr.points },

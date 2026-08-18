@@ -199,7 +199,7 @@ export type ThreadCard = {
 };
 export type Me = {
   id: number; name: string; slug: string; avatar: string;
-  country?: string; // verified nationality (ISO alpha-2) → avatar flag; '' until verified
+  country?: string; // the member's STATED nationality (ISO alpha-2) → avatar flag; a claim, '' until stated (the blue check is the verification signal)
   points: number; coins: number; tier: string;
 } | null;
 

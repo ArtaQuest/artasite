@@ -1015,7 +1015,7 @@ final class Extra {
 		'community-events-location' => 'cached IP address',
 		'aq_google_sub'             => 'Google account identifier',
 		'aq_birth_min'              => 'exact birth time',
-		'aq_gender'                 => 'opt-in, for ArtaCredits matching only',
+		'aq_gender'                 => 'a retired opt-in answer (2026-08-18) — purged as accounts are touched, masked while any row survives',
 	];
 
 	/** Credential-SHAPED names that hold nothing secret, so default-deny must not withhold them.
