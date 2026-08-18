@@ -18,6 +18,8 @@ import {
 } from "../lib/wp";
 import { Coins } from "../lib/currency";
 import { sendCoins } from "../lib/api";
+import { countryName, flagEmoji } from "../lib/flags";
+import { nameClass } from "../lib/fmt";
 
 /** The feed API filters by author (GET /notebooks?author=<slug>); the shared params type
  *  doesn't declare `author` yet, so widen it locally rather than touching api.ts (other
@@ -126,7 +128,7 @@ function FollowPanel({ slug, dir, count, onClose }: {
             <>
               <Avatar src={r.avatar} name={r.name} className="h-10 w-10 text-[15px]" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate font-semibold text-ink">{r.name}</span>
+                <span className={cx("block font-semibold text-ink", nameClass(r.name, 15))}>{r.name}</span>
                 {r.at > 0 && <span className="block text-[12px] text-ink-3">Followed {relAgo(r.at)}</span>}
               </span>
             </>
@@ -235,6 +237,7 @@ export default function Profile() {
     relationshipLabel(p.relationship) ? "" : "Relationship",
     p.location?.trim() ? "" : "Where you live",
     (p.languages?.length ?? 0) > 0 ? "" : "Languages you speak",
+    p.nationality ? "" : "Nationality",
   ].filter(Boolean);
   const [missing, setMissing] = useState(false);
   useEffect(() => {
@@ -358,29 +361,51 @@ export default function Profile() {
                 the cover's bottom edge, which reads as a badly centred sigil rather than as an
                 overlay. Measured on prod: elementFromPoint at the avatar's centre-x, 18% down,
                 returned the cover's gradient div. Positioning this row puts it in the same paint
-                step, where later-in-DOM wins. */}
-            <div className="relative z-10 -mt-10 flex flex-col gap-3 sm:-mt-14 sm:flex-row sm:items-end sm:gap-5">
+                step, where later-in-DOM wins.
+
+                THE ROW WRAPS, AND THE NAME HAS A MINIMUM (operator screenshot, 2026-08-18). Just past
+                the `sm` breakpoint the identity block shared one non-wrapping row with the avatar and
+                the action buttons, and both of those are `shrink-0` — so the name block was the only
+                thing that could give. It gave until it was one character wide ("r" over "@") while
+                Send coins ran off the edge of the card. Now the row may wrap on sm+, and the name block
+                asks for 14rem before it will share a line (`sm:basis-56`): whenever the actions cannot
+                fit beside avatar + name they drop to a line of their own underneath, and the name is
+                never squeezed. Only the avatar stays `shrink-0`; below `sm` the column layout is
+                unchanged. */}
+            <div className="relative z-10 -mt-10 flex flex-col gap-3 sm:-mt-14 sm:flex-row sm:flex-wrap sm:items-end sm:gap-x-5 sm:gap-y-3">
               {/* priority: above the fold and normally this page's LCP element — lazy-loading it
                   made the browser wait for layout before even starting the request. Carries the
-                  verified-nationality flag and the opt-in palm flip. */}
+                  STATED nationality flag and the opt-in palm flip. The flag is a claim, exactly like
+                  the date of birth below — the member picked it (operator 2026-08-18, reversing the
+                  2026-08-11 removal); the blue check beside the name is the verification signal, not
+                  the flag. `country` is what the backend chose to expose and today carries the same
+                  value; the claim is read first so the flag never depends on which one arrived. */}
               <Avatar priority src={p.avatar} name={p.name} palm={p.palm || undefined}
+                country={p.nationality || p.country || undefined}
                 className="h-24 w-24 shrink-0 bg-space-2 text-3xl ring-4 ring-space-2 sm:h-32 sm:w-32" />
-              <div className="min-w-0 flex-1 sm:pb-1">
+              <div className="min-w-0 grow shrink basis-0 sm:basis-56 sm:pb-1">
                 {/* THE REAL NAME IS THE HEADING. `p.name` is display_name — the handle a member is
                     addressed by, and frequently not a name at all ("Arash" for Arash Ashrafnejad).
                     full_name is what the identity gate collected and what the page title, description
                     and Person schema say, so the visible heading agreeing with them is both the
-                    honest label and the one a visitor arriving from a name search expects. */}
+                    honest label and the one a visitor arriving from a name search expects.
+
+                    NEVER TRUNCATED. A name wraps; `overflow-wrap: anywhere` (Tailwind's `wrap-anywhere`)
+                    lets a single long token break rather than overflow, and — unlike `break-word` — it
+                    counts those breaks in the flex item's min-content size, so the item can actually
+                    shrink to fit. */}
                 <h1 className="flex items-center gap-2 text-[26px] font-extrabold leading-tight tracking-tight sm:text-[30px]">
-                  <span className="truncate">{p.fullName?.trim() || p.name}</span>
+                  <span className="min-w-0 wrap-anywhere">{p.fullName?.trim() || p.name}</span>
                   {p.verified && <BlueCheck size={20} className="shrink-0" />}
                 </h1>
                 {/* THE HANDLE. It is how you are addressed here and the only thing /messages/?with=
                     accepts, so "what is this person's handle" was a question their own profile could
-                    not answer. Shown whenever it adds something the heading has not already said. */}
+                    not answer. Shown whenever it adds something the heading has not already said.
+                    Never truncated either: the handle is a slug, so it may break anywhere; the "goes
+                    by" name beside it wraps at spaces first. */}
                 {(p.fullName?.trim() && p.fullName.trim() !== p.name ? p.name : p.slug) && (
-                  <p className="mt-0.5 truncate text-[14px] text-ink-3">
-                    @{p.slug}
+                  <p className="mt-0.5 text-[14px] text-ink-3 wrap-anywhere">
+                    <span className="break-all">@{p.slug}</span>
                     {p.fullName?.trim() && p.fullName.trim() !== p.name && p.name !== p.slug && (
                       <span className="text-ink-3"> · goes by {p.name}</span>
                     )}
@@ -512,7 +537,7 @@ export default function Profile() {
           derived from an IP address or a header. Rows appear only when there is something to say —
           a member who has filled none of this in gets no card at all, rather than a grid of blanks
           advertising what they declined to answer. */}
-      {p && (isOwn || relationshipLabel(p.relationship) || p.location?.trim() || (p.languages?.length ?? 0) > 0 || fmtBirthday(p.birthday)) ? (
+      {p && (isOwn || relationshipLabel(p.relationship) || p.location?.trim() || (p.languages?.length ?? 0) > 0 || fmtBirthday(p.birthday) || p.nationality) ? (
         <section className="grid gap-x-8 gap-y-5 rounded-card border border-line bg-space-2 px-5 py-5 sm:grid-cols-2 lg:grid-cols-4" aria-label="About">
           {relationshipLabel(p.relationship) ? (
             <Fact label="Relationship" icon={<svg {...FACT_SVG}><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9z" /></svg>}>
@@ -547,6 +572,20 @@ export default function Profile() {
           {fmtBirthday(p.birthday) ? (
             <Fact label="Born" icon={<svg {...FACT_SVG}><path d="M4 20h16v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2Zm0-3h16" /><path d="M12 12V8m0-4v1.5M8 12V9m8 3V9" /></svg>}>
               {fmtBirthday(p.birthday)}
+            </Fact>
+          ) : null}
+          {/* NATIONALITY — back on the profile (operator 2026-08-18, reversing the 2026-08-11 removal).
+              A CLAIM, exactly like the date of birth: the member picked it at sign-up (the picker was
+              pre-filled from their IP country, but only what they submitted is ever stored), and it is
+              one of the three facts — name, date of birth, nationality — the blue check reads off the
+              government ID. So the flag on the avatar says what they stated, and the small "verified"
+              here says the ID agreed; without the check it stays a claim. The country name is already
+              in the active language (Intl.DisplayNames), so the mesh must not translate it a second
+              time — hence data-ay-skip on the name, and not on the word "verified". */}
+          {p.nationality ? (
+            <Fact label="Nationality" icon={<svg {...FACT_SVG}><path d="M5 21V4m0 0h11l-2 4 2 4H5" /></svg>}>
+              <span data-ay-skip="1"><span aria-hidden>{flagEmoji(p.nationality)}</span> {countryName(p.nationality)}</span>
+              {p.verified && <span className="text-[12.5px] text-ink-3"> · verified</span>}
             </Fact>
           ) : null}
           {/* YOUR OWN profile, and something is unsaid. A card holding one lonely row reads as broken

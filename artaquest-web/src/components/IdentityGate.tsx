@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "./ui";
 import { currentUser, isLoggedIn, localePath } from "../lib/wp";
 import { BIRTHDAY_REQUIRED_EVENT } from "../lib/api";
@@ -8,6 +8,8 @@ import CitySelect from "./CitySelect";
 import { availableLangs } from "../lib/i18n";
 import { postProfileUpdate, RELATIONSHIPS, LANGS_MAX } from "../lib/wp";
 import { cityLabel } from "../lib/api";
+import { ipCountry } from "../lib/geo";
+import { countryOptions, flagEmoji } from "../lib/flags";
 
 /* Date of birth must be a real date the server accepts (AQ\Verify: 13–120 years old). Bound the
    picker to that range so the native control opens near a plausible year; the server is the final
@@ -41,13 +43,17 @@ function exactDate(ymd: string): boolean {
 }
 
 /**
- * The sign-up step. TWO fields: real full name, exact date of birth.
+ * The sign-up step. THREE fields: real full name, exact date of birth, nationality.
  *
- * **Nationality was removed (operator, 2026-07-30) — it is only needed for verification.** It was
- * being collected here, and worse, a legacy account that already had a name and a date of birth was
- * re-shown this whole dialog purely because it had no country. Asking every new member for
- * something only the blue check needs is a tax on joining; it lives on the Account page, next to
- * the ID upload that actually uses it.
+ * **Nationality is asked here again (operator, 2026-08-18).** It left this dialog on 2026-07-30
+ * (only the blue check needed it, so it moved to the Account page) and the platform altogether on
+ * 2026-08-11; on 2026-08-18 the operator reversed that. It is asked at sign-up, DEFAULTED from the
+ * visitor's country as the edge saw it (ipCountry()) — a suggestion the member sees and can change,
+ * stored only when they press Continue — shown as the country's flag on the public profile, and
+ * checked by the blue check against the government ID together with the name and the date of
+ * birth. What did NOT come back is the 07-30 mistake of re-showing this whole dialog to a legacy
+ * account that has a name and a date of birth but no nationality: the open condition (`need`) is
+ * unchanged, and the Account page carries the field for anyone who joined before today.
  *
  * **No seasons framing here either (same instruction).** The previous copy explained the twelve
  * seasons and what the date of birth would be used to recommend. Whatever its merits elsewhere,
@@ -68,13 +74,19 @@ export function IdentityGate() {
   const u = currentUser();
   const [name, setName] = useState(u?.name || "");
   const [bday, setBday] = useState(u?.birthday || "");
+  // Nationality (ISO 3166-1 alpha-2). Seeded from the account when it already has one (a stale shell
+  // that re-opened the gate must not overwrite a stated claim with a guess), otherwise from the
+  // visitor's country as the edge saw it — a SUGGESTION: nothing is stored until Continue, and
+  // `guessed` keeps the hint under the field visible until the member touches it.
+  const [nat, setNat] = useState(() => u?.nationality || ipCountry());
+  const [guessed, setGuessed] = useState(() => !u?.nationality && ipCountry() !== "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   // The picked city and its coordinates. `pob` is only ever set by CHOOSING from the gazetteer, so
   // a half-typed "Teh" cannot be submitted as a place.
   // Asked for here so a member states them ONCE, at the only moment they are already filling a form.
-  // Optional — mandatory identity is name + date of birth + place of birth, and padding a sign-up
-  // gate with four more required fields is how you lose the person on the other side of it.
+  // Optional — mandatory identity is name + date of birth + nationality, and padding a sign-up
+  // gate with more required fields is how you lose the person on the other side of it.
   const [rel, setRel] = useState("");
   const [lives, setLives] = useState("");
   const [langs, setLangs] = useState<string[]>([]);
@@ -88,17 +100,25 @@ export function IdentityGate() {
   }, []);
 
   // Open for a signed-in member with no identity, or whose date of birth is missing or not exact.
-  // NOT for a missing nationality any more — that is the blue check's business, not joining's.
+  // NOT for a missing nationality: it is asked here again (2026-08-18), but a legacy account that
+  // has a name and a date of birth is not dragged back through this dialog for it — the operator is
+  // setting theirs by hand, and the Account page carries the field for everyone else.
   // `has_identity === false` stays fail-open on an undefined flag: a stale shell must never lock
   // anyone out, because the server-side refusal above closes that gap properly.
   const need = u && (u.has_identity === false || (u.birthday !== undefined && !exactDate(u.birthday)));
-  if (!isLoggedIn() || (!need && !refused)) return null;
+  const open = isLoggedIn() && !!(need || refused);
+  // Every country, localised + sorted for the active language — built only once the gate is
+  // actually open: this component mounts for every signed-in member and almost always renders
+  // nothing, and countryOptions() asks Intl.DisplayNames for ~250 names.
+  const countries = useMemo(() => (open ? countryOptions() : []), [open]);
+  if (!open) return null;
 
   const nameOk = name.trim().length >= 2;
   const dobOk = exactDate(bday);
-  // Place of birth is mandatory server-side (Verify::has_identity), so the button must not promise
-  // otherwise — a member who cannot see WHY Continue is dead just meets a 400 after tapping it.
-  const ready = nameOk && dobOk && !busy;
+  // Nationality is required server-side (AQ\Verify refuses a first identity without a valid code),
+  // so the button must not promise otherwise — a member who cannot see WHY Continue is dead just
+  // meets a 400 after tapping it.
+  const ready = nameOk && dobOk && nat !== "" && !busy;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -106,8 +126,9 @@ export function IdentityGate() {
     setBusy(true);
     setErr("");
     try {
-      // Nationality intentionally blank — the server only writes it when non-empty.
-      const r = await VerifyApi.setIdentity(name.trim(), bday);
+      // Nationality rides with the name and the date (operator 2026-08-18): the server refuses a
+      // first identity without a valid code, and `ready` holds the button until one is chosen.
+      const r = await VerifyApi.setIdentity(name.trim(), bday, nat);
       // The optional half rides on the profile endpoint, and only when there is something to say.
       // Deliberately AFTER identity and deliberately not awaited into the failure path: a member who
       // filled the gate must get through it even if this second call is refused.
@@ -144,8 +165,8 @@ export function IdentityGate() {
             actually wrong — feedback, not explanation. */}
         <h2 id="aq-gate-title" className="text-[22px] font-bold leading-tight text-ink">Tell us who you are</h2>
         {/* The gate got longer, so it now says which part is compulsory — otherwise a member reads
-            seven fields and assumes all seven are. Three are. */}
-        <p className="mt-1 text-[13px] text-ink-3">Your name and date of birth are required. The rest you can fill in now or later.</p>
+            six fields and assumes all six are. Three are. */}
+        <p className="mt-1 text-[13px] text-ink-3">Your name, date of birth and nationality are required. The rest you can fill in now or later.</p>
 
         <div className="mt-4 space-y-3">
           <label className="block">
@@ -172,6 +193,21 @@ export function IdentityGate() {
               <span id="aq-gate-dob-hint" role="alert" className="mt-1 block text-[12px] text-yin-ink">You must be at least 13</span>
             )}
           </label>
+          <div className="block">
+            <span className="mb-1 block text-[13px] font-medium text-ink-2">Nationality</span>
+            {/* Every country, as a flag + localised name. The value may have been seeded from the
+                visitor's connection (ipCountry()), so the hint below says so until they touch the
+                field — a wrong prefilled nationality would otherwise be saved by someone who did
+                not notice it. Touching the field retires the hint even if the same country is
+                picked again: it is now their choice, not our guess. */}
+            <select value={nat} onChange={(e) => { setNat(e.target.value); setGuessed(false); }} aria-label="Nationality" className={field}>
+              <option value="">Choose your nationality…</option>
+              {countries.map((c) => <option key={c.code} value={c.code}>{`${flagEmoji(c.code)} ${c.name}`}</option>)}
+            </select>
+            {guessed && (
+              <span className="mt-1 block text-[12px] text-ink-3">Guessed from your connection — change it if it is wrong.</span>
+            )}
+          </div>
           {/* THE REST OF THE PROFILE, asked once. Every one of these is optional and says so, and the
               button does not wait on them. They are here because a member who states them now never
               has to find the settings page to do it — which is where all three sat unfilled. */}

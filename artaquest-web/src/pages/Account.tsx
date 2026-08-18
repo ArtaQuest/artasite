@@ -1,9 +1,11 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { DobWheel } from "../components/DobWheel";
 import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, LANGS_MAX, postProfileUpdate, PROFILE_LINKS, RELATIONSHIPS, type CourseCard, type Dashboard, type UsernameCheck } from "../lib/wp";
-import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, KaggleIds, Passkeys, ShellAccount, UsageApi, myParticipation, setGender as setGender_, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type KaggleIdItem, type SessionItem, type ShellInfo, type ShellKey, type UsageInfo, type BursaryResult, type BursaryStatus, type ShareKit , type Footprint } from "../lib/api";
+import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, KaggleIds, Passkeys, ShellAccount, UsageApi, myParticipation, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type KaggleIdItem, type SessionItem, type ShellInfo, type ShellKey, type UsageInfo, type BursaryResult, type BursaryStatus, type ShareKit , type Footprint } from "../lib/api";
 import { signOut } from "../lib/auth";
 import { VerifyApi, fileToImage, type VerifyStatus } from "../lib/verify";
+import { ipCountry } from "../lib/geo";
+import { countryOptions, flagEmoji, countryName } from "../lib/flags";
 import { BlueCheck } from "../components/BlueCheck";
 import { Avatar, Button, Card, CertBadge, Chip, ErrorNote, Field, Input, Pill, Select, SignInGate, StatusNote, Textarea } from "../components/ui";
 import { availableLangs } from "../lib/i18n";
@@ -1190,31 +1192,31 @@ function IdentityVerification() {
   const [imgs, setImgs] = useState<{ profile_pic?: string; id_front?: string; id_back?: string; selfie?: string }>({});
   const [busy, setBusy] = useState(false);
   const [vmsg, setVmsg] = useState<{ ok: boolean; text: string } | null>(null);
-  // Every country, localized + sorted for the active language (no allow-list — see lib/flags.ts).
-
-  const [gender, setGender] = useState("");
+  // Nationality (ISO 3166-1 alpha-2). Removed on 2026-08-11; brought back on 2026-08-18 by operator
+  // order — the same order that retired gender, which sat in this form until then. The picker
+  // offers every country, localised + sorted for the active language (no allow-list — see
+  // lib/flags.ts), built once: the language is boot config and cannot change under a mounted page.
+  const [nat, setNat] = useState("");
+  const countries = useMemo(() => countryOptions(), []);
   const load = () => VerifyApi.status().then((s) => {
     if (s && !("error" in s && (s as { error?: string }).error)) {
       setSt(s); setName(s.full_name || ""); setBday(s.birthday || "");
-      setGender(s.gender || "");
+      // A member with no nationality on record sees their IP country PRE-SELECTED — a suggestion,
+      // never a fact: nothing is stored until they press Save, and ipCountry() is '' when the
+      // visitor's country is unknown (it never guesses), which leaves the picker on "Choose…".
+      setNat(s.nationality || ipCountry());
     }
   });
   useEffect(() => { load(); }, []);
-
-  /** Gender saves on change (its own route), so choosing "Prefer not to say" revokes it immediately
-   *  rather than waiting on a Save the member might never press. */
-  function saveGenderNow(g: string) {
-    setGender(g);
-    setGender_(g === "" ? "clear" : g).then(() => setIdMsg(g === "" ? "Gender removed" : "Saved"), () => setIdMsg("Couldn’t save that — try again."));
-  }
 
   async function saveIdentity() {
     // Check here as well as on the server. The server is the rule (Rest::birthday_gate), but a
     // member who submits an empty date should be told which field, not handed a generic refusal.
     if (!name.trim()) { setIdMsg("Add your full legal name — it is required."); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(bday)) { setIdMsg("Add your date of birth — every member states one."); return; }
+    if (!nat) { setIdMsg("Choose your nationality — it shows as a flag on your profile."); return; }
     setIdSaving(true); setIdMsg("");
-    const r = await VerifyApi.setIdentity(name.trim(), bday);
+    const r = await VerifyApi.setIdentity(name.trim(), bday, nat);
     setIdSaving(false);
     if (r.ok) { setIdMsg("Saved"); load(); } else { setIdMsg(r.message || "Couldn't save — check your details."); }
   }
@@ -1240,10 +1242,12 @@ function IdentityVerification() {
         <h2 className="flex items-center gap-2 text-[20px] font-bold tracking-tight">
           Identity {st?.verified && <BlueCheck size={18} />}
         </h2>
-        <p className="mt-1 text-[13px] text-ink-3">Your real name and birthday are required to post, and are public on your profile. The blue check confirms a government ID — it's required to cash out, and puts your country's flag on your profile picture.</p>
+        <p className="mt-1 text-[13px] text-ink-3">Your real name and date of birth are required to post; your nationality shows as your country's flag on your profile. All three are public. The blue check confirms them against a government ID — it's required to cash out.</p>
       </div>
 
-      {/* Name + birthday (gates posting) + nationality (needed for the blue check) */}
+      {/* Name + date of birth (gate posting) + nationality (the profile flag; all three are what the
+          blue check reads off the government ID). Gender sat here until 2026-08-18 and is gone from
+          the platform — nationality replaced it as the axis a donor's ArtaCredit can be aimed at. */}
       <Card as="div" className="flex flex-col gap-3 p-5">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Full legal name" required>
@@ -1258,16 +1262,19 @@ function IdentityVerification() {
             <DobWheel value={bday} onChange={setBday} minYear={new Date().getFullYear() - 120}
               maxYear={new Date().getFullYear() - 13} invalid={bday !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(bday)} />
           </Field>
-          {/* GENDER — the only axis of a donor's ArtaCredit that ArtaQuest does not otherwise know.
-              Opt-in, revocable, never inferred, and useless for anything else: it is read by exactly
-              one thing (Credits::buckets_for_user). Saying nothing is a complete answer. */}
-          <Field label="Gender" optional hint="Public, like everything on ArtaQuest. Used only so a donor’s gift can find the members it was given for.">
-            <select value={gender} onChange={(e) => saveGenderNow(e.target.value)} aria-label="Gender"
+          {/* NATIONALITY — required, like the name and the date of birth (operator 2026-08-18,
+              reversing the 2026-08-11 removal). It is the flag on the public profile, one of the
+              two axes a donor's ArtaCredit can be aimed at (with an age band — gender is gone),
+              and the third fact the blue check reads off the government ID. It saves with the
+              name and date of birth on Save — never on change — so an IP-suggested default is
+              only ever stored once the member has confirmed it. */}
+          <Field label="Nationality" required hint="Public on your profile as your country's flag, and checked against your ID by the blue check.">
+            <select value={nat} onChange={(e) => setNat(e.target.value)} aria-label="Nationality"
               className="h-11 w-full rounded-field border border-line bg-space-1 px-3.5 text-[15px] text-ink outline-none focus:border-yin-light">
-              <option value="">Prefer not to say</option>
-              <option value="w">Woman</option>
-              <option value="m">Man</option>
-              <option value="n">Non-binary</option>
+              <option value="">Choose your nationality…</option>
+              {countries.map(({ code, name: cn }) => (
+                <option key={code} value={code}>{`${flagEmoji(code)} ${cn}`}</option>
+              ))}
             </select>
           </Field>
         </div>
@@ -1283,15 +1290,19 @@ function IdentityVerification() {
         {st?.verified ? (
           <div className="flex items-center gap-2 text-[15px] font-semibold text-yin-light">
             <BlueCheck size={18} /> Verified{st.verified_at ? ` · ${new Date(st.verified_at * 1000).toLocaleDateString()}` : ""}
+            {/* The flag the check confirmed — the same one the public profile shows. */}
+            {flagEmoji(st.nationality) && (
+              <span role="img" aria-label={countryName(st.nationality)} title={`${countryName(st.nationality)} — shown on your profile`} className="text-[17px] leading-none">{flagEmoji(st.nationality)}</span>
+            )}
           </div>
         ) : !st?.configured ? (
           <p className="text-[14px] text-ink-3">Identity verification is temporarily unavailable. Please check back soon.</p>
-        ) : !st?.has_identity ? (
-          <p className="text-[14px] text-ink-3">Save your full name and date of birth above first, then verify your ID.</p>
+        ) : !st?.has_identity || !st?.nationality ? (
+          <p className="text-[14px] text-ink-3">Save your full name, date of birth and nationality above first, then verify your ID.</p>
         ) : (
           <>
             <h3 className="text-[16px] font-bold">Get the blue check</h3>
-            <p className="text-[13px] text-ink-3">Verifying is free. Add a clear photo of your face (it becomes your profile picture), the front and back of any government photo ID — passport, national ID, driver licence, residence permit, from any country — and a selfie. Claude confirms the ID is genuine and that the NAME and DATE OF BIRTH on it are yours, and that the same face appears on the ID, the selfie and your photo. Nothing else is read off the ID: not your nationality, not where you were born. Your ID and selfie are used only for this check and are never stored.</p>
+            <p className="text-[13px] text-ink-3">Verifying is free. Add a clear photo of your face (it becomes your profile picture), the front and back of any government photo ID — passport, national ID, driver licence, residence permit, from any country — and a selfie. Claude confirms the ID is genuine and that the name (given name and surname), date of birth and nationality on it are yours, and that the same face appears on the ID, the selfie and your photo. Every nationality is accepted — the check is only that what you stated matches your ID. Your ID and selfie are used only for this check and are never stored.</p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <PhotoTile label="Profile photo" hint="your face" value={imgs.profile_pic} onPick={(f) => pick("profile_pic", f)} />
               <PhotoTile label="ID front" hint="government ID" value={imgs.id_front} onPick={(f) => pick("id_front", f)} />

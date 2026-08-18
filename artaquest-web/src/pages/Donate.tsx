@@ -5,6 +5,7 @@ import {
 } from "../lib/wp";
 import { creditOptions, creditReach, myCredits, sampleCert, widenCredit, type CreditOptions, type CreditReach, type CreditGift } from "../lib/api";
 import { Coins, formatFiat, sanitizeDecimal } from "../lib/currency";
+import { countryOptions, flagEmoji } from "../lib/flags";
 import { Button, Card, Chip, PageHero, StatusNote, cx } from "../components/ui";
 import { DomainGlyph } from "../components/catalogue";
 import { ParticipationDoc } from "../components/participation";
@@ -16,7 +17,7 @@ const w = (typeof window !== "undefined" ? (window as unknown as Record<string, 
  *
  * A donation is now ONE decision made three times: who your gift reaches, how much, and what name
  * goes on their certificate. It buys challenge entry fees — the only thing on ArtaQuest that costs a
- * member money — for a slice of the membership the donor chooses by nationality, gender and age.
+ * member money — for a slice of the membership the donor chooses by nationality and age.
  *
  * Two things this page must not do, both learned the hard way:
  *   · It must not publish who is where. The database is public, so a per-country member count next
@@ -144,8 +145,9 @@ export default function Donate() {
   const [finFailed, setFinFailed] = useState(false);
   const [gifts, setGifts] = useState<CreditGift[]>([]);
 
-  // step 1 — who
-  const [gender, setGender] = useState("");
+  // step 1 — who. `country` is the nationality the gift is aimed at — an ISO 3166-1 alpha-2 code,
+  // upper-case, '' for anyone (operator 2026-08-18; see the note above the picker).
+  const [country, setCountry] = useState("");
   const [band, setBand] = useState("");
   const [reach, setReach] = useState<CreditReach | null>(null);
   // step 2 — how much
@@ -178,7 +180,7 @@ export default function Donate() {
   const STASH = "aq.donate.intent";
   function stashIntent() {
     try {
-      sessionStorage.setItem(STASH, JSON.stringify({ gender, band, preset, custom, donorName, anon }));
+      sessionStorage.setItem(STASH, JSON.stringify({ country, band, preset, custom, donorName, anon }));
     } catch { /* private mode / quota — the sign-in still works, it just forgets */ }
   }
   useEffect(() => {
@@ -187,8 +189,8 @@ export default function Donate() {
     try { raw = sessionStorage.getItem(STASH); sessionStorage.removeItem(STASH); } catch { return; }
     if (!raw) return;
     try {
-      const v = JSON.parse(raw) as Partial<{ gender: string; band: string; preset: number; custom: string; donorName: string; anon: boolean }>;
-      if (typeof v.gender === "string") setGender(v.gender);
+      const v = JSON.parse(raw) as Partial<{ country: string; band: string; preset: number; custom: string; donorName: string; anon: boolean }>;
+      if (typeof v.country === "string") setCountry(v.country);
       if (typeof v.band === "string") setBand(v.band);
       if (typeof v.preset === "number") setPreset(v.preset);
       if (typeof v.custom === "string") setCustom(v.custom);
@@ -248,9 +250,9 @@ export default function Donate() {
   // Reach for the CURRENT pick only — one slice at a time, never a published map.
   useEffect(() => {
     let live = true;
-    creditReach("", gender, band).then((r) => { if (live) setReach(r); }, () => { if (live) setReach(null); });
+    creditReach(country, band).then((r) => { if (live) setReach(r); }, () => { if (live) setReach(null); });
     return () => { live = false; };
-  }, [gender, band]);
+  }, [country, band]);
 
   const cur = opts?.currency || "CAD";
   const sym = opts?.symbol || "$";
@@ -276,6 +278,9 @@ export default function Donate() {
     ? Math.max(1, Math.floor(Math.round(amount * 100) / (unitCents * Math.max(1, feeCap))))
     : 0;
 
+  // Named and sorted for the active language, once: the language is boot config, so it cannot change
+  // under a mounted page.
+  const countries = useMemo(() => countryOptions(), []);
   const sliceWords = reach?.words || "any member of ArtaQuest";
   const printedName = anon ? "" : donorName.trim();
   const specimen = useMemo(() => sampleCert(printedName, sliceWords), [printedName, sliceWords]);
@@ -292,8 +297,9 @@ export default function Donate() {
     stashIntent();
     setBusy(true); setErr("");
     postCourseCheckout({
-      // No `country`: Credits::bucket pins that axis to ANY, so sending one only ever misled.
-      donations: [{ amount, credit: { gender, band, fee_cap: copts?.fee_cap, name: anon ? "" : donorName.trim() } }],
+      // The country IS honoured now: Credits::bucket keeps a valid ISO code since 2026-08-18, and
+      // gender is gone from the payload because it is gone from the platform.
+      donations: [{ amount, credit: { country, band, fee_cap: copts?.fee_cap, name: anon ? "" : donorName.trim() } }],
       // No email: the donations branch of Extra::course_checkout never reads it, and currentUser()
       // does not carry one — referencing it was a type error the root `tsc --noEmit` could not see
       // (this project is solution-style, so only `tsc -b` actually checks the sources).
@@ -331,18 +337,23 @@ export default function Donate() {
         {/* ── the three decisions ── */}
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-9">
           <Step n={1} title="Who your gift reaches"
-            hint="Leave any answer as “Anyone”. Members are matched only on what they have chosen to say about themselves — nothing is ever inferred.">
-            {/* NATIONALITY IS NOT OFFERED. It stopped being a matching facet on 2026-08-11 —
-                Credits::buckets_for_user pins the country axis to ANY, so no member can be matched by
-                one. The picker outlived that change: a donor who chose Iran had their gift minted into
-                crd_ir_w_25 while only crd_x_w_25 can ever be matched, and the reach meter answered for
-                the country-agnostic slice, so they were shown a real audience for a bucket their money
-                would never enter. Offering a choice that cannot be honoured is worse than offering
-                none. */}
+            hint="Leave any answer as “Anyone”. Members are matched only on what they have stated about themselves — a nationality, a date of birth — nothing is ever inferred.">
+            {/* NATIONALITY IS THE AXIS, AND GENDER IS GONE (operator 2026-08-18). This reverses the
+                2026-08-11 removal, when Credits::buckets_for_user pinned the country axis to ANY and
+                this page hid the picker rather than offer a choice that could not be honoured (a
+                gift aimed at Iran was minted into a bucket no member could ever be matched into,
+                while the reach meter answered for the country-agnostic slice). Gender is no longer
+                an axis anywhere on the platform — no field, no route, no type — and nationality
+                took its place: Credits::bucket keeps a valid ISO code and Credits::buckets_for_user
+                matches a member on the nationality they stated at sign-up (once it has stood for
+                SETTLE_DAYS), so a gift aimed at a country now genuinely reaches its members and the
+                reach meter below answers for that exact slice.
+                The list is countryOptions() from lib/flags — every ISO 3166-1 alpha-2 code, named
+                and sorted in the active language — not copts.countries, whose names are English. */}
             <Card className="grid gap-4 p-5 sm:grid-cols-2">
-              <Picker id="cr-gender" label="Gender" value={gender} onChange={setGender}>
+              <Picker id="cr-country" label="Nationality" value={country} onChange={setCountry}>
                 <option value="">Anyone</option>
-                {(copts?.genders || []).map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
+                {countries.map((c) => <option key={c.code} value={c.code}>{`${flagEmoji(c.code)} ${c.name}`}</option>)}
               </Picker>
               <Picker id="cr-band" label="Age group" value={band} onChange={setBand}>
                 <option value="">Any age</option>

@@ -2,21 +2,30 @@ import { type FormEvent, useMemo, useState } from "react";
 import { Avatar, Button, RichText, VoteControl, cx } from "../ui";
 import { Composer } from "../Composer";
 import { VerifyApi } from "../../lib/verify";
+import { ipCountry } from "../../lib/geo";
+import { countryOptions, flagEmoji } from "../../lib/flags";
 import type { BoardCapabilities, BoardComment, BoardWriteState } from "./types";
 
-/* Inline identity prompt: posting requires a real name + birthday (server gate). Collect it RIGHT
-   HERE so an enrolled member never types a reply only to be rejected — then the board refetches and
-   the composer appears. */
+/* Inline identity prompt: posting requires a real name + date of birth + nationality (server gate).
+   Collect it RIGHT HERE so an enrolled member never types a reply only to be rejected — then the
+   board refetches and the composer appears. Nationality came back on 2026-08-18 (operator; it had
+   gone on 08-11): without it here the prompt would post a request the server refuses, and the
+   member would read "choose a nationality" beside a form that never asked for one. */
 function IdentityPrompt() {
   const [name, setName] = useState("");
   const [bday, setBday] = useState("");
+  // Seeded from the visitor's country as the edge saw it (ipCountry(), '' when unknown) — a
+  // suggestion they can change; nothing is stored until Save.
+  const [nat, setNat] = useState(() => ipCountry());
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // Every country, localised + sorted for the active language; only this prompt needs the list.
+  const countries = useMemo(() => countryOptions(), []);
   async function save() {
-    if (!name.trim() || !bday || busy) return;
+    if (!name.trim() || !bday || !nat || busy) return;
     setBusy(true); setErr("");
     try {
-      const r = await VerifyApi.setIdentity(name.trim(), bday);
+      const r = await VerifyApi.setIdentity(name.trim(), bday, nat);
       if (r?.ok) window.location.reload();
       else setErr(r?.message || r?.error || "Couldn't save — check your details.");
     } catch { setErr("Couldn't save — please try again."); }
@@ -27,10 +36,20 @@ function IdentityPrompt() {
     <div data-goal="needs-identity" className="rounded-card border border-yin/30 bg-yin/5 px-4 py-3.5">
       <p className="text-[14px] font-semibold text-ink">Add your name to post</p>
       <p className="mt-0.5 text-[13px] text-ink-2">Replies are public and signed with your real name and age. It takes a few seconds — and you keep your place here.</p>
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" maxLength={80} className={f} />
-        <input value={bday} onChange={(e) => setBday(e.target.value)} type="date" aria-label="Date of birth" className={f} />
-        <Button onClick={save} disabled={busy || !name.trim() || !bday} className="h-10 shrink-0 px-5 text-[14px] disabled:opacity-50">{busy ? "Saving…" : "Save & post"}</Button>
+      {/* Two rows on sm+ (name + date, then nationality + the button), each stacking on a phone —
+          three inputs and a button on one row left every field too narrow to read. */}
+      <div className="mt-3 flex flex-col gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" maxLength={80} className={f} />
+          <input value={bday} onChange={(e) => setBday(e.target.value)} type="date" aria-label="Date of birth" className={f} />
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <select value={nat} onChange={(e) => setNat(e.target.value)} aria-label="Nationality" className={f}>
+            <option value="">Choose your nationality…</option>
+            {countries.map((c) => <option key={c.code} value={c.code}>{`${flagEmoji(c.code)} ${c.name}`}</option>)}
+          </select>
+          <Button onClick={save} disabled={busy || !name.trim() || !bday || !nat} className="h-10 shrink-0 px-5 text-[14px] disabled:opacity-50">{busy ? "Saving…" : "Save & post"}</Button>
+        </div>
       </div>
       {err && <p className="mt-1.5 text-[12px] text-yin-light">{err}</p>}
     </div>
