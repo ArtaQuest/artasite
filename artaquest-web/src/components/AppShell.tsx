@@ -10,6 +10,7 @@ import { openSearch, useWide } from "../lib/rail";
 import { nameClass, nameSize } from "../lib/fmt";
 import { UserMenu } from "./UserMenu";
 import { currentUser, isLoggedIn, localePath } from "../lib/wp";
+import { signOut } from "../lib/auth";
 import { getChatState, subscribeChat } from "../lib/chat-store";
 import { cartCount, onCartChange } from "../lib/cart";
 import { CHECKOUT_LIVE } from "../lib/wp";
@@ -337,6 +338,71 @@ function CreateMenu({ expanded, onNavigate }: { expanded: boolean; onNavigate: (
   );
 }
 
+/**
+ * THE ACCOUNT ROW AT THE FOOT OF THE RAIL — X's, including the ⋯ (operator 2026-08-18, screenshot:
+ * the Post button over "Arash Ashrafnejad / @artafather" with a ⋯ at its end).
+ *
+ * The row already carried the face, the name and the handle; the ⋯ is what it was missing, and on X
+ * it is how you leave. Ours opens upward (the row is the last thing in the rail) with the three
+ * things that belong to the person rather than to the page: their profile, their settings, and sign
+ * out. Notifications stay in the header's avatar menu — that badge belongs where it can be seen from
+ * every scroll position, and duplicating it here would give one drawer two doors.
+ *
+ * The row is a LINK and the ⋯ is a BUTTON inside it, so a click on the dots must not also navigate:
+ * stopPropagation + preventDefault on the trigger, which is why the dots are not simply an <a>.
+ */
+function AccountRow({ me, labelShow, onNavigate }: {
+  me: { name: string; slug?: string; avatar: string };
+  labelShow: string;
+  onNavigate: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => { if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+  const href = localePath(me.slug ? `/u/${me.slug}/` : "/user-account/");
+  const item = "flex w-full items-center gap-2.5 px-4 py-2.5 text-start text-[14px] font-semibold text-ink transition-colors hover:bg-veil/[0.06]";
+  return (
+    <div ref={wrap} className="relative">
+      {open && (
+        <div role="menu" aria-label="Account"
+          className="absolute bottom-full start-2 z-50 mb-1 w-[15rem] overflow-hidden rounded-card border border-line bg-space-2 py-1 shadow-card">
+          <a role="menuitem" href={href} onClick={() => { setOpen(false); onNavigate(); }} className={item}>Your profile</a>
+          <a role="menuitem" href={localePath("/user-account/?settings=1")} onClick={() => { setOpen(false); onNavigate(); }} className={item}>Settings</a>
+          <button role="menuitem" type="button" onClick={() => { setOpen(false); void signOut(); }}
+            className={`${item} text-rose-300 hover:text-rose-200`}>
+            Sign out <bdi dir="ltr" data-ay-skip="1" className="text-ink-3">@{me.slug}</bdi>
+          </button>
+        </div>
+      )}
+      <a href={href} onClick={onNavigate} aria-label={`${me.name} — your profile`}
+        className="mx-2 mb-3 mt-1 flex min-h-14 shrink-0 items-center rounded-pill py-1 transition-colors hover:bg-veil/[0.06]">
+        <span className="grid w-[52px] shrink-0 place-items-center">
+          <Avatar src={me.avatar} name={me.name} className="h-9 w-9 text-[13px] text-ink ring-1 ring-yin-light/50" />
+        </span>
+        {/* A NAME IS NEVER SHORTENED — nameClass wraps and steps the type down (lib/fmt). */}
+        <span className={`min-w-0 flex-1 pe-1 transition-opacity duration-200 ${labelShow}`}>
+          <span className={`block font-bold text-ink ${nameClass(me.name)}`}>{me.name}</span>
+          <span className={`block break-all leading-tight text-ink-2 ${nameSize(me.slug || "", 13)}`} data-ay-skip="1">@{me.slug}</span>
+        </span>
+        <button type="button" aria-haspopup="menu" aria-expanded={open} aria-label="Account options"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((v) => !v); }}
+          className={`me-2 grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-3 transition-colors hover:bg-veil/10 hover:text-ink ${labelShow}`}>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden>
+            <circle cx="5" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="19" cy="12" r="1.7" />
+          </svg>
+        </button>
+      </a>
+    </div>
+  );
+}
+
 function Sidebar({ active, expanded, onNavigate }: { active: string; expanded: boolean; onNavigate: () => void }) {
   // Labels are visible only when expanded; in the condensed rail they fade fully out so the
   // rail shows icons alone (the icon column keeps its layout slot either way).
@@ -430,24 +496,7 @@ function Sidebar({ active, expanded, onNavigate }: { active: string; expanded: b
             with the signed-in member — face, name, handle — and so do we. It is a link to the
             member's own profile; the account MENU stays in the header, where the notifications
             badge lives, so this row cannot become a second, competing door to the same drawer. */}
-        {me ? (
-          <a href={localePath(me.slug ? `/u/${me.slug}/` : "/user-account/")} onClick={onNavigate}
-            aria-label={`${me.name} — your profile`}
-            className="mx-2 mb-3 mt-1 flex min-h-14 shrink-0 items-center rounded-pill py-1 transition-colors hover:bg-veil/[0.06]">
-            <span className="grid w-[52px] shrink-0 place-items-center">
-              <Avatar src={me.avatar} name={me.name} className="h-9 w-9 text-[13px] text-ink ring-1 ring-yin-light/50" />
-            </span>
-            {/* A NAME IS NEVER SHORTENED (operator 2026-08-16). It wraps and the type steps down —
-                it does not take an ellipsis through the middle of somebody's name. `truncate` is the
-                lazy answer and it is wrong here: "Arash Ashrafne…" in the one place the product
-                addresses a member by name is worse than a line of 12px text. Stepped by length, not
-                by measurement, so it cannot depend on a font that has not loaded yet. */}
-            <span className={`min-w-0 pe-3 transition-opacity duration-200 ${labelShow}`}>
-              <span className={`block font-bold text-ink ${nameClass(me.name)}`}>{me.name}</span>
-              <span className={`block break-all leading-tight text-ink-2 ${nameSize(me.slug || "", 13)}`} data-ay-skip="1">@{me.slug}</span>
-            </span>
-          </a>
-        ) : null}
+        {me ? <AccountRow me={me} labelShow={labelShow} onNavigate={onNavigate} /> : null}
       </div>
     </aside>
   );
