@@ -6,25 +6,34 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 /**
  * Identity verification — the "blue check".
  *
- * Two tiers of identity, both stored as PUBLIC user meta (radical transparency — full name + birthday
- * show on every profile and in /data/):
- *   1. IDENTITY (aq_full_name + aq_birthday): a member must state their real name and an exact date
- *      of birth before they can post. No proof, no cost — the gate is that the fields are filled in.
+ * Two tiers of identity, all of it stored as PUBLIC user meta (radical transparency — the full name,
+ * the date of birth and the nationality show on every profile and in /data/):
+ *   1. IDENTITY (aq_full_name + aq_birthday, and aq_nationality): a member states their real name,
+ *      an exact date of birth and their nationality (ISO 3166-1 alpha-2). No proof, no cost — the
+ *      gate is that the fields are filled in. Name + date are what gate POSTING (has_identity);
+ *      the nationality is asked at sign-up, defaulted from the visitor's country, shows as the
+ *      country's FLAG on the public profile, and is required before the blue check.
  *   2. THE BLUE CHECK (optional): four photos — profile picture, government ID front and back, and a
- *      selfie — go to Claude, which decides whether the ID is genuine, whether the NAME and DATE OF
- *      BIRTH on it match what the member entered, and whether the same face appears across the ID,
- *      the selfie and the profile photo. Those TWO facts are the whole check.
+ *      selfie — go to Claude, which decides whether the ID is genuine, whether the NAME (given name
+ *      and surname), the DATE OF BIRTH and the NATIONALITY on it match what the member stated, and
+ *      whether the same face appears across the ID, the selfie and the profile photo. Those THREE
+ *      facts are the whole check.
  *
  * ANY government photo ID from ANY country is accepted — passport, national ID, driver licence,
- * residence permit — read in any language or script. NATIONALITY IS NOT COLLECTED, NOT CHECKED AND
- * NOT STORED (operator, 2026-08-11): the platform used to require a citizenship claim, publish it,
- * and gate the badge on the ID agreeing with it. Nothing a member does here needed it, and a
- * published citizenship beside a real name and face is a disclosure with consequences we were not
- * making up for anywhere. Place of birth went the same day. The examiner is told, in the prompt, to
- * ignore nationality, citizenship, issuing country, ethnicity and place of birth entirely.
+ * residence permit — read in any language or script. EVERY nationality verifies identically: the
+ * examiner checks only that the claim is accurate, never which country it names, and nothing
+ * anywhere grants or denies anything by country.
+ *
+ * HISTORY, so nobody relitigates it from the diff: nationality was collected, published and checked
+ * from the start; on 2026-08-11 the operator removed it (and place of birth) as a disclosure nothing
+ * needed; on 2026-08-18 the operator brought nationality back — asked at sign-up, defaulted from
+ * the visitor's IP country, shown as a flag on the profile, checked by the blue check, and the axis
+ * an ArtaCredits donor may aim a gift at (it replaced gender there, which is now gone from the
+ * platform entirely). Place of birth stayed removed.
  *
  * The ID and selfie images are NEVER persisted — decoded in memory, sent for the verdict, freed. What
- * survives is the verdict, the (already-public) full name and date of birth, and the profile photo.
+ * survives is the verdict, the (already-public) name, date of birth and nationality, and the
+ * profile photo.
  */
 final class Verify {
 
@@ -37,15 +46,44 @@ final class Verify {
 
 	// Every officially assigned ISO 3166-1 alpha-2 code — ALL of them, no allow-list (validation only,
 	// never gating). The SPA renders the same list (src/lib/flags.ts) with localized names.
+	const COUNTRIES = 'AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW';
 
 	// ── public helpers (used by the gates elsewhere) ──────────────────────────
 	public static function full_name( $uid ) { return trim( (string) get_user_meta( (int) $uid, 'aq_full_name', true ) ); }
 	public static function birthday( $uid )  { return (string) get_user_meta( (int) $uid, 'aq_birthday', true ); }
+	/** The stored nationality claim, upper-cased, UNVALIDATED ('' when none). Prefer claimed_country()
+	 *  for anything shown or emitted — it refuses a value that is not an ISO 3166-1 alpha-2 code. */
+	public static function nationality( $uid ) { return strtoupper( trim( (string) get_user_meta( (int) $uid, 'aq_nationality', true ) ) ); }
 
-	// Full name + a valid date of birth. That is the whole gate: nationality and place of birth
-	// were both removed on 2026-08-11, and the blue check confirms these same two against a photo ID.
+	// Full name + a valid date of birth. That is the POSTING gate (Rest::birthday_gate refuses every
+	// mutation without the date). Nationality is deliberately NOT part of it: it is asked at sign-up
+	// and required for the blue check, but a legacy account without one must not be locked out of
+	// posting for a fact the operator has set by hand for every existing member.
 	public static function has_identity( $uid ) { return self::full_name( $uid ) !== '' && self::valid_birthday( self::birthday( $uid ) ); }
 	public static function is_verified( $uid ) { return (int) get_user_meta( (int) $uid, 'aq_verified', true ) > 0; }
+
+	/** True for any officially assigned ISO 3166-1 alpha-2 code (case-insensitive input). */
+	public static function valid_country( $c ) {
+		$c = strtoupper( trim( (string) $c ) );
+		return $c !== '' && in_array( $c, explode( ' ', self::COUNTRIES ), true );
+	}
+
+	/** The nationality the member STATED, as a validated ISO 3166-1 alpha-2 code, or '' — the value
+	 *  every public surface shows: the flag on the profile picture, the "Nationality" fact on the
+	 *  profile, window.AQ_USER, /verify/status. A claim, like the date of birth beside it; the blue
+	 *  check beside the name is what says the ID agreed with it. */
+	public static function claimed_country( $uid ) {
+		$c = self::nationality( $uid );
+		return self::valid_country( $c ) ? $c : '';
+	}
+
+	/** The nationality as CONFIRMED by the blue check — '' until the member is verified. Kept as its
+	 *  own predicate so a caller that wants the ID-backed fact (a payout, an audit) can ask for it
+	 *  and never mistake a claim for it. verify_identity() canonicalises aq_nationality to the ID's
+	 *  country on success, so once verified the two agree by construction. */
+	public static function badge_country( $uid ) {
+		return self::is_verified( $uid ) ? self::claimed_country( $uid ) : '';
+	}
 
 	/** True once this member has stated an EXACT, valid date of birth (operator 2026-07-25: every
 	 *  account must carry one — see Rest::birthday_gate, which refuses every mutation until it does).
@@ -95,7 +133,7 @@ final class Verify {
 		return [
 			'full_name'    => self::full_name( $uid ),
 			'birthday'     => self::birthday( $uid ),
-			'gender'       => self::gender( $uid ),        // '' unless the member chose to say (ArtaCredits matching only)
+			'nationality'  => self::claimed_country( $uid ), // the stated claim (ISO 3166-1 alpha-2), '' until stated
 			'has_identity' => self::has_identity( $uid ),
 			'verified'     => $ts > 0,
 			'verified_at'  => $ts,
@@ -104,72 +142,63 @@ final class Verify {
 		];
 	}
 
-	// ── set identity (name + date of birth) — required to post, no cost, no proof ───
-	/** POST /identity {full_name, birthday} — the real name + date of birth that gate posting.
+	// ── set identity (name + date of birth + nationality) — required to post, no cost, no proof ───
+	/** POST /identity {full_name, birthday, nationality} — the real name + date of birth that gate
+	 *  posting, and the nationality (ISO 3166-1 alpha-2) that shows as a flag on the profile and is
+	 *  checked by the blue check.
 	 *
-	 *  Nationality was collected here until 2026-08-11 and is gone (operator). The platform asked every
-	 *  member to declare a citizenship, published it, and made the blue check turn on whether their ID
-	 *  agreed with it. None of it was load-bearing for anything a member does here, and a published
-	 *  citizenship is one of the more consequential facts you can attach to a real person's name.
-	 *  Place of birth went the same day, for the same reason. */
+	 *  NATIONALITY IS REQUIRED UNTIL THE ACCOUNT HAS ONE, then optional: an omitted or empty value
+	 *  leaves the stored claim untouched. That is what lets a form that only edits the name keep
+	 *  working, an older client keep working, and a first-time member never slip through without one.
+	 *  There is no revocation sentinel: like the date of birth, this is a stated identity fact — a
+	 *  member changes it, they do not blank it (operator 2026-08-18; between 08-11 and 08-18 this
+	 *  handler DELETED aq_nationality on every call — see the class doc for the history).
+	 *
+	 *  Place of birth stays gone: its meta is still purged here so a value written before 08-11 is
+	 *  not left published with no surface to take it back from. Gender went the same way on 08-18. */
 	public static function set_identity( $req ) {
 		$uid = Rest::uid();
 		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
 		$name = sanitize_text_field( (string) Rest::p( $req, 'full_name', '' ) );
 		$bday = self::norm_date( (string) Rest::p( $req, 'birthday', '' ) );
+		$nat  = strtoupper( trim( sanitize_text_field( (string) Rest::p( $req, 'nationality', '' ) ) ) );
 		if ( mb_strlen( $name ) < 2 ) { return Rest::err( 'bad_name', 'Enter your full name.' ); }
 		if ( ! self::valid_birthday( $bday ) ) { return Rest::err( 'bad_birthday', 'Enter a valid birthday (you must be at least ' . self::MIN_AGE . ').' ); }
-		// Editing identity after being verified invalidates the check (the verified facts changed).
-		if ( self::is_verified( $uid ) && ( $name !== self::full_name( $uid ) || $bday !== self::birthday( $uid ) ) ) {
+		if ( $nat !== '' && ! self::valid_country( $nat ) ) { return Rest::err( 'bad_country', 'Pick your nationality from the list.' ); }
+		if ( $nat === '' && self::claimed_country( $uid ) === '' ) { return Rest::err( 'bad_country', 'Choose your nationality — it shows as your country\'s flag on your profile.' ); }
+		$nat_changed = $nat !== '' && $nat !== self::claimed_country( $uid );
+		// Editing identity after being verified invalidates the check (the verified facts changed) —
+		// the nationality included, because the ID was checked against the one stated at the time.
+		if ( self::is_verified( $uid ) && ( $name !== self::full_name( $uid ) || $bday !== self::birthday( $uid ) || $nat_changed ) ) {
 			delete_user_meta( $uid, 'aq_verified' );
 		}
 		update_user_meta( $uid, 'aq_full_name', $name );
 		if ( $bday !== self::birthday( $uid ) ) { self::stamp( $uid, 'aq_birthday' ); }
 		update_user_meta( $uid, 'aq_birthday', $bday );
-		// The stored claim is DELETED here, not merely ignored. Dropping the field while leaving
-		// aq_nationality in place would keep publishing a citizenship for every member who ever set
-		// one, in a database served in full at /data/, with no surface left to take it back from.
-		delete_user_meta( $uid, 'aq_nationality' );
-		delete_user_meta( $uid, 'aq_nationality_at' );
+		if ( $nat !== '' ) {
+			// Stamp only a CHANGE (a first statement included), never a re-save of the same value: the
+			// stamp is what makes an ArtaCredits facet wait SETTLE_DAYS, and a member re-saving their
+			// unchanged profile must not reset that clock.
+			if ( $nat_changed ) { self::stamp( $uid, 'aq_nationality' ); }
+			update_user_meta( $uid, 'aq_nationality', $nat );
+		}
+		// Retired facets are DELETED here, not merely ignored: dropping a field while leaving its meta
+		// in place would keep publishing it, in a database served in full at /data/, with no surface
+		// left to take it back from. Place of birth (removed 2026-08-11) and gender (removed 2026-08-18,
+		// when nationality replaced it as the ArtaCredits axis).
 		delete_user_meta( $uid, 'aq_birthplace' );
 		delete_user_meta( $uid, 'aq_birthplace_geo' );
-		return [ 'ok' => true, 'full_name' => $name, 'birthday' => $bday, 'verified' => self::is_verified( $uid ) ];
+		delete_user_meta( $uid, 'aq_gender' );
+		delete_user_meta( $uid, 'aq_gender_at' );
+		return [ 'ok' => true, 'full_name' => $name, 'birthday' => $bday, 'nationality' => self::claimed_country( $uid ), 'verified' => self::is_verified( $uid ) ];
 	}
 
-	/** Record WHEN a self-claimed identity facet last changed. Nationality, gender and birthday are all
-	 *  freely rewritable, so anything that acts on them — ArtaCredits matching — must be able to tell a
+	/** Record WHEN a self-claimed identity facet last changed. Nationality and birthday are freely
+	 *  rewritable, so anything that acts on them — ArtaCredits matching — must be able to tell a
 	 *  long-standing statement from one typed thirty seconds ago to reach a waiting gift. The stamp is
 	 *  public user meta like the facts themselves; it reveals only that something changed, never what. */
 	public static function stamp( $uid, $meta ) {
 		update_user_meta( (int) $uid, $meta . '_at', Data::now() );
-	}
-
-	/** A member's stated gender, or '' — the default. Opt-in, revocable, and NEVER inferred from a
-	 *  name, a pronoun or anything else. Only the member writes it (set_gender below). */
-	public static function gender( $uid ) {
-		$g = (string) get_user_meta( (int) $uid, 'aq_gender', true );
-		return isset( Credits::GENDERS[ $g ] ) ? $g : '';
-	}
-
-	/** POST /identity/gender {gender} — state it, change it, or send 'clear' to take it back. It is
-	 *  used for exactly one thing: letting a donor's ArtaCredit find members it was given for. Saying
-	 *  nothing is a complete answer — a member who never answers is matched on the axes they have
-	 *  actually stated, and by every gift that names no gender at all. */
-	public static function set_gender( $req ) {
-		$uid = Rest::uid();
-		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
-		$g = sanitize_key( (string) Rest::p( $req, 'gender', '' ) );
-		if ( $g === 'clear' || $g === '' ) {
-			// Revocation leaves NO trace — see the nationality clear above. Deleting the stamp too
-			// means the public database does not record that this member once answered and withdrew it.
-			delete_user_meta( $uid, 'aq_gender' );
-			delete_user_meta( $uid, 'aq_gender_at' );
-			return [ 'ok' => true, 'gender' => '' ];
-		}
-		if ( ! isset( Credits::GENDERS[ $g ] ) ) { return Rest::err( 'bad_gender', 'Choose one of the listed answers, or clear it.' ); }
-		if ( $g !== self::gender( $uid ) ) { self::stamp( $uid, 'aq_gender' ); }
-		update_user_meta( $uid, 'aq_gender', $g );
-		return [ 'ok' => true, 'gender' => $g ];
 	}
 
 	/** The member's saved "fine-tune" birth time (minutes past local midnight, 0–1439), or '' if unset. */
@@ -194,8 +223,8 @@ final class Verify {
 	// ── verify (blue check) ─────────────────────────────────────────────────────
 	/**
 	 * POST /verify/identity {profile_pic, id_front, id_back, selfie} (all base64 data URLs).
-	 * Uses the member's already-set full name + date of birth as the claim, asks Claude to
-	 * confirm the ID, grants the check on success, and ALWAYS discards the ID + selfie images.
+	 * Uses the member's already-set full name + date of birth + nationality as the claim, asks Claude
+	 * to confirm the ID, grants the check on success, and ALWAYS discards the ID + selfie images.
 	 * Free — no coin cost (ticket #109; the 1-coin-per-attempt fee was removed).
 	 */
 	public static function verify_identity( $req ) {
@@ -204,6 +233,7 @@ final class Verify {
 		if ( Rest::throttle( 'verify_id', 8, 3600 ) ) { return Rest::err( 'rate_limited', 'Too many attempts. Try again later.', 429 ); }
 		if ( ! Relay::available() ) { return Rest::err( 'offline', 'Verification is temporarily unavailable — please try again shortly.', 503 ); }
 		if ( ! self::has_identity( $uid ) ) { return Rest::err( 'identity_required', 'Set your full name and date of birth first.', 400 ); }
+		if ( self::claimed_country( $uid ) === '' ) { return Rest::err( 'nationality_required', 'Choose your nationality first — verification checks it against your ID.', 400 ); }
 
 		// Decode the four images IN MEMORY. They are never written anywhere (the ID + selfie especially).
 		$profile = self::parse_image( (string) Rest::p( $req, 'profile_pic', '' ) );
@@ -214,7 +244,7 @@ final class Verify {
 			if ( $img === null ) { return Rest::err( 'bad_image', 'Please attach a clear JPG/PNG/WebP for the ' . $label . ' (under 5 MB).' ); }
 		}
 
-		$verdict = self::run_claude( self::full_name( $uid ), self::birthday( $uid ), $profile, $front, $back, $selfie );
+		$verdict = self::run_claude( self::full_name( $uid ), self::birthday( $uid ), self::claimed_country( $uid ), $profile, $front, $back, $selfie );
 		// Free the image bytes the moment the check is done — defence-in-depth on top of never persisting.
 		$profile_bytes = $profile['bytes']; $profile_mime = $profile['mime'];
 		unset( $front, $back, $selfie, $profile );
@@ -226,17 +256,21 @@ final class Verify {
 
 		$ok = ! empty( $verdict['verified'] );
 		if ( $ok ) {
-			// Canonicalise the public name + date of birth to what is actually ON THE ID — the document
-			// is the source of truth, so a member who typed a nickname or a wrong year ends up with what
-			// they can prove. Nothing else is read off the ID and nothing else is stored from it.
+			// Canonicalise the public name + date of birth + nationality to what is actually ON THE ID —
+			// the document is the source of truth, so a member who typed a nickname, a wrong year or the
+			// wrong country ends up with what they can prove. Nothing else is read off the ID and nothing
+			// else is stored from it. The stamp is NOT touched: a canonicalisation is not the member
+			// rewriting a facet, so it must not restart the ArtaCredits settle clock.
 			$name = sanitize_text_field( (string) ( $verdict['name_on_id'] ?: self::full_name( $uid ) ) );
 			$dob  = self::norm_date( (string) ( $verdict['dob_on_id'] ?: self::birthday( $uid ) ) );
+			$ctry = strtoupper( trim( (string) ( $verdict['country_on_id'] ?? '' ) ) );
 			if ( $name !== '' ) { update_user_meta( $uid, 'aq_full_name', $name ); }
 			if ( self::valid_birthday( $dob ) ) { update_user_meta( $uid, 'aq_birthday', $dob ); }
+			if ( self::valid_country( $ctry ) ) { update_user_meta( $uid, 'aq_nationality', $ctry ); }
 			self::set_avatar( $uid, $profile_bytes, $profile_mime ); // the verified profile photo → public avatar
 			update_user_meta( $uid, 'aq_verified', time() );
 			update_user_meta( $uid, 'aq_verify_note', '' );
-			Notify::push( $uid, 'security', 'You\'re verified', 'Your name and date of birth were confirmed against your ID — your profile now carries the blue check, and cash-out is unlocked.', '/account/' );
+			Notify::push( $uid, 'security', 'You\'re verified', 'Your name, date of birth and nationality were confirmed against your ID — your profile now carries the blue check beside your country\'s flag, and cash-out is unlocked.', '/account/' );
 		} else {
 			delete_user_meta( $uid, 'aq_verified' );
 			$reason = sanitize_text_field( (string) ( $verdict['reason'] ?: 'We couldn\'t confirm a match.' ) );
@@ -252,37 +286,37 @@ final class Verify {
 	}
 
 	// ── Claude vision verdict ───────────────────────────────────────────────────
-	/** Ask Claude whether the ID + selfie + profile photo bear out the claimed name and date of birth.
-	 *  TWO facts, checked against ANY government photo ID. Returns the verdict, or null upstream. */
-	private static function run_claude( $name, $birthday, $profile, $front, $back, $selfie ) {
+	/** Ask Claude whether the ID + selfie + profile photo bear out the claimed name, date of birth and
+	 *  nationality. THREE facts, checked against ANY government photo ID. Returns the verdict, or
+	 *  null upstream. */
+	private static function run_claude( $name, $birthday, $nationality, $profile, $front, $back, $selfie ) {
 		// Test seam: the harness can force a verdict (or an upstream failure via the string 'fail')
 		// to exercise the success/failure handling without fabricating a real government ID.
-		$mock = apply_filters( 'aq_verify_verdict', null, $name, $birthday );
+		$mock = apply_filters( 'aq_verify_verdict', null, $name, $birthday, $nationality );
 		if ( $mock === 'fail' ) { return null; }
 		if ( is_array( $mock ) ) {
-			$mock['verified'] = ! empty( $mock['genuine_id'] ) && ! empty( $mock['name_match'] ) && ! empty( $mock['dob_match'] )
-				&& ! empty( $mock['selfie_matches_id'] ) && ! empty( $mock['profile_matches'] )
-				&& (float) ( $mock['confidence'] ?? 0 ) >= self::MIN_CONF;
+			$mock['verified'] = self::decide( $mock );
 			return $mock;
 		}
 		$system = implode( "\n", [
-			'You are an identity-verification examiner for ArtaQuest. You will be shown four images and a CLAIMED full name and date of birth. Decide whether to grant a verified badge.',
+			'You are an identity-verification examiner for ArtaQuest. You will be shown four images and a CLAIMED full name, date of birth and nationality. Decide whether to grant a verified badge.',
 			'The four images, in order, are labelled: PROFILE PHOTO, GOVERNMENT ID FRONT, GOVERNMENT ID BACK, SELFIE.',
 			'ANY government-issued photo ID is acceptable, from any country: passport, national ID card, driver licence, residence permit, military or government employee card. Never reject one for its issuing country, its language or its script, and never require a particular document type. Read names and dates in any language, script or calendar, converting to the Gregorian calendar where needed.',
 			'Assess, independently:',
 			'1) genuine_id: do the FRONT and BACK together look like a real government-issued photo ID (not a screen photo of a photo, not obviously edited, has a portrait + machine/printed data)?',
-			'2) name_match: does the name on the ID match the CLAIMED full name? Allow ordering, capitalisation, accents, middle names/initials, and transliteration differences. Read name_on_id off the ID.',
+			'2) name_match: does the name on the ID — given name(s) AND surname — match the CLAIMED full name? Allow ordering, capitalisation, accents, middle names/initials, and transliteration differences. Read name_on_id off the ID.',
 			'3) dob_match: does the date of birth on the ID match the CLAIMED birthday (same calendar date)? Read dob_on_id off the ID in strict YYYY-MM-DD.',
-			'4) selfie_matches_id: is the SELFIE the same person as the ID portrait?',
-			'5) profile_matches: is the PROFILE PHOTO the same person as the SELFIE / ID portrait (a clear photo of that person\'s face)?',
-			'Do NOT consider nationality, citizenship, issuing country, ethnicity or place of birth. They are not collected, not stored, and must not influence the verdict.',
+			'4) nationality_match: does the nationality on the ID match the CLAIMED nationality (an ISO 3166-1 alpha-2 code)? Use the ID\'s nationality/citizenship field when it has one (passports, national IDs); when it has none (most driver licences, residence permits), use the issuing country. EVERY nationality is equally acceptable — this gate only checks that the claim is accurate, never which country it names. Report country_on_id as the ISO 3166-1 alpha-2 code you read.',
+			'5) selfie_matches_id: is the SELFIE the same person as the ID portrait?',
+			'6) profile_matches: is the PROFILE PHOTO the same person as the SELFIE / ID portrait (a clear photo of that person\'s face)?',
+			'Do NOT consider ethnicity or place of birth. They are not collected, not stored, and must not influence the verdict.',
 			'Be careful but fair. Give a confidence 0-1 for the overall decision.',
 			'Reply with ONLY a single minified JSON object, no prose, exactly these keys:',
-			'{"genuine_id":bool,"name_match":bool,"dob_match":bool,"selfie_matches_id":bool,"profile_matches":bool,"name_on_id":string,"dob_on_id":"YYYY-MM-DD","confidence":number,"reason":string}',
+			'{"genuine_id":bool,"name_match":bool,"dob_match":bool,"nationality_match":bool,"selfie_matches_id":bool,"profile_matches":bool,"name_on_id":string,"dob_on_id":"YYYY-MM-DD","country_on_id":"XX","confidence":number,"reason":string}',
 			'"reason" is one short sentence a member can read (no PII beyond what they submitted). Set "verified" yourself is NOT needed — we compute it.',
 		] );
 		$content = [
-			[ 'type' => 'text', 'text' => "CLAIMED full name: {$name}\nCLAIMED date of birth (YYYY-MM-DD): {$birthday}\n\nImages follow in this order:" ],
+			[ 'type' => 'text', 'text' => "CLAIMED full name: {$name}\nCLAIMED date of birth (YYYY-MM-DD): {$birthday}\nCLAIMED nationality (ISO 3166-1 alpha-2): {$nationality}\n\nImages follow in this order:" ],
 			[ 'type' => 'text', 'text' => 'PROFILE PHOTO:' ],          self::block( $profile ),
 			[ 'type' => 'text', 'text' => 'GOVERNMENT ID FRONT:' ],    self::block( $front ),
 			[ 'type' => 'text', 'text' => 'GOVERNMENT ID BACK:' ],     self::block( $back ),
@@ -300,10 +334,20 @@ final class Verify {
 		$v = json_decode( $m[0], true );
 		if ( ! is_array( $v ) ) { return null; }
 		// Compute the overall decision ourselves — every gate must pass + confidence ≥ threshold.
-		$v['verified'] = ! empty( $v['genuine_id'] ) && ! empty( $v['name_match'] ) && ! empty( $v['dob_match'] )
+		$v['verified'] = self::decide( $v );
+		return $v;
+	}
+
+	/** The verdict is computed by US, never read off the model: six gates, each of which alone
+	 *  refuses, plus confidence ≥ MIN_CONF. ONE definition, shared by the live path and the test
+	 *  seam, so the harness exercises the exact expression production runs (the 2026-08-11 rewrite
+	 *  had the same expression twice, and a gate added to one copy would silently be missing from the
+	 *  other). nationality_match is a gate again since 2026-08-18. */
+	public static function decide( array $v ) {
+		return ! empty( $v['genuine_id'] ) && ! empty( $v['name_match'] ) && ! empty( $v['dob_match'] )
+			&& ! empty( $v['nationality_match'] )
 			&& ! empty( $v['selfie_matches_id'] ) && ! empty( $v['profile_matches'] )
 			&& (float) ( $v['confidence'] ?? 0 ) >= self::MIN_CONF;
-		return $v;
 	}
 
 	private static function block( $img ) {

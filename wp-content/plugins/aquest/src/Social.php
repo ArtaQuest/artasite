@@ -828,6 +828,13 @@ final class Social {
 			// exact date of birth is the identity-verification triplet a bank asks for) was raised,
 			// heard, and decided.
 			'birthday'   => Verify::birthday( $id ),
+			// The STATED nationality (ISO 3166-1 alpha-2, '' until stated) — public like the date beside
+			// it, and what the profile shows as the country's flag (operator 2026-08-18). `country` is
+			// the same value under the name every user-card payload and <Avatar country=…> already
+			// use for the flag; `nationality` is the labelled fact. Neither implies the blue check —
+			// `verified` below is that.
+			'nationality' => Verify::claimed_country( $id ),
+			'country'     => Verify::claimed_country( $id ),
 			// Still emitted, now ALONGSIDE the date rather than instead of it: the Developer API is a
 			// real consumer surface and an age saves every client reimplementing the leap-year
 			// arithmetic. The profile page renders the date, never this.

@@ -68,9 +68,12 @@ $check('users.user_activation_key → masked',$r['user_activation_key'],true);
 // usermeta identity
 // aq_birthday is PUBLIC by operator decision (2026-08-15) — the profile prints the exact date,
 // so the explorer must not withhold it. Asserted in the must-stay-public direction below.
+// aq_nationality likewise (operator 2026-08-18): it is the flag on every profile, so the explorer
+// must not give the same fact a second answer. aq_gender was retired the same day; its rows are
+// purged and the mask stays for any that survive.
 foreach(['wpcom_user_data'=>true,'community-events-location'=>true,
          'aq_google_sub'=>true,'aq_birth_min'=>true,'aq_gender'=>true,
-         'aq_birthday'=>false,'aq_location'=>false,'aq_full_name'=>false,'aq_relationship'=>false,
+         'aq_birthday'=>false,'aq_nationality'=>false,'aq_location'=>false,'aq_full_name'=>false,'aq_relationship'=>false,
          'aq_languages'=>false,'aq_last_seen'=>false,'aq_verified'=>false,
          'aq_palm_url'=>false,'aq_typology_tags'=>false,'description'=>false] as $k=>$w){
   $r=Extra::redact_row('wp_usermeta',['meta_key'=>$k,'meta_value'=>'X']);

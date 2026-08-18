@@ -201,7 +201,7 @@ final class Rest {
 
 		// ── Identity + verification (blue check) ──────────────────────────────
 		[ 'GET',  'verify/status',                 'Verify::status',          'user' ],
-		[ 'POST', 'identity',                      'Verify::set_identity',    'user' ], // name + birthday (required to post)
+		[ 'POST', 'identity',                      'Verify::set_identity',    'user' ], // name + birthday (required to post) + nationality (asked at sign-up; the profile flag; checked by the blue check)
 		[ 'POST', 'identity/birthtime',            'Verify::set_birthtime',   'user' ], // fine-tune birth time (places the long-term goal)
 		[ 'POST', 'profile/photo',                 'Verify::set_photo',       'user' ], // change avatar only — no ID-verify, free
 		[ 'POST', 'profile/palm',                  'Verify::set_palm_photo',  'user' ], // palm "back photo" — opt-in self-verify, free
@@ -262,7 +262,6 @@ final class Rest {
 		[ 'GET',  'credits/reach',                'Credits::reach',        'public' ], // how many members one slice reaches, floored to REACH_MIN
 		[ 'GET',  'credits/mine',                 'Credits::mine',         'user'   ], // the donor's own gifts and what became of each
 		[ 'POST', 'credits/widen',               'Credits::widen',        'user'   ], // release an unspent gift to the general slice (donor-only)
-		[ 'POST', 'identity/gender',              'Verify::set_gender',    'user'   ], // opt-in, revocable ('clear'), never inferred
 
 		// ── Certificate of Participation (every challenge entrant holds one) ──
 		[ 'GET',  'participation',                'Credits::certificate',  'user'   ], // ?challenge= : the holder's own

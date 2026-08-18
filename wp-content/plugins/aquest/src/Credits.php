@@ -6,8 +6,8 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 /**
  * ARTACREDITS (2026-08-03) — a donor pays a stranger's challenge entry fee.
  *
- * A donor gives to a SLICE of the membership (gender · age band). The gift lands in
- * the public fund as a `crd_<cty>_<g>_<band>` earmark. When a member of that slice tries to enter a
+ * A donor gives to a SLICE of the membership (nationality · age band). The gift lands in
+ * the public fund as a `crd_<cty>_<band>` earmark. When a member of that slice tries to enter a
  * challenge and is short the fee, we OFFER them the credit — naming the donor and the slice — and
  * they accept, or don't. Accepting pays their fee from the fund and puts the donor's name on their
  * Certificate of Participation.
@@ -41,9 +41,9 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *   2. A credit never SEEDS a field — the challenge must already hold another member's entry.
  *   3. A credit is never offered to an API TOKEN. Publication-grade consent is a human act, and a
  *      token cannot see the donor's name it would be accepting (Api::via_token).
- *   4. Nationality / gender / birthday are freely-rewritable self-claims (Verify::set_identity), so
- *      a facet only matches once it has been SETTLED for SETTLE_DAYS. Rewriting your gender to
- *      reach a waiting gift buys you a month's wait, not a gift.
+ *   4. Nationality / birthday are freely-rewritable self-claims (Verify::set_identity), so a facet
+ *      only matches once it has been SETTLED for SETTLE_DAYS. Rewriting your nationality to reach a
+ *      waiting gift buys you a month's wait, not a gift.
  * Plus MOON_CAP credit-funded entries per member per synodic month, and FEE_CAP on any one entry.
  *
  * ── WHAT IS PUBLIC (the database is public — say it plainly) ────────────────────────────────────
@@ -51,20 +51,35 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * A reader who follows gift_id learns the slice the gift was given for, which is a fact about the
  * member. That is disclosed in the offer, before they accept, in words. The `bucket` is deliberately
  * NOT duplicated onto the grant row: it stays one hop away on the gift, so no single public row
- * states a member's gender and age together beside their user id.
+ * states a member's nationality and age together beside their user id.
  * Nothing anywhere records that a member WANTS to be sponsored — there is no standing flag to read.
+ *
+ * ── THE AXES, AND WHEN THEY CHANGED ────────────────────────────────────────────────────────────
+ * Launched 2026-08-03 with three axes (nationality · gender · age band). On 2026-08-11 the operator
+ * removed nationality from the platform, leaving gender · age. On 2026-08-18 the operator reversed
+ * that and went further: nationality is back (asked at sign-up, defaulted from the visitor's
+ * country, shown as a flag, checked by the blue check) and GENDER IS GONE from the platform — no
+ * field, no route, no meta. The bucket key was re-shaped to two segments at the same time; it could
+ * be, because aq_credit_gifts, aq_credit_grants and every crd_ earmark were EMPTY on production when
+ * this shipped (checked 2026-08-18 through the public /db and /foundation/finances). bucket_words()
+ * still reads the old three-segment key, in case a development database holds one.
+ *
+ * NATIONALITY MATCHES ON THE STATED CLAIM, ONCE SETTLED — not on the blue check. The 08-03 design
+ * required a VERIFIED nationality, which today would make every country slice reach nobody (very
+ * few members hold the check) and turn the reach meter into a wall of zeros. The claim is what the
+ * flag on the profile shows, it is stated at sign-up by every member, and SETTLE_DAYS is the same
+ * defence the age band relies on. What a credit buys — ONE entry of at most FEE_CAP coins, MOON_CAP
+ * times a moon, never the founder's own, never into a field of fewer than MIN_FIELD — bounds what a
+ * false claim could ever be worth.
  */
 final class Credits {
 
 	/** Age bands, low edge => label. '13' is the under-18 band: derived for matching, NEVER offered
-	 *  to a donor (see SLICE_BANDS) — no adult stranger targets a child by age or gender. */
+	 *  to a donor (see SLICE_BANDS) — no adult stranger targets a child by age or nationality. */
 	const BANDS = [ '13' => 'Under 18', '18' => '18–24', '25' => '25–34', '35' => '35–49', '50' => '50–64', '65' => '65 and over' ];
 
 	/** The bands a donor may choose. */
 	const SLICE_BANDS = [ '18', '25', '35', '50', '65' ];
-
-	/** Gender, as a member may state it about themselves. Opt-in, revocable, never inferred. */
-	const GENDERS = [ 'w' => 'Women', 'm' => 'Men', 'n' => 'Non-binary people' ];
 
 	const ANY        = 'x';   // the "no preference" value on every axis
 	const FEE_CAP    = 5;     // ₳ — the largest single entry fee one credit will cover
@@ -76,37 +91,26 @@ final class Credits {
 
 	// ── the slice ───────────────────────────────────────────────────────────
 
-	/** A slice's fund bucket: crd_<cty>_<gender>_<band>, each axis 'x' when unrestricted.
-	 *  Max 11 chars — comfortably inside aq_fund_ledger.bucket VARCHAR(24) and the
-	 *  aq_counters.name VARCHAR(40) that carries it as 'fund_<bucket>'. */
-	public static function bucket( $cty, $gender, $band ) {
-		$cty    = strtolower( preg_replace( '/[^A-Za-z]/', '', (string) $cty ) );
-		$gender = (string) $gender;
-		$band   = (string) $band;
-		// NATIONALITY IS PINNED TO ANY *HERE*, at the one place a bucket key is ever built.
-		//
-		// buckets_for_user has hard-pinned its country segment since 2026-08-11 and its comment states
-		// the axis is "pinned to ANY on both sides" — but only the MATCHING side was ever pinned. This
-		// function, the MINTING side, kept any 2-letter code, so a donor who picked Iran had their gift
-		// minted into crd_ir_w_25 while buckets_for_user can only ever return crd_x_w_25. No match()
-		// could reach it: the money was stranded in an earmark with zero possible recipients, forever.
-		// The reach meter compounded it by answering for the country-agnostic bucket, so the donor was
-		// shown a real audience for a slice their money would never enter.
-		//
-		// Pinning it at the choke point rather than at the callers means the two sides agree by
-		// construction, and no client — nor a future caller — can reintroduce the split.
-		$cty = self::ANY;
-		if ( ! isset( self::GENDERS[ $gender ] ) ) { $gender = self::ANY; }
+	/** A slice's fund bucket: crd_<cty>_<band>, each axis 'x' when unrestricted. `cty` is a
+	 *  lower-cased ISO 3166-1 alpha-2 nationality; anything that is not one of Verify::COUNTRIES
+	 *  collapses to ANY here, at the ONE place a bucket key is ever built, so the minting side
+	 *  (Extra::course_checkout), the matching side (buckets_for_user) and the reach meter agree by
+	 *  construction — a client cannot mint a gift into a slice no member can ever be matched to.
+	 *  Max 9 chars — comfortably inside aq_fund_ledger.bucket VARCHAR(24) and the aq_counters.name
+	 *  VARCHAR(40) that carries it as 'fund_<bucket>'. */
+	public static function bucket( $cty, $band ) {
+		$cty  = strtolower( preg_replace( '/[^A-Za-z]/', '', (string) $cty ) );
+		$band = (string) $band;
+		if ( ! Verify::valid_country( $cty ) ) { $cty = self::ANY; }
 		if ( ! in_array( $band, self::SLICE_BANDS, true ) ) { $band = self::ANY; }
-		return 'crd_' . $cty . '_' . $gender . '_' . $band;
+		return 'crd_' . $cty . '_' . $band;
 	}
 
 	/** A slice in words, for the offer, the certificate and the donate page — never a raw bucket key.
-	 *  "women in Iran aged 25–34" · "members in Iran" · "any member of ArtaQuest". */
-	public static function slice_words( $cty, $gender, $band ) {
-		$who = isset( self::GENDERS[ $gender ] ) ? strtolower( self::GENDERS[ $gender ] ) : 'members';
-		$out = $who;
-		if ( strlen( (string) $cty ) === 2 && $cty !== self::ANY ) {
+	 *  "members in Iran aged 25–34" · "members in Iran" · "members aged 25–34" · "any member of ArtaQuest". */
+	public static function slice_words( $cty, $band ) {
+		$out = 'members';
+		if ( Verify::valid_country( (string) $cty ) ) {
 			$out .= ' in ' . self::country_name( $cty );
 		}
 		if ( in_array( (string) $band, self::SLICE_BANDS, true ) ) {
@@ -116,10 +120,14 @@ final class Credits {
 		return $out;
 	}
 
-	/** Words for a stored bucket key. */
+	/** Words for a stored bucket key. Reads the current crd_<cty>_<band> shape and, so a development
+	 *  database written before 2026-08-18 still renders, the old crd_<cty>_<gender>_<band> shape —
+	 *  whose gender segment is simply not said (the axis no longer exists). */
 	public static function bucket_words( $bucket ) {
 		$p = explode( '_', (string) $bucket );
-		return count( $p ) === 4 ? self::slice_words( $p[1], $p[2], $p[3] ) : 'any member of ArtaQuest';
+		if ( count( $p ) === 3 ) { return self::slice_words( $p[1], $p[2] ); }
+		if ( count( $p ) === 4 ) { return self::slice_words( $p[1], $p[3] ); }
+		return 'any member of ArtaQuest';
 	}
 
 	/** ISO-2 => English country name, from the same table the rest of the platform uses. */
@@ -136,16 +144,16 @@ final class Credits {
 		return $map[ strtolower( (string) $iso ) ] ?? strtoupper( (string) $iso );
 	}
 
-	/** The selectable countries (ISO-2 + name), for the donor's picker. No member counts — publishing
-	 *  "Iran · 2 members" beside a money bucket is a targeting oracle AND a disclosure. */
+	/** The selectable countries (ISO-2 + English name), for API consumers of credits/options — every
+	 *  code in Verify::COUNTRIES, i.e. exactly what bucket() will honour; the SPA renders the same
+	 *  codes localized from lib/flags.ts. No member counts — publishing "Iran · 2 members" beside a
+	 *  money bucket is a targeting oracle AND a disclosure. */
 	public static function countries() {
 		static $out = null;
 		if ( $out !== null ) { return $out; }
-		$out  = [];
-		$file = ( defined( 'AQ_DIR' ) ? AQ_DIR : __DIR__ . '/..' ) . '/data/countries.tsv';
-		foreach ( @file( $file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES ) ?: [] as $line ) {
-			$c = explode( "\t", $line );
-			if ( count( $c ) >= 2 ) { $out[] = [ 'iso' => strtolower( trim( $c[0] ) ), 'name' => trim( $c[1] ) ]; }
+		$out = [];
+		foreach ( explode( ' ', Verify::COUNTRIES ) as $iso ) {
+			$out[] = [ 'iso' => $iso, 'name' => self::country_name( $iso ) ];
 		}
 		return $out;
 	}
@@ -167,13 +175,6 @@ final class Credits {
 		return '65';
 	}
 
-	/** A member's stated gender ('' when they have not said — the default, and never inferred).
-	 *  Verify owns the field (it sits beside the other self-claimed identity facts); this is the
-	 *  reader, so the two can never drift apart on what counts as a valid answer. */
-	public static function gender( $uid ) {
-		return Verify::gender( (int) $uid );
-	}
-
 	/** Has this facet been SETTLED long enough to match? Identity fields are freely rewritable, so a
 	 *  facet changed inside SETTLE_DAYS is treated as undisclosed for matching. A member who has
 	 *  always said who they are is unaffected; one who just rewrote it to reach a waiting gift is not
@@ -185,32 +186,28 @@ final class Credits {
 
 	/** Every bucket a member is eligible for, MOST SPECIFIC FIRST — so a gift aimed precisely at them
 	 *  is spent before a general one, which is what the donor meant. A member under 18 matches ONLY
-	 *  the unrestricted bucket: no gift that names a gender or an age band can ever reach a child. */
+	 *  the unrestricted bucket: no gift that names a nationality or an age band can ever reach a child.
+	 *
+	 *  The nationality is the member's STATED claim (Verify::claimed_country — the same value the flag
+	 *  on their profile shows), counted only once it has stood for SETTLE_DAYS; see the class doc for
+	 *  why the claim and not the blue check. A member who has stated none is matched by every gift
+	 *  that names no country. */
 	public static function buckets_for_user( $uid ) {
 		$uid  = (int) $uid;
 		$band = self::age_band( $uid );
-		if ( $band === '13' ) { return [ self::bucket( self::ANY, self::ANY, self::ANY ) ]; }
+		if ( $band === '13' ) { return [ self::bucket( self::ANY, self::ANY ) ]; }
 
-		// NATIONALITY IS NO LONGER A FACET (operator 2026-08-11). The platform stopped collecting a
-		// citizenship, so nobody can be matched by one and no gift can name one — the country axis is
-		// pinned to ANY on both sides. The key KEEPS its three segments: aq_credit_gifts was empty when
-		// this changed, so nothing needed migrating, and re-shaping a fund earmark is not worth doing
-		// for a segment that is now always 'x'.
-		$cty = '';
-		$gen = self::settled( $uid, 'aq_gender' ) ? self::gender( $uid ) : '';
+		$cty = self::settled( $uid, 'aq_nationality' ) ? strtolower( Verify::claimed_country( $uid ) ) : '';
 		if ( ! self::settled( $uid, 'aq_birthday' ) ) { $band = ''; }
 
 		$ctys = $cty !== '' ? [ $cty, self::ANY ] : [ self::ANY ];
-		$gens = $gen !== '' ? [ $gen, self::ANY ] : [ self::ANY ];
 		$bnds = $band !== '' ? [ $band, self::ANY ] : [ self::ANY ];
 
 		$out = [];
 		foreach ( $ctys as $c ) {
-			foreach ( $gens as $g ) {
-				foreach ( $bnds as $b ) { $out[] = self::bucket( $c, $g, $b ); }
-			}
+			foreach ( $bnds as $b ) { $out[] = self::bucket( $c, $b ); }
 		}
-		// $ctys/$gens/$bnds are each [specific, any], so the natural nesting above already runs
+		// $ctys/$bnds are each [specific, any], so the natural nesting above already runs
 		// most-specific -> least; usort on the count of 'x' axes makes that explicit and stable.
 		usort( $out, static function ( $a, $b ) {
 			$ax = substr_count( $a, '_x' ); $bx = substr_count( $b, '_x' );
@@ -480,13 +477,10 @@ final class Credits {
 	 *  targeting oracle and a disclosure. The donor sees reach for their OWN pick via credits/reach. */
 	public static function options( $req = null ) {
 		return [
-			// `countries` is deliberately EMPTY, not removed: the key stays so a cached or older client
-			// renders an empty picker rather than crashing on a missing field. Nationality stopped being
-			// a matching facet on 2026-08-11 — nobody can be matched by one — so offering all 249 of
-			// them invited donors to direct money at a slice that could never receive it. Credits::bucket
-			// now pins the axis, so a country sent by any client is ignored rather than stranding a gift.
-			'countries' => [],
-			'genders'   => array_map( fn( $k ) => [ 'key' => $k, 'label' => self::GENDERS[ $k ] ], array_keys( self::GENDERS ) ),
+			// Every nationality bucket() will honour (operator 2026-08-18 — the axis is back, and it
+			// replaced gender, which is no longer offered anywhere). An older cached client that still
+			// reads a `genders` key gets none, and renders an empty gender picker rather than crashing.
+			'countries' => self::countries(),
 			'bands'     => array_map( fn( $k ) => [ 'key' => $k, 'label' => self::BANDS[ $k ] ], self::SLICE_BANDS ),
 			'fee_cap'   => self::FEE_CAP,
 			'moon_cap'  => self::MOON_CAP,
@@ -505,25 +499,24 @@ final class Credits {
 	}
 
 	/**
-	 * GET credits/reach {country,gender,band} — how many members this slice reaches, floored to
-	 * REACH_MIN so a precise pick can never count a handful of identifiable people. Honest about
-	 * zero, because a donor is entitled to know their gift would sit unspent.
+	 * GET credits/reach {country,band} — how many members this slice reaches, floored to REACH_MIN
+	 * so a precise pick can never count a handful of identifiable people. Honest about zero, because
+	 * a donor is entitled to know their gift would sit unspent.
 	 *
 	 * ONE indexed query, not a walk. This used to pull up to 5,000 user ids and then call
 	 * buckets_for_user() on each — a per-user meta lookup, ~5,000 round trips, on a PUBLIC unthrottled
 	 * GET with thousands of distinct cacheable parameter combinations. It is now a set of joins over
 	 * (meta_key, meta_value), and it encodes the SAME three rules buckets_for_user does: a facet only
-	 * counts once SETTLED, and a member under 18 is reachable ONLY by a gift that names nothing.
-	 * (The nationality facet was removed 2026-08-11 — see buckets_for_user.)
+	 * counts once SETTLED, the nationality is the member's stated claim, and a member under 18 is
+	 * reachable ONLY by a gift that names nothing.
 	 */
 	public static function reach( $req ) {
 		global $wpdb;
 		if ( Rest::throttle( 'credits_reach', 120, 60 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
-		$cty  = ''; // nationality is not collected any more — a gift can never name one (see buckets_for_user)
-		$gen  = sanitize_key( (string) Rest::p( $req, 'gender', '' ) );
+		$cty  = strtolower( sanitize_key( (string) Rest::p( $req, 'country', '' ) ) );
 		$band = sanitize_key( (string) Rest::p( $req, 'band', '' ) );
-		$want = self::bucket( $cty, $gen, $band );
-		[ , $wcty, $wgen, $wband ] = explode( '_', $want );
+		$want = self::bucket( $cty, $band );
+		[ , $wcty, $wband ] = explode( '_', $want );
 
 		$um     = $wpdb->usermeta;
 		$settle = Data::now() - self::SETTLE_DAYS * DAY_IN_SECONDS;
@@ -544,16 +537,18 @@ final class Credits {
 		};
 		$settled( 'bs', 'aq_birthday' );
 
-		if ( $wgen !== self::ANY ) {
-			$joins  .= " JOIN $um gn ON gn.user_id = bd.user_id AND gn.meta_key = 'aq_gender' AND gn.meta_value = %s";
-			$jargs[] = $wgen;
-			$settled( 'gs', 'aq_gender' );
+		if ( $wcty !== self::ANY ) {
+			// The STATED nationality, upper-cased in storage (Verify::set_identity) and compared
+			// case-insensitively anyway; settled like every other facet.
+			$joins  .= " JOIN $um nt ON nt.user_id = bd.user_id AND nt.meta_key = 'aq_nationality' AND UPPER(nt.meta_value) = %s";
+			$jargs[] = strtoupper( $wcty );
+			$settled( 'ns', 'aq_nationality' );
 		}
 		if ( $wband !== self::ANY ) {
 			$r       = self::band_range( $wband );
 			$where  .= ' AND bd.meta_value BETWEEN %s AND %s';
 			$wargs[] = $r[0]; $wargs[] = $r[1];
-		} elseif ( $wcty !== self::ANY || $wgen !== self::ANY ) {
+		} elseif ( $wcty !== self::ANY ) {
 			// Any gift that NAMES something is closed to under-18s (buckets_for_user's minor rule).
 			$where  .= ' AND bd.meta_value <= %s';
 			$wargs[] = gmdate( 'Y-m-d', strtotime( '-18 years' ) );
@@ -562,7 +557,7 @@ final class Credits {
 		$n = (int) Data::col( 'SELECT COUNT(DISTINCT bd.user_id)' . $joins . $where, array_merge( $jargs, $wargs ) );
 		return [
 			'bucket'  => $want,
-			'words'   => self::slice_words( $cty, $gen, $band ),
+			'words'   => self::slice_words( $wcty, $wband ),
 			'exact'   => $n === 0 || $n >= self::REACH_MIN,
 			'members' => $n === 0 ? 0 : ( $n >= self::REACH_MIN ? $n : self::REACH_MIN ),
 			'floor'   => self::REACH_MIN,
@@ -607,7 +602,7 @@ final class Credits {
 		$id  = Rest::pint( $req, 'id', 0 );
 		$g   = Data::one( 'SELECT * FROM ' . Data::t( 'aq_credit_gifts' ) . ' WHERE id = %d', [ $id ] );
 		if ( ! $g || (int) $g['donor_id'] !== $uid ) { return Rest::err( 'not_yours', 'That is not one of your gifts', 403 ); }
-		$general = self::bucket( self::ANY, self::ANY, self::ANY );
+		$general = self::bucket( self::ANY, self::ANY );
 		if ( (string) $g['bucket'] === $general ) { return Rest::err( 'already_general', 'This gift is already open to any member', 409 ); }
 		// A courtesy answer for the ordinary repeat click; the claim below is what actually decides.
 		if ( (int) $g['widened'] > 0 ) { return Rest::err( 'already', 'You have already released this gift', 409 ); }
@@ -675,7 +670,7 @@ final class Credits {
 			"SELECT g.*, ( SELECT COUNT(*) FROM $R r WHERE r.gift_id = g.id ) AS used,
 			        ( SELECT COALESCE(SUM(r.cents),0) FROM $R r WHERE r.gift_id = g.id ) AS spent
 			 FROM $G g WHERE g.donor_id = %d ORDER BY g.id DESC LIMIT 50", [ $uid ] );
-		$general = self::bucket( self::ANY, self::ANY, self::ANY );
+		$general = self::bucket( self::ANY, self::ANY );
 		return [ 'items' => array_map( static function ( $g ) use ( $general ) {
 			$held = Economy::counter( 'fund_' . $g['bucket'] );
 			// What widen() would actually be able to move: this gift's own unspent cents, clamped to

@@ -383,7 +383,7 @@ final class Funds {
 	}
 
 	// ── ArtaCredits (Credits.php) ───────────────────────────────────────────
-	// A credit gift is an ordinary earmarked donation into a `crd_<cty>_<gender>_<band>` bucket, and a
+	// A credit gift is an ordinary earmarked donation into a `crd_<cty>_<band>` bucket, and a
 	// redemption is an ordinary negative append out of it — the same two moves a topic sponsorship
 	// already makes. Both go through fund_append, so the counter projection and the public statement
 	// stay correct with no new accounting concept. Credits.php owns the matching and the locking; this

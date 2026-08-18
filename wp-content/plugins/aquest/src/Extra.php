@@ -970,9 +970,13 @@ final class Extra {
 	 *    linkage, published for a member who only ever chose "sign in with Google".
 	 *  • `aq_birth_min` — birth time to the MINUTE. An astrology input (Verify::set_birthtime), and
 	 *    beside a date of birth it is the most precise identifier a person has.
-	 *  • `aq_gender` — Verify::set_gender documents this as "opt-in … ArtaCredits matching only", and
-	 *    no public route emits it. The DB export published it anyway, which makes it a broken promise
-	 *    rather than a transparency decision. */
+	 *  • `aq_gender` — was "opt-in … ArtaCredits matching only" and no public route emitted it, so
+	 *    the DB export publishing it was a broken promise rather than a transparency decision. The
+	 *    facet was RETIRED on 2026-08-18 (nationality replaced it as the ArtaCredits axis) and its
+	 *    rows are purged, but the mask stays: a row that somehow survives must not become public
+	 *    the day the code that hid it is deleted.
+	 *  • `aq_nationality` is deliberately NOT here — like `aq_birthday`, it is shown on every profile
+	 *    (as the country's flag), so masking it in the explorer would give one fact two answers. */
 	/** aq_notifications, decided ROW BY ROW: `type` says whether the prose is about another member,
 	 *  about this member's own device, or about the platform — and only the first two are private.
 	 *
@@ -3360,8 +3364,9 @@ final class Extra {
 				// different ones, because the coin sell price moves between all three moments.
 				$k = is_array( $d['credit'] ?? null ) ? $d['credit'] : null;
 				if ( $k ) {
-					$bucket = Credits::bucket(
-						(string) ( $k['country'] ?? '' ), (string) ( $k['gender'] ?? '' ), (string) ( $k['band'] ?? '' ) );
+					// nationality · age band (operator 2026-08-18; gender was the middle axis until then
+					// and is ignored if an old client still sends it — Credits::bucket takes two).
+					$bucket = Credits::bucket( (string) ( $k['country'] ?? '' ), (string) ( $k['band'] ?? '' ) );
 					// SELL, because that is what a redemption is priced at (Credits::cents_for) and what
 					// the page quotes — freezing one side of the spread and charging the other made the
 					// stored promise something the donor was never actually shown.
