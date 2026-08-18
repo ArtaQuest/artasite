@@ -1035,6 +1035,8 @@ final class News {
 			// TIER 2 — human reporting, attributed, and structurally separate from every measured field
 			// above it. Read from cache only: rendering a page must never call an outside service.
 			'context'   => self::social_context( (int) $row['id'] ),
+			// Where a stranger can check THIS measurement at the instrument itself.
+			'evidence'  => self::evidence_links( $row ),
 			// Stated on every page, not implied: an instrument measured energy, nothing more.
 			'unknown'   => 'These figures describe what an instrument measured. They do not establish the'
 				. ' cause of the event, who was involved, or any consequence on the ground.',
@@ -1291,6 +1293,110 @@ final class News {
 		return array_slice( $hits, 0, self::REDDIT_MAX );
 	}
 
+
+	/**
+	 * THE CITED SOURCE URL EXPIRES, AND THE CLAIM DEPENDS ON IT NOT EXPIRING.
+	 *
+	 * Every detection cited the bulk product it was read from — for a quake, `all_day.geojson`, a
+	 * ROLLING 24-HOUR FEED. A reader who follows that link the next day finds a different set of
+	 * earthquakes and no trace of the one they were reading about. The platform's whole claim is
+	 * that a stranger can go and check, and the link offered to them stopped working within a day
+	 * of publication while still looking like provenance.
+	 *
+	 * So each detection also carries a PERMANENT, per-event address at the instrument's own site,
+	 * built from the identifier already in the ledger. Nothing new is fetched or stored: `ekey` has
+	 * always held the network's own event id (`quake:us6000tlkl`), the cluster centroid, or the
+	 * country code — this only spends what was already there.
+	 *
+	 * A LINK IS A CLAIM THAT SOMETHING IS THERE. Where an instrument has no per-event page — FIRMS
+	 * detects pixels, not events, and IODA reports a country's signal rather than an incident — the
+	 * link goes to the view showing that place and window, and SAYS that is what it is. It never
+	 * pretends a bulk viewer is a permalink for one measurement.
+	 */
+	private static function evidence_links( $row ) {
+		$det  = (string) ( $row['detector'] ?? '' );
+		$ekey = (string) ( $row['ekey'] ?? '' );
+		$id   = false !== strpos( $ekey, ':' ) ? substr( $ekey, strpos( $ekey, ':' ) + 1 ) : $ekey;
+		$lat  = (float) ( $row['lat'] ?? 0 );
+		$lon  = (float) ( $row['lon'] ?? 0 );
+		$out  = [];
+
+		if ( 'quake' === $det && '' !== $id ) {
+			// EMSC rows are keyed `emsc_<unid>`; everything else on this leg is a USGS event id.
+			if ( 0 === strpos( $id, 'emsc_' ) ) {
+				$unid = substr( $id, 5 );
+				$out[] = [
+					'label' => 'This event at EMSC',
+					'url'   => 'https://www.emsc-csem.org/Earthquake_info/earthquake.php?id=' . rawurlencode( $unid ),
+					'note'  => 'The European-Mediterranean Seismological Centre\'s own page for this solution.',
+				];
+			} else {
+				$out[] = [
+					'label' => 'This event at USGS',
+					'url'   => 'https://earthquake.usgs.gov/earthquakes/eventpage/' . rawurlencode( $id ),
+					'note'  => 'The USGS event page: the same solution, with its waveforms, contributors and revisions.',
+				];
+				$out[] = [
+					'label' => 'This event as raw GeoJSON',
+					'url'   => 'https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&eventid=' . rawurlencode( $id ),
+					'note'  => 'The machine-readable record, so the figures above can be checked field by field.',
+				];
+			}
+		} elseif ( 'thermal' === $det && ( $lat || $lon ) ) {
+			// NASA WORLDVIEW, NOT THE FIRMS MAP. The FIRMS viewer's URL fragment (`#d:24hrs;@x,y,9z`)
+			// is undocumented and its coordinate ORDER could not be established from anything NASA
+			// publishes — and a link that silently lands in the wrong hemisphere is a false claim
+			// wearing the clothes of provenance. Worldview's parameters are documented, ordered
+			// west,south,east,north, and `t` pins the DATE, so the reader sees the same VIIRS product
+			// on the day it was acquired rather than whatever is burning now.
+			$d = 1.0;   // ~110 km box: wide enough to place the cluster, tight enough to see it
+			$box = implode( ',', [ round( $lon - $d, 3 ), round( $lat - $d, 3 ), round( $lon + $d, 3 ), round( $lat + $d, 3 ) ] );
+			$out[] = [
+				'label' => 'These detections at NASA Worldview',
+				'url'   => 'https://worldview.earthdata.nasa.gov/?v=' . $box
+					. '&l=VIIRS_SNPP_Thermal_Anomalies_375m_All,Reference_Labels_15m,Reference_Features_15m,MODIS_Terra_CorrectedReflectance_TrueColor'
+					. '&t=' . rawurlencode( gmdate( 'Y-m-d', (int) ( $row['first_ts'] ?? time() ) ) ),
+				'note'  => 'NASA\'s own viewer, showing the same VIIRS thermal product over this area on the day'
+					. ' it was acquired. FIRMS publishes hot pixels rather than events, so this is the place, not'
+					. ' a permalink for one measurement.',
+			];
+		} elseif ( 'netloss' === $det || 'blackout' === $det ) {
+			// ekey is `net_<CC>_<probe>_<date>`; the country code is the addressable part.
+			if ( preg_match( '/^net_([A-Za-z]{2})_/', $id, $m ) ) {
+				$out[] = [
+					'label' => 'This country at IODA',
+					'url'   => 'https://ioda.inetintel.cc.gatech.edu/country/' . strtoupper( $m[1] ),
+					'note'  => 'Georgia Tech\'s live outage dashboard for this country. It shows the current signal,'
+						. ' so it will not match this reading once the window has moved.',
+				];
+			}
+		}
+
+		// A DETAILED MAP OF THE GROUND, for every detection that has a coordinate (operator
+		// 2026-08-18). The figure above plots the instrument's pixels against nothing — it answers
+		// "how much and how far apart", never "what is actually there" — and the bundled locator is
+		// a world outline, deliberately coarse. This is the link out to streets, terrain and
+		// buildings at full detail.
+		//
+		// A LINK RATHER THAN AN EMBED, and that is the whole trade. An embedded tile layer would
+		// make every reader's browser tell Google which conflict coordinate they are looking at,
+		// merely for opening the page — and this platform does not hand a third party a list of who
+		// read about a strike in Iran. A link spends nothing until the reader chooses to spend it.
+		// (An embedded basemap is possible and would need GOOGLE_MAPS_API_KEY in the Vault plus a
+		// CSP grant; it is a decision about readers, not a missing feature.)
+		if ( $lat || $lon ) {
+			$ll = round( $lat, 5 ) . ',' . round( $lon, 5 );
+			$out[] = [
+				'label' => 'This location on Google Maps (satellite)',
+				'url'   => 'https://www.google.com/maps/@?api=1&map_action=map&center=' . rawurlencode( $ll )
+					. '&zoom=13&basemap=satellite',
+				'note'  => 'The ground itself at ' . $ll . '. Opened only if you choose to — the map is not'
+					. ' embedded, so nothing on this page reports your interest in this place to a third party.',
+			];
+		}
+		return $out;
+	}
+
 	/** A stable, readable, route-safe slug that pins the exact event: …-e<id>. */
 	public static function event_slug( $row ) {
 		$b = sanitize_title( remove_accents( (string) $row['headline'] ) );
@@ -1370,6 +1476,28 @@ final class News {
 	const ARTANEWS_MIN_DROP_WATCH = 25.0; // …lower inside a watched country, where it carries more
 
 	/**
+	 * THE ROOT ELEMENT EVERY ARTANEWS FIGURE SHARES.
+	 *
+	 * Four builders had each grown their own copy, and copies drift: extent_svg() had lost
+	 * `font-family` somewhere along the way, so alone among the figures its labels rendered in
+	 * whatever serif the browser defaults to. Nobody would file that as a bug and it would never
+	 * have been fixed, which is the ordinary fate of duplicated furniture. One root means the
+	 * accessible name, the brand background and the responsive sizing are decided once.
+	 *
+	 * The aria-label is an ATTRIBUTE and is escaped as one. Text nodes (<title>, <desc>, <text>)
+	 * are escaped by their callers with esc_html — the two are not interchangeable, and a builder
+	 * that copied the wrong one from a neighbour is exactly what this indirection prevents.
+	 */
+	const SVG_BG = '#06121E';   // dark space background — the brand's, not a per-figure choice
+
+	private static function svg_open( $w, $h, $aria ) {
+		return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . (int) $w . ' ' . (int) $h . '" role="img" '
+			. 'font-family="system-ui,sans-serif" '
+			. 'aria-label="' . esc_attr( (string) $aria ) . '" '
+			. 'style="width:100%;height:auto;background:' . self::SVG_BG . ';border-radius:10px">';
+	}
+
+	/**
 	 * WHERE ON EARTH — a locator map, drawn offline from a bundled outline.
 	 *
 	 * The detail figures plot latitude and longitude, which tells a reader the shape of an event but
@@ -1398,11 +1526,8 @@ final class News {
 		if ( ! $rings ) { return ''; }
 		$x = static fn( $lo ) => ( ( $lo + 180.0 ) / 360.0 ) * $w;
 		$y = static fn( $la ) => ( ( 90.0 - $la ) / 180.0 ) * $h;
-		$o = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . $w . ' ' . $h . '" role="img" '
-			. 'font-family="system-ui,sans-serif" '
-			. 'aria-label="' . esc_attr( 'World locator: ' . number_format( abs( $lat ), 2 ) . ( $lat >= 0 ? '°N ' : '°S ' )
-				. number_format( abs( $lon ), 2 ) . ( $lon >= 0 ? '°E' : '°W' ) ) . '" '
-			. 'style="width:100%;height:auto;background:#06121E;border-radius:10px">';
+		$o = self::svg_open( $w, $h, 'World locator: ' . number_format( abs( $lat ), 2 ) . ( $lat >= 0 ? '°N ' : '°S ' )
+			. number_format( abs( $lon ), 2 ) . ( $lon >= 0 ? '°E' : '°W' ) );
 		$o .= '<title>Where on Earth this was measured</title>';
 		$o .= '<desc>' . esc_html( 'Coastlines from Natural Earth 1:110 million scale (public domain), equirectangular. '
 			. 'The marker is the measured coordinate.' ) . '</desc>';
@@ -1500,11 +1625,8 @@ final class News {
 		$wnow  = round( $full * ( $now / 100.0 ), 1 );
 		$txt   = static fn( $x ) => esc_html( (string) $x );
 		$ctry  = (string) ( $ev['country'] ?? '' );
-		$o  = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . $w . ' ' . $h . '" role="img" '
-			. 'font-family="system-ui,sans-serif" '
-			. 'aria-label="' . esc_attr( 'Connectivity ' . round( $now ) . '% of this country\'s own recent normal, '
-				. round( $drop ) . '% below it' ) . '" '
-			. 'style="width:100%;height:auto;background:#06121E;border-radius:10px">';
+		$o  = self::svg_open( $w, $h, 'Connectivity ' . round( $now ) . '% of this country\'s own recent normal, '
+			. round( $drop ) . '% below it' );
 		$o .= '<title>' . $txt( (string) ( $ev['headline'] ?? 'Connectivity loss' ) ) . '</title>';
 		$o .= '<desc>' . $txt( 'Two bars. The upper is this country\'s own recent normal level of '
 			. 'connectivity; the lower is what was reachable when the measurement was taken. The '
@@ -1544,8 +1666,9 @@ final class News {
 		$depth = 0.0;
 		if ( preg_match( '/([0-9]+(?:\.[0-9]+)?)/', (string) ( $meas['Depth'] ?? '' ), $dm ) ) { $depth = (float) $dm[1]; }
 		if ( $depth <= 0 ) { return ''; }
-		// Named for WHAT IT ESCAPES. extent_svg() below binds $esc to esc_attr(), so a line copied
-		// between these two builders would silently change escaping context.
+		// Named for WHAT IT ESCAPES: text nodes, not attributes. The one attribute these figures
+		// carry — the accessible name — is escaped inside svg_open(), so there is no longer a
+		// second closure in a neighbouring builder for a copied line to pick up the wrong one from.
 		$txt = static fn( $x ) => esc_html( (string) $x );
 		// Scale: show at least 60 km of crust, or 1.3x the hypocentre, so a deep event still fits.
 		$span   = max( 60.0, $depth * 1.3 );
@@ -1557,11 +1680,8 @@ final class News {
 		// Marker area tracks RADIATED ENERGY, which rises ~10^1.5 per magnitude unit — so the dot
 		// grows the way the energy does, not the way the number does.
 		$r      = round( max( 5.0, min( 34.0, 3.2 * pow( 10, 0.25 * ( $mag - 3.0 ) ) ) ), 1 );
-		$o  = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . $w . ' ' . $h . '" role="img" '
-			. 'font-family="system-ui,sans-serif" '
-			. 'aria-label="' . esc_attr( 'Depth cross-section: M' . number_format( $mag, 1 )
-				. ' at ' . number_format( $depth, 1 ) . ' km depth' ) . '" '
-			. 'style="width:100%;height:auto;background:#06121E;border-radius:10px">';
+		$o  = self::svg_open( $w, $h, 'Depth cross-section: M' . number_format( $mag, 1 )
+			. ' at ' . number_format( $depth, 1 ) . ' km depth' );
 		$o .= '<title>' . $txt( (string) ( $ev['headline'] ?? 'Seismic event' ) ) . '</title>';
 		$o .= '<desc>' . $txt( 'Cross-section through the crust. The marker is the hypocentre at its '
 			. 'measured depth, sized by magnitude. No shaking or damage radius is drawn: that would be '
@@ -1658,10 +1778,7 @@ final class News {
 			$rpx   = ( $lo1 - $lo0 ) > 0 ? ( $f['km'] * $dpk / ( $lo1 - $lo0 ) ) * $w : 4;
 			$rs[]  = round( max( 3, $rpx ), 1 );
 		}
-		$esc = static fn( $x ) => esc_attr( (string) $x );
-		$o  = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . $w . ' ' . $h . '" role="img" '
-			. 'aria-label="' . $esc( 'Measured radiant extent over ' . count( $frames ) . ' satellite passes' ) . '" '
-			. 'style="width:100%;height:auto;background:#06121E;border-radius:10px">';
+		$o  = self::svg_open( $w, $h, 'Measured radiant extent over ' . count( $frames ) . ' satellite passes' );
 		$o .= '<title>' . esc_html( (string) $ev['headline'] ) . '</title>';
 		$o .= '<desc>' . esc_html( 'Each hot pixel the instrument recorded, with the power-weighted centre and '
 			. 'the distance to the furthest pixel at each pass. An observed extent, not a blast radius.' ) . '</desc>';

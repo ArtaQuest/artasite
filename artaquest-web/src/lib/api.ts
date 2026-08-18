@@ -2083,6 +2083,12 @@ export type NewsDetection = {
   svg: string;
   /** inline locator map, drawn from a bundled coastline — no tile server. Empty without a coordinate. */
   map: string;
+  /**
+   * Where a stranger can check THIS measurement at the instrument itself — a permanent per-event
+   * address, plus a detailed map of the ground. Links, never embeds: an embedded tile would make
+   * every reader's browser report which conflict coordinate they opened.
+   */
+  evidence?: { label: string; url: string; note: string }[];
   /** plain-language statement of what was not determined. Empty when nothing is outstanding. */
   unknown: string;
   /**

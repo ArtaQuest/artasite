@@ -217,6 +217,29 @@ export default function NewsDetectionPage() {
           {d.source?.retrieved ? (
             <p className="mt-2 text-[13px] text-ink-3">Retrieved {whenUTC(d.source.retrieved)}</p>
           ) : null}
+
+          {/* The product URL above is the BULK feed the reading came from, and for most detectors that
+              feed rolls — follow it tomorrow and this event is not in it. These are the permanent
+              per-event addresses, plus a detailed map of the ground, so "go and check" survives the
+              day it was published. Links, never embeds: an embedded tile layer would make every
+              reader's browser tell a third party which coordinate they opened. */}
+          {d.evidence?.length ? (
+            <ul className="mt-4 space-y-3 border-t border-line pt-4">
+              {d.evidence.map((e) => (
+                <li key={e.url}>
+                  <a
+                    className="text-[14px] font-semibold text-yin-light hover:underline"
+                    href={e.url}
+                    rel="noreferrer nofollow"
+                    target="_blank"
+                  >
+                    {e.label} ↗
+                  </a>
+                  <p className="mt-0.5 text-[13px] leading-snug text-ink-3">{e.note}</p>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           {d.confidence ? (
             <p className="mt-3 text-[13px] text-ink-3">
               Confidence as reported by the detector: {d.confidence}
