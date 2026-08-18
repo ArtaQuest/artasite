@@ -48,10 +48,11 @@ export function ChallengeRow({ c }: { c: Challenge }) {
   return (
     <Link to="/challenges" className="block px-4 py-2.5 transition-colors hover:bg-veil/[0.04]">
       <div className="flex items-baseline justify-between gap-2">
-        <p className="min-w-0 truncate text-[14px] font-bold text-ink">{c.title}</p>
+        <p className={`min-w-0 font-bold text-ink ${nameClass(c.title)}`}>{c.title}</p>
         <span className="shrink-0 text-[15px] font-extrabold tracking-tight text-yang">₳{c.pool}</span>
       </div>
-      <p className="mt-0.5 truncate text-[12px] text-ink-3">{NB_KIND_META[c.kind]?.label} · {c.topic} · closes {closesIn(c.deadline)} · {c.entries} in</p>
+      {/* The meta line carries the TOPIC, so it wraps rather than cutting one. */}
+      <p className="mt-0.5 text-[12px] leading-tight text-ink-3">{NB_KIND_META[c.kind]?.label} · {c.topic} · closes {closesIn(c.deadline)} · {c.entries} in</p>
     </Link>
   );
 }
@@ -106,7 +107,7 @@ export function TodaysNewsCard({ items }: { items: TrendingKindItem[] | null }) 
         <article key={n.url || n.title} className="px-4 py-2.5" data-ay-skip="1">
           <p className="line-clamp-2 text-[14px] font-bold leading-snug text-ink">{n.title}</p>
           {n.summary ? <p className="mt-1 line-clamp-2 text-[12.5px] leading-snug text-ink-2">{n.summary}</p> : null}
-          <p className="mt-1 truncate text-[12px] text-ink-3">
+          <p className="mt-1 text-[12px] leading-tight text-ink-3">
             {n.by || "Newsroom"}{n.ts ? ` · ${timeAgo(n.ts)}` : ""}
           </p>
         </article>
@@ -132,9 +133,13 @@ export function HappeningCard({ items }: { items: TrendingTopic[] | null }) {
       {items.slice(0, 5).map((t) => (
         // OpenAlex topic + field names are third-party strings — skipped, as above.
         <div key={t.name} className="px-4 py-2" data-ay-skip="1">
-          <p className="truncate text-[12px] leading-tight text-ink-3">{t.field} · Trending</p>
-          <p className="truncate text-[14px] font-bold leading-snug text-ink">{t.name}</p>
-          <p className="truncate text-[12px] leading-tight text-ink-3">{t.papers} paper{t.papers === 1 ? "" : "s"}</p>
+          {/* NO ELLIPSIS IN A NAME (operator 2026-08-18), and a field or a topic IS one: cut to
+              "Biochemistry, Genetics and" it names nothing. Both wrap and step down by length, the
+              same rule members' names follow (lib/fmt nameClass). The card grows a line; that is the
+              cheaper cost. `papers` is a count and cannot overflow, so it just loses its truncate. */}
+          <p className={`text-ink-3 ${nameClass(t.field, 12)}`}>{t.field} · Trending</p>
+          <p className={`font-bold text-ink ${nameClass(t.name)}`}>{t.name}</p>
+          <p className="text-[12px] leading-tight text-ink-3">{t.papers} paper{t.papers === 1 ? "" : "s"}</p>
         </div>
       ))}
     </RailCard>
