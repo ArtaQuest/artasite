@@ -27,3 +27,39 @@ export function fmtCount(n: number) {
   if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
   return String(n);
 }
+
+
+/**
+ * A NAME IS NEVER SHORTENED (operator 2026-08-16, again 2026-08-18: "reduce the font to avoid … in
+ * the name"). `truncate` puts an ellipsis through the middle of a person's name, which is the one
+ * string on the platform where half of it identifies nobody. The type steps down instead, and the
+ * name wraps if it still does not fit.
+ *
+ * EVERY CLASS HERE IS A LITERAL. Tailwind scans source text, so a class built by template —
+ * `text-[${px}px]` — is never generated and silently resolves to no font-size at all. That is the
+ * same failure that cost an hour on the sticky column this week (`theme()` inside an arbitrary
+ * value, also emitting nothing), and a class that compiles to nothing looks exactly like one that
+ * works until it is measured.
+ *
+ * Stepped by LENGTH, not by measurement: a measured fit depends on a font that may not have loaded
+ * when the row first paints, and would reflow when it does. Steps are per base size, so a 14px row
+ * and a 17px heading each shrink within their own scale instead of all collapsing to 12px.
+ */
+const NAME_STEPS = {
+  12: ["text-[12px]", "text-[11px]", "text-[10px]"],
+  13: ["text-[13px]", "text-[12px]", "text-[11px]"],
+  14: ["text-[14px]", "text-[13px]", "text-[12px]"],
+  15: ["text-[15px]", "text-[14px]", "text-[12.5px]"],
+  17: ["text-[17px]", "text-[15px]", "text-[13px]"],
+} as const;
+
+export function nameSize(name: string, base: keyof typeof NAME_STEPS = 14): string {
+  const n = (name || "").trim().length;
+  const [a, b, c] = NAME_STEPS[base];
+  return n <= 16 ? a : n <= 22 ? b : c;
+}
+
+/** The full class for a member name: no ellipsis, wraps, type stepped to the length. */
+export function nameClass(name: string, base: keyof typeof NAME_STEPS = 14): string {
+  return `break-words leading-tight ${nameSize(name, base)}`;
+}

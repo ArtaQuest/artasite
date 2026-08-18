@@ -26,7 +26,7 @@ import { Avatar, Button, cx, EmptyState, HeartGlyph } from "../components/ui";
 import { RailPortal } from "../components/RightRail";
 import { ChallengesCard, HappeningCard, NewsCard, TodaysNewsCard, WhoToFollowCard } from "../components/RailCards";
 import { useRail } from "../lib/rail";
-import { closesIn, fmtCount, timeAgo } from "../lib/fmt";
+import { nameClass, closesIn, fmtCount, timeAgo } from "../lib/fmt";
 import { isLoggedIn } from "../lib/auth";
 // localePath: a programmatic redirect is NOT intercepted by AppShell's locale safety net (that only
 // rewrites clicks on real <a> elements), so a signed-out reader on /fa/ was dropped on the English
@@ -116,7 +116,7 @@ function PostMedia({ items }: { items: LibraryItem[] }) {
               <span data-ay-skip="1">{it.work.title}</span>
             </Link>
             <span>from</span>
-            <Link to={`/u/${it.work.author.slug}`} onClick={(e) => e.stopPropagation()} className="min-w-0 max-w-full truncate hover:underline">
+            <Link to={`/u/${it.work.author.slug}`} onClick={(e) => e.stopPropagation()} className="min-w-0 max-w-full break-words hover:underline">
               <span data-ay-skip="1">{it.work.author.name}</span>
             </Link>
           </li>
@@ -310,8 +310,8 @@ function FeedPost({ post, onDeleted, hearted }: { post: FeedPostT; onDeleted?: (
           {/* X's byline: bold name, muted @handle, dot, relative time — then the ⋯ corner menu on
               your own posts. The handle doubles as the profile link's visible address. */}
           <div className="flex items-center gap-1.5 text-sm">
-            <Link to={`/u/${post.author.slug}`} className="truncate font-bold text-ink hover:underline">{post.author.name}</Link>
-            <Link to={`/u/${post.author.slug}`} tabIndex={-1} className="hidden min-w-0 shrink-[2] truncate text-ink-3 sm:block"><bdi dir="ltr" data-ay-skip="1">@{post.author.slug}</bdi></Link>
+            <Link to={`/u/${post.author.slug}`} className={`font-bold text-ink hover:underline ${nameClass(post.author.name)}`}>{post.author.name}</Link>
+            <Link to={`/u/${post.author.slug}`} tabIndex={-1} className="hidden min-w-0 shrink-[2] break-all text-ink-3 sm:block"><bdi dir="ltr" data-ay-skip="1">@{post.author.slug}</bdi></Link>
             <span className="text-ink-3">·</span>
             <time className="shrink-0 text-ink-3" dateTime={new Date(post.created * 1000).toISOString()}>{timeAgo(post.created)}</time>
             {own ? (
