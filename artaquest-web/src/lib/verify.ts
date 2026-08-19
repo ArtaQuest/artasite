@@ -73,6 +73,13 @@ export const VerifyApi = {
     req<{ ok?: boolean; palm?: string; error?: string; message?: string }>("/profile/palm", "POST", { image }),
   removePalm: () =>
     req<{ ok?: boolean; palm?: string; error?: string; message?: string }>("/profile/palm", "POST", { remove: true }),
+  // The profile BANNER (operator 2026-08-18) — the picture behind the profile header. Free, public,
+  // session-only like the photo and the palm. A data-URL to set; removeBanner() paints the gold→blue
+  // band again.
+  setBanner: (image: string) =>
+    req<{ ok?: boolean; banner?: string; error?: string; message?: string }>("/profile/banner", "POST", { image }),
+  removeBanner: () =>
+    req<{ ok?: boolean; banner?: string; error?: string; message?: string }>("/profile/banner", "POST", { remove: true }),
 };
 
 /** Read a File, downscale to <= maxDim on the long edge, return a JPEG data URL (small + legible). */

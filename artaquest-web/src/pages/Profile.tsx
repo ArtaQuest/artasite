@@ -13,12 +13,13 @@ import { NB_KIND_META, NbCard } from "../components/nbview";
 import { BlueCheck } from "../components/BlueCheck";
 import { Avatar, Button, EmptyState, HeartGlyph, Input, LoadMoreButton, Pill, StatusNote, cx } from "../components/ui";
 import {
-  currentUser, fmtBirthday, followUser, getFollows, getProfile, isLoggedIn, lastSeenLabel, localePath, PROFILE_LINKS, relAgo, relationshipLabel,
+  currentUser, fmtBirthday, followUser, getFollows, getProfile, isLoggedIn, lastSeenLabel, localePath, relAgo, relationshipLabel,
   type FollowRow, type Profile as ProfileData,
 } from "../lib/wp";
 import { Coins } from "../lib/currency";
 import { sendCoins } from "../lib/api";
 import { nameClass } from "../lib/fmt";
+import { VerifyApi, fileToImage } from "../lib/verify";
 
 /** The feed API filters by author (GET /notebooks?author=<slug>); the shared params type
  *  doesn't declare `author` yet, so widen it locally rather than touching api.ts (other
@@ -232,10 +233,10 @@ export default function Profile() {
 
   // What this member has NOT said yet — used only on their own profile, to turn an empty-looking
   // card into one tap. Order matches the settings form so the prompt reads like a to-do list.
+  // Languages are not listed either: the card stopped showing "Speaks" on 2026-08-18 (operator).
   const missingFacts = !p ? [] : [
-    relationshipLabel(p.relationship) ? "" : "Relationship",
     p.location?.trim() ? "" : "Where you live",
-    (p.languages?.length ?? 0) > 0 ? "" : "Languages you speak",
+    relationshipLabel(p.relationship) ? "" : "Relationship",
     // Nationality is deliberately NOT listed: this card links to the settings editor, and the
     // nationality picker lives in the Identity section further down the Account page — a prompt
     // that lands somewhere without the field is worse than none. Every member states one at
@@ -277,6 +278,43 @@ export default function Profile() {
   useEffect(() => { if (p) { setFollowing(!!p.isFollowing); setFollowers(p.stats?.followers ?? 0); } }, [p]);
   const [listDir, setListDir] = useState<"followers" | "following" | null>(null);
   useEffect(() => setListDir(null), [slug]); // navigating to a member from the list closes it
+
+  // THE BANNER (operator 2026-08-18: "make banner pic updatable"). Own profile only: a file picker
+  // behind an "Add/Change cover" pill on the cover itself, the picture downscaled in the browser
+  // (≤1600px on the long edge, JPEG) and sent to /profile/banner; the page swaps it in without a
+  // reload. Remove paints the gold→blue band again. Free, public, nothing to do with the blue check.
+  const bannerInput = useRef<HTMLInputElement | null>(null);
+  const [bannerBusy, setBannerBusy] = useState(false);
+  const [bannerMsg, setBannerMsg] = useState("");
+  const onBannerPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = ""; // the same file may be picked again after a failure
+    if (!f || bannerBusy) return;
+    setBannerBusy(true); setBannerMsg("");
+    try {
+      const url = await fileToImage(f, 1600, 0.85);
+      const r = await VerifyApi.setBanner(url);
+      if (r?.ok && r.banner) setP((prev) => (prev ? { ...prev, banner: r.banner } : prev));
+      else setBannerMsg(r?.message || "Couldn't save that picture — try a JPG or PNG under 5 MB.");
+    } catch {
+      setBannerMsg("Couldn't read that image.");
+    } finally {
+      setBannerBusy(false);
+    }
+  };
+  const removeBanner = async () => {
+    if (bannerBusy) return;
+    setBannerBusy(true); setBannerMsg("");
+    try {
+      const r = await VerifyApi.removeBanner();
+      if (r?.ok) setP((prev) => (prev ? { ...prev, banner: "" } : prev));
+      else setBannerMsg(r?.message || "Couldn't remove the cover — try again.");
+    } catch {
+      setBannerMsg("Couldn't remove the cover — try again.");
+    } finally {
+      setBannerBusy(false);
+    }
+  };
 
   if (missing) {
     return (
@@ -343,10 +381,43 @@ export default function Profile() {
               Straight gold to blue passes through a near-neutral grey instead, which is not a
               compromise but the point: these two are complements, and muted they meet at the true
               neutral midpoint. Verified in both themes. */}
-          <div className="relative h-20 w-full sm:h-32" aria-hidden>
-            <div className="absolute inset-0 bg-gradient-to-r from-yang/80 to-yin/80" />
-            <div className="absolute inset-0 bg-[radial-gradient(120%_150%_at_18%_-30%,rgba(255,255,255,0.22),transparent_62%)]" />
-            <div className="absolute inset-x-0 bottom-0 h-px bg-line" />
+          {/* WITH A BANNER (member-set, 2026-08-18) the cover is the picture at 3:1 — the shape every
+              other social banner is cut to, so a picture made for X or LinkedIn lands here whole —
+              capped at 15rem tall; without one it stays the 80/128px band above. object-cover
+              centre-crops anything that is not 3:1 rather than letterboxing it. The container is no
+              longer aria-hidden as a whole: the picture is decorative (alt="") and the two gradient
+              layers are hidden, but the owner's controls on it must reach assistive tech. */}
+          <div className={p.banner ? "relative aspect-[3/1] max-h-60 w-full" : "relative h-20 w-full sm:h-32"}>
+            {p.banner ? (
+              <img src={p.banner} alt="" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+            ) : (
+              <>
+                <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-yang/80 to-yin/80" />
+                <div aria-hidden className="absolute inset-0 bg-[radial-gradient(120%_150%_at_18%_-30%,rgba(255,255,255,0.22),transparent_62%)]" />
+              </>
+            )}
+            <div aria-hidden className="absolute inset-x-0 bottom-0 h-px bg-line" />
+            {isOwn && (
+              /* The owner's controls, top-end, clear of the avatar (which straddles the bottom-left
+                 edge). Frosted so they read on any picture; end-anchored so RTL mirrors them. */
+              <div className="absolute end-3 top-3 flex items-center gap-1.5">
+                <button type="button" onClick={() => bannerInput.current?.click()} disabled={bannerBusy}
+                  title="Change the picture behind your profile — a wide (3:1) picture fits best"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-pill border border-line bg-space-1/80 px-3 text-[12.5px] font-semibold text-ink backdrop-blur transition-colors hover:border-yang disabled:opacity-60">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.2" />
+                  </svg>
+                  {bannerBusy ? "Saving…" : p.banner ? "Change cover" : "Add cover"}
+                </button>
+                {p.banner && !bannerBusy ? (
+                  <button type="button" onClick={removeBanner} title="Remove the cover picture" aria-label="Remove the cover picture"
+                    className="grid h-8 w-8 place-items-center rounded-full border border-line bg-space-1/80 text-ink-2 backdrop-blur transition-colors hover:border-yang hover:text-ink">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6 6 18" /></svg>
+                  </button>
+                ) : null}
+                <input ref={bannerInput} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" tabIndex={-1} aria-hidden onChange={onBannerPick} />
+              </div>
+            )}
           </div>
 
           <div className="px-4 pb-5 sm:px-6">
@@ -519,33 +590,11 @@ export default function Profile() {
 
             {/* THE BIO, under the standing line — the actions stay near the top whatever its length. */}
             {p.bio && <p className="mt-4 max-w-2xl whitespace-pre-wrap text-[15px] leading-relaxed text-ink-2">{p.bio}</p>}
+            {bannerMsg && <p role="alert" className="mt-3 text-[12.5px] text-yin-ink">{bannerMsg}</p>}
 
-            {/* WHERE ELSE THEY ARE — at the RIGHT on sm+, under the actions (operator 2026-08-18: "make
-                these social icons like to the right"), so the header reads as facts on the left and
-                things-to-do on the right. Text, not brand logos: seven third-party marks would be seven
-                trademarks to keep current and the only place on this site with colours outside the
-                two. Every href was host-checked server-side (AQ\Auth::LINKS) before it was stored.
-                rel: "me" states this is the same person — the claim the sameAs schema makes, in the
-                markup a human-readable indexer reads; "nofollow ugc" because these are member-supplied
-                and there must be no ranking to farm by putting a link here. */}
-            {p.links && Object.keys(p.links).length > 0 && (
-              <ul className="mt-3 flex flex-wrap items-center gap-1.5 sm:justify-end">
-                {PROFILE_LINKS.filter(([k]) => p.links?.[k]).map(([k, label]) => (
-                  <li key={k}>
-                    <a href={p.links![k]} target="_blank" rel="me nofollow ugc noopener noreferrer"
-                      title={p.links![k]}
-                      className="inline-flex items-center gap-1 rounded-pill border border-line px-3 py-1 text-[13px] text-ink-2 transition-colors hover:border-yin-light hover:text-yin-light">
-                      {label}
-                      {/* external-link glyph, currentColor — no third accent */}
-                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor"
-                        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                        <path d="M7 17 17 7M9 7h8v8" />
-                      </svg>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {/* NO social links here (operator 2026-08-18: "remove all the social links"). They are
+                still collected in Settings, because they feed the Person schema's sameAs (aq-app.php)
+                — an indexer's fact, not a row of pills on the page. */}
           </div>
         </header>
       )}
@@ -560,34 +609,12 @@ export default function Profile() {
           1440px window (and ~410px at 1100px), where four fixed columns were 137px each and
           "February 15, 1994" broke after the comma (operator's Born screenshot, 2026-08-18). Each
           fact now asks for 11rem and the row holds as many as fit — three at 686px, one on a phone. */}
-      {p && (isOwn || relationshipLabel(p.relationship) || p.location?.trim() || (p.languages?.length ?? 0) > 0 || fmtBirthday(p.birthday)) ? (
+      {p && (isOwn || fmtBirthday(p.birthday) || p.location?.trim() || relationshipLabel(p.relationship)) ? (
         <section className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-x-8 gap-y-5 rounded-card border border-line bg-space-2 px-5 py-5" aria-label="About">
-          {relationshipLabel(p.relationship) ? (
-            <Fact label="Relationship" icon={<svg {...FACT_SVG}><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9z" /></svg>}>
-              {relationshipLabel(p.relationship)}
-            </Fact>
-          ) : null}
-          {p.location?.trim() ? (
-            <Fact label="Lives in" icon={<svg {...FACT_SVG}><path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11z" /><circle cx="12" cy="10" r="2.6" /></svg>}>
-              <span data-ay-skip="1">{p.location.trim()}</span>
-            </Fact>
-          ) : null}
-          {(p.languages?.length ?? 0) > 0 ? (
-            /* Endonyms, because that is how LanguageSelector names a language and how a speaker
-               recognises their own. Each in <bdi dir> with data-ay-skip, or an RTL name (فارسی,
-               العربية) reorders the Latin punctuation around it and the translation mesh tries to
-               translate a proper noun. */
-            <Fact label="Speaks" icon={<svg {...FACT_SVG}><path d="M4 6h10M9 4v2c0 4-2.2 7-5 8" /><path d="M7 11c1.3 2.3 3.3 4 6 5" /><path d="M13 20l4-9 4 9M14.8 17h4.4" /></svg>}>
-              <span className="flex flex-wrap gap-x-1.5">
-                {p.languages!.map((l, i) => (
-                  <span key={l.code}>
-                    <bdi dir={l.dir} data-ay-skip="1">{l.native}</bdi>{i < p.languages!.length - 1 ? "," : ""}
-                  </span>
-                ))}
-              </span>
-            </Fact>
-          ) : null}
-          {/* The DATE, to everyone — no derived age. Operator 2026-07-27, reaffirmed 2026-08-15:
+          {/* ORDER (operator 2026-08-18): Born, then Lives in, then Relationship. "Speaks" (the
+              languages) left the card the same day; the languages are still collected and public,
+              they are simply not a row here.
+              The DATE, to everyone — no derived age. Operator 2026-07-27, reaffirmed 2026-08-15:
               "printing it turns a fact the member stated into a label the site puts on them", and it
               re-renders differently every birthday. Between 08-14 and 08-15 this showed a derived age
               to visitors and the date only to the member; that was my call and the operator reversed
@@ -595,6 +622,16 @@ export default function Profile() {
           {fmtBirthday(p.birthday) ? (
             <Fact label="Born" icon={<svg {...FACT_SVG}><path d="M4 20h16v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2Zm0-3h16" /><path d="M12 12V8m0-4v1.5M8 12V9m8 3V9" /></svg>}>
               <span className="whitespace-nowrap">{fmtBirthday(p.birthday)}</span>
+            </Fact>
+          ) : null}
+          {p.location?.trim() ? (
+            <Fact label="Lives in" icon={<svg {...FACT_SVG}><path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11z" /><circle cx="12" cy="10" r="2.6" /></svg>}>
+              <span data-ay-skip="1">{p.location.trim()}</span>
+            </Fact>
+          ) : null}
+          {relationshipLabel(p.relationship) ? (
+            <Fact label="Relationship" icon={<svg {...FACT_SVG}><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9z" /></svg>}>
+              {relationshipLabel(p.relationship)}
             </Fact>
           ) : null}
           {/* NO "Nationality" row here, and no flag after the date (operator 2026-08-18: "this is

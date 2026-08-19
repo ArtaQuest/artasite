@@ -198,11 +198,13 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
         {/* WHERE ELSE YOU ARE. Two fields per row on anything wider than a phone: seven stacked
             inputs reads as a form to endure, and none of them is required. A bare handle is enough —
             the server turns it into the real address and hands it back, which is why the value can
-            change under the cursor after a save. */}
+            change under the cursor after a save. Since 2026-08-18 these are NOT shown on the profile
+            page (operator: "remove all the social links"); they still feed the Person schema's sameAs,
+            which is what the hint now says. */}
         <Field label="Where else you are">
           <span className="text-[12.5px] font-normal text-ink-3">
-            Optional. Paste the address, or just your handle. These appear on your profile and tell search
-            engines that this page and your other accounts are the same person.
+            Optional. Paste the address, or just your handle. These are not shown on your profile; they tell
+            search engines that this page and your other accounts are the same person.
           </span>
           <div className="mt-1 grid gap-2 sm:grid-cols-2">
             {PROFILE_LINKS.map(([k, label]) => (

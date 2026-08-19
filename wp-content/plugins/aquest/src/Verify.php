@@ -441,6 +441,48 @@ final class Verify {
 		delete_user_meta( $uid, 'aq_palm_file' );
 	}
 
+	// ── the profile BANNER (operator 2026-08-18: "make banner pic updatable") ──────────────────
+	/** The member's profile banner URL — the picture behind the profile header — or '' when they
+	 *  have not set one (the page then paints the gold→blue band). Public like the avatar. Every
+	 *  profile emitter ships it (Social::profile, Auth::me). */
+	public static function banner_url( $uid ) { return (string) get_user_meta( (int) $uid, 'aq_banner_url', true ); }
+
+	/**
+	 * POST /profile/banner {image} | {remove:true} — set or clear the banner. Exactly the palm's
+	 * shape: any signed-in member, one request, free, no AI, no bearing on the blue check; the SPA
+	 * downscales to ≤1600px on the long edge before upload and parse_image caps it at 5 MB. A wide
+	 * picture (3:1, like every other social banner) fits best; anything else is centre-cropped by
+	 * the page. Session-only, like the photo and the palm — an API token cannot change a face or a
+	 * banner. Purged with the account (Account::sweep unlinks aq_banner_file).
+	 */
+	public static function set_banner_photo( $req ) {
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+		if ( Rest::throttle( 'set_banner', 12, 3600 ) ) { return Rest::err( 'rate_limited', 'Too many changes. Try again later.', 429 ); }
+		if ( Rest::p( $req, 'remove', '' ) ) {
+			self::clear_banner( $uid );
+			return [ 'ok' => true, 'banner' => '' ];
+		}
+		$img = self::parse_image( (string) Rest::p( $req, 'image', '' ) );
+		if ( $img === null ) { return Rest::err( 'bad_image', 'Please choose a clear JPG, PNG or WebP under 5 MB.' ); }
+		$ext  = $img['mime'] === 'image/png' ? 'png' : ( $img['mime'] === 'image/webp' ? 'webp' : 'jpg' );
+		$prev = (string) get_user_meta( $uid, 'aq_banner_file', true );
+		if ( $prev && @file_exists( $prev ) ) { @unlink( $prev ); }
+		$res = wp_upload_bits( 'aq-banner-' . $uid . '-' . time() . '.' . $ext, null, $img['bytes'] );
+		if ( ! empty( $res['error'] ) || empty( $res['url'] ) ) { return Rest::err( 'upload_failed', 'Could not save that image — please try another.', 500 ); }
+		update_user_meta( $uid, 'aq_banner_url', esc_url_raw( $res['url'] ) );
+		update_user_meta( $uid, 'aq_banner_file', $res['file'] );
+		return [ 'ok' => true, 'banner' => (string) $res['url'] ];
+	}
+
+	/** Remove the banner entirely — delete the file and clear both meta keys. */
+	private static function clear_banner( $uid ) {
+		$prev = (string) get_user_meta( $uid, 'aq_banner_file', true );
+		if ( $prev && @file_exists( $prev ) ) { @unlink( $prev ); }
+		delete_user_meta( $uid, 'aq_banner_url' );
+		delete_user_meta( $uid, 'aq_banner_file' );
+	}
+
 	/**
 	 * The picture we hold for a member, in precedence order, or '' if we hold none:
 	 * uploaded photo → single-select typology pick → their season sigil.

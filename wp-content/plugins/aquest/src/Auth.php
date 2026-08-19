@@ -264,6 +264,7 @@ final class Auth {
 			'birthday'     => Verify::birthday( $uid ),
 			'nationality'  => Verify::claimed_country( $uid ), // the stated claim (ISO 3166-1 alpha-2) → the profile flag; '' until stated
 			'palm'         => Verify::palm_url( $uid ),      // opt-in palm "back photo" → the avatar flips to it (ticket #94)
+			'banner'       => Verify::banner_url( $uid ),    // the profile banner; '' when unset
 		] ];
 	}
 

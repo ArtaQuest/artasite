@@ -205,6 +205,7 @@ final class Rest {
 		[ 'POST', 'identity/birthtime',            'Verify::set_birthtime',   'user' ], // fine-tune birth time (places the long-term goal)
 		[ 'POST', 'profile/photo',                 'Verify::set_photo',       'user' ], // change avatar only — no ID-verify, free
 		[ 'POST', 'profile/palm',                  'Verify::set_palm_photo',  'user' ], // palm "back photo" — opt-in self-verify, free
+		[ 'POST', 'profile/banner',                'Verify::set_banner_photo', 'user' ], // the profile banner — set or {remove:true}, free
 		[ 'POST', 'verify/identity',               'Verify::verify_identity', 'user' ], // ID + selfie → Claude (free)
 
 		// ── Offline / "take it with you" (selective full-platform download) ───

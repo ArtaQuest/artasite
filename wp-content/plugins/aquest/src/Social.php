@@ -787,6 +787,7 @@ final class Social {
 			// picture is served at its own size, so nothing else pays for it.
 			'avatar'     => Verify::avatar_url( $id, 320 ),
 			'palm'       => Verify::palm_url( $id ),         // opt-in palm "back photo" → the avatar flips to it (ticket #94)
+			'banner'     => Verify::banner_url( $id ),       // the picture behind the header; '' → the gold→blue band
 			// EMAIL IS NOT A RESEARCH ARTEFACT — it is this platform's account identifier. Sign-in is
 			// an emailed one-time code (Auth::harden disables password login entirely), so the address
 			// IS half of every member's credential, and it is collected mandatorily. It was emitted

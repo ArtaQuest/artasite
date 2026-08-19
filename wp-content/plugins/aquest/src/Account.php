@@ -346,9 +346,10 @@ final class Account {
 		$wpdb->delete( Data::t( 'aq_endorsements' ),     [ 'target_id' => $uid ] ); // endorsements the member RECEIVED
 		$wpdb->delete( Data::t( 'aq_notifications' ),    [ 'user_id' => $uid ] );
 
-		// 7. Uploaded files — the avatar + palm "back photo" on disk. wp_delete_user clears the usermeta
-		//    that points at them, but not the files wp_upload_bits wrote, so unlink them first.
-		foreach ( [ 'aq_avatar_file', 'aq_palm_file' ] as $mk ) {
+		// 7. Uploaded files — the avatar, the palm "back photo" and the banner on disk. wp_delete_user
+		//    clears the usermeta that points at them, but not the files wp_upload_bits wrote, so unlink
+		//    them first.
+		foreach ( [ 'aq_avatar_file', 'aq_palm_file', 'aq_banner_file' ] as $mk ) {
 			$f = (string) get_user_meta( $uid, $mk, true );
 			if ( $f !== '' && @file_exists( $f ) ) { @unlink( $f ); }
 		}

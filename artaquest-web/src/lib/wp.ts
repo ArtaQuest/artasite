@@ -1015,6 +1015,7 @@ export type Profile = {
   verified?: boolean; // the blue check (Verify::is_verified)
   season?: number; // the ONE season this member follows (1…12 cycle position; 0 = none on record)
   palm?: string; // opt-in palm "back photo" (ticket #94) → the avatar flips to it; '' if unset
+  banner?: string; // the picture behind the profile header (member-set, 2026-08-18); '' → the gold→blue band
   nationality?: string; // the same stated claim as `country`, for the labelled "Nationality" fact; '' if unset (shown unverified, like the birthday — the blue check is the verification signal)
   /** Self-declared, both. `relationship` is a RELATIONSHIPS key ('' = not saying); `location` is
    *  whatever the member typed and is NEVER inferred from an IP address (see AQ\Auth::location). */
@@ -1067,7 +1068,7 @@ export type ProfileCourse = { id: number; slug: string; title: string; image: st
 // status, and raw image ('' → the card falls back to the on-brand emblem, same as the Topics page).
 export type ProfileTopic = { key: string; name: string; category: string; status: string; image: string };
 type ProfileR = {
-  id: number; name: string; slug: string; avatar: string; palm?: string; country?: string; nationality?: string; email?: string; points: number; tier: string;
+  id: number; name: string; slug: string; avatar: string; palm?: string; banner?: string; country?: string; nationality?: string; email?: string; points: number; tier: string;
   /** Whole years, computed server-side (Verify::age) — an API convenience emitted BESIDE the exact
    *  `birthday` below, never instead of it. 0 = no valid date on record. */
   age?: number;
@@ -1126,7 +1127,7 @@ export async function getProfile(slug: string): Promise<Profile | null> {
   try {
     const pr = await get<ProfileR>(`${AQ}/profile?slug=${encodeURIComponent(slug)}`);
     return {
-      id: pr.id, name: pr.name, slug: pr.slug, avatar: pr.avatar, palm: pr.palm || "", email: pr.email || "", bio: pr.bio || "", links: pr.links || undefined, lastSeen: pr.last_seen || 0,
+      id: pr.id, name: pr.name, slug: pr.slug, avatar: pr.avatar, palm: pr.palm || "", banner: pr.banner || "", email: pr.email || "", bio: pr.bio || "", links: pr.links || undefined, lastSeen: pr.last_seen || 0,
       // Public identity facts the endpoint has always emitted but the SPA used to drop on the floor.
       age: pr.age ?? 0, birthday: pr.birthday || "", fullName: pr.full_name || "", season: pr.season ?? 0, verified: !!pr.verified,
       // The stated nationality (back on 2026-08-18) — mapped EXPLICITLY, because this object is built
