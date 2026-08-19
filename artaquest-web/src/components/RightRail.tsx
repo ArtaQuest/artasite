@@ -7,9 +7,10 @@
  * wide screen and a tab on a phone. Here that is ONE column, rendered by AppShell on every page
  * that has room for it:
  *
- *   • <ShellRail> is the column: whatever the page contributed, then the foot (the legal links and
- *     accounts that used to be the page footer). The SEARCH FIELD is the header's again since the
- *     operator asked for Reddit's centred bar — see AppShell's Topbar.
+ *   • <ShellRail> is the column: whatever the page contributed, scrolling, and then the FOOT pinned
+ *     under it — the one <SiteFooter> (components/Footer.tsx: the legal links, the accounts, the
+ *     copyright), visible on every page. The SEARCH FIELD is the header's again since the operator
+ *     asked for Reddit's centred bar — see AppShell's Topbar.
  *   • A page adds cards with <RailPortal> — the feed's highlights, a work's cite/run cards, the
  *     calendar's subscribe panel. It cannot switch the column off, which is the whole point: the
  *     first design let a page CLAIM the column and then render nothing, and a signed-out reader on
@@ -25,50 +26,8 @@ import { createPortal } from "react-dom";
 import { setRailNode, useIsFilling, useRail, useRailFilled, useRailNode, useWide } from "../lib/rail";
 import { ChallengesCard, HappeningCard, NewsCard, TodaysNewsCard, WhoToFollowCard } from "./RailCards";
 import { SearchBox } from "./SearchBox";
-import { LEGAL, SOCIALS } from "../lib/brand-links";
-
-/**
- * THE RAIL'S FOOT — what used to be the page footer (operator 2026-08-16: "all of these should be
- * in the right panel").
- *
- * On a wide screen the right column now ends the page the way X's does: the legal links, the
- * official accounts and the copyright, small and quiet, under whatever cards the page put above
- * them. The full-width <Footer> still renders BELOW lg, where there is no column to carry it — the
- * legal links are not optional furniture, and a phone would otherwise lose them entirely.
- *
- * Same data as the footer (lib/brand-links.ts), so the two cannot drift, and the schema mirror
- * documented there still governs the account list.
- */
-export function RailFoot() {
-  const year = new Date().getFullYear();
-  return (
-    <div className="flex flex-col gap-3 px-3 pb-2">
-      {/* ink-2: these are links a reader is meant to find and follow, and ink-3's 3:1 tier is for
-          rules and glyphs. Measured at 3.68:1 on the light canvas before this. */}
-      {/* Each link is a 40px-tall target with its text kept on the same visual line: the vertical
-          padding is cancelled by a negative margin, so the row does not grow while the thumb gets
-          the room it needs. They were 26px. */}
-      <nav aria-label="Quick links" className="flex flex-wrap gap-x-3 gap-y-0 text-[12px] text-ink-2">
-        {[{ label: "About", href: "/about/" }, { label: "Donations", href: "/donate/" }, { label: "Data", href: "/data/" }, { label: "FAQ", href: "/faq-contact/" }, ...LEGAL]
-          .map((l) => <a key={l.href} href={l.href} className="-mx-1 -my-2 inline-flex min-h-[40px] items-center px-1 transition-colors hover:text-ink hover:underline">{l.label}</a>)}
-      </nav>
-      <div className="flex items-center gap-2">
-        {SOCIALS.map((sIcon) => (
-          <a key={sIcon.href} href={sIcon.href} target="_blank" rel="noopener noreferrer" aria-label={sIcon.label} title={sIcon.label}
-            className="grid h-10 w-10 place-items-center rounded-full border border-line text-ink-2 transition-colors hover:border-yin-light hover:text-ink">
-            <svg viewBox={sIcon.viewBox || "0 0 24 24"} width="15" height="15" fill="currentColor" aria-hidden><path d={sIcon.path} /></svg>
-          </a>
-        ))}
-      </div>
-      <p className="text-[12px] text-ink-2">
-        © {year} ArtaQuest ·{" "}
-        <a href="https://ised-isde.canada.ca/cc/lgcy/fdrlCrpDtls.html?corpId=17948328" target="_blank" rel="noopener noreferrer"
-          className="-my-2 inline-flex min-h-[40px] items-center underline underline-offset-2 transition-colors hover:text-yang">registered</a>{" "}
-        not-for-profit
-      </p>
-    </div>
-  );
-}
+import { SiteFooter } from "./Footer";
+import { isLoggedIn } from "../lib/wp";
 
 /**
  * THE right column — one per page, rendered by the shell, on every page that has room for it.
@@ -83,16 +42,33 @@ export function ShellRail() {
     <aside className="hidden w-[330px] shrink-0 lg:block" aria-label="Search and highlights">
       {/* top = the bar (60px) + a 16px breath, and the height subtracts the same, or the column
           pins UNDER the bar and loses its first card. Measured on a work page before this: the
-          column's top sat at -143px with 204px of it behind the bar. */}
-      <div className="sticky top-[calc(var(--spacing-topbar)+1rem)] flex max-h-[calc(100vh-var(--spacing-topbar)-2rem)] flex-col gap-4 overflow-y-auto pb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {/* Where the page's own cards land (a work's cite/run cards, the calendar's subscribe
-            panel, the feed's highlights). */}
-        <div ref={setRailNode} className="contents" />
-        {/* …and when the page brought none, the column carries the platform's own discovery cards
-            rather than a field over a row of links (operator 2026-08-16: "put some stuff to the
-            right"). One fetch, and only on the pages that actually render them. */}
-        <RailDefaults />
-        <RailFoot />
+          column's top sat at -143px with 204px of it behind the bar.
+
+          TWO PARTS, and only the first scrolls (operator 2026-08-19: the footer "should be under
+          right side of every page"). The cards scroll inside the column behind a hidden scrollbar;
+          the FOOTER is pinned under them, at the bottom of the sticky column, so it is on screen on
+          every page — before this it sat at the END of that hidden-scrollbar column, reachable only
+          by scrolling a scrollbar nobody could see, i.e. invisible on any page with more than a
+          card or two. */}
+      <div className="sticky top-[calc(var(--spacing-topbar)+1rem)] flex max-h-[calc(100vh-var(--spacing-topbar)-2rem)] flex-col">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {/* Where the page's own cards land (a work's cite/run cards, the calendar's subscribe
+              panel, the feed's highlights). */}
+          <div ref={setRailNode} className="contents" />
+          {/* …and when the page brought none, the column carries the platform's own discovery cards
+              rather than a field over a row of links (operator 2026-08-16: "put some stuff to the
+              right"). One fetch, and only on the pages that actually render them. */}
+          <RailDefaults />
+        </div>
+        {/* THE FOOT — the one footer (components/Footer.tsx), pinned. A signed-in member has the
+            ArtaChat dock fixed over the bottom-right of the window — 400px wide, its collapsed bar
+            ~64px tall, squarely over this column's foot — so the foot clears it with pb-24 (96px:
+            the bar and a breath). Signed out there is no dock and no band of empty space (the same
+            asymmetry AppShell keeps for Arta's ledge). Measured at 1440×900 in the lab: the copyright
+            line sat behind the dock's bar before this. */}
+        <div className={`shrink-0 border-t border-line px-3 pt-4 ${isLoggedIn() ? "pb-24" : "pb-6"}`}>
+          <SiteFooter />
+        </div>
       </div>
     </aside>
   );

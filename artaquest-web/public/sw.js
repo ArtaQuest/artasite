@@ -384,7 +384,8 @@
 // v63: the profile banner is member-set (Add/Change/Remove cover on your own profile), the social
 // links and "Speaks" leave the profile page, facts read Born → Lives in → Relationship (operator
 // 2026-08-18) — new chunk + a plugin route, bump for SW-cached devices.
-const VERSION = "aq-sw-v63";
+// v64: ONE footer, pinned under the right column on every page (operator 2026-08-19) — chunk-only, bump.
+const VERSION = "aq-sw-v64";
 const SHELL = "aq-shell-v42";   // last good app-shell HTML (any route boots the SPA offline)
 const ASSETS = "aq-assets-v42"; // hashed JS/CSS from the theme's app/ build dir
 const IMG = "aq-img-v4";
