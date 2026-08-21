@@ -388,7 +388,9 @@
 // v65: /about is laid out by CONTAINER queries, so the founder's note stops rendering five words to
 // a line inside the shell's ~614px card, and the rail's foot sits at the bottom of the column
 // instead of the top of an empty one (operator 2026-08-21) — chunk-only, bump.
-const VERSION = "aq-sw-v65";
+// v66: /about opens with the founder, and his picture is a ringed link to his profile (operator
+// 2026-08-21) — chunk-only, bump.
+const VERSION = "aq-sw-v66";
 const SHELL = "aq-shell-v42";   // last good app-shell HTML (any route boots the SPA offline)
 const ASSETS = "aq-assets-v42"; // hashed JS/CSS from the theme's app/ build dir
 const IMG = "aq-img-v4";

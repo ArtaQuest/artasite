@@ -119,51 +119,32 @@ const FOUNDER: { label: string; body: string }[] = [
 export default function About() {
   return (
     <div className="@container flex flex-col gap-12 pb-12 @xl:gap-16">
-      {/* Hero. The h1 is ONE text node with no inner `aq-grad` span: the i18n mesh walks text nodes
-          individually, so a split heading is translated as two disconnected fragments in every
-          locale, and `.aq-grad` measures ~1.84:1 on the default light canvas. */}
-      {/* Same rule as the founder card: the hero pads to ITS OWN width, not the window's. At the
-          ~686px column a 1440px window gives this page, `sm:px-12 sm:py-20` spent 96px of a 686px
-          card on side padding and 160px of height on air. */}
-      <section className="@container relative overflow-hidden rounded-card border border-line bg-space-2 px-6 py-12 @xl:px-10 @xl:py-16">
-        <div className="relative max-w-2xl">
-          <h1 className="text-[clamp(1.85rem,3.2vw+1.1rem,3.3rem)] font-extrabold leading-[1.1]">
-            Work you can check for yourself
-          </h1>
-          <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-ink">
-            A not-for-profit social feed for science and education. Every post here is a public notebook on Kaggle:
-            writing and code that Kaggle has already run on its own computers. Kaggle keeps a public
-            record of that run. We read that record and show you what it says. Since 4 August 2026 you can only
-            submit a notebook from a Kaggle account you have proved you control, so on every work submitted
-            since, the member who publishes it is its Kaggle author and the citation credits them. Publishing
-            takes a one-time link sent to your own inbox and a signature from your own device — nothing and
-            nobody else can do it. It stays free to read, and anyone can run it
-            again on Kaggle for as long as its author keeps it there — which is why publishing also
-            mints a permanent citation link that outlives the notebook.
-          </p>
-          <div className="mt-7 flex flex-wrap gap-3">
-            <Button href="/works/" size="xl">Open the feed</Button>
-          </div>
-        </div>
-      </section>
-
       <div>
         <div className="flex flex-col gap-12 @xl:gap-16">
           {/* From the founder — the landing point for /about#founder, where the CEO posting sends a
               candidate. */}
           <section>
             <div className="flex items-center gap-4">
-              {/* Decorative: it sat inside an aria-hidden, tabIndex={-1} anchor, i.e. a link no user
-                  could reach. The name beside it is the real link. */}
-              <img
-                src={founderAvatar}
-                width={48}
-                height={48}
-                loading="lazy"
-                decoding="async"
-                alt=""
-                className="h-12 w-12 shrink-0 rounded-full object-cover ring-1 ring-yang/30"
-              />
+              {/* A REAL LINK, and a ring you can see (operator 2026-08-21: "the founder profile ring is
+                  missing and not clickable"). It was an <img> inside nothing — a picture of a person
+                  beside their name, where every other avatar on the platform opens their profile — and
+                  its `ring-1 ring-yang/30` was a 1px line at 30% gold, which on the dark canvas is
+                  invisible. Now a 2px gold BORDER with 2px of inset — measured, unlike `ring-*`, whose
+                  computed box-shadow came back fully transparent here — and the whole circle is the
+                  same link as the name (both go to /u/arash/, so the pair is one target a reader can
+                  hit either half of). */}
+              <a href={localePath("/u/arash/")} aria-label="Arash Ashrafnejad — profile"
+                className="block shrink-0 rounded-full border-2 border-yang/70 p-0.5 transition-colors hover:border-yang focus-visible:border-yang focus-visible:outline-none">
+                <img
+                  src={founderAvatar}
+                  width={48}
+                  height={48}
+                  loading="lazy"
+                  decoding="async"
+                  alt=""
+                  className="block h-12 w-12 rounded-full object-cover"
+                />
+              </a>
               <div>
                 <H2 id="founder">From the founder</H2>
                 <p className="text-[13px] text-ink-2">
@@ -232,6 +213,36 @@ export default function About() {
 
         </div>
       </div>
+
+      {/* THE FOUNDER COMES FIRST (operator 2026-08-21: "from the founder should be first card"), so
+          this hero — what the platform is — now follows his note rather than introducing it. The
+          order is deliberate on a page four audiences land on: the person, then the thing he built,
+          then the one ask. The h1 is ONE text node with no inner `aq-grad` span: the i18n mesh walks
+          text nodes individually, so a split heading is translated as two disconnected fragments in
+          every locale, and `.aq-grad` measures ~1.84:1 on the default light canvas. It pads to ITS
+          OWN width, not the window's: at the ~686px column a 1440px window gives this page,
+          `sm:px-12 sm:py-20` spent 96px on side padding and 160px of height on air. */}
+      <section className="@container relative overflow-hidden rounded-card border border-line bg-space-2 px-6 py-12 @xl:px-10 @xl:py-16">
+        <div className="relative max-w-2xl">
+          <h1 className="text-[clamp(1.85rem,3.2vw+1.1rem,3.3rem)] font-extrabold leading-[1.1]">
+            Work you can check for yourself
+          </h1>
+          <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-ink">
+            A not-for-profit social feed for science and education. Every post here is a public notebook on Kaggle:
+            writing and code that Kaggle has already run on its own computers. Kaggle keeps a public
+            record of that run. We read that record and show you what it says. Since 4 August 2026 you can only
+            submit a notebook from a Kaggle account you have proved you control, so on every work submitted
+            since, the member who publishes it is its Kaggle author and the citation credits them. Publishing
+            takes a one-time link sent to your own inbox and a signature from your own device — nothing and
+            nobody else can do it. It stays free to read, and anyone can run it
+            again on Kaggle for as long as its author keeps it there — which is why publishing also
+            mints a permanent citation link that outlives the notebook.
+          </p>
+          <div className="mt-7 flex flex-wrap gap-3">
+            <Button href="/works/" size="xl">Open the feed</Button>
+          </div>
+        </div>
+      </section>
 
       {/* Closing band. ONE ask: a reader who reached the bottom of an About page can reach the feed
           from every other surface. */}
