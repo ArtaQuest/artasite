@@ -118,11 +118,14 @@ const FOUNDER: { label: string; body: string }[] = [
 
 export default function About() {
   return (
-    <div className="flex flex-col gap-16 pb-12 sm:gap-20">
+    <div className="@container flex flex-col gap-12 pb-12 @xl:gap-16">
       {/* Hero. The h1 is ONE text node with no inner `aq-grad` span: the i18n mesh walks text nodes
           individually, so a split heading is translated as two disconnected fragments in every
           locale, and `.aq-grad` measures ~1.84:1 on the default light canvas. */}
-      <section className="relative overflow-hidden rounded-card border border-line bg-space-2 px-6 py-16 sm:px-12 sm:py-20">
+      {/* Same rule as the founder card: the hero pads to ITS OWN width, not the window's. At the
+          ~686px column a 1440px window gives this page, `sm:px-12 sm:py-20` spent 96px of a 686px
+          card on side padding and 160px of height on air. */}
+      <section className="@container relative overflow-hidden rounded-card border border-line bg-space-2 px-6 py-12 @xl:px-10 @xl:py-16">
         <div className="relative max-w-2xl">
           <h1 className="text-[clamp(1.85rem,3.2vw+1.1rem,3.3rem)] font-extrabold leading-[1.1]">
             Work you can check for yourself
@@ -145,7 +148,7 @@ export default function About() {
       </section>
 
       <div>
-        <div className="flex flex-col gap-16 sm:gap-20">
+        <div className="flex flex-col gap-12 @xl:gap-16">
           {/* From the founder — the landing point for /about#founder, where the CEO posting sends a
               candidate. */}
           <section>
@@ -168,8 +171,24 @@ export default function About() {
                 </p>
               </div>
             </div>
-            <Card className="mt-6 border-s-2 border-s-yang p-7 sm:p-9">
-              <figure className="mx-auto mb-6 max-w-[280px] sm:float-end sm:mx-0 sm:mb-3 sm:ms-8 sm:w-60 sm:max-w-none">
+            {/* @container, not viewport breakpoints (operator 2026-08-21, with a screenshot of the
+                note reading five words to a line). Everything below sizes itself to THIS CARD, which
+                is nothing like the window: the shell keeps a 330px right column and a left rail, so a
+                1440px window gives the page ~686px and this card ~614px inside its padding — while
+                `sm:`/`lg:` were both firing as if there were 1440px to spend. The old markup floated a
+                240px photo AND opened a 9rem margin-label column inside those 614px, leaving the prose
+                ~166px: about five words a line, on the one page that is a long read. A grid container
+                also establishes its own formatting context, so each paragraph row was shortened beside
+                the float rather than flowing under it — the two decisions compounded. */}
+            <Card className="@container mt-6 border-s-2 border-s-yang p-6 @xl:p-9">
+              {/* The portrait moves beside the text only when the CARD can hold both, and its size
+                  follows the card: at @lg (512px of card) an 11rem photo still leaves ~40 characters
+                  a line, at @2xl (672px) a 13rem one leaves ~53. Below @lg it is a centred figure
+                  above the essay — what a phone has room for, and equally what the ~394px card a
+                  1100px window actually produces. 220px there, not 280: this is a 540×938 portrait,
+                  so every 100px of width is 174px of scrolling before the essay starts. Measured at
+                  390/900/1100/1280/1440 in the lab. */}
+              <figure className="mx-auto mb-6 max-w-[220px] @lg:float-end @lg:mx-0 @lg:mb-3 @lg:ms-5 @lg:w-44 @lg:max-w-none @2xl:ms-6 @2xl:w-52">
                 <a href={localePath("/u/arash/")} className="block">
                   <img
                     src={founderPhoto}
@@ -188,11 +207,19 @@ export default function About() {
               {/* The founder's first-person essay — his authentic words. Exempt from the brand-vocab
                   lint: it is his voice, not platform framing. The margin labels are navigation only;
                   not one word of his text changes. */}
-              <div data-aq-vocab-exempt="founder-note" className="space-y-6 text-[15.5px] leading-relaxed text-ink [text-wrap:pretty]">
+              {/* The labels are navigation, not headings — they name the beat each paragraph is on so
+                  a reader can find their place again. They sit ABOVE their paragraph at every width
+                  the platform actually produces; the margin column returns only at @5xl (64rem), a
+                  width no shell column reaches today, so it can never again eat the prose. Not one
+                  word of the note changes: its English is hashed to the hand-written Persian and
+                  Arabic (tools/about-i18n-gate.php). */}
+              <div data-aq-vocab-exempt="founder-note" className="space-y-6 text-[15.5px] leading-relaxed text-ink [text-wrap:pretty] @xl:space-y-7">
                 {FOUNDER.map((p) => (
-                  <div key={p.label} className="lg:grid lg:grid-cols-[9rem_1fr] lg:gap-x-8">
-                    <p className="mb-1 text-[12.5px] font-semibold uppercase tracking-[0.14em] text-ink-2 lg:mb-0 lg:mt-1">{p.label}</p>
-                    <p className="max-w-[68ch]">{p.body}</p>
+                  <div key={p.label} className="@5xl:grid @5xl:grid-cols-[8rem_1fr] @5xl:gap-x-8">
+                    <p className="mb-1.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-ink-2 @5xl:mb-0 @5xl:mt-1 @5xl:text-[12.5px]">{p.label}</p>
+                    {/* A measure, not a cap in `ch`: 68ch of this display face measured 643px, i.e.
+                        81 characters a line — past the comfortable 45-75. 36rem lands at ~73. */}
+                    <p className="max-w-[36rem]">{p.body}</p>
                   </div>
                 ))}
               </div>
@@ -208,7 +235,7 @@ export default function About() {
 
       {/* Closing band. ONE ask: a reader who reached the bottom of an About page can reach the feed
           from every other surface. */}
-      <section className="rounded-card border border-line bg-gradient-to-br from-space-2 to-space-3 px-6 py-12 text-center sm:px-12">
+      <section className="@container rounded-card border border-line bg-gradient-to-br from-space-2 to-space-3 px-6 py-12 text-center @xl:px-10">
         <h2 className="mx-auto max-w-2xl text-[clamp(1.4rem,3vw,1.9rem)] font-bold leading-snug">We do not need to keep you happy — we need to keep you thinking</h2>
         <div className="mt-7 flex flex-col items-center gap-4">
           <Button href="/donate/" size="xl">Support this work</Button>

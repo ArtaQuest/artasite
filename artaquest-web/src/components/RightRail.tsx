@@ -50,7 +50,12 @@ export function ShellRail() {
           every page — before this it sat at the END of that hidden-scrollbar column, reachable only
           by scrolling a scrollbar nobody could see, i.e. invisible on any page with more than a
           card or two. */}
-      <div className="sticky top-[calc(var(--spacing-topbar)+1rem)] flex max-h-[calc(100vh-var(--spacing-topbar)-2rem)] flex-col">
+      {/* A FIXED height, not a max: with `max-h` the column was only as tall as its content, so on a
+          page whose rail has no cards — /about — the foot sat at the TOP of an empty column with a
+          screenful of nothing under it. At full height the scroller takes the slack and the foot
+          rests at the bottom of the window, which is where a footer belongs; on a card-rich page the
+          scroller fills and the foot sits directly under the last card exactly as before. */}
+      <div className="sticky top-[calc(var(--spacing-topbar)+1rem)] flex h-[calc(100vh-var(--spacing-topbar)-2rem)] flex-col">
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {/* Where the page's own cards land (a work's cite/run cards, the calendar's subscribe
               panel, the feed's highlights). */}

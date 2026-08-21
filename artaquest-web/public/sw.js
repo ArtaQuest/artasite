@@ -385,7 +385,10 @@
 // links and "Speaks" leave the profile page, facts read Born → Lives in → Relationship (operator
 // 2026-08-18) — new chunk + a plugin route, bump for SW-cached devices.
 // v64: ONE footer, pinned under the right column on every page (operator 2026-08-19) — chunk-only, bump.
-const VERSION = "aq-sw-v64";
+// v65: /about is laid out by CONTAINER queries, so the founder's note stops rendering five words to
+// a line inside the shell's ~614px card, and the rail's foot sits at the bottom of the column
+// instead of the top of an empty one (operator 2026-08-21) — chunk-only, bump.
+const VERSION = "aq-sw-v65";
 const SHELL = "aq-shell-v42";   // last good app-shell HTML (any route boots the SPA offline)
 const ASSETS = "aq-assets-v42"; // hashed JS/CSS from the theme's app/ build dir
 const IMG = "aq-img-v4";
