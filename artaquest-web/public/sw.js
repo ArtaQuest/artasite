@@ -390,7 +390,9 @@
 // instead of the top of an empty one (operator 2026-08-21) — chunk-only, bump.
 // v66: /about opens with the founder, and his picture is a ringed link to his profile (operator
 // 2026-08-21) — chunk-only, bump.
-const VERSION = "aq-sw-v66";
+// v67: /sponsors is a list, not a 760px-wide table crammed into a 410px column (operator
+// 2026-08-21, "the sponsors page is messed up … the table specially") — chunk-only, bump.
+const VERSION = "aq-sw-v67";
 const SHELL = "aq-shell-v42";   // last good app-shell HTML (any route boots the SPA offline)
 const ASSETS = "aq-assets-v42"; // hashed JS/CSS from the theme's app/ build dir
 const IMG = "aq-img-v4";
