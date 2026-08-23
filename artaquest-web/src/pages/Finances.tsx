@@ -135,7 +135,16 @@ function RecordCost({ onSaved }: { onSaved: () => void }) {
         Type the figures from the invoice and attach it. A cost that will not post to the ledger is not
         recorded at all — the register and the books move together or neither moves.
       </p>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+      {/* auto-fit, not `sm:grid-cols-2` (operator 2026-08-21). `sm:` is a 640px VIEWPORT query, and
+          no page on this site is ever given the viewport: the app shell keeps a left rail and a 330px
+          right column, so /finances gets a content column of about 686px at a 1440px window, 570px at
+          1280, 410px at 1100 and 366px at 1024, and this page's own px-4 takes 32px more (654 · 538 ·
+          378 · 334) with the card's p-5 taking a further 40 (614 · 498 · 338 · 294). Two fixed tracks
+          therefore meant 161px fields at 1100, which set the 110-character GST hint five lines deep
+          and truncated a <select> whose longest option is "Computer and software subscriptions".
+          Each field asks for 14rem, so the form is two tracks at 1440 (~299px) and 1280 (~241px) and
+          one from 1100 down (~338px) — and a native control is never handed less than that. */}
+      <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
         <Field label="Vendor" required><Input value={f.vendor} onChange={set("vendor")} placeholder="Anthropic, PBC" /></Field>
         <Field label="Invoice number" required><Input value={f.number} onChange={set("number")} placeholder="6LNWF16Y-0009" /></Field>
         <Field label="Description"><Input value={f.description} onChange={set("description")} placeholder="Claude Max plan - 20x" /></Field>
@@ -178,7 +187,11 @@ function RecordCost({ onSaved }: { onSaved: () => void }) {
         </Field>
         <Field label="Note" optional><Input value={f.note} onChange={set("note")} /></Field>
       </div>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+      {/* The same 14rem tracks as the fields above, for the same reason: a native file input is a
+          button plus a filename, and at the 161px `sm:grid-cols-2` gave it in a 1100px window the
+          filename had nowhere to go. Two side by side at 1440 and 1280, one per row below
+          (operator 2026-08-21). */}
+      <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
         <Field label="Invoice PDF" optional>
           <input type="file" accept="application/pdf" onChange={(e) => setInvoicePdf(e.target.files?.[0] ?? null)}
             className="block w-full text-[13px] text-ink-2 file:me-3 file:rounded file:border file:border-line file:bg-space-1 file:px-3 file:py-1.5 file:text-[13px] file:text-ink-2" />
@@ -228,7 +241,12 @@ function FilingSettings({ st, onSaved }: { st: Statements; onSaved: () => void }
         Only the operator sees this. Everything else on the page comes from the ledger; these two do not.
       </p>
       <h3 className="mt-4 text-[13px] font-semibold uppercase tracking-wide text-ink-3">Signing officer</h3>
-      <div className="mt-2 grid gap-4 sm:grid-cols-2">
+      {/* auto-fit for the reason set out above the cost form: `sm:` measures the window, and this
+          card has 614px of usable width at 1440, 498px at 1280, 338px at 1100 and 294px at 1024. Two
+          fixed tracks put "Position, office or rank (line 954)" into a 161px field at 1100, where the
+          CRA line number wrapped away from the label it belongs to. 14rem a field gives two tracks at
+          1440 (~299px) and 1280 (~241px) and one below (operator 2026-08-21). */}
+      <div className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
         <Field label="Last name (line 950)"><Input value={f.signer_last} onChange={set("signer_last")} /></Field>
         <Field label="First name (line 951)"><Input value={f.signer_first} onChange={set("signer_first")} /></Field>
         <Field label="Position, office or rank (line 954)"><Input value={f.signer_role} onChange={set("signer_role")} /></Field>
@@ -244,7 +262,13 @@ function FilingSettings({ st, onSaved }: { st: Statements; onSaved: () => void }
         CRA then requires one for every subsequent period, whatever the revenue. Only record what has
         actually been filed.
       </p>
-      <div className="mt-2 grid gap-4 sm:grid-cols-3">
+      {/* auto-fit, not `sm:grid-cols-3` (operator 2026-08-21). Three fixed tracks in this card's
+          338px at 1100 — 294px at 1024 — left each control 102px and 87px respectively, and a
+          <select> with 16px of padding either side and its own arrow has barely 50px left for the
+          text, so the fiscal period truncated inside its own picker and "Defaults to today" ran to
+          two lines under the date. 12rem a control keeps three across at 1440 (~194px each), drops
+          to two at 1280 (~241px) and to one from 1100 down (~338px). */}
+      <div className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-4">
         <Field label="Period">
           <Select value={fy} onChange={setFy} options={st.fiscal.years.map((y) => ({ value: y.label, label: y.label }))} />
         </Field>
@@ -356,7 +380,14 @@ export default function Finances() {
 
       {tab === "overview" && (
         <>
-          <div className="mt-8 grid gap-3 sm:grid-cols-3">
+          {/* auto-fit, not `sm:grid-cols-3` (operator 2026-08-21). These three sit straight on the
+              page column, which the shell leaves at ~654px inside the px-4 at 1440, 538px at 1280,
+              378px at 1100 and 334px at 1024 — so three fixed tracks were 210px, 175px, 118px and
+              103px wide, and each card spends 32px of that on its own padding. A figure such as
+              "CA$4,230.00" is about 150px at 26px semibold and contains no space to break at, so
+              below ~182px it simply overflowed the card it was in. 12rem a tile clears that with the
+              padding: three across at 1440 (~210px), two at 1280 (~263px), one from 1100 down. */}
+          <div className="mt-8 grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3">
             <BigNumber label="What it owns" value={money(pos.total_assets, cur)} tone="neutral"
               plain={pos.total_assets === 0 ? "No bank balance, no property, nothing." : "Cash, and anything paid for in advance."} />
             <BigNumber label="What it owes" value={money(pos.total_liabilities, cur)} tone="yang"
@@ -399,7 +430,12 @@ export default function Finances() {
             <Section title="The coins, and the gold behind them"
               note="ArtaCoin is meant to be one milligram of gold each. Where it is not, this page says so rather than rounding the claim up.">
               <Card className="p-5">
-                <div className="grid gap-4 sm:grid-cols-3">
+                {/* auto-fit, not `sm:grid-cols-3` (operator 2026-08-21). Inside this card the row
+                    has 614px at 1440, 498px at 1280, 338px at 1100 and 294px at 1024, so three fixed
+                    tracks were 102px at 1100 — and "4,230,000 mg" is about 120px at 20px, so the
+                    gold figure ran out of its own tile. 10rem a tile gives three at 1440 (~194px),
+                    two at 1280 (~241px) and two at 1100 (~161px), one below that. */}
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-4">
                   <div><p className="text-[12px] uppercase tracking-wide text-ink-3">Coins issued</p><p data-ay-skip="1" className="mt-1 text-[20px] font-semibold text-ink">{res.issued_coins.toLocaleString()} ₳</p></div>
                   <div><p className="text-[12px] uppercase tracking-wide text-ink-3">Gold held</p><p data-ay-skip="1" className="mt-1 text-[20px] font-semibold text-ink">{res.backing_mg.toLocaleString()} mg</p></div>
                   <div><p className="text-[12px] uppercase tracking-wide text-ink-3">Backed</p><p className={`mt-1 text-[20px] font-semibold ${res.backed ? "text-yin-light" : "text-yang"}`}>{res.backed ? "Fully" : "Not fully"}</p></div>
@@ -424,7 +460,14 @@ export default function Finances() {
                           {o.done ? `done ${o.done}` : overdue ? `${Math.abs(o.days)} days overdue` : `in ${o.days} days`}
                         </span>
                       </div>
-                      <dl className="mt-2 grid grid-cols-2 gap-x-5 gap-y-1 text-[12.5px] sm:grid-cols-3">
+                      {/* auto-fit, not `grid-cols-2` + `sm:grid-cols-3` (operator 2026-08-21). This
+                          list has 614px at 1440, 498px at 1280, 338px at 1100 and 294px at 1024, so
+                          three fixed tracks handed "Canada Revenue Agency" a 99px cell at 1100. 7rem
+                          is what the longest atom in these cells needs at 12.5px, and auto-fit then
+                          collapses the spare track when a row has no amount: three across at 1440
+                          (~191px, unchanged), three at 1280, two at 1100 (~159px) and two on a phone
+                          — exactly what the old base `grid-cols-2` gave the phone. */}
+                      <dl className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-x-5 gap-y-1 text-[12.5px]">
                         <div><dt className="text-ink-3">Due</dt><dd data-ay-skip="1" className="mt-0.5 text-ink-2">{o.due}</dd></div>
                         <div><dt className="text-ink-3">To</dt><dd className="mt-0.5 text-ink-2">{o.authority}</dd></div>
                         {o.amount !== null ? <div><dt className="text-ink-3">Amount</dt><dd data-ay-skip="1" className="mt-0.5 text-ink-2">{money(o.amount, cur)}</dd></div> : null}
@@ -552,7 +595,14 @@ export default function Finances() {
                   <span className="text-[15px] font-semibold text-ink"><span data-ay-skip="1">{r.vendor}</span> — {r.description}</span>
                   <span data-ay-skip="1" className="tabular-nums text-[15px] font-semibold text-ink">{money(r.cad_cents, cur)}</span>
                 </div>
-                <dl className="mt-3 grid grid-cols-2 gap-x-5 gap-y-2 text-[12.5px] sm:grid-cols-4">
+                {/* auto-fit, not `grid-cols-2` + `sm:grid-cols-4` (operator 2026-08-21). Four fixed
+                    tracks in this card's 338px at 1100 left each cell 69px — about eleven characters
+                    a line, which broke an invoice number across two of them. 7rem clears the widest
+                    unbreakable atom here (an invoice number is ~90px at 12.5px) without costing any
+                    density where there was room: four across at 1440 (~138px each, as before), three
+                    at 1280 (~153px), two at 1100 (~159px) and two on a phone (~125px, what the old
+                    base `grid-cols-2` gave it). */}
+                <dl className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-x-5 gap-y-2 text-[12.5px]">
                   <div><dt className="text-ink-3">Invoice</dt><dd data-ay-skip="1" className="mt-0.5 text-ink-2">{r.number}</dd></div>
                   <div><dt className="text-ink-3">Paid</dt><dd data-ay-skip="1" className="mt-0.5 text-ink-2">{r.paid}</dd></div>
                   <div><dt className="text-ink-3">Covers</dt><dd className="mt-0.5 text-ink-2"><bdi data-ay-skip="1">{r.period.start} → {r.period.end}</bdi></dd></div>
@@ -600,7 +650,12 @@ export default function Finances() {
             <Card className="p-5">
               <p className="text-[14px] font-semibold text-ink">T2 Corporation Income Tax Return — required</p>
               <p className="mt-1 max-w-[70ch] text-[13.5px] leading-relaxed text-ink-2">{cra.t2.why}</p>
-              <dl className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 text-[13px] sm:grid-cols-3">
+              {/* auto-fit for the reason set out on the invoice register above: `sm:grid-cols-3`
+                  measures the window, not this card's 614px at 1440, 498px at 1280, 338px at 1100 and
+                  294px at 1024. Form, period and due date keep all three across at 1440 and 1280
+                  (~191px and ~153px each) and fall to two at 1100 (~159px), never 99px
+                  (operator 2026-08-21). */}
+              <dl className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-x-5 gap-y-3 text-[13px]">
                 <div><dt className="text-ink-3">Form</dt><dd data-ay-skip="1" className="mt-0.5 font-semibold text-ink-2">{cra.t2.form}</dd></div>
                 <div><dt className="text-ink-3">Period</dt><dd data-ay-skip="1" className="mt-0.5 font-semibold text-ink-2">{cra.fy.label}</dd></div>
                 <div><dt className="text-ink-3">Due</dt><dd data-ay-skip="1" className="mt-0.5 font-semibold text-ink-2">{cra.t2.due}</dd></div>

@@ -158,7 +158,13 @@ export default function Studio() {
             <Button tip="Start a new course from scratch" onClick={() => setCreating(true)}>New course</Button>
           </div>
           {courses === null ? <SkeletonGrid count={6} /> : (
-            <ul className="grid list-none grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            /* auto-fit, not `sm:`/`lg:` (operator 2026-08-21). `sm:` and `lg:` are VIEWPORT queries, and the
+                shell's right column leaves this page a ~686px content column at a 1440px window, ~570px at
+                1280, ~410px at 1100 and ~366px at 1024 — so `lg:grid-cols-3` fired at the very pixel the right
+                column appeared and cut a 366px column into three 114px cards, clipping the trending rate off
+                every one of them. Each card now asks for 13rem and the row takes as many as fit: three at 1440
+                (~220px each), two at 1280 (~279px), one from 1024 down (~366px) — no breakpoint to be wrong. */
+            <ul className="grid list-none grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))] gap-3">
               {filtered.map((c) => (
                 <li key={c.id}>
                   <button type="button" title="Open this course to edit its details, videos and analytics" onClick={() => openEditor(c.id)}
@@ -166,7 +172,7 @@ export default function Studio() {
                     {c.image && <img src={c.image} alt="" loading="lazy" className="aspect-video w-full object-cover" />}
                     <span className="flex flex-1 flex-col gap-1 p-3">
                       <span className="font-semibold leading-snug text-ink transition-colors group-hover:text-yang">{c.title}</span>
-                      <span className="mt-auto flex items-center gap-2 pt-1 text-[12px] text-ink-3">
+                      <span className="mt-auto flex flex-wrap items-center gap-2 pt-1 text-[12px] text-ink-3">
                         <span>{c.lessons} videos</span><span>· ₳{c.price}</span>
                         {c.comments_per_day > 0 && <span className="font-semibold text-yang">▲ {c.comments_per_day.toLocaleString("en")}/day</span>}
                       </span>
@@ -212,7 +218,10 @@ function BooksMode() {
       {books === null ? <SkeletonGrid count={6} /> : books.length === 0 ? (
         <StatusNote>You haven't written a book yet. <a className="font-semibold text-yin-light hover:underline" href={localePath("/library/")}>Write your first one</a> — brief the AI editor, review the draft, and publish it under your name.</StatusNote>
       ) : (
-        <ul className="grid list-none grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        /* auto-fit, not `sm:`/`lg:` (operator 2026-08-21) — see the courses grid above. This column is
+            ~686px at 1440 and ~366px at 1024, where three tracks left 114px a book. 13rem a card gives
+            three at 1440, two at 1280 and one full-width card from 1024 down. */
+        <ul className="grid list-none grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))] gap-3">
           {filtered.map((b) => (
             <li key={b.id}>
               <a href={localePath(`/read/${b.id}/`)} title="Open this book"
@@ -222,7 +231,7 @@ function BooksMode() {
                   : <span className="flex aspect-[3/4] w-full items-center justify-center bg-gradient-to-br from-yang/25 to-yin/25 text-2xl font-bold text-ink">{(b.title.match(/\b\w/g) || []).slice(0, 2).join("").toUpperCase() || "A"}</span>}
                 <span className="flex flex-1 flex-col gap-1 p-3">
                   <span className="font-semibold leading-snug text-ink transition-colors group-hover:text-yang">{b.title}</span>
-                  <span className="mt-auto flex items-center gap-2 pt-1 text-[12px] text-ink-3">
+                  <span className="mt-auto flex flex-wrap items-center gap-2 pt-1 text-[12px] text-ink-3">
                     <span className="rounded-full bg-veil/[0.06] px-2 py-0.5 font-medium">{bookStateLabel(b.status, b.book_state)}</span>
                     <span>{b.pages} pages</span>
                   </span>
@@ -266,7 +275,10 @@ function MusicMode() {
       {items === null ? <SkeletonGrid count={6} /> : items.length === 0 ? (
         <StatusNote>You haven't composed a track yet. <a className="font-semibold text-yin-light hover:underline" href={localePath("/music/")}>Compose your first one</a>.</StatusNote>
       ) : (
-        <ul className="grid list-none grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        /* auto-fit, not `sm:`/`lg:` (operator 2026-08-21). A track card is a 56px cover beside its title,
+            so three tracks in the ~366px column at 1024 left 114px — barely 34px of it for the name. 13rem
+            a card keeps ~184px of content after the p-3: three at 1440, two at 1280, one from 1024 down. */
+        <ul className="grid list-none grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))] gap-3">
           {filtered.map((t) => (
             <li key={t.id}>
               <a href={localePath(`/listen/${t.id}/`)} className="group flex h-full w-full items-center gap-3 overflow-hidden rounded-card border border-line bg-veil/[0.02] p-3 no-underline transition-colors hover:border-yang/40">
@@ -297,7 +309,10 @@ function AnimationsMode() {
       {items === null ? <SkeletonGrid count={6} /> : items.length === 0 ? (
         <StatusNote>You haven't made an animation yet. <a className="font-semibold text-yin-light hover:underline" href={localePath("/animations/")}>Animate your first topic</a>.</StatusNote>
       ) : (
-        <ul className="grid list-none grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        /* auto-fit, not `sm:`/`lg:` (operator 2026-08-21) — the same column as the grids above: ~686px at
+            1440, ~570px at 1280, ~366px at 1024. 13rem a card gives three at 1440, two at 1280 and one
+            from 1024 down, instead of three 114px cards the moment the right column appeared. */
+        <ul className="grid list-none grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))] gap-3">
           {filtered.map((a) => (
             <li key={a.id}>
               <a href={localePath(`/watch/${a.id}/`)} className="group flex h-full w-full flex-col overflow-hidden rounded-card border border-line bg-veil/[0.02] no-underline transition-colors hover:border-yang/40">
@@ -329,14 +344,17 @@ function IllustrationsMode() {
       {items === null ? <SkeletonGrid count={6} /> : items.length === 0 ? (
         <StatusNote>You haven't commissioned an illustration yet. <a className="font-semibold text-yin-light hover:underline" href={localePath("/illustrations/")}>Commission your first one</a> — a standalone artwork, or a cover/plate for one of your books.</StatusNote>
       ) : (
-        <ul className="grid list-none grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        /* auto-fit, not `sm:`/`lg:` (operator 2026-08-21). At 1024 `lg:grid-cols-3` gave each piece 114px
+            of the ~366px column — narrower than its own state pill and kind label side by side. 13rem a
+            card: three at 1440, two at 1280, one from 1024 down. */
+        <ul className="grid list-none grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))] gap-3">
           {filtered.map((i) => (
             <li key={i.id}>
               <a href={localePath(`/illustration/${i.id}/`)} className="group flex h-full w-full flex-col overflow-hidden rounded-card border border-line bg-veil/[0.02] no-underline transition-colors hover:border-yang/40">
                 <span className="aspect-square w-full overflow-hidden">{i.image ? <img src={i.image} alt="" className="h-full w-full object-cover" /> : <MediaInitials title={i.title} fallback="✦" />}</span>
                 <span className="flex flex-col gap-1 p-3">
                   <span className="truncate font-semibold text-ink group-hover:text-yang">{i.title}</span>
-                  <span className="flex items-center gap-2 text-[12px] text-ink-3">
+                  <span className="flex flex-wrap items-center gap-2 text-[12px] text-ink-3">
                     <span className="rounded-full bg-veil/[0.06] px-2 py-0.5 font-medium">{mediaStateLabel(i.status, i.art_state, "Painting…")}</span>
                     <span>{KIND_LABEL[i.kind] || "Artwork"}</span>
                   </span>
@@ -1534,7 +1552,10 @@ function TopicsMode() {
         <Button tip="Create a new typology topic" onClick={() => setCreating(true)}>New topic</Button>
       </div>
       {topics === null ? <SkeletonGrid count={6} /> : (
-        <ul className="grid list-none grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        /* auto-fit, not `sm:`/`lg:` (operator 2026-08-21). The topic chips (category, status, trend) sat
+            in a 114px card at 1024, where this column is ~366px. 13rem a card: three at 1440 (~220px), two
+            at 1280 (~279px), one from 1024 down. */
+        <ul className="grid list-none grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))] gap-3">
           {filtered.map((t) => (
             <li key={t.key}>
               <button type="button" title="Open this topic to edit it" onClick={() => openEditor(t.key)}
@@ -1912,7 +1933,10 @@ function GrantsMode() {
         <Button tip="Add a new sponsor / grant opportunity" onClick={() => setCreating(true)}>New sponsor</Button>
       </div>
       {grants === null ? <SkeletonGrid count={6} /> : (
-        <ul className="grid list-none grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        /* auto-fit, not `sm:`/`lg:` (operator 2026-08-21). A sponsor card carries a title, a funder line
+            and a deadline; three tracks in the ~366px column at 1024 left 114px for all of it. 13rem a
+            card: three at 1440, two at 1280, one from 1024 down. */
+        <ul className="grid list-none grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))] gap-3">
           {filtered.map((g) => {
             const sponsor = g.category === SPONSOR_CATEGORY;
             return (

@@ -48,7 +48,11 @@ function FoundationBooks({ fin }: { fin: FoundationFinances }) {
         <h2 className="text-[20px] font-bold tracking-tight">The foundation’s books</h2>
         <span className="text-[13px] text-ink-3">Public · real, current values · every gift and every spend accounted for</span>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {/* auto-fit, not `sm:grid-cols-4`: `sm:` is a 640px VIEWPORT query while this column is ~686px
+          at 1440 and ~410px at 1100, so four tracks meant 130px money cards on a wide screen and 61px
+          ones at 1100 (operator 2026-08-21). Each card asks for 10rem and the row takes as many as
+          fit — four at 1440, two at 1100, one on a phone — with no breakpoint to be wrong. */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3">
         <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">In the fund</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-yang">{formatFiat(fin.donations_fiat, fin.fiat)}</p><p className="text-[12px] text-ink-3">donated money still on hand, every bucket</p></Card>
         <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">ArtaCredits held</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-yin-light">{formatFiat(creditsHeld, fin.fiat)}</p><p className="text-[12px] text-ink-3">of the above, waiting for the slices donors chose</p></Card>
         <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Coins in circulation</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-ink"><Coins n={fin.coin_supply} /></p><p className="text-[12px] text-ink-3">{(fin.reserve_mg / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} g of gold held</p></Card>
@@ -351,7 +355,15 @@ export default function Donate() {
                 reach meter below answers for that exact slice.
                 The list is countryOptions() from lib/flags — every ISO 3166-1 alpha-2 code, named
                 and sorted in the active language — not copts.countries, whose names are English. */}
-            <Card className="grid gap-4 p-5 sm:grid-cols-2">
+            {/* auto-fit, not `sm:grid-cols-2` (operator 2026-08-21). `sm:` is a 640px VIEWPORT
+                query, and the page column these two pickers live in is nothing like the viewport:
+                the shell's right column leaves ~686px at a 1440px window, ~570px at 1280, ~410px at
+                1100 and ~366px at 1024, and this step is capped at max-w-2xl with the card's own p-5
+                inside it, so two fixed tracks gave each <select> 155px at 1024 — not enough for a
+                flag and a country name, and a native control truncates rather than wraps. Each field
+                asks for 14rem, so the pair sits side by side at 1440 (~308px each) and 1280 (~257px)
+                and falls to one full-width field per row from 1100 down (~370px). */}
+            <Card className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4 p-5">
               <Picker id="cr-country" label="Nationality" value={country} onChange={setCountry}>
                 <option value="">Anyone</option>
                 {countries.map((c) => <option key={c.code} value={c.code}>{`${flagEmoji(c.code)} ${c.name}`}</option>)}
@@ -471,7 +483,13 @@ export default function Donate() {
       {/* ── what a credit is, and is not ── */}
       <section className="flex flex-col gap-3">
         <h2 className="text-[20px] font-bold tracking-tight">What an ArtaCredit is</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
+        {/* auto-fit, not `sm:grid-cols-2` (operator 2026-08-21). These are four PROSE cards, and
+            `sm:` only knows the window: at 1100 the shell leaves this section a ~410px column, so
+            two tracks minus the 12px gap and each card's own 40px of padding set this copy 159px
+            wide — about 23 characters a line, which is unreadable regardless of how wide the screen
+            claims to be. 16rem a card leaves ~13.5rem of prose after the padding; the row is two
+            cards at 1440 (~297px of text each) and 1280 (~239px) and one from 1100 down (~370px). */}
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] gap-3">
           <Card className="p-5 text-[14px] leading-relaxed text-ink-2">
             <p className="font-semibold text-ink">It buys one entry</p>
             <p className="mt-1.5">A credit pays a member’s challenge entry fee and nothing else. It is not a prize, not a vote, not standing, and it can’t be cashed out — the money goes straight into the challenge’s pool, which the community’s hearts award at the full moon.</p>

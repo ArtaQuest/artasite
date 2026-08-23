@@ -55,12 +55,18 @@ const FACT_SVG = { viewBox: "0 0 24 24", width: 16, height: 16, fill: "none", st
 /** Header placeholder while the profile payload loads — holds the layout, no jumps. */
 function HeaderSkeleton() {
   return (
-    <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center" aria-hidden>
+    <div className="flex flex-wrap items-center gap-4" aria-hidden>
       <div className="h-24 w-24 shrink-0 animate-pulse rounded-full bg-veil/[0.08]" />
-      <div className="flex-1">
-        <div className="h-6 w-48 animate-pulse rounded bg-veil/[0.08]" />
-        <div className="mt-3 h-4 w-72 animate-pulse rounded bg-veil/[0.06]" />
-        <div className="mt-2 h-4 w-40 animate-pulse rounded bg-veil/[0.06]" />
+      {/* WRAP rather than switch on the viewport, and cap the bars. `sm:flex-row` put these beside
+          the 96px circle from a 640px WINDOW onward, but the shell's content column is only ~366px
+          at 1024 and ~410px at 1100, and the bars are fixed widths — 96 + 16 + 288 (w-72) is wider
+          than the column, so the placeholder for a page about to load overflowed it (operator
+          2026-08-21). The block asks for 18rem and takes its own line when the column cannot hold
+          both; max-w-full keeps each bar inside whatever width it lands in. */}
+      <div className="min-w-0 flex-[1_1_18rem]">
+        <div className="h-6 w-48 max-w-full animate-pulse rounded bg-veil/[0.08]" />
+        <div className="mt-3 h-4 w-72 max-w-full animate-pulse rounded bg-veil/[0.06]" />
+        <div className="mt-2 h-4 w-40 max-w-full animate-pulse rounded bg-veil/[0.06]" />
       </div>
     </div>
   );
@@ -122,7 +128,13 @@ function FollowPanel({ slug, dir, count, onClose }: {
       {state === "ready" && rows.length === 0 && (
         <StatusNote className="py-6">{dir === "followers" ? "No followers yet." : "Not following anyone yet."}</StatusNote>
       )}
-      <ul className="mt-1 grid list-none grid-cols-1 gap-x-4 sm:grid-cols-2">
+      {/* auto-fit, not `sm:grid-cols-2`: `sm:` is a 640px VIEWPORT query and this panel sits in the
+          shell's content column, ~410px at 1100 and ~366px at 1024. Two fixed tracks made each row
+          181px wide, of which a 40px avatar and the row's own padding take 68px — 113px for a member
+          NAME, which is never truncated and so simply wrapped down the page (operator 2026-08-21).
+          Each row asks for 14rem: two 319px rows at 1440, two 261px ones at 1280, one column at
+          1100 and below. */}
+      <ul className="mt-1 grid list-none grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-x-4">
         {rows.map((r, i) => {
           const body = (
             <>
@@ -689,15 +701,23 @@ export default function Profile() {
             </Pill>
           ))}
         </div>
+        {/* auto-fit, not `lg:grid-cols-3 xl:grid-cols-4`: both are VIEWPORT queries, and 1024 — where
+            `lg:` asks for a third track — is the exact width at which the shell's 330px right column
+            appears, so the page was cut to ~366px at the same moment it was told to hold three cards.
+            Measured: 151px NbCards at 1440 and 115px at 1100, for a card carrying a 16/10 teaser, a
+            two-line title and an author's name (operator 2026-08-21). Each card asks for 10rem, which
+            is the width the phone's two-up already gives it, so the row is three 218px cards at 1440,
+            three 179px at 1280, two 197px at 1100 and two on a phone exactly as before. The skeleton
+            below uses the same track definition so nothing reflows when the posts arrive. */}
         {postsState === "loading" ? (
-          <ul className="grid list-none grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4" aria-hidden>
+          <ul className="grid list-none grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3 sm:gap-4" aria-hidden>
             {Array.from({ length: 8 }, (_, i) => <CardSkeleton key={i} />)}
           </ul>
         ) : postsState === "error" ? (
           <StatusNote error>Couldn't load these posts — please refresh and try again.</StatusNote>
         ) : items.length ? (
           <>
-            <ul className="grid list-none grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+            <ul className="grid list-none grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3 sm:gap-4">
               {items.map((nb) => <NbCard key={nb.id} nb={nb} />)}
             </ul>
             {next != null && <LoadMoreButton onClick={() => load(next)} loading={more} />}

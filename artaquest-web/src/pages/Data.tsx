@@ -157,7 +157,16 @@ export default function Data() {
       <section aria-labelledby="data-uses">
         <h2 id="data-uses" className="text-[20px] font-bold tracking-tight">What you can do with it</h2>
         <p className="mt-1.5 text-[14px] text-ink-2">A few of the questions this data can answer. Read it on the page below, or pull it through the API.</p>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Intrinsic tracks, no breakpoint: `sm:`/`lg:` are VIEWPORT queries, but the shell wraps this
+            page in a left rail plus a 330px right column, so the box these cards actually live in is
+            ~686px at a 1440px window, ~570px at 1280, ~410px at 1100 and ~366px at 1024 — the very width
+            where the right column appears. Three-up therefore cut a 410px column into 128px cards, and
+            after the 40px icon, its 14px gap and the card's 32px of padding the sentence was left 42px
+            to itself (operator, 2026-08-21). auto-fit asks the box instead of the window: two tracks at
+            686px (337px each) and at 570px (279px each), one full-width track at 410px and below, and
+            never a card with less than ~170px of prose. The min(100%,…) floor is what stops a single
+            track from being wider than the box on a narrow phone. */}
+        <div className="mt-5 grid grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))] gap-3">
           {USE_CASES.map((u, i) => {
             const tint = i % 2 === 0 ? "bg-yang/10 text-yang" : "bg-yin/15 text-yin-light";
             return (
@@ -183,9 +192,19 @@ export default function Data() {
         {!tables ? (
           <StatusNote className="py-16">Loading…</StatusNote>
         ) : (
-          <div className="mt-5 grid gap-6 lg:grid-cols-[256px_1fr]">
+          /* The 256px table list was a FIXED grid track opened by `lg:`, and `lg:` fires at exactly the
+             1024px viewport where the shell's 330px right column appears — so the fixed track and the
+             right column arrived together and the data grid was left 366 − 256 − 24 = 86px at 1024 and
+             410 − 280 = 130px at 1100: a scrollable table narrower than one of its own columns
+             (operator, 2026-08-21). A wrapping flex row instead. The list keeps its natural 16rem and
+             the grid asks for 28rem, so the two share a line only where the box can hold
+             256 + 24 + 448 = 728px, and otherwise the list takes a full-width line above the grid —
+             which is what this layout already did below `lg`, so no new arrangement is introduced. The
+             shell's content column tops out near 686px, so in practice the grid now gets the whole
+             column (686/570/410/366px) instead of the 406/290/130/86px left over from it. */
+          <div className="mt-5 flex flex-wrap gap-6">
             {/* table list */}
-            <aside className="min-w-0">
+            <aside className="min-w-0 flex-[1_1_16rem]">
               <SearchPill value={q} onChange={setQ} placeholder="Find a table…" className="mb-2 h-9 w-full px-3" />
               <ul className="max-h-[72vh] list-none space-y-0.5 overflow-y-auto pe-1">
                 {shown.map((t) => (
@@ -202,7 +221,7 @@ export default function Data() {
             </aside>
 
             {/* data grid */}
-            <section className="min-w-0">
+            <section className="min-w-0 flex-[1_1_28rem]">
               {failed ? (
                 <Card className="px-6 py-10 text-center text-[14px] text-ink-3">
                   <p>Could not load this table. Please try again.</p>
@@ -279,12 +298,18 @@ export default function Data() {
           please cite it as below.
         </p>
 
-        {/* grid-cols-1 (not the implicit `auto` track) so the single mobile column is minmax(0,1fr) —
-            capped at the viewport, never widened to fit the cards' content. Each card also gets min-w-0
-            so it can shrink below its code blocks' intrinsic width (the long curl/JS lines scroll inside
-            their own overflow-x-auto <pre> instead of forcing the card — and the page — sideways). Mirrors
-            the explorer grid above (its aside/section carry min-w-0 for the same reason). Fixes #16. */}
-        <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
+        {/* auto-fit tracks with a min(100%,20rem) floor. That floor does the job `grid-cols-1` used to
+            do — a single track can never be wider than the box, so it stays capped and is never widened
+            to fit the cards' content (fixes #16) — while `lg:grid-cols-2` had to go, because it split a
+            box the shell caps at ~686px at 1440, ~570px at 1280, ~410px at 1100 and ~366px at 1024. Two
+            cards in a 366px column are 173px wide, and after 40px of card padding the `table` / `page`
+            rows had a 48px key, a 12px gap and about 73px left for the explanation (operator,
+            2026-08-21). The pair now sits side by side only above 660px — two 333px cards in a 686px
+            column — and takes the full width below that. Each card also keeps min-w-0 so it can shrink
+            below its code blocks' intrinsic width (the long curl/JS lines scroll inside their own
+            overflow-x-auto <pre> instead of forcing the card — and the page — sideways). Mirrors the
+            explorer above, whose two parts carry min-w-0 for the same reason. */}
+        <div className="mt-5 grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] gap-5">
           {/* Query the API */}
           <Card className="flex min-w-0 flex-col gap-4 p-5">
             <div className="flex items-center justify-between gap-2">

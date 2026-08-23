@@ -354,15 +354,31 @@ export default function Wallet() {
     <div className="flex flex-col gap-8 pb-12">
       {/* balance header */}
       <section className="relative overflow-hidden rounded-card border border-line bg-space-2 px-6 py-9 shadow-card sm:px-9">
-        <OrbitRings className="absolute -right-10 top-1/2 hidden h-72 w-72 -translate-y-1/2 text-ink sm:block lg:right-12" />
-        <div className="relative flex items-center justify-between gap-6">
-          <div>
+        {/* The 132px coin was a shrink-0 sibling of the balance in a row that could not wrap, so at
+            a 1024px window — where the shell leaves a page a 366px column, 294px of it inside this
+            section's padding — the coin and its 24px gap took 156px and left the balance 138px to
+            render a 51px figure in, inside an overflow-hidden section that then quietly clipped the
+            money. The rings were worse: `lg:right-12` pulled a 288px decoration INWARD across the
+            words at exactly the width where the 330px right column appears. The row wraps
+            intrinsically now — the text asks for 18rem, the coin keeps its natural 132px and drops
+            below whenever both will not fit, so 686px and 570px columns hold them side by side (the
+            text getting 458px and 342px) while 410px, 366px and a phone stack them with the text on
+            the full width — and the rings travel with the coin rather than floating over the prose
+            (operator, 2026-08-21). */}
+        <div className="relative flex flex-wrap items-center justify-between gap-6">
+          <div className="min-w-0 flex-[1_1_18rem]">
             <p className="text-[13px] font-semibold uppercase tracking-[0.18em] text-ink-3">Your wallet</p>
             <div className="mt-2 text-[clamp(2.4rem,6vw,3.2rem)] font-extrabold leading-none text-yang tabular-nums">{balance == null && !dash ? "—" : <Coins n={bal} />}</div>
             <p className="mt-2 text-[14px] text-ink-2">Arta Coins · <a href="/reserve/" className="hover:text-yin-light hover:underline">{reserve ? `${Math.round((Number(reserve.backing_ratio) || 0) * 100)}% gold-backed` : "gold-backed"}</a>.{reserve ? <> Cash-out value ≈ <span className="font-semibold text-ink">{formatFiat(bal * reserve.sell, fiat)}</span>.</> : failed ? <> Live cash-out value is temporarily unavailable.</> : null}</p>
             <a href={localePath("/reserve/")} className="mt-3 inline-block text-[14px] font-semibold text-yang hover:underline">See the reserve <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
           </div>
-          <CoinDisc size={132} className="hidden shrink-0 sm:block" />
+          {/* The `sm:` gate stays only as the art switch it always was (no coin on a phone); it no
+              longer decides the layout. `relative` on the coin keeps it above the positioned rings,
+              which are absolutely positioned and would otherwise paint over a static sibling. */}
+          <span className="relative mx-auto hidden shrink-0 place-items-center sm:grid">
+            <OrbitRings className="absolute left-1/2 top-1/2 h-[15rem] w-[15rem] -translate-x-1/2 -translate-y-1/2 text-ink" />
+            <CoinDisc size={132} className="relative" />
+          </span>
         </div>
       </section>
 
@@ -373,15 +389,28 @@ export default function Wallet() {
       {CHECKOUT_LIVE ? (
         // #buy is the scroll target for "Top up your wallet" CTAs (e.g. ArtaBot) so landing here goes
         // straight to the Buy-coins form; scroll-mt clears the 60px sticky topbar.
-        <div id="buy" className="grid scroll-mt-24 gap-5 lg:grid-cols-2">
+        //
+        // `lg:grid-cols-2` was a viewport query spending room the page does not have: the shell hands
+        // a page ~686px at a 1440px window, ~570px at 1280px, ~410px at 1100px and ~366px at 1024px
+        // (the 330px right column appears at exactly 1024). Two tracks with a 20px gap therefore made
+        // 195px panels at 1100px and 173px panels at 1024px — 147px and 125px of content inside each
+        // card's p-6, for a form carrying an amount field, four gateway cards and a
+        // "Buy ₳150 — CA$20.00" button. auto-fit with a 20rem floor puts them side by side only where
+        // they fit (686px column → 333px each, 285px of content) and stacks them full width at 570px
+        // and below (operator, 2026-08-21).
+        <div id="buy" className="grid scroll-mt-24 grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] gap-5">
           <BuyPanel opts={opts} buyPrice={reserve?.buy ?? 0} fiat={fiat} payments={reserve?.payments ?? false} reserveKnown={!!reserve} onRetry={loadReserve} onCredited={refreshWallet} />
           <SellPanel balance={bal} balanceKnown={balance != null || !!dash} sellPrice={reserve?.sell ?? 0} fiat={fiat} cashout={reserve?.cashout ?? false} reserveKnown={!!reserve} onRetry={loadReserve} onSold={() => refreshWallet()} />
         </div>
       ) : (
         // Buy/cash-out is retired (see CHECKOUT_LIVE) — the BuyPanel filled then failed on submit
         // (buyCoins is a RETIRED stub). Honest state instead; balance + live gold value stay above.
-        <Card className="flex flex-col items-start gap-3 p-6 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        // `sm:flex-row` had the same viewport-query fault as the grid above: at a 1024px window the
+        // shrink-0 button left this paragraph 106px, about thirteen characters to a line. It wraps on
+        // its own contents now — side by side while the row can hold 18rem of text plus the button
+        // (a 686px column gives the text 426px), stacked below that (operator, 2026-08-21).
+        <Card className="flex flex-wrap items-center justify-between gap-3 p-6">
+          <div className="min-w-0 flex-[1_1_18rem]">
             <h2 className="text-[18px] font-bold tracking-tight">Buying and cashing out are being rebuilt</h2>
             <p className="mt-1 max-w-xl text-[14px] leading-relaxed text-ink-2">Topping up with cash and cashing out
             for cash are coming back on the new platform. Meanwhile you win gold-backed coins by taking

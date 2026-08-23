@@ -51,7 +51,11 @@ const msg = (e: unknown, fallback: string) => (e as { message?: string })?.messa
 
 function StepRail({ at }: { at: number }) {
   return (
-    <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+    /* auto-fit, not `sm:grid-cols-4`: `sm:` is a 640px VIEWPORT query while the shell leaves this
+        page a ~410px content column at an 1100px window and ~366px at 1024 — four fixed tracks were
+        97px each there, and a step is a 12px uppercase label plus a hint. Each step asks for 9rem and
+        the row takes as many as fit: four at 1440, two at 1100, one on a phone. */
+    <ol className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-2">
       {STEPS.map((s) => {
         const done = s.n < at;
         const now = s.n === at;

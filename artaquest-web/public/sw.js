@@ -392,7 +392,10 @@
 // 2026-08-21) — chunk-only, bump.
 // v67: /sponsors is a list, not a 760px-wide table crammed into a 410px column (operator
 // 2026-08-21, "the sponsors page is messed up … the table specially") — chunk-only, bump.
-const VERSION = "aq-sw-v67";
+// v68: the layout sweep — /reserve, /wallet, /data, /faq-contact, /donate, /finances, /studio,
+// /topics and the notebook step rail stop splitting themselves on VIEWPORT breakpoints inside the
+// shell's ~410px column (operator 2026-08-21) — chunk-only, bump.
+const VERSION = "aq-sw-v68";
 const SHELL = "aq-shell-v42";   // last good app-shell HTML (any route boots the SPA offline)
 const ASSETS = "aq-assets-v42"; // hashed JS/CSS from the theme's app/ build dir
 const IMG = "aq-img-v4";

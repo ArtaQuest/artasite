@@ -185,7 +185,14 @@ function SystemCard({ sys, sel, onChange, openInitially }: {
               <p className="mt-4 text-[12px] font-semibold uppercase tracking-wide text-ink-3">
                 {sys.format === "multi" ? "Select all that apply" : "Select one"}
               </p>
-              <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {/* auto-fit, not `sm:grid-cols-2`: an OptionRow spends 112px on fixed chrome before a
+                  word of its description — 28px of padding, a 16px tick, a 44px avatar and two 12px
+                  gaps — so the two fixed tracks the 640px VIEWPORT query asked for left 73px of
+                  description in the ~410px column the shell gives this page at 1100 (operator
+                  2026-08-21). Each row asks for 16rem so the description clears about 150px at the
+                  narrowest two-up: two 323px rows at 1440, two 265px at 1280, one column at 1100
+                  and below. */}
+              <ul className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] gap-2">
                 {sys.options?.map((o) => (
                   <OptionRow key={o.key} multi={sys.format === "multi"} checked={picks.includes(o.key)}
                     label={o.label} short={o.short} desc={o.desc} image={o.image} seed={o.key} onToggle={() => togglePick(o.key)} />

@@ -99,13 +99,29 @@ export default function Reserve() {
   return (
     <div className="flex flex-col gap-12 pb-12">
       {/* hero */}
-      <section className="relative overflow-hidden rounded-card border border-line bg-space-2 px-6 py-14 sm:px-12 sm:py-16">
+      {/* THE SHELL, NOT THE WINDOW, DECIDES HOW WIDE THIS SECTION IS. A page is handed a content
+          column of roughly 686px at a 1440px window, 570px at 1280px, 410px at 1100px and 366px at
+          1024px (the 330px right column appears at exactly 1024), and the section spends 96px of
+          that on its own padding — so the prose block is really 590px, 474px, 314px and 270px. The
+          hero art used to be three absolutely positioned pieces revealed by `lg:`/`xl:`, which are
+          viewport queries and therefore describe a width this page never has: the 300px coin
+          switched itself ON at a 1280px viewport and lay across 260px of a 474px prose block, and
+          the 200px coin covered 128px of the 270px one at 1024px — an opaque struck coin sitting on
+          the headline and the lede (operator, 2026-08-21). The section is now the flex row itself
+          (the two blurred glows are absolutely positioned, so they are not flex items and nothing
+          about them changes): the prose asks for 28rem and the coin is an ordinary item that wraps
+          beneath it whenever the row cannot hold both — which, at every width this shell offers, it
+          cannot, so the coin sits UNDER the prose instead of on top of it. The `lg:` gate survives on
+          the coin only as the small-screen art switch it always was; it no longer decides any
+          layout, only whether a phone is given the coin at all. */}
+      <section className="relative flex flex-wrap items-center gap-x-8 gap-y-8 overflow-hidden rounded-card border border-line bg-space-2 px-6 py-12 sm:px-10 sm:py-14">
         <div className="pointer-events-none absolute -right-24 -top-28 h-80 w-80 rounded-full bg-yang/10 blur-3xl" aria-hidden />
         <div className="pointer-events-none absolute -bottom-28 -left-24 h-80 w-80 rounded-full bg-yin/15 blur-3xl" aria-hidden />
-        <OrbitRings className="absolute -right-20 top-1/2 hidden h-[440px] w-[440px] -translate-y-1/2 text-ink lg:block" />
-        <CoinDisc size={300} className="absolute right-2 top-1/2 hidden -translate-y-1/2 xl:block" />
-        <CoinDisc size={200} className="absolute -right-6 top-1/2 hidden -translate-y-1/2 lg:block xl:hidden" />
-        <div className="relative max-w-2xl">
+        {/* 24rem, measured: the card's inside is 686 − 80 (px-10) = 606px at a 1440px window, so
+            384 (text) + 32 (gap) + 176 (the disc) = 592 fits on one line there and the coin sits
+            BESIDE the words as it was meant to; at 1100 the card holds 330px and the coin drops
+            below, centred, instead of being painted over the headline. */}
+        <div className="relative min-w-0 max-w-2xl flex-[1_1_24rem]">
           <p className="text-[13px] font-semibold uppercase tracking-[0.22em] text-ink-3">{r.name} · {r.code}</p>
           <h1 className="mt-4 text-[clamp(2.1rem,5vw,3.3rem)] font-extrabold leading-[1.1]">
             A currency measured in <span className="aq-grad">real gold</span>
@@ -127,6 +143,14 @@ export default function Reserve() {
             <Button href="/donate/" variant="outline" size="xl" className="text-ink hover:text-yin-light">See the books</Button>
           </div>
         </div>
+        {/* The rings ride WITH the coin now rather than floating over the section, so a decoration
+            can never cross the prose again whatever the column does. `relative` on the coin is
+            load-bearing: the rings are positioned and would otherwise paint over a static sibling, and the
+            grid cell is what centres the coin on them without an inline box's descender gap. */}
+        <span className="relative mx-auto hidden shrink-0 place-items-center sm:grid">
+          <OrbitRings className="absolute left-1/2 top-1/2 h-[17rem] w-[17rem] -translate-x-1/2 -translate-y-1/2 text-ink" />
+          <CoinDisc size={176} className="relative" />
+        </span>
       </section>
 
       {/* live ticker */}
@@ -135,7 +159,15 @@ export default function Reserve() {
           <h2 className="text-[20px] font-bold tracking-tight">Live price</h2>
           {updated && <span className="text-[12px] text-ink-3">Updated <time dateTime={new Date(r.updated * 1000).toISOString()}>{updated}</time></span>}
         </div>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {/* `lg:grid-cols-4` was a viewport query cutting up a column the viewport does not describe:
+            at a 1024px window this row is 366px wide, so four tracks with 12px gaps gave 82px tiles —
+            42px of content inside the card's p-5 — and a figure like CA$0.1300 (about 140px at 26px
+            extrabold, and one unbreakable token) simply ran out over the border; 1100px gave 93px
+            tiles, 1280px gave 133px. auto-fit sizes to the row it is actually in: 3 tiles of 221px at
+            a 686px column, 2 of 279px at 570px, 2 of 199px at 410px, and one full-width tile at 366px
+            and on a phone — never a track under 12rem, which is 152px of content after the card's own
+            padding (operator, 2026-08-21). */}
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] gap-3">
           <TickerCard label={`Buy price (${fiat}/${r.symbol})`} value={perCoin(r.buy, fiat)} sub="what you pay per coin" tone="yang" />
           <TickerCard label={`Sell price (${fiat}/${r.symbol})`} value={perCoin(r.sell, fiat)} sub="what you receive per coin" tone="yin" />
           <TickerCard label="Gold spot (USD/oz)" value={usdOz(r.gold_oz_usd || r.spot)} sub="the underlying metal" tone="ink" />
@@ -151,7 +183,12 @@ export default function Reserve() {
       <section>
         <h2 className="text-[20px] font-bold tracking-tight">Proof of reserve</h2>
         <p className="mt-1 max-w-2xl text-[14px] leading-relaxed text-ink-2">Every coin in circulation is meant to be matched, milligram for milligram, by gold in the vault. Here is the live ratio, whatever it says.</p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {/* The same viewport-query bug as the live-price row, and it bit harder because these
+            figures are longer: formatFiat prints CA$1,234.56 at about 168px. So the floor here is
+            13rem = 208px, which leaves 168px of content after the p-5 — 3 tiles of 221px at a 686px
+            column, 2 of 279px at 570px, and one full-width tile at 410px and below, where four 82px
+            tiles used to be (operator, 2026-08-21). */}
+        <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))] gap-3">
           <TickerCard label="Coins in circulation" value={<Coins n={r.supply} />} sub="total Arta Coins minted" tone="ink" />
           <TickerCard label="Gold reserve" value={`${reserveG} g`} sub={`${r.reserve_mg.toLocaleString()} mg held`} tone="yang" />
           <TickerCard label="Reserve value" value={formatFiat(r.reserve_value, fiat)} sub="at today’s spot" tone="yin" />
@@ -189,7 +226,11 @@ export default function Reserve() {
           <p className="mt-1 max-w-2xl text-[14px] leading-relaxed text-ink-2">
             Gifts are held as money, earmarked to whoever the donor chose, and spent on challenge entry fees for those members. Nothing here is converted into coin.
           </p>
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {/* `sm:grid-cols-2` halved a 366px column into two 177px cards at a 1024px window — 137px
+              of content for a fiat figure that wants about 168px. Same 13rem floor as the proof row;
+              with only two cards auto-fit collapses the spare track, so they still share a 686px
+              column 50/50 at 337px each (operator, 2026-08-21). */}
+          <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))] gap-3">
             <TickerCard label="In the fund" value={formatFiat(fin.fund_balance, fin.fiat)} sub="donated money still on hand, every earmark" tone="yin" />
             <TickerCard label="Directed earmarks" value={fin.earmarks.length.toLocaleString()} sub="slices a donor has chosen and money is waiting for" tone="yang" />
           </div>

@@ -103,7 +103,16 @@ export function ParticipationDoc({ cert, sample = false }: { cert: PartCert; sam
     <article className={cx("aq-cert aq-cert-plain relative mx-auto w-full max-w-4xl overflow-hidden rounded-card bg-space-1", sample && "select-none")}>
       {/* ONE rule. The old document had two nested frames and four corner ticks; a single hairline
           says "this is a document" just as clearly and leaves the name the loudest thing on it. */}
-      <div className="relative px-7 py-10 sm:px-14 sm:py-14" style={{ border: "1px solid rgba(232,185,35,0.45)", borderRadius: "12px" }}>
+      {/* The side padding is a PERCENTAGE of the document's own width rather than `sm:px-14`
+          (operator 2026-08-21). `sm:` is a 640px VIEWPORT query, and this certificate never gets the
+          viewport: the app shell keeps a left rail and a 330px right column, so the page column it
+          is drawn into is about 686px at a 1440px window, 570px at 1280, 410px at 1100 and 366px at
+          1024. A flat 56px on each side was therefore spending 27% of the sheet at 1100 while still
+          behaving as though the screen were wide. A percentage sizes to the box the document is
+          actually in — about 55px at 686, 46px at 570, and floored at the original 28px once the
+          sheet drops below ~350px — and print is unaffected, because @media print lays .aq-cert out
+          at 100% of the page box, where 8% lands back on ~56px. */}
+      <div className="relative px-[clamp(1.75rem,8%,3.5rem)] py-10 sm:py-14" style={{ border: "1px solid rgba(232,185,35,0.45)", borderRadius: "12px" }}>
 
         {sample && (
           <p className="aq-no-print absolute right-5 top-5 text-[9.5px] font-semibold uppercase tracking-[0.24em] text-ink-3">
@@ -163,7 +172,18 @@ export function ParticipationDoc({ cert, sample = false }: { cert: PartCert; sam
         {/* ── one hairline, then the plates ── */}
         <div className="mt-11 h-px w-full" style={{ backgroundColor: "rgba(232,185,35,0.28)" }} aria-hidden />
 
-        <div className={cx("mt-7 grid gap-x-10 gap-y-8 sm:items-end", cert.sponsored ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+        {/* auto-fit, not `sm:grid-cols-3` / `sm:grid-cols-2` (operator 2026-08-21). `sm:` asks the
+            VIEWPORT, and the viewport is not what this document gets: inside the shell's content
+            column the sheet has about 576px of usable width at 1440, 479px at 1280 and 344px at
+            1100, so three tracks with a 40px gutter between them handed each plate 72px at 1100 —
+            narrower than the founder's own signature line, and the plates collided. Each plate now
+            asks for 10rem, which is what "Founder · ArtaQuest Foundation" measures at 9px with its
+            tracking; that line is whitespace-nowrap by design, so it must never be given less. The
+            row then takes as many tracks as fit — three at 1440 (~165px each), two at 1280 (~219px),
+            one from 1100 down — with no breakpoint to be wrong. auto-fit also collapses the track a
+            missing donor plate would have left empty, so an unsponsored certificate no longer needs
+            a column count of its own. */}
+        <div className="mt-7 grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-x-10 gap-y-8 sm:items-end">
           {/* the Foundation's plate */}
           <div className="flex flex-col items-center sm:items-start">
             <FounderSignature />

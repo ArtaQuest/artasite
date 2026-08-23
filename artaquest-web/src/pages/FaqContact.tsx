@@ -139,9 +139,20 @@ export default function FaqContact() {
         ))}
       </nav>
 
-      <div className="grid gap-10 lg:grid-cols-[1fr_300px] lg:items-start">
+      {/* The accordion and the contact card were a `1fr 300px` grid opened by `lg:` — a VIEWPORT query
+          that fires at 1024px, which is the exact width where the shell's own 330px right column
+          appears. The box this page gets is therefore ~366px at 1024 and ~410px at 1100, so the fixed
+          300px rail plus its 40px gap left the questions 26px and 70px respectively, and even at a
+          1440px window (~686px box, ~346px of it for the accordion) the answers wrapped at about five
+          words to a line (operator, 2026-08-21). A wrapping flex row asks the box instead: the two share
+          a line only where it can hold 448 + 40 + 288 = 776px, and below that the contact card takes a
+          full-width line beneath the accordion — the same order it already had below `lg`. Since the
+          shell's content column tops out near 686px, the questions now get the whole of it. items-start
+          keeps the card at its own height, which is what the sticky offset needs; the card's `lg:sticky`
+          stays because it spends no horizontal room and is simply inert while the card is the last line. */}
+      <div className="flex flex-wrap items-start gap-10">
         {/* FAQ accordion */}
-        <div ref={faqRef} className="flex flex-col gap-9">
+        <div ref={faqRef} className="flex min-w-0 flex-[1_1_28rem] flex-col gap-9">
           {SECTIONS.map((s) => (
             // tabIndex=-1 so a quick-jump anchor moves keyboard FOCUS to the section (not just the scroll)
             // — otherwise the next Tab resumes from the nav link, not where the user jumped (WCAG 2.4.3).
@@ -154,7 +165,7 @@ export default function FaqContact() {
         </div>
 
         {/* Contact rail */}
-        <aside className="lg:sticky lg:top-20">
+        <aside className="min-w-0 flex-[1_1_18rem] lg:sticky lg:top-20">
           <Card className="p-6">
             <h2 className="text-[18px] font-bold">Still need help?</h2>
             <p className="mt-2 text-[14px] leading-relaxed text-ink-2">Email us and we will respond within 3–5 business days.</p>
