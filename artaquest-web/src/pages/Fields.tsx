@@ -9,8 +9,29 @@ import researchData from "../data/research.json";
 import { localePath, isLoggedIn } from "../lib/wp";
 import { resonanceTitle } from "../lib/resonance";
 
+/**
+ * research.json is a generated data file with no types of its own, so every read of it used to be an
+ * `any` — eight of them, which meant the file failed the changed-file lint gate and could not be
+ * edited at all (that is why the /topics layout bug outlived two sweeps). ONE shape, declared once,
+ * cast once. `unknown` on the ends the JSON does not describe keeps it honest: a field that is not
+ * declared here has to be checked before it is used, which is what the auc2/auc4 reads do below.
+ */
+type ResearchTopic = {
+  key: string; label: string; sign: string; r2: number;
+  dominantPlanet?: string; domShare?: number;
+  phaseSign?: string; worldEvent?: string;
+  [k: string]: unknown;
+};
+type ResearchAggregate = {
+  auc: number; skillMedian: number; pctPositive: number; topics: number;
+  persistence: number | null; paramsPerTopic: number | null;
+  skillCurve?: number[]; auc2?: number; auc4?: number; [k: string]: unknown;
+};
+const TOPICS = researchData.topics as unknown as ResearchTopic[];
+const AGGREGATE = (researchData as unknown as { aggregate?: ResearchAggregate }).aggregate;
+
 // The full topic-500-winner analysis for a field, keyed identically to the disciplines registry.
-const ANALYSIS: Record<string, any> = Object.fromEntries((researchData.topics as any[]).map((t) => [t.key, t]));
+const ANALYSIS: Record<string, ResearchTopic> = Object.fromEntries(TOPICS.map((t) => [t.key, t]));
 // The shared yearly time axis (per-field: its own start … 2055, one point per calendar year) for the
 // fit+forecast plot; each chunk's actual+forecast align to it.
 // A topic's SEASON: from its fitted peak phase in research.json, falling back to the backend
@@ -28,10 +49,13 @@ const r2Of = (d: Discipline): number => (typeof ANALYSIS[d.key]?.r2 === "number"
 
 // CITATIONS PIVOT (operator 2026-07-23): the atlas IS the list — every OpenAlex subfield fitted on
 // its per-year share of all citations RECEIVED (mid-year sky sampling). No backend registry.
-const ALL_FIELDS: Discipline[] = (researchData.topics as any[])
+const ALL_FIELDS: Discipline[] = TOPICS
   .map((t) => ({ key: t.key, house: "", label: t.label, sign: t.sign, score: (t.r2 ?? 0) * 100, central: 0 }));
 
 type AxisCfg = { axis: "house" | "topic"; title: string; noun: string; blurb: string; base: string };
+// The page's own configuration, imported by App.tsx to title the route. Moving it to its own module
+// would be a rename across the router for a rule about hot-reload granularity, so it stays and says so.
+// eslint-disable-next-line react-refresh/only-export-components
 export const SKILLS_CFG: AxisCfg = {
   axis: "topic", title: "Topics", noun: "topic", base: "/topics",
   blurb: "Every OpenAlex research subfield, measured as its share of the citations the whole scholarly record received each year, the sky sampled at each year's mid-point — each field modelled on its own, over its own history since it emerged — placed in the sidereal sign its Pluto tuning falls in (Lahiri dates), ranked by model fit. Follow one sign: its topics are what we recommend you.",
@@ -76,7 +100,11 @@ function SeasonCycle({ bySeason, sel, onSel, mineN, nowN }: {
   const nowY = curveY(tNow);
   return (
     <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${CY.w} ${CY.h}`} className="mx-auto block w-full min-w-[720px]" role="listbox" aria-label="The cycle of the twelve seasons">
+      {/* min-w-[720px] in a column that tops out at ~686px meant this never fitted and always
+          scrolled sideways inside its overflow-x-auto parent. The SVG scales to the box it is given
+          (viewBox does the work); 34rem is the width below which the twelve labels genuinely
+          collide, and only then does the parent scroll. */}
+      <svg viewBox={`0 0 ${CY.w} ${CY.h}`} className="mx-auto block w-full min-w-[34rem]" role="listbox" aria-label="The cycle of the twelve seasons">
         <defs>
           {/* The dual (adaptive) tone: gold→blue — exact complements, neutral at the midpoint. */}
           <linearGradient id="aqToneDual" x1="0" y1="0" x2="1" y2="0">
@@ -131,7 +159,7 @@ function SeasonCycle({ bySeason, sel, onSel, mineN, nowN }: {
 const PLANETS = ["mars", "jupiter", "saturn", "uranus", "neptune", "pluto", "node"];  // 7 bodies (mars in; sun/mercury/venus + chiron excluded)
 
 function PlanetView({ planet, cfg }: { planet: string; cfg: AxisCfg }) {
-  const rows = (researchData.topics as any[])
+  const rows = TOPICS
     .filter((t) => t.dominantPlanet === planet)
     .sort((x, y) => (y.domShare || 0) - (x.domShare || 0));
   return (
@@ -236,7 +264,11 @@ function TrendView({ cfg, initial }: { cfg: AxisCfg; initial: string }) {
               <text x={W - 4} y={14} fontSize="9" textAnchor="end" fill="var(--color-ink-3, #888)">gold forecast → {rows[rows.length - 1].year}</text>
             </svg>
             <div className="mt-3 max-h-64 overflow-y-auto rounded-card border border-line/60 bg-space-3/30 p-2.5">
-              <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-[12.5px] tabular-nums text-ink-2 sm:grid-cols-5">
+              {/* auto-fit, not `sm:grid-cols-5` (operator 2026-08-21): `sm:` is a 640px VIEWPORT
+                  query, and five fixed tracks inside the shell's column were 49px each — narrower
+                  than the "2031 0.123%" pair every cell holds, so the figures collided. Each cell
+                  asks for 6.5rem and the row takes as many as fit. */}
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,6.5rem),1fr))] gap-x-4 gap-y-1 text-[12.5px] tabular-nums text-ink-2">
                 {rows.map((r) => (
                   <div key={r.year} className="flex justify-between gap-2">
                     <span className="text-ink-3">{r.year}</span><b>{r.v.toFixed(3)}%</b>
@@ -255,7 +287,7 @@ function TrendView({ cfg, initial }: { cfg: AxisCfg; initial: string }) {
 function MethodCard() {
   // Every number quoted below is read from the exported atlas, never typed in — a figure written into
   // prose is a figure the model can quietly drift away from, and this page has done that before.
-  const g = (researchData as any).aggregate as {
+  const g = AGGREGATE as {
     auc: number; skillMedian: number; pctPositive: number; topics: number;
     persistence: number | null; paramsPerTopic: number | null;
   };
@@ -412,9 +444,9 @@ export default function Fields({ cfg = SKILLS_CFG }: { cfg?: AxisCfg } = {}) {
             Every {cfg.noun} peaks on its own natural rhythm — <a href={localePath("/cycles/")} className="font-semibold text-yin-light hover:underline">explore the cycles <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
           </p>
 
-          {(researchData as any).aggregate && (() => {
+          {AGGREGATE && (() => {
 
-            const g = (researchData as any).aggregate as { skillCurve: number[]; auc: number; skillMedian: number; pctPositive: number; topics: number };
+            const g = AGGREGATE as ResearchAggregate & { skillCurve: number[] };
 
             const c = g.skillCurve || [];
 
@@ -474,9 +506,9 @@ export default function Fields({ cfg = SKILLS_CFG }: { cfg?: AxisCfg } = {}) {
 
                   <span>topics beating the baseline <b className="text-ink-2">{g.pctPositive.toFixed(0)}%</b></span>
 
-                  {typeof (g as any).auc2 === "number" && <span>four years out, AUC <b className="text-ink-2">{(g as any).auc2.toFixed(2)}</b></span>}
+                  {typeof g.auc2 === "number" && <span>four years out, AUC <b className="text-ink-2">{g.auc2.toFixed(2)}</b></span>}
 
-                  {typeof (g as any).auc4 === "number" && <span>twelve years out, AUC <b className="text-ink-2">{(g as any).auc4.toFixed(2)}</b></span>}
+                  {typeof g.auc4 === "number" && <span>twelve years out, AUC <b className="text-ink-2">{g.auc4.toFixed(2)}</b></span>}
 
                 </div>
 
@@ -575,7 +607,9 @@ function FieldView({ d, loading, cfg }: { d: Discipline | null; loading: boolean
 
                 <Card className="mt-4 p-4 sm:p-6">
                   <h2 className="mb-3 text-[12px] font-semibold uppercase tracking-[0.12em] text-ink-3">What the numbers say</h2>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {/* At most two facts ever render here, so four fixed tracks left half the row empty
+                      and both facts at 142px. auto-fit gives each one 11rem and the row fills. */}
+                  <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,11rem),1fr))] gap-3">
                     {a.popularity != null && <Fact label="Citation share" value={`${a.popularity}%`} hint="its mean share of each year's citations received" />}
                     {typeof a.r2Oos === "number" && <Fact label="30-yr forecast skill" value={a.r2Oos.toFixed(2)} hint="held-out thirty-year skill vs carrying its mean forward" />}
                   </div>

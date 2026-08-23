@@ -395,7 +395,9 @@
 // v68: the layout sweep — /reserve, /wallet, /data, /faq-contact, /donate, /finances, /studio,
 // /topics and the notebook step rail stop splitting themselves on VIEWPORT breakpoints inside the
 // shell's ~410px column (operator 2026-08-21) — chunk-only, bump.
-const VERSION = "aq-sw-v68";
+// v69: the last two pages of the layout sweep — /user-account's stat tiles, identity form and ID
+// previews, and /topics' forecast table and facts row (operator 2026-08-21) — chunk-only, bump.
+const VERSION = "aq-sw-v69";
 const SHELL = "aq-shell-v42";   // last good app-shell HTML (any route boots the SPA offline)
 const ASSETS = "aq-assets-v42"; // hashed JS/CSS from the theme's app/ build dir
 const IMG = "aq-img-v4";

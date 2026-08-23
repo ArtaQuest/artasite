@@ -518,7 +518,10 @@ function UsageManager() {
 
       {info && (
         <>
-          <div data-ay-skip="1" className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {/* auto-fit, not `sm:grid-cols-4` (operator 2026-08-21). `sm:` is a 640px VIEWPORT query
+              while the shell leaves this page ~686px at a 1440px window and ~410px at 1100, so four
+              fixed tracks were 53px of tile around a 24px money figure. Each tile asks for 9rem. */}
+          <div data-ay-skip="1" className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-3">
             <Stat label="Balance" value={`${n(info.balance, 2)} ₳`} sub={info.balance <= info.floor ? "below the floor" : "spendable"} />
             <Stat label="Not yet charged" value={`${n(info.carry)} ₳`} sub="settles daily, in whole coins" />
             <Stat label="One ArtaCoin" value={`$${n(info.coin_usd, 4)}`} sub="1 mg of gold" />
@@ -1259,7 +1262,10 @@ function IdentityVerification() {
           blue check reads off the government ID). Gender sat here until 2026-08-18 and is gone from
           the platform — nationality replaced it as the axis a donor's ArtaCredit can be aimed at. */}
       <Card as="div" className="flex flex-col gap-3 p-5">
-        <div className="grid gap-3 sm:grid-cols-2">
+        {/* The date-of-birth wheel is three selects side by side and cannot go under ~17rem; two
+            fixed tracks gave it 179px at 1100. auto-fit keeps the pair on one line only where both
+            halves fit. */}
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,17rem),1fr))] gap-3">
           <Field label="Full legal name" required>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="As written on your ID" required />
           </Field>
@@ -1315,7 +1321,8 @@ function IdentityVerification() {
           <>
             <h3 className="text-[16px] font-bold">Get the blue check</h3>
             <p className="text-[13px] text-ink-3">Verifying is free. Add a clear photo of your face (it becomes your profile picture), the front and back of a government photo ID from any country — a passport or national ID card, which establish nationality; a driver licence or residence permit can confirm your name and date of birth but not your nationality — and a selfie. Claude confirms the ID is genuine and that the name (given name and surname), date of birth and nationality on it are yours, and that the same face appears on the ID, the selfie and your photo. Every nationality is accepted — the check is only that what you stated matches your ID. Your ID and selfie are used only for this check and are never stored.</p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {/* A 59px preview of a passport at 1100 was not a preview. 8rem minimum. */}
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-3">
               <PhotoTile label="Profile photo" hint="your face" value={imgs.profile_pic} onPick={(f) => pick("profile_pic", f)} />
               <PhotoTile label="ID front" hint="government ID" value={imgs.id_front} onPick={(f) => pick("id_front", f)} />
               <PhotoTile label="ID back" hint="government ID" value={imgs.id_back} onPick={(f) => pick("id_back", f)} />
@@ -1743,7 +1750,10 @@ export default function Account() {
           user closes the editor via the header toggle when done. */}
       {editing && <SettingsForm user={d.user} onSaved={(name, bio, slug) => setD({ ...d, user: { ...d.user, name, bio, slug: slug || d.user.slug } })} />}
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      {/* `lg:` fires at the 1024px viewport — the exact width at which the shell ADDS its 330px
+          right column, so the tiles tripled their track count in the same pixel the column lost a
+          third of its width (50px of tile at 1100). auto-fit asks the box instead. */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-4">
         {/* The four real tiles getDashboard composes: Courses, Completed, Points, Coins —
             grid-cols-2 → lg:grid-cols-4 fills every row evenly (no orphan tile / empty column). */}
         {d.stats.map((s) => <Stat key={s.label} label={s.label} value={s.value} sub={s.sub} />)}
