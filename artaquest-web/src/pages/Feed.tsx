@@ -685,7 +685,9 @@ export default function Feed({ initialKind, embedded = false }: { initialKind?: 
 
   return (
     <div className="mx-auto flex w-full max-w-[1076px] justify-center px-0 sm:px-4 lg:gap-7">
-      <Col className={cx("w-full min-w-0 max-w-2xl border-line sm:border-x", !isLoggedIn() ? "pb-28" : "pb-16 md:pb-0")}>
+      {/* No side rules when embedded: the landing page already draws a card around this, and two
+          borders 30px apart read as a rendering fault rather than as a column. */}
+      <Col className={cx("w-full min-w-0 max-w-2xl border-line", !embedded && "sm:border-x", !isLoggedIn() ? "pb-28" : "pb-16 md:pb-0")}>
         {/* ONE TIMELINE (operator 2026-07-28). The For-you/Following tabs and the eleven-kind chip
             shelf are gone: a feed with almost no posts cannot fill two timelines, and a chip row
             that filters a near-empty list only ever shows a member an empty state they chose. A
@@ -695,6 +697,11 @@ export default function Feed({ initialKind, embedded = false }: { initialKind?: 
         {/* Under the bar, not behind it: the full-bleed header is 60px of fixed chrome, so a
             timeline header pinned at top-0 spends its whole life hidden by it (measured: 61px of it,
             i.e. all of it). */}
+        {/* NOT on the landing page (operator 2026-08-21): that page already titles this section
+            "Happening right now", so the embedded copy printed a second heading ("Home") — and a
+            sticky one, pinned inside a bordered card it does not own. `embedded` renders the feed
+            as proof, not as a destination; the header belongs to the destination. */}
+        {embedded ? null : (
         <div className="sticky top-topbar z-10 border-b border-line bg-space-1/85 backdrop-blur">
           <div className="flex min-h-[52px] items-center">
             {meta ? (
@@ -710,6 +717,7 @@ export default function Feed({ initialKind, embedded = false }: { initialKind?: 
             )}
           </div>
         </div>
+        )}
 
         {/* Composer teaser */}
         {isLoggedIn() ? (

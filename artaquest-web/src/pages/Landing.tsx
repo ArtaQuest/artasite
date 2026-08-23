@@ -59,17 +59,24 @@ export default function Landing() {
         companion, so that space had become a wide empty band above the fold on every visit. On a
         phone it cost most of a screen before anything else could be seen.
       */}
-      <section className="relative overflow-hidden rounded-card border border-line bg-space-2 px-5 py-12 text-center sm:px-6 sm:py-16">
+      {/* @container, and the headline is measured in `cqw` — the width of THIS CARD, not the window
+          (operator 2026-08-21). `clamp(2rem, 6vw, 3.4rem)` is a VIEWPORT unit, and the shell leaves
+          this page a ~718px column at a 1440px window and ~442px at 1100 — so at 1100 the headline
+          still resolved to its 54px ceiling inside a 392px box and took three lines, making the hero
+          TALLER (511px) on the narrower screen than on the wide one (453px). 7cqw asks the card. */}
+      <section className="@container relative overflow-hidden rounded-card border border-line bg-space-2 px-5 py-10 text-center @lg:px-6 @lg:py-14">
         <div className="pointer-events-none absolute -right-24 -top-28 h-80 w-80 rounded-full bg-yang/10 blur-3xl" aria-hidden />
         <div className="pointer-events-none absolute -bottom-28 -left-24 h-80 w-80 rounded-full bg-yin/15 blur-3xl" aria-hidden />
         <div className="relative mx-auto max-w-2xl">
           {/* One text node — see the file header. Deliberately NOT .aq-grad: that gradient runs
               through --color-yang, which is 1.84:1 on the light canvas anonymous visitors get by
               default. The most important line on the site has to be readable before it is pretty. */}
-          <h1 className="text-[clamp(2rem,6vw,3.4rem)] font-extrabold leading-[1.07] text-ink">
+          <h1 className="text-[clamp(1.95rem,7cqw,3.25rem)] font-extrabold leading-[1.07] text-ink [text-wrap:balance]">
             Post stuff that actually works
           </h1>
-          <p className="mx-auto mt-4 max-w-[34ch] text-[17px] leading-relaxed text-ink-2">
+          {/* 34ch was a 365px ribbon under a 668px headline — three short lines that read as an
+              afterthought. 44ch fills the measure without passing it. */}
+          <p className="mx-auto mt-4 max-w-[44ch] text-[17px] leading-relaxed text-ink-2">
             Publish work anyone can run again for themselves. Hearts decide who takes the prize pool.
           </p>
           <div ref={cta} className="mt-7 inline-flex flex-wrap justify-center gap-3">
@@ -85,7 +92,12 @@ export default function Landing() {
         of prose that nobody scrolling a landing page was going to read. Each claim is now one
         sentence, because a claim you can verify does not need a paragraph defending it.
       */}
-      <section className="grid gap-4 sm:grid-cols-3">
+      {/* auto-fit, not `sm:grid-cols-3`: `sm:` is a 640px VIEWPORT query, so three tracks were on at
+          every desktop width — 137px each at 1100, about eighteen characters a line for a claim that
+          is a whole sentence. Each card asks for 14rem, which is the number that keeps the three
+          claims on ONE line where they belong — (718 + 16) / (224 + 16) = 3 at a 1440px window — and
+          gives each of them the whole column at 1100 and on a phone rather than a 137px sliver. */}
+      <section className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-4">
         {[
           ["Public, all the way down", "The notebook and everything it was built from are open on Kaggle. No account needed."],
           ["It ran, and these are the files", "Kaggle's own record says the run finished and made exactly these files. We quote it back to you."],
@@ -94,7 +106,9 @@ export default function Landing() {
           /* yang-ink, not yang: the fill token is 1.84:1 on the light canvas an anonymous visitor
              gets by default — unreadable. yang-ink is the text half of the same pair. */
           <div key={h} className="rounded-card border border-line bg-space-2 p-5">
-            <h2 className="text-[15px] font-extrabold text-yang-ink">{h}</h2>
+            {/* balance, so a two-line claim breaks near the middle instead of leaving one word
+                stranded ("Public, all the / way down"). */}
+            <h2 className="text-[15px] font-extrabold text-yang-ink [text-wrap:balance]">{h}</h2>
             <p className="mt-1.5 text-[14px] leading-relaxed text-ink-2">{b}</p>
           </div>
         ))}
@@ -103,8 +117,11 @@ export default function Landing() {
       {/* ArtaBot is a real reason to sign up, so it stays — but as one line, not the full-height
           section it was. The widget is members-only (App.tsx gates the launcher), which is why a
           visitor sees this instead of the chat. */}
-      <section className="flex flex-col items-center gap-3 rounded-card border border-line bg-space-2 px-5 py-6 text-center sm:flex-row sm:justify-between sm:text-start">
-        <div>
+      {/* Wrapping, not `sm:flex-row`: the row holds a 17px heading, a line of prose and a button, and
+          a 442px column cannot carry all three side by side. The text asks for 20rem; below that the
+          button drops under it and both centre themselves. */}
+      <section className="flex flex-wrap items-center justify-center gap-3 rounded-card border border-line bg-space-2 px-5 py-6 text-center sm:justify-between sm:text-start">
+        <div className="min-w-0 flex-[1_1_20rem]">
           <h2 className="text-[17px] font-extrabold text-yang-ink">Chat with a state-of-the-art AI, free</h2>
           <p className="mt-1 text-[14px] text-ink-2">ArtaBot runs on Claude Opus 5. No card, no limit.</p>
         </div>

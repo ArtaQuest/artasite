@@ -397,7 +397,10 @@
 // shell's ~410px column (operator 2026-08-21) — chunk-only, bump.
 // v69: the last two pages of the layout sweep — /user-account's stat tiles, identity form and ID
 // previews, and /topics' forecast table and facts row (operator 2026-08-21) — chunk-only, bump.
-const VERSION = "aq-sw-v69";
+// v70: the landing page sizes its hero to the card (cqw, not vw), the three claims take the width
+// they have, and the embedded feed drops its duplicate "Home" header and doubled border (operator
+// 2026-08-21) — chunk-only, bump.
+const VERSION = "aq-sw-v70";
 const SHELL = "aq-shell-v42";   // last good app-shell HTML (any route boots the SPA offline)
 const ASSETS = "aq-assets-v42"; // hashed JS/CSS from the theme's app/ build dir
 const IMG = "aq-img-v4";
