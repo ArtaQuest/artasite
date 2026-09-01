@@ -619,7 +619,13 @@ function Composer({ onPosted }: { onPosted: (p: FeedPostT) => void }) {
 export default function Feed({ initialKind, embedded = false }: { initialKind?: NbKind; embedded?: boolean }) {
   const nav = useNavigate();
   const [kind, setKind] = useState<NbKind | "">(initialKind || "");
-  const rail = useRail(!embedded);
+  // ALWAYS fetch the rail, embedded included. `useRail(!embedded)` handed the landing's embedded
+  // feed EMPTY data while the portal below still CLAIMED the shell's right column — so the one page
+  // where a visitor decides whether to stay showed a void between the header and the footer, and
+  // the phone's interleaved copies vanished too. The old objection ("five extra calls on a
+  // marketing page") is obsolete: fetchRail() is module-cached with a TTL and shares one in-flight
+  // promise, so this and the shell's own RailDefaults cost ONE round of requests between them.
+  const rail = useRail();
   const [items, setItems] = useState<FeedPostT[]>([]);
   const [hearted, setHearted] = useState<Set<number>>(new Set());
   const [next, setNext] = useState<number | null>(null);
@@ -793,13 +799,20 @@ export default function Feed({ initialKind, embedded = false }: { initialKind?: 
           inline (above). */}
       {/* The feed's cards, in THE right column (RightRail.tsx). `mobile="none"` because a phone
           already gets these same modules interleaved between posts, a few posts down, X-style. */}
-      <RailPortal mobile="none">
-        <TodaysNewsCard items={rail.headlines} />
-        <HappeningCard items={rail.topics} />
-        <ChallengesCard items={rail.challenges} />
-        <WhoToFollowCard items={rail.who} />
-        <NewsCard items={rail.news} />
-      </RailPortal>
+      {/* NOT when embedded: the landing is the page, this feed is just its proof. RailPortal's
+          mount marks the shell column as filled even when every card inside resolves to null — so
+          the embedded copy claiming it produced an EMPTY right column on the landing page. Skipping
+          the portal lets the shell's own RailDefaults fill the column with these same cards, from
+          the same cached fetch. */}
+      {embedded ? null : (
+        <RailPortal mobile="none">
+          <TodaysNewsCard items={rail.headlines} />
+          <HappeningCard items={rail.topics} />
+          <ChallengesCard items={rail.challenges} />
+          <WhoToFollowCard items={rail.who} />
+          <NewsCard items={rail.news} />
+        </RailPortal>
+      )}
     </div>
   );
 }

@@ -17,7 +17,7 @@ import {
   type Challenge, type FollowSuggestion, type NewsItem, type TrendingKindItem, type TrendingTopic,
 } from "../lib/api";
 import { Avatar, cx } from "./ui";
-import { nameClass, closesIn, timeAgo } from "../lib/fmt";
+import { nameClass, closesIn, timeAgo, isFresh } from "../lib/fmt";
 import { NB_KIND_META } from "./nbview";
 import { isLoggedIn } from "../lib/auth";
 import { localePath } from "../lib/wp";
@@ -197,12 +197,19 @@ export function NewsCard({ items }: { items: NewsItem[] | null }) {
           return head.length > 1 && title.includes(head);
         };
         const where = n.place || n.country;
+        // The measurement is the one token that makes this card different from a wire feed, so when
+        // the headline has not already said it, it leads the meta line IN GOLD — the same accent the
+        // challenge rows give a prize pool. Everything else stays quiet ink.
+        const measure = said(n.measure) ? "" : n.measure;
         const meta = [
-          said(n.measure) ? "" : n.measure,
           said(where) ? "" : where,
           said(n.detector) ? "" : n.detector,
         ].filter(Boolean);
         const when = n.updated ? timeAgo(n.updated) : "";
+        // A detection refreshed within the last six hours — one detection tick — is LIVE in the
+        // only sense an instrument feed has: the measurement is current, not being written about.
+        // The dot is decorative (aria-hidden) and gold; blue stays the hover accent, per the brand.
+        const fresh = isFresh(n.updated, 6 * 3600);
         // Every row is a link now. feed() has emitted `url` since the detection pages shipped;
         // without an anchor each card was a dead end to a page that exists.
         const Row = n.url ? "a" : "div";
@@ -224,8 +231,15 @@ export function NewsCard({ items }: { items: NewsItem[] | null }) {
             // above and below it already do.
             className={`block px-4 py-2${n.url ? " transition-colors hover:bg-space-3" : ""}`}
           >
-            <p className="text-[13.5px] font-semibold leading-snug text-ink" data-ay-skip="1">{n.title}</p>
-            <p className="mt-0.5 text-[12px] text-ink-3">
+            <p className="text-[13.5px] font-semibold leading-snug text-ink" data-ay-skip="1">
+              {fresh ? (
+                <span className="mb-px mr-1.5 inline-block size-[7px] animate-pulse rounded-full bg-yang align-middle" aria-hidden />
+              ) : null}
+              {n.title}
+            </p>
+            <p className="mt-0.5 text-[12px] leading-tight text-ink-3">
+              {measure ? <span className="font-bold text-yang-ink" data-ay-skip="1">{measure}</span> : null}
+              {measure && (meta.length || when) ? " · " : null}
               {meta.length ? <span data-ay-skip="1">{meta.join(" · ")}</span> : null}
               {meta.length && when ? " · " : null}
               {when}
