@@ -416,7 +416,7 @@ function Sidebar({ active, expanded, onNavigate }: { active: string; expanded: b
       //     move and only the label column is revealed.
       // One element drives both: mobile animates transform, desktop animates width. 240ms on
       // Kaggle's decelerate curve (ease-out). overflow-hidden clips the labels in the rail.
-      className={`fixed bottom-0 top-topbar start-0 z-40 flex w-sidebar flex-col overflow-hidden border-e border-line bg-space-1 transition-[width,transform] duration-[240ms] ease-out md:translate-x-0 ${
+      className={`fixed bottom-0 top-topbar start-0 z-40 flex w-sidebar flex-col overflow-hidden border-e border-line bg-space-1 transition-[width,transform,inset-inline-start] duration-[240ms] ease-out md:start-[var(--nav-void)] md:translate-x-0 ${
         expanded
           ? "max-md:translate-x-0 max-md:shadow-[0_0_8px_rgba(0,0,0,0.28)] md:w-sidebar"
           : "max-md:ltr:-translate-x-full max-md:rtl:translate-x-full md:w-rail"
@@ -769,7 +769,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   // separate logged-out TopNav had no menu at all on desktop). The Sidebar drops the member-only
   // rows and the Topbar swaps the account drawer for Sign in / Register when nobody is signed in.
   return (
-    <div className="min-h-screen bg-space-1 text-ink">
+    // `--nav-w` is the shell's collapse state as a LENGTH, read by the fixed nav's offset and the
+    // wrapper's padding below — one truth, so the two can never reflow out of step.
+    <div className={`aq-shell min-h-screen bg-space-1 text-ink ${expanded ? "[--nav-w:var(--spacing-sidebar)]" : "[--nav-w:var(--spacing-rail)]"}`}>
       {/* SKIP TO THE CONTENT (WCAG 2.4.1). Before this, a keyboard or screen-reader visitor crossed
           the bar and every row of the rail — twenty-odd links — to reach the page, on every single
           navigation. Visible only when focused, which is the point: it is furniture for the people
@@ -798,7 +800,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           reflows in lock-step (md:ps-rail → md:ps-sidebar) so the labels are never painted
           over the page; menu and content stay complementary, side by side. Padding animates
           on the same 240ms ease-out as the panel width. Phone: full width; drawer slides over. */}
-      <div className={`transition-[padding] duration-[240ms] ease-out ${expanded ? "md:ps-sidebar" : "md:ps-rail"}`}>
+      <div className="transition-[padding] duration-[240ms] ease-out md:ps-[calc(var(--nav-void)+var(--nav-w))] md:pe-[max(0px,calc(var(--nav-void)-var(--spacing-gutter)))]">
         {/* overflow-x-clip: a hard, deterministic horizontal containment so no page's content can
             bleed past the viewport — what made the page overflow out beneath the open mobile nav
             drawer (ticket #16). It does NOT rely on the body→viewport overflow propagation (flaky on
