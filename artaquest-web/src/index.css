@@ -109,6 +109,19 @@
   --spacing-topbar: 60px;
   --spacing-content: 1120px;
   --spacing-gutter: 24px;
+  /* THE CLUSTER VOID — how far the whole [nav][content][rail] cluster sits in from the window's
+     inline edges on screens wider than nav + content. The row used to centre itself in the space
+     RIGHT of the window-pinned nav, so every spare pixel piled up between the nav and the content
+     (measured: 390px nav-to-card against 24px card-to-rail at 1920 with the rail collapsed) while
+     X — the stated model — centres the three columns as ONE unit and leaves the slack at the
+     window edges. `--nav-w` is set by the shell per collapse state; the void follows it through
+     the same 240ms reflow. Zero whenever the cluster fills the window, which keeps every viewport
+     below ~1200px exactly as it was. */
+  /* ⚠️ NOT defined here. A custom property whose value contains var() is RESOLVED ON THE ELEMENT
+     WHERE IT IS DEFINED — define --nav-void on :root and it locks to :root's --nav-w (the
+     fallback, forever the expanded width), and the shell's per-state --nav-w can never reach it.
+     Measured exactly that: the collapsed rail kept the expanded void. So the void is declared in
+     .aq-shell below, the same element that carries --nav-w. */
 
   /* Geometry — soft, our own. Refreshed for a rounder, more modern feel (redesign it.1). */
   --radius-field: 16px;
@@ -1787,3 +1800,14 @@ html[dir="rtl"] .aq-bot-panel { right: auto; left: calc(1.25rem + env(safe-area-
    transform so property order cannot make them fight; the hover nudge is not re-negated. */
 :dir(rtl) .aq-continue-arrow { transform: scaleX(-1); }
 :dir(rtl) .aq-continue-arrow:hover { transform: scaleX(-1) translateX(3px); }
+
+/* The shell's cluster void — see the note beside --spacing-content. Lives on the SAME element that
+   sets --nav-w (AppShell's root), because var()-bearing custom properties resolve where defined. */
+.aq-shell {
+  /* Net of one gutter: the row's inline-END padding sits between the right rail and the row edge,
+     while the nav sits flush at the row's START — so a void computed over the full row width left
+     the window's edge-voids a constant gutter apart (measured 592 vs 616 at 2560). The cluster's
+     VISIBLE span is nav + content − gutter, and the wrapper's end-padding below gives that gutter
+     back so the row still gets its full content width. */
+  --nav-void: max(0px, calc((100vw - var(--nav-w, var(--spacing-sidebar)) - var(--spacing-content) + var(--spacing-gutter)) / 2));
+}
