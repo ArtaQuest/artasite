@@ -323,6 +323,138 @@ function FileTileBody({ item }: { item: LibraryItem }) {
  * chain and its reduced-motion still are made of those twins, so the work page passes `nb.files`
  * and a feed card — which carries only its hero — passes nothing and renders the vector alone.
  */
+/**
+ * The FEED PLAYER — a published song plays like a music channel: its loop video (a sibling file
+ * whose name says "loop") as the picture, live FFT bars over the bottom, one tap to play.
+ *
+ * Two platform contracts it must not break:
+ *  * A Web Audio tap MUTES cross-origin media silently. The CDN is another origin, so the audio
+ *    is fetched into a blob: URL first — same-origin by construction — and only then analysed.
+ *    If that fetch fails (CORS, offline), the tap is DROPPED and the song still plays untapped:
+ *    bars are decoration, playback is the product.
+ *  * Motion-calm: when the member suppresses motion, the loop video stays on its first frame and
+ *    the analyser smoothing is raised so the bars breathe instead of flicker.
+ */
+function FeedPlayer({ item, files }: { item: LibraryItem; files?: LibraryItem[] }) {
+  const loop = (files || []).find((f) => f.class === "video" && /loop/i.test(f.name || "") && !/asgenerated/i.test(f.name || ""));
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const ctxRef = useRef<AudioContext | null>(null);
+  const anRef = useRef<AnalyserNode | null>(null);
+  const rafRef = useRef(0);
+  const blobRef = useRef<string | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [pct, setPct] = useState(0);
+  const calm = useMotionOff();
+
+  useEffect(() => () => {
+    cancelAnimationFrame(rafRef.current);
+    if (blobRef.current) URL.revokeObjectURL(blobRef.current);
+    ctxRef.current?.close().catch(() => {});
+  }, []);
+
+  const draw = useCallback(() => {
+    rafRef.current = requestAnimationFrame(draw);
+    const an = anRef.current, cv = canvasRef.current, wrap = wrapRef.current;
+    if (!an || !cv || !wrap) return;
+    if (cv.width !== wrap.clientWidth * devicePixelRatio) {
+      cv.width = wrap.clientWidth * devicePixelRatio;
+      cv.height = Math.round(wrap.clientHeight * 0.38 * devicePixelRatio);
+    }
+    const data = new Uint8Array(an.frequencyBinCount);
+    an.getByteFrequencyData(data);
+    const g = cv.getContext("2d"); if (!g) return;
+    const W = cv.width, H = cv.height;
+    g.clearRect(0, 0, W, H);
+    const N = W < 480 * devicePixelRatio ? 48 : 96;
+    const step = Math.floor((data.length * 0.72) / N), bw = W / N;
+    for (let i = 0; i < N; i++) {
+      let m = 0;
+      for (let j = 0; j < step; j++) m = Math.max(m, data[i * step + j]);
+      const h = Math.pow(m / 255, 1.35) * H;
+      g.fillStyle = "rgba(255,255,255," + (0.5 + 0.45 * (m / 255)).toFixed(3) + ")";
+      g.fillRect(i * bw + bw * 0.18, H - h, bw * 0.64, h);
+    }
+  }, []);
+
+  const wireTap = useCallback(async (a: HTMLAudioElement) => {
+    // blob: first — the tap on a cross-origin element mutes it with no error at all.
+    try {
+      const r = await fetch(item.url, { mode: "cors" });
+      if (!r.ok) throw new Error(String(r.status));
+      blobRef.current = URL.createObjectURL(await r.blob());
+      a.src = blobRef.current;
+      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new Ctx();
+      const an = ctx.createAnalyser();
+      an.fftSize = 512;
+      an.smoothingTimeConstant = calm ? 0.93 : 0.82;
+      ctx.createMediaElementSource(a).connect(an);
+      an.connect(ctx.destination);
+      ctxRef.current = ctx; anRef.current = an;
+      draw();
+    } catch {
+      a.src = item.url;   // untapped: no bars, full sound
+    }
+  }, [item.url, calm, draw]);
+
+  const toggle = useCallback(async () => {
+    let a = audioRef.current;
+    if (!a) {
+      a = new Audio();
+      a.preload = "auto";
+      (a as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
+      a.addEventListener("timeupdate", () => setPct(a!.duration ? (100 * a!.currentTime) / a!.duration : 0));
+      a.addEventListener("ended", () => { setPlaying(false); videoRef.current?.pause(); });
+      audioRef.current = a;
+      await wireTap(a);
+    }
+    if (ctxRef.current?.state === "suspended") await ctxRef.current.resume();
+    if (a.paused) {
+      await a.play().catch(() => {});
+      if (!calm) videoRef.current?.play().catch(() => {});
+      setPlaying(true);
+      if ("mediaSession" in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({ title: item.label || item.name });
+      }
+    } else {
+      a.pause(); videoRef.current?.pause(); setPlaying(false);
+    }
+  }, [wireTap, calm, item.label, item.name]);
+
+  return (
+    <div ref={wrapRef} className="relative w-full overflow-hidden rounded-card bg-space-1" style={{ aspectRatio: "1 / 1", maxHeight: "70vh" }}>
+      {loop ? (
+        <video ref={videoRef} src={loop.url} muted loop playsInline preload="metadata"
+          className="absolute inset-0 h-full w-full object-cover" />
+      ) : (
+        <span aria-hidden className="absolute inset-0 grid place-items-center text-yang"><ClassGlyph cls="audio" /></span>
+      )}
+      <canvas ref={canvasRef} aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[38%] w-full" />
+      <button
+        type="button"
+        onClick={toggle}
+        aria-label={playing ? "Pause" : "Play"}
+        className={cx(
+          "absolute inset-0 m-auto grid h-14 w-14 place-items-center rounded-full border-2 border-ink/80 bg-space-1/50 text-ink backdrop-blur-sm transition-opacity sm:h-16 sm:w-16",
+          playing ? "opacity-0 focus-visible:opacity-100 [@media(hover:hover)]:hover:opacity-90" : "opacity-100",
+        )}
+      >
+        {playing ? (
+          <span aria-hidden className="flex gap-1"><span className="h-4 w-1.5 bg-current" /><span className="h-4 w-1.5 bg-current" /></span>
+        ) : (
+          <span aria-hidden className="ps-0.5"><PlayGlyph size={22} /></span>
+        )}
+      </button>
+      <span aria-hidden className="absolute inset-x-0 bottom-0 h-1 bg-ink/15">
+        <span className="block h-full bg-yang" style={{ width: pct + "%" }} />
+      </span>
+    </div>
+  );
+}
+
 export function LibraryMedia({ item, className, still, files }: {
   item: LibraryItem; className?: string; still?: boolean; files?: LibraryItem[];
 }) {
@@ -363,7 +495,19 @@ export function LibraryMedia({ item, className, still, files }: {
     );
   }
 
-  if (item.class === "audio" && !still) return <AudioTile item={item} className={className} />;
+  if (item.class === "audio" && !still) {
+    // A song whose work ships a loop video plays like a music channel (FeedPlayer: video bed +
+    // live FFT). Every other audio keeps the platform transport (AudioTile -> AudioPlayer).
+    const loopSibling = (files || []).find((f) => f.class === "video" && /loop/i.test(f.name || "") && !/asgenerated/i.test(f.name || ""));
+    if (loopSibling) {
+      return (
+        <span className={cx(box, "block p-0")}>
+          <FeedPlayer item={item} files={files} />
+        </span>
+      );
+    }
+    return <AudioTile item={item} className={className} />;
+  }
 
   const ext = fileExt(item).toLowerCase();
 
