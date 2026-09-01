@@ -5,6 +5,13 @@ import { uiLocale } from "./wp";
  * They were defined inside Feed.tsx, which made them the feed's private business — and the cards
  * could not move out of that file without them.
  */
+/** Was this unix-seconds timestamp within the last `horizonS` seconds? A helper rather than an
+ *  inline `Date.now()` because the react-hooks purity rule (rightly) bars impure calls in render —
+ *  the clock read lives here with timeAgo's, its natural neighbour. */
+export function isFresh(ts: number, horizonS: number) {
+  return !!ts && Date.now() / 1000 - ts < horizonS;
+}
+
 export function timeAgo(ts: number) {
   const s = Math.max(1, Math.floor(Date.now() / 1000 - ts));
   if (s < 60) return `${s}s`;
