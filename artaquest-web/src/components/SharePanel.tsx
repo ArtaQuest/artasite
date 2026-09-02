@@ -24,7 +24,9 @@ const NETWORK_ICONS: Record<string, ReactNode> = {
   telegram: brandGlyph("M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.139-5.061 3.345-.479.329-.913.489-1.302.481-.428-.009-1.252-.242-1.865-.44-.752-.244-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"),
 };
 
-export function SharePanel({ title, url, message, image, dialogLabel = "Share", className }: { title: string; url: string; message: string; image?: string; dialogLabel?: string; className?: string }) {
+export function SharePanel({ title, url, message, image, dialogLabel = "Share", className, compact }: { title: string; url: string; message: string; image?: string; dialogLabel?: string; className?: string;
+  /** Icon-only trigger for tight rows (the feed card's title line) — same popover, no label. */
+  compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [imgOk, setImgOk] = useState(true);
@@ -53,9 +55,16 @@ export function SharePanel({ title, url, message, image, dialogLabel = "Share", 
   const nativeShare = async () => { try { await navigator.share?.({ title, text: message, url }); setOpen(false); } catch { /* dismissed */ } };
   return (
     <div ref={ref} className={cx("relative", className)}>
-      <Button variant="outline" onClick={() => setOpen((o) => !o)} aria-haspopup="dialog" aria-expanded={open} className="h-9 w-full gap-1.5 px-3.5 text-[14px] sm:w-auto">
-        {SHARE_ICON}Share
-      </Button>
+      {compact ? (
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-haspopup="dialog" aria-expanded={open} aria-label="Share" title="Share"
+          className="grid h-8 w-8 place-items-center rounded-full text-ink-3 transition-colors hover:bg-veil/10 hover:text-ink">
+          {SHARE_ICON}
+        </button>
+      ) : (
+        <Button variant="outline" onClick={() => setOpen((o) => !o)} aria-haspopup="dialog" aria-expanded={open} className="h-9 w-full gap-1.5 px-3.5 text-[14px] sm:w-auto">
+          {SHARE_ICON}Share
+        </Button>
+      )}
       {open && (
         <div role="dialog" aria-label={dialogLabel} className="absolute right-0 z-30 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-card border border-line bg-space-2 p-4 text-start shadow-card">
           <p className="text-[13px] font-semibold text-ink">Ready-to-post — pick a platform</p>

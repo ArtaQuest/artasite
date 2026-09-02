@@ -19,6 +19,7 @@ import {
   normalizeNbKind } from "../lib/api";
 import { assetItem, NB_KIND_META, teaserSrc, TeaserVideo, useAqTheme, useCalmFlag } from "../components/nbview";
 import { FeedPlayer, LibraryMedia, LibraryPicker } from "../components/library";
+import { SharePanel } from "../components/SharePanel";
 
 import { PostThread } from "./NotebookPage";
 import { ConfirmDialog, Avatar, Button, cx, EmptyState, HeartGlyph } from "../components/ui";
@@ -125,7 +126,6 @@ function PostMedia({ items }: { items: LibraryItem[] }) {
   );
 }
 
-/** A card asset as a minimal LibraryItem — FeedPlayer reads name/label/class/mime/url only. */
 function NbBlock({ nb, compact }: { nb: NotebookCard; compact?: boolean }) {
   const nav = useNavigate();
   const meta = NB_KIND_META[normalizeNbKind(nb.kind)];
@@ -162,15 +162,28 @@ function NbBlock({ nb, compact }: { nb: NotebookCard; compact?: boolean }) {
             <LibraryMedia item={nb.hero!} files={(nb.assets || []).map((a) => assetItem(nb, a))} className="h-full w-full" />
           </div>
         )}
-        <p
-          role="link" tabIndex={0} aria-label={nb.title}
-          onClick={(e) => { e.stopPropagation(); nav(`/nb/${nb.id}/${nb.slug}`); }}
-          onKeyDown={(e) => { if (e.key === "Enter") nav(`/nb/${nb.id}/${nb.slug}`); }}
-          className="mt-1.5 flex cursor-pointer items-baseline gap-2 px-0.5"
-        >
-          <span className="text-[14px] font-semibold text-ink hover:underline">{nb.title}</span>
-          <span className="text-[11px] uppercase tracking-wider text-ink-3">{meta?.label || nb.kind}</span>
-        </p>
+        <div className="mt-1 flex items-center gap-2 px-0.5">
+          <p
+            role="link" tabIndex={0} aria-label={nb.title}
+            onClick={(e) => { e.stopPropagation(); nav(`/nb/${nb.id}/${nb.slug}`); }}
+            onKeyDown={(e) => { if (e.key === "Enter") nav(`/nb/${nb.id}/${nb.slug}`); }}
+            className="flex min-w-0 flex-1 cursor-pointer items-baseline gap-2"
+          >
+            <span className="truncate text-[14px] font-semibold text-ink hover:underline">{nb.title}</span>
+            <span className="shrink-0 text-[11px] uppercase tracking-wider text-ink-3">{meta?.label || nb.kind}</span>
+          </p>
+          {/* External share, on the work itself — the popover posts the WORK's link (OG unfurl),
+              a different act from Quote (which stays on-platform on the POST). */}
+          <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+            <SharePanel
+              compact
+              title={nb.title}
+              url={`${location.origin}/nb/${nb.id}/${nb.slug}`}
+              message={`${sounded ? "Listen to" : "Watch"} “${nb.title}” on ArtaQuest`}
+              image={nb.thumb || (nb.assets || []).find((a) => a.mime.startsWith("image/"))?.url}
+            />
+          </span>
+        </div>
       </div>
     );
   }
