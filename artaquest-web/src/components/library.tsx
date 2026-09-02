@@ -336,7 +336,16 @@ function FileTileBody({ item }: { item: LibraryItem }) {
  *    the analyser smoothing is raised so the bars breathe instead of flicker.
  */
 export function FeedPlayer({ item, files }: { item: LibraryItem; files?: LibraryItem[] }) {
-  const loop = (files || []).find((f) => f.class === "video" && /loop/i.test(f.name || "") && !/asgenerated/i.test(f.name || ""));
+  // ONE player for every moving work on the feed. A song (class audio) plays over its cover-loop
+  // bed; a plain video work plays itself. Both sit in the SAME 16:9 rounded frame as the scene
+  // panels, so the feed reads as one column of identical windows — the first cut shipped as a
+  // full-width square capped at 70vh and dwarfed every other card. The PICTURE belongs to the
+  // scroll: the loop autoplays muted while the card is on screen (calm mode: never). SOUND
+  // belongs to the click, and only the click.
+  const videoOnly = item.class === "video";
+  const loop = videoOnly
+    ? item
+    : (files || []).find((f) => f.class === "video" && /loop/i.test(f.name || "") && !/asgenerated/i.test(f.name || ""));
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -354,6 +363,20 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
     if (blobRef.current) URL.revokeObjectURL(blobRef.current);
     ctxRef.current?.close().catch(() => {});
   }, []);
+
+  // The picture plays on SCROLL: muted, whenever about a third of the card is visible; paused the
+  // moment it leaves. Sound is never touched here — an unmuted video keeps its own counsel until
+  // its control stops it.
+  useEffect(() => {
+    const el = wrapRef.current, v = videoRef.current;
+    if (!el || !v || calm) return;
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) v.play().catch(() => {});
+      else if (v.muted) v.pause();
+    }, { threshold: 0.35 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [calm, loop?.url]);
 
   // The envelope must COVER BOTH AXES, like a music channel's:
   //  * x — the spectrum is sampled on a LOG frequency scale (55 Hz..14 kHz). Linear bins spend
@@ -445,11 +468,20 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
   useEffect(() => {
     const vis = () => {
       if (document.hidden) { drawingRef.current = false; cancelAnimationFrame(rafRef.current); }
-      else if (audioRef.current && !audioRef.current.paused) startDraw();
+      else if ((audioRef.current && !audioRef.current.paused) || (videoOnly && videoRef.current && !videoRef.current.muted && !videoRef.current.paused)) startDraw();
     };
     document.addEventListener("visibilitychange", vis);
     return () => document.removeEventListener("visibilitychange", vis);
-  }, [startDraw]);
+  }, [startDraw, videoOnly]);
+
+  // Sound progress only — the muted scroll preview must not run the bar.
+  useEffect(() => {
+    if (!videoOnly) return;
+    const v = videoRef.current; if (!v) return;
+    const t = () => { if (!v.muted) setPct(v.duration ? (100 * v.currentTime) / v.duration : 0); };
+    v.addEventListener("timeupdate", t);
+    return () => v.removeEventListener("timeupdate", t);
+  }, [videoOnly]);
 
   const wireTap = useCallback(async (a: HTMLAudioElement) => {
     // blob: first — the tap on a cross-origin element mutes it with no error at all.
@@ -469,16 +501,50 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
     } catch {
       a.src = item.url;   // untapped: no bars, full sound
     }
-  }, [item.url, calm, draw]);
+  }, [item.url, calm]);
+
+  // A video work is same-origin, so its element is tapped directly — a blob copy would
+  // re-download the whole file for nothing.
+  const wireVideoTap = useCallback((v: HTMLVideoElement) => {
+    try {
+      if (new URL(v.currentSrc || v.src, location.href).origin !== location.origin) return;
+      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new Ctx();
+      const an = ctx.createAnalyser();
+      an.fftSize = 512;
+      an.smoothingTimeConstant = calm ? 0.93 : 0.82;
+      ctx.createMediaElementSource(v).connect(an);
+      an.connect(ctx.destination);
+      ctxRef.current = ctx; anRef.current = an;
+    } catch { /* untapped: sound without the envelope */ }
+  }, [calm]);
 
   const toggle = useCallback(async () => {
+    if (videoOnly) {
+      const v = videoRef.current; if (!v) return;
+      if (!ctxRef.current) wireVideoTap(v);
+      if (ctxRef.current?.state === "suspended") await ctxRef.current.resume();
+      if (v.muted || v.paused) {
+        v.muted = false;
+        await v.play().catch(() => {});
+        startDraw(); setPlaying(true);
+        if ("mediaSession" in navigator) {
+          navigator.mediaSession.metadata = new MediaMetadata({ title: item.label || item.name });
+        }
+      } else {
+        v.muted = true;             // back to the scroll's silent loop
+        if (calm) v.pause();
+        stopDraw(); setPlaying(false);
+      }
+      return;
+    }
     let a = audioRef.current;
     if (!a) {
       a = new Audio();
       a.preload = "auto";
       (a as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
       a.addEventListener("timeupdate", () => setPct(a!.duration ? (100 * a!.currentTime) / a!.duration : 0));
-      a.addEventListener("ended", () => { setPlaying(false); videoRef.current?.pause(); stopDraw(); });
+      a.addEventListener("ended", () => { setPlaying(false); stopDraw(); });
       audioRef.current = a;
       await wireTap(a);
     }
@@ -492,32 +558,33 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
         navigator.mediaSession.metadata = new MediaMetadata({ title: item.label || item.name });
       }
     } else {
-      a.pause(); videoRef.current?.pause(); stopDraw(); setPlaying(false);
+      // Sound stops; the bed keeps looping — the scroll owns the picture.
+      a.pause(); stopDraw(); setPlaying(false);
     }
-  }, [wireTap, calm, item.label, item.name, startDraw, stopDraw]);
+  }, [videoOnly, wireTap, wireVideoTap, calm, item.label, item.name, startDraw, stopDraw]);
 
   return (
-    <div ref={wrapRef} className="relative w-full overflow-hidden rounded-card bg-space-1" style={{ aspectRatio: "1 / 1", maxHeight: "70vh" }}>
+    <div ref={wrapRef} className="relative aspect-video w-full overflow-hidden rounded-xl border border-line bg-space-2">
       {loop ? (
         <video ref={videoRef} src={loop.url} muted loop playsInline preload="metadata"
           className="absolute inset-0 h-full w-full object-cover" />
       ) : (
         <span aria-hidden className="absolute inset-0 grid place-items-center text-yang"><ClassGlyph cls="audio" /></span>
       )}
-      <canvas ref={canvasRef} aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[38%] w-full" />
+      <canvas ref={canvasRef} aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[34%] w-full" />
       <button
         type="button"
         onClick={toggle}
         aria-label={playing ? "Pause" : "Play"}
         className={cx(
-          "absolute inset-0 m-auto grid h-14 w-14 place-items-center rounded-full border-2 border-ink/80 bg-space-1/50 text-ink backdrop-blur-sm transition-opacity sm:h-16 sm:w-16",
+          "absolute inset-0 m-auto grid h-11 w-11 place-items-center rounded-full border border-ink/25 bg-space-1/55 text-ink backdrop-blur-sm transition-opacity sm:h-12 sm:w-12",
           playing ? "opacity-0 focus-visible:opacity-100 [@media(hover:hover)]:hover:opacity-90" : "opacity-100",
         )}
       >
         {playing ? (
-          <span aria-hidden className="flex gap-1"><span className="h-4 w-1.5 bg-current" /><span className="h-4 w-1.5 bg-current" /></span>
+          <span aria-hidden className="flex gap-1"><span className="h-3.5 w-1 bg-current" /><span className="h-3.5 w-1 bg-current" /></span>
         ) : (
-          <span aria-hidden className="ps-0.5"><PlayGlyph size={22} /></span>
+          <span aria-hidden className="ps-0.5"><PlayGlyph size={18} /></span>
         )}
       </button>
       <span aria-hidden className="absolute inset-x-0 bottom-0 h-1 bg-ink/15">

@@ -140,6 +140,33 @@ function NbBlock({ nb, compact }: { nb: NotebookCard; compact?: boolean }) {
   const flagged = useCalmFlag(nb); // Motion-calm gate: flagged videos never autoplay
   const teaser = teaserSrc(nb, theme);
   const [teaserOk, setTeaserOk] = useState(true); // VP9-alpha unsupported / file gone → legacy thumb
+
+  // A work that PLAYS gets the focused treatment (X/TikTok/Instagram): the player IS the card —
+  // no bordered tile, no chips, no abstract, no continue pill — one quiet title line under it.
+  // The frame is FeedPlayer's own, identical across every playing card. Taps on the player play;
+  // the title line is the way to the work.
+  const audioAsset = !compact ? nb.assets?.find((a) => a.mime.startsWith("audio/")) : undefined;
+  if (!compact && (audioAsset || nb.hero?.class === "video")) {
+    return (
+      <div className="mt-2">
+        <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          <FeedPlayer
+            item={audioAsset ? assetItem(nb, audioAsset) : nb.hero!}
+            files={(nb.assets || []).map((a) => assetItem(nb, a))}
+          />
+        </div>
+        <p
+          role="link" tabIndex={0} aria-label={nb.title}
+          onClick={(e) => { e.stopPropagation(); nav(`/nb/${nb.id}/${nb.slug}`); }}
+          onKeyDown={(e) => { if (e.key === "Enter") nav(`/nb/${nb.id}/${nb.slug}`); }}
+          className="mt-1.5 flex cursor-pointer items-baseline gap-2 px-0.5"
+        >
+          <span className="text-[14px] font-semibold text-ink hover:underline">{nb.title}</span>
+          <span className="text-[11px] uppercase tracking-wider text-ink-3">{meta?.label || nb.kind}</span>
+        </p>
+      </div>
+    );
+  }
   return (
     <div
       role="link" tabIndex={0} aria-label={nb.title}
@@ -158,18 +185,7 @@ function NbBlock({ nb, compact }: { nb: NotebookCard; compact?: boolean }) {
           with the adaptive global background), the active theme's variant. Same element for every
           kind; the interactive deliverable lives on the notebook page. Legacy thumb only as
           fallback. Keyed on src so a theme flip swaps the variant cleanly. */}
-      {!compact && nb.assets?.some((a) => a.mime.startsWith("audio/")) ? (
-        /* A SONG leads with its player — the loop video as the picture, the live envelope over
-           it — never with a bare 4-second <video controls> of its own cover (which is exactly
-           what the class-picked hero produced for the first published record). Taps on the
-           player must play, not navigate: the card is a link everywhere else. */
-        <div className="mt-2" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-          <FeedPlayer
-            item={assetItem(nb, nb.assets.find((a) => a.mime.startsWith("audio/"))!)}
-            files={nb.assets.map((a) => assetItem(nb, a))}
-          />
-        </div>
-      ) : !compact && teaser && teaserOk ? (
+      {!compact && teaser && teaserOk ? (
         <span className="mt-2 block aspect-[16/9] w-full">
           <TeaserVideo src={teaser} poster={nb.thumb || undefined} flagged={flagged} onError={() => setTeaserOk(false)}
             className={"h-full w-full object-contain" + (flagged ? "" : " pointer-events-none")} />
@@ -377,7 +393,6 @@ function FeedPost({ post, onDeleted, hearted }: { post: FeedPostT; onDeleted?: (
               <p role="status" className="mt-1 text-[12.5px] text-yang" onClick={(e) => e.stopPropagation()}>{writeErr}</p>
             ) : null}
             <PostMedia items={mediaOf(post)} />
-            {nb ? <NbBlock nb={nb} /> : null}
             {post.repost ? (
               <div className="mt-2 rounded-2xl border border-line bg-space-2/40 px-3 py-2.5">
                 <p className="flex items-center gap-1.5 text-[13px]">
@@ -391,6 +406,9 @@ function FeedPost({ post, onDeleted, hearted }: { post: FeedPostT; onDeleted?: (
               </div>
             ) : null}
           </Collapse>
+          {/* The attached work stands OUTSIDE the height clamp: a player half-hidden behind a
+              Show more fade is a broken control, and the lean card is short by construction. */}
+          {nb ? <NbBlock nb={nb} /> : null}
           {/* X's action row: the icons SPREAD across the card (justify-between up to X's ~425px),
               in X's order — reply · repost · heart · views · run. Counts hug their icons; Edit /
               Delete moved to the ⋯ corner menu above. Quote lives beside repost, X's split. */}
