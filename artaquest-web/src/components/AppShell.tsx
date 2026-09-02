@@ -655,15 +655,17 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
             the bar's own centre line. Centring it between its NEIGHBOURS instead leaves it
             short by whatever the controls weigh, and drifts with the language pill's width
             from one locale to the next (measured: 12px off at 1440 before this). */}
-        {/* The lockup rides the CLUSTER, not the window (operator 2026-09-02 screenshot: "the logo
-            … not aligned with the below components"). The columns slid in by --nav-void when the
-            three of them became one centred unit, and everything in this bar followed — the field
-            is measured onto the content column, the trailing controls end on the rail's edge — but
-            the logo stayed pinned to the window and floated 276px left of the nav it captions at
-            1920. The margin re-joins it: void minus the row's own px-4, clamped so narrow windows
-            (void 0) keep today's 16px inset exactly. Margin, not padding, so the row's shared px
-            still breathes for the right zone. */}
-        <div ref={leftRef} className="flex min-w-0 flex-1 items-center gap-1.5 md:gap-3 md:ms-[max(0px,calc(var(--nav-void)-16px))]">
+        {/* The lockup rides the cluster AND sits on the ICON AXIS (operator 2026-09-02, twice: the
+            first fix aligned the logo with the nav panel's EDGE, and the follow-up screenshot showed
+            why that still read as wrong — X aligns its mark with the icon GLYPHS, and ours sit a
+            constant 23px inside the panel: mx-[14px] on the w-10 icon slot plus the centring of the
+            22px glyph, measured identical at 1100, 1440 and 1920. So the margin is the void plus
+            that 23px inset, minus the row's own px-4 — logo.x lands exactly on glyph.x at every
+            md+ width, including the void-0 regime where the old clamp left it 7px short. If the
+            rail's icon slot metrics change, this 23 changes with them. Margin, not padding, so the
+            row's shared px still breathes for the right zone; below md the phone bar keeps its own
+            16px inset — the drawer overlays, it does not caption. */}
+        <div ref={leftRef} className="flex min-w-0 flex-1 items-center gap-1.5 md:gap-3 md:ms-[calc(var(--nav-void)+7px)]">
           {/* The DRAWER's toggle — phones only (operator 2026-09-01, with X's desktop nav beside
               it: "no ham menu in desktop"). On md+ the nav is a permanent fixture of the layout —
               an icon rail that becomes the labelled sidebar at xl, responsively, with nothing to
