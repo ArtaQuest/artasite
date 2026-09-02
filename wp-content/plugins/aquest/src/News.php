@@ -76,7 +76,7 @@ final class News {
 		// near-identical copy each. Differing labels are not differing measurements.
 		'netloss' => [ 'label' => 'Internet connectivity loss', 'fn' => 'detect_netloss', 'svg' => 'connectivity_svg' ],
 		'blackout' => [ 'label' => 'National traffic collapse',  'fn' => 'detect_blackout', 'svg' => 'connectivity_svg' ],
-		'price'   => [ 'label' => 'Commodity price move',      'fn' => 'detect_price', 'svg' => '' ], // no figure yet — see detection_svg()
+		'price'   => [ 'label' => 'Commodity price move',      'fn' => 'detect_price', 'svg' => 'price_svg' ],
 		'claude'  => [ 'label' => 'Claude service disruption', 'fn' => 'detect_claude', 'svg' => '' ], // no figure yet — see detection_svg()
 	];
 
@@ -1587,6 +1587,91 @@ final class News {
 	public static function detection_svg( $ev ) {
 		$fn = (string) ( self::DETECTORS[ (string) ( $ev['detector'] ?? '' ) ]['svg'] ?? '' );
 		return ( '' !== $fn && method_exists( __CLASS__, $fn ) ) ? self::$fn( $ev ) : '';
+	}
+
+	/**
+	 * THE PRICE SERIES THAT FLAGGED ITSELF — the figure for a commodity move.
+	 *
+	 * Drawn from the SAME local series the detector measured (Extra::commodity_monthly reads the
+	 * cached Pink Sheet option — a render never fetches), and PINNED to the observation month in the
+	 * event's own ekey: months after the detection are cut, so the page keeps showing the record as
+	 * it was measured rather than quietly extending into data the detector never saw. If the cached
+	 * series has aged out or no longer reaches back to the event, the figure declines to render —
+	 * an absent figure is honest, a redrawn-from-different-data one is not.
+	 *
+	 * The line is blue; ONLY the flagged month is gold, because that is the measurement. The y-axis
+	 * prints the series' own numbers with no invented unit: the Pink Sheet quotes each commodity in
+	 * its own unit, and the desc says exactly that.
+	 */
+	private static function price_svg( $ev, $w = 640, $h = 240 ) {
+		$ekey = (string) ( $ev['ekey'] ?? '' );
+		if ( ! preg_match( '/(?:^|:)p_([a-z0-9_]+)_(\\d{4}-\\d{2})$/i', $ekey, $m ) ) { return ''; }
+		$key   = $m[1];
+		$month = $m[2];
+		if ( ! class_exists( '\\AQ\\Extra' ) ) { return ''; }
+		$months = (array) Extra::commodity_monthly( $key );
+		if ( count( $months ) < 2 ) { return ''; }
+		ksort( $months );
+		$upto = [];
+		foreach ( $months as $mk => $mv ) { if ( strcmp( (string) $mk, $month ) <= 0 ) { $upto[ (string) $mk ] = (float) $mv; } }
+		// The series must still REACH the event: a cache rebuilt without this month cannot draw it.
+		if ( count( $upto ) < 2 || ! isset( $upto[ $month ] ) ) { return ''; }
+		$upto = array_slice( $upto, -48, null, true );   // four years of context, readable at 640px
+		$keys = array_keys( $upto );
+		$vals = array_values( $upto );
+		$n    = count( $vals );
+		$meas = [];
+		$mj   = json_decode( (string) ( $ev['measures'] ?? '' ), true );
+		if ( is_array( $mj ) && is_array( $mj['measures'] ?? null ) ) { $meas = $mj['measures']; }
+		$move = (string) ( $meas['Move'] ?? '' );
+		$sig  = (string) ( $meas['Size vs normal'] ?? '' );
+		$name = (string) ( $meas['Commodity'] ?? $key );
+		$txt  = static fn( $x ) => esc_html( (string) $x );
+		$lo   = min( $vals );
+		$hi   = max( $vals );
+		$pad  = ( $hi - $lo ) > 0 ? ( $hi - $lo ) * 0.08 : max( 0.01, abs( $hi ) * 0.08 );
+		$lo  -= $pad; $hi += $pad;
+		$l = 56.0; $r = (float) $w - 16.0; $t = 30.0; $b = (float) $h - 26.0;
+		$sx = static fn( $i ) => $l + ( $r - $l ) * ( $n > 1 ? $i / ( $n - 1 ) : 0 );
+		$sy = static fn( $v ) => $b - ( $b - $t ) * ( ( $v - $lo ) / max( 1e-9, $hi - $lo ) );
+		// A value printed for a reader keeps the series' own precision band, nothing cleverer.
+		$fmt = static fn( $v ) => $v >= 100 ? (string) round( $v ) : ( $v >= 10 ? (string) round( $v, 1 ) : (string) round( $v, 3 ) );
+		$d = '';
+		foreach ( $vals as $i => $v ) { $d .= ( 0 === $i ? 'M' : 'L' ) . round( $sx( $i ), 1 ) . ' ' . round( $sy( $v ), 1 ) . ' '; }
+		$fx = round( $sx( $n - 1 ), 1 );
+		$fy = round( $sy( $vals[ $n - 1 ] ), 1 );
+		$o  = self::svg_open( $w, $h, $name . ': ' . $move . ', ' . $sig );
+		$o .= '<title>' . $txt( (string) ( $ev['headline'] ?? 'Commodity price move' ) ) . '</title>';
+		$o .= '<desc>' . $txt( 'The monthly World Bank Pink Sheet series for ' . $name . ' over up to 48 months ending at the'
+			. ' observation month, each commodity in the Pink Sheet\'s own quoted unit. The gold point is the flagged'
+			. ' month; the line before it is the recent behaviour the move was measured against.' ) . '</desc>';
+		// quiet frame: min and max of the drawn window, and the first + flagged months
+		$o .= '<text x="' . ( $l - 8 ) . '" y="' . ( $t + 4 ) . '" fill="#8b98a5" font-size="11" text-anchor="end">' . $txt( $fmt( $hi - $pad ) ) . '</text>';
+		$o .= '<text x="' . ( $l - 8 ) . '" y="' . $b . '" fill="#8b98a5" font-size="11" text-anchor="end">' . $txt( $fmt( $lo + $pad ) ) . '</text>';
+		$o .= '<text x="' . $l . '" y="' . ( (float) $h - 8 ) . '" fill="#8b98a5" font-size="11">' . $txt( (string) $keys[0] ) . '</text>';
+		$o .= '<text x="' . $fx . '" y="' . ( (float) $h - 8 ) . '" fill="#E8B923" font-size="11" font-weight="bold" text-anchor="end">' . $txt( $month ) . '</text>';
+		// THE DATA IS NEVER ANIMATION-GATED. A dash-in draw was tried here and the first raster
+		// check showed an empty chart: at frame zero the offset hides the whole line, so any
+		// renderer without SMIL — crawlers, thumbnailers, reduced-motion readers — got a figure
+		// with no figure in it. The other builders' rule holds: the record is always visible and
+		// only decoration animates.
+		$o .= '<path d="' . $d . '" fill="none" stroke="#1746DC" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+		// the flagged month's own segment, gold and static — the measurement itself, not decor
+		if ( $n >= 2 ) {
+			$px = round( $sx( $n - 2 ), 1 );
+			$py = round( $sy( $vals[ $n - 2 ] ), 1 );
+			$o .= '<path d="M' . $px . ' ' . $py . ' L' . $fx . ' ' . $fy . '" fill="none" stroke="#E8B923" stroke-width="2.6" stroke-linecap="round"/>';
+		}
+		// THE measurement: the flagged month, gold, with its size beside it
+		$o .= '<circle cx="' . $fx . '" cy="' . $fy . '" r="5" fill="none" stroke="#E8B923" stroke-width="1.6">'
+			. '<animate attributeName="r" values="5;9;5" dur="2.4s" repeatCount="indefinite"/>'
+			. '<animate attributeName="opacity" values="0.9;0.2;0.9" dur="2.4s" repeatCount="indefinite"/></circle>'
+			. '<circle cx="' . $fx . '" cy="' . $fy . '" r="3.4" fill="#E8B923" stroke="#06121E" stroke-width="1"/>';
+		// Anchored END at the right margin: anchored start it painted past the viewBox and the
+		// raster check showed the sigma clipped mid-word.
+		$o .= '<text x="' . $r . '" y="' . ( $t - 10 ) . '" fill="#E8B923" font-size="12.5" font-weight="bold" text-anchor="end">'
+			. $txt( $move . ( $sig ? ' - ' . $sig : '' ) ) . '</text>';
+		return $o . '</svg>';
 	}
 
 	/**

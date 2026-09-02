@@ -242,7 +242,7 @@ const CREATE_ITEMS: { href: string; label: string; hint: string; d: IconKey }[] 
   { href: "/challenges/", label: "Challenge", hint: "Kind, topic, full-moon deadline, entry fee", d: "trophy" },
 ];
 
-function CreateMenu({ expanded, onNavigate }: { expanded: boolean; onNavigate: () => void }) {
+function CreateMenu({ onNavigate }: { onNavigate: () => void }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
@@ -268,15 +268,16 @@ function CreateMenu({ expanded, onNavigate }: { expanded: boolean; onNavigate: (
         onClick={onNavigate}
         aria-label="Create — sign in to publish"
         title="Sign in to publish"
-        className={`mb-1 mt-3 flex h-11 shrink-0 items-center justify-center overflow-hidden rounded-pill bg-yang font-bold text-on-accent shadow-sm transition-opacity hover:opacity-90 ${expanded ? "mx-2 w-[calc(100%-1rem)]" : "mx-[14px] w-10 self-start"}`}
+        className="mb-1 mt-3 flex h-11 shrink-0 items-center justify-center overflow-hidden rounded-pill bg-yang font-bold text-on-accent shadow-sm transition-opacity hover:opacity-90 mx-2 w-[calc(100%-1rem)] md:mx-[14px] md:w-10 md:self-start xl:mx-2 xl:w-[calc(100%-1rem)] xl:self-auto"
       >
         {/* JUST THE WORD, CENTRED, AS WIDE AS THE ACCOUNT ROW (operator 2026-08-18, with X's Post
              button beside its account row: "centered and same length as the profile bar"): the same
              mx-2 as the AccountRow below, so the two pills share their edges; 44px tall (smaller than
              the 48px slab it replaced); no + beside the label. Collapsed, the + is the whole button. */}
-        {expanded
-          ? <span className="whitespace-nowrap text-[15px]">Create</span>
-          : <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" aria-hidden className="shrink-0"><path d="M12 5v14M5 12h14" /></svg>}
+        {/* Both children render; the viewport picks one — the word in the drawer and the labelled
+            sidebar, the + on the icon rail — so there is no JS state to fall out of step with. */}
+        <span className="whitespace-nowrap text-[15px] md:hidden xl:inline">Create</span>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" aria-hidden className="hidden shrink-0 md:block xl:hidden"><path d="M12 5v14M5 12h14" /></svg>
       </a>
     );
   }
@@ -285,7 +286,7 @@ function CreateMenu({ expanded, onNavigate }: { expanded: boolean; onNavigate: (
     // X's Post button spans the rail's label column when it is open, so the wrapper must stretch
     // with it — and go back to `self-start` when the rail is a 68px icon strip, where a full-width
     // button would be a 68px slab.
-    <div ref={wrapRef} className={`relative shrink-0 ${expanded ? "mx-2" : "mx-[14px] self-start"}`}>
+    <div ref={wrapRef} className="relative shrink-0 mx-2 md:mx-[14px] md:self-start xl:mx-2 xl:self-auto">
       <button
         ref={btnRef}
         type="button"
@@ -294,13 +295,12 @@ function CreateMenu({ expanded, onNavigate }: { expanded: boolean; onNavigate: (
         aria-expanded={open}
         aria-label="Create"
         title="Create"
-        className={`mb-1 mt-3 flex h-11 shrink-0 items-center justify-center overflow-hidden rounded-pill bg-yang font-bold text-on-accent shadow-sm transition-opacity hover:opacity-90 ${open ? "opacity-90" : ""} ${expanded ? "w-full" : "w-10"}`}
+        className={`mb-1 mt-3 flex h-11 shrink-0 items-center justify-center overflow-hidden rounded-pill bg-yang font-bold text-on-accent shadow-sm transition-opacity hover:opacity-90 w-full md:w-10 xl:w-full ${open ? "opacity-90" : ""}`}
       >
         {/* JUST THE WORD, CENTRED, AS WIDE AS THE ACCOUNT ROW (operator 2026-08-18): see the signed-out
              twin above; the wrapper carries the mx-2 that lines it up with the row below. */}
-        {expanded
-          ? <span className="whitespace-nowrap text-[15px]">Create</span>
-          : <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" aria-hidden className="shrink-0"><path d="M12 5v14M5 12h14" /></svg>}
+        <span className="whitespace-nowrap text-[15px] md:hidden xl:inline">Create</span>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" aria-hidden className="hidden shrink-0 md:block xl:hidden"><path d="M12 5v14M5 12h14" /></svg>
       </button>
 
       {open && (
@@ -398,9 +398,9 @@ function AccountRow({ me, labelShow, onNavigate }: {
 }
 
 function Sidebar({ active, expanded, onNavigate }: { active: string; expanded: boolean; onNavigate: () => void }) {
-  // Labels are visible only when expanded; in the condensed rail they fade fully out so the
-  // rail shows icons alone (the icon column keeps its layout slot either way).
-  const labelShow = expanded ? "opacity-100" : "opacity-0";
+  // Labels by VIEWPORT, not by state: visible in the phone drawer (it is the full panel),
+  // hidden on the md icon rail, visible again from xl where the sidebar has its label column.
+  const labelShow = "opacity-100 md:opacity-0 xl:opacity-100";
   // ONE sidebar for both shells (Kaggle shows signed-out visitors the same rail): the
   // member-only (`auth`) rows simply drop out when nobody is signed in.
   const items = isLoggedIn() ? NAV : NAV.filter((n) => !n.auth);
@@ -408,18 +408,17 @@ function Sidebar({ active, expanded, onNavigate }: { active: string; expanded: b
   const me = isLoggedIn() ? currentUser() : null;
   return (
     <aside
-      // Two behaviours, exactly like Kaggle:
+      // Two behaviours, like X:
       //   • Phone (max-md): NO rail. The panel is full width and lives off-canvas, sliding in
-      //     (translateX) over a scrim when expanded — a classic drawer.
-      //   • Desktop (md+): the condensed icon rail is the resting state; expanding WIDENS this
-      //     same element in place (w-rail → w-sidebar, translateX always 0) so the icons never
-      //     move and only the label column is revealed.
-      // One element drives both: mobile animates transform, desktop animates width. 240ms on
-      // Kaggle's decelerate curve (ease-out). overflow-hidden clips the labels in the rail.
-      className={`fixed bottom-0 top-topbar start-0 z-40 flex w-sidebar flex-col overflow-hidden border-e border-line bg-space-1 transition-[width,transform,inset-inline-start] duration-[240ms] ease-out md:start-[var(--nav-void)] md:translate-x-0 ${
+      //     (translateX) over a scrim when the drawer opens.
+      //   • Desktop (md+): a PERMANENT fixture with no state — the icon rail, and from xl the
+      //     same element wider with the label column revealed. The viewport decides; nothing
+      //     toggles (operator 2026-09-01: "no ham menu in desktop").
+      // overflow-hidden clips the labels while the element is at rail width.
+      className={`fixed bottom-0 top-topbar start-0 z-40 flex w-sidebar flex-col overflow-hidden border-e border-line bg-space-1 transition-[width,transform,inset-inline-start] duration-[240ms] ease-out md:w-rail md:start-[var(--nav-void)] md:translate-x-0 xl:w-sidebar ${
         expanded
-          ? "max-md:translate-x-0 max-md:shadow-[0_0_8px_rgba(0,0,0,0.28)] md:w-sidebar"
-          : "max-md:ltr:-translate-x-full max-md:rtl:translate-x-full md:w-rail"
+          ? "max-md:translate-x-0 max-md:shadow-[0_0_8px_rgba(0,0,0,0.28)]"
+          : "max-md:ltr:-translate-x-full max-md:rtl:translate-x-full"
       }`}
     >
       {/* Inner is pinned to the full expanded width so nothing reflows as the aside clips it. */}
@@ -498,7 +497,7 @@ function Sidebar({ active, expanded, onNavigate }: { active: string; expanded: b
             honest front doors behind a menu (submit a run notebook, write one in the Lab, found a
             challenge) rather than a button that pretends publishing is the only thing to start, and
             a signed-out visitor sent to sign in rather than into a menu that would bounce them. */}
-        <CreateMenu expanded={expanded} onNavigate={onNavigate} />
+        <CreateMenu onNavigate={onNavigate} />
 
         {/* THE ACCOUNT ROW (operator 2026-08-16: "make the left bar like X"). X ends its left rail
             with the signed-in member — face, name, handle — and so do we. It is a link to the
@@ -657,8 +656,11 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
             short by whatever the controls weigh, and drifts with the language pill's width
             from one locale to the next (measured: 12px off at 1440 before this). */}
         <div ref={leftRef} className="flex min-w-0 flex-1 items-center gap-1.5 md:gap-3">
-          {/* The rail's toggle, at every width — the rail no longer has a top row of its own. */}
-          <IconButton label="Toggle menu" onClick={onMenu} className="h-9 w-9 shrink-0">
+          {/* The DRAWER's toggle — phones only (operator 2026-09-01, with X's desktop nav beside
+              it: "no ham menu in desktop"). On md+ the nav is a permanent fixture of the layout —
+              an icon rail that becomes the labelled sidebar at xl, responsively, with nothing to
+              toggle — so a hamburger there would be a control for a state that no longer exists. */}
+          <IconButton label="Toggle menu" onClick={onMenu} className="h-9 w-9 shrink-0 md:hidden">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M3 6h18M3 12h18M3 18h18" /></svg>
           </IconButton>
           {/* The one lockup, at the window's start edge, where Reddit puts its own. */}
@@ -730,11 +732,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Arta needs a ledge. The two that exist — the messaging dock and the bottom tab bar — are BOTH
   // members-only, so a signed-out visitor has none and the figure stands on nothing.
   const signedIn = isLoggedIn();
-  // One state drives both viewports. Desktop has the room, so the menu rests EXPANDED
-  // (labels showing); phones have none, so the drawer rests closed and only opens on tap.
-  // `md` is Tailwind's 768px breakpoint — keep this matchMedia query in sync with it.
+  // `expanded` is THE PHONE DRAWER, nothing else (operator 2026-09-01: "no ham menu in desktop").
+  // Desktop's nav has no state at all any more: it is an icon rail from md and the labelled
+  // sidebar from xl, decided by the viewport the way X decides it, so the only thing left to
+  // open or close is the phone's overlay drawer — which rests closed.
   const isDesktop = () => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches;
-  const [expanded, setExpanded] = useState(isDesktop);
+  const [expanded, setExpanded] = useState(false);
   // Navigating closes the drawer on phones (it overlays the page); on desktop the panel
   // sits beside the content, so a nav click leaves it open — what the extra space affords.
   const collapse = () => { if (!isDesktop()) setExpanded(false); };
@@ -769,9 +772,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   // separate logged-out TopNav had no menu at all on desktop). The Sidebar drops the member-only
   // rows and the Topbar swaps the account drawer for Sign in / Register when nobody is signed in.
   return (
-    // `--nav-w` is the shell's collapse state as a LENGTH, read by the fixed nav's offset and the
-    // wrapper's padding below — one truth, so the two can never reflow out of step.
-    <div className={`aq-shell min-h-screen bg-space-1 text-ink ${expanded ? "[--nav-w:var(--spacing-sidebar)]" : "[--nav-w:var(--spacing-rail)]"}`}>
+    // `--nav-w` — the nav's width as a LENGTH, read by the fixed nav's offset and the wrapper's
+    // padding — is set responsively in .aq-shell (index.css): rail from md, sidebar from xl.
+    // There is no collapse state to carry any more; the viewport decides, exactly as on X.
+    <div className="aq-shell min-h-screen bg-space-1 text-ink">
       {/* SKIP TO THE CONTENT (WCAG 2.4.1). Before this, a keyboard or screen-reader visitor crossed
           the bar and every row of the rail — twenty-odd links — to reach the page, on every single
           navigation. Visible only when focused, which is the point: it is furniture for the people
@@ -796,10 +800,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         aria-hidden
         onClick={collapse}
       />
-      {/* Desktop: the rail is ALWAYS shown and the expanded panel EXTENDS it — the content
-          reflows in lock-step (md:ps-rail → md:ps-sidebar) so the labels are never painted
-          over the page; menu and content stay complementary, side by side. Padding animates
-          on the same 240ms ease-out as the panel width. Phone: full width; drawer slides over. */}
+      {/* Desktop: the nav is a permanent fixture and the padding follows --nav-w responsively
+          (rail from md, sidebar from xl) — the same variable the nav's own width tracks, so the
+          two can never reflow out of step. Phone: full width; the drawer slides over. */}
       <div className="transition-[padding] duration-[240ms] ease-out md:ps-[calc(var(--nav-void)+var(--nav-w))] md:pe-[max(0px,calc(var(--nav-void)-var(--spacing-gutter)))]">
         {/* overflow-x-clip: a hard, deterministic horizontal containment so no page's content can
             bleed past the viewport — what made the page overflow out beneath the open mobile nav
