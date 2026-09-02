@@ -404,7 +404,9 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
     const cv = sizeCanvas(); if (!cv) return;
     const g = cv.getContext("2d"); if (!g) return;
     const W = cv.width, H = cv.height;
-    const base = H - 2.5 * devicePixelRatio;   // the resting line, just inside the frame
+    // The resting line rides ABOVE the progress track (bottom 4px) — at 2.5px it shipped hidden
+    // underneath it, and the "this has audio" signal never showed at rest.
+    const base = H - 7 * devicePixelRatio;
     g.clearRect(0, 0, W, H);
     const N = ys ? ys.length : 2;
     const y = (i: number) => base - (ys ? ys[i] : 0);
@@ -430,9 +432,14 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
       g.quadraticCurveTo(x(i), y(i), (x(i) + x(i + 1)) / 2, (y(i) + y(i + 1)) / 2);
     }
     g.lineTo(W, y(N - 1));
-    g.lineWidth = 2.2 * devicePixelRatio;
     g.lineJoin = "round";
     g.lineCap = "round";
+    // a dark under-stroke first, so the white line stays legible over a bright bed (the forge
+    // shot swallowed a bare white line whole)
+    g.lineWidth = 3.6 * devicePixelRatio;
+    g.strokeStyle = "rgba(0,0,0,.28)";
+    g.stroke();
+    g.lineWidth = 2.2 * devicePixelRatio;
     g.strokeStyle = "rgba(255,255,255,.95)";
     g.shadowColor = "rgba(255,255,255,.35)";
     g.shadowBlur = 5 * devicePixelRatio;
@@ -468,7 +475,7 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
       const a0 = vals[Math.max(0, i - 1)], a1 = vals[i], a2 = vals[Math.min(N - 1, i + 1)];
       sm[i] = (a0 + 2 * a1 + a2) / 4;
     }
-    const span = H - 4 * devicePixelRatio;
+    const span = H - 9 * devicePixelRatio;
     const ys = new Float32Array(N);
     for (let i = 0; i < N; i++) {
       const b0 = sm[Math.max(0, i - 1)], b1 = sm[i], b2 = sm[Math.min(N - 1, i + 1)];
