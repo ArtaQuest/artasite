@@ -881,10 +881,19 @@ final class Notebook {
 		return array_values( array_unique( array_filter( $out ) ) );
 	}
 
-	/** The one published file a card should render, best-first by Kernel::HERO_ORDER. */
-	private static function hero_file( $nb_id ) {
+	/** The card's published files, ONE query: the hero (best-first by Kernel::HERO_ORDER) and the
+	 *  compact file list a rich card needs. The first published song exposed why the hero alone is
+	 *  not enough: HERO_ORDER ranked its cover loop above its audio, so the feed showed a silent
+	 *  four-second <video controls> for a work that is a SONG — the card could not even discover
+	 *  the audio existed. `files` carries {name,url,bytes,mime} for every published file, so the
+	 *  SPA's player can lead with the song and use the loop as its picture. */
+	private static function card_files( $nb_id ) {
+		// Memoized per request: card() asks twice (hero + files) and a feed page holds dozens of
+		// cards — without this the library query runs twice per card for identical rows.
+		static $memo = [];
+		if ( isset( $memo[ $nb_id ] ) ) { return $memo[ $nb_id ]; }
 		$rows = Data::all( 'SELECT * FROM ' . Data::t( 'aq_library' ) . ' WHERE nb_id = %d', [ (int) $nb_id ] );
-		if ( ! $rows ) { return null; }
+		if ( ! $rows ) { return $memo[ $nb_id ] = [ 'hero' => null, 'files' => [] ]; }
 		usort( $rows, function ( $a, $b ) {
 			$ra = array_search( (string) $a['class'], Kernel::HERO_ORDER, true );
 			$rb = array_search( (string) $b['class'], Kernel::HERO_ORDER, true );
@@ -892,7 +901,16 @@ final class Notebook {
 			$rb = false === $rb ? 99 : $rb;
 			return $ra === $rb ? ( (int) $a['id'] - (int) $b['id'] ) : ( $ra - $rb );
 		} );
-		return Kernel::lib_card( $rows[0] );
+		$files = [];
+		foreach ( $rows as $row ) {
+			$files[] = [
+				'name'  => (string) $row['name'],
+				'url'   => Media::url( (string) $row['cdn_key'] ),
+				'bytes' => (int) $row['bytes'],
+				'mime'  => (string) $row['mime'],
+			];
+		}
+		return $memo[ $nb_id ] = [ 'hero' => Kernel::lib_card( $rows[0] ), 'files' => $files ];
 	}
 
 	/** Public so the Library (AQ\Kernel) renders an author identically to a work card. */
@@ -936,7 +954,7 @@ final class Notebook {
 			// (details in the out/calm.json asset) and filterable via ?calm_min.
 			'calm'         => (int) ( $r['calm'] ?? 100 ),
 			'calm_measured' => (int) ( $r['calm_measured'] ?? 0 ) === 1,
-			'assets'       => Data::dec( $r['assets'] ?? '' ) ?: [],
+			'assets'       => Data::dec( $r['assets'] ?? '' ) ?: self::card_files( (int) $r['id'] )['files'],
 			'hearts'       => (int) $r['hearts'],
 			'comments'     => (int) ( $r['comments'] ?? 0 ),
 			'views'        => (int) ( $r['view_count'] ?? 0 ),
@@ -951,7 +969,7 @@ final class Notebook {
 			// retired execution relay and nothing writes them any more, so without this every card
 			// falls back to a grey placeholder bearing the kind's name: a member's first publication
 			// lands in the feed looking broken, while the artifact sits mirrored on the CDN.
-			'hero'         => self::hero_file( (int) $r['id'] ),
+			'hero'         => self::card_files( (int) $r['id'] )['hero'],
 			// WHO WROTE THE NOTEBOOK, as Kaggle reports it. Any member may submit any PUBLIC kernel
 			// (operator 2026-07-28), so the ArtaQuest member above is the SUBMITTER and this is the
 			// creator. On a work someone submitted for themselves the two simply agree.
