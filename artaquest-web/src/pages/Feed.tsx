@@ -16,8 +16,8 @@ import {
   myNotebooks, liteRunUrl,
   type Challenge, type FeedPostT, type LibraryItem,
   type NbKind, type NotebookCard,
-  normalizeNbKind, type NbAsset } from "../lib/api";
-import { NB_KIND_META, teaserSrc, TeaserVideo, useAqTheme, useCalmFlag } from "../components/nbview";
+  normalizeNbKind } from "../lib/api";
+import { assetItem, NB_KIND_META, teaserSrc, TeaserVideo, useAqTheme, useCalmFlag } from "../components/nbview";
 import { FeedPlayer, LibraryMedia, LibraryPicker } from "../components/library";
 
 import { PostThread } from "./NotebookPage";
@@ -126,13 +126,6 @@ function PostMedia({ items }: { items: LibraryItem[] }) {
 }
 
 /** A card asset as a minimal LibraryItem — FeedPlayer reads name/label/class/mime/url only. */
-function assetItem(nb: { id: number }, a: NbAsset): LibraryItem {
-  const cls: LibraryItem["class"] =
-    a.mime.startsWith("audio/") ? "audio" : a.mime.startsWith("video/") ? "video" : "image";
-  return { id: 0, nb_id: nb.id, name: a.name, label: a.name, class: cls, mime: a.mime,
-           bytes: a.bytes, sha256: "", url: a.url, uses: 0 } as LibraryItem;
-}
-
 function NbBlock({ nb, compact }: { nb: NotebookCard; compact?: boolean }) {
   const nav = useNavigate();
   const meta = NB_KIND_META[normalizeNbKind(nb.kind)];

@@ -639,10 +639,14 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
   );
 }
 
-export function LibraryMedia({ item, className, still, files }: {
-  item: LibraryItem; className?: string; still?: boolean; files?: LibraryItem[];
+export function LibraryMedia({ item, className, still, cover, files }: {
+  item: LibraryItem; className?: string; still?: boolean;
+  /** Fill the caller's box edge to edge (thumbnail crop) instead of letterboxing on the tile
+   *  ground — a grid card's window, like any channel's, is a full picture, not a matted print. */
+  cover?: boolean; files?: LibraryItem[];
 }) {
   const box = cx(BOX, className);
+  const fill = cover ? "h-full w-full object-cover" : FILL;
 
   // A SCENE — the work as an animated SVG, in an <img> and never inlined (see SceneMedia). It is
   // checked before the image branch because a scene's TWINS (loop.webp, poster.png) are class
@@ -655,7 +659,7 @@ export function LibraryMedia({ item, className, still, files }: {
   if (item.class === "image") {
     return (
       <span className={box}>
-        <img src={item.url} alt={item.label || item.name} loading="lazy" decoding="async" className={FILL} />
+        <img src={item.url} alt={item.label || item.name} loading="lazy" decoding="async" className={fill} />
       </span>
     );
   }
@@ -668,7 +672,7 @@ export function LibraryMedia({ item, className, still, files }: {
           preload="metadata"
           playsInline
           {...(still ? { muted: true, tabIndex: -1 } : { controls: true })}
-          className={FILL}
+          className={fill}
         />
         {still ? (
           <span aria-hidden className="pointer-events-none absolute inset-0 grid place-items-center text-ink">

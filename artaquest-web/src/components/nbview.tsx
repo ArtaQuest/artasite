@@ -19,7 +19,7 @@
    place, because the server-mirrored constants and the components that draw them must not drift. */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { normalizeNbKind, notebookPulse, type NbKind, type NotebookCard } from "../lib/api";
+import { normalizeNbKind, notebookPulse, type LibraryItem, type NbAsset, type NbKind, type NotebookCard } from "../lib/api";
 import { calmStop } from "../lib/theme";
 import { MarkdownLite } from "./reader";
 import { watchMath } from "../lib/math";
@@ -490,6 +490,15 @@ export function TeaserVideo({ src, poster, flagged, className, onError }: {
 /** `to` overrides the card's destination: the author's own Studio grid points at the Studio room
  *  (`/studio/nb/:id`), because on a phone the card IS the tap target and a draft's public page is
  *  the wrong place to land. Everywhere else it keeps pointing at the public work. */
+/** A published-file entry off the card payload, as the minimal LibraryItem the media stack eats. */
+export function assetItem(nb: { id: number }, a: NbAsset): LibraryItem {
+  const cls: LibraryItem["class"] =
+    a.mime === "image/svg+xml" || /\.svg$/i.test(a.name) ? "scene"
+    : a.mime.startsWith("audio/") ? "audio" : a.mime.startsWith("video/") ? "video" : "image";
+  return { id: 0, nb_id: nb.id, name: a.name, label: a.name, class: cls, mime: a.mime,
+           bytes: a.bytes, sha256: "", url: a.url, uses: 0 } as LibraryItem;
+}
+
 export function NbCard({ nb, to, badge }: { nb: NotebookCard; to?: string; badge?: ReactNode }) {
   const meta = NB_KIND_META[normalizeNbKind(nb.kind)];
   const theme = useAqTheme();
@@ -511,8 +520,15 @@ export function NbCard({ nb, to, badge }: { nb: NotebookCard; to?: string; badge
           ) : nb.hero ? (
             /* THE WORK ITSELF. teaser/thumb came from the retired execution relay and nothing
                writes them now, so without this every profile and catalogue card was a grey box
-               with its own kind's name in it — the same defect already fixed on the feed card. */
-            <LibraryMedia item={nb.hero} className="h-full w-full" still />
+               with its own kind's name in it — the same defect already fixed on the feed card.
+               The full asset list rides along so a scene finds its poster/loop twins — `still`
+               with no files handed SceneMedia a set of one, and the "inert" render of a scene
+               without a poster is the typed SVG tile the operator rightly called broken. A scene
+               is NOT marked still: its own governance (reduce-motion, off-screen) is the calm
+               gate, and the drawing is the card's whole face. Video stays still (muted first
+               frame + play glyph) and covers the box instead of letterboxing on grey. */
+            <LibraryMedia item={nb.hero} files={(nb.assets || []).map((a) => assetItem(nb, a))}
+              className="h-full w-full" cover still={nb.hero.class !== "scene"} />
           ) : (
             <div className="grid h-full w-full place-items-center text-xs uppercase tracking-widest text-ink-3">{meta?.label || nb.kind}</div>
           )}
@@ -521,7 +537,6 @@ export function NbCard({ nb, to, badge }: { nb: NotebookCard; to?: string; badge
           <div className="flex items-center gap-2 text-[0.7rem] uppercase tracking-wider text-ink-3">
             <span>{meta?.label || nb.kind}</span>
             {badge}
-            {nb.doi_link ? <Chip>DOI</Chip> : null}
             {/* the measured change-rate score — published with every work that carries video */}
             {nb.calm < 100 ? <span title="Measured change rate — higher is calmer (slower change)"><Chip>Calm {nb.calm}</Chip></span> : null}
           </div>
