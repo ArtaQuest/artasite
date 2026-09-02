@@ -335,6 +335,11 @@ function FileTileBody({ item }: { item: LibraryItem }) {
  *  * Motion-calm: when the member suppresses motion, the loop video stays on its first frame and
  *    the analyser smoothing is raised so the bars breathe instead of flicker.
  */
+// ONE sound at a time across the whole feed (X/TikTok behaviour): starting a player silences
+// whichever other card was sounding. Module state, not context — players mount and unmount with
+// the timeline and the only coordination they need is "hush the previous one".
+let hushActive: (() => void) | null = null;
+
 export function FeedPlayer({ item, files }: { item: LibraryItem; files?: LibraryItem[] }) {
   // ONE player for every moving work on the feed. A song (class audio) plays over its cover-loop
   // bed; a plain video work plays itself. Both sit in the SAME 16:9 rounded frame as the scene
@@ -355,6 +360,7 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
   const rafRef = useRef(0);
   const blobRef = useRef<string | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [loading, setLoading] = useState(false);  // first click fetches the whole track for the tap
   const [pct, setPct] = useState(0);
   const calm = useMotionOff();
 
@@ -401,6 +407,7 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
     return cv;
   }, []);
   const paintBand = useCallback((ys: Float32Array | null) => {
+    const rest = !ys;
     const cv = sizeCanvas(); if (!cv) return;
     const g = cv.getContext("2d"); if (!g) return;
     const W = cv.width, H = cv.height;
@@ -440,9 +447,9 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
     g.strokeStyle = "rgba(0,0,0,.28)";
     g.stroke();
     g.lineWidth = 2.2 * devicePixelRatio;
-    g.strokeStyle = "rgba(255,255,255,.95)";
+    g.strokeStyle = rest ? "rgba(255,255,255,.7)" : "rgba(255,255,255,.95)";
     g.shadowColor = "rgba(255,255,255,.35)";
-    g.shadowBlur = 5 * devicePixelRatio;
+    g.shadowBlur = rest ? 0 : 5 * devicePixelRatio;
     g.stroke();
     g.shadowBlur = 0;
   }, [sizeCanvas]);
@@ -564,12 +571,30 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
     } catch { /* untapped: sound without the band */ }
   }, [calm]);
 
+  // Silence THIS player (called when another one starts). The bed keeps looping — hushing is
+  // about sound, and the scroll still owns the picture.
+  const hush = useCallback(() => {
+    const a = audioRef.current, v = videoRef.current;
+    if (a && !a.paused) a.pause();
+    if (videoOnly && v && !v.muted) v.muted = true;
+    stopDraw(); setPlaying(false);
+  }, [videoOnly, stopDraw]);
+  const hushRef = useRef<(() => void) | null>(null);
+  hushRef.current = hush;
+  // ONE stable token per player: the registry can tell "us" from "another card", and unmount
+  // can withdraw exactly its own entry.
+  const hushTokenRef = useRef<(() => void) | null>(null);
+  if (!hushTokenRef.current) hushTokenRef.current = () => hushRef.current?.();
+  useEffect(() => () => { if (hushActive === hushTokenRef.current) hushActive = null; }, []);
+
   const toggle = useCallback(async () => {
     if (videoOnly) {
       const v = videoRef.current; if (!v) return;
       if (!ctxRef.current) wireVideoTap(v);
       if (ctxRef.current?.state === "suspended") await ctxRef.current.resume();
       if (v.muted || v.paused) {
+        if (hushActive !== hushTokenRef.current) hushActive?.();
+        hushActive = hushTokenRef.current;
         v.muted = false;
         await v.play().catch(() => {});
         startDraw(); setPlaying(true);
@@ -591,10 +616,13 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
       a.addEventListener("timeupdate", () => setPct(a!.duration ? (100 * a!.currentTime) / a!.duration : 0));
       a.addEventListener("ended", () => { setPlaying(false); stopDraw(); });
       audioRef.current = a;
-      await wireTap(a);
+      setLoading(true);          // the whole track downloads before the tap can wire — say so
+      try { await wireTap(a); } finally { setLoading(false); }
     }
     if (ctxRef.current?.state === "suspended") await ctxRef.current.resume();
     if (a.paused) {
+      if (hushActive !== hushTokenRef.current) hushActive?.();
+        hushActive = hushTokenRef.current;
       await a.play().catch(() => {});
       if (!calm) videoRef.current?.play().catch(() => {});
       startDraw();
@@ -616,6 +644,11 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
       ) : (
         <span aria-hidden className="absolute inset-0 grid place-items-center text-yang"><ClassGlyph cls="audio" /></span>
       )}
+      {/* The band lives on a scrim, the way every channel darkens its chrome edge — a bare line
+          over bright footage read as a scratch across the picture, not as a control. */}
+      {!videoOnly || playing ? (
+        <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[30%] bg-gradient-to-t from-black/55 to-transparent" />
+      ) : null}
       <canvas ref={canvasRef} aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[26%] w-full" />
       <button
         type="button"
@@ -626,15 +659,37 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
           playing ? "opacity-0 focus-visible:opacity-100 [@media(hover:hover)]:hover:opacity-90" : "opacity-100",
         )}
       >
-        {playing ? (
+        {loading ? (
+          <span aria-hidden className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+        ) : playing ? (
           <span aria-hidden className="flex gap-1"><span className="h-3.5 w-1 bg-current" /><span className="h-3.5 w-1 bg-current" /></span>
         ) : (
           <span aria-hidden className="ps-0.5"><PlayGlyph size={18} /></span>
         )}
       </button>
-      <span aria-hidden className="absolute inset-x-0 bottom-0 h-1 bg-ink/15">
-        <span className="block h-full bg-yang" style={{ width: pct + "%" }} />
-      </span>
+      {/* Seek: the whole bottom strip is the slider — a 4px line is a statement, not a target. */}
+      <div
+        role="slider" aria-label="Seek" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}
+        tabIndex={playing || pct > 0 ? 0 : -1}
+        onClick={(e) => {
+          const m = videoOnly ? videoRef.current : audioRef.current;
+          if (!m || !m.duration || (videoOnly && videoRef.current?.muted)) return;
+          const r = e.currentTarget.getBoundingClientRect();
+          m.currentTime = ((e.clientX - r.left) / r.width) * m.duration;
+          setPct((100 * m.currentTime) / m.duration);
+        }}
+        onKeyDown={(e) => {
+          const m = videoOnly ? videoRef.current : audioRef.current;
+          if (!m || !m.duration) return;
+          if (e.key === "ArrowRight") m.currentTime = Math.min(m.duration, m.currentTime + 5);
+          if (e.key === "ArrowLeft") m.currentTime = Math.max(0, m.currentTime - 5);
+        }}
+        className="absolute inset-x-0 bottom-0 h-4 cursor-pointer"
+      >
+        <span aria-hidden className="absolute inset-x-0 bottom-0 h-1 bg-ink/15">
+          <span className="block h-full bg-yang" style={{ width: pct + "%" }} />
+        </span>
+      </div>
     </div>
   );
 }
