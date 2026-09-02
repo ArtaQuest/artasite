@@ -655,7 +655,15 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
             the bar's own centre line. Centring it between its NEIGHBOURS instead leaves it
             short by whatever the controls weigh, and drifts with the language pill's width
             from one locale to the next (measured: 12px off at 1440 before this). */}
-        <div ref={leftRef} className="flex min-w-0 flex-1 items-center gap-1.5 md:gap-3">
+        {/* The lockup rides the CLUSTER, not the window (operator 2026-09-02 screenshot: "the logo
+            … not aligned with the below components"). The columns slid in by --nav-void when the
+            three of them became one centred unit, and everything in this bar followed — the field
+            is measured onto the content column, the trailing controls end on the rail's edge — but
+            the logo stayed pinned to the window and floated 276px left of the nav it captions at
+            1920. The margin re-joins it: void minus the row's own px-4, clamped so narrow windows
+            (void 0) keep today's 16px inset exactly. Margin, not padding, so the row's shared px
+            still breathes for the right zone. */}
+        <div ref={leftRef} className="flex min-w-0 flex-1 items-center gap-1.5 md:gap-3 md:ms-[max(0px,calc(var(--nav-void)-16px))]">
           {/* The DRAWER's toggle — phones only (operator 2026-09-01, with X's desktop nav beside
               it: "no ham menu in desktop"). On md+ the nav is a permanent fixture of the layout —
               an icon rail that becomes the labelled sidebar at xl, responsively, with nothing to
