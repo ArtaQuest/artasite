@@ -346,6 +346,28 @@ const mss = (sec: number) => {
   return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`;
 };
 
+/**
+ * A silent animation/video work on the feed. It plays ITSELF, muted, while on screen — exactly
+ * like a scene animates — and stops off screen; calm mode holds the first frame. No button, no
+ * band, no transport: the operator split this off the music player on purpose (2026-09-02) —
+ * chrome belongs to sound, and an animation with a play button read as a broken song.
+ */
+export function AutoLoopVideo({ src, className }: { src: string; className?: string }) {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  const calm = useMotionOff();
+  useEffect(() => {
+    const v = ref.current;
+    if (!v || calm) return;
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) v.play().catch(() => {});
+      else v.pause();
+    }, { threshold: 0.35 });
+    io.observe(v);
+    return () => io.disconnect();
+  }, [calm]);
+  return <video ref={ref} src={src} muted loop playsInline preload="metadata" className={className} />;
+}
+
 export function FeedPlayer({ item, files, title, art }: {
   item: LibraryItem; files?: LibraryItem[];
   /** The WORK's name for the lockscreen — without it the Media Session shows the file path. */
@@ -353,16 +375,12 @@ export function FeedPlayer({ item, files, title, art }: {
   /** Lockscreen artwork URL (the work's cover image). */
   art?: string;
 }) {
-  // ONE player for every moving work on the feed. A song (class audio) plays over its cover-loop
-  // bed; a plain video work plays itself. Both sit in the SAME 16:9 rounded frame as the scene
-  // panels, so the feed reads as one column of identical windows. The PICTURE belongs to the
-  // scroll: the loop autoplays muted while the card is on screen (calm mode: never). SOUND
-  // belongs to the click, and only the click. A song shows its band at rest — a flat line along
-  // the bottom, YouTube's idiom for "this has audio" — before a single note has played.
-  const videoOnly = item.class === "video";
-  const loop = videoOnly
-    ? item
-    : (files || []).find((f) => f.class === "video" && /loop/i.test(f.name || "") && !/asgenerated/i.test(f.name || ""));
+  // The MUSIC player — and only music (a silent video work is AutoLoopVideo, above). A song plays
+  // over its cover-loop bed in the same 16:9 frame as every other card. The PICTURE belongs to
+  // the scroll: the loop autoplays muted while the card is on screen (calm mode: never). SOUND
+  // belongs to the click, and only the click. The band at rest is a flat line on the scrim —
+  // YouTube's idiom for "this has audio" — before a single note has played.
+  const loop = (files || []).find((f) => f.class === "video" && /loop/i.test(f.name || "") && !/asgenerated/i.test(f.name || ""));
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -407,14 +425,13 @@ export function FeedPlayer({ item, files, title, art }: {
   const stopDrawRef = useRef<(() => void) | null>(null);
 
   // The picture plays on SCROLL: muted, whenever about a third of the card is visible; paused the
-  // moment it leaves. Sound is never touched here — an unmuted video keeps its own counsel until
-  // its control stops it.
+  // moment it leaves. Sound is never touched here.
   useEffect(() => {
     const el = wrapRef.current, v = videoRef.current;
     if (!el || !v || calm) return;
     const io = new IntersectionObserver(([e]) => {
       if (e.isIntersecting) v.play().catch(() => {});
-      else if (v.muted) v.pause();
+      else v.pause();
     }, { threshold: 0.35 });
     io.observe(el);
     return () => io.disconnect();
@@ -423,13 +440,10 @@ export function FeedPlayer({ item, files, title, art }: {
   // The band, drawn YouTube's way: a thin bright line riding just above the frame's bottom edge,
   // flat at rest, lifting into wide smooth bumps where the energy is. Both axes are still
   // normalised for coverage —
-  //  * x — LOG frequency (55 Hz..14 kHz): log spacing is how hearing spaces octaves, and linear
-  //    bins would spend half the width on near-empty treble;
-  //  * y — an adaptive gain rides a slow-decaying running peak, so a quiet verse still moves the
-  //    line and a loud chorus does not pin it flat;
+  //  * x — LOG frequency (55 Hz..14 kHz): log spacing is how hearing spaces octaves;
+  //  * y — an adaptive gain rides a slow-decaying running peak;
   // — but the MAPPING is compressive (pow > 1), so ordinary energy hugs the baseline and only
-  // real peaks stand up. That, plus double spatial smoothing and a heavier analyser time
-  // constant, is what makes it read as YouTube's calm envelope instead of a jagged spectrum.
+  // real peaks stand up.
   const peakRef = useRef(64);
   const drawingRef = useRef(false);
   const sizeCanvas = useCallback(() => {
@@ -528,7 +542,7 @@ export function FeedPlayer({ item, files, title, art }: {
   }, [sizeCanvas, paintBand]);
 
   // The loop runs ONLY while sound plays and the tab is visible — a paused player must cost
-  // nothing, on a phone above all. At rest a song keeps the flat line; a video keeps a clear frame.
+  // nothing, on a phone above all. At rest the song keeps its flat line.
   const startDraw = useCallback(() => {
     if (drawingRef.current) return;
     drawingRef.current = true;
@@ -537,44 +551,25 @@ export function FeedPlayer({ item, files, title, art }: {
   const stopDraw = useCallback(() => {
     drawingRef.current = false;
     cancelAnimationFrame(rafRef.current);
-    if (videoOnly) {
-      const cv = canvasRef.current;
-      cv?.getContext("2d")?.clearRect(0, 0, cv.width, cv.height);
-    } else {
-      paintBand(null);
-    }
-  }, [videoOnly, paintBand]);
+    paintBand(null);
+  }, [paintBand]);
   // The resting band on mount, and again whenever the column is resized under us.
   useEffect(() => {
-    if (videoOnly) return;
     paintBand(null);
     const wrap = wrapRef.current; if (!wrap) return;
     const ro = new ResizeObserver(() => { if (!drawingRef.current) paintBand(null); });
     ro.observe(wrap);
     return () => ro.disconnect();
-  }, [videoOnly, paintBand]);
+  }, [paintBand]);
   useEffect(() => { startDrawRef.current = startDraw; stopDrawRef.current = stopDraw; }, [startDraw, stopDraw]);
   useEffect(() => {
     const vis = () => {
       if (document.hidden) { drawingRef.current = false; cancelAnimationFrame(rafRef.current); }
-      else if ((audioRef.current && !audioRef.current.paused) || (videoOnly && videoRef.current && !videoRef.current.muted && !videoRef.current.paused)) startDraw();
+      else if (audioRef.current && !audioRef.current.paused) startDraw();
     };
     document.addEventListener("visibilitychange", vis);
     return () => document.removeEventListener("visibilitychange", vis);
-  }, [startDraw, videoOnly]);
-
-  // Sound progress only — the muted scroll preview must not run the bar.
-  useEffect(() => {
-    if (!videoOnly) return;
-    const v = videoRef.current; if (!v) return;
-    const t = () => {
-      if (v.muted) return;
-      setPct(v.duration ? (100 * v.currentTime) / v.duration : 0);
-      if (v.duration) setClock({ t: v.currentTime, d: v.duration });
-    };
-    v.addEventListener("timeupdate", t);
-    return () => v.removeEventListener("timeupdate", t);
-  }, [videoOnly]);
+  }, [startDraw]);
 
   const wireTap = useCallback(async (a: HTMLAudioElement) => {
     // blob: first — the tap on a cross-origin element mutes it with no error at all.
@@ -596,30 +591,13 @@ export function FeedPlayer({ item, files, title, art }: {
     }
   }, [item.url, calm]);
 
-  // A video work is same-origin, so its element is tapped directly — a blob copy would
-  // re-download the whole file for nothing.
-  const wireVideoTap = useCallback((v: HTMLVideoElement) => {
-    try {
-      if (new URL(v.currentSrc || v.src, location.href).origin !== location.origin) return;
-      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const ctx = new Ctx();
-      const an = ctx.createAnalyser();
-      an.fftSize = 512;
-      an.smoothingTimeConstant = calm ? 0.94 : 0.88;
-      ctx.createMediaElementSource(v).connect(an);
-      an.connect(ctx.destination);
-      ctxRef.current = ctx; anRef.current = an;
-    } catch { /* untapped: sound without the band */ }
-  }, [calm]);
-
   // Silence THIS player (called when another one starts). The bed keeps looping — hushing is
   // about sound, and the scroll still owns the picture.
   const hush = useCallback(() => {
-    const a = audioRef.current, v = videoRef.current;
+    const a = audioRef.current;
     if (a && !a.paused) a.pause();
-    if (videoOnly && v && !v.muted) v.muted = true;
     stopDraw(); setPlaying(false);
-  }, [videoOnly, stopDraw]);
+  }, [stopDraw]);
   const hushRef = useRef<(() => void) | null>(null);
   hushRef.current = hush;
   // ONE stable token per player: the registry can tell "us" from "another card", and unmount
@@ -629,24 +607,6 @@ export function FeedPlayer({ item, files, title, art }: {
   useEffect(() => () => { if (hushActive === hushTokenRef.current) hushActive = null; }, []);
 
   const toggle = useCallback(async () => {
-    if (videoOnly) {
-      const v = videoRef.current; if (!v) return;
-      if (!ctxRef.current) wireVideoTap(v);
-      if (ctxRef.current?.state === "suspended") await ctxRef.current.resume();
-      if (v.muted || v.paused) {
-        if (hushActive !== hushTokenRef.current) hushActive?.();
-        hushActive = hushTokenRef.current;
-        v.muted = false;
-        await v.play().catch(() => {});
-        startDraw(); setPlaying(true);
-        wireSession(v);
-      } else {
-        v.muted = true;             // back to the scroll's silent loop
-        if (calm) v.pause();
-        stopDraw(); setPlaying(false);
-      }
-      return;
-    }
     let a = audioRef.current;
     if (!a) {
       a = new Audio();
@@ -664,7 +624,7 @@ export function FeedPlayer({ item, files, title, art }: {
     if (ctxRef.current?.state === "suspended") await ctxRef.current.resume();
     if (a.paused) {
       if (hushActive !== hushTokenRef.current) hushActive?.();
-        hushActive = hushTokenRef.current;
+      hushActive = hushTokenRef.current;
       await a.play().catch(() => {});
       if (!calm) videoRef.current?.play().catch(() => {});
       startDraw();
@@ -674,7 +634,7 @@ export function FeedPlayer({ item, files, title, art }: {
       // Sound stops; the bed keeps looping — the scroll owns the picture.
       a.pause(); stopDraw(); setPlaying(false);
     }
-  }, [videoOnly, wireTap, wireVideoTap, calm, item.label, item.name, startDraw, stopDraw]);
+  }, [wireTap, wireSession, calm, startDraw, stopDraw]);
 
   return (
     <div ref={wrapRef} className="relative aspect-video w-full overflow-hidden rounded-xl border border-line bg-space-2">
@@ -686,9 +646,7 @@ export function FeedPlayer({ item, files, title, art }: {
       )}
       {/* The band lives on a scrim, the way every channel darkens its chrome edge — a bare line
           over bright footage read as a scratch across the picture, not as a control. */}
-      {!videoOnly || playing ? (
-        <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[30%] bg-gradient-to-t from-black/55 to-transparent" />
-      ) : null}
+      <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[30%] bg-gradient-to-t from-black/55 to-transparent" />
       <canvas ref={canvasRef} aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[26%] w-full" />
       <button
         type="button"
@@ -717,8 +675,8 @@ export function FeedPlayer({ item, files, title, art }: {
         role="slider" aria-label="Seek" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}
         tabIndex={playing || pct > 0 ? 0 : -1}
         onPointerDown={(e) => {
-          const m = videoOnly ? videoRef.current : audioRef.current;
-          if (!m || !m.duration || (videoOnly && videoRef.current?.muted)) return;
+          const m = audioRef.current;
+          if (!m || !m.duration) return;
           e.currentTarget.setPointerCapture(e.pointerId);
           const r = e.currentTarget.getBoundingClientRect();
           m.currentTime = (Math.min(Math.max(e.clientX - r.left, 0), r.width) / r.width) * m.duration;
@@ -726,14 +684,14 @@ export function FeedPlayer({ item, files, title, art }: {
         }}
         onPointerMove={(e) => {
           if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
-          const m = videoOnly ? videoRef.current : audioRef.current;
+          const m = audioRef.current;
           if (!m || !m.duration) return;
           const r = e.currentTarget.getBoundingClientRect();
           m.currentTime = (Math.min(Math.max(e.clientX - r.left, 0), r.width) / r.width) * m.duration;
           setPct((100 * m.currentTime) / m.duration);
         }}
         onKeyDown={(e) => {
-          const m = videoOnly ? videoRef.current : audioRef.current;
+          const m = audioRef.current;
           if (!m || !m.duration) return;
           if (e.key === "ArrowRight") m.currentTime = Math.min(m.duration, m.currentTime + 5);
           if (e.key === "ArrowLeft") m.currentTime = Math.max(0, m.currentTime - 5);

@@ -18,7 +18,7 @@ import {
   type NbKind, type NotebookCard,
   normalizeNbKind } from "../lib/api";
 import { assetItem, NB_KIND_META, teaserSrc, TeaserVideo, useAqTheme, useCalmFlag } from "../components/nbview";
-import { FeedPlayer, LibraryMedia, LibraryPicker } from "../components/library";
+import { AutoLoopVideo, FeedPlayer, LibraryMedia, LibraryPicker } from "../components/library";
 import { SharePanel } from "../components/SharePanel";
 
 import { PostThread } from "./NotebookPage";
@@ -142,29 +142,35 @@ function NbBlock({ nb, compact }: { nb: NotebookCard; compact?: boolean }) {
   const audioAsset = !compact ? nb.assets?.find((a) => a.mime.startsWith("audio/")) : undefined;
   const heroCls = nb.hero?.class;
   if (!compact && (audioAsset || heroCls === "video" || heroCls === "scene")) {
-    const sounded = audioAsset || heroCls === "video";
     return (
-      <div className="mt-2">
-        {sounded ? (
+      <div className="mt-1.5">
+        {audioAsset ? (
+          /* MUSIC alone gets the player — play button, band, seek. */
           <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
             <FeedPlayer
-              item={audioAsset ? assetItem(nb, audioAsset) : nb.hero!}
+              item={assetItem(nb, audioAsset)}
               files={(nb.assets || []).map((a) => assetItem(nb, a))}
               title={nb.title}
               art={nb.thumb || (nb.assets || []).find((a) => a.mime.startsWith("image/"))?.url}
             />
           </div>
         ) : (
+          /* A silent work — scene or video animation — plays itself, no chrome; the frame is
+             the way to the work. */
           <div
             role="link" tabIndex={0} aria-label={nb.title}
             onClick={(e) => { e.stopPropagation(); nav(`/nb/${nb.id}/${nb.slug}`); }}
             onKeyDown={(e) => { if (e.key === "Enter") nav(`/nb/${nb.id}/${nb.slug}`); }}
             className="aspect-video w-full cursor-pointer overflow-hidden rounded-xl border border-line bg-space-2"
           >
-            <LibraryMedia item={nb.hero!} files={(nb.assets || []).map((a) => assetItem(nb, a))} className="h-full w-full" />
+            {heroCls === "video" ? (
+              <AutoLoopVideo src={nb.hero!.url} className="h-full w-full object-cover" />
+            ) : (
+              <LibraryMedia item={nb.hero!} files={(nb.assets || []).map((a) => assetItem(nb, a))} className="h-full w-full" />
+            )}
           </div>
         )}
-        <div className="mt-1 flex items-center gap-2 px-0.5">
+        <div className="mt-0.5 flex items-center gap-2 px-0.5">
           <p
             role="link" tabIndex={0} aria-label={nb.title}
             onClick={(e) => { e.stopPropagation(); nav(`/nb/${nb.id}/${nb.slug}`); }}
@@ -181,7 +187,7 @@ function NbBlock({ nb, compact }: { nb: NotebookCard; compact?: boolean }) {
               compact
               title={nb.title}
               url={`${location.origin}/nb/${nb.id}/${nb.slug}`}
-              message={`${sounded ? "Listen to" : "Watch"} “${nb.title}” on ArtaQuest`}
+              message={`${audioAsset ? "Listen to" : "Watch"} “${nb.title}” on ArtaQuest`}
               image={nb.thumb || (nb.assets || []).find((a) => a.mime.startsWith("image/"))?.url}
             />
           </span>
@@ -434,7 +440,7 @@ function FeedPost({ post, onDeleted, hearted }: { post: FeedPostT; onDeleted?: (
           {/* X's action row: the icons SPREAD across the card (justify-between up to X's ~425px),
               in X's order — reply · repost · heart · views · run. Counts hug their icons; Edit /
               Delete moved to the ⋯ corner menu above. Quote lives beside repost, X's split. */}
-          <div className="mt-2.5 flex max-w-[425px] items-center justify-between gap-x-2 text-[13px] text-ink-3">
+          <div className="mt-1 flex max-w-[425px] items-center justify-between gap-x-2 text-[13px] text-ink-3">
             {nb ? (
               <button type="button" onClick={(e) => { e.stopPropagation(); setTalk((v) => !v); }} aria-expanded={talk}
                 className={cx("-my-2 -ms-1.5 inline-flex min-h-11 items-center gap-1 rounded-pill px-1.5 py-2 transition-colors", talk ? "text-yin-ink" : "hover:text-yin-ink")} aria-label="Reply">
