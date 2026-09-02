@@ -340,6 +340,12 @@ function FileTileBody({ item }: { item: LibraryItem }) {
 // the timeline and the only coordination they need is "hush the previous one".
 let hushActive: (() => void) | null = null;
 
+/** m:ss — the only clock format a feed card needs. */
+const mss = (sec: number) => {
+  const n = Math.max(0, Math.floor(sec));
+  return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`;
+};
+
 export function FeedPlayer({ item, files }: { item: LibraryItem; files?: LibraryItem[] }) {
   // ONE player for every moving work on the feed. A song (class audio) plays over its cover-loop
   // bed; a plain video work plays itself. Both sit in the SAME 16:9 rounded frame as the scene
@@ -362,13 +368,33 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);  // first click fetches the whole track for the tap
   const [pct, setPct] = useState(0);
+  const [clock, setClock] = useState<{ t: number; d: number } | null>(null);
   const calm = useMotionOff();
 
   useEffect(() => () => {
     cancelAnimationFrame(rafRef.current);
     if (blobRef.current) URL.revokeObjectURL(blobRef.current);
     ctxRef.current?.close().catch(() => {});
+    if ("mediaSession" in navigator) {
+      for (const k of ["play", "pause", "seekto"] as MediaSessionAction[]) {
+        try { navigator.mediaSession.setActionHandler(k, null); } catch { /* older UA */ }
+      }
+    }
   }, []);
+
+  // Lockscreen / notification transport. Registered at every sound start so the handlers close
+  // over the CURRENT media element; metadata alone shows controls that silently do nothing.
+  const wireSession = useCallback((m: HTMLMediaElement) => {
+    if (!("mediaSession" in navigator)) return;
+    navigator.mediaSession.metadata = new MediaMetadata({ title: item.label || item.name });
+    try {
+      navigator.mediaSession.setActionHandler("play", () => { m.play().catch(() => {}); setPlaying(true); startDrawRef.current?.(); });
+      navigator.mediaSession.setActionHandler("pause", () => { m.pause(); setPlaying(false); stopDrawRef.current?.(); });
+      navigator.mediaSession.setActionHandler("seekto", (d) => { if (d.seekTime != null) m.currentTime = d.seekTime; });
+    } catch { /* older UA */ }
+  }, [item.label, item.name]);
+  const startDrawRef = useRef<(() => void) | null>(null);
+  const stopDrawRef = useRef<(() => void) | null>(null);
 
   // The picture plays on SCROLL: muted, whenever about a third of the card is visible; paused the
   // moment it leaves. Sound is never touched here — an unmuted video keeps its own counsel until
@@ -517,6 +543,7 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
     ro.observe(wrap);
     return () => ro.disconnect();
   }, [videoOnly, paintBand]);
+  useEffect(() => { startDrawRef.current = startDraw; stopDrawRef.current = stopDraw; }, [startDraw, stopDraw]);
   useEffect(() => {
     const vis = () => {
       if (document.hidden) { drawingRef.current = false; cancelAnimationFrame(rafRef.current); }
@@ -530,7 +557,11 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
   useEffect(() => {
     if (!videoOnly) return;
     const v = videoRef.current; if (!v) return;
-    const t = () => { if (!v.muted) setPct(v.duration ? (100 * v.currentTime) / v.duration : 0); };
+    const t = () => {
+      if (v.muted) return;
+      setPct(v.duration ? (100 * v.currentTime) / v.duration : 0);
+      if (v.duration) setClock({ t: v.currentTime, d: v.duration });
+    };
     v.addEventListener("timeupdate", t);
     return () => v.removeEventListener("timeupdate", t);
   }, [videoOnly]);
@@ -598,9 +629,7 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
         v.muted = false;
         await v.play().catch(() => {});
         startDraw(); setPlaying(true);
-        if ("mediaSession" in navigator) {
-          navigator.mediaSession.metadata = new MediaMetadata({ title: item.label || item.name });
-        }
+        wireSession(v);
       } else {
         v.muted = true;             // back to the scroll's silent loop
         if (calm) v.pause();
@@ -613,7 +642,10 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
       a = new Audio();
       a.preload = "auto";
       (a as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
-      a.addEventListener("timeupdate", () => setPct(a!.duration ? (100 * a!.currentTime) / a!.duration : 0));
+      a.addEventListener("timeupdate", () => {
+        setPct(a!.duration ? (100 * a!.currentTime) / a!.duration : 0);
+        if (a!.duration) setClock({ t: a!.currentTime, d: a!.duration });
+      });
       a.addEventListener("ended", () => { setPlaying(false); stopDraw(); });
       audioRef.current = a;
       setLoading(true);          // the whole track downloads before the tap can wire — say so
@@ -627,9 +659,7 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
       if (!calm) videoRef.current?.play().catch(() => {});
       startDraw();
       setPlaying(true);
-      if ("mediaSession" in navigator) {
-        navigator.mediaSession.metadata = new MediaMetadata({ title: item.label || item.name });
-      }
+      wireSession(a);
     } else {
       // Sound stops; the bed keeps looping — the scroll owns the picture.
       a.pause(); stopDraw(); setPlaying(false);
@@ -667,15 +697,29 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
           <span aria-hidden className="ps-0.5"><PlayGlyph size={18} /></span>
         )}
       </button>
+      {clock && (playing || pct > 0) && !loading ? (
+        <span aria-hidden className="pointer-events-none absolute bottom-2.5 start-2 rounded bg-black/45 px-1.5 py-0.5 text-[11px] tabular-nums text-white/90">
+          {mss(clock.t)} / {mss(clock.d)}
+        </span>
+      ) : null}
       {/* Seek: the whole bottom strip is the slider — a 4px line is a statement, not a target. */}
       <div
         role="slider" aria-label="Seek" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}
         tabIndex={playing || pct > 0 ? 0 : -1}
-        onClick={(e) => {
+        onPointerDown={(e) => {
           const m = videoOnly ? videoRef.current : audioRef.current;
           if (!m || !m.duration || (videoOnly && videoRef.current?.muted)) return;
+          e.currentTarget.setPointerCapture(e.pointerId);
           const r = e.currentTarget.getBoundingClientRect();
-          m.currentTime = ((e.clientX - r.left) / r.width) * m.duration;
+          m.currentTime = (Math.min(Math.max(e.clientX - r.left, 0), r.width) / r.width) * m.duration;
+          setPct((100 * m.currentTime) / m.duration);
+        }}
+        onPointerMove={(e) => {
+          if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+          const m = videoOnly ? videoRef.current : audioRef.current;
+          if (!m || !m.duration) return;
+          const r = e.currentTarget.getBoundingClientRect();
+          m.currentTime = (Math.min(Math.max(e.clientX - r.left, 0), r.width) / r.width) * m.duration;
           setPct((100 * m.currentTime) / m.duration);
         }}
         onKeyDown={(e) => {
