@@ -150,6 +150,8 @@ function NbBlock({ nb, compact }: { nb: NotebookCard; compact?: boolean }) {
             <FeedPlayer
               item={audioAsset ? assetItem(nb, audioAsset) : nb.hero!}
               files={(nb.assets || []).map((a) => assetItem(nb, a))}
+              title={nb.title}
+              art={nb.thumb || (nb.assets || []).find((a) => a.mime.startsWith("image/"))?.url}
             />
           </div>
         ) : (

@@ -346,7 +346,13 @@ const mss = (sec: number) => {
   return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`;
 };
 
-export function FeedPlayer({ item, files }: { item: LibraryItem; files?: LibraryItem[] }) {
+export function FeedPlayer({ item, files, title, art }: {
+  item: LibraryItem; files?: LibraryItem[];
+  /** The WORK's name for the lockscreen — without it the Media Session shows the file path. */
+  title?: string;
+  /** Lockscreen artwork URL (the work's cover image). */
+  art?: string;
+}) {
   // ONE player for every moving work on the feed. A song (class audio) plays over its cover-loop
   // bed; a plain video work plays itself. Both sit in the SAME 16:9 rounded frame as the scene
   // panels, so the feed reads as one column of identical windows. The PICTURE belongs to the
@@ -386,13 +392,17 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
   // over the CURRENT media element; metadata alone shows controls that silently do nothing.
   const wireSession = useCallback((m: HTMLMediaElement) => {
     if (!("mediaSession" in navigator)) return;
-    navigator.mediaSession.metadata = new MediaMetadata({ title: item.label || item.name });
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: title || item.label || item.name,
+      artist: "ArtaQuest",
+      ...(art ? { artwork: [{ src: art }] } : {}),
+    });
     try {
       navigator.mediaSession.setActionHandler("play", () => { m.play().catch(() => {}); setPlaying(true); startDrawRef.current?.(); });
       navigator.mediaSession.setActionHandler("pause", () => { m.pause(); setPlaying(false); stopDrawRef.current?.(); });
       navigator.mediaSession.setActionHandler("seekto", (d) => { if (d.seekTime != null) m.currentTime = d.seekTime; });
     } catch { /* older UA */ }
-  }, [item.label, item.name]);
+  }, [title, art, item.label, item.name]);
   const startDrawRef = useRef<(() => void) | null>(null);
   const stopDrawRef = useRef<(() => void) | null>(null);
 
