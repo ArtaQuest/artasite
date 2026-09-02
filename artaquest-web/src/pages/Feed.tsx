@@ -20,6 +20,7 @@ import {
 import { assetItem, NB_KIND_META, teaserSrc, TeaserVideo, useAqTheme, useCalmFlag } from "../components/nbview";
 import { AutoLoopVideo, FeedPlayer, LibraryMedia, LibraryPicker } from "../components/library";
 import { SharePanel } from "../components/SharePanel";
+import { EmojiPicker } from "../components/EmojiPicker";
 
 import { PostThread } from "./NotebookPage";
 import { ConfirmDialog, Avatar, Button, cx, EmptyState, HeartGlyph } from "../components/ui";
@@ -170,28 +171,17 @@ function NbBlock({ nb, compact }: { nb: NotebookCard; compact?: boolean }) {
             )}
           </div>
         )}
-        <div className="mt-0.5 flex items-center gap-2 px-0.5">
-          <p
-            role="link" tabIndex={0} aria-label={nb.title}
-            onClick={(e) => { e.stopPropagation(); nav(`/nb/${nb.id}/${nb.slug}`); }}
-            onKeyDown={(e) => { if (e.key === "Enter") nav(`/nb/${nb.id}/${nb.slug}`); }}
-            className="flex min-w-0 flex-1 cursor-pointer items-baseline gap-2"
-          >
-            <span className="truncate text-[14px] font-semibold text-ink hover:underline">{nb.title}</span>
-            <span className="shrink-0 text-[11px] uppercase tracking-wider text-ink-3">{meta?.label || nb.kind}</span>
-          </p>
-          {/* External share, on the work itself — the popover posts the WORK's link (OG unfurl),
-              a different act from Quote (which stays on-platform on the POST). */}
-          <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-            <SharePanel
-              compact
-              title={nb.title}
-              url={`${location.origin}/nb/${nb.id}/${nb.slug}`}
-              message={`${audioAsset ? "Listen to" : "Watch"} “${nb.title}” on ArtaQuest`}
-              image={nb.thumb || (nb.assets || []).find((a) => a.mime.startsWith("image/"))?.url}
-            />
-          </span>
-        </div>
+        {/* Share is NOT here: it belongs with reply/repost/heart/run in the one action row below,
+            where every other verb on this post already lives. */}
+        <p
+          role="link" tabIndex={0} aria-label={nb.title}
+          onClick={(e) => { e.stopPropagation(); nav(`/nb/${nb.id}/${nb.slug}`); }}
+          onKeyDown={(e) => { if (e.key === "Enter") nav(`/nb/${nb.id}/${nb.slug}`); }}
+          className="mt-0.5 flex cursor-pointer items-baseline gap-2 px-0.5"
+        >
+          <span className="truncate text-[14px] font-semibold text-ink hover:underline">{nb.title}</span>
+          <span className="shrink-0 text-[11px] uppercase tracking-wider text-ink-3">{meta?.label || nb.kind}</span>
+        </p>
       </div>
     );
   }
@@ -464,10 +454,25 @@ function FeedPost({ post, onDeleted, hearted }: { post: FeedPostT; onDeleted?: (
               <span className={cx("inline-flex transition-transform duration-300", pop && "scale-[1.35]")}><HeartGlyph size={16} filled={mine} /></span>
               {hearts > 0 ? hearts : ""}
             </button>
-            {nb && nb.views > 0 ? (
+            {/* Always rendered for a work, zero included: a count that disappears at 0 made two
+                cards in the same timeline look like different kinds of card. */}
+            {nb ? (
               <span className="inline-flex items-center gap-1" title="Views">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M4 20V10M12 20V4M20 20v-7" strokeLinecap="round" /></svg>
                 {fmtCount(nb.views)}
+              </span>
+            ) : null}
+            {/* External share — the WORK's link with its OG unfurl, a different act from Quote
+                (which reposts the POST here). Same row, same 44px target as its neighbours. */}
+            {nb ? (
+              <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} className="-my-2 inline-flex items-center">
+                <SharePanel
+                  compact
+                  title={nb.title}
+                  url={`${location.origin}/nb/${nb.id}/${nb.slug}`}
+                  message={`${nb.assets?.some((a) => a.mime.startsWith("audio/")) ? "Listen to" : "Watch"} “${nb.title}” on ArtaQuest`}
+                  image={nb.thumb || (nb.assets || []).find((a) => a.mime.startsWith("image/"))?.url}
+                />
               </span>
             ) : null}
             {/* Measured at 48x20 in the rendered feed while every button beside it was 44 tall —
@@ -542,11 +547,29 @@ function Composer({ onPosted }: { onPosted: (p: FeedPostT) => void }) {
   // Library attachments: up to four published files, anyone's, carried with their provenance.
   const [media, setMedia] = useState<LibraryItem[]>([]);
   const [picking, setPicking] = useState(false);
+  const [nbOpen, setNbOpen] = useState(false);   // "attach your own work" popover
   const [err, setErr] = useState("");
   const box = useRef<HTMLTextAreaElement>(null);
+  const nbBox = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!nbOpen) return;
+    const down = (e: MouseEvent) => { if (nbBox.current && !nbBox.current.contains(e.target as Node)) setNbOpen(false); };
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") setNbOpen(false); };
+    document.addEventListener("mousedown", down);
+    document.addEventListener("keydown", key);
+    return () => { document.removeEventListener("mousedown", down); document.removeEventListener("keydown", key); };
+  }, [nbOpen]);
   useEffect(() => { quoteIntent = (p) => { setQuote(p); setOpen(true); box.current?.focus(); }; return () => { quoteIntent = null; }; }, []);
   const left = CHAR_LIMIT - text.length;
-  const EMOJI = ["😀", "🔬", "📐", "🎉", "🤯", "❤️"];
+  // Insert AT THE CARET, not at the end: the old strip appended, so picking an emoji after
+  // going back to fix a word dropped it at the tail of the sentence.
+  const insert = (e: string) => {
+    const ta = box.current;
+    if (!ta) { setText((t) => t + e); return; }
+    const a = ta.selectionStart ?? text.length, b = ta.selectionEnd ?? a;
+    setText(text.slice(0, a) + e + text.slice(b));
+    requestAnimationFrame(() => { ta.focus(); ta.selectionStart = ta.selectionEnd = a + e.length; });
+  };
   // Published works only. The old filter was `score >= 90`; nothing writes a score any more,
   // so it matched nothing and the whole attach-your-own-work feature was silently dead.
   const loadMine = () => { if (mine === null) myNotebooks().then((r) => setMine(r.items.filter((n) => n.status === "published"))).catch(() => setMine([])); };
@@ -619,20 +642,6 @@ function Composer({ onPosted }: { onPosted: (p: FeedPostT) => void }) {
           ) : null}
           {open ? (
             <>
-              {!attach && !quote ? (
-                <details onToggle={loadMine} className="mb-1.5">
-                  <summary className="cursor-pointer list-none text-[13px] text-yin-ink hover:underline">📓 Attach one of your notebooks </summary>
-                  <div className="mt-1.5 flex flex-col gap-1">
-                    {mine === null ? <span className="text-[12px] text-ink-3">Loading…</span>
-                      : mine.length ? mine.map((n) => (
-                        <button key={n.id} type="button" onClick={() => setAttach(n)}
-                          className="truncate rounded-lg border border-line px-2.5 py-1.5 text-start text-[13px] text-ink-2 hover:border-yin-ink">
-                          {NB_KIND_META[n.kind]?.label} · {n.title}
-                        </button>
-                      )) : <span className="text-[12px] text-ink-3">You have no published work yet — <button type="button" className="text-yin-ink hover:underline" onClick={() => nav("/studio")}>publish one in the Studio</button>. Text posts need no attachment.</span>}
-                  </div>
-                </details>
-              ) : null}
               {err !== "" && <p role="alert" className="pb-2 text-[13px] text-yin-ink">{err}</p>}
               <div className="flex items-center gap-1.5 border-t border-line pt-2">
                 <button type="button" onClick={() => setPicking(true)} disabled={media.length >= MEDIA_MAX}
@@ -642,15 +651,44 @@ function Composer({ onPosted }: { onPosted: (p: FeedPostT) => void }) {
                     <path d="M21.4 11.1 12.2 20.3a5 5 0 0 1-7.1-7.1l9.2-9.2a3.5 3.5 0 0 1 5 5l-9.2 9.2a2 2 0 0 1-2.8-2.9l8.5-8.4" />
                   </svg>
                 </button>
-                {/* The emoji row is the one droppable thing here: at 360px the paperclip, six
-                    glyphs, the counter, the ring and Post do not fit, and Post is what must
-                    survive. It returns at 400px. */}
-                <span className="hidden min-[400px]:flex min-w-0 items-center gap-1.5 overflow-hidden">
-                  {EMOJI.map((e) => (
-                    <button key={e} type="button" onClick={() => { setText((t) => t + e); box.current?.focus(); }}
-                      aria-label={`Insert ${e}`} className="min-h-6 shrink-0 rounded-md px-1 py-0.5 text-[16px] transition-transform hover:scale-125">{e}</button>
-                  ))}
-                </span>
+                {/* Attaching your OWN work lives here with the other two "add something" controls,
+                    not as a disclosure link stranded in the middle of the box — that line was the
+                    one piece of chrome inside the writing area, and it read as part of the post. */}
+                {!attach && !quote ? (
+                  <div ref={nbBox} className="relative">
+                    <button type="button" onClick={() => { setNbOpen((o) => !o); loadMine(); }}
+                      aria-haspopup="dialog" aria-expanded={nbOpen} aria-label="Attach one of your works" title="Attach one of your works"
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-yin-ink transition-colors hover:bg-veil/[0.06]">
+                      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H18a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6.5A1.5 1.5 0 0 1 5 19.5Z" />
+                        <path d="M5 17.5h14M9 3v18" />
+                      </svg>
+                    </button>
+                    {nbOpen ? (
+                      <div role="dialog" aria-label="Your published work"
+                        className="absolute bottom-full z-30 mb-2 max-h-64 w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-card border border-line bg-space-2 p-2 shadow-card">
+                        {mine === null ? <span className="block px-1 py-1.5 text-[12px] text-ink-3">Loading…</span>
+                          : mine.length ? (
+                            <div className="flex flex-col gap-1">
+                              {mine.map((n) => (
+                                <button key={n.id} type="button" onClick={() => { setAttach(n); setNbOpen(false); }}
+                                  className="truncate rounded-lg px-2 py-1.5 text-start text-[13px] text-ink-2 transition-colors hover:bg-veil/[0.08] hover:text-ink">
+                                  <span className="text-ink-3">{NB_KIND_META[n.kind]?.label}</span> · {n.title}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="block px-1 py-1.5 text-[12px] leading-relaxed text-ink-3">
+                              No published work yet — <button type="button" className="text-yin-ink hover:underline" onClick={() => nav("/studio")}>publish one in the Studio</button>. A post needs no attachment.
+                            </span>
+                          )}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                {/* One trigger, so nothing has to be dropped on a phone — the old six-glyph strip
+                    could not share the row with the counter and Post below 400px. */}
+                <EmojiPicker onPick={insert} />
                 <span aria-live="polite" className={cx("ms-auto shrink-0 text-[12px] tabular-nums",
                   left < 0 ? "font-bold text-yang" : left <= 20 ? "text-yang-ink" : "text-ink-3")}>{left}</span>
                 <svg viewBox="0 0 24 24" width="20" height="20" className="hidden shrink-0 -rotate-90 min-[400px]:block" aria-hidden>

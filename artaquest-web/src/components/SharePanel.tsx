@@ -57,7 +57,7 @@ export function SharePanel({ title, url, message, image, dialogLabel = "Share", 
     <div ref={ref} className={cx("relative", className)}>
       {compact ? (
         <button type="button" onClick={() => setOpen((o) => !o)} aria-haspopup="dialog" aria-expanded={open} aria-label="Share" title="Share"
-          className="grid h-8 w-8 place-items-center rounded-full text-ink-3 transition-colors hover:bg-veil/10 hover:text-ink">
+          className="-my-2 grid min-h-11 w-9 place-items-center rounded-pill text-ink-3 transition-colors hover:text-yin-ink">
           {SHARE_ICON}
         </button>
       ) : (
