@@ -338,10 +338,10 @@ function FileTileBody({ item }: { item: LibraryItem }) {
 export function FeedPlayer({ item, files }: { item: LibraryItem; files?: LibraryItem[] }) {
   // ONE player for every moving work on the feed. A song (class audio) plays over its cover-loop
   // bed; a plain video work plays itself. Both sit in the SAME 16:9 rounded frame as the scene
-  // panels, so the feed reads as one column of identical windows — the first cut shipped as a
-  // full-width square capped at 70vh and dwarfed every other card. The PICTURE belongs to the
+  // panels, so the feed reads as one column of identical windows. The PICTURE belongs to the
   // scroll: the loop autoplays muted while the card is on screen (calm mode: never). SOUND
-  // belongs to the click, and only the click.
+  // belongs to the click, and only the click. A song shows its band at rest — a flat line along
+  // the bottom, YouTube's idiom for "this has audio" — before a single note has played.
   const videoOnly = item.class === "video";
   const loop = videoOnly
     ? item
@@ -378,30 +378,75 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
     return () => io.disconnect();
   }, [calm, loop?.url]);
 
-  // The envelope must COVER BOTH AXES, like a music channel's:
-  //  * x — the spectrum is sampled on a LOG frequency scale (55 Hz..14 kHz). Linear bins spend
-  //    half the canvas on near-empty treble; log spacing is how hearing spaces octaves.
-  //  * y — an adaptive gain rides a slow-decaying running peak, so a quiet verse still draws a
-  //    full-height envelope and a loud chorus does not clip flat. A floor keeps silence at zero
-  //    instead of amplifying noise.
-  // The curve is a filled spline through midpoints (smooth, YouTube-like), not discrete bars,
-  // with spatial smoothing so single hot bins do not spike.
+  // The band, drawn YouTube's way: a thin bright line riding just above the frame's bottom edge,
+  // flat at rest, lifting into wide smooth bumps where the energy is. Both axes are still
+  // normalised for coverage —
+  //  * x — LOG frequency (55 Hz..14 kHz): log spacing is how hearing spaces octaves, and linear
+  //    bins would spend half the width on near-empty treble;
+  //  * y — an adaptive gain rides a slow-decaying running peak, so a quiet verse still moves the
+  //    line and a loud chorus does not pin it flat;
+  // — but the MAPPING is compressive (pow > 1), so ordinary energy hugs the baseline and only
+  // real peaks stand up. That, plus double spatial smoothing and a heavier analyser time
+  // constant, is what makes it read as YouTube's calm envelope instead of a jagged spectrum.
   const peakRef = useRef(64);
   const drawingRef = useRef(false);
+  const sizeCanvas = useCallback(() => {
+    const cv = canvasRef.current, wrap = wrapRef.current;
+    if (!cv || !wrap) return null;
+    const w = Math.round(wrap.clientWidth * devicePixelRatio);
+    if (cv.width !== w) {
+      cv.width = w;
+      cv.height = Math.round(wrap.clientHeight * 0.26 * devicePixelRatio);
+    }
+    return cv;
+  }, []);
+  const paintBand = useCallback((ys: Float32Array | null) => {
+    const cv = sizeCanvas(); if (!cv) return;
+    const g = cv.getContext("2d"); if (!g) return;
+    const W = cv.width, H = cv.height;
+    const base = H - 2.5 * devicePixelRatio;   // the resting line, just inside the frame
+    g.clearRect(0, 0, W, H);
+    const N = ys ? ys.length : 2;
+    const y = (i: number) => base - (ys ? ys[i] : 0);
+    const x = (i: number) => (i / (N - 1)) * W;
+    // a whisper of fill seats the line on the picture without painting a mountain over it
+    g.beginPath();
+    g.moveTo(0, H);
+    g.lineTo(0, y(0));
+    for (let i = 0; i < N - 1; i++) {
+      g.quadraticCurveTo(x(i), y(i), (x(i) + x(i + 1)) / 2, (y(i) + y(i + 1)) / 2);
+    }
+    g.lineTo(W, y(N - 1));
+    g.lineTo(W, H);
+    g.closePath();
+    const grad = g.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, "rgba(255,255,255,.10)");
+    grad.addColorStop(1, "rgba(255,255,255,.02)");
+    g.fillStyle = grad;
+    g.fill();
+    g.beginPath();
+    g.moveTo(0, y(0));
+    for (let i = 0; i < N - 1; i++) {
+      g.quadraticCurveTo(x(i), y(i), (x(i) + x(i + 1)) / 2, (y(i) + y(i + 1)) / 2);
+    }
+    g.lineTo(W, y(N - 1));
+    g.lineWidth = 2.2 * devicePixelRatio;
+    g.lineJoin = "round";
+    g.lineCap = "round";
+    g.strokeStyle = "rgba(255,255,255,.95)";
+    g.shadowColor = "rgba(255,255,255,.35)";
+    g.shadowBlur = 5 * devicePixelRatio;
+    g.stroke();
+    g.shadowBlur = 0;
+  }, [sizeCanvas]);
   const draw = useCallback(() => {
     if (!drawingRef.current) return;
     rafRef.current = requestAnimationFrame(draw);
-    const an = anRef.current, cv = canvasRef.current, wrap = wrapRef.current;
-    if (!an || !cv || !wrap) return;
-    if (cv.width !== Math.round(wrap.clientWidth * devicePixelRatio)) {
-      cv.width = Math.round(wrap.clientWidth * devicePixelRatio);
-      cv.height = Math.round(wrap.clientHeight * 0.34 * devicePixelRatio);
-    }
+    const an = anRef.current, cv = sizeCanvas();
+    if (!an || !cv) return;
     const data = new Uint8Array(an.frequencyBinCount);
     an.getByteFrequencyData(data);
-    const g = cv.getContext("2d"); if (!g) return;
     const W = cv.width, H = cv.height;
-    g.clearRect(0, 0, W, H);
     const N = W < 480 * devicePixelRatio ? 48 : 80;
     const sr = ctxRef.current?.sampleRate || 44100;
     const fMin = 55, fMax = Math.min(14000, sr / 2);
@@ -418,42 +463,22 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
       frameMax = Math.max(frameMax, vals[i]);
     }
     peakRef.current = Math.max(frameMax, peakRef.current * 0.985, 64);
-    const ys = new Float32Array(N);
+    const sm = new Float32Array(N);
     for (let i = 0; i < N; i++) {
       const a0 = vals[Math.max(0, i - 1)], a1 = vals[i], a2 = vals[Math.min(N - 1, i + 1)];
-      ys[i] = Math.pow((a0 + 2 * a1 + a2) / 4 / peakRef.current, 0.85) * H * 0.92;
+      sm[i] = (a0 + 2 * a1 + a2) / 4;
     }
-    const x = (i: number) => (i / (N - 1)) * W;
-    g.beginPath();
-    g.moveTo(0, H);
-    g.lineTo(0, H - ys[0]);
-    for (let i = 0; i < N - 1; i++) {
-      g.quadraticCurveTo(x(i), H - ys[i], (x(i) + x(i + 1)) / 2, H - (ys[i] + ys[i + 1]) / 2);
+    const span = H - 4 * devicePixelRatio;
+    const ys = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const b0 = sm[Math.max(0, i - 1)], b1 = sm[i], b2 = sm[Math.min(N - 1, i + 1)];
+      ys[i] = Math.pow((b0 + 2 * b1 + b2) / 4 / peakRef.current, 1.5) * span * 0.94;
     }
-    g.lineTo(W, H - ys[N - 1]);
-    g.lineTo(W, H);
-    g.closePath();
-    const grad = g.createLinearGradient(0, 0, 0, H);
-    grad.addColorStop(0, "rgba(255,255,255,.34)");
-    grad.addColorStop(1, "rgba(255,255,255,.04)");
-    g.fillStyle = grad;
-    g.fill();
-    g.beginPath();
-    g.moveTo(0, H - ys[0]);
-    for (let i = 0; i < N - 1; i++) {
-      g.quadraticCurveTo(x(i), H - ys[i], (x(i) + x(i + 1)) / 2, H - (ys[i] + ys[i + 1]) / 2);
-    }
-    g.lineTo(W, H - ys[N - 1]);
-    g.lineWidth = 1.6 * devicePixelRatio;
-    g.strokeStyle = "rgba(255,255,255,.95)";
-    g.shadowColor = "rgba(255,255,255,.5)";
-    g.shadowBlur = 6 * devicePixelRatio;
-    g.stroke();
-    g.shadowBlur = 0;
-  }, []);
+    paintBand(ys);
+  }, [sizeCanvas, paintBand]);
 
   // The loop runs ONLY while sound plays and the tab is visible — a paused player must cost
-  // nothing, on a phone above all.
+  // nothing, on a phone above all. At rest a song keeps the flat line; a video keeps a clear frame.
   const startDraw = useCallback(() => {
     if (drawingRef.current) return;
     drawingRef.current = true;
@@ -462,9 +487,22 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
   const stopDraw = useCallback(() => {
     drawingRef.current = false;
     cancelAnimationFrame(rafRef.current);
-    const cv = canvasRef.current;
-    cv?.getContext("2d")?.clearRect(0, 0, cv.width, cv.height);
-  }, []);
+    if (videoOnly) {
+      const cv = canvasRef.current;
+      cv?.getContext("2d")?.clearRect(0, 0, cv.width, cv.height);
+    } else {
+      paintBand(null);
+    }
+  }, [videoOnly, paintBand]);
+  // The resting band on mount, and again whenever the column is resized under us.
+  useEffect(() => {
+    if (videoOnly) return;
+    paintBand(null);
+    const wrap = wrapRef.current; if (!wrap) return;
+    const ro = new ResizeObserver(() => { if (!drawingRef.current) paintBand(null); });
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, [videoOnly, paintBand]);
   useEffect(() => {
     const vis = () => {
       if (document.hidden) { drawingRef.current = false; cancelAnimationFrame(rafRef.current); }
@@ -494,12 +532,12 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
       const ctx = new Ctx();
       const an = ctx.createAnalyser();
       an.fftSize = 512;
-      an.smoothingTimeConstant = calm ? 0.93 : 0.82;
+      an.smoothingTimeConstant = calm ? 0.94 : 0.88;
       ctx.createMediaElementSource(a).connect(an);
       an.connect(ctx.destination);
       ctxRef.current = ctx; anRef.current = an;
     } catch {
-      a.src = item.url;   // untapped: no bars, full sound
+      a.src = item.url;   // untapped: no band, full sound
     }
   }, [item.url, calm]);
 
@@ -512,11 +550,11 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
       const ctx = new Ctx();
       const an = ctx.createAnalyser();
       an.fftSize = 512;
-      an.smoothingTimeConstant = calm ? 0.93 : 0.82;
+      an.smoothingTimeConstant = calm ? 0.94 : 0.88;
       ctx.createMediaElementSource(v).connect(an);
       an.connect(ctx.destination);
       ctxRef.current = ctx; anRef.current = an;
-    } catch { /* untapped: sound without the envelope */ }
+    } catch { /* untapped: sound without the band */ }
   }, [calm]);
 
   const toggle = useCallback(async () => {
@@ -571,7 +609,7 @@ export function FeedPlayer({ item, files }: { item: LibraryItem; files?: Library
       ) : (
         <span aria-hidden className="absolute inset-0 grid place-items-center text-yang"><ClassGlyph cls="audio" /></span>
       )}
-      <canvas ref={canvasRef} aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[34%] w-full" />
+      <canvas ref={canvasRef} aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[26%] w-full" />
       <button
         type="button"
         onClick={toggle}

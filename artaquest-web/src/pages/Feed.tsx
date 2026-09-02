@@ -141,20 +141,34 @@ function NbBlock({ nb, compact }: { nb: NotebookCard; compact?: boolean }) {
   const teaser = teaserSrc(nb, theme);
   const [teaserOk, setTeaserOk] = useState(true); // VP9-alpha unsupported / file gone → legacy thumb
 
-  // A work that PLAYS gets the focused treatment (X/TikTok/Instagram): the player IS the card —
-  // no bordered tile, no chips, no abstract, no continue pill — one quiet title line under it.
-  // The frame is FeedPlayer's own, identical across every playing card. Taps on the player play;
-  // the title line is the way to the work.
+  // Any work with a MOVING face gets the focused treatment (X/TikTok/Instagram): the media IS the
+  // card — no bordered tile, no chips, no abstract, no continue pill — one quiet title line under
+  // it. All of them share FeedPlayer's 16:9 frame, so a song, a video and a silent scene are the
+  // same window; only a work with sound carries the resting band and the play control. Taps on a
+  // player play; taps on a silent scene, and the title line everywhere, go to the work.
   const audioAsset = !compact ? nb.assets?.find((a) => a.mime.startsWith("audio/")) : undefined;
-  if (!compact && (audioAsset || nb.hero?.class === "video")) {
+  const heroCls = nb.hero?.class;
+  if (!compact && (audioAsset || heroCls === "video" || heroCls === "scene")) {
+    const sounded = audioAsset || heroCls === "video";
     return (
       <div className="mt-2">
-        <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-          <FeedPlayer
-            item={audioAsset ? assetItem(nb, audioAsset) : nb.hero!}
-            files={(nb.assets || []).map((a) => assetItem(nb, a))}
-          />
-        </div>
+        {sounded ? (
+          <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+            <FeedPlayer
+              item={audioAsset ? assetItem(nb, audioAsset) : nb.hero!}
+              files={(nb.assets || []).map((a) => assetItem(nb, a))}
+            />
+          </div>
+        ) : (
+          <div
+            role="link" tabIndex={0} aria-label={nb.title}
+            onClick={(e) => { e.stopPropagation(); nav(`/nb/${nb.id}/${nb.slug}`); }}
+            onKeyDown={(e) => { if (e.key === "Enter") nav(`/nb/${nb.id}/${nb.slug}`); }}
+            className="aspect-video w-full cursor-pointer overflow-hidden rounded-xl border border-line bg-space-2"
+          >
+            <LibraryMedia item={nb.hero!} files={(nb.assets || []).map((a) => assetItem(nb, a))} className="h-full w-full" />
+          </div>
+        )}
         <p
           role="link" tabIndex={0} aria-label={nb.title}
           onClick={(e) => { e.stopPropagation(); nav(`/nb/${nb.id}/${nb.slug}`); }}
