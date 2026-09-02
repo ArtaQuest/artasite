@@ -1804,6 +1804,12 @@ html[dir="rtl"] .aq-bot-panel { right: auto; left: calc(1.25rem + env(safe-area-
 /* The shell's cluster void — see the note beside --spacing-content. Lives on the SAME element that
    sets --nav-w (AppShell's root), because var()-bearing custom properties resolve where defined. */
 .aq-shell {
+  /* THE NAV'S WIDTH, BY VIEWPORT — no toggle state feeds this any more (operator 2026-09-01,
+     "no ham menu in desktop"): the icon rail from md, the labelled sidebar from xl, the way X
+     decides it. The fixed nav's width classes (md:w-rail xl:w-sidebar) and this variable must
+     name the same breakpoints, or the padding and the panel reflow out of step. */
+  --nav-w: 0px;
+
   /* Net of one gutter: the row's inline-END padding sits between the right rail and the row edge,
      while the nav sits flush at the row's START — so a void computed over the full row width left
      the window's edge-voids a constant gutter apart (measured 592 vs 616 at 2560). The cluster's
@@ -1811,3 +1817,5 @@ html[dir="rtl"] .aq-bot-panel { right: auto; left: calc(1.25rem + env(safe-area-
      back so the row still gets its full content width. */
   --nav-void: max(0px, calc((100vw - var(--nav-w, var(--spacing-sidebar)) - var(--spacing-content) + var(--spacing-gutter)) / 2));
 }
+@media (min-width: 768px) { .aq-shell { --nav-w: var(--spacing-rail); } }
+@media (min-width: 1280px) { .aq-shell { --nav-w: var(--spacing-sidebar); } }
