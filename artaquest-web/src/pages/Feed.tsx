@@ -16,10 +16,9 @@ import {
   myNotebooks, liteRunUrl,
   type Challenge, type FeedPostT, type LibraryItem,
   type NbKind, type NotebookCard,
-  normalizeNbKind,
-} from "../lib/api";
+  normalizeNbKind, type NbAsset } from "../lib/api";
 import { NB_KIND_META, teaserSrc, TeaserVideo, useAqTheme, useCalmFlag } from "../components/nbview";
-import { LibraryMedia, LibraryPicker } from "../components/library";
+import { FeedPlayer, LibraryMedia, LibraryPicker } from "../components/library";
 
 import { PostThread } from "./NotebookPage";
 import { ConfirmDialog, Avatar, Button, cx, EmptyState, HeartGlyph } from "../components/ui";
@@ -126,6 +125,14 @@ function PostMedia({ items }: { items: LibraryItem[] }) {
   );
 }
 
+/** A card asset as a minimal LibraryItem — FeedPlayer reads name/label/class/mime/url only. */
+function assetItem(nb: { id: number }, a: NbAsset): LibraryItem {
+  const cls: LibraryItem["class"] =
+    a.mime.startsWith("audio/") ? "audio" : a.mime.startsWith("video/") ? "video" : "image";
+  return { id: 0, nb_id: nb.id, name: a.name, label: a.name, class: cls, mime: a.mime,
+           bytes: a.bytes, sha256: "", url: a.url, uses: 0 } as LibraryItem;
+}
+
 function NbBlock({ nb, compact }: { nb: NotebookCard; compact?: boolean }) {
   const nav = useNavigate();
   const meta = NB_KIND_META[normalizeNbKind(nb.kind)];
@@ -142,7 +149,6 @@ function NbBlock({ nb, compact }: { nb: NotebookCard; compact?: boolean }) {
     >
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-ink-3">
         <span>{meta?.label || nb.kind}</span>
-        {nb.doi_link ? <span className="rounded-pill border border-line px-1.5">DOI</span> : null}
         {nb.calm < 100 ? <span className="rounded-pill border border-line px-1.5" title="Measured change rate — higher is calmer">Calm {nb.calm}/100</span> : null}
       </div>
       <h2 className="mt-0.5 text-[15px] font-semibold leading-snug text-ink">{nb.title}</h2>
@@ -152,7 +158,18 @@ function NbBlock({ nb, compact }: { nb: NotebookCard; compact?: boolean }) {
           with the adaptive global background), the active theme's variant. Same element for every
           kind; the interactive deliverable lives on the notebook page. Legacy thumb only as
           fallback. Keyed on src so a theme flip swaps the variant cleanly. */}
-      {!compact && teaser && teaserOk ? (
+      {!compact && nb.assets?.some((a) => a.mime.startsWith("audio/")) ? (
+        /* A SONG leads with its player — the loop video as the picture, the live envelope over
+           it — never with a bare 4-second <video controls> of its own cover (which is exactly
+           what the class-picked hero produced for the first published record). Taps on the
+           player must play, not navigate: the card is a link everywhere else. */
+        <div className="mt-2" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          <FeedPlayer
+            item={assetItem(nb, nb.assets.find((a) => a.mime.startsWith("audio/"))!)}
+            files={nb.assets.map((a) => assetItem(nb, a))}
+          />
+        </div>
+      ) : !compact && teaser && teaserOk ? (
         <span className="mt-2 block aspect-[16/9] w-full">
           <TeaserVideo src={teaser} poster={nb.thumb || undefined} flagged={flagged} onError={() => setTeaserOk(false)}
             className={"h-full w-full object-contain" + (flagged ? "" : " pointer-events-none")} />

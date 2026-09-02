@@ -335,7 +335,7 @@ function FileTileBody({ item }: { item: LibraryItem }) {
  *  * Motion-calm: when the member suppresses motion, the loop video stays on its first frame and
  *    the analyser smoothing is raised so the bars breathe instead of flicker.
  */
-function FeedPlayer({ item, files }: { item: LibraryItem; files?: LibraryItem[] }) {
+export function FeedPlayer({ item, files }: { item: LibraryItem; files?: LibraryItem[] }) {
   const loop = (files || []).find((f) => f.class === "video" && /loop/i.test(f.name || "") && !/asgenerated/i.test(f.name || ""));
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -355,29 +355,101 @@ function FeedPlayer({ item, files }: { item: LibraryItem; files?: LibraryItem[] 
     ctxRef.current?.close().catch(() => {});
   }, []);
 
+  // The envelope must COVER BOTH AXES, like a music channel's:
+  //  * x — the spectrum is sampled on a LOG frequency scale (55 Hz..14 kHz). Linear bins spend
+  //    half the canvas on near-empty treble; log spacing is how hearing spaces octaves.
+  //  * y — an adaptive gain rides a slow-decaying running peak, so a quiet verse still draws a
+  //    full-height envelope and a loud chorus does not clip flat. A floor keeps silence at zero
+  //    instead of amplifying noise.
+  // The curve is a filled spline through midpoints (smooth, YouTube-like), not discrete bars,
+  // with spatial smoothing so single hot bins do not spike.
+  const peakRef = useRef(64);
+  const drawingRef = useRef(false);
   const draw = useCallback(() => {
+    if (!drawingRef.current) return;
     rafRef.current = requestAnimationFrame(draw);
     const an = anRef.current, cv = canvasRef.current, wrap = wrapRef.current;
     if (!an || !cv || !wrap) return;
-    if (cv.width !== wrap.clientWidth * devicePixelRatio) {
-      cv.width = wrap.clientWidth * devicePixelRatio;
-      cv.height = Math.round(wrap.clientHeight * 0.38 * devicePixelRatio);
+    if (cv.width !== Math.round(wrap.clientWidth * devicePixelRatio)) {
+      cv.width = Math.round(wrap.clientWidth * devicePixelRatio);
+      cv.height = Math.round(wrap.clientHeight * 0.34 * devicePixelRatio);
     }
     const data = new Uint8Array(an.frequencyBinCount);
     an.getByteFrequencyData(data);
     const g = cv.getContext("2d"); if (!g) return;
     const W = cv.width, H = cv.height;
     g.clearRect(0, 0, W, H);
-    const N = W < 480 * devicePixelRatio ? 48 : 96;
-    const step = Math.floor((data.length * 0.72) / N), bw = W / N;
+    const N = W < 480 * devicePixelRatio ? 48 : 80;
+    const sr = ctxRef.current?.sampleRate || 44100;
+    const fMin = 55, fMax = Math.min(14000, sr / 2);
+    const vals = new Float32Array(N);
+    let frameMax = 0;
     for (let i = 0; i < N; i++) {
+      const f0 = fMin * Math.pow(fMax / fMin, i / N);
+      const f1 = fMin * Math.pow(fMax / fMin, (i + 1) / N);
+      const b0 = Math.max(1, Math.floor((f0 / (sr / 2)) * data.length));
+      const b1 = Math.max(b0 + 1, Math.ceil((f1 / (sr / 2)) * data.length));
       let m = 0;
-      for (let j = 0; j < step; j++) m = Math.max(m, data[i * step + j]);
-      const h = Math.pow(m / 255, 1.35) * H;
-      g.fillStyle = "rgba(255,255,255," + (0.5 + 0.45 * (m / 255)).toFixed(3) + ")";
-      g.fillRect(i * bw + bw * 0.18, H - h, bw * 0.64, h);
+      for (let j = b0; j < b1 && j < data.length; j++) m = Math.max(m, data[j]);
+      vals[i] = m * (0.72 + 0.5 * (i / N));   // gentle tilt: octaves up front, not buried
+      frameMax = Math.max(frameMax, vals[i]);
     }
+    peakRef.current = Math.max(frameMax, peakRef.current * 0.985, 64);
+    const ys = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const a0 = vals[Math.max(0, i - 1)], a1 = vals[i], a2 = vals[Math.min(N - 1, i + 1)];
+      ys[i] = Math.pow((a0 + 2 * a1 + a2) / 4 / peakRef.current, 0.85) * H * 0.92;
+    }
+    const x = (i: number) => (i / (N - 1)) * W;
+    g.beginPath();
+    g.moveTo(0, H);
+    g.lineTo(0, H - ys[0]);
+    for (let i = 0; i < N - 1; i++) {
+      g.quadraticCurveTo(x(i), H - ys[i], (x(i) + x(i + 1)) / 2, H - (ys[i] + ys[i + 1]) / 2);
+    }
+    g.lineTo(W, H - ys[N - 1]);
+    g.lineTo(W, H);
+    g.closePath();
+    const grad = g.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, "rgba(255,255,255,.34)");
+    grad.addColorStop(1, "rgba(255,255,255,.04)");
+    g.fillStyle = grad;
+    g.fill();
+    g.beginPath();
+    g.moveTo(0, H - ys[0]);
+    for (let i = 0; i < N - 1; i++) {
+      g.quadraticCurveTo(x(i), H - ys[i], (x(i) + x(i + 1)) / 2, H - (ys[i] + ys[i + 1]) / 2);
+    }
+    g.lineTo(W, H - ys[N - 1]);
+    g.lineWidth = 1.6 * devicePixelRatio;
+    g.strokeStyle = "rgba(255,255,255,.95)";
+    g.shadowColor = "rgba(255,255,255,.5)";
+    g.shadowBlur = 6 * devicePixelRatio;
+    g.stroke();
+    g.shadowBlur = 0;
   }, []);
+
+  // The loop runs ONLY while sound plays and the tab is visible — a paused player must cost
+  // nothing, on a phone above all.
+  const startDraw = useCallback(() => {
+    if (drawingRef.current) return;
+    drawingRef.current = true;
+    rafRef.current = requestAnimationFrame(draw);
+  }, [draw]);
+  const stopDraw = useCallback(() => {
+    drawingRef.current = false;
+    cancelAnimationFrame(rafRef.current);
+    const cv = canvasRef.current;
+    cv?.getContext("2d")?.clearRect(0, 0, cv.width, cv.height);
+  }, []);
+  useEffect(() => {
+    const vis = () => {
+      if (document.hidden) { drawingRef.current = false; cancelAnimationFrame(rafRef.current); }
+      else if (audioRef.current && !audioRef.current.paused) startDraw();
+    };
+    document.addEventListener("visibilitychange", vis);
+    return () => document.removeEventListener("visibilitychange", vis);
+  }, [startDraw]);
 
   const wireTap = useCallback(async (a: HTMLAudioElement) => {
     // blob: first — the tap on a cross-origin element mutes it with no error at all.
@@ -394,7 +466,6 @@ function FeedPlayer({ item, files }: { item: LibraryItem; files?: LibraryItem[] 
       ctx.createMediaElementSource(a).connect(an);
       an.connect(ctx.destination);
       ctxRef.current = ctx; anRef.current = an;
-      draw();
     } catch {
       a.src = item.url;   // untapped: no bars, full sound
     }
@@ -407,7 +478,7 @@ function FeedPlayer({ item, files }: { item: LibraryItem; files?: LibraryItem[] 
       a.preload = "auto";
       (a as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
       a.addEventListener("timeupdate", () => setPct(a!.duration ? (100 * a!.currentTime) / a!.duration : 0));
-      a.addEventListener("ended", () => { setPlaying(false); videoRef.current?.pause(); });
+      a.addEventListener("ended", () => { setPlaying(false); videoRef.current?.pause(); stopDraw(); });
       audioRef.current = a;
       await wireTap(a);
     }
@@ -415,14 +486,15 @@ function FeedPlayer({ item, files }: { item: LibraryItem; files?: LibraryItem[] 
     if (a.paused) {
       await a.play().catch(() => {});
       if (!calm) videoRef.current?.play().catch(() => {});
+      startDraw();
       setPlaying(true);
       if ("mediaSession" in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({ title: item.label || item.name });
       }
     } else {
-      a.pause(); videoRef.current?.pause(); setPlaying(false);
+      a.pause(); videoRef.current?.pause(); stopDraw(); setPlaying(false);
     }
-  }, [wireTap, calm, item.label, item.name]);
+  }, [wireTap, calm, item.label, item.name, startDraw, stopDraw]);
 
   return (
     <div ref={wrapRef} className="relative w-full overflow-hidden rounded-card bg-space-1" style={{ aspectRatio: "1 / 1", maxHeight: "70vh" }}>
