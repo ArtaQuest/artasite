@@ -430,27 +430,34 @@ function FeedPost({ post, onDeleted, hearted }: { post: FeedPostT; onDeleted?: (
           {/* X's action row: the icons SPREAD across the card (justify-between up to X's ~425px),
               in X's order — reply · repost · heart · views · run. Counts hug their icons; Edit /
               Delete moved to the ⋯ corner menu above. Quote lives beside repost, X's split. */}
-          <div className="mt-1 flex max-w-[425px] items-center justify-between gap-x-2 text-[13px] text-ink-3">
+          <div className="mt-1 flex max-w-[425px] items-center justify-between gap-x-0.5 text-[13px] text-ink-3 min-[400px]:gap-x-2">
             {nb ? (
               <button type="button" onClick={(e) => { e.stopPropagation(); setTalk((v) => !v); }} aria-expanded={talk}
-                className={cx("-my-2 -ms-1.5 inline-flex min-h-11 items-center gap-1 rounded-pill px-1.5 py-2 transition-colors", talk ? "text-yin-ink" : "hover:text-yin-ink")} aria-label="Reply">
+                className={cx("-my-2 -ms-1.5 inline-flex min-h-11 items-center gap-1 rounded-pill px-1 py-2 transition-colors min-[400px]:px-1.5", talk ? "text-yin-ink" : "hover:text-yin-ink")} aria-label="Reply">
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M21 11.5a8.4 8.4 0 0 1-9.4 8.3L3 21l1.2-3.6A8.4 8.4 0 1 1 21 11.5Z" /></svg>
                 {nb.comments > 0 ? nb.comments : ""}
               </button>
             ) : null}
             <span className="inline-flex items-center">
               <button type="button" onClick={doRepost} aria-label="Repost" aria-pressed={reposted}
-                className={cx("-my-2 inline-flex min-h-11 items-center gap-1 rounded-pill px-1.5 py-2 transition-colors", reposted ? "text-yang-ink" : "hover:text-yang-ink")}>
+                className={cx("-my-2 inline-flex min-h-11 items-center gap-1 rounded-pill px-1 py-2 transition-colors min-[400px]:px-1.5", reposted ? "text-yang-ink" : "hover:text-yang-ink")}>
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M17 2l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 22l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></svg>
                 {reposts > 0 ? reposts : ""}
               </button>
               {/* Same 44px target as its neighbours: this was a bare 12px text run, the one control
                   in the row a thumb could miss. */}
               <button type="button" onClick={(e) => { e.stopPropagation(); quoteIntent?.(post); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                aria-label="Quote" className="-my-2 inline-flex min-h-11 items-center rounded-pill px-1.5 py-2 text-[12px] transition-colors hover:text-yang-ink">Quote</button>
+                aria-label="Quote" className="-my-2 inline-flex min-h-11 items-center rounded-pill px-1 py-2 text-[12px] transition-colors hover:text-yang-ink min-[400px]:px-1.5">
+                {/* Share joined this row and pushed "Run it" off the card at 360px (measured on
+                    prod). The word becomes a glyph on a phone; nothing is dropped. */}
+                <span className="hidden min-[400px]:inline">Quote</span>
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="min-[400px]:hidden">
+                  <path d="M9 7H6a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h2v2a2 2 0 0 1-2 2" /><path d="M19 7h-3a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h2v2a2 2 0 0 1-2 2" />
+                </svg>
+              </button>
             </span>
             <button type="button" onClick={toggleHeart} aria-pressed={mine} aria-label={mine ? "Remove heart" : "Heart"}
-              className={cx("-my-2 inline-flex min-h-11 items-center gap-1 rounded-pill px-1.5 py-2 transition-colors", mine ? "text-yang" : "hover:text-yang")}>
+              className={cx("-my-2 inline-flex min-h-11 items-center gap-1 rounded-pill px-1 py-2 transition-colors min-[400px]:px-1.5", mine ? "text-yang" : "hover:text-yang")}>
               <span className={cx("inline-flex transition-transform duration-300", pop && "scale-[1.35]")}><HeartGlyph size={16} filled={mine} /></span>
               {hearts > 0 ? hearts : ""}
             </button>
@@ -477,7 +484,9 @@ function FeedPost({ post, onDeleted, hearted }: { post: FeedPostT; onDeleted?: (
             ) : null}
             {/* Measured at 48x20 in the rendered feed while every button beside it was 44 tall —
                 the last short target in the row. */}
-            {nb ? <a href={liteRunUrl(nb.id, nb.slug)} onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener" className="-my-2 -me-1.5 inline-flex min-h-11 items-center rounded-pill px-1.5 py-2 transition-colors hover:text-ink-2" title="Runs in your browser — nothing leaves your device">Run it ↗</a> : null}
+            {nb ? <a href={liteRunUrl(nb.id, nb.slug)} onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener" className="-my-2 -me-1.5 inline-flex min-h-11 shrink-0 items-center rounded-pill px-1 py-2 transition-colors min-[400px]:px-1.5 hover:text-ink-2" title="Runs in your browser — nothing leaves your device">
+              <span className="hidden min-[400px]:inline">Run it&nbsp;↗</span><span className="min-[400px]:hidden">Run&nbsp;↗</span>
+            </a> : null}
           </div>
           {talk && nb ? (
             <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} className="mt-3 cursor-default rounded-2xl border border-line bg-space-1/60 p-3">
@@ -548,6 +557,7 @@ function Composer({ onPosted }: { onPosted: (p: FeedPostT) => void }) {
   const [media, setMedia] = useState<LibraryItem[]>([]);
   const [picking, setPicking] = useState(false);
   const [nbOpen, setNbOpen] = useState(false);   // "attach your own work" popover
+  const [nbUp, setNbUp] = useState(true);       // ...opening up, unless the window has no room
   const [err, setErr] = useState("");
   const box = useRef<HTMLTextAreaElement>(null);
   const nbBox = useRef<HTMLDivElement>(null);
@@ -656,7 +666,8 @@ function Composer({ onPosted }: { onPosted: (p: FeedPostT) => void }) {
                     one piece of chrome inside the writing area, and it read as part of the post. */}
                 {!attach && !quote ? (
                   <div ref={nbBox} className="relative">
-                    <button type="button" onClick={() => { setNbOpen((o) => !o); loadMine(); }}
+                    <button type="button"
+                      onClick={(e) => { setNbUp(e.currentTarget.getBoundingClientRect().top > 272); setNbOpen((o) => !o); loadMine(); }}
                       aria-haspopup="dialog" aria-expanded={nbOpen} aria-label="Attach one of your works" title="Attach one of your works"
                       className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-yin-ink transition-colors hover:bg-veil/[0.06]">
                       <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -666,7 +677,8 @@ function Composer({ onPosted }: { onPosted: (p: FeedPostT) => void }) {
                     </button>
                     {nbOpen ? (
                       <div role="dialog" aria-label="Your published work"
-                        className="absolute bottom-full z-30 mb-2 max-h-64 w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-card border border-line bg-space-2 p-2 shadow-card">
+                        className={cx("absolute z-30 max-h-64 w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-card border border-line bg-space-2 p-2 shadow-card",
+                          nbUp ? "bottom-full mb-2" : "top-full mt-2")}>
                         {mine === null ? <span className="block px-1 py-1.5 text-[12px] text-ink-3">Loading…</span>
                           : mine.length ? (
                             <div className="flex flex-col gap-1">

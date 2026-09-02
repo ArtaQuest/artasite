@@ -20,8 +20,15 @@ const GROUPS: { name: string; emoji: string[] }[] = [
   { name: "World", emoji: ["🌍", "🌙", "⭐", "🎵", "🎨", "🎬", "📷", "🌱"] },
 ];
 
+/** Tallest the panel can be, and the room it needs above the trigger before it must flip down. */
+const PANEL_PX = 272;
+
 export function EmojiPicker({ onPick, className }: { onPick: (e: string) => void; className?: string }) {
   const [open, setOpen] = useState(false);
+  // Opens UPWARD from a control that sits at the bottom of the composer — except when the composer
+  // is near the top of the window (it is the first thing on the feed), where upward would run off
+  // the screen. Measured at the moment of opening, so a scrolled page gets the right answer.
+  const [up, setUp] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -34,7 +41,11 @@ export function EmojiPicker({ onPick, className }: { onPick: (e: string) => void
   return (
     <div ref={ref} className={cx("relative", className)}>
       <button
-        type="button" onClick={() => setOpen((o) => !o)}
+        type="button"
+        onClick={(e) => {
+          setUp(e.currentTarget.getBoundingClientRect().top > PANEL_PX + 16);
+          setOpen((o) => !o);
+        }}
         aria-haspopup="dialog" aria-expanded={open} aria-label="Emoji" title="Emoji"
         className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-yin-ink transition-colors hover:bg-veil/[0.06]"
       >
@@ -48,7 +59,8 @@ export function EmojiPicker({ onPick, className }: { onPick: (e: string) => void
       </button>
       {open ? (
         <div role="dialog" aria-label="Emoji"
-          className="absolute bottom-full z-30 mb-2 max-h-[17rem] w-[17.5rem] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-card border border-line bg-space-2 p-2 shadow-card">
+          className={cx("absolute z-30 max-h-[17rem] w-[17.5rem] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-card border border-line bg-space-2 p-2 shadow-card",
+            up ? "bottom-full mb-2" : "top-full mt-2")}>
           {GROUPS.map((g) => (
             <div key={g.name} className="mb-1.5 last:mb-0">
               <p className="px-1 pb-1 text-[10px] uppercase tracking-wider text-ink-3">{g.name}</p>
