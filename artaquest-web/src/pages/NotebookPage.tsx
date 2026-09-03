@@ -19,7 +19,7 @@ import {
   type NbComment, type NotebookFull,
 } from "../lib/api";
 import { NB_KIND_META } from "../components/nbview";
-import { LibraryMedia, SaveOffline, foldScene, sceneSet } from "../components/library";
+import { LibraryMedia, SaveOffline, foldScene, playerBed, sceneSet } from "../components/library";
 import { WithRail, RailInline } from "../components/PageRail";
 import { WorkEdit, EditLink, DeleteWork } from "../components/WorkEdit";
 import { WorkRail } from "../components/WorkRail";
@@ -55,7 +55,12 @@ function AssetStage({ nb }: { nb: NotebookFull }) {
   // file stays listed, sized and downloadable in the Published files panel.
   const scene = sceneSet(files);
   const hero = scene ? scene.scene : files[0];
-  const rest = foldScene(files).filter((f) => f.id !== hero.id);
+  // A SONG has the same twin problem as a scene: its player already shows the cover-loop video as
+  // the picture, so listing that loop again in the grid printed the same forge shot twice under a
+  // hero that was playing it. Folded on the SAME predicate the player renders from (playerBed), so
+  // the two can never drift; the file stays listed and downloadable in Published files.
+  const bed = hero.class === "audio" ? playerBed(files) : undefined;
+  const rest = foldScene(files).filter((f) => f.id !== hero.id && f.id !== bed?.id);
   const heroBox =
     hero.class === "audio" ? "" :
     hero.class === "video" ? "aspect-video" :

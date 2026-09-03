@@ -368,6 +368,16 @@ export function AutoLoopVideo({ src, className }: { src: string; className?: str
   return <video ref={ref} src={src} muted loop playsInline preload="metadata" className={className} />;
 }
 
+/**
+ * The loop video a song's player uses as its PICTURE — the cover bed, not a second deliverable.
+ * Exported because two places must agree on it: FeedPlayer renders it, and the work page folds it
+ * out of the published-files grid (the same rule as a scene's twins in foldScene). When they
+ * disagreed, the reader met the same forge shot three times on one page — hero, grid tile, cover.
+ * `/asgenerated/` is excluded deliberately: that is the raw render, a real separate artifact.
+ */
+export const playerBed = (files: LibraryItem[] | null | undefined) =>
+  (files || []).find((f) => f.class === "video" && /loop/i.test(f.name || "") && !/asgenerated/i.test(f.name || ""));
+
 export function FeedPlayer({ item, files, title, art }: {
   item: LibraryItem; files?: LibraryItem[];
   /** The WORK's name for the lockscreen — without it the Media Session shows the file path. */
@@ -380,7 +390,7 @@ export function FeedPlayer({ item, files, title, art }: {
   // the scroll: the loop autoplays muted while the card is on screen (calm mode: never). SOUND
   // belongs to the click, and only the click. The band at rest is a flat line on the scrim —
   // YouTube's idiom for "this has audio" — before a single note has played.
-  const loop = (files || []).find((f) => f.class === "video" && /loop/i.test(f.name || "") && !/asgenerated/i.test(f.name || ""));
+  const loop = playerBed(files);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -753,7 +763,7 @@ export function LibraryMedia({ item, className, still, cover, files }: {
   if (item.class === "audio" && !still) {
     // A song whose work ships a loop video plays like a music channel (FeedPlayer: video bed +
     // live FFT). Every other audio keeps the platform transport (AudioTile -> AudioPlayer).
-    const loopSibling = (files || []).find((f) => f.class === "video" && /loop/i.test(f.name || "") && !/asgenerated/i.test(f.name || ""));
+    const loopSibling = playerBed(files);
     if (loopSibling) {
       return (
         <span className={cx(box, "block p-0")}>
