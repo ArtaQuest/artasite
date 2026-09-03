@@ -950,7 +950,15 @@ export function LibraryCard({ item, onPick, picked, compact }: {
   const thumb = (
     <span className={cx("block shrink-0 overflow-hidden rounded-field bg-space-3",
       compact ? "h-16 w-16" : "aspect-[4/3] w-full")}>
-      <LibraryMedia item={item} className="h-full w-full" still={picking} />
+      {/* A VIDEO is always inert here. Measured on the live shelf: the tile is 107x80, and a live
+          <video controls> at that size renders the browser's own grey bar — squeezed, unusable,
+          and the one piece of browser chrome left anywhere on the platform (the reason
+          AudioPlayer exists for audio). `still` gives the muted first frame with our play glyph,
+          and the card's own "Open the file" is how a reader actually watches it. Audio stays
+          live: its transport IS ours and fits (the clock measures 59px in a 107px tile), and a
+          scene stays live because holding it inert with no poster twin published falls to the
+          typed "SVG 164 KB" tile — the exact defect fixed on the profile grid. */}
+      <LibraryMedia item={item} className="h-full w-full" still={picking || item.class === "video"} />
     </span>
   );
   const head = (
