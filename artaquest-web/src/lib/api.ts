@@ -3117,3 +3117,72 @@ export function bookSetRule(b: {
 export function bookRuleOff(id: number) {
   return post<{ ok: boolean; rule?: BookRule }>("/book/rule-off", { id });
 }
+
+// ── ArtaCast — a couple asks to appear on the show (src/Cast.php) ────────────
+/** One milestone on a guest's timeline: the year on the rail, the label beside it. */
+export type CastRow = { y: number; l: string };
+/** One half of the couple, as the episode frame airs it. `born` is YYYY-MM-DD or ''. */
+export type CastSide = { name: string; subtitle: string; born: string; place: string; photo: string; rows: CastRow[] };
+export type CastCard = { id: number; name: string; slug: string; avatar: string };
+export type CastMeet = { id: number; start_ts: number; end_ts: number; tz: string; status: string; url: string };
+export type CastRequest = {
+  id: number;
+  status: "draft" | "scheduled" | "cancelled";
+  /** Who the viewer is to this request: the one who asked, their partner, the host — or nobody. */
+  role: "a" | "b" | "host" | "";
+  requester: CastCard | null;
+  partner: CastCard | null;
+  a: CastSide;
+  b: CastSide;
+  b_email: string;
+  married_y: number;
+  story: string;
+  invite: { sent: number; accepted: number; pending: boolean; expires: number };
+  /** The recording, once booked — an ordinary ArtaMeet. */
+  meet: CastMeet | null;
+  complete: { a: boolean; b: boolean };
+  created: number;
+  updated: number;
+};
+export type CastPage = {
+  ok: boolean;
+  host: (CastCard & { tz: string }) | null;
+  /** The host's 'artacast' booking rule when hours are open, else null. */
+  rule: BookRule | null;
+  open: boolean;
+  me: number;
+  is_host: boolean;
+  request: CastRequest | null;
+  now: number;
+};
+export function castPage(id?: number) {
+  return get<CastPage>("/artacast/page", id ? { id } : undefined);
+}
+export type CastSave = { a?: Partial<CastSide>; b?: Partial<CastSide>; married_y?: number; story?: string; b_email?: string };
+/** Create my request, or update it. Absent keys keep what the row already says. */
+export function castSave(b: CastSave) {
+  return post<{ ok: boolean; request: CastRequest }>("/artacast/save", b as unknown as Json);
+}
+export function castPhoto(side: "a" | "b", image: string) {
+  return post<{ ok: boolean; url: string; request: CastRequest }>("/artacast/photo", { side, image });
+}
+/** Mint + email the partner's single-use link. `url` is the raw link, handed back ONCE so the
+ *  requester can pass it on themselves; only its hash is stored. */
+export function castInvite() {
+  return post<{ ok: boolean; sent: boolean; url: string; request: CastRequest }>("/artacast/invite", {});
+}
+export function castAccept(k: string) {
+  return post<{ ok: boolean; already?: boolean; request: CastRequest }>("/artacast/accept", { k });
+}
+export function castSchedule(start: number) {
+  return post<{ ok: boolean; request: CastRequest; meet_url: string }>("/artacast/schedule", { start: Math.round(start) });
+}
+export function castWithdraw() {
+  return post<{ ok: boolean; note: string }>("/artacast/withdraw", {});
+}
+export function castInbox(cursor = 0) {
+  return get<{ ok: boolean; items: CastRequest[]; next: number | null; rule: BookRule | null }>("/artacast/inbox", cursor ? { cursor } : undefined);
+}
+export function castHostOpen(tz: string) {
+  return post<{ ok: boolean; rule: BookRule | null; edit_url: string }>("/artacast/host-open", { tz });
+}

@@ -916,6 +916,14 @@ final class Extra {
 		'aq_notebooks'  => [ 'author_token' => 'publication confirm verifier' ],
 		// Same doctrine: the hash of a live personal API token (the row + label + usage stay visible).
 		'aq_api_tokens' => [ 'token_hash' => 'API token hash' ],
+		// ArtaCast: the verifier of the partner's single-use link; an address one spouse typed for
+		// the other, who may not be a member at all; and what the couple wrote for the host before
+		// the recording — their story is theirs to tell on air, not a row to be scraped beforehand.
+		'aq_cast_requests' => [
+			'invite_token' => 'partner invitation verifier',
+			'b_email'      => 'a partner\'s address, typed by their spouse',
+			'story'        => 'what the couple wrote for the host',
+		],
 	];
 
 	/** The key/value stores a credential actually lands in — table => [ key column, value column ].

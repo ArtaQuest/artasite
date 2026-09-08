@@ -39,6 +39,7 @@ const Messages = lazy(() => import("./pages/Messages")); // ArtaChat — end-to-
 const Meet = lazy(() => import("./pages/Meet")); // ArtaMeet — scheduled meetings on ArtaChat rooms
 const Calendar = lazy(() => import("./pages/Calendar")); // ArtaCalendar — everything dated, in one place
 const Book = lazy(() => import("./pages/Book")); // a member's booking page — take a slot from their week
+const ArtaCast = lazy(() => import("./pages/ArtaCast")); // ArtaCast — a couple asks to appear on the show
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ArtaRead = lazy(() => import("./pages/ArtaRead")); // read/translate/listen to ANY PDF, on-device
 const Page = lazy(() => import("./pages/Page"));
@@ -125,6 +126,7 @@ const ROUTE_TITLES: Record<string, string> = {
   // Every /book/<handle> too — this is the one URL in the product designed to be handed to a
   // stranger, and a tab reading "Page not found" is the first thing they would see.
   "/book": "Calendar",
+  "/artacast": "ArtaCast",
   "/login": "Sign in", "/sponsors": "Sponsors",
   "/fearometer": "ArtaMod",
   "/works": "Home", "/challenges": "Challenges", "/rankings": "Rankings", "/studio": "Your Studio", "/console": "Operator console",
@@ -171,7 +173,7 @@ function stripLang(pathname: string): string {
 const STATIC_ROUTES = new Set([
   "/", "/about", "/wallet", "/faq-contact", "/developers",
   "/my-library", "/library", "/ceo",
-  "/user-account", "/login", "/donate", "/messages", "/meet", "/calendar", "/book",
+  "/user-account", "/login", "/donate", "/messages", "/meet", "/calendar", "/book", "/artacast",
   "/finances",
   "/sponsors", "/offline", "/studio", "/console", "/fearometer",
   "/works", "/challenges", "/rankings", "/topics", "/lab",
@@ -423,6 +425,8 @@ export default function App() {
           <Route path="/book" element={<Navigate to="/calendar/?tab=free" replace />} />
           <Route path="/book/" element={<Navigate to="/calendar/?tab=free" replace />} />
           <Route path="/book/:handle" element={<Book />} />
+          <Route path="/artacast" element={<ArtaCast />} />
+          <Route path="/artacast/" element={<ArtaCast />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/calendar/" element={<Calendar />} />
           <Route path="/meet" element={<Navigate to="/messages/?box=meetings" replace />} />

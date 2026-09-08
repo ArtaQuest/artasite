@@ -181,6 +181,19 @@ class Mailer {
 			'vars'     => [ 'head', 'when', 'meet_url' ],
 			'sample'   => [ 'head' => 'A chat with Arash was cancelled', 'when' => 'It was going to be Thu 20 Aug, 14:00 Europe/Istanbul.', 'meet_url' => '/meet/1' ],
 		],
+		/* ArtaCast — the partner's single-use link. The address was typed by their spouse, who may be
+		 * the only one of the two with an account, so the letter explains the show and says plainly
+		 * that nothing happens unless they click. The requester's name is attacker-controlled by
+		 * construction (anybody may ask), so it arrives through Mailer::safe_var. */
+		'cast_invite' => [
+			'label'    => 'ArtaCast — your partner asked you both onto the show',
+			'audience' => 'anyone',
+			'subject'  => '{{who}} would like you both on ArtaCast',
+			'body'     => "Hello {{partner}},\n\n{{who}} has asked to appear on ArtaCast — the ArtaQuest show where the host talks with couples about how they stayed together — and named you as the other half.\n\nOpen the link below to join them. You will be asked to sign in (or to create a free account in one step), then you can check the few details {{who}} entered about you, add a photograph, and see the episode frame the two of you will appear in. Once a recording time is chosen you are seated in it automatically — it is an encrypted ArtaMeet video call with the host.\n\nThe link works once and expires in 14 days. If you don't know {{who}}, ignore this email — nothing happens unless you click.",
+			'cta'      => [ 'Join them on ArtaCast', '{{url}}' ],
+			'vars'     => [ 'who', 'partner', 'url' ],
+			'sample'   => [ 'who' => 'Arash', 'partner' => 'Ana', 'url' => '/artacast/?invite=example' ],
+		],
 		'cdn_quota' => [
 			'label'    => 'Media CDN approaching its free tier',
 			'audience' => 'operator',

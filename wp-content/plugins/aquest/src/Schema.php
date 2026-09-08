@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.71.0';
+	const VERSION = '1.72.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -980,6 +980,47 @@ final class Schema {
 				UNIQUE KEY meet_user (meet_id, user_id),
 				KEY user_meet (user_id, meet_id)",
 
+			// ── ArtaCast — a couple's request to appear on the show ──────────
+			// The FACTS the episode frame airs, never a rendered frame (the browser draws it). Names
+			// are VARCHAR(255) for a 60-character cap because VARCHAR counts bytes. `invite_token` is
+			// the sha256 of the partner's single-use link (raw only in the letter); `b_email` is an
+			// address one spouse typed for the other. Both are masked at /data/ (Extra::REDACT_COLUMNS).
+			// The recording itself is an ordinary aq_meets row (meet_id), created through Booking::take.
+			'aq_cast_requests' => "
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				requester_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				partner_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				status VARCHAR(12) NOT NULL DEFAULT 'draft',
+				a_name VARCHAR(255) NOT NULL DEFAULT '',
+				a_subtitle VARCHAR(191) NOT NULL DEFAULT '',
+				a_born VARCHAR(10) NOT NULL DEFAULT '',
+				a_place VARCHAR(191) NOT NULL DEFAULT '',
+				a_photo VARCHAR(255) NOT NULL DEFAULT '',
+				a_file VARCHAR(255) NOT NULL DEFAULT '',
+				a_rows TEXT NULL,
+				b_name VARCHAR(255) NOT NULL DEFAULT '',
+				b_subtitle VARCHAR(191) NOT NULL DEFAULT '',
+				b_born VARCHAR(10) NOT NULL DEFAULT '',
+				b_place VARCHAR(191) NOT NULL DEFAULT '',
+				b_photo VARCHAR(255) NOT NULL DEFAULT '',
+				b_file VARCHAR(255) NOT NULL DEFAULT '',
+				b_rows TEXT NULL,
+				b_email VARCHAR(191) NOT NULL DEFAULT '',
+				married_y SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+				story TEXT NULL,
+				invite_token VARCHAR(64) NOT NULL DEFAULT '',
+				invite_sent INT UNSIGNED NOT NULL DEFAULT 0,
+				invite_exp INT UNSIGNED NOT NULL DEFAULT 0,
+				invite_accepted INT UNSIGNED NOT NULL DEFAULT 0,
+				meet_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				start_ts INT UNSIGNED NOT NULL DEFAULT 0,
+				created INT UNSIGNED NOT NULL DEFAULT 0,
+				updated INT UNSIGNED NOT NULL DEFAULT 0,
+				PRIMARY KEY  (id),
+				KEY requester_status (requester_id, status),
+				KEY partner_status (partner_id, status),
+				KEY invite_token (invite_token)",
+
 			'aq_grant_meetings' => "
 				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 				grant_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
@@ -1218,6 +1259,7 @@ final class Schema {
 			'aq_meet_rules' => [ 'desc' => 'When a member is open to being booked. A rule, not a diary — the free/busy answer is computed against aq_meets at read time, and a booking becomes an ordinary meeting.', 'cols' => [ 'days' => '7-char mask, Monday first', 'from_min' => 'minutes from midnight in the owner\'s own tz', 'notice_h' => 'how little warning is acceptable' ] ],
 			'aq_meets' => [ 'desc' => 'ArtaMeet — a scheduled meeting. The E2EE room that carries it is bound at T-15m and released after, so room_id is 0 for almost all of a meeting\'s life.', 'cols' => [ 'room_id' => 'the ArtaRooms room, only while live', 'seq' => 'iCalendar SEQUENCE — clients ignore an updated event without it', 'sort_key' => 'start_ts*1e7+id, a unique keyset cursor (start_ts alone ties)', 'ctx_key' => 'idempotency handle, e.g. grant:12:t-14' ] ],
 			'aq_meet_guests' => [ 'desc' => 'Who is invited to an ArtaMeet, and whether they have been seated in its room yet.', 'cols' => [ 'rsvp' => 'none|yes|no|maybe', 'seated' => 'when they were added to the live room (0 = not yet)' ] ],
+			'aq_cast_requests' => [ 'desc' => 'ArtaCast — a couple\'s request to appear on the show: the facts the episode frame airs (names, one line each, birth, photographs, the year they married, milestones), the partner\'s invitation, and the recording (an ordinary aq_meets row booked from the host\'s published hours).', 'cols' => [ 'status' => 'draft | scheduled | cancelled', 'a_*' => 'the member who asked', 'b_*' => 'their partner', 'a_rows' => 'milestones as [{y, l}] for the timeline', 'invite_token' => 'sha256 of the partner\'s single-use link (masked)', 'b_email' => 'the partner\'s address, typed by their spouse (masked)', 'meet_id' => 'the recording, once booked' ] ],
 			'aq_grant_meetings' => [ 'desc' => 'Scheduled group working sessions for a grant\'s registrants.', 'cols' => [ 'reminder_key' => 'milestone (e.g. t-14, t-1)', 'meet_url' => 'RETIRED — the Google Meet link these sessions used before ArtaMeet; kept for the record, read by nothing' ] ],
 			'aq_competitions'   => [ 'desc' => 'Kaggle-style predictive-modelling contests. Public train/test data are files under uploads/competitions/<slug>/; the hidden holdout targets are server-only (never in this public DB).', 'cols' => [ 'owner_uid' => 'the member who opened the competition', 'metric' => 'scorer (r2)', 'holdout' => 'how the hidden test split is defined', 'status' => 'active | closed', 'n_train' => 'training rows', 'n_test' => 'holdout rows', 'n_features' => 'features per row', 'n_targets' => 'number of prediction targets', 'prize' => 'coin prize pool paid 50/30/20 to the top-3 at the deadline (0 = no prize)', 'thread_id' => 'the competition\'s official discussion thread (aq_threads.id)' ] ],
 			'aq_comp_subs'      => [ 'desc' => 'APPEND-ONLY competition submissions. The leaderboard takes the MAX score per member, so a better submission outranks earlier ones and a worse one never demotes them.', 'cols' => [ 'comp_id' => 'the competition', 'uid' => 'submitter', 'score' => 'R² against the hidden holdout', 'place' => 'leaderboard position snapshot at submission time', 'note' => 'optional submitter note', 'score' => 'R\xc2\xb2 on the PUBLIC holdout half (the live leaderboard); the private half decides the prize at the deadline', 'preds' => 'the submitted predictions (JSON, holdout rows only; oversized blobs stored as "gz:"+base64(deflate)) — kept so the private-half prize can be re-scored at settlement; public like every row here (they are the submitter\'s own guesses, not the hidden answers)', 'phase' => 'phase-metric telemetry (JSON): the full shift→R² distribution, the best shift, its zodiac sign, the per-30°-sector zodiac distribution and rep — which sky rotation the model locked onto, and how decisively', 'code_url' => 'open code the member submitted for adversarial review', 'method' => 'the member\'s method write-up', 'review' => 'review state: none | submitted | reviewing | verified | flagged | revisions-requested', 'verified' => 'the ArtaCompete reviewer ran the code + confirmed the score reproduces with no holdout leakage — required to win the prize' ] ],

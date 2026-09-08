@@ -1585,6 +1585,12 @@ function aq_app_route_seo( $slug ) {
 				'Every file published on ' . $b . ' — music, video, images, datasets, models and papers — each one produced by a Kaggle notebook anyone can re-run. Free to play, download and attach to your own posts.',
 			),
 		),
+		'artacast'    => array(
+			'ArtaCast',
+			array(
+				'ArtaCast is the ' . $b . ' show where the host talks with couples about how they stayed together. Ask to appear: enter a name, one line in your own words, a date and place of birth and a photograph for each of you, invite your partner with a single-use link, watch the thumbnail and the episode frame take shape as you type, and book a recording slot from the host\'s published hours. The recording is an encrypted ArtaMeet video call with the host and both of you on the guest list.',
+			),
+		),
 		'my-library'  => array(
 			'My Library',
 			array(
@@ -2122,7 +2128,8 @@ add_action(
 		aq_ensure_app_page( 'developers', 'Developers' ); // /developers — the API docs + token guide (author-only publish gate) — pages/Developers.tsx
 		aq_ensure_app_page( 'artascience', 'ArtaScience' ); // /artascience — the reviewer transparency page (exact prompt) — pages/ArtaScience.tsx
 		aq_ensure_app_page( 'artatranslate', 'ArtaTranslate' ); // /artatranslate — the translation-upgrade transparency page (adversarial rounds) — pages/ArtaTranslate.tsx
-		aq_ensure_app_page( 'artaillustration', 'ArtaIllustration' ); // /artaillustration — the art-studio transparency page (exact prompts + live queue) — pages/ArtaIllustrationStudio.tsx
+		aq_ensure_app_page( 'artaillustration', 'ArtaIllustration' );
+		aq_ensure_app_page( 'artacast', 'ArtaCast' ); // /artacast — a couple asks to appear on the show: details, live frame preview, the host's hours — pages/ArtaCast.tsx // /artaillustration — the art-studio transparency page (exact prompts + live queue) — pages/ArtaIllustrationStudio.tsx
 		aq_ensure_app_page( 'artasound', 'ArtaSound' ); // /artasound — 301 anchor → /music/ (the audio kind's own live hub, 2026-07-26)
 		aq_ensure_app_page( 'sponsors', 'Sponsors' );
 		aq_ensure_app_page( 'typology', 'Typology' );

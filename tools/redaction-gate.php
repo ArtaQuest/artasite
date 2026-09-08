@@ -116,6 +116,14 @@ $r=Extra::redact_row('wp_aq_meets',['title'=>'X','agenda'=>'X','id'=>'1']);
 $check('aq_meets.title',$r['title'],true);
 $check('aq_meets.agenda',$r['agenda'],true);
 $check('aq_meets.id',$r['id'],false);
+// aq_cast_requests (ArtaCast): the partner's link verifier, the address one spouse typed for the
+// other, and what the couple wrote for the host are masked; the facts the episode airs stay public.
+$r=Extra::redact_row('wp_aq_cast_requests',['invite_token'=>'h','b_email'=>'p@x.com','story'=>'we met','a_name'=>'A','a_born'=>'1951-05-09','meet_id'=>'3']);
+$check('aq_cast_requests.invite_token',$r['invite_token'],true);
+$check('aq_cast_requests.b_email',$r['b_email'],true);
+$check('aq_cast_requests.story',$r['story'],true);
+$check('aq_cast_requests.a_name',$r['a_name'],false);
+$check('aq_cast_requests.meet_id',$r['meet_id'],false);
 // Tables WITHHELD entirely — the DM metadata graph plus the two older promises.
 foreach(['aq_chats','aq_chat_msgs','aq_doc_sources','aq_order_ship'] as $t){
   $in=in_array($t,Extra::PRIVATE_TABLES,true); $n++; if(!$in)$fails++;

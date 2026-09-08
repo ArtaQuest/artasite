@@ -566,6 +566,16 @@ final class Rest {
 		[ 'GET',  'book/rules',                    'Booking::my_rules',   'user'   ], // my own availability
 		[ 'POST', 'book/rules',                    'Booking::set_rule',   'user'   ], // create or update one
 		[ 'POST', 'book/rule-off',                 'Booking::drop_rule',  'user'   ], // stop offering it
+		// ── ArtaCast — a couple asks to appear on the show (src/Cast.php) ─────────
+		[ 'GET',  'artacast/page',                 'Cast::page',          'public' ], // the show, the host, whether hours are open, my request
+		[ 'POST', 'artacast/save',                 'Cast::save',          'user'   ], // create or update my request (the requester writes both sides; the partner their own)
+		[ 'POST', 'artacast/photo',                'Cast::photo',         'user'   ], // {side, image} one portrait, stored like an avatar
+		[ 'POST', 'artacast/invite',               'Cast::invite',        'user'   ], // mint + email the partner's single-use link (hash stored)
+		[ 'POST', 'artacast/accept',               'Cast::accept',        'user'   ], // {k} the partner's click, signed in as themselves — spent atomically
+		[ 'POST', 'artacast/schedule',             'Cast::schedule',      'user'   ], // {start} take a recording slot — through Booking::take, seats the partner
+		[ 'POST', 'artacast/withdraw',             'Cast::withdraw',      'user'   ], // the requester takes it back
+		[ 'GET',  'artacast/inbox',                'Cast::inbox',         'user'   ], // host/operator: every live request
+		[ 'POST', 'artacast/host-open',            'Cast::host_open',     'user'   ], // host: open recording hours (writes the 'artacast' booking rule)
 		[ 'GET',  'meet/list',                     'Meetings::list_mine', 'user' ], // ?scope=upcoming|past
 		[ 'GET',  'meet/get',                      'Meetings::get',       'user' ], // ?id= → one meeting + its guests
 		[ 'POST', 'meet/create',                   'Meetings::create',    'user' ], // {title, start, minutes, tz, guests[]}
