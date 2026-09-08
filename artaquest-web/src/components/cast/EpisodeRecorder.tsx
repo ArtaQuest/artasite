@@ -5,6 +5,7 @@ import {
 } from "../../lib/episode-frame";
 import { firstName } from "../../lib/cast-frame";
 import { castRecorded } from "../../lib/api";
+import { canStore, deleteRecording, listRecordings, openRecording, recordingFile, type StoredRecording, type Writable } from "../../lib/episode-store";
 
 /**
  * THE RECORDER — the host's device cuts the episode while it happens.
@@ -15,12 +16,13 @@ import { castRecorded } from "../../lib/api";
  * the three voices, and hands the result to MediaRecorder at 30fps — H.264/AAC in MP4 where the
  * browser can write it, VP9/Opus in WebM otherwise. Both go straight onto YouTube.
  *
- * WRITTEN TO DISK AS IT RECORDS. Ninety minutes at 8 Mbit/s is over five gigabytes; holding that
- * in memory until Stop is how a two-hour recording is lost at the last second. Where the browser
- * offers a writable file (Chrome, Edge), the file is chosen at Start — a real user gesture, which
- * the picker requires — and every second's chunk is appended to it; a crash keeps everything up
- * to the crash. Elsewhere the chunks are held and offered as a download at Stop, and the panel
- * says so before recording begins.
+ * WRITTEN TO DISK AS IT RECORDS, AND SAVED TO THE HOST'S COMPUTER AT STOP. Ninety minutes at
+ * 8 Mbit/s is over five gigabytes; holding that in memory until Stop is how a two-hour recording
+ * is lost at the last second. Every second's chunk is appended to a file in the browser's own
+ * on-disk store (lib/episode-store — no prompt, any modern browser, survives a crash); at Stop the
+ * finished file is handed to the Downloads folder, and it stays listed under the recorder, with a
+ * Download button, until the host deletes it. Where that store is unavailable the chunks are held
+ * in memory and the panel says so before Record.
  *
  * The chapter cursors (the gold on each rail, the kit's "chapter change") are the host's to move
  * during the conversation: one button per spouse. Names (the lower-thirds) can be shown or hidden.
@@ -44,8 +46,12 @@ function fmtClock(s: number): string {
   return (h ? `${h}:` : "") + `${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}`;
 }
 
-type SavePicker = (o: { suggestedName: string; types: { description: string; accept: Record<string, string[]> }[] }) => Promise<{ createWritable: () => Promise<{ write: (d: Blob) => Promise<void>; close: () => Promise<void> }> }>;
-const canWriteToDisk = () => typeof (window as unknown as { showSaveFilePicker?: unknown }).showSaveFilePicker === "function";
+/** Hand a file to the Downloads folder. Programmatic; the browser may still ask where, which is fine. */
+function download(url: string, name: string) {
+  const a = document.createElement("a");
+  a.href = url; a.download = name; a.rel = "noopener";
+  document.body.appendChild(a); a.click(); a.remove();
+}
 
 export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: {
   spec: EpisodeSpec;
@@ -69,7 +75,11 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
   const state = useRef({ names: true, cursorA: 0, cursorB: 0 });
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
-  const writable = useRef<{ write: (d: Blob) => Promise<void>; close: () => Promise<void> } | null>(null);
+  const writable = useRef<Writable | null>(null);
+  const [stored, setStored] = useState<StoredRecording[]>([]);
+  const [diskOk, setDiskOk] = useState<boolean | null>(null);
+  const refreshStored = useCallback(() => { listRecordings().then(setStored).catch(() => undefined); }, []);
+  useEffect(() => { canStore().then(setDiskOk).catch(() => setDiskOk(false)); refreshStored(); }, [refreshStored]);
   const writing = useRef<Promise<void>>(Promise.resolve());
   const audioCtx = useRef<AudioContext | null>(null);
   const audioDest = useRef<MediaStreamAudioDestinationNode | null>(null);
@@ -174,19 +184,8 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
     const c = canvas.current;
     if (!c || !type) { setErr("This browser cannot record video. Chrome or Edge on a laptop can."); return; }
     const name = recordingName(spec, type.ext);
-    // THE FILE FIRST, inside the click: the picker needs the gesture, and a host who changes their
-    // mind here has recorded nothing.
-    writable.current = null;
-    if (canWriteToDisk()) {
-      try {
-        const picker = (window as unknown as { showSaveFilePicker: SavePicker }).showSaveFilePicker;
-        const handle = await picker({ suggestedName: name, types: [{ description: "Episode recording", accept: { [type.mime.split(";")[0]]: [`.${type.ext}`] } }] });
-        writable.current = await handle.createWritable();
-      } catch (e) {
-        if ((e as { name?: string })?.name === "AbortError") return; // changed their mind
-        writable.current = null; // fall back to memory
-      }
-    }
+    // A file in the browser's own store, no prompt. Null means memory — the panel already said so.
+    writable.current = await openRecording(name);
     await warmFonts();
     const stream = c.captureStream(FPS);
     const audio = mixAudio();
@@ -220,12 +219,18 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
           await writing.current;
           try { await writable.current.close(); } catch { setErr("The file could not be closed cleanly."); }
           writable.current = null;
+          const f = await recordingFile(name);
+          if (f) url = URL.createObjectURL(f);
+          refreshStored();
         } else {
           const blob = new Blob(chunks.current, { type: type.mime });
           url = URL.createObjectURL(blob);
           chunks.current = [];
         }
         setDone({ name, bytes: total, seconds: secs, label: type.label, url });
+        // STRAIGHT INTO DOWNLOADS. The host pressed Stop; the file should be on their computer
+        // without another decision. The button below is the way back if the browser held it.
+        if (url) download(url, name);
         castRecorded(meetId, { seconds: secs, bytes: total, format: type.label }).catch(() => undefined);
       };
       void finish();
@@ -280,9 +285,9 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
           </div>
           <p className="text-[12px] leading-relaxed text-ink-3">
             {type
-              ? <>1920×1080 at 30 fps, {type.label}, 8 Mbit/s — upload it to YouTube as it is. {canWriteToDisk()
-                  ? "You choose the file when you press Record, and it is written as you go: a crash keeps everything up to that second."
-                  : "This browser holds the recording in memory until Stop — keep it under an hour, or use Chrome to write straight to disk."}
+              ? <>1920×1080 at 30 fps, {type.label}, 8 Mbit/s — upload it to YouTube as it is. {diskOk !== false
+                  ? "It is written to this computer as you go, and saved to your Downloads when you press Stop."
+                  : "This browser holds the recording in memory until Stop — keep it under an hour, or use Chrome, Edge or Safari on a laptop."}
                   {missing > 0 && <> · <span className="text-yang">{missing === 2 ? "Neither guest’s camera is in yet." : "One guest’s camera is not in yet."}</span></>}</>
               : "This browser cannot record video. Use Chrome or Edge on a laptop."}
           </p>
@@ -291,8 +296,23 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
             <div className="rounded-card border border-yang/40 bg-yang/[0.06] p-3 text-[13px] text-ink">
               <p className="font-semibold">Saved: <span data-ay-skip="1">{done.name}</span></p>
               <p className="mt-1 text-ink-2"><span data-ay-skip="1">{fmtClock(done.seconds)}</span> · <span data-ay-skip="1">{fmtBytes(done.bytes)}</span> · {done.label}</p>
-              {done.url && <a href={done.url} download={done.name} className="mt-2 inline-flex h-10 items-center rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent">Download the recording</a>}
-              <p className="mt-2 text-[12px] text-ink-3">YouTube: upload the file as it is. The frame carries the names and both timelines; add the thumbnail from the couple’s ArtaCast page.</p>
+              {done.url && <a href={done.url} download={done.name} className="mt-2 inline-flex h-10 items-center rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent">Download again</a>}
+              <p className="mt-2 text-[12px] text-ink-3">It went to your Downloads. YouTube: upload the file as it is. The frame carries the names and both timelines; add the thumbnail from the couple’s ArtaCast page.</p>
+            </div>
+          )}
+          {stored.length > 0 && (
+            <div className="rounded-card border border-line p-3 text-[12.5px]">
+              <p className="font-semibold text-ink">Recordings kept on this computer</p>
+              <ul className="mt-1 flex flex-col gap-1">
+                {stored.map((s) => (
+                  <li key={s.name} className="flex flex-wrap items-center gap-2 text-ink-2">
+                    <span className="min-w-0 flex-1 break-all" data-ay-skip="1">{s.name} · {fmtBytes(s.bytes)}</span>
+                    <button type="button" className="underline" onClick={() => { recordingFile(s.name).then((f) => { if (f) download(URL.createObjectURL(f), s.name); }); }}>Download</button>
+                    <button type="button" className="underline" onClick={() => { deleteRecording(s.name).then(refreshStored); }}>Delete</button>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-ink-3">An interrupted recording is listed here too — a crash keeps everything up to that second.</p>
             </div>
           )}
         </div>

@@ -345,15 +345,39 @@ function TimePicker({ hostSlug, hostName, rule, onBook }: {
 
 /* ───────────────────────── the host ───────────────────────── */
 
+/** Minutes from midnight → the clock face the reader's locale writes, on a fixed UTC day. */
+function minuteClock(min: number): string {
+  const m = Math.max(0, Math.min(1439, Math.round(min)));
+  return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "UTC" }).format(new Date(Date.UTC(1970, 0, 1, 0, m)));
+}
+function DaysWords({ days }: { days: string }) {
+  if (/^1{7}$/.test(days)) return <>any day</>;
+  if (days === "1111100") return <>weekdays</>;
+  if (days === "0000011") return <>weekends</>;
+  const names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  return <span data-ay-skip="1">{names.filter((_, i) => days[i] === "1").join(", ")}</span>;
+}
+
 function HostPanel({ page, onPreview, previewing }: { page: CastPage; onPreview: (r: CastRequest | null) => void; previewing: number }) {
   const [items, setItems] = useState<CastRequest[] | null>(null);
   const [rule, setRule] = useState<BookRule | null>(page.rule);
   const [err, setErr] = useState("");
   const [opening, setOpening] = useState(false);
 
+  const [opened, setOpened] = useState(false);
   useEffect(() => {
     let stop = false;
-    castInbox().then((r) => { if (!stop) { setItems(r.items); setRule(r.rule); } }).catch((e) => { if (!stop) setErr(errText(e, "Couldn’t load the requests.")); });
+    castInbox().then(async (r) => {
+      if (stop) return;
+      setItems(r.items); setRule(r.rule);
+      // NO STEP FOR THE HOST. The first time the host looks at their show, the hours open themselves
+      // with the show's defaults in the host's own zone; the sentence below says what they are and
+      // where to change them. A show whose hours a couple cannot book is a show nobody is on.
+      if (!r.rule) {
+        try { const o = await castHostOpen(VIEWER_TZ); if (!stop) { setRule(o.rule); setOpened(true); } }
+        catch (e) { if (!stop) setErr(errText(e, "Couldn’t open the hours.")); }
+      }
+    }).catch((e) => { if (!stop) setErr(errText(e, "Couldn’t load the requests.")); });
     return () => { stop = true; };
   }, []);
 
@@ -371,8 +395,8 @@ function HostPanel({ page, onPreview, previewing }: { page: CastPage; onPreview:
         <h2 className="text-[16px] font-bold text-ink">Recording hours</h2>
         {rule ? (
           <p className="mt-2 text-[13.5px] leading-relaxed text-ink-2">
-            Open: <span data-ay-skip="1">{rule.title}</span>, <span data-ay-skip="1">{rule.minutes}</span> minutes, in <span data-ay-skip="1">{rule.tz}</span>.
-            Couples pick from the free times of this rule. <a className="font-semibold underline" href={localePath("/book/")}>Edit the hours</a>
+            {opened ? "Opened just now: " : "Open: "}<span data-ay-skip="1">{rule.title}</span>, <span data-ay-skip="1">{rule.minutes}</span> minutes, <DaysWords days={rule.days} /> <span data-ay-skip="1">{minuteClock(rule.from_min)}–{minuteClock(rule.to_min)}</span> in <span data-ay-skip="1">{rule.tz}</span>, up to <span data-ay-skip="1">{rule.horizon_d}</span> days ahead.
+            Couples pick from the free times. <a className="font-semibold underline" href={localePath("/book/")}>Change the hours</a>
           </p>
         ) : (
           <>

@@ -1394,7 +1394,7 @@ function MeetingPage({ id }: { id: number }) {
               <h2 className="text-[14px] font-semibold text-ink">This is an ArtaCast recording</h2>
               <p className="mt-2 text-[13.5px] leading-relaxed text-ink-2">
                 {Number(meet.host_id) === me
-                  ? "Once all three of you are in, press Record in the call. The episode is composited on this computer — the couple side by side, you below, names and timelines — and written to a YouTube-ready file as it records. Use a laptop on Chrome or Edge, with the best camera and light you have."
+                  ? "Once all three of you are in, press Record in the call. The episode is composited on this computer — the couple side by side, you below, names and timelines — written to disk as it records, and saved to your Downloads as a YouTube-ready MP4 when you press Stop. Use a laptop, with the best camera and light you have."
                   : "The host records the episode on their own computer. Nothing is recorded on yours. Use a laptop with a good camera if you can — the recording asks your camera for 720p — sit facing a window or a lamp, and keep your face in the middle of the picture."}
               </p>
             </section>
