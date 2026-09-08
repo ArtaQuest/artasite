@@ -39,11 +39,31 @@ class Kaggle {
 
 	private static function token() { return (string) Secrets::get( 'KAGGLE_TOKEN' ); }
 
-	public static function ready() { return '' !== self::token(); }
+	/**
+	 * THE CREDENTIAL, IN THE FORM KAGGLE ACTUALLY HONOURS. Probed live on production 2026-09-08 with
+	 * the Vault's KGAT_ token: kernels/push 401, kernels/list 401 (as Bearer AND as a Basic password),
+	 * kernels/pull of our own kernel 403. The classic username + API key pair over HTTP Basic is what
+	 * every write needs (the python client has never sent anything else). So: when KAGGLE_KEY is in
+	 * the Vault, Basic with KAGGLE_USERNAME (else OWNER) and that key; otherwise the token, which still
+	 * reads public kernels. Pushes from the token path are expected to fail and are reported as such.
+	 */
+	private static function auth_header() {
+		$key = (string) Secrets::get( 'KAGGLE_KEY' );
+		if ( '' !== $key ) { return 'Basic ' . base64_encode( self::owner() . ':' . $key ); }
+		return 'Bearer ' . self::token();
+	}
+
+	public static function ready() { return '' !== self::token() || '' !== (string) Secrets::get( 'KAGGLE_KEY' ); }
+
+	/** The account our kernels land under: the Vault's KAGGLE_USERNAME when the key pair is set. */
+	public static function owner() {
+		$u = trim( (string) Secrets::get( 'KAGGLE_USERNAME' ) );
+		return '' !== $u && '' !== (string) Secrets::get( 'KAGGLE_KEY' ) ? $u : self::OWNER;
+	}
 
 	/** Human-facing kernel page. */
 	public static function kernel_url( $slug ) {
-		return 'https://www.kaggle.com/code/' . self::OWNER . '/' . $slug;
+		return 'https://www.kaggle.com/code/' . self::owner() . '/' . $slug;
 	}
 
 	/** One authenticated JSON call. Returns [http_code, decoded_body]. */
@@ -51,7 +71,7 @@ class Kaggle {
 		$args = [
 			'method'  => $method,
 			'timeout' => 180,
-			'headers' => [ 'Authorization' => 'Bearer ' . self::token(), 'Content-Type' => 'application/json' ],
+			'headers' => [ 'Authorization' => self::auth_header(), 'Content-Type' => 'application/json' ],
 		];
 		if ( null !== $body ) { $args['body'] = wp_json_encode( $body ); }
 		$r = wp_remote_request( self::API . $path, $args );
@@ -134,7 +154,7 @@ class Kaggle {
 	private static function get( $path ) {
 		$r = wp_remote_get( self::API . $path, [
 			'timeout' => 60,
-			'headers' => [ 'Authorization' => 'Bearer ' . self::token() ],
+			'headers' => [ 'Authorization' => self::auth_header() ],
 		] );
 		if ( is_wp_error( $r ) ) { return [ 0, [ 'error' => $r->get_error_message() ] ]; }
 		return [ (int) wp_remote_retrieve_response_code( $r ), json_decode( (string) wp_remote_retrieve_body( $r ), true ) ];
@@ -375,7 +395,7 @@ class Kaggle {
 		$body = [
 			'newTitle'               => mb_substr( (string) $title, 0, 120 ),
 			'id'                     => null,
-			'slug'                   => self::OWNER . '/' . $slug,
+			'slug'                   => self::owner() . '/' . $slug,
 			'text'                   => (string) $source,
 			'language'               => 'python',
 			'kernelType'             => 'script',
@@ -406,7 +426,7 @@ class Kaggle {
 	 */
 	public static function status_of( $slug ) {
 		if ( ! self::ready() ) { return [ 'unknown', 'no Kaggle credential' ]; }
-		[ $code, $j ] = self::get( '/kernels/status?userName=' . rawurlencode( self::OWNER ) . '&kernelSlug=' . rawurlencode( $slug ) );
+		[ $code, $j ] = self::get( '/kernels/status?userName=' . rawurlencode( self::owner() ) . '&kernelSlug=' . rawurlencode( $slug ) );
 		if ( $code < 200 || $code >= 300 || ! is_array( $j ) ) { return [ 'unknown', 'HTTP ' . $code ]; }
 		$s = strtolower( (string) ( $j['status'] ?? $j['statusNullable'] ?? '' ) );
 		$why = (string) ( $j['failureMessage'] ?? $j['failureMessageNullable'] ?? '' );
@@ -416,9 +436,6 @@ class Kaggle {
 		if ( str_contains( $s, 'queue' ) ) { return [ 'queued', '' ]; }
 		return [ 'unknown', $s ];
 	}
-
-	/** The owner every kernel this plugin pushes lands under. */
-	public static function owner() { return self::OWNER; }
 
 	/**
 	 * Push a journal article's reproduction notebook (Science.php). Same kernel contract as push(),

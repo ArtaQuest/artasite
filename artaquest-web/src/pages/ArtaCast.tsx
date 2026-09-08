@@ -781,7 +781,7 @@ export default function ArtaCast() {
   // ── the host ──
   if (page.is_host && !request) {
     return frame(
-      <PageHero eyebrow="ArtaCast" title="Your show" lede="Open the hours couples may book, and see who has asked to come on." />,
+      <PageHero eyebrow="ArtaCast" title="Your show" lede="Couples book any free slot in your calendar. Here is who has asked to come on, and where each episode stands." />,
       <>
         <HostPanel page={page} onPreview={setHostPreview} previewing={hostPreview?.id || 0} />
         {hostPreview && (

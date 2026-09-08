@@ -677,7 +677,7 @@ final class Media {
 			'free_grant'      => self::FREE_BYTES,
 			'bytes_per_coin'  => self::BYTES_PER_COIN,
 			'balance'         => Economy::coin_balance( $uid ),
-			'file_max'        => self::FILE_MAX,
+			'file_max'        => self::file_max( $uid ),
 			'cdn'             => self::r2_ready(),
 		];
 	}
