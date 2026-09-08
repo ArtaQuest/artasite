@@ -11,6 +11,7 @@ import os, sys, json, subprocess, time, shutil, glob, re, math
 
 RAW_URL    = "{{RAW_URL}}"
 THUMB_URL  = "{{THUMB_URL}}"
+ISO_JSON   = "{{ISO_JSON}}"   # the guests' isolated camera tracks: [{"name","url"}], copied untouched for the editor
 OUT_BASE   = "{{OUT_BASE}}"
 REQUEST_ID = "{{REQUEST_ID}}"
 
@@ -291,6 +292,17 @@ except Exception as e:
     except Exception as e2:
         step("mux-fallback", False, error=str(e2)[-300:])
         out_path = os.path.join(WORK, OUT_BASE + "-raw" + raw_ext); shutil.copy(raw, out_path)
+
+# ── 5b. the isolated tracks, untouched ─────────────────────────────────────────────────────────
+try:
+    for iso in json.loads(ISO_JSON or "[]"):
+        try:
+            download(iso["url"], os.path.join(WORK, "ISO-" + os.path.basename(iso["name"])))
+            step("iso", True, name=iso["name"])
+        except Exception as e:
+            step("iso", False, name=iso.get("name"), error=str(e)[:200])
+except Exception as e:
+    step("iso-list", False, error=str(e)[:200])
 
 # ── 6. the thumbnail and the report ──────────────────────────────────────────────────────────────
 if THUMB_URL.startswith("http"):

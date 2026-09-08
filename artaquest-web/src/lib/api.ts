@@ -3146,6 +3146,8 @@ export type CastRequest = {
   recorded?: { at: number; note: string };
   /** The finishing run on Kaggle: '' | queued | running | done | failed, and what it left. */
   pipeline?: { state: string; note: string; started: number; done: number; files: { name: string }[]; raw: number; thumb: string; kernel: string; tries?: number; retrying?: boolean };
+  /** Each guest's isolated camera track, once sent — for the editor; visible to the host and the couple. */
+  iso?: { uid: number; name: string; bytes: number; url: string }[];
   complete: { a: boolean; b: boolean };
   created: number;
   updated: number;
@@ -3214,4 +3216,8 @@ export function castFinal(id: number) {
 /** Offer to host episodes (or stop). A volunteer's calendar opens to couples like the primary host's. */
 export function castVolunteer(on: boolean, tz: string) {
   return post<{ ok: boolean; hosting: boolean; rule?: BookRule | null }>("/artacast/volunteer", { on: on ? 1 : 0, tz });
+}
+/** A guest's own camera track, recorded beside the master, now on their shelf — attach it. */
+export function castIso(meet: number, media_id: number) {
+  return post<{ ok: boolean; iso: { uid: number; name: string; bytes: number; url: string }[] }>("/artacast/iso", { meet, media_id });
 }

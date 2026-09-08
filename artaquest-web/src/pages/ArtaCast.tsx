@@ -11,7 +11,7 @@ import {
   Segmented, Textarea, cx,
 } from "../components/ui";
 import { CastFrame, CastThumb, type PreviewData } from "../components/cast/CastPreview";
-import { sendForFinishing, sendState, storedEpisodes, subscribeSend, type SendState, type Sidecar } from "../lib/episode-upload";
+import { sendForFinishing, sendIso, sendState, storedEpisodes, subscribeSend, type SendState, type Sidecar } from "../lib/episode-upload";
 import { deleteRecording } from "../lib/episode-store";
 import { CheckGlyph, ChevronGlyph, DayGrid, GlobeGlyph, GridSkeleton, WeekdayStrip } from "../components/cast/grid";
 import {
@@ -380,6 +380,9 @@ function PipelineLine({ r }: { r: CastRequest }) {
           {p.kernel && <> · <a className="underline" href={p.kernel} target="_blank" rel="noreferrer">kernel log</a></>}
         </p>
       )}
+      {(r.iso?.length || 0) > 0 && (
+        <p className="text-ink-2">Isolated tracks: {r.iso!.map((t) => <a key={t.name} className="me-2 underline" href={t.url} download data-ay-skip="1">{t.name} · {t.bytes < 1e9 ? `${(t.bytes / 1e6).toFixed(0)} MB` : `${(t.bytes / 1e9).toFixed(2)} GB`}</a>)}</p>
+      )}
       {p.state === "done" && (
         <div>
           <p className="text-ink"><span className="font-semibold text-yang">Release ready</span> · <span data-ay-skip="1">{p.note}</span></p>
@@ -400,16 +403,17 @@ function PipelineLine({ r }: { r: CastRequest }) {
 }
 
 /** Episodes still in this browser's store — the way back when a send was interrupted. */
-function StoredEpisodes() {
+function StoredEpisodes({ iso = false }: { iso?: boolean }) {
   const [items, setItems] = useState<{ name: string; bytes: number; modified: number; side: Sidecar | null }[]>([]);
   const [, bump] = useState(0);
-  const refresh = useCallback(() => { storedEpisodes().then(setItems).catch(() => undefined); }, []);
+  const refresh = useCallback(() => { storedEpisodes().then((all) => setItems(all.filter((it) => !!it.side?.iso === iso))).catch(() => undefined); }, [iso]);
   useEffect(() => { refresh(); return subscribeSend(() => bump((n) => n + 1)); }, [refresh]);
   if (!items.length) return null;
   const fmtBytes = (n: number) => n < 1e9 ? `${(n / 1e6).toFixed(0)} MB` : `${(n / 1e9).toFixed(2)} GB`;
   return (
     <section className="rounded-card border border-line bg-space-2 p-4 md:p-5" aria-label="Recordings on this computer">
-      <h2 className="text-[16px] font-bold text-ink">Recordings on this computer</h2>
+      <h2 className="text-[16px] font-bold text-ink">{iso ? "Your camera recordings on this computer" : "Recordings on this computer"}</h2>
+      {iso && <p className="mt-1 text-[12.5px] text-ink-3">Recorded beside the episode at full quality, for the editor. They are sent to the show on their own; if a send was interrupted, send it again here.</p>}
       <ul className="mt-2 flex flex-col gap-2">
         {items.map((it) => {
           const st: SendState | undefined = sendState(it.name);
@@ -422,7 +426,7 @@ function StoredEpisodes() {
               {st?.phase === "done" && <span className="text-yang">Sent — finishing on Kaggle</span>}
               {st?.phase === "error" && <span className="text-yang">{st.note}</span>}
               {it.side && !sending && st?.phase !== "done" && (
-                <Button size="sm" onClick={() => { sendForFinishing(it.name, it.side!.meet_id).catch(() => undefined); }}>{st?.phase === "error" ? "Send again" : "Send for finishing"}</Button>
+                <Button size="sm" onClick={() => { (iso ? sendIso(it.name, it.side!.meet_id) : sendForFinishing(it.name, it.side!.meet_id)).catch(() => undefined); }}>{st?.phase === "error" ? "Send again" : iso ? "Send to the show" : "Send for finishing"}</Button>
               )}
               {!it.side && <span className="text-ink-3">Not an episode file</span>}
               {!sending && <button type="button" className="text-[12.5px] text-ink-3 underline" onClick={() => { deleteRecording(it.name).then(() => { deleteRecording(`${it.name}.json`); deleteRecording(`${it.name}.thumb.png`); refresh(); }); }}>Delete</button>}
@@ -903,6 +907,7 @@ export default function ArtaCast() {
       )}
 
       {previewCard}
+      <StoredEpisodes iso />
 
       {isA && (
         <section className="rounded-card border border-line bg-space-2 p-4 md:p-5" aria-label="You">

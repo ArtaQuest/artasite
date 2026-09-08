@@ -581,6 +581,7 @@ final class Rest {
 		[ 'POST', 'artacast/recorded',             'Cast::recorded',      'user'   ], // host: the device finished writing an episode — remembered for the inbox
 		[ 'POST', 'artacast/finish',               'Cast::finish',        'user'   ], // host: {meet, media_id, thumb?} the raw is on ArtaCloud — start finishing it on Kaggle (also = retry)
 		[ 'GET',  'artacast/final',                'Cast::final',         'user'   ], // host: ?id= → fresh download links for the finished episode (signed, short-lived)
+		[ 'POST', 'artacast/iso',                  'Cast::iso',           'user'   ], // a guest: {meet, media_id} my own camera track is on my shelf — attach it to the episode
 		[ 'GET',  'meet/list',                     'Meetings::list_mine', 'user' ], // ?scope=upcoming|past
 		[ 'GET',  'meet/get',                      'Meetings::get',       'user' ], // ?id= → one meeting + its guests
 		[ 'POST', 'meet/create',                   'Meetings::create',    'user' ], // {title, start, minutes, tz, guests[]}

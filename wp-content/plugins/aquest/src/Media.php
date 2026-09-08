@@ -651,8 +651,11 @@ final class Media {
 	const CAST_FILE_MAX   = 17179869184;      // 16 GB
 	/** Files past this stay on the origin at commit rather than being copied to the CDN in-request. */
 	const CDN_COPY_MAX    = 1073741824;       // 1 GB
+	const CAST_GUEST_BYTES = 17179869184;     // 16 GB — a guest's isolated track while their episode is live
 	private static function cast_host_bytes( $uid ) {
-		return class_exists( '\\AQ\\Cast' ) && Cast::is_host_uid( $uid ) ? self::CAST_HOST_BYTES : 0;
+		if ( ! class_exists( '\\AQ\\Cast' ) ) { return 0; }
+		if ( Cast::is_host_uid( $uid ) ) { return self::CAST_HOST_BYTES; }
+		return Cast::is_live_guest( $uid ) ? self::CAST_GUEST_BYTES : 0;
 	}
 	public static function file_max( $uid ) {
 		return self::cast_host_bytes( $uid ) > 0 ? self::CAST_FILE_MAX : self::FILE_MAX;

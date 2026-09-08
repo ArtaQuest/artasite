@@ -1,4 +1,4 @@
-import { castFinish, uploadImage } from "./api";
+import { castFinish, castIso, uploadImage } from "./api";
 import { listRecordings, openRecording, recordingFile } from "./episode-store";
 import type { EpisodeSpec } from "./episode-frame";
 
@@ -14,7 +14,7 @@ import type { EpisodeSpec } from "./episode-frame";
  * which meeting a file belongs to, so nothing has to be typed.
  */
 
-export type Sidecar = { meet_id: number; request_id: number; spec: EpisodeSpec; at: number; upload_id?: number; upload_bytes?: number };
+export type Sidecar = { meet_id: number; request_id: number; spec: EpisodeSpec; at: number; upload_id?: number; upload_bytes?: number; /** a guest's own camera track, not the master */ iso?: boolean };
 export type SendState = { name: string; phase: "idle" | "uploading" | "thumb" | "starting" | "done" | "error"; frac: number; note: string; at: number };
 
 const registry = new Map<string, SendState>();
@@ -133,6 +133,25 @@ export async function sendForFinishing(name: string, meetId: number, file?: File
     set(name, { phase: "starting" });
     await castFinish(meetId, item.id, thumb);
     set(name, { phase: "done", note: "Finishing on Kaggle — you will be emailed when the episode is ready." });
+  } catch (e) {
+    set(name, { phase: "error", note: (e as Error)?.message || "The upload failed." });
+    throw e;
+  }
+}
+
+/** A guest's isolated track: to their shelf, then attached to the request. Same resumable path. */
+export async function sendIso(name: string, meetId: number): Promise<void> {
+  const cur = registry.get(name);
+  if (cur && (cur.phase === "uploading" || cur.phase === "thumb" || cur.phase === "starting")) return;
+  set(name, { phase: "uploading", frac: 0, note: "" });
+  try {
+    const f = await recordingFile(name);
+    if (!f) throw new Error("The recording is no longer on this computer.");
+    const side = await readSidecar(name);
+    const mediaId = await uploadResumable(name, f, side, meetId, (frac) => set(name, { frac }));
+    set(name, { phase: "starting" });
+    await castIso(meetId, mediaId);
+    set(name, { phase: "done", note: "Your camera recording is with the editor." });
   } catch (e) {
     set(name, { phase: "error", note: (e as Error)?.message || "The upload failed." });
     throw e;

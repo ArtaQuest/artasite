@@ -93,6 +93,17 @@ final class Cast {
 		return array_values( $out );
 	}
 
+	/** A member whose own episode is booked (or was recorded this week) — their shelf carries a grant
+	 *  for their isolated camera track. Read by Media::capacity. */
+	public static function is_live_guest( $uid ) {
+		$uid = (int) $uid;
+		if ( $uid <= 0 ) { return false; }
+		return (bool) Data::col(
+			'SELECT 1 FROM ' . Data::t( 'aq_cast_requests' ) . " WHERE (requester_id = %d OR partner_id = %d) AND status = 'scheduled' AND meet_id > 0 AND (start_ts = 0 OR start_ts > %d) LIMIT 1",
+			[ $uid, $uid, Data::now() - 7 * 86400 ]
+		);
+	}
+
 	/** Is this member a host — one whose shelf holds episodes and whose device records. */
 	public static function is_host_uid( $uid ) {
 		$uid = (int) $uid;
@@ -193,6 +204,18 @@ final class Cast {
 		return '';
 	}
 
+	/** The guests' isolated tracks, with shelf URLs for the people party to the episode. */
+	private static function iso_list( $r, $role ) {
+		if ( '' === $role ) { return []; }
+		$out = [];
+		foreach ( (array) ( Data::dec( (string) ( $r['iso_files'] ?? '' ) ) ?: [] ) as $t ) {
+			$m = Data::one( 'SELECT id, store_key, name, bytes, state FROM ' . Data::t( 'aq_media' ) . ' WHERE id = %d', [ (int) ( $t['media_id'] ?? 0 ) ] );
+			if ( ! $m || 'ready' !== (string) $m['state'] ) { continue; }
+			$out[] = [ 'uid' => (int) ( $t['uid'] ?? 0 ), 'name' => (string) $m['name'], 'bytes' => (int) $m['bytes'], 'url' => Media::url( (string) $m['store_key'] ) ];
+		}
+		return $out;
+	}
+
 	/**
 	 * The API shape of one request, for one viewer. Column names where the SPA needs them, and
 	 * nothing a viewer is not party to: the invite hash never leaves (it is a live credential's
@@ -250,6 +273,7 @@ final class Cast {
 				'thumb'   => (string) ( $r['thumb_url'] ?? '' ),
 				'kernel'  => '' !== (string) ( $r['pipe_kernel'] ?? '' ) ? Kaggle::kernel_url( (string) $r['pipe_kernel'] ) : '',
 				'tries'   => (int) ( $r['pipe_tries'] ?? 0 ),
+				'iso'     => self::iso_list( $r, $role ),
 				'retrying' => 'failed' === (string) ( $r['pipe_state'] ?? '' ) && str_starts_with( (string) ( $r['pipe_note'] ?? '' ), 'Kaggle refused' ) && (int) ( $r['pipe_tries'] ?? 0 ) < self::PIPE_TRIES,
 			],
 			'complete'  => [ 'a' => $a_ok, 'b' => $b_ok ],
@@ -764,6 +788,35 @@ final class Cast {
 	}
 
 	/**
+	 * POST artacast/iso {meet, media_id} — a guest's own camera track is on their shelf; attach it to
+	 * the episode. Guests of the meeting only, their own committed video item only. Idempotent per
+	 * item. Listed to the host and the couple with fresh shelf URLs; copied into the finishing run's
+	 * outputs when it is still to come, else downloadable from the shelf.
+	 */
+	public static function iso( $req ) {
+		if ( Rest::throttle( 'aq_cast_iso', 20, 3600 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+		$mid = Rest::pint( $req, 'meet', 0 );
+		$r   = self::by_meet( $mid );
+		if ( ! $r ) { return Rest::err( 'not_found', 'Not an ArtaCast recording.', 404 ); }
+		if ( ! Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_meet_guests' ) . ' WHERE meet_id = %d AND user_id = %d LIMIT 1', [ $mid, $uid ] ) ) {
+			return Rest::err( 'not_found', 'Not an ArtaCast recording.', 404 );
+		}
+		$item = self::raw_item( Rest::pint( $req, 'media_id', 0 ), $uid );
+		if ( ! $item ) { return Rest::err( 'no_raw', 'That recording is not on your shelf yet.', 409 ); }
+		$list = (array) ( Data::dec( (string) ( $r['iso_files'] ?? '' ) ) ?: [] );
+		$have = false;
+		foreach ( $list as $t ) { if ( (int) ( $t['media_id'] ?? 0 ) === (int) $item['id'] ) { $have = true; } }
+		if ( ! $have ) {
+			$list[] = [ 'uid' => $uid, 'media_id' => (int) $item['id'], 'at' => Data::now() ];
+			Data::update( 'aq_cast_requests', [ 'iso_files' => Data::enc( array_slice( $list, -12 ) ), 'updated' => Data::now() ], [ 'id' => (int) $r['id'] ] );
+		}
+		$r = self::row( (int) $r['id'] );
+		return [ 'ok' => true, 'iso' => self::iso_list( $r, self::role_of( $r, $uid ) ) ];
+	}
+
+	/**
 	 * POST artacast/recorded {meet, seconds, bytes, format} — the host's device finished writing an
 	 * episode. Nothing about the file reaches the server (it cannot: the room is sealed); the row
 	 * remembers THAT it was recorded, and how long, so the inbox can say so. Host only.
@@ -844,7 +897,10 @@ final class Cast {
 		$now = Data::now();
 		$tpl = @file_get_contents( AQ_DIR . '/data/artacast-finish.py' );
 		if ( ! $tpl ) { self::pipeline_fail( $r, 'the finishing script is missing from this build' ); return; }
+		$iso = [];
+		foreach ( self::iso_list( $r, 'host' ) as $t ) { $iso[] = [ 'name' => (string) $t['name'], 'url' => (string) $t['url'] ]; }
 		$src = strtr( $tpl, [
+			'{{ISO_JSON}}'   => str_replace( [ '\\', '"' ], [ '\\\\', '\\"' ], (string) wp_json_encode( $iso ) ),
 			'{{RAW_URL}}'    => Media::url( (string) $item['store_key'] ),
 			'{{THUMB_URL}}'  => (string) $r['thumb_url'],
 			'{{OUT_BASE}}'   => self::out_base( $r ),
@@ -893,11 +949,21 @@ final class Cast {
 		], [ 'id' => (int) $r['id'] ] );
 		// THE RAW LEAVES THE SHELF. The host has the file on their own computer and Kaggle now holds the
 		// finished one; five gigabytes an episode would fill even the host's grant in a season.
+		global $wpdb;
 		$raw = Data::one( 'SELECT id, store_key, user_id FROM ' . Data::t( 'aq_media' ) . ' WHERE id = %d', [ (int) $r['raw_media_id'] ] );
 		if ( $raw && (int) $raw['user_id'] === (int) ( self::host_of( $r )->ID ?? 0 ) ) {
-			Media::destroy( (string) $raw['store_key'] );
-			global $wpdb;
+			if ( method_exists( Media::class, 'destroy' ) ) { Media::destroy( (string) $raw['store_key'] ); }
 			$wpdb->delete( Data::t( 'aq_media' ), [ 'id' => (int) $raw['id'] ] );
+		}
+		// The isolated tracks that made it into the run's outputs leave the guests' shelves too.
+		$copied = [];
+		foreach ( (array) $files as $f ) { $copied[ (string) $f['name'] ] = true; }
+		foreach ( (array) ( Data::dec( (string) ( $r['iso_files'] ?? '' ) ) ?: [] ) as $t ) {
+			$m = Data::one( 'SELECT id, store_key, name FROM ' . Data::t( 'aq_media' ) . ' WHERE id = %d', [ (int) ( $t['media_id'] ?? 0 ) ] );
+			if ( $m && isset( $copied[ 'ISO-' . (string) $m['name'] ] ) ) {
+				if ( method_exists( Media::class, 'destroy' ) ) { Media::destroy( (string) $m['store_key'] ); }
+				$wpdb->delete( Data::t( 'aq_media' ), [ 'id' => (int) $m['id'] ] );
+			}
 		}
 		$h = self::host_of( $r );
 		if ( ! $h ) { return; }

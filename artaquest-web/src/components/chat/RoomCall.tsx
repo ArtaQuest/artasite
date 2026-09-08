@@ -14,6 +14,7 @@ import { CallModeChoice, LinkNote } from "./CallPanel";
 import { callModePref, deviceSuggestedMode, rememberCallMode, useVideoLive } from "./callmode";
 import { Whiteboard, type Ping, type Stroke } from "./Whiteboard";
 import { EpisodeRecorder } from "../cast/EpisodeRecorder";
+import { IsoRecorder } from "../cast/IsoRecorder";
 import { reshapeCapture, setStudio } from "../../lib/webrtc";
 import type { EpisodeSpec } from "../../lib/episode-frame";
 
@@ -953,6 +954,9 @@ export function RoomCall({ room, roomKey, me, onLeft, episode }: {
         <p className="flex items-center gap-2 border-t border-line px-3 py-1.5 text-[12.5px] font-semibold text-ink" role="status">
           <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" aria-hidden /> The host is recording this episode
         </p>
+      )}
+      {episode && episode.host_id !== me && (
+        <IsoRecorder local={local} on={recOn} meetId={episode.meet_id} me={me} spec={episode} />
       )}
       {episode && episode.host_id === me && (
         <EpisodeRecorder spec={episode} local={local} me={me} meetId={episode.meet_id}
