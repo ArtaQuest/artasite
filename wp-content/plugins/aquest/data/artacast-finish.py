@@ -226,12 +226,36 @@ for which in ("mossformer2", "noisereduce"):
         tail = (r.stdout + r.stderr)[-1500:]
         m = re.search(r"MODEL=(.+)", r.stdout)
         if r.returncode == 0 and m and os.path.exists(ENH_WAV) and os.path.getsize(ENH_WAV) > 1000:
+            # A MODEL THAT ATE THE VOICES DOES NOT WIN. A speech enhancer handed something it does not
+            # recognise as speech can suppress it to near silence and report success; the loudness
+            # after must stay within hearing of the loudness before, or the next rung is tried.
+            after = lufs(ENH_WAV)
+            before = report["lufs_before"]
+            if before is not None and after is not None and after < before - 18:
+                step("enhance-" + which, False, error=f"the model suppressed the signal: {before} -> {after} LUFS")
+                try: os.remove(ENH_WAV)
+                except OSError: pass
+                continue
             model = m.group(1).strip()
-            step("enhance", True, model=model, log=r.stdout[-300:])
+            step("enhance", True, model=model, lufs_after=after, log=r.stdout[-300:])
         else:
             step("enhance-" + which, False, error=tail[-700:])
     except Exception as e:
         step("enhance-" + which, False, error=str(e)[-600:])
+
+# The last rung: ffmpeg's own denoiser — never nothing, and under the same guard.
+if not model:
+    try:
+        sh([FF, "-y", "-i", IN_WAV, "-af", "highpass=f=60,afftdn=nf=-25:tn=1", "-ar", "48000", "-c:a", "pcm_s16le", ENH_WAV])
+        after = lufs(ENH_WAV)
+        if report["lufs_before"] is not None and after is not None and after < report["lufs_before"] - 18:
+            raise RuntimeError(f"afftdn suppressed the signal: {report['lufs_before']} -> {after} LUFS")
+        model = "ffmpeg afftdn"
+        step("enhance", True, model=model, lufs_after=after)
+    except Exception as e:
+        step("enhance-afftdn", False, error=str(e)[-600:])
+        shutil.copy(IN_WAV, ENH_WAV); model = "none"
+        step("enhance", True, model=model, note="the voices as recorded")
 
 # A model that shortened or stretched the file is worse than no model.
 try:
