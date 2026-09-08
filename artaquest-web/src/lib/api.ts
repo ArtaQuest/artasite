@@ -3144,6 +3144,8 @@ export type CastRequest = {
   meet: CastMeet | null;
   /** Set once the host's device has written an episode file. */
   recorded?: { at: number; note: string };
+  /** For the couple: '' | recorded | finishing | finished. */
+  stage?: string;
   /** The finishing run on Kaggle: '' | queued | running | done | failed, and what it left. */
   pipeline?: { state: string; note: string; started: number; done: number; files: { name: string }[]; raw: number; thumb: string; kernel: string; tries?: number; retrying?: boolean };
   /** Each guest's isolated camera track, once sent — for the editor; visible to the host and the couple. */

@@ -897,8 +897,15 @@ export default function ArtaCast() {
             It is an ordinary ArtaMeet now — in your calendar, in <span data-ay-skip="1">{hostName}</span>’s{request.partner ? <>, and in <span data-ay-skip="1">{request.partner.name}</span>’s</> : ". Your partner is seated the moment they accept the invitation"}. The room opens fifteen minutes before, from the meeting page. You can still change photos and details until then.
           </p>
           <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
-            On the day: a laptop with a good camera, facing a window or a lamp, each of you on your own device if you can. The host records the episode on their computer — the call itself is encrypted and nothing is recorded on yours.
+            On the day: a laptop with a good camera, facing a window or a lamp, each of you on your own device if you can. The host records the episode on their computer; your own camera is recorded on yours at full quality for the editor, and sent on its own afterwards.
           </p>
+          {request.stage && (
+            <p className="mt-2 text-[13px] font-semibold text-ink" role="status">
+              {request.stage === "recorded" && "The episode has been recorded."}
+              {request.stage === "finishing" && "The episode has been recorded and is being finished for release."}
+              {request.stage === "finished" && "The episode is finished and ready for release."}
+            </p>
+          )}
           <div className="mt-4 flex flex-wrap gap-2">
             <Button href={booked.url}>Open the meeting</Button>
             <Button href="/calendar/" variant="outline">See it in your calendar</Button>

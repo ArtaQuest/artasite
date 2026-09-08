@@ -82,13 +82,22 @@ final class Cast {
 		return $u ?: null;
 	}
 
+	/** Members an operator has barred from hosting — option `aq_artacast_host_block`, a list of ids
+	 *  (`wp option update aq_artacast_host_block '[123]' --format=json`). Volunteering is open to every
+	 *  member, and this is the one lever when that openness is abused: a barred member is not listed,
+	 *  cannot volunteer, and their live requests fall back to the primary host (host_of). */
+	private static function blocked( $uid ) {
+		$list = get_option( 'aq_artacast_host_block', [] );
+		return in_array( (int) $uid, array_map( 'intval', is_array( $list ) ? $list : [] ), true );
+	}
+
 	/** Every host, primary first: the configured one plus every volunteer. Small by construction. */
 	public static function hosts() {
 		$out = [];
 		$h = self::host();
 		if ( $h ) { $out[ (int) $h->ID ] = $h; }
 		foreach ( get_users( [ 'meta_key' => self::VOLUNTEER_META, 'meta_value' => '1', 'number' => 50, 'orderby' => 'ID' ] ) as $u ) {
-			$out[ (int) $u->ID ] = $u;
+			if ( ! self::blocked( $u->ID ) ) { $out[ (int) $u->ID ] = $u; }
 		}
 		return array_values( $out );
 	}
@@ -110,7 +119,7 @@ final class Cast {
 		if ( $uid <= 0 ) { return false; }
 		$h = self::host();
 		if ( $h && (int) $h->ID === $uid ) { return true; }
-		return (bool) get_user_meta( $uid, self::VOLUNTEER_META, true );
+		return (bool) get_user_meta( $uid, self::VOLUNTEER_META, true ) && ! self::blocked( $uid );
 	}
 
 	/** The host of one request: the one the couple chose, if they are still hosting, else the primary. */
@@ -263,6 +272,10 @@ final class Cast {
 			],
 			'meet'      => $meet,
 			'recorded'  => [ 'at' => (int) ( $r['recorded_at'] ?? 0 ), 'note' => (string) ( $r['recorded_note'] ?? '' ) ],
+			// One word the couple can read without the host's detail: nothing · recorded · finishing · finished
+			'stage'     => (int) ( $r['pipe_done'] ?? 0 ) > 0 && 'done' === (string) ( $r['pipe_state'] ?? '' ) ? 'finished'
+				: ( in_array( (string) ( $r['pipe_state'] ?? '' ), [ 'queued', 'running', 'failed' ], true ) ? 'finishing'
+				: ( (int) ( $r['recorded_at'] ?? 0 ) > 0 ? 'recorded' : '' ) ),
 			'pipeline'  => [
 				'state'   => (string) ( $r['pipe_state'] ?? '' ),
 				'note'    => (string) ( $r['pipe_note'] ?? '' ),
@@ -1067,6 +1080,8 @@ final class Cast {
 		$uid = Rest::uid();
 		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
 		if ( ! self::is_host( $uid ) ) { return Rest::err( 'forbidden', 'Only the host sees the requests.', 403 ); }
+		// The cron is the engine; a host opening their inbox is a second one. Self-gated inside.
+		self::pipeline_tick();
 		$h = self::host();
 		$mine_only = ! current_user_can( 'manage_options' ) || Rest::pint( $req, 'mine', 0 );
 		// host_id 0 is the primary host — rows written before hosts were chosen.
@@ -1129,6 +1144,7 @@ final class Cast {
 		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
 		$h = self::host();
 		if ( $h && (int) $h->ID === $uid ) { return Rest::err( 'primary', 'You are the show’s host already.', 400 ); }
+		if ( self::blocked( $uid ) ) { return Rest::err( 'forbidden', 'Hosting is not open to this account.', 403 ); }
 		if ( ! class_exists( '\\AQ\\Verify' ) || ! Verify::has_birthday( $uid ) ) { return Rest::err( 'identity', 'State your name and date of birth first.', 403 ); }
 		if ( Rest::pint( $req, 'on', 1 ) ) {
 			update_user_meta( $uid, self::VOLUNTEER_META, '1' );
