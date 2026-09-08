@@ -576,6 +576,8 @@ final class Rest {
 		[ 'POST', 'artacast/withdraw',             'Cast::withdraw',      'user'   ], // the requester takes it back
 		[ 'GET',  'artacast/inbox',                'Cast::inbox',         'user'   ], // host/operator: every live request
 		[ 'POST', 'artacast/host-open',            'Cast::host_open',     'user'   ], // host: open recording hours (writes the 'artacast' booking rule)
+		[ 'GET',  'artacast/episode',              'Cast::episode',       'user'   ], // ?meet= → the frame's facts for a recording (guests of the meeting; 404 = not an episode)
+		[ 'POST', 'artacast/recorded',             'Cast::recorded',      'user'   ], // host: the device finished writing an episode — remembered for the inbox
 		[ 'GET',  'meet/list',                     'Meetings::list_mine', 'user' ], // ?scope=upcoming|past
 		[ 'GET',  'meet/get',                      'Meetings::get',       'user' ], // ?id= → one meeting + its guests
 		[ 'POST', 'meet/create',                   'Meetings::create',    'user' ], // {title, start, minutes, tz, guests[]}

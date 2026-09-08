@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ApiError,
   meetCalRotate, meetEmailPrefs, meetCancel, meetCreate, meetGet, meetInvite, meetList, meetLobby,
-  meetRetime, meetRetimeRespond,
+  meetRetime, meetRetimeRespond, castEpisode,
   meetNow, meetOpen, meetRsvp, meetSeat, meetUninvite, meetUpdate, roomsCall,
   type Meet as MeetRow, type MeetCal, type MeetGuest, type MeetLobby, type MeetRsvp,
 } from "../lib/api";
@@ -14,6 +14,7 @@ import { distributeRoomKey, roomKey } from "../lib/rooms";
 import { shouldAnchor } from "../lib/anchor";
 import { RoomThread } from "../components/chat/RoomThread";
 import { RoomCall } from "../components/chat/RoomCall";
+import type { EpisodeSpec } from "../lib/episode-frame";
 import { CallModeChoice } from "../components/chat/CallPanel";
 import { CALL_MODES, callModePref, deviceSuggestedMode, rememberCallMode } from "../components/chat/callmode";
 import type { CallMode } from "../lib/webrtc";
@@ -1087,6 +1088,9 @@ function JoinPanel({ lobby, busy, now, opening, onOpen, guests }: {
 function MeetingPage({ id }: { id: number }) {
   const nav = useNavigate();
   const [meet, setMeet] = useState<MeetRow | null>(null);
+  /** Set when this meeting is an ArtaCast recording — the host then gets the episode recorder in
+   *  the call, and everyone's camera opens on the studio profile. */
+  const [episode, setEpisode] = useState<EpisodeSpec | null>(null);
   const [guests, setGuests] = useState<MeetGuest[]>([]);
   const [cal, setCal] = useState<MeetCal | null>(null);
   const [me, setMe] = useState(0);
@@ -1131,6 +1135,11 @@ function MeetingPage({ id }: { id: number }) {
       .then((r) => {
         if (stop) return;
         setMeet(r.meet); setGuests(r.guests); setMe(r.me); setCal(r.cal);
+        // Only a meeting that SAYS it is an episode is asked about — the title is what Cast writes,
+        // and a 404 here is an ordinary meeting, not an error.
+        if (/^ArtaCast/.test(String(r.meet.title || "")) || String(r.meet.context_type) === "book") {
+          castEpisode(id).then((e) => { if (!stop && e?.ok) setEpisode(e); }).catch(() => undefined);
+        }
       })
       .catch((e) => {
         if (stop) return;
@@ -1372,12 +1381,23 @@ function MeetingPage({ id }: { id: number }) {
               /* NEVER the call surface without a key: without one every offer and answer is dropped
                  before it is sent, so the camera opens and nobody can see or hear you. */
               renderCall={(room, key, meId, leaveCall) => (key && room.in_call.includes(meId)
-                ? <RoomCall room={room} roomKey={key} me={meId} onLeft={leaveCall} />
+                ? <RoomCall room={room} roomKey={key} me={meId} onLeft={leaveCall} episode={episode} />
                 : null)} />
           ) : lobby ? (
             <JoinPanel lobby={lobby} guests={guests} busy={busy} now={now} opening={opening} onOpen={() => void doOpen()} />
           ) : (
             <StatusNote>Checking the room…</StatusNote>
+          )}
+
+          {episode && !live && meet.status !== "cancelled" && (
+            <section className="rounded-card border border-yang/40 bg-yang/[0.06] p-4" aria-label="ArtaCast recording">
+              <h2 className="text-[14px] font-semibold text-ink">This is an ArtaCast recording</h2>
+              <p className="mt-2 text-[13.5px] leading-relaxed text-ink-2">
+                {Number(meet.host_id) === me
+                  ? "Once all three of you are in, press Record in the call. The episode is composited on this computer — the couple side by side, you below, names and timelines — and written to a YouTube-ready file as it records. Use a laptop on Chrome or Edge, with the best camera and light you have."
+                  : "The host records the episode on their own computer. Nothing is recorded on yours. Use a laptop with a good camera if you can — the recording asks your camera for 720p — sit facing a window or a lamp, and keep your face in the middle of the picture."}
+              </p>
+            </section>
           )}
 
           {meet.agenda && !live && (

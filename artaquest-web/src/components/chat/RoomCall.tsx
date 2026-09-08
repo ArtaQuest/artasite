@@ -13,6 +13,9 @@ import { Avatar } from "../ui";
 import { CallModeChoice, LinkNote } from "./CallPanel";
 import { callModePref, deviceSuggestedMode, rememberCallMode, useVideoLive } from "./callmode";
 import { Whiteboard, type Ping, type Stroke } from "./Whiteboard";
+import { EpisodeRecorder } from "../cast/EpisodeRecorder";
+import { reshapeCapture, setStudio } from "../../lib/webrtc";
+import type { EpisodeSpec } from "../../lib/episode-frame";
 
 /**
  * A group call — a MESH, with no server anywhere in it.
@@ -186,13 +189,18 @@ function useSpeakers(entries: { uid: number; stream: MediaStream | null }[], ena
   return { speaking, speaker };
 }
 
-export function RoomCall({ room, roomKey, me, onLeft }: {
+export function RoomCall({ room, roomKey, me, onLeft, episode }: {
   room: Room;
   roomKey: CryptoKey | null;
   me: number;
   onLeft: () => void;
+  /** Present when this call is an ArtaCast recording: the host gets the episode recorder, every
+   *  camera opens on the studio profile (lib/webrtc setStudio), and the room is told when the
+   *  host is recording. */
+  episode?: EpisodeSpec | null;
 }) {
   const [peers, setPeers] = useState<Record<number, Peer>>({});
+  const [recOn, setRecOn] = useState(false);
   const [local, setLocal] = useState<MediaStream | null>(null);
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
@@ -250,6 +258,15 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
    *  means they threw their side away and built a new one — a reload fast enough that the roster
    *  never noticed — and the connection we are holding for them is dead. */
   const remoteSid = useRef(new Map<number, string>());
+
+  /** THE STUDIO PROFILE, before any camera opens. Declared ahead of the media effects so it runs
+   *  first; undone on unmount so the next ordinary call is not asked for 720p. */
+  useEffect(() => {
+    setStudio(!!episode);
+    // Already filming at 360p because the spec arrived after the camera opened: ask again.
+    if (episode) for (const t of media.current?.getVideoTracks() ?? []) void reshapeCapture(t);
+    return () => setStudio(false);
+  }, [episode]);
 
   /** Two columns of tiles or four — read once and on resize, never per render. */
   const [wide, setWide] = useState(() => {
@@ -617,6 +634,7 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
           if (p.t === "point") { setPings((cur) => [...cur.slice(-6), { x: p.x, y: p.y, at: Date.now(), by: m.sender }]); continue; }
           if (p.t === "hand") { setHands((cur) => ({ ...cur, [m.sender]: p.up })); continue; }
           if (p.t === "timer") { setTimerEnds(p.ends); continue; }
+          if (p.t === "rec") { setRecOn(!!p.on); continue; }
           if (p.t === "link") { scores.current[m.sender] = { score: p.score, at: Date.now() }; continue; }
           if (p.t !== "rtc" || p.to !== me) continue;   // in a mesh, an offer is for ONE person
           if (p.kind === "offer" && p.sdp) {
@@ -639,6 +657,8 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
           } else if (p.kind === "answer" && p.sdp) {
             await calls.current.get(m.sender)?.accept(p.sdp).catch(() => undefined);
           } else if (p.kind === "bye") {
+            // The host leaving ends the recording by definition; the banner must not outlive them.
+            if (episode && m.sender === episode.host_id) setRecOn(false);
             calls.current.get(m.sender)?.close();
             calls.current.delete(m.sender);
             remoteSid.current.delete(m.sender);
@@ -927,6 +947,18 @@ export function RoomCall({ room, roomKey, me, onLeft }: {
       )}
 
       {err && <p className="px-3 py-1.5 text-[12px] text-yang">{err}</p>}
+      {/* EVERYONE IS TOLD. A recording the guests cannot see is a recording they did not agree to;
+          the host's device says so through the room, and this line stays for as long as it is on. */}
+      {episode && recOn && episode.host_id !== me && (
+        <p className="flex items-center gap-2 border-t border-line px-3 py-1.5 text-[12.5px] font-semibold text-ink" role="status">
+          <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" aria-hidden /> The host is recording this episode
+        </p>
+      )}
+      {episode && episode.host_id === me && (
+        <EpisodeRecorder spec={episode} local={local} me={me} meetId={episode.meet_id}
+          peers={tiles.map((p) => ({ uid: p.uid, stream: p.stream }))}
+          onRecState={(on) => { setRecOn(on); void signal({ v: 2, t: "rec", on }); }} />
+      )}
       {controls}
     </section>
   );

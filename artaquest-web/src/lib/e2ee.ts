@@ -475,7 +475,11 @@ export type ChatPayload =
   // Each participant's own view of its own link, so everyone can work out who should carry the
   // shared work. SEALED like everything else here: the server never learns who has the good line,
   // and could not act on it if it did — the election is a function every peer computes for itself.
-  | { v: 2; t: "link"; score: number };
+  | { v: 2; t: "link"; score: number }
+  /** The host of an ArtaCast recording has started (or stopped) recording the episode on THEIR
+   *  device. Everybody in the room is told, on screen, for as long as it is on. Sealed like every
+   *  other payload: the server never learns that a recording exists. */
+  | { v: 2; t: "rec"; on: boolean };
 
 export function encodePayload(p: ChatPayload): string {
   return JSON.stringify(p);

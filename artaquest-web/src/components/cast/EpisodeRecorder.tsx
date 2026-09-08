@@ -1,0 +1,302 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FRAME_H, FRAME_W, drawEpisodeFrame, episodeRows, pickRecordingType, recordingName, warmFonts,
+  type EpisodeSpec, type FrameInput,
+} from "../../lib/episode-frame";
+import { firstName } from "../../lib/cast-frame";
+import { castRecorded } from "../../lib/api";
+
+/**
+ * THE RECORDER — the host's device cuts the episode while it happens.
+ *
+ * ArtaMeet is end-to-end encrypted: no server ever holds a frame, so the only place an episode can
+ * be recorded is a participant's browser. This panel, shown to the HOST of an ArtaCast recording,
+ * composites the three feeds into the kit's 1920×1080 frame on a canvas (lib/episode-frame), mixes
+ * the three voices, and hands the result to MediaRecorder at 30fps — H.264/AAC in MP4 where the
+ * browser can write it, VP9/Opus in WebM otherwise. Both go straight onto YouTube.
+ *
+ * WRITTEN TO DISK AS IT RECORDS. Ninety minutes at 8 Mbit/s is over five gigabytes; holding that
+ * in memory until Stop is how a two-hour recording is lost at the last second. Where the browser
+ * offers a writable file (Chrome, Edge), the file is chosen at Start — a real user gesture, which
+ * the picker requires — and every second's chunk is appended to it; a crash keeps everything up
+ * to the crash. Elsewhere the chunks are held and offered as a download at Stop, and the panel
+ * says so before recording begins.
+ *
+ * The chapter cursors (the gold on each rail, the kit's "chapter change") are the host's to move
+ * during the conversation: one button per spouse. Names (the lower-thirds) can be shown or hidden.
+ * Nothing about the recording is a server feature — the room is told through a sealed `rec`
+ * payload so everyone sees "Recording" for as long as it is on.
+ */
+
+const FPS = 30;
+const VIDEO_BPS = 8_000_000;
+const AUDIO_BPS = 192_000;
+
+type Feed = { uid: number; stream: MediaStream | null };
+
+function fmtBytes(n: number): string {
+  if (n < 1e6) return `${Math.round(n / 1e3)} KB`;
+  if (n < 1e9) return `${(n / 1e6).toFixed(0)} MB`;
+  return `${(n / 1e9).toFixed(2)} GB`;
+}
+function fmtClock(s: number): string {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+  return (h ? `${h}:` : "") + `${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}`;
+}
+
+type SavePicker = (o: { suggestedName: string; types: { description: string; accept: Record<string, string[]> }[] }) => Promise<{ createWritable: () => Promise<{ write: (d: Blob) => Promise<void>; close: () => Promise<void> }> }>;
+const canWriteToDisk = () => typeof (window as unknown as { showSaveFilePicker?: unknown }).showSaveFilePicker === "function";
+
+export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: {
+  spec: EpisodeSpec;
+  local: MediaStream | null;
+  peers: Feed[];
+  me: number;
+  meetId: number;
+  onRecState: (on: boolean) => void;
+}) {
+  const canvas = useRef<HTMLCanvasElement | null>(null);
+  const videos = useRef<Map<number, HTMLVideoElement>>(new Map());
+  const [rec, setRec] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const [bytes, setBytes] = useState(0);
+  const [err, setErr] = useState("");
+  const [done, setDone] = useState<{ name: string; bytes: number; seconds: number; label: string; url: string } | null>(null);
+  const [names, setNames] = useState(true);
+  const [cursorA, setCursorA] = useState(0);
+  const [cursorB, setCursorB] = useState(0);
+  const [open, setOpen] = useState(true);
+  const state = useRef({ names: true, cursorA: 0, cursorB: 0 });
+  const recorder = useRef<MediaRecorder | null>(null);
+  const chunks = useRef<Blob[]>([]);
+  const writable = useRef<{ write: (d: Blob) => Promise<void>; close: () => Promise<void> } | null>(null);
+  const writing = useRef<Promise<void>>(Promise.resolve());
+  const audioCtx = useRef<AudioContext | null>(null);
+  const audioDest = useRef<MediaStreamAudioDestinationNode | null>(null);
+  /** Audio tracks already feeding the mix, by track id — a stream object may be rebuilt around the
+   *  same microphone track (a screen share does that), and the same voice must not be mixed twice. */
+  const mixed = useRef<Set<string>>(new Set());
+  const startedAt = useRef(0);
+  const rows = useMemo(() => episodeRows(spec), [spec]);
+  const type = useMemo(() => pickRecordingType(), []);
+
+  useEffect(() => { state.current = { names, cursorA, cursorB }; }, [names, cursorA, cursorB]);
+
+  /** Who is in which window. The requester is the left window, the partner the right, the host
+   *  below — by member id, never by arrival order. */
+  const feedFor = useCallback((uid: number): MediaStream | null => {
+    if (uid === me) return local;
+    return peers.find((p) => p.uid === uid)?.stream || null;
+  }, [me, local, peers]);
+
+  /** A hidden, playing <video> per stream, so drawImage has frames to read. A stream that changes
+   *  identity (a reload on the other side) gets a fresh element. */
+  const videoFor = useCallback((uid: number): HTMLVideoElement | null => {
+    const s = feedFor(uid);
+    if (!s || !s.getVideoTracks().length) return null;
+    let v = videos.current.get(uid);
+    if (!v || v.srcObject !== s) {
+      v = document.createElement("video");
+      v.muted = true; v.playsInline = true; v.autoplay = true;
+      v.srcObject = s;
+      v.play().catch(() => undefined);
+      videos.current.set(uid, v);
+    }
+    return v;
+  }, [feedFor]);
+
+  // The draw loop runs while the panel is open, recording or not: the small live picture is how
+  // the host frames the shot before pressing Record.
+  useEffect(() => {
+    const c = canvas.current;
+    if (!c || !open) return;
+    const ctx = c.getContext("2d", { alpha: false });
+    if (!ctx) return;
+    let stop = false;
+    void warmFonts();
+    const tick = () => {
+      if (stop) return;
+      const input: FrameInput = {
+        a: videoFor(spec.a.uid), b: videoFor(spec.b.uid), host: videoFor(spec.host_id),
+        cursorA: state.current.cursorA, cursorB: state.current.cursorB, names: state.current.names,
+      };
+      drawEpisodeFrame(ctx, spec, rows, input);
+    };
+    const t = window.setInterval(tick, 1000 / FPS);
+    tick();
+    return () => { stop = true; window.clearInterval(t); };
+  }, [spec, rows, videoFor, open]);
+
+  useEffect(() => {
+    if (!rec) return;
+    const t = window.setInterval(() => setSeconds(Math.round((Date.now() - startedAt.current) / 1000)), 500);
+    return () => window.clearInterval(t);
+  }, [rec]);
+
+  // Leaving the call while recording: stop cleanly so the file is closed, never torn — and let go
+  // of the hidden video elements, which would otherwise keep decoding three streams for nobody.
+  useEffect(() => () => {
+    if (recorder.current && recorder.current.state !== "inactive") recorder.current.stop();
+    for (const v of videos.current.values()) { v.pause(); v.srcObject = null; }
+    videos.current.clear();
+  }, []);
+
+  /** Add every voice not yet in the mix. Sources are the raw MediaStreams — never a media element,
+   *  which a Web Audio tap would mute. Called at Start and again whenever the room changes, so a
+   *  partner who arrives after Record is pressed is heard from their first word. */
+  const feedMix = useCallback(() => {
+    const ctx = audioCtx.current, dest = audioDest.current;
+    if (!ctx || !dest) return;
+    for (const s of [local, ...peers.map((p) => p.stream)]) {
+      if (!s) continue;
+      for (const t of s.getAudioTracks()) {
+        if (mixed.current.has(t.id)) continue;
+        try { ctx.createMediaStreamSource(new MediaStream([t])).connect(dest); mixed.current.add(t.id); } catch { /* no live audio on it */ }
+      }
+    }
+  }, [local, peers]);
+  useEffect(() => { if (rec) feedMix(); }, [rec, feedMix]);
+
+  function mixAudio(): MediaStreamTrack | null {
+    const AC = (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext }).AudioContext
+      || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return null;
+    const ctx = new AC();
+    audioCtx.current = ctx;
+    audioDest.current = ctx.createMediaStreamDestination();
+    mixed.current = new Set();
+    feedMix();
+    return audioDest.current.stream.getAudioTracks()[0] || null;
+  }
+
+  async function start() {
+    setErr(""); setDone(null);
+    const c = canvas.current;
+    if (!c || !type) { setErr("This browser cannot record video. Chrome or Edge on a laptop can."); return; }
+    const name = recordingName(spec, type.ext);
+    // THE FILE FIRST, inside the click: the picker needs the gesture, and a host who changes their
+    // mind here has recorded nothing.
+    writable.current = null;
+    if (canWriteToDisk()) {
+      try {
+        const picker = (window as unknown as { showSaveFilePicker: SavePicker }).showSaveFilePicker;
+        const handle = await picker({ suggestedName: name, types: [{ description: "Episode recording", accept: { [type.mime.split(";")[0]]: [`.${type.ext}`] } }] });
+        writable.current = await handle.createWritable();
+      } catch (e) {
+        if ((e as { name?: string })?.name === "AbortError") return; // changed their mind
+        writable.current = null; // fall back to memory
+      }
+    }
+    await warmFonts();
+    const stream = c.captureStream(FPS);
+    const audio = mixAudio();
+    if (audio) stream.addTrack(audio);
+    let mr: MediaRecorder;
+    try {
+      mr = new MediaRecorder(stream, { mimeType: type.mime, videoBitsPerSecond: VIDEO_BPS, audioBitsPerSecond: AUDIO_BPS });
+    } catch (e) {
+      setErr(`Couldn’t start the recorder: ${(e as Error)?.message || "unknown error"}`);
+      return;
+    }
+    chunks.current = [];
+    let total = 0;
+    mr.ondataavailable = (ev) => {
+      if (!ev.data || !ev.data.size) return;
+      total += ev.data.size;
+      setBytes(total);
+      if (writable.current) {
+        const w = writable.current;
+        writing.current = writing.current.then(() => w.write(ev.data)).catch(() => { setErr("Writing to the file failed — the disk may be full."); });
+      } else {
+        chunks.current.push(ev.data);
+      }
+    };
+    mr.onerror = () => setErr("The recorder stopped with an error.");
+    mr.onstop = () => {
+      const secs = Math.round((Date.now() - startedAt.current) / 1000);
+      const finish = async () => {
+        let url = "";
+        if (writable.current) {
+          await writing.current;
+          try { await writable.current.close(); } catch { setErr("The file could not be closed cleanly."); }
+          writable.current = null;
+        } else {
+          const blob = new Blob(chunks.current, { type: type.mime });
+          url = URL.createObjectURL(blob);
+          chunks.current = [];
+        }
+        setDone({ name, bytes: total, seconds: secs, label: type.label, url });
+        castRecorded(meetId, { seconds: secs, bytes: total, format: type.label }).catch(() => undefined);
+      };
+      void finish();
+      audioCtx.current?.close().catch(() => undefined);
+      audioCtx.current = null;
+      audioDest.current = null;
+      mixed.current = new Set();
+      setRec(false);
+      onRecState(false);
+    };
+    startedAt.current = Date.now();
+    setBytes(0); setSeconds(0);
+    mr.start(1000);
+    recorder.current = mr;
+    setRec(true);
+    onRecState(true);
+  }
+
+  function stop() {
+    const mr = recorder.current;
+    if (mr && mr.state !== "inactive") mr.stop();
+  }
+
+  const btn = "inline-flex h-10 shrink-0 items-center rounded-pill px-3 text-[12.5px] font-semibold";
+  const nameA = firstName(spec.a.name) || "Left", nameB = firstName(spec.b.name) || "Right";
+  const missing = [spec.a.uid, spec.b.uid].filter((u) => !feedFor(u)?.getVideoTracks().length).length;
+
+  return (
+    <section className="border-t border-line bg-space-2/60" aria-label="Episode recorder">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <span className={`h-2.5 w-2.5 rounded-full ${rec ? "bg-red-500 animate-pulse" : "bg-ink-3"}`} aria-hidden />
+        <p className="min-w-0 flex-1 text-[13px] font-semibold text-ink">
+          {rec ? <>Recording · <span data-ay-skip="1">{fmtClock(seconds)}</span> · <span data-ay-skip="1">{fmtBytes(bytes)}</span></> : "ArtaCast episode recorder"}
+        </p>
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className={`${btn} border border-line text-ink-2`}>{open ? "Hide" : "Show"}</button>
+      </div>
+      {open && (
+        <div className="flex flex-col gap-2 px-3 pb-3">
+          {/* The live cut, small. This canvas IS the recording: what the host sees here is the file. */}
+          <canvas ref={canvas} width={FRAME_W} height={FRAME_H} className="w-full rounded-card bg-black" aria-label="The episode frame as it is being recorded" />
+          <div className="flex flex-wrap items-center gap-2">
+            {!rec ? (
+              <button type="button" onClick={() => void start()} className={`${btn} bg-yang px-4 text-on-accent`} disabled={!type}>Record</button>
+            ) : (
+              <button type="button" onClick={stop} className={`${btn} bg-red-600 px-4 text-white`}>Stop &amp; save</button>
+            )}
+            <button type="button" onClick={() => setNames((v) => !v)} className={`${btn} ${names ? "bg-yang text-on-accent" : "border border-line text-ink-2"}`}>{names ? "Names on" : "Names off"}</button>
+            <button type="button" onClick={() => setCursorA((i) => Math.min(rows.a.length - 1, i + 1))} disabled={cursorA >= rows.a.length - 1} className={`${btn} border border-line text-ink-2 disabled:opacity-40`} data-ay-skip="1">{nameA} → next</button>
+            <button type="button" onClick={() => setCursorA((i) => Math.max(0, i - 1))} disabled={cursorA <= 0} className={`${btn} border border-line text-ink-2 disabled:opacity-40`} data-ay-skip="1">{nameA} ← back</button>
+            <button type="button" onClick={() => setCursorB((i) => Math.min(rows.b.length - 1, i + 1))} disabled={cursorB >= rows.b.length - 1} className={`${btn} border border-line text-ink-2 disabled:opacity-40`} data-ay-skip="1">{nameB} → next</button>
+            <button type="button" onClick={() => setCursorB((i) => Math.max(0, i - 1))} disabled={cursorB <= 0} className={`${btn} border border-line text-ink-2 disabled:opacity-40`} data-ay-skip="1">{nameB} ← back</button>
+          </div>
+          <p className="text-[12px] leading-relaxed text-ink-3">
+            {type
+              ? <>1920×1080 at 30 fps, {type.label}, 8 Mbit/s — upload it to YouTube as it is. {canWriteToDisk()
+                  ? "You choose the file when you press Record, and it is written as you go: a crash keeps everything up to that second."
+                  : "This browser holds the recording in memory until Stop — keep it under an hour, or use Chrome to write straight to disk."}
+                  {missing > 0 && <> · <span className="text-yang">{missing === 2 ? "Neither guest’s camera is in yet." : "One guest’s camera is not in yet."}</span></>}</>
+              : "This browser cannot record video. Use Chrome or Edge on a laptop."}
+          </p>
+          {err && <p className="text-[12.5px] text-yang" role="alert">{err}</p>}
+          {done && (
+            <div className="rounded-card border border-yang/40 bg-yang/[0.06] p-3 text-[13px] text-ink">
+              <p className="font-semibold">Saved: <span data-ay-skip="1">{done.name}</span></p>
+              <p className="mt-1 text-ink-2"><span data-ay-skip="1">{fmtClock(done.seconds)}</span> · <span data-ay-skip="1">{fmtBytes(done.bytes)}</span> · {done.label}</p>
+              {done.url && <a href={done.url} download={done.name} className="mt-2 inline-flex h-10 items-center rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent">Download the recording</a>}
+              <p className="mt-2 text-[12px] text-ink-3">YouTube: upload the file as it is. The frame carries the names and both timelines; add the thumbnail from the couple’s ArtaCast page.</p>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}

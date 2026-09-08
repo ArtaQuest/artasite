@@ -205,6 +205,7 @@ final class Cast {
 				'expires'  => $live ? (int) $r['invite_exp'] : 0,
 			],
 			'meet'      => $meet,
+			'recorded'  => [ 'at' => (int) ( $r['recorded_at'] ?? 0 ), 'note' => (string) ( $r['recorded_note'] ?? '' ) ],
 			'complete'  => [ 'a' => $a_ok, 'b' => $b_ok ],
 			'created'   => (int) $r['created'],
 			'updated'   => (int) $r['updated'],
@@ -660,6 +661,65 @@ final class Cast {
 		if ( (int) $r['partner_id'] > 0 ) {
 			Notify::push( (int) $r['partner_id'], 'artacast', 'Your ArtaCast request was withdrawn', '', '/artacast/', 'castwdp' . (int) $r['id'] );
 		}
+		return [ 'ok' => true, 'note' => $note ];
+	}
+
+	// ── The recording ──────────────────────────────────────────────────────
+
+	/** The live request behind a meeting, or null. */
+	private static function by_meet( $mid ) {
+		$mid = (int) $mid;
+		return $mid > 0 ? Data::one(
+			'SELECT * FROM ' . Data::t( 'aq_cast_requests' ) . " WHERE meet_id = %d AND status <> 'cancelled' ORDER BY id DESC LIMIT 1",
+			[ $mid ]
+		) : null;
+	}
+
+	/**
+	 * GET artacast/episode?meet=<id> — the frame's facts for a recording: who sits in which window
+	 * (by member id, never by arrival order), the names and lines, birth and milestones, the year.
+	 * Guests of the meeting only, and a 404 for any meeting that is not an episode — the call page
+	 * asks on every meeting titled "ArtaCast…" and treats 404 as "an ordinary meeting".
+	 */
+	public static function episode( $req ) {
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+		$mid = Rest::pint( $req, 'meet', 0 );
+		$r   = self::by_meet( $mid );
+		if ( ! $r ) { return Rest::err( 'not_found', 'Not an ArtaCast recording.', 404 ); }
+		if ( ! Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_meet_guests' ) . ' WHERE meet_id = %d AND user_id = %d LIMIT 1', [ $mid, $uid ] ) ) {
+			return Rest::err( 'not_found', 'Not an ArtaCast recording.', 404 );
+		}
+		$m = Data::one( 'SELECT host_id, title FROM ' . Data::t( 'aq_meets' ) . ' WHERE id = %d', [ $mid ] );
+		return [
+			'ok'        => true,
+			'meet_id'   => $mid,
+			'host_id'   => (int) ( $m['host_id'] ?? 0 ),
+			'a'         => self::side( $r, 'a' ) + [ 'uid' => (int) $r['requester_id'] ],
+			'b'         => self::side( $r, 'b' ) + [ 'uid' => (int) $r['partner_id'] ],
+			'married_y' => (int) $r['married_y'],
+			'title'     => (string) ( $m['title'] ?? '' ),
+		];
+	}
+
+	/**
+	 * POST artacast/recorded {meet, seconds, bytes, format} — the host's device finished writing an
+	 * episode. Nothing about the file reaches the server (it cannot: the room is sealed); the row
+	 * remembers THAT it was recorded, and how long, so the inbox can say so. Host only.
+	 */
+	public static function recorded( $req ) {
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+		$mid = Rest::pint( $req, 'meet', 0 );
+		$r   = self::by_meet( $mid );
+		if ( ! $r ) { return Rest::err( 'not_found', 'Not an ArtaCast recording.', 404 ); }
+		$m = Data::one( 'SELECT host_id FROM ' . Data::t( 'aq_meets' ) . ' WHERE id = %d', [ $mid ] );
+		if ( ! $m || (int) $m['host_id'] !== $uid ) { return Rest::err( 'forbidden', 'Only the host records.', 403 ); }
+		$secs  = max( 0, min( 86400, Rest::pint( $req, 'seconds', 0 ) ) );
+		$bytes = max( 0, (int) Rest::p( $req, 'bytes', 0 ) );
+		$fmt   = self::clean_text( Rest::p( $req, 'format', '' ), 40 );
+		$note  = trim( sprintf( '%d min · %.1f GB · %s', (int) round( $secs / 60 ), $bytes / 1e9, $fmt ), ' ·' );
+		Data::update( 'aq_cast_requests', [ 'recorded_at' => Data::now(), 'recorded_note' => mb_substr( $note, 0, 100 ), 'updated' => Data::now() ], [ 'id' => (int) $r['id'] ] );
 		return [ 'ok' => true, 'note' => $note ];
 	}
 

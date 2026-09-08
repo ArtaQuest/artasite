@@ -3140,6 +3140,8 @@ export type CastRequest = {
   invite: { sent: number; accepted: number; pending: boolean; expires: number };
   /** The recording, once booked — an ordinary ArtaMeet. */
   meet: CastMeet | null;
+  /** Set once the host's device has written an episode file. The file never reaches the server. */
+  recorded?: { at: number; note: string };
   complete: { a: boolean; b: boolean };
   created: number;
   updated: number;
@@ -3185,4 +3187,13 @@ export function castInbox(cursor = 0) {
 }
 export function castHostOpen(tz: string) {
   return post<{ ok: boolean; rule: BookRule | null; edit_url: string }>("/artacast/host-open", { tz });
+}
+/** The episode spec for a meeting that is an ArtaCast recording — who sits in which window, the
+ *  facts the frame airs. 404 when the meeting is not one; guests of the meeting only. */
+export function castEpisode(meet: number) {
+  return get<{ ok: boolean; meet_id: number; host_id: number; a: CastSide & { uid: number }; b: CastSide & { uid: number }; married_y: number; title: string }>("/artacast/episode", { meet });
+}
+/** The host's device finished a recording — the request remembers it for the inbox. */
+export function castRecorded(meet: number, r: { seconds: number; bytes: number; format: string }) {
+  return post<{ ok: boolean }>("/artacast/recorded", { meet, ...r });
 }

@@ -402,6 +402,7 @@ function HostPanel({ page, onPreview, previewing }: { page: CastPage; onPreview:
                       {r.meet ? <>Recording <span data-ay-skip="1">{longInstant(r.meet.start_ts, VIEWER_TZ)}</span></>
                         : r.complete.a && r.complete.b ? "Details complete — no time yet" : "Still filling in details"}
                       {r.partner ? " · partner joined" : r.invite.pending ? " · partner invited" : " · partner not invited yet"}
+                      {(r.recorded?.at || 0) > 0 && <> · <span className="text-yang">recorded</span> <span data-ay-skip="1">{r.recorded?.note}</span></>}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -434,7 +435,16 @@ function StepRow({ done, children }: { done: boolean; children: ReactNode }) {
 export default function ArtaCast() {
   const [entry] = useState(() => {
     const sp = new URLSearchParams(typeof window === "undefined" ? "" : window.location.search);
-    return { invite: (sp.get("invite") || "").toLowerCase() };
+    let invite = (sp.get("invite") || "").toLowerCase();
+    // A partner who is NEW here meets the identity step (name, date of birth) before any POST is
+    // allowed, and that step ends in a full navigation to the front page — the link in the address
+    // bar would be gone. So the secret is stashed the moment it is seen and picked up again on the
+    // next visit to this page, whether that visit comes from the bell, the email or the nav.
+    try {
+      if (invite) window.localStorage.setItem("aq_cast_invite", invite);
+      else invite = (window.localStorage.getItem("aq_cast_invite") || "").toLowerCase();
+    } catch { /* storage refused — the link in the letter still works */ }
+    return { invite: /^[0-9a-f]{40}$/.test(invite) ? invite : "" };
   });
   const [page, setPage] = useState<CastPage | null>(null);
   const [pageErr, setPageErr] = useState("");
@@ -476,8 +486,15 @@ export default function ArtaCast() {
         try {
           const r = await castAccept(entry.invite);
           acceptNote.current = r.already ? "" : `You have joined ${r.request.requester?.name || "your partner"}’s request.`;
+          try { window.localStorage.removeItem("aq_cast_invite"); } catch { /* fine */ }
         } catch (e) {
-          setInviteFail(errText(e, "That invitation could not be used."));
+          // A DEFINITIVE refusal (used, expired, wrong person) retires the stash; anything else — the
+          // identity gate, a dropped connection — keeps it, so the next visit tries again.
+          const code = e instanceof ApiError ? String(e.code || "") : "";
+          if (["bad_invite", "expired", "own_invite", "own_show", "busy"].includes(code)) {
+            try { window.localStorage.removeItem("aq_cast_invite"); } catch { /* fine */ }
+          }
+          if (code !== "birthday_required") setInviteFail(errText(e, "That invitation could not be used."));
         }
         window.history.replaceState(null, "", window.location.pathname);
       }
@@ -584,11 +601,15 @@ export default function ArtaCast() {
 
   const host = page?.host || null;
   const hostName = host?.name || "the host";
+  // The host's window shows a PHOTOGRAPH or the bust — never the season sigil the platform draws
+  // for a member with no picture, which would air as a logo on the interview frame.
+  const hostAvatar = host?.avatar || "";
+  const hostPhoto = hostAvatar && !/\/seasons\//.test(hostAvatar) ? hostAvatar : "";
   const preview: PreviewData = useMemo(() => {
-    if (hostPreview) return { a: hostPreview.a, b: hostPreview.b, married_y: hostPreview.married_y, hostPhoto: host?.avatar || "" };
-    if (form) return { a: form.a, b: form.b, married_y: form.married_y, hostPhoto: host?.avatar || "" };
-    return { ...DEMO, hostPhoto: host?.avatar || "" };
-  }, [form, hostPreview, host?.avatar]);
+    if (hostPreview) return { a: hostPreview.a, b: hostPreview.b, married_y: hostPreview.married_y, hostPhoto };
+    if (form) return { a: form.a, b: form.b, married_y: form.married_y, hostPhoto };
+    return { ...DEMO, hostPhoto };
+  }, [form, hostPreview, hostPhoto]);
 
   const frame = (hero: ReactNode, main: ReactNode, rail: ReactNode) => (
     <div className="flex flex-col gap-5 pb-12">
@@ -745,6 +766,9 @@ export default function ArtaCast() {
           {booked.tz && booked.tz !== VIEWER_TZ && <p className="mt-1 text-[13px] text-ink-2"><span data-ay-skip="1">{clockOnly(booked.start_ts, booked.tz)}</span> for <span data-ay-skip="1">{hostName}</span> in <span data-ay-skip="1">{booked.tz}</span></p>}
           <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
             It is an ordinary ArtaMeet now — in your calendar, in <span data-ay-skip="1">{hostName}</span>’s{request.partner ? <>, and in <span data-ay-skip="1">{request.partner.name}</span>’s</> : ". Your partner is seated the moment they accept the invitation"}. The room opens fifteen minutes before, from the meeting page. You can still change photos and details until then.
+          </p>
+          <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
+            On the day: a laptop with a good camera, facing a window or a lamp, each of you on your own device if you can. The host records the episode on their computer — the call itself is encrypted and nothing is recorded on yours.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Button href={booked.url}>Open the meeting</Button>

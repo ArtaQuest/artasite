@@ -149,6 +149,38 @@ const MIC: MediaTrackConstraints = {
  *  A mesh means the budget is per device, not per connection — four peers get a quarter each. */
 const VIDEO_BUDGET: Record<"low" | "full", number> = { low: 240, full: 900 };
 
+/**
+ * THE STUDIO PROFILE — an ArtaCast recording, and nothing else.
+ *
+ * A call is voice-first and 360p is right for it. A recording that will be cut into a 1920×1080
+ * episode is a different bargain: the couple's windows are 912px wide, and a 640×360 feed scaled
+ * up 2.5× is not a picture anyone would publish. A cast call has at most three people, so each
+ * device encodes for two peers, and a laptop can carry 720p at that. `setStudio(true)` swaps the
+ * "full" capture to 1280×720@30 and lifts the full-mode video budget and SDP rails to match;
+ * `setStudio(false)` puts everything back. Called by the call surface BEFORE it opens media (the
+ * capture profile is read when the camera opens, the rails when the SDP is written), and undone
+ * when that surface unmounts. The adaptive ladder is untouched: a bad link still sheds video, and
+ * the local capture — which is what the recorder draws from — stays sharp regardless of the wire.
+ */
+const STUDIO = {
+  capture: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 }, facingMode: { ideal: "user" } } as MediaTrackConstraints,
+  budget: 2500, rail: 2500,
+};
+const PLAIN = { capture: null as MediaTrackConstraints | null, budget: 900, rail: 800 };
+/** A camera that opened BEFORE setStudio (the episode spec can arrive after the call surface has
+ *  mounted) is asked again for the current "full" capture. Bypasses the shaped-once cache. */
+export async function reshapeCapture(track: MediaStreamTrack): Promise<void> {
+  SHAPED.delete(track);
+  await shapeCapture(track, "full");
+}
+export function setStudio(on: boolean): void {
+  if (!PLAIN.capture) PLAIN.capture = CAPTURE.full;
+  CAPTURE.full = on ? STUDIO.capture : PLAIN.capture;
+  VIDEO_BUDGET.full = on ? STUDIO.budget : PLAIN.budget;
+  RAIL_UP.full = on ? STUDIO.rail : PLAIN.rail;
+  RAIL_DOWN.full = on ? STUDIO.rail : PLAIN.rail;
+}
+
 /** Below this a picture is not a picture, so rather than starve four streams we shrink them. */
 const VIDEO_FLOOR_KBPS = 60;
 
