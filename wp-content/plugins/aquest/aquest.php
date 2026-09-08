@@ -3,7 +3,7 @@
  * Plugin Name: ArtaQuest
  * Description: The entire ArtaQuest platform — LMS, economy, social, i18n, funds — in one
  *              lean, dependency-free plugin. Replaces MasterStudy LMS + WooCommerce.
- * Version:     1.20.719
+ * Version:     1.20.720
  * Author:      ArtaQuest Foundation
  * License:     GNU AGPLv3
  * License URI: https://www.gnu.org/licenses/agpl-3.0.html
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 // disagree will send the next person chasing a production divergence that is not there: the
 // header is what get_plugin_data() reads, AQ_VERSION is what /version reports and what the
 // integrity sweep keys on. Bump them together, always.
-define( 'AQ_VERSION', '1.20.719' );
+define( 'AQ_VERSION', '1.20.720' );
 define( 'AQ_DIR', __DIR__ );
 define( 'AQ_URL', plugins_url( '', __FILE__ ) );
 
@@ -52,6 +52,8 @@ add_action( 'user_register', [ 'AQ\\Economy', 'grant_signup_allowance' ] );
  *  two — the extra ones default). */
 add_action( 'aq_dm_email', [ 'AQ\\Chat', 'send_dm_email' ], 10, 5 );
 add_action( 'aq_meet_tick', [ 'AQ\\Meetings', 'tick' ] );
+/** Every five minutes: ArtaCast episodes being finished on Kaggle — poll, deliver, and tell the host. */
+add_action( 'aq_meet_tick', [ 'AQ\\Cast', 'pipeline_tick' ] );
 /** Daily: once a fiscal period has ended, post its accrual adjustment, freeze it so a late entry
  *  cannot rewrite a filed figure, and publish the year-end CRA package at /foundation/cra. */
 add_action( 'aq_books_year_end', [ 'AQ\\Books', 'year_end_tick' ] );

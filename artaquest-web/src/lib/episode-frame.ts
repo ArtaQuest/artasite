@@ -263,3 +263,85 @@ export function recordingName(spec: EpisodeSpec, ext: string, when = new Date())
   const d = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, "0")}-${String(when.getDate()).padStart(2, "0")}`;
   return `ArtaCast-${clean(spec.a.name)}-${clean(spec.b.name)}-${d}.${ext}`;
 }
+
+/* ── THE THUMBNAIL, 1280 × 720 — the kit's Thumbnail board as pixels ──────────────────────────────
+   The two portraits either side, desaturated, each face bleeding off its own outer edge; the hook
+   (the years married) on the bare ground between them, over the mark. Drawn once at Stop and
+   uploaded beside the recording, so the release bundle is complete. */
+
+export const THUMB_W = 1280;
+export const THUMB_H = 720;
+
+/** Load the two portraits for the thumbnail. A photo that will not load leaves its crop empty —
+ *  the hook and the mark still make a thumbnail. */
+export function loadPortraits(spec: EpisodeSpec): Promise<[HTMLImageElement | null, HTMLImageElement | null]> {
+  const one = (url: string) => new Promise<HTMLImageElement | null>((resolve) => {
+    if (!url) { resolve(null); return; }
+    const i = new Image();
+    i.crossOrigin = "anonymous";
+    i.onload = () => resolve(i);
+    i.onerror = () => resolve(null);
+    i.src = url;
+    window.setTimeout(() => resolve(i.complete && i.naturalWidth > 0 ? i : null), 8000);
+  });
+  return Promise.all([one(spec.a.photo), one(spec.b.photo)]);
+}
+
+function coverInto(ctx: CanvasRenderingContext2D, img: CanvasImageSource, x: number, y: number, w: number, h: number, fx: number, fy: number) {
+  const [sw, sh] = sizeOf(img);
+  const s = Math.max(w / sw, h / sh);
+  const dw = sw * s, dh = sh * s;
+  ctx.drawImage(img, x + (w - dw) * fx, y + (h - dh) * fy, dw, dh);
+}
+
+export function drawThumbnail(ctx: CanvasRenderingContext2D, spec: EpisodeSpec, a: CanvasImageSource | null, b: CanvasImageSource | null, now = new Date()): void {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.filter = "none";
+  ctx.fillStyle = SPACE;
+  ctx.fillRect(0, 0, THUMB_W, THUMB_H);
+  // the two crops, 380 × 720, desaturated
+  for (const [img, x, fx] of [[a, 0, 0.6], [b, 900, 0.4]] as [CanvasImageSource | null, number, number][]) {
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, 0, 380, 720); ctx.clip();
+    ctx.fillStyle = WINDOW; ctx.fillRect(x, 0, 380, 720);
+    if (img) { ctx.filter = "grayscale(1)"; coverInto(ctx, img, x, 0, 380, 720, fx, 0.3); ctx.filter = "none"; }
+    else bust(ctx, x, 0, 380, 720);
+    ctx.restore();
+  }
+  // the hook column
+  const years = spec.married_y > 0 ? now.getUTCFullYear() - spec.married_y : 0;
+  const lines = years >= 1 ? [String(years), years === 1 ? "YEAR" : "YEARS", "MARRIED"] : spec.married_y > 0 ? ["JUST", "GOT", "MARRIED"] : ["HOW", "WE", "STAYED"];
+  ctx.fillStyle = INK1;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.font = `800 92px ${DISPLAY}`;
+  let y = 36 + 90 * 0.8;
+  for (const l of lines) { ctx.fillText(l, 640, y); y += 90; }
+  // who they are
+  const first = (n: string) => (n || "").trim().split(/\s+/)[0] || "";
+  const who = [first(spec.a.name), first(spec.b.name)].filter(Boolean).join(" & ").toUpperCase();
+  ctx.fillStyle = INK2;
+  ctx.font = `700 30px ${DISPLAY}`;
+  y = 36 + 90 * 3 + 14 + 30 * 0.8;
+  if (who) {
+    // never truncated: a long pair wraps onto a second line
+    const parts = wrap(ctx, who, 480);
+    for (const p of parts) { ctx.fillText(p, 640, y); y += 36; }
+  }
+  // the mark, 250 px, centred, 28 px under the name
+  const size = 250, mx = 640 - size / 2, my = y - 30 * 0.8 + 28;
+  const s = size / 118;
+  ctx.save();
+  ctx.translate(mx, my); ctx.scale(s, s); ctx.translate(9, 9);
+  const A = new Path2D("M43.33 21.21L56.52 21.21L90.61 96.67L78.18 96.67L66.52 70.3L33.48 70.3L22.73 96.67L9.09 96.67Z");
+  const Ahole = new Path2D("M50 34.55L38.57 59.3L61.43 59.3Z");
+  ctx.lineWidth = 11.66; ctx.strokeStyle = BLUE;
+  ctx.beginPath(); ctx.arc(50, 50, 41.6, 0, Math.PI * 2); ctx.stroke();
+  // the moat: the A's outline, 7 wide, in the ground colour, cuts the ring
+  ctx.lineWidth = 7; ctx.lineJoin = "round"; ctx.strokeStyle = SPACE; ctx.stroke(A);
+  ctx.fillStyle = SPACE; ctx.fill(A);
+  ctx.fillStyle = GOLD; ctx.fill(A);
+  ctx.fillStyle = SPACE; ctx.fill(Ahole);
+  ctx.restore();
+}

@@ -42,18 +42,24 @@ final class Cast {
 
 	/** What host_open() writes when the host opens hours from the show page. Every value is one
 	 *  Booking::set_rule will accept; the tz is the host's own browser zone, sent with the call. */
+	/** NOT A TIMETABLE. The window is the whole waking day, every day; what actually decides a slot
+	 *  is the host's calendar — every meeting they are in blocks it (Booking::busy). So a couple sees
+	 *  "when the host is free", never "the show's hours". */
 	const RULE_DEFAULTS = [
 		'title'      => 'ArtaCast recording',
 		'blurb'      => 'A recorded conversation with a couple about how they stayed together — an encrypted ArtaMeet call.',
 		'minutes'    => 90,
-		'days'       => '1111100',
-		'from_min'   => 840,   // 14:00
-		'to_min'     => 1140,  // 19:00
+		'days'       => '1111111',
+		'from_min'   => 540,   // 09:00
+		'to_min'     => 1260,  // 21:00
 		'buffer_min' => 30,
-		'notice_h'   => 48,
+		'notice_h'   => 24,
 		'horizon_d'  => 60,
 		'seats'      => 3,     // the host and both of them
 	];
+
+	/** A member who volunteered to host. The primary host (HOST_OPTION) is always one. */
+	const VOLUNTEER_META = 'aq_cast_host';
 
 	const NAME_MAX      = 60;
 	const SUBTITLE_MAX  = 40;
@@ -76,11 +82,37 @@ final class Cast {
 		return $u ?: null;
 	}
 
+	/** Every host, primary first: the configured one plus every volunteer. Small by construction. */
+	public static function hosts() {
+		$out = [];
+		$h = self::host();
+		if ( $h ) { $out[ (int) $h->ID ] = $h; }
+		foreach ( get_users( [ 'meta_key' => self::VOLUNTEER_META, 'meta_value' => '1', 'number' => 50, 'orderby' => 'ID' ] ) as $u ) {
+			$out[ (int) $u->ID ] = $u;
+		}
+		return array_values( $out );
+	}
+
+	/** Is this member a host — one whose shelf holds episodes and whose device records. */
+	public static function is_host_uid( $uid ) {
+		$uid = (int) $uid;
+		if ( $uid <= 0 ) { return false; }
+		$h = self::host();
+		if ( $h && (int) $h->ID === $uid ) { return true; }
+		return (bool) get_user_meta( $uid, self::VOLUNTEER_META, true );
+	}
+
+	/** The host of one request: the one the couple chose, if they are still hosting, else the primary. */
+	private static function host_of( $r ) {
+		$hid = (int) ( $r['host_id'] ?? 0 );
+		if ( $hid > 0 && self::is_host_uid( $hid ) ) { $u = get_userdata( $hid ); if ( $u ) { return $u; } }
+		return self::host();
+	}
+
 	/** Operators see the inbox too — the host is one person, and the show should survive a week of
 	 *  their absence — but they never become the host: the meeting is always the host's. */
 	private static function is_host( $uid ) {
-		$h = self::host();
-		return $uid > 0 && ( ( $h && (int) $h->ID === (int) $uid ) || current_user_can( 'manage_options' ) );
+		return $uid > 0 && ( self::is_host_uid( $uid ) || current_user_can( 'manage_options' ) );
 	}
 
 	/** The same four keys ArtaMeet's guest card and the booking page use. */
@@ -99,8 +131,8 @@ final class Cast {
 	/** The show's rule as the public booking page describes it — read through Booking::page so the
 	 *  shape is the one the SPA already holds for a booking type, and so nothing here has to know
 	 *  how a rule is stored. Null when the host has not opened hours (or has paused them). */
-	private static function rule() {
-		$h = self::host();
+	private static function rule( $h = null ) {
+		$h = $h ?: self::host();
 		if ( ! $h ) { return null; }
 		$req = new \WP_REST_Request();
 		$req->set_param( 'user', (string) $h->ID );
@@ -187,10 +219,12 @@ final class Cast {
 		}
 		$a_ok = self::complete( $r, 'a' );
 		$b_ok = self::complete( $r, 'b' );
+		$hu = self::host_of( $r );
 		return [
 			'id'        => (int) $r['id'],
 			'status'    => (string) $r['status'],
 			'role'      => $role,
+			'host'      => $hu ? self::card( $hu->ID ) : null,
 			'requester' => self::card( (int) $r['requester_id'] ),
 			'partner'   => (int) $r['partner_id'] > 0 ? self::card( (int) $r['partner_id'] ) : null,
 			'a'         => self::side( $r, 'a' ),
@@ -206,6 +240,16 @@ final class Cast {
 			],
 			'meet'      => $meet,
 			'recorded'  => [ 'at' => (int) ( $r['recorded_at'] ?? 0 ), 'note' => (string) ( $r['recorded_note'] ?? '' ) ],
+			'pipeline'  => [
+				'state'   => (string) ( $r['pipe_state'] ?? '' ),
+				'note'    => (string) ( $r['pipe_note'] ?? '' ),
+				'started' => (int) ( $r['pipe_started'] ?? 0 ),
+				'done'    => (int) ( $r['pipe_done'] ?? 0 ),
+				'files'   => array_values( array_filter( (array) ( Data::dec( (string) ( $r['final_files'] ?? '' ) ) ?: [] ) ) ),
+				'raw'     => (int) ( $r['raw_media_id'] ?? 0 ),
+				'thumb'   => (string) ( $r['thumb_url'] ?? '' ),
+				'kernel'  => '' !== (string) ( $r['pipe_kernel'] ?? '' ) ? Kaggle::kernel_url( (string) $r['pipe_kernel'] ) : '',
+			],
 			'complete'  => [ 'a' => $a_ok, 'b' => $b_ok ],
 			'created'   => (int) $r['created'],
 			'updated'   => (int) $r['updated'],
@@ -222,18 +266,22 @@ final class Cast {
 	public static function page( $req ) {
 		if ( Rest::throttle( 'aq_cast_page', 120, 300 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$uid  = Rest::uid();
-		$h    = self::host();
-		$rule = self::rule();
-		$card = $h ? ( self::card( $h->ID ) + [ 'tz' => (string) ( $rule['tz'] ?? '' ) ] ) : null;
-
 		$r = null;
 		$want = Rest::pint( $req, 'id', 0 );
 		if ( $want > 0 && self::is_host( $uid ) ) { $r = self::row( $want ); }
 		if ( ! $r && $uid ) { $r = self::mine( $uid ); }
 
+		// The host that matters is the one on MY request; before there is one, the primary host.
+		$h    = $r ? self::host_of( $r ) : self::host();
+		$rule = self::rule( $h );
+		$card = $h ? ( self::card( $h->ID ) + [ 'tz' => (string) ( $rule['tz'] ?? '' ) ] ) : null;
+		$hosts = [];
+		foreach ( self::hosts() as $hu ) { $hosts[] = self::card( $hu->ID ) + [ 'tz' => (string) ( self::rule( $hu )['tz'] ?? '' ), 'open' => (bool) self::rule( $hu ) ]; }
+
 		return [
 			'ok'      => true,
 			'host'    => $card,
+			'hosts'   => $hosts,
 			'rule'    => $rule,
 			'open'    => (bool) $rule,
 			'me'      => $uid,
@@ -304,7 +352,6 @@ final class Cast {
 		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
 		$h = self::host();
 		if ( ! $h ) { return Rest::err( 'no_host', 'The show has no host configured yet.', 503 ); }
-		if ( (int) $h->ID === $uid ) { return Rest::err( 'own_show', 'You are the host — the guests fill this in.', 400 ); }
 
 		$now = Data::now();
 		$r   = self::mine( $uid );
@@ -312,6 +359,13 @@ final class Cast {
 		$data = [ 'updated' => $now ];
 
 		if ( 'a' === $role ) {
+			if ( null !== Rest::p( $req, 'host', null ) ) {
+				$hid = Rest::pint( $req, 'host', 0 );
+				if ( ! self::is_host_uid( $hid ) ) { return Rest::err( 'bad_host', 'That member is not hosting.', 400 ); }
+				if ( $hid === $uid ) { return Rest::err( 'own_show', 'You cannot host your own episode.', 400 ); }
+				if ( $r && (int) $r['meet_id'] > 0 ) { return Rest::err( 'booked', 'The recording is booked with your host already — withdraw to change hosts.', 409 ); }
+				$data['host_id'] = $hid;
+			}
 			$e = self::apply_side( $data, Rest::p( $req, 'a', null ), 'a' );
 			if ( '' === $e ) { $e = self::apply_side( $data, Rest::p( $req, 'b', null ), 'b' ); }
 			if ( '' !== $e ) { return Rest::err( 'bad_date', $e, 400 ); }
@@ -341,6 +395,9 @@ final class Cast {
 		}
 
 		if ( ! $r ) {
+			// Nobody hosts their own episode: the host of a NEW request is the chosen one or the
+			// primary, and neither may be the person asking.
+			if ( (int) ( $data['host_id'] ?? $h->ID ) === $uid ) { return Rest::err( 'own_show', 'You are the host — the guests fill this in. Choose another host to appear yourself.', 400 ); }
 			// A fresh row starts with what we already know about the requester: their public name and
 			// their stated birthday — both are theirs to correct on the form.
 			$me = get_userdata( $uid );
@@ -348,6 +405,7 @@ final class Cast {
 			$data += [
 				'requester_id' => $uid,
 				'partner_id'   => 0,
+				'host_id'      => (int) ( $data['host_id'] ?? $h->ID ),
 				'status'       => 'draft',
 				'a_name'       => self::clean_text( '' !== $full ? $full : ( $me ? $me->display_name : '' ), self::NAME_MAX ),
 				'a_born'       => (string) ( self::clean_date( get_user_meta( $uid, 'aq_birthday', true ) ) ?? '' ),
@@ -494,8 +552,8 @@ final class Cast {
 		if ( (int) $r['invite_exp'] < $now ) { return Rest::err( 'expired', 'That invitation has expired — ask your partner to send a fresh one.', 410 ); }
 		if ( (int) $r['requester_id'] === $uid ) { return Rest::err( 'own_invite', 'This is your own invitation — it is for your partner to open, signed in as themselves.', 400 ); }
 		if ( (int) $r['partner_id'] === $uid ) { return [ 'ok' => true, 'already' => true, 'request' => self::payload( $r, $uid ) ]; }
-		$h = self::host();
-		if ( $h && (int) $h->ID === $uid ) { return Rest::err( 'own_show', 'You are the host of this show.', 400 ); }
+		$h = self::host_of( $r );
+		if ( $h && (int) $h->ID === $uid ) { return Rest::err( 'own_show', 'You are the host of this episode.', 400 ); }
 		$other = self::mine( $uid );
 		if ( $other && (int) $other['id'] !== (int) $r['id'] ) {
 			return Rest::err( 'busy', 'You already have an ArtaCast request of your own. Withdraw it first if you would rather join this one.', 409 );
@@ -574,9 +632,10 @@ final class Cast {
 		if ( ! self::complete( $r, 'a' ) || ! self::complete( $r, 'b' ) ) {
 			return Rest::err( 'incomplete', 'Both of you need a name, a line and a photograph before a time can be booked.', 409 );
 		}
-		$h = self::host();
+		$h = self::host_of( $r );
 		if ( ! $h ) { return Rest::err( 'no_host', 'The show has no host configured yet.', 503 ); }
-		if ( ! self::rule() ) { return Rest::err( 'closed', 'The host has not opened recording hours yet.', 409 ); }
+		if ( (int) $h->ID === $uid || (int) $h->ID === (int) $r['partner_id'] ) { return Rest::err( 'own_show', 'Your host cannot be one of you.', 400 ); }
+		if ( ! self::rule( $h ) ) { return Rest::err( 'closed', 'Your host’s calendar is not open yet.', 409 ); }
 
 		// A recording already booked stands: moving it is the host's act from the meeting page, or
 		// the couple withdraws and asks again. Two live meetings for one couple is what a silent
@@ -643,7 +702,7 @@ final class Cast {
 			$undo->set_param( 'id', (int) $r['meet_id'] );
 			$res = Meetings::cancel( $undo );
 			if ( $res instanceof \WP_REST_Response ) {
-				$h = self::host();
+				$h = self::host_of( $r );
 				if ( $h ) {
 					Notify::push( (int) $h->ID, 'artacast', Mailer::safe_var( self::card( $uid )['name'] ) . ' withdrew from ArtaCast — please cancel the recording', '', '/meet/' . (int) $r['meet_id'], 'castwd' . (int) $r['id'] );
 				}
@@ -723,6 +782,168 @@ final class Cast {
 		return [ 'ok' => true, 'note' => $note ];
 	}
 
+	// ── Finishing — the episode is cleaned and normalised on Kaggle, unattended ─────────────
+	//
+	// The host's device wrote the raw episode; its browser then sends it to the host's ArtaCloud
+	// shelf (Media.php — the host carries a standing grant for exactly this). `finish` takes that
+	// shelf item, renders data/artacast-finish.py with the item's public URL, and pushes it to
+	// Kaggle as a private script kernel on a T4 pair. The five-minute cron then asks Kaggle how the
+	// kernel is doing, and when the report file appears the host is rung and emailed: the final
+	// file, the thumbnail and the report are downloaded from Kaggle through links minted on demand
+	// (they are signed and short-lived, so they are never stored). Nothing runs on this server but
+	// two small HTTP calls; nothing about the couple's voices is ever processed here.
+
+	const PIPE_TIMEOUT_S = 36000;   // ten hours: a Kaggle GPU session's own ceiling is twelve
+
+	/** The host's own, committed, video shelf item — or null. Never trusts the id alone. */
+	private static function raw_item( $media_id, $uid ) {
+		$m = Data::one( 'SELECT * FROM ' . Data::t( 'aq_media' ) . ' WHERE id = %d', [ (int) $media_id ] );
+		if ( ! $m || (int) $m['user_id'] !== (int) $uid || 'ready' !== (string) $m['state'] || 'video' !== (string) $m['kind'] ) { return null; }
+		return $m;
+	}
+
+	/**
+	 * POST artacast/finish {meet, media_id, thumb?} — the raw is on the shelf; finish it. Host only.
+	 * Calling it again is the retry: a failed or stale run is simply pushed anew under the same
+	 * kernel slug (Kaggle keeps versions).
+	 */
+	public static function finish( $req ) {
+		if ( Rest::throttle( 'aq_cast_finish', 12, 3600 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+		$mid = Rest::pint( $req, 'meet', 0 );
+		$r   = self::by_meet( $mid );
+		if ( ! $r ) { return Rest::err( 'not_found', 'Not an ArtaCast recording.', 404 ); }
+		$m = Data::one( 'SELECT host_id FROM ' . Data::t( 'aq_meets' ) . ' WHERE id = %d', [ $mid ] );
+		if ( ! $m || (int) $m['host_id'] !== $uid ) { return Rest::err( 'forbidden', 'Only the host finishes an episode.', 403 ); }
+		$media_id = Rest::pint( $req, 'media_id', (int) $r['raw_media_id'] );
+		$item = self::raw_item( $media_id, $uid );
+		if ( ! $item ) { return Rest::err( 'no_raw', 'That recording is not on your shelf yet.', 409 ); }
+		if ( 'running' === (string) $r['pipe_state'] && (int) $r['pipe_started'] > Data::now() - 900 ) {
+			return Rest::err( 'busy', 'That episode is already being finished — give it a few minutes.', 409 );
+		}
+		$thumb = esc_url_raw( (string) Rest::p( $req, 'thumb', (string) $r['thumb_url'] ) );
+		Data::update( 'aq_cast_requests', [ 'raw_media_id' => (int) $item['id'], 'thumb_url' => $thumb, 'updated' => Data::now() ], [ 'id' => (int) $r['id'] ] );
+		$r = self::row( (int) $r['id'] );
+		self::pipeline_start( $r, $item );
+		return [ 'ok' => true, 'request' => self::payload( self::row( (int) $r['id'] ), $uid ) ];
+	}
+
+	/** The kernel slug for a request. Its TITLE below must slugify to exactly this (a Kaggle trap). */
+	private static function kernel_slug( $r ) { return 'artacast-episode-' . (int) $r['id']; }
+
+	/** The file name the finished episode carries — the kit's, minus the extension. */
+	private static function out_base( $r ) {
+		$clean = fn( $s ) => trim( preg_replace( '/[^A-Za-z0-9]+/', '-', remove_accents( (string) $s ) ), '-' ) ?: 'guest';
+		return 'ArtaCast-' . mb_substr( $clean( $r['a_name'] ), 0, 24 ) . '-' . mb_substr( $clean( $r['b_name'] ), 0, 24 ) . '-' . wp_date( 'Y-m-d', (int) ( $r['start_ts'] ?: Data::now() ) );
+	}
+
+	private static function pipeline_start( $r, $item ) {
+		$now = Data::now();
+		$tpl = @file_get_contents( AQ_DIR . '/data/artacast-finish.py' );
+		if ( ! $tpl ) { self::pipeline_fail( $r, 'the finishing script is missing from this build' ); return; }
+		$src = strtr( $tpl, [
+			'{{RAW_URL}}'    => Media::url( (string) $item['store_key'] ),
+			'{{THUMB_URL}}'  => (string) $r['thumb_url'],
+			'{{OUT_BASE}}'   => self::out_base( $r ),
+			'{{REQUEST_ID}}' => (string) (int) $r['id'],
+		] );
+		$slug  = self::kernel_slug( $r );
+		$title = 'artacast episode ' . (int) $r['id'];
+		// Test seam: a local site has no Kaggle credential, and the state machine still has to be
+		// exercised. Never consulted on production unless somebody adds the filter there on purpose.
+		$seam = apply_filters( 'aq_cast_kaggle_push', null, $slug, $title, $src );
+		[ $ok, $why ] = is_array( $seam ) ? $seam : Kaggle::push_script( $slug, $title, $src, (bool) get_option( 'aq_artacast_kernel_private', 0 ) );
+		if ( ! $ok ) { self::pipeline_fail( $r, 'Kaggle refused the kernel: ' . $why ); return; }
+		Data::update( 'aq_cast_requests', [
+			'pipe_state' => 'running', 'pipe_kernel' => $slug, 'pipe_started' => $now, 'pipe_done' => 0,
+			'pipe_note' => '', 'final_files' => null, 'updated' => $now,
+		], [ 'id' => (int) $r['id'] ] );
+	}
+
+	private static function pipeline_fail( $r, $note ) {
+		$now = Data::now();
+		Data::update( 'aq_cast_requests', [ 'pipe_state' => 'failed', 'pipe_note' => mb_substr( (string) $note, 0, 250 ), 'pipe_done' => $now, 'updated' => $now ], [ 'id' => (int) $r['id'] ] );
+		$h = self::host_of( $r );
+		if ( $h ) {
+			Notify::push( (int) $h->ID, 'artacast', 'Finishing an ArtaCast episode failed — open your show to retry', mb_substr( (string) $note, 0, 190 ), '/artacast/', 'castpf' . (int) $r['id'] . ':' . $now );
+		}
+	}
+
+	private static function pipeline_done( $r, $files, $model ) {
+		$now  = Data::now();
+		$keep = [];
+		foreach ( (array) $files as $f ) { $keep[] = [ 'name' => (string) $f['name'] ]; }
+		Data::update( 'aq_cast_requests', [
+			'pipe_state' => 'done', 'pipe_done' => $now, 'pipe_note' => mb_substr( 'Voices cleaned with ' . ( $model ?: 'the fallback' ), 0, 250 ),
+			'final_files' => Data::enc( $keep ), 'updated' => $now,
+		], [ 'id' => (int) $r['id'] ] );
+		$h = self::host_of( $r );
+		if ( ! $h ) { return; }
+		$names = trim( (string) $r['a_name'] ) . ' & ' . trim( (string) $r['b_name'] );
+		Notify::push_mail(
+			(int) $h->ID, 'artacast', 'Your ArtaCast episode with ' . $names . ' is finished', '', '/artacast/', 'castdone' . (int) $r['id'],
+			'cast_final', [ 'names' => Mailer::safe_var( $names, 90 ), 'model' => Mailer::safe_var( $model ?: 'the fallback chain', 60 ) ], ''
+		);
+	}
+
+	/** The verdict from what the kernel left behind: its report file and its own last line. */
+	private static function judge_output( $files, $log ) {
+		$report = false;
+		foreach ( (array) $files as $f ) { if ( str_ends_with( (string) $f['name'], '-report.json' ) ) { $report = true; } }
+		$model = '';
+		if ( preg_match( '/ARTACAST_DONE (\{.*\})/', (string) $log, $m ) ) {
+			$j = json_decode( $m[1], true );
+			$model = (string) ( $j['model'] ?? '' );
+		}
+		if ( str_contains( (string) $log, 'ARTACAST_FAILED' ) ) { return [ 'failed', $model ]; }
+		if ( $report ) { return [ 'done', $model ]; }
+		return [ 'running', $model ];
+	}
+
+	/** Every five minutes (aq_meet_tick): the episodes being finished. Bounded; self-gated. */
+	public static function pipeline_tick() {
+		if ( get_transient( 'aq_cast_pipe' ) ) { return; }
+		set_transient( 'aq_cast_pipe', 1, 240 );
+		$rows = Data::all( 'SELECT * FROM ' . Data::t( 'aq_cast_requests' ) . " WHERE pipe_state = 'running' ORDER BY pipe_started ASC LIMIT 10" );
+		$now  = Data::now();
+		foreach ( $rows as $r ) {
+			$slug = (string) $r['pipe_kernel'];
+			if ( '' === $slug ) { self::pipeline_fail( $r, 'no kernel recorded' ); continue; }
+			$seam = apply_filters( 'aq_cast_kaggle_read', null, $slug );
+			[ $st, $why ] = is_array( $seam ) ? [ $seam[0], $seam[1] ] : Kaggle::status_of( $slug );
+			if ( 'error' === $st ) { self::pipeline_fail( $r, 'Kaggle: ' . ( $why ?: 'the run errored' ) ); continue; }
+			[ $code, $files, $log ] = is_array( $seam ) ? [ $seam[2], $seam[3], $seam[4] ] : Kaggle::output( Kaggle::owner(), $slug );
+			if ( $code >= 200 && $code < 300 ) {
+				[ $verdict, $model ] = self::judge_output( $files, $log );
+				if ( 'done' === $verdict )   { self::pipeline_done( $r, $files, $model ); continue; }
+				if ( 'failed' === $verdict ) { self::pipeline_fail( $r, 'the finishing script could not read the recording' ); continue; }
+				if ( 'complete' === $st )    { self::pipeline_fail( $r, 'the run finished without its report — open the kernel log' ); continue; }
+			} elseif ( 'complete' === $st ) {
+				self::pipeline_fail( $r, 'the run finished but its outputs could not be listed (HTTP ' . $code . ')' );
+				continue;
+			}
+			if ( (int) $r['pipe_started'] < $now - self::PIPE_TIMEOUT_S ) { self::pipeline_fail( $r, 'no result after ten hours' ); }
+		}
+	}
+
+	/** GET artacast/final?id= — fresh, signed download links for a finished episode. Host only. */
+	public static function final( $req ) {
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+		if ( ! self::is_host( $uid ) ) { return Rest::err( 'forbidden', 'Only the host.', 403 ); }
+		$r = self::row( Rest::pint( $req, 'id', 0 ) );
+		if ( ! $r || 'done' !== (string) $r['pipe_state'] ) { return Rest::err( 'not_ready', 'That episode is not finished yet.', 409 ); }
+		$seam = apply_filters( 'aq_cast_kaggle_read', null, (string) $r['pipe_kernel'] );
+		[ $code, $files, $log ] = is_array( $seam ) ? [ $seam[2], $seam[3], $seam[4] ] : Kaggle::output( Kaggle::owner(), (string) $r['pipe_kernel'] );
+		if ( $code < 200 || $code >= 300 ) { return Rest::err( 'kaggle', 'Kaggle did not answer (HTTP ' . $code . ') — try again in a moment.', 502 ); }
+		$out = [];
+		foreach ( $files as $f ) { $out[] = [ 'name' => (string) $f['name'], 'url' => (string) $f['url'] ]; }
+		$tail = (string) $log;
+		if ( preg_match( '/ARTACAST_DONE (\{.*\})/', $tail, $m ) ) { $tail = $m[1]; } else { $tail = mb_substr( $tail, -600 ); }
+		return [ 'ok' => true, 'files' => $out, 'summary' => $tail, 'kernel' => Kaggle::kernel_url( (string) $r['pipe_kernel'] ) ];
+	}
+
 	// ── The host's side ────────────────────────────────────────────────────
 
 	/** GET artacast/inbox?cursor= — every live request, newest first. Host and operators. */
@@ -730,13 +951,20 @@ final class Cast {
 		$uid = Rest::uid();
 		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
 		if ( ! self::is_host( $uid ) ) { return Rest::err( 'forbidden', 'Only the host sees the requests.', 403 ); }
+		$h = self::host();
+		$mine_only = ! current_user_can( 'manage_options' ) || Rest::pint( $req, 'mine', 0 );
+		// host_id 0 is the primary host — rows written before hosts were chosen.
+		$where = $mine_only
+			? ( $h && (int) $h->ID === $uid ? "status <> 'cancelled' AND (host_id = %d OR host_id = 0)" : "status <> 'cancelled' AND host_id = %d" )
+			: "status <> 'cancelled'";
 		[ $rows, $next ] = Data::page(
-			'aq_cast_requests', "status <> 'cancelled'", [],
+			'aq_cast_requests', $where, $mine_only ? [ $uid ] : [],
 			Rest::pint( $req, 'cursor', 0 ), max( 1, min( 50, Rest::pint( $req, 'limit', 30 ) ) )
 		);
 		$items = [];
 		foreach ( $rows as $r ) { $items[] = self::payload( $r, $uid ); }
-		return [ 'ok' => true, 'items' => $items, 'next' => $next, 'rule' => self::rule() ];
+		$me = get_userdata( $uid );
+		return [ 'ok' => true, 'items' => $items, 'next' => $next, 'rule' => self::is_host_uid( $uid ) ? self::rule( $me ) : null ];
 	}
 
 	/**
@@ -747,10 +975,15 @@ final class Cast {
 	public static function host_open( $req ) {
 		$uid = Rest::uid();
 		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
-		$h = self::host();
-		if ( ! $h || (int) $h->ID !== $uid ) { return Rest::err( 'forbidden', 'Only the host can open recording hours.', 403 ); }
+		if ( ! self::is_host_uid( $uid ) ) { return Rest::err( 'forbidden', 'Only a host has recording hours.', 403 ); }
 		$tz = trim( (string) Rest::p( $req, 'tz', '' ) );
 		if ( ! in_array( $tz, timezone_identifiers_list(), true ) ) { $tz = 'UTC'; }
+		return self::ensure_rule( $uid, $tz );
+	}
+
+	/** The host's 'artacast' rule, created with the show's defaults in their zone if absent, switched
+	 *  back on if paused. Idempotent; called from the show page on every host visit. */
+	private static function ensure_rule( $uid, $tz ) {
 
 		$sub = new \WP_REST_Request();
 		$sub->set_param( 'type', self::RULE_SLUG );
@@ -765,6 +998,31 @@ final class Cast {
 		}
 		$res = Booking::set_rule( $sub );
 		if ( $res instanceof \WP_REST_Response ) { return $res; }
-		return [ 'ok' => true, 'rule' => self::rule(), 'edit_url' => home_url( '/book/' ) ];
+		$me = get_userdata( $uid );
+		return [ 'ok' => true, 'rule' => self::rule( $me ), 'edit_url' => home_url( '/book/' ) ];
+	}
+
+	/**
+	 * POST artacast/volunteer {on, tz} — offer to host episodes, or stop. A volunteer's calendar opens
+	 * the same way the primary host's does (ensure_rule); stopping pauses nothing already booked —
+	 * those are meetings, and stay. The primary host cannot stop.
+	 */
+	public static function volunteer( $req ) {
+		if ( Rest::throttle( 'aq_cast_vol', 10, 3600 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+		$h = self::host();
+		if ( $h && (int) $h->ID === $uid ) { return Rest::err( 'primary', 'You are the show’s host already.', 400 ); }
+		if ( ! class_exists( '\\AQ\\Verify' ) || ! Verify::has_birthday( $uid ) ) { return Rest::err( 'identity', 'State your name and date of birth first.', 403 ); }
+		if ( Rest::pint( $req, 'on', 1 ) ) {
+			update_user_meta( $uid, self::VOLUNTEER_META, '1' );
+			$tz = trim( (string) Rest::p( $req, 'tz', '' ) );
+			if ( ! in_array( $tz, timezone_identifiers_list(), true ) ) { $tz = 'UTC'; }
+			$res = self::ensure_rule( $uid, $tz );
+			if ( $res instanceof \WP_REST_Response ) { delete_user_meta( $uid, self::VOLUNTEER_META ); return $res; }
+			return [ 'ok' => true, 'hosting' => true, 'rule' => $res['rule'] ?? null ];
+		}
+		delete_user_meta( $uid, self::VOLUNTEER_META );
+		return [ 'ok' => true, 'hosting' => false ];
 	}
 }

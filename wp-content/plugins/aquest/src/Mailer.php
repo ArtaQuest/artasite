@@ -268,6 +268,18 @@ class Mailer {
 			'vars'     => [ 'count', 'items' ],
 			'sample'   => [ 'count' => '2', 'items' => "• Major heat signature, Kakhovka Ukraine (316 MW)\n  A signature classified as a high-intensity thermal anomaly was measured near Kakhovka, Ukraine.\n  Review & publish: https://artaquest.com/wp-admin/admin-post.php?action=aq_news_confirm&slug=example&k=deadbeef" ],
 		],
+		/* ArtaCast — the finishing run on Kaggle produced the release file. The letter deliberately
+		 * carries no download link: Kaggle's URLs are signed and short-lived, so they are minted when
+		 * the host opens their show page. */
+		'cast_final' => [
+			'label'    => 'ArtaCast — the episode is finished',
+			'audience' => 'member',
+			'subject'  => 'Your ArtaCast episode with {{names}} is ready',
+			'body'     => "The recording with {{names}} has been finished: the voices were cleaned with {{model}}, the loudness set to YouTube's target, and the picture left exactly as you recorded it.\n\nOpen your show to download the final file, the thumbnail and the report — the links are made fresh each time the page is opened. Upload the file to YouTube as it is.",
+			'cta'      => [ 'Open your show', '/artacast/' ],
+			'vars'     => [ 'names', 'model' ],
+			'sample'   => [ 'names' => 'Mohammadreza & Ana', 'model' => 'MossFormer2_SE_48K' ],
+		],
 		'passkey_added' => [
 			'label'    => 'A passkey was added (publication co-signing key)',
 			'audience' => 'member',

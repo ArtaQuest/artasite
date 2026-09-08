@@ -3130,6 +3130,8 @@ export type CastRequest = {
   status: "draft" | "scheduled" | "cancelled";
   /** Who the viewer is to this request: the one who asked, their partner, the host — or nobody. */
   role: "a" | "b" | "host" | "";
+  /** The host this couple chose (the primary host until they choose). */
+  host: CastCard | null;
   requester: CastCard | null;
   partner: CastCard | null;
   a: CastSide;
@@ -3140,8 +3142,10 @@ export type CastRequest = {
   invite: { sent: number; accepted: number; pending: boolean; expires: number };
   /** The recording, once booked — an ordinary ArtaMeet. */
   meet: CastMeet | null;
-  /** Set once the host's device has written an episode file. The file never reaches the server. */
+  /** Set once the host's device has written an episode file. */
   recorded?: { at: number; note: string };
+  /** The finishing run on Kaggle: '' | queued | running | done | failed, and what it left. */
+  pipeline?: { state: string; note: string; started: number; done: number; files: { name: string }[]; raw: number; thumb: string; kernel: string };
   complete: { a: boolean; b: boolean };
   created: number;
   updated: number;
@@ -3149,6 +3153,8 @@ export type CastRequest = {
 export type CastPage = {
   ok: boolean;
   host: (CastCard & { tz: string }) | null;
+  /** Everyone hosting — the primary host first, then volunteers — with whether their calendar is open. */
+  hosts: (CastCard & { tz: string; open: boolean })[];
   /** The host's 'artacast' booking rule when hours are open, else null. */
   rule: BookRule | null;
   open: boolean;
@@ -3160,7 +3166,7 @@ export type CastPage = {
 export function castPage(id?: number) {
   return get<CastPage>("/artacast/page", id ? { id } : undefined);
 }
-export type CastSave = { a?: Partial<CastSide>; b?: Partial<CastSide>; married_y?: number; story?: string; b_email?: string };
+export type CastSave = { a?: Partial<CastSide>; b?: Partial<CastSide>; married_y?: number; story?: string; b_email?: string; host?: number };
 /** Create my request, or update it. Absent keys keep what the row already says. */
 export function castSave(b: CastSave) {
   return post<{ ok: boolean; request: CastRequest }>("/artacast/save", b as unknown as Json);
@@ -3196,4 +3202,16 @@ export function castEpisode(meet: number) {
 /** The host's device finished a recording — the request remembers it for the inbox. */
 export function castRecorded(meet: number, r: { seconds: number; bytes: number; format: string }) {
   return post<{ ok: boolean }>("/artacast/recorded", { meet, ...r });
+}
+/** The raw recording is on the host's shelf — finish it on Kaggle (also the retry). Host only. */
+export function castFinish(meet: number, media_id: number, thumb = "") {
+  return post<{ ok: boolean; request: CastRequest }>("/artacast/finish", { meet, media_id, thumb });
+}
+/** Fresh, signed download links for a finished episode — minted on each call, never stored. */
+export function castFinal(id: number) {
+  return get<{ ok: boolean; files: { name: string; url: string }[]; summary: string; kernel: string }>("/artacast/final", { id });
+}
+/** Offer to host episodes (or stop). A volunteer's calendar opens to couples like the primary host's. */
+export function castVolunteer(on: boolean, tz: string) {
+  return post<{ ok: boolean; hosting: boolean; rule?: BookRule | null }>("/artacast/volunteer", { on: on ? 1 : 0, tz });
 }

@@ -641,7 +641,19 @@ final class Media {
 			'SELECT COALESCE(SUM(bytes),0) FROM ' . Data::t( 'aq_media_grants' ) . ' WHERE user_id = %d',
 			[ (int) $uid ]
 		);
-		return self::FREE_BYTES + $bought;
+		return self::FREE_BYTES + $bought + self::cast_host_bytes( $uid );
+	}
+
+	/** THE SHOW'S HOST HOLDS EPISODES. A raw ArtaCast recording is five gigabytes an hour, and the
+	 *  finishing pipeline (Cast.php) fetches it from here — so the host's shelf carries a standing
+	 *  grant for them, and their per-file ceiling is an episode's, not a song's. Nobody else's. */
+	const CAST_HOST_BYTES = 68719476736;      // 64 GB
+	const CAST_FILE_MAX   = 17179869184;      // 16 GB
+	private static function cast_host_bytes( $uid ) {
+		return class_exists( '\\AQ\\Cast' ) && Cast::is_host_uid( $uid ) ? self::CAST_HOST_BYTES : 0;
+	}
+	public static function file_max( $uid ) {
+		return self::cast_host_bytes( $uid ) > 0 ? self::CAST_FILE_MAX : self::FILE_MAX;
 	}
 
 	/** Bytes this member currently stores (committed files only). */
@@ -713,7 +725,8 @@ final class Media {
 		$bytes = (int) $req->get_param( 'bytes' );
 		[ $kind, $ext ] = self::kind_for( $name );
 		if ( ! $kind ) { return Rest::err( 'bad_kind', 'Bring music, video or a PDF', 400 ); }
-		if ( $bytes < 1 || $bytes > self::FILE_MAX ) { return Rest::err( 'too_big', 'That file is larger than 2 GB', 400 ); }
+		$fmax = self::file_max( $uid );
+		if ( $bytes < 1 || $bytes > $fmax ) { return Rest::err( 'too_big', 'That file is larger than ' . size_format( $fmax ), 400 ); }
 		// Refuse BEFORE a byte is written, with the real numbers.
 		$freeBytes = self::capacity( $uid ) - self::used( $uid ) - self::pending( $uid );
 		if ( $bytes > $freeBytes ) {

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { RailPortal } from "../components/RightRail";
 import {
-  ApiError, bookSlots, castAccept, castHostOpen, castInbox, castInvite, castPage, castPhoto, castSave,
-  castSchedule, castWithdraw,
+  ApiError, bookSlots, castAccept, castFinal, castFinish, castHostOpen, castInbox, castInvite, castPage, castPhoto, castSave,
+  castSchedule, castVolunteer, castWithdraw,
   type BookRule, type CastPage, type CastRequest, type CastSide, type CastRow,
 } from "../lib/api";
 import { isLoggedIn, localePath } from "../lib/wp";
@@ -11,6 +11,8 @@ import {
   Segmented, Textarea, cx,
 } from "../components/ui";
 import { CastFrame, CastThumb, type PreviewData } from "../components/cast/CastPreview";
+import { sendForFinishing, sendState, storedEpisodes, subscribeSend, type SendState, type Sidecar } from "../lib/episode-upload";
+import { deleteRecording } from "../lib/episode-store";
 import { CheckGlyph, ChevronGlyph, DayGrid, GlobeGlyph, GridSkeleton, WeekdayStrip } from "../components/cast/grid";
 import {
   VIEWER_TZ, addMonths, clockOnly, dayHeading, dayHeadingLong, dayKey, longInstant, minKey, monthLabel, monthOf, zoneName,
@@ -345,6 +347,91 @@ function TimePicker({ hostSlug, hostName, rule, onBook }: {
 
 /* ───────────────────────── the host ───────────────────────── */
 
+/** What the finishing run is doing for one request, and the downloads when it is done. Links are
+ *  minted on click (Kaggle's are signed and short-lived), never stored. */
+function PipelineLine({ r }: { r: CastRequest }) {
+  const p = r.pipeline;
+  const [links, setLinks] = useState<{ name: string; url: string }[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  if (!p || !p.state) return null;
+  async function fetchLinks() {
+    setBusy(true); setErr("");
+    try { const f = await castFinal(r.id); setLinks(f.files); }
+    catch (e) { setErr(errText(e, "Kaggle did not answer — try again in a moment.")); }
+    finally { setBusy(false); }
+  }
+  async function retry() {
+    if (!r.meet) return;
+    setBusy(true); setErr("");
+    try { await castFinish(r.meet.id, p?.raw || 0); window.location.reload(); }
+    catch (e) { setErr(errText(e, "Couldn’t restart the finishing run.")); setBusy(false); }
+  }
+  const label = (n: string) => /-report\.json$/.test(n) ? "Report" : /thumbnail/.test(n) ? "Thumbnail" : /\.(mp4|webm|m4a)$/.test(n) ? "Final episode" : n;
+  return (
+    <div className="mt-1 text-[12.5px]">
+      {p.state === "running" && <p className="text-ink-2">Finishing on Kaggle GPU — cleaning the voices, setting the loudness — since <span data-ay-skip="1">{longInstant(p.started, VIEWER_TZ)}</span>. Usually under an hour; you will be emailed.</p>}
+      {p.state === "failed" && (
+        <p className="text-yang">Finishing failed: <span data-ay-skip="1">{p.note}</span>{" "}
+          <button type="button" className="underline" disabled={busy} onClick={() => void retry()}>Try again</button>
+          {p.kernel && <> · <a className="underline" href={p.kernel} target="_blank" rel="noreferrer">kernel log</a></>}
+        </p>
+      )}
+      {p.state === "done" && (
+        <div>
+          <p className="text-ink"><span className="font-semibold text-yang">Release ready</span> · <span data-ay-skip="1">{p.note}</span></p>
+          {links ? (
+            <div className="mt-1 flex flex-wrap gap-2">
+              {links.map((f) => <a key={f.name} href={f.url} className="inline-flex h-9 items-center rounded-pill bg-yang px-3 text-[12.5px] font-bold text-on-accent" download={f.name}>{label(f.name)}</a>)}
+              {p.thumb && !links.some((f) => /thumbnail/.test(f.name)) && <a href={p.thumb} className="inline-flex h-9 items-center rounded-pill border border-line px-3 text-[12.5px] font-semibold text-ink-2" download>Thumbnail</a>}
+            </div>
+          ) : (
+            <button type="button" className="mt-1 inline-flex h-9 items-center rounded-pill bg-yang px-3 text-[12.5px] font-bold text-on-accent" disabled={busy} onClick={() => void fetchLinks()}>{busy ? "Fetching…" : "Get the downloads"}</button>
+          )}
+          <p className="mt-1 text-ink-3">Upload the final episode to YouTube as it is, with the thumbnail. Links expire after a while — press the button again for fresh ones.</p>
+        </div>
+      )}
+      {err && <p className="text-yang">{err}</p>}
+    </div>
+  );
+}
+
+/** Episodes still in this browser's store — the way back when a send was interrupted. */
+function StoredEpisodes() {
+  const [items, setItems] = useState<{ name: string; bytes: number; modified: number; side: Sidecar | null }[]>([]);
+  const [, bump] = useState(0);
+  const refresh = useCallback(() => { storedEpisodes().then(setItems).catch(() => undefined); }, []);
+  useEffect(() => { refresh(); return subscribeSend(() => bump((n) => n + 1)); }, [refresh]);
+  if (!items.length) return null;
+  const fmtBytes = (n: number) => n < 1e9 ? `${(n / 1e6).toFixed(0)} MB` : `${(n / 1e9).toFixed(2)} GB`;
+  return (
+    <section className="rounded-card border border-line bg-space-2 p-4 md:p-5" aria-label="Recordings on this computer">
+      <h2 className="text-[16px] font-bold text-ink">Recordings on this computer</h2>
+      <ul className="mt-2 flex flex-col gap-2">
+        {items.map((it) => {
+          const st: SendState | undefined = sendState(it.name);
+          const sending = st && (st.phase === "uploading" || st.phase === "thumb" || st.phase === "starting");
+          return (
+            <li key={it.name} className="flex flex-wrap items-center gap-2 text-[13px]">
+              <span className="min-w-0 flex-1 break-all text-ink" data-ay-skip="1">{it.name} · {fmtBytes(it.bytes)}</span>
+              {st?.phase === "uploading" && <span className="text-ink-2">Sending · <span data-ay-skip="1">{Math.round(st.frac * 100)}%</span></span>}
+              {(st?.phase === "thumb" || st?.phase === "starting") && <span className="text-ink-2">Starting the finishing run…</span>}
+              {st?.phase === "done" && <span className="text-yang">Sent — finishing on Kaggle</span>}
+              {st?.phase === "error" && <span className="text-yang">{st.note}</span>}
+              {it.side && !sending && st?.phase !== "done" && (
+                <Button size="sm" onClick={() => { sendForFinishing(it.name, it.side!.meet_id).catch(() => undefined); }}>{st?.phase === "error" ? "Send again" : "Send for finishing"}</Button>
+              )}
+              {!it.side && <span className="text-ink-3">Not an episode file</span>}
+              {!sending && <button type="button" className="text-[12.5px] text-ink-3 underline" onClick={() => { deleteRecording(it.name).then(() => { deleteRecording(`${it.name}.json`); deleteRecording(`${it.name}.thumb.png`); refresh(); }); }}>Delete</button>}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-2 text-[12px] text-ink-3">A send that was interrupted resumes where it stopped. Keep this tab open while it runs.</p>
+    </section>
+  );
+}
+
 /** Minutes from midnight → the clock face the reader's locale writes, on a fixed UTC day. */
 function minuteClock(min: number): string {
   const m = Math.max(0, Math.min(1439, Math.round(min)));
@@ -395,8 +482,9 @@ function HostPanel({ page, onPreview, previewing }: { page: CastPage; onPreview:
         <h2 className="text-[16px] font-bold text-ink">Recording hours</h2>
         {rule ? (
           <p className="mt-2 text-[13.5px] leading-relaxed text-ink-2">
-            {opened ? "Opened just now: " : "Open: "}<span data-ay-skip="1">{rule.title}</span>, <span data-ay-skip="1">{rule.minutes}</span> minutes, <DaysWords days={rule.days} /> <span data-ay-skip="1">{minuteClock(rule.from_min)}–{minuteClock(rule.to_min)}</span> in <span data-ay-skip="1">{rule.tz}</span>, up to <span data-ay-skip="1">{rule.horizon_d}</span> days ahead.
-            Couples pick from the free times. <a className="font-semibold underline" href={localePath("/book/")}>Change the hours</a>
+            {opened ? "Your calendar is now open to couples: " : "Your calendar is open to couples: "}
+            any free <span data-ay-skip="1">{rule.minutes}</span>-minute slot, <DaysWords days={rule.days} /> <span data-ay-skip="1">{minuteClock(rule.from_min)}–{minuteClock(rule.to_min)}</span> in <span data-ay-skip="1">{rule.tz}</span>, up to <span data-ay-skip="1">{rule.horizon_d}</span> days ahead.
+            Every meeting already in your calendar blocks its time automatically — there are no show hours to keep. <a className="font-semibold underline" href={localePath("/book/")}>Adjust</a>
           </p>
         ) : (
           <>
@@ -408,6 +496,7 @@ function HostPanel({ page, onPreview, previewing }: { page: CastPage; onPreview:
         )}
         {err && <div className="mt-3"><ErrorNote>{err}</ErrorNote></div>}
       </section>
+      <StoredEpisodes />
       <section className="rounded-card border border-line bg-space-2 p-4 md:p-5" aria-label="Requests">
         <h2 className="text-[16px] font-bold text-ink">Requests</h2>
         {items === null ? <p className="mt-2 text-[13px] text-ink-2">Loading…</p>
@@ -428,6 +517,7 @@ function HostPanel({ page, onPreview, previewing }: { page: CastPage; onPreview:
                       {r.partner ? " · partner joined" : r.invite.pending ? " · partner invited" : " · partner not invited yet"}
                       {(r.recorded?.at || 0) > 0 && <> · <span className="text-yang">recorded</span> <span data-ay-skip="1">{r.recorded?.note}</span></>}
                     </p>
+                    <PipelineLine r={r} />
                   </div>
                   <div className="flex items-center gap-2">
                     {r.meet && <Button size="sm" variant="outline" href={r.meet.url}>Open the meeting</Button>}
@@ -623,8 +713,9 @@ export default function ArtaCast() {
     } finally { setWithdrawing(false); }
   }
 
-  const host = page?.host || null;
+  const host = request?.host || page?.host || null;
   const hostName = host?.name || "the host";
+  const hosts = page?.hosts || [];
   // The host's window shows a PHOTOGRAPH or the bust — never the season sigil the platform draws
   // for a member with no picture, which would air as a logo on the interview frame.
   const hostAvatar = host?.avatar || "";
@@ -731,17 +822,24 @@ export default function ArtaCast() {
             <li><b className="text-ink">1 · You.</b> Your name, one line in your own words, a photograph — and, if you like, where and when you were born and a few milestones for the timeline.</li>
             <li><b className="text-ink">2 · Your partner.</b> The same for them, and their email: they get a single-use link, sign in as themselves, and are seated in the recording.</li>
             <li><b className="text-ink">3 · Your frame.</b> The thumbnail and the episode frame draw themselves from what you type, live.</li>
-            <li><b className="text-ink">4 · A time.</b> Pick a recording slot from <span data-ay-skip="1">{hostName}</span>’s free hours. It becomes an encrypted ArtaMeet call in all three calendars.</li>
+            <li><b className="text-ink">4 · A time.</b> Pick any free slot in your host’s calendar{hosts.length > 1 ? " — and choose which host" : ""}. It becomes an ArtaMeet video call in all three calendars, and the episode is recorded and finished for YouTube from there.</li>
           </ol>
           <div className="mt-4">
             {signedIn
               ? <Button onClick={() => void start()} disabled={starting}>{starting ? "One moment…" : "Ask to appear"}</Button>
               : <Button onClick={() => signInTo(back)}>{entry.invite ? "Sign in to join your partner" : "Sign in to ask"}</Button>}
             {!signedIn && <p className="mt-2 text-[12.5px] text-ink-2">Signing in creates a free account in one step — an email code, nothing else.</p>}
-            {!page.open && <p className="mt-2 text-[12.5px] text-ink-2">Recording hours aren’t open yet. You can still fill everything in; the calendar appears the moment they are.</p>}
+            {!page.open && <p className="mt-2 text-[12.5px] text-ink-2">The host’s calendar isn’t open yet. You can still fill everything in; it appears the moment it is.</p>}
           </div>
         </section>
         {previewCard}
+        {signedIn && !page.is_host && (
+          <section className="rounded-card border border-line bg-space-2 p-4 md:p-5" aria-label="Host the show">
+            <h2 className="text-[16px] font-bold text-ink">Would you host?</h2>
+            <p className="mt-2 text-[13.5px] leading-relaxed text-ink-2">Anyone can volunteer to host episodes. Couples then choose between hosts, book any free slot in your calendar, and the episode is recorded on your computer and finished automatically.</p>
+            <div className="mt-3"><Button variant="outline" onClick={() => { castVolunteer(true, VIEWER_TZ).then(() => window.location.reload()).catch((e) => setPageErr(errText(e, "Couldn’t sign you up to host."))); }}>Volunteer to host</Button></div>
+          </section>
+        )}
       </>,
       hostCard,
     );
@@ -865,6 +963,25 @@ export default function ArtaCast() {
         <section className="rounded-card border border-line bg-space-2 p-4 md:p-5" aria-label="The two of you">
           <h2 className="text-[16px] font-bold text-ink">The two of you</h2>
           <div className="mt-4 grid gap-4">
+            {hosts.length > 1 && (
+              <Field label="Your host" hint={booked ? "The recording is booked with this host." : "Who you would like to talk with. You book a slot in their calendar."}>
+                <div role="radiogroup" aria-label="Your host" className="flex flex-col gap-2">
+                  {hosts.map((h) => {
+                    const on = (request.host?.id || 0) === h.id;
+                    return (
+                      <button key={h.id} type="button" role="radio" aria-checked={on} disabled={!!booked}
+                        onClick={() => { castSave({ host: h.id }).then((r) => setRequest(r.request)).catch((e) => setSaveErr(errText(e, "Couldn’t change the host."))); }}
+                        className={cx("flex min-h-[56px] w-full items-center gap-3 rounded-field border p-3 text-start transition-colors duration-150 disabled:opacity-60",
+                          on ? "border-yang bg-yang/12" : "border-line hover:border-yin-light")}>
+                        <Avatar src={h.avatar} name={h.name} className="h-9 w-9 text-[13px]" />
+                        <span className="min-w-0 flex-1 text-[14px] font-semibold text-ink" data-ay-skip="1">{h.name}</span>
+                        <span className="shrink-0 text-[12px] text-ink-2">{h.open ? "calendar open" : "not open yet"}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Field>
+            )}
             <Field label="The year you married" optional hint="The thumbnail’s hook — “47 years married” — and the second row of both timelines.">
               <Input inputMode="numeric" value={form.married_y || ""} placeholder="1979" className="w-32 tabular-nums"
                 onChange={(e) => setForm({ ...form, married_y: Number(e.target.value.replace(/\D/g, "").slice(0, 4)) || 0 })} />
@@ -882,7 +999,7 @@ export default function ArtaCast() {
           {!isA ? (
             <p className="mt-2 text-[13.5px] text-ink-2"><span data-ay-skip="1">{request.requester?.name || "Your partner"}</span> picks the time; you will be told the moment it is booked, and it lands in your calendar.</p>
           ) : !page.open ? (
-            <p className="mt-2 text-[13.5px] text-ink-2"><span data-ay-skip="1">{hostName}</span> hasn’t opened recording hours yet. Your request is saved — the calendar appears here the moment they do.</p>
+            <p className="mt-2 text-[13.5px] text-ink-2"><span data-ay-skip="1">{hostName}</span>’s calendar isn’t open yet. Your request is saved — it appears here the moment it is{hosts.length > 1 ? ", or choose another host above" : ""}.</p>
           ) : !(request.complete.a && request.complete.b) ? (
             <p className="mt-2 text-[13.5px] text-ink-2">Once both of you have a name, a line and a photograph, <span data-ay-skip="1">{hostName}</span>’s free times appear here.</p>
           ) : canBook && host && page.rule ? (

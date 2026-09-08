@@ -575,9 +575,12 @@ final class Rest {
 		[ 'POST', 'artacast/schedule',             'Cast::schedule',      'user'   ], // {start} take a recording slot — through Booking::take, seats the partner
 		[ 'POST', 'artacast/withdraw',             'Cast::withdraw',      'user'   ], // the requester takes it back
 		[ 'GET',  'artacast/inbox',                'Cast::inbox',         'user'   ], // host/operator: every live request
-		[ 'POST', 'artacast/host-open',            'Cast::host_open',     'user'   ], // host: open recording hours (writes the 'artacast' booking rule)
+		[ 'POST', 'artacast/host-open',            'Cast::host_open',     'user'   ], // a host: make sure my calendar is open to couples (the 'artacast' booking rule; idempotent)
+		[ 'POST', 'artacast/volunteer',            'Cast::volunteer',     'user'   ], // {on, tz} offer to host episodes, or stop
 		[ 'GET',  'artacast/episode',              'Cast::episode',       'user'   ], // ?meet= → the frame's facts for a recording (guests of the meeting; 404 = not an episode)
 		[ 'POST', 'artacast/recorded',             'Cast::recorded',      'user'   ], // host: the device finished writing an episode — remembered for the inbox
+		[ 'POST', 'artacast/finish',               'Cast::finish',        'user'   ], // host: {meet, media_id, thumb?} the raw is on ArtaCloud — start finishing it on Kaggle (also = retry)
+		[ 'GET',  'artacast/final',                'Cast::final',         'user'   ], // host: ?id= → fresh download links for the finished episode (signed, short-lived)
 		[ 'GET',  'meet/list',                     'Meetings::list_mine', 'user' ], // ?scope=upcoming|past
 		[ 'GET',  'meet/get',                      'Meetings::get',       'user' ], // ?id= → one meeting + its guests
 		[ 'POST', 'meet/create',                   'Meetings::create',    'user' ], // {title, start, minutes, tz, guests[]}

@@ -362,6 +362,65 @@ class Kaggle {
 	}
 
 	/**
+	 * Push a SCRIPT kernel — a plain .py that Kaggle runs top to bottom — for the ArtaCast finishing
+	 * pipeline (Cast.php). Distinct from push(): script, not notebook; a T4 pair (machineShape is the
+	 * documented token; the bare enableGpu lands on a P100 whose compute capability Kaggle's own torch
+	 * refuses); internet ON, because the recording is fetched from ArtaCloud; private by default —
+	 * a couple's raw episode is not a public artefact before its release. The title MUST slugify to
+	 * the slug, or Kaggle forks a kernel under its own slug and every later poll waits on nothing.
+	 * Returns [ ok, url_or_error ].
+	 */
+	public static function push_script( $slug, $title, $source, $private = true ) {
+		if ( ! self::ready() ) { return [ false, 'no Kaggle credential' ]; }
+		$body = [
+			'newTitle'               => mb_substr( (string) $title, 0, 120 ),
+			'id'                     => null,
+			'slug'                   => self::OWNER . '/' . $slug,
+			'text'                   => (string) $source,
+			'language'               => 'python',
+			'kernelType'             => 'script',
+			'isPrivate'              => (bool) $private,
+			'enableGpu'              => true,
+			'enableInternet'         => true,
+			'machineShape'           => 'NvidiaTeslaT4',
+			'datasetDataSources'     => [],
+			'competitionDataSources' => [],
+			'kernelDataSources'      => [],
+			'categoryIds'            => [],
+		];
+		[ $code, $j ] = self::call( '/kernels/push', $body );
+		$err = (string) ( $j['errorNullable'] ?? $j['error'] ?? '' );
+		$url = (string) ( $j['urlNullable'] ?? $j['url'] ?? '' );
+		// A push that "succeeds" with no url kept the previous version (see the kernel traps note).
+		if ( $code < 200 || $code >= 300 || '' !== $err || '' === $url ) {
+			return [ false, '' !== $err ? $err : ( 'HTTP ' . $code . ( '' === $url ? ', empty url' : '' ) ) ];
+		}
+		return [ true, $url ];
+	}
+
+	/**
+	 * The run state of one of OUR kernels, best effort: 'complete' | 'running' | 'error' | 'queued'
+	 * | 'unknown', plus a failure line. kernels/status was 401 for the Vault token when probed in
+	 * July; it is asked anyway (a later token may answer), and 'unknown' tells the caller to judge by
+	 * the outputs and the log instead — which is what Cast::pipeline_tick does.
+	 */
+	public static function status_of( $slug ) {
+		if ( ! self::ready() ) { return [ 'unknown', 'no Kaggle credential' ]; }
+		[ $code, $j ] = self::get( '/kernels/status?userName=' . rawurlencode( self::OWNER ) . '&kernelSlug=' . rawurlencode( $slug ) );
+		if ( $code < 200 || $code >= 300 || ! is_array( $j ) ) { return [ 'unknown', 'HTTP ' . $code ]; }
+		$s = strtolower( (string) ( $j['status'] ?? $j['statusNullable'] ?? '' ) );
+		$why = (string) ( $j['failureMessage'] ?? $j['failureMessageNullable'] ?? '' );
+		if ( str_contains( $s, 'complete' ) ) { return [ 'complete', $why ]; }
+		if ( str_contains( $s, 'error' ) || str_contains( $s, 'cancel' ) ) { return [ 'error', $why ]; }
+		if ( str_contains( $s, 'run' ) ) { return [ 'running', '' ]; }
+		if ( str_contains( $s, 'queue' ) ) { return [ 'queued', '' ]; }
+		return [ 'unknown', $s ];
+	}
+
+	/** The owner every kernel this plugin pushes lands under. */
+	public static function owner() { return self::OWNER; }
+
+	/**
 	 * Push a journal article's reproduction notebook (Science.php). Same kernel contract as push(),
 	 * but the row shape there is different, so the caller passes the pieces directly.
 	 */

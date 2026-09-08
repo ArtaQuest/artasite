@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  FRAME_H, FRAME_W, drawEpisodeFrame, episodeRows, pickRecordingType, recordingName, warmFonts,
+  FRAME_H, FRAME_W, THUMB_H, THUMB_W, drawEpisodeFrame, drawThumbnail, episodeRows, loadPortraits, pickRecordingType, recordingName, warmFonts,
   type EpisodeSpec, type FrameInput,
 } from "../../lib/episode-frame";
+import { sendForFinishing, sendState, subscribeSend, writeSidecar, writeThumb, type SendState } from "../../lib/episode-upload";
 import { firstName } from "../../lib/cast-frame";
 import { castRecorded } from "../../lib/api";
 import { canStore, deleteRecording, listRecordings, openRecording, recordingFile, type StoredRecording, type Writable } from "../../lib/episode-store";
@@ -75,8 +76,13 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
   const state = useRef({ names: true, cursorA: 0, cursorB: 0 });
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
+  /** The finished file when the browser held it in memory (no store) — what the send reads then. */
+  const memoryFile = useRef<File | null>(null);
   const writable = useRef<Writable | null>(null);
   const [stored, setStored] = useState<StoredRecording[]>([]);
+  const [send, setSend] = useState<SendState | undefined>(undefined);
+  const sendName = useRef("");
+  useEffect(() => subscribeSend(() => setSend(sendName.current ? sendState(sendName.current) : undefined)), []);
   const [diskOk, setDiskOk] = useState<boolean | null>(null);
   const refreshStored = useCallback(() => { listRecordings().then(setStored).catch(() => undefined); }, []);
   useEffect(() => { canStore().then(setDiskOk).catch(() => setDiskOk(false)); refreshStored(); }, [refreshStored]);
@@ -186,6 +192,8 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
     const name = recordingName(spec, type.ext);
     // A file in the browser's own store, no prompt. Null means memory — the panel already said so.
     writable.current = await openRecording(name);
+    // Which meeting this file belongs to, beside it — so the show page can send it later without asking.
+    if (writable.current) void writeSidecar(name, { meet_id: meetId, request_id: 0, spec, at: Date.now() });
     await warmFonts();
     const stream = c.captureStream(FPS);
     const audio = mixAudio();
@@ -222,8 +230,12 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
           const f = await recordingFile(name);
           if (f) url = URL.createObjectURL(f);
           refreshStored();
+          sendName.current = name;
+          // deferred a tick so the thumbnail below is written before the send reads it
+          window.setTimeout(() => { sendForFinishing(name, meetId).catch(() => undefined); }, 1500);
         } else {
           const blob = new Blob(chunks.current, { type: type.mime });
+          memoryFile.current = new File([blob], name, { type: type.mime });
           url = URL.createObjectURL(blob);
           chunks.current = [];
         }
@@ -232,6 +244,23 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
         // without another decision. The button below is the way back if the browser held it.
         if (url) download(url, name);
         castRecorded(meetId, { seconds: secs, bytes: total, format: type.label }).catch(() => undefined);
+        // THE THUMBNAIL, drawn now from the same facts, kept beside the recording.
+        try {
+          const [pa, pb] = await loadPortraits(spec);
+          const tc = document.createElement("canvas"); tc.width = THUMB_W; tc.height = THUMB_H;
+          const tctx = tc.getContext("2d");
+          if (tctx) {
+            drawThumbnail(tctx, spec, pa, pb);
+            const blob = await new Promise<Blob | null>((r) => tc.toBlob(r, "image/png"));
+            if (blob) await writeThumb(name, blob);
+          }
+        } catch { /* no thumbnail — the run still finishes */ }
+        // AND OFF TO BE FINISHED — no button. The file goes to the host's shelf and Kaggle takes it
+        // from there; the show page shows progress and the result, and the host is emailed.
+        if (writable.current === null && url) {
+          sendName.current = name;
+          sendForFinishing(name, meetId, memoryFile.current).catch(() => undefined);
+        }
       };
       void finish();
       audioCtx.current?.close().catch(() => undefined);
@@ -297,7 +326,16 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
               <p className="font-semibold">Saved: <span data-ay-skip="1">{done.name}</span></p>
               <p className="mt-1 text-ink-2"><span data-ay-skip="1">{fmtClock(done.seconds)}</span> · <span data-ay-skip="1">{fmtBytes(done.bytes)}</span> · {done.label}</p>
               {done.url && <a href={done.url} download={done.name} className="mt-2 inline-flex h-10 items-center rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent">Download again</a>}
-              <p className="mt-2 text-[12px] text-ink-3">It went to your Downloads. YouTube: upload the file as it is. The frame carries the names and both timelines; add the thumbnail from the couple’s ArtaCast page.</p>
+              <p className="mt-2 text-[12px] text-ink-3">It went to your Downloads. The clean, normalised release file is made for you next — see below.</p>
+              {send && (
+                <p className="mt-2 text-[12.5px] text-ink" role="status">
+                  {send.phase === "uploading" && <>Sending to your shelf for finishing · <span data-ay-skip="1">{Math.round(send.frac * 100)}%</span> — keep this tab open</>}
+                  {send.phase === "thumb" && "Sending the thumbnail…"}
+                  {send.phase === "starting" && "Starting the finishing run on Kaggle…"}
+                  {send.phase === "done" && <>Finishing on Kaggle: the voices are cleaned and the loudness set for YouTube. You will be emailed, and your show page carries the download.</>}
+                  {send.phase === "error" && <span className="text-yang">Couldn’t send it: {send.note} — your show page can send it again.</span>}
+                </p>
+              )}
             </div>
           )}
           {stored.length > 0 && (
