@@ -887,15 +887,33 @@ final class Cast {
 		);
 	}
 
+	/**
+	 * The script's own last line, decoded. Kaggle hands a kernel's log back as JSON lines, so the
+	 * script's JSON arrives with its quotes escaped (`ARTACAST_DONE {\"model\": …}\n"`); a plain log
+	 * ends the line at a real newline. Both shapes are read; anything else is null.
+	 */
+	private static function done_json( $log ) {
+		$log = (string) $log;
+		$p = strpos( $log, 'ARTACAST_DONE ' );
+		if ( false === $p ) { return null; }
+		$rest = substr( $log, $p + 14 );
+		$end  = strlen( $rest );
+		foreach ( [ '\\n"', "\n" ] as $stop ) {
+			$q = strpos( $rest, $stop );
+			if ( false !== $q ) { $end = min( $end, $q ); }
+		}
+		$raw = substr( $rest, 0, $end );
+		$j = json_decode( $raw, true );
+		if ( ! is_array( $j ) ) { $j = json_decode( stripcslashes( $raw ), true ); }
+		return is_array( $j ) ? $j : null;
+	}
+
 	/** The verdict from what the kernel left behind: its report file and its own last line. */
 	private static function judge_output( $files, $log ) {
 		$report = false;
 		foreach ( (array) $files as $f ) { if ( str_ends_with( (string) $f['name'], '-report.json' ) ) { $report = true; } }
-		$model = '';
-		if ( preg_match( '/ARTACAST_DONE (\{.*\})/', (string) $log, $m ) ) {
-			$j = json_decode( $m[1], true );
-			$model = (string) ( $j['model'] ?? '' );
-		}
+		$j = self::done_json( $log );
+		$model = (string) ( $j['model'] ?? '' );
 		if ( str_contains( (string) $log, 'ARTACAST_FAILED' ) ) { return [ 'failed', $model ]; }
 		if ( $report ) { return [ 'done', $model ]; }
 		return [ 'running', $model ];
@@ -939,8 +957,8 @@ final class Cast {
 		if ( $code < 200 || $code >= 300 ) { return Rest::err( 'kaggle', 'Kaggle did not answer (HTTP ' . $code . ') — try again in a moment.', 502 ); }
 		$out = [];
 		foreach ( $files as $f ) { $out[] = [ 'name' => (string) $f['name'], 'url' => (string) $f['url'] ]; }
-		$tail = (string) $log;
-		if ( preg_match( '/ARTACAST_DONE (\{.*\})/', $tail, $m ) ) { $tail = $m[1]; } else { $tail = mb_substr( $tail, -600 ); }
+		$j = self::done_json( $log );
+		$tail = $j ? (string) wp_json_encode( $j ) : mb_substr( (string) $log, -600 );
 		return [ 'ok' => true, 'files' => $out, 'summary' => $tail, 'kernel' => Kaggle::kernel_url( (string) $r['pipe_kernel'] ) ];
 	}
 
