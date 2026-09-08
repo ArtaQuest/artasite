@@ -1,4 +1,4 @@
-import { castFinish, cloudUpload, uploadImage } from "./api";
+import { castFinish, uploadImage } from "./api";
 import { listRecordings, openRecording, recordingFile } from "./episode-store";
 import type { EpisodeSpec } from "./episode-frame";
 
@@ -14,7 +14,7 @@ import type { EpisodeSpec } from "./episode-frame";
  * which meeting a file belongs to, so nothing has to be typed.
  */
 
-export type Sidecar = { meet_id: number; request_id: number; spec: EpisodeSpec; at: number };
+export type Sidecar = { meet_id: number; request_id: number; spec: EpisodeSpec; at: number; upload_id?: number; upload_bytes?: number };
 export type SendState = { name: string; phase: "idle" | "uploading" | "thumb" | "starting" | "done" | "error"; frac: number; note: string; at: number };
 
 const registry = new Map<string, SendState>();
@@ -55,10 +55,65 @@ export async function storedEpisodes(): Promise<{ name: string; bytes: number; m
 }
 
 const dataUrl = (b: Blob) => new Promise<string>((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result)); r.onerror = () => reject(r.error); r.readAsDataURL(b); });
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * THE UPLOAD THAT DOES NOT START OVER. Five gigabytes over a home connection is an hour, and an
+ * hour is long enough for a dropped connection, a sleeping laptop, or a closed tab. So:
+ *   · the server's shelf id is written into the sidecar the moment the upload begins, and a later
+ *     send — from this tab or the next one — resumes the SAME item at the server's byte count
+ *     (a part at offset 0 answers 409 with `received`, which is the cursor);
+ *   · every part is retried with backoff before the send is called failed;
+ *   · a commit whose reply was lost is recovered by asking the shelf whether the item is ready.
+ */
+async function uploadResumable(name: string, f: File, side: Sidecar | null, meetId: number, onFrac: (n: number) => void, fresh = false): Promise<number> {
+  const BASE = "/wp-json/aq/v1";
+  const nonce = () => (window as unknown as { AQ_WP_NONCE?: string }).AQ_WP_NONCE || "";
+  const call = async (path: string, init: RequestInit) => {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try {
+        const r = await fetch(`${BASE}${path}`, { ...init, credentials: "include", headers: { ...(init.headers as Record<string, string> || {}), "X-WP-Nonce": nonce() } });
+        if (r.status >= 500 || r.status === 429) { await sleep(2000 * 2 ** attempt); continue; }
+        return r;
+      } catch { await sleep(2000 * 2 ** attempt); }
+    }
+    throw new Error("The connection kept failing — the send will resume when you press Send again.");
+  };
+  let id = side?.upload_id && side.upload_bytes === f.size ? side.upload_id : 0;
+  let chunk = 8 * 1024 * 1024;
+  if (!id) {
+    const r = await call("/media/begin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: f.name, bytes: f.size }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.message || "The shelf refused the upload.");
+    id = j.id; chunk = Math.max(1, j.chunk_max || chunk);
+    if (side) await writeSidecar(name, { ...side, meet_id: side.meet_id || meetId, upload_id: id, upload_bytes: f.size });
+  }
+  let sent = 0;
+  while (sent < f.size) {
+    const end = Math.min(sent + chunk, f.size);
+    const r = await call(`/media/${id}/part?offset=${sent}`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: f.slice(sent, end) });
+    const j = (await r.json().catch(() => ({}))) as { received?: number; message?: string; error?: string };
+    if (!r.ok) {
+      if (r.status === 409 && typeof j.received === "number") { sent = j.received; continue; }
+      if (r.status === 409 && j.error === "closed") break; // already committed by an earlier send
+      if (r.status === 404 && !fresh) { id = 0; break; }   // the item is gone: begin again below, once
+      throw new Error(j.message || `Upload refused (${r.status}).`);
+    }
+    sent = typeof j.received === "number" ? j.received : end;
+    onFrac(sent / f.size);
+  }
+  if (!id) { if (side) await writeSidecar(name, { ...side, upload_id: 0, upload_bytes: 0 }); return uploadResumable(name, f, side ? { ...side, upload_id: 0 } : null, meetId, onFrac, true); }
+  const c = await call(`/media/${id}/commit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: name.replace(/\.[^.]+$/, "") }) });
+  if (!c.ok) {
+    const j = (await c.json().catch(() => ({}))) as { message?: string; error?: string };
+    // "already finished" is success; anything else is reported.
+    if (j.error !== "closed") throw new Error(j.message || "The shelf could not finish the upload.");
+  }
+  return id;
+}
 
 /** Upload the episode and start finishing it. Resolves when Kaggle has been asked. Safe to call
- *  again for the same file: a second upload of an unfinished send simply resumes on the server's
- *  byte count. */
+ *  again for the same file: a second send resumes the same shelf item at the server's byte count. */
 export async function sendForFinishing(name: string, meetId: number, file?: File | null): Promise<void> {
   const cur = registry.get(name);
   if (cur && (cur.phase === "uploading" || cur.phase === "thumb" || cur.phase === "starting")) return;
@@ -66,7 +121,9 @@ export async function sendForFinishing(name: string, meetId: number, file?: File
   try {
     const f = file || (await recordingFile(name));
     if (!f) throw new Error("The recording is no longer on this computer.");
-    const item = await cloudUpload(f, { title: name.replace(/\.[^.]+$/, "") }, (frac) => set(name, { frac }));
+    const side = await readSidecar(name);
+    const mediaId = await uploadResumable(name, f, side, meetId, (frac) => set(name, { frac }));
+    const item = { id: mediaId };
     set(name, { phase: "thumb", frac: 1 });
     let thumb = "";
     const t = await recordingFile(`${name}.thumb.png`);

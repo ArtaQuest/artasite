@@ -371,7 +371,10 @@ function PipelineLine({ r }: { r: CastRequest }) {
   return (
     <div className="mt-1 text-[12.5px]">
       {p.state === "running" && <p className="text-ink-2">Finishing on Kaggle GPU — cleaning the voices, setting the loudness — since <span data-ay-skip="1">{longInstant(p.started, VIEWER_TZ)}</span>. Usually under an hour; you will be emailed.</p>}
-      {p.state === "failed" && (
+      {p.state === "failed" && p.retrying && (
+        <p className="text-ink-2">Kaggle refused the run (<span data-ay-skip="1">{p.note.replace(/^Kaggle refused the kernel: /, "")}</span>) — it is retried automatically every ten minutes, up to four times.</p>
+      )}
+      {p.state === "failed" && !p.retrying && (
         <p className="text-yang">Finishing failed: <span data-ay-skip="1">{p.note}</span>{" "}
           <button type="button" className="underline" disabled={busy} onClick={() => void retry()}>Try again</button>
           {p.kernel && <> · <a className="underline" href={p.kernel} target="_blank" rel="noreferrer">kernel log</a></>}

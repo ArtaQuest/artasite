@@ -649,6 +649,8 @@ final class Media {
 	 *  grant for them, and their per-file ceiling is an episode's, not a song's. Nobody else's. */
 	const CAST_HOST_BYTES = 68719476736;      // 64 GB
 	const CAST_FILE_MAX   = 17179869184;      // 16 GB
+	/** Files past this stay on the origin at commit rather than being copied to the CDN in-request. */
+	const CDN_COPY_MAX    = 1073741824;       // 1 GB
 	private static function cast_host_bytes( $uid ) {
 		return class_exists( '\\AQ\\Cast' ) && Cast::is_host_uid( $uid ) ? self::CAST_HOST_BYTES : 0;
 	}
@@ -800,12 +802,18 @@ final class Media {
 		if ( $real !== (int) $row['bytes'] ) {
 			return Rest::err( 'incomplete', 'Only ' . $real . ' of ' . (int) $row['bytes'] . ' bytes arrived — resume from byte ' . $real, 409 );
 		}
-		$fields = [ 'state' => 'ready', 'updated' => Data::now(), 'sha256' => hash_file( 'sha256', $path ) ];
+		// AN EPISODE IS NOT A SONG. A multi-gigabyte ArtaCast recording must not be hashed and copied
+		// to the CDN inside one request — that is minutes of PHP time on a synchronous PUT, and a
+		// timeout here leaves the row 'uploading' after every byte arrived. Past CDN_COPY_MAX the file
+		// stays on this origin (an inert type Media::url already prefers to serve from here) and the
+		// finishing pipeline fetches it from here; Cast::pipeline_done removes it when the run is over.
+		$huge   = (int) $row['bytes'] > self::CDN_COPY_MAX;
+		$fields = [ 'state' => 'ready', 'updated' => Data::now(), 'sha256' => $huge ? '' : hash_file( 'sha256', $path ) ];
 		// Hand the bytes to the CDN, then drop the local copy so this origin never becomes the library.
 		// If the CDN is not configured (or the PUT fails) the file simply stays here and is served from
 		// uploads/ — the member's upload is never lost to an infrastructure problem.
 		$mime = 'music' === $row['kind'] ? 'audio/mpeg' : ( 'video' === $row['kind'] ? 'video/mp4' : 'application/pdf' );
-		if ( self::to_cdn( $row['store_key'], $path, $mime ) ) { @unlink( $path ); $fields['on_cdn'] = 1; }
+		if ( ! $huge && self::to_cdn( $row['store_key'], $path, $mime ) ) { @unlink( $path ); $fields['on_cdn'] = 1; }
 		foreach ( [ 'title', 'artist', 'album' ] as $f ) {
 			$v = $req->get_param( $f );
 			if ( null !== $v ) { $fields[ $f ] = sanitize_text_field( (string) $v ); }

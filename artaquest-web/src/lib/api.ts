@@ -3145,7 +3145,7 @@ export type CastRequest = {
   /** Set once the host's device has written an episode file. */
   recorded?: { at: number; note: string };
   /** The finishing run on Kaggle: '' | queued | running | done | failed, and what it left. */
-  pipeline?: { state: string; note: string; started: number; done: number; files: { name: string }[]; raw: number; thumb: string; kernel: string };
+  pipeline?: { state: string; note: string; started: number; done: number; files: { name: string }[]; raw: number; thumb: string; kernel: string; tries?: number; retrying?: boolean };
   complete: { a: boolean; b: boolean };
   created: number;
   updated: number;

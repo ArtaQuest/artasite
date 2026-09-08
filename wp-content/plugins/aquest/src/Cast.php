@@ -249,6 +249,8 @@ final class Cast {
 				'raw'     => (int) ( $r['raw_media_id'] ?? 0 ),
 				'thumb'   => (string) ( $r['thumb_url'] ?? '' ),
 				'kernel'  => '' !== (string) ( $r['pipe_kernel'] ?? '' ) ? Kaggle::kernel_url( (string) $r['pipe_kernel'] ) : '',
+				'tries'   => (int) ( $r['pipe_tries'] ?? 0 ),
+				'retrying' => 'failed' === (string) ( $r['pipe_state'] ?? '' ) && str_starts_with( (string) ( $r['pipe_note'] ?? '' ), 'Kaggle refused' ) && (int) ( $r['pipe_tries'] ?? 0 ) < self::PIPE_TRIES,
 			],
 			'complete'  => [ 'a' => $a_ok, 'b' => $b_ok ],
 			'created'   => (int) $r['created'],
@@ -853,17 +855,28 @@ final class Cast {
 		// Test seam: a local site has no Kaggle credential, and the state machine still has to be
 		// exercised. Never consulted on production unless somebody adds the filter there on purpose.
 		$seam = apply_filters( 'aq_cast_kaggle_push', null, $slug, $title, $src );
-		[ $ok, $why ] = is_array( $seam ) ? $seam : Kaggle::push_script( $slug, $title, $src, (bool) get_option( 'aq_artacast_kernel_private', 0 ) );
-		if ( ! $ok ) { self::pipeline_fail( $r, 'Kaggle refused the kernel: ' . $why ); return; }
+		// PRIVATE by default now that the Vault holds a key pair: our own private kernel's outputs read
+		// back over Basic, and a couple's raw episode is not a public artefact before its release.
+		[ $ok, $why ] = is_array( $seam ) ? $seam : Kaggle::push_script( $slug, $title, $src, (bool) get_option( 'aq_artacast_kernel_private', 1 ) );
+		$tries = (int) ( $r['pipe_tries'] ?? 0 ) + 1;
+		if ( ! $ok ) { self::pipeline_fail( $r, 'Kaggle refused the kernel: ' . $why, $tries >= self::PIPE_TRIES, $tries ); return; }
 		Data::update( 'aq_cast_requests', [
 			'pipe_state' => 'running', 'pipe_kernel' => $slug, 'pipe_started' => $now, 'pipe_done' => 0,
-			'pipe_note' => '', 'final_files' => null, 'updated' => $now,
+			'pipe_note' => '', 'final_files' => null, 'pipe_tries' => $tries, 'updated' => $now,
 		], [ 'id' => (int) $r['id'] ] );
 	}
 
-	private static function pipeline_fail( $r, $note ) {
+	/** A push is retried by the cron this many times (Kaggle's two-GPU-session cap, a 5xx, a queue
+	 *  full for an hour) before the host is told; every other failure is told at once. */
+	const PIPE_TRIES = 4;
+	const PIPE_RETRY_S = 600;
+
+	private static function pipeline_fail( $r, $note, $final = true, $tries = null ) {
 		$now = Data::now();
-		Data::update( 'aq_cast_requests', [ 'pipe_state' => 'failed', 'pipe_note' => mb_substr( (string) $note, 0, 250 ), 'pipe_done' => $now, 'updated' => $now ], [ 'id' => (int) $r['id'] ] );
+		$data = [ 'pipe_state' => 'failed', 'pipe_note' => mb_substr( (string) $note, 0, 250 ), 'pipe_done' => $now, 'updated' => $now ];
+		if ( null !== $tries ) { $data['pipe_tries'] = (int) $tries; }
+		Data::update( 'aq_cast_requests', $data, [ 'id' => (int) $r['id'] ] );
+		if ( ! $final ) { return; }
 		$h = self::host_of( $r );
 		if ( $h ) {
 			Notify::push( (int) $h->ID, 'artacast', 'Finishing an ArtaCast episode failed — open your show to retry', mb_substr( (string) $note, 0, 190 ), '/artacast/', 'castpf' . (int) $r['id'] . ':' . $now );
@@ -878,6 +891,14 @@ final class Cast {
 			'pipe_state' => 'done', 'pipe_done' => $now, 'pipe_note' => mb_substr( 'Voices cleaned with ' . ( $model ?: 'the fallback' ), 0, 250 ),
 			'final_files' => Data::enc( $keep ), 'updated' => $now,
 		], [ 'id' => (int) $r['id'] ] );
+		// THE RAW LEAVES THE SHELF. The host has the file on their own computer and Kaggle now holds the
+		// finished one; five gigabytes an episode would fill even the host's grant in a season.
+		$raw = Data::one( 'SELECT id, store_key, user_id FROM ' . Data::t( 'aq_media' ) . ' WHERE id = %d', [ (int) $r['raw_media_id'] ] );
+		if ( $raw && (int) $raw['user_id'] === (int) ( self::host_of( $r )->ID ?? 0 ) ) {
+			Media::destroy( (string) $raw['store_key'] );
+			global $wpdb;
+			$wpdb->delete( Data::t( 'aq_media' ), [ 'id' => (int) $raw['id'] ] );
+		}
 		$h = self::host_of( $r );
 		if ( ! $h ) { return; }
 		$names = trim( (string) $r['a_name'] ) . ' & ' . trim( (string) $r['b_name'] );
@@ -923,8 +944,19 @@ final class Cast {
 	public static function pipeline_tick() {
 		if ( get_transient( 'aq_cast_pipe' ) ) { return; }
 		set_transient( 'aq_cast_pipe', 1, 240 );
-		$rows = Data::all( 'SELECT * FROM ' . Data::t( 'aq_cast_requests' ) . " WHERE pipe_state = 'running' ORDER BY pipe_started ASC LIMIT 10" );
 		$now  = Data::now();
+		// Pushes Kaggle refused (session cap, 5xx) come back on their own, spaced ten minutes apart,
+		// while the raw is still on the shelf; only the last refusal reaches the host.
+		$again = Data::all(
+			'SELECT * FROM ' . Data::t( 'aq_cast_requests' ) . " WHERE pipe_state = 'failed' AND pipe_note LIKE 'Kaggle refused%' AND pipe_tries < %d AND pipe_done < %d AND raw_media_id > 0 ORDER BY pipe_done ASC LIMIT 5",
+			[ self::PIPE_TRIES, $now - self::PIPE_RETRY_S ]
+		);
+		foreach ( $again as $r ) {
+			$h = self::host_of( $r );
+			$item = $h ? self::raw_item( (int) $r['raw_media_id'], (int) $h->ID ) : null;
+			if ( $item ) { self::pipeline_start( $r, $item ); }
+		}
+		$rows = Data::all( 'SELECT * FROM ' . Data::t( 'aq_cast_requests' ) . " WHERE pipe_state = 'running' ORDER BY pipe_started ASC LIMIT 10" );
 		foreach ( $rows as $r ) {
 			$slug = (string) $r['pipe_kernel'];
 			if ( '' === $slug ) { self::pipeline_fail( $r, 'no kernel recorded' ); continue; }

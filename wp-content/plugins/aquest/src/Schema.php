@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.74.0';
+	const VERSION = '1.75.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -1024,6 +1024,7 @@ final class Schema {
 				pipe_started INT UNSIGNED NOT NULL DEFAULT 0,
 				pipe_done INT UNSIGNED NOT NULL DEFAULT 0,
 				pipe_note VARCHAR(255) NOT NULL DEFAULT '',
+				pipe_tries TINYINT UNSIGNED NOT NULL DEFAULT 0,
 				final_files TEXT NULL,
 				created INT UNSIGNED NOT NULL DEFAULT 0,
 				updated INT UNSIGNED NOT NULL DEFAULT 0,
