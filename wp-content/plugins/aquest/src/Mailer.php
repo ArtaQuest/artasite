@@ -271,6 +271,24 @@ class Mailer {
 		/* ArtaCast — the finishing run on Kaggle produced the release file. The letter deliberately
 		 * carries no download link: Kaggle's URLs are signed and short-lived, so they are minted when
 		 * the host opens their show page. */
+		'cast_confirmed' => [
+			'label'    => 'ArtaCast — the host confirmed the episode',
+			'audience' => 'member',
+			'subject'  => '{{host}} confirmed your ArtaCast episode',
+			'body'     => "{{host}} has looked at your request and confirmed the episode with {{names}}.\n\nThe next step is yours: open your show page and pick a recording time — any free slot in {{host}}’s calendar. It becomes an encrypted ArtaMeet video call in all three calendars.",
+			'cta'      => [ 'Pick a recording time', '/artacast/' ],
+			'vars'     => [ 'host', 'names' ],
+			'sample'   => [ 'host' => 'Arash', 'names' => 'Mohammadreza & Ana' ],
+		],
+		'cast_declined' => [
+			'label'    => 'ArtaCast — the host could not take the episode',
+			'audience' => 'member',
+			'subject'  => 'About your ArtaCast request',
+			'body'     => "{{host}} looked at your request with {{names}} and, this time, could not take the episode.{{note_line}}\n\nNothing else changes on your account. If another host is offering episodes you are welcome to ask again from the show page.",
+			'cta'      => [ 'Open ArtaCast', '/artacast/' ],
+			'vars'     => [ 'host', 'names', 'note_line' ],
+			'sample'   => [ 'host' => 'Arash', 'names' => 'Mohammadreza & Ana', 'note_line' => '' ],
+		],
 		'cast_final' => [
 			'label'    => 'ArtaCast — the episode is finished',
 			'audience' => 'member',

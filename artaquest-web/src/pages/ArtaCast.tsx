@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { RailPortal } from "../components/RightRail";
 import {
-  ApiError, bookSlots, castAccept, castFinal, castFinish, castHostOpen, castInbox, castInvite, castPage, castPhoto, castSave,
+  ApiError, bookSlots, castAccept, castConfirm, castFinal, castFinish, castHostOpen, castInbox, castInvite, castPage, castPhoto, castSave,
   castSchedule, castVolunteer, castWithdraw,
   type BookRule, type CastPage, type CastRequest, type CastSide, type CastRow,
 } from "../lib/api";
@@ -485,6 +485,16 @@ function HostPanel({ page, onPreview, previewing }: { page: CastPage; onPreview:
   }
 
   const label = (r: CastRequest) => [r.a.name, r.b.name].filter(Boolean).join(" & ") || `Request #${r.id}`;
+  const [busyId, setBusyId] = useState(0);
+  async function decide(r: CastRequest, ok: boolean) {
+    setBusyId(r.id); setErr("");
+    try {
+      const res = await castConfirm(r.id, ok);
+      if (res.request) setItems((cur) => (cur || []).map((x) => (x.id === r.id ? res.request! : x)));
+      else if (res.declined) setItems((cur) => (cur || []).filter((x) => x.id !== r.id));
+    } catch (e) { setErr(errText(e, ok ? "Couldn’t confirm that." : "Couldn’t decline that.")); }
+    finally { setBusyId(0); }
+  }
   return (
     <>
       {!page.hosting && (
@@ -543,7 +553,17 @@ function HostPanel({ page, onPreview, previewing }: { page: CastPage; onPreview:
                     </p>
                     <PipelineLine r={r} />
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* THE HOST'S WORD. A request is confirmed before the couple can take an hour
+                        of the host's calendar; declining closes it with a letter to both. */}
+                    {!r.confirmed ? (
+                      <>
+                        <Button size="sm" onClick={() => void decide(r, true)} disabled={busyId === r.id}>{busyId === r.id ? "…" : "Confirm"}</Button>
+                        <Button size="sm" variant="outline" onClick={() => { if (window.confirm(`Decline ${label(r)}? They are told, and the request closes.`)) void decide(r, false); }} disabled={busyId === r.id}>Decline</Button>
+                      </>
+                    ) : (
+                      <span className="inline-flex h-8 items-center rounded-pill bg-yang/15 px-2.5 text-[12px] font-semibold text-yang">Confirmed</span>
+                    )}
                     {r.meet && <Button size="sm" variant="outline" href={r.meet.url}>Open the meeting</Button>}
                     <Button size="sm" variant={previewing === r.id ? "primary" : "outline"} onClick={() => onPreview(previewing === r.id ? null : r)}>{previewing === r.id ? "Hide frame" : "Frame"}</Button>
                   </div>
@@ -875,7 +895,8 @@ export default function ArtaCast() {
 
   // ── the couple ──
   const isA = role === "a";
-  const canBook = isA && request.complete.a && request.complete.b && page.open && !!host && !!page.rule;
+  const confirmed = (request.confirmed || 0) > 0;
+  const canBook = isA && confirmed && request.complete.a && request.complete.b && page.open && !!host && !!page.rule;
   const booked = request.meet && request.meet.status !== "cancelled" ? request.meet : null;
   const steps = (
     <section className="rounded-card border border-line bg-space-2 p-4" aria-label="Where you are">
@@ -884,6 +905,7 @@ export default function ArtaCast() {
         <StepRow done={request.complete.a}>{isA ? "Your" : <><span data-ay-skip="1">{request.requester?.name || "Their"}</span>’s</>} details</StepRow>
         <StepRow done={request.complete.b}>{isA ? "Your partner’s" : "Your"} details</StepRow>
         <StepRow done={!!request.partner || request.invite.pending}>{request.partner ? "Partner joined" : request.invite.pending ? "Partner invited — waiting for them" : "Invite your partner"}</StepRow>
+        <StepRow done={confirmed}>{confirmed ? <>Confirmed by <span data-ay-skip="1">{hostName}</span></> : <><span data-ay-skip="1">{hostName}</span> confirms the episode</>}</StepRow>
         <StepRow done={!!booked}>{booked ? "Recording booked" : "A recording time"}</StepRow>
       </ul>
       <p className="mt-3 text-[12px] text-ink-3" role="status">
@@ -1037,6 +1059,10 @@ export default function ArtaCast() {
             <p className="mt-2 text-[13.5px] text-ink-2"><span data-ay-skip="1">{request.requester?.name || "Your partner"}</span> picks the time; you will be told the moment it is booked, and it lands in your calendar.</p>
           ) : !page.open ? (
             <p className="mt-2 text-[13.5px] text-ink-2"><span data-ay-skip="1">{hostName}</span>’s calendar isn’t open yet. Your request is saved — it appears here the moment it is{hosts.length > 1 ? ", or choose another host above" : ""}.</p>
+          ) : request.complete.a && request.complete.b && !confirmed ? (
+            <p className="mt-2 text-[13.5px] leading-relaxed text-ink-2" role="status">
+              Everything is in. <span data-ay-skip="1">{hostName}</span> looks at your frame and confirms the episode — you get an email the moment they do, and the times open here then.
+            </p>
           ) : !(request.complete.a && request.complete.b) ? (
             <p className="mt-2 text-[13.5px] text-ink-2">Once both of you have a name, a line and a photograph, <span data-ay-skip="1">{hostName}</span>’s free times appear here.</p>
           ) : canBook && host && page.rule ? (

@@ -74,6 +74,9 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
   const [cursorB, setCursorB] = useState(0);
   const [open, setOpen] = useState(true);
   const state = useRef({ names: true, cursorA: 0, cursorB: 0 });
+  /** Where the gold IS on each rail, sliding towards the chapter the host chose — the slider is
+   *  animated in the draw loop, so a press moves the record smoothly rather than in a jump. */
+  const slide = useRef({ a: 0, b: 0, at: 0 });
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   /** The finished file when the browser held it in memory (no store) — what the send reads then. */
@@ -97,6 +100,29 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
   const type = useMemo(() => pickRecordingType(), []);
 
   useEffect(() => { state.current = { names, cursorA, cursorB }; }, [names, cursorA, cursorB]);
+
+  const nextBoth = useCallback(() => {
+    setCursorA((i) => Math.min(rows.a.length - 1, i + 1));
+    setCursorB((i) => Math.min(rows.b.length - 1, i + 1));
+  }, [rows]);
+  const backBoth = useCallback(() => {
+    setCursorA((i) => Math.max(0, i - 1));
+    setCursorB((i) => Math.max(0, i - 1));
+  }, []);
+  // Arrow keys drive the chapters while the panel is open and nothing is being typed.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      if (e.key === "ArrowRight") { nextBoth(); e.preventDefault(); }
+      else if (e.key === "ArrowLeft") { backBoth(); e.preventDefault(); }
+      else if (e.key.toLowerCase() === "n") { setNames((v) => !v); e.preventDefault(); }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, nextBoth, backBoth]);
 
   /** Who is in which window. The requester is the left window, the partner the right, the host
    *  below — by member id, never by arrival order. */
@@ -132,9 +158,18 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
     void warmFonts();
     const tick = () => {
       if (stop) return;
+      // Ease each rail towards its chapter: about 400 ms from press to rest, frame-rate independent.
+      const now = performance.now();
+      const dt = slide.current.at ? Math.min(0.1, (now - slide.current.at) / 1000) : 0;
+      slide.current.at = now;
+      const k = 1 - Math.exp(-dt * 9);
+      slide.current.a += (state.current.cursorA - slide.current.a) * k;
+      slide.current.b += (state.current.cursorB - slide.current.b) * k;
+      if (Math.abs(slide.current.a - state.current.cursorA) < 0.004) slide.current.a = state.current.cursorA;
+      if (Math.abs(slide.current.b - state.current.cursorB) < 0.004) slide.current.b = state.current.cursorB;
       const input: FrameInput = {
         a: videoFor(spec.a.uid), b: videoFor(spec.b.uid), host: videoFor(spec.host_id),
-        cursorA: state.current.cursorA, cursorB: state.current.cursorB, names: state.current.names,
+        cursorA: slide.current.a, cursorB: slide.current.b, names: state.current.names,
       };
       drawEpisodeFrame(ctx, spec, rows, input);
     };
@@ -307,6 +342,13 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
               <button type="button" onClick={stop} className={`${btn} bg-red-600 px-4 text-white`}>Stop &amp; save</button>
             )}
             <button type="button" onClick={() => setNames((v) => !v)} className={`${btn} ${names ? "bg-yang text-on-accent" : "border border-line text-ink-2"}`}>{names ? "Names on" : "Names off"}</button>
+            {/* THE HOST DRIVES THE STORY. One press moves both timelines to the next chapter — the
+                gold slides down each rail as the conversation reaches that year — and the arrow keys
+                do the same while the call has the keyboard. Each spouse can also be moved alone. */}
+            <button type="button" onClick={nextBoth} disabled={cursorA >= rows.a.length - 1 && cursorB >= rows.b.length - 1}
+              className={`${btn} bg-yin/15 text-ink disabled:opacity-40`} title="→">Next chapter</button>
+            <button type="button" onClick={backBoth} disabled={cursorA <= 0 && cursorB <= 0}
+              className={`${btn} border border-line text-ink-2 disabled:opacity-40`} title="←">Back a chapter</button>
             <button type="button" onClick={() => setCursorA((i) => Math.min(rows.a.length - 1, i + 1))} disabled={cursorA >= rows.a.length - 1} className={`${btn} border border-line text-ink-2 disabled:opacity-40`} data-ay-skip="1">{nameA} → next</button>
             <button type="button" onClick={() => setCursorA((i) => Math.max(0, i - 1))} disabled={cursorA <= 0} className={`${btn} border border-line text-ink-2 disabled:opacity-40`} data-ay-skip="1">{nameA} ← back</button>
             <button type="button" onClick={() => setCursorB((i) => Math.min(rows.b.length - 1, i + 1))} disabled={cursorB >= rows.b.length - 1} className={`${btn} border border-line text-ink-2 disabled:opacity-40`} data-ay-skip="1">{nameB} → next</button>

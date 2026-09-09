@@ -180,16 +180,19 @@ function timeline(ctx: CanvasRenderingContext2D, rows: CastRow[], right: boolean
   if (!n) return;
   const x0 = right ? 1312 : 32;
   const railX = right ? x0 + 576 - 9 - 6 : x0 + 9;
+  // The cursor may sit BETWEEN rows while it slides: the gold rail follows it exactly, the ticks
+  // and the ink change over at the halfway point.
   const cur = Math.max(0, Math.min(n - 1, cursor));
+  const at = Math.round(cur);
   ctx.fillStyle = INK3;
   ctx.fillRect(railX, top + 32, 6, Math.max(0, (n - 1) * 64));
   ctx.fillStyle = GOLD;
   ctx.fillRect(railX, top + 32, 6, cur * 64);
   rows.forEach((r, i) => {
     const y = top + i * 64;
-    const past = i < cur, now = i === cur;
+    const past = i < at, now = i === at;
     const tickW = now ? 34 : 24;
-    ctx.fillStyle = i <= cur ? GOLD : INK3;
+    ctx.fillStyle = i <= at ? GOLD : INK3;
     ctx.fillRect(right ? x0 + 576 - tickW : x0, y + 29, tickW, 6);
     const color = now ? INK1 : past ? INK2 : INK3;
     ctx.fillStyle = color;

@@ -3150,6 +3150,8 @@ export type CastRequest = {
   meet: CastMeet | null;
   /** Set once the host's device has written an episode file. */
   recorded?: { at: number; note: string };
+  /** When the host confirmed the episode; 0 until then. Booking a time waits for it. */
+  confirmed: number;
   /** For the couple: '' | recorded | finishing | finished. */
   stage?: string;
   /** The finishing run on Kaggle: '' | queued | running | done | failed, and what it left. */
@@ -3198,6 +3200,10 @@ export function castAccept(k: string) {
 }
 export function castSchedule(start: number) {
   return post<{ ok: boolean; request: CastRequest; meet_url: string }>("/artacast/schedule", { start: Math.round(start) });
+}
+/** The host's word: confirm (ok) or decline an episode. Operators may act for a host. */
+export function castConfirm(id: number, ok: boolean, note?: string) {
+  return post<{ ok: boolean; request?: CastRequest; declined?: boolean; already?: boolean }>("/artacast/confirm", { id, ok: ok ? 1 : 0, ...(note ? { note } : {}) });
 }
 export function castWithdraw() {
   return post<{ ok: boolean; note: string }>("/artacast/withdraw", {});

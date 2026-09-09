@@ -573,6 +573,7 @@ final class Rest {
 		[ 'POST', 'artacast/invite',               'Cast::invite',        'user'   ], // mint + email the partner's single-use link (hash stored)
 		[ 'POST', 'artacast/accept',               'Cast::accept',        'user'   ], // {k} the partner's click, signed in as themselves — spent atomically
 		[ 'POST', 'artacast/schedule',             'Cast::schedule',      'user'   ], // {start} take a recording slot — through Booking::take, seats the partner
+		[ 'POST', 'artacast/confirm',                 'Cast::confirm',       'user' ], // the host confirms (ok=1) or declines (ok=0) an episode; booking waits for it
 		[ 'POST', 'artacast/withdraw',             'Cast::withdraw',      'user'   ], // the requester takes it back
 		[ 'GET',  'artacast/inbox',                'Cast::inbox',         'user'   ], // host/operator: every live request
 		[ 'POST', 'artacast/host-open',            'Cast::host_open',     'user'   ], // a host: make sure my calendar is open to couples (the 'artacast' booking rule; idempotent)

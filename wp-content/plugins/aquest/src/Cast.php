@@ -278,6 +278,7 @@ final class Cast {
 			],
 			'meet'      => $meet,
 			'recorded'  => [ 'at' => (int) ( $r['recorded_at'] ?? 0 ), 'note' => (string) ( $r['recorded_note'] ?? '' ) ],
+			'confirmed' => (int) ( $r['confirmed_at'] ?? 0 ),
 			// One word the couple can read without the host's detail: nothing · recorded · finishing · finished
 			'stage'     => (int) ( $r['pipe_done'] ?? 0 ) > 0 && 'done' === (string) ( $r['pipe_state'] ?? '' ) ? 'finished'
 				: ( in_array( (string) ( $r['pipe_state'] ?? '' ), [ 'queued', 'running', 'failed' ], true ) ? 'finishing'
@@ -464,6 +465,9 @@ final class Cast {
 				'host_id'      => (int) ( $data['host_id'] ?? $h->ID ),
 				'status'       => 'draft',
 				'a_name'       => self::clean_text( '' !== $full ? $full : ( $me ? $me->display_name : '' ), self::NAME_MAX ),
+				// THEIR PROFILE PICTURE IS THE PORTRAIT until they choose another: the frame airs a
+				// face, and the one they already show the platform is the obvious first answer.
+				'a_photo'      => self::portrait_of( $uid ),
 				'a_born'       => (string) ( self::clean_date( get_user_meta( $uid, 'aq_birthday', true ) ) ?? '' ),
 				'a_rows'       => '[]',
 				'b_rows'       => '[]',
@@ -615,12 +619,16 @@ final class Cast {
 			return Rest::err( 'busy', 'You already have an ArtaCast request of your own. Withdraw it first if you would rather join this one.', 409 );
 		}
 
-		$won = Data::update( 'aq_cast_requests', [
+		$fields = [
 			'partner_id'      => $uid,
 			'invite_token'    => '',
 			'invite_accepted' => $now,
 			'updated'         => $now,
-		], [ 'id' => (int) $r['id'], 'invite_token' => $hash, 'partner_id' => 0 ] );
+		];
+		// The partner's own profile picture becomes their portrait, unless their spouse already
+		// chose one for them.
+		if ( '' === (string) $r['b_photo'] ) { $fields['b_photo'] = self::portrait_of( $uid ); }
+		$won = Data::update( 'aq_cast_requests', $fields, [ 'id' => (int) $r['id'], 'invite_token' => $hash, 'partner_id' => 0 ] );
 		if ( ! $won ) { return Rest::err( 'bad_invite', 'That invitation was just used.', 410 ); }
 
 		$r = self::row( (int) $r['id'] );
@@ -680,6 +688,63 @@ final class Cast {
 	 * passed back verbatim, the same two letters. What this adds afterwards is the show's own
 	 * wording on the meeting, the partner's chair, and the row's link to it.
 	 */
+	/** The member's OWN picture — uploaded, or their typology pick — never the season sigil or a
+	 *  gravatar, which are not portraits. Empty when we hold none. */
+	public static function portrait_of( $uid ) {
+		$uid = (int) $uid;
+		if ( $uid <= 0 ) { return ''; }
+		$up = (string) get_user_meta( $uid, 'aq_avatar_url', true );
+		if ( '' !== $up ) { return esc_url_raw( $up ); }
+		$pick = (string) get_user_meta( $uid, 'aq_typology_pic', true );
+		return '' !== $pick ? esc_url_raw( $pick ) : '';
+	}
+
+	/**
+	 * POST artacast/confirm {id, ok, note?} — THE HOST'S WORD. A couple's request goes to the host
+	 * first; the host looks at the frame and confirms, and only then can a time be booked. Declining
+	 * ends the request (and any recording already booked) with a letter to both, worded plainly.
+	 * Operators may confirm on a host's behalf.
+	 */
+	public static function confirm( $req ) {
+		if ( Rest::throttle( 'aq_cast_confirm', 60, 3600 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+		$r = self::row( Rest::pint( $req, 'id', 0 ) );
+		if ( ! $r || 'cancelled' === (string) $r['status'] ) { return Rest::err( 'not_found', 'No such request.', 404 ); }
+		$h = self::host_of( $r );
+		if ( ! ( ( $h && (int) $h->ID === $uid ) || current_user_can( 'manage_options' ) ) ) {
+			return Rest::err( 'forbidden', 'Only the host confirms an episode.', 403 );
+		}
+		$now   = Data::now();
+		$ok    = Rest::pint( $req, 'ok', 1 ) === 1;
+		$names = trim( (string) $r['a_name'] . ( '' !== (string) $r['b_name'] ? ' & ' . (string) $r['b_name'] : '' ) );
+		$hname = Mailer::safe_var( $h ? self::card( $h->ID )['name'] : 'The host' );
+		$people = array_values( array_filter( [ (int) $r['requester_id'], (int) $r['partner_id'] ] ) );
+		if ( $ok ) {
+			if ( (int) $r['confirmed_at'] > 0 ) { return [ 'ok' => true, 'already' => true, 'request' => self::payload( self::row( (int) $r['id'] ), $uid ) ]; }
+			Data::update( 'aq_cast_requests', [ 'confirmed_at' => $now, 'updated' => $now ], [ 'id' => (int) $r['id'] ] );
+			foreach ( $people as $p ) {
+				Notify::push_mail( $p, 'artacast', $hname . ' confirmed your ArtaCast episode', 'Pick a recording time from your show page.', '/artacast/',
+					'castok' . (int) $r['id'] . '-' . $p, 'cast_confirmed', [ 'host' => $hname, 'names' => Mailer::safe_var( $names, 90 ) ] );
+			}
+			return [ 'ok' => true, 'request' => self::payload( self::row( (int) $r['id'] ), $uid ) ];
+		}
+		// Declined: the recording (if booked) is called off by its host — this caller — through
+		// ArtaMeet's own cancel, then the request is closed like a withdrawal.
+		$note = mb_substr( trim( wp_strip_all_tags( (string) Rest::p( $req, 'note', '' ) ) ), 0, 300 );
+		if ( (int) $r['meet_id'] > 0 ) {
+			$undo = new \WP_REST_Request();
+			$undo->set_param( 'id', (int) $r['meet_id'] );
+			Meetings::cancel( $undo );
+		}
+		Data::update( 'aq_cast_requests', [ 'status' => 'cancelled', 'invite_token' => '', 'invite_exp' => 0, 'updated' => $now ], [ 'id' => (int) $r['id'] ] );
+		foreach ( $people as $p ) {
+			Notify::push_mail( $p, 'artacast', $hname . ' could not take your ArtaCast episode', $note, '/artacast/',
+				'castno' . (int) $r['id'] . '-' . $p, 'cast_declined', [ 'host' => $hname, 'names' => Mailer::safe_var( $names, 90 ), 'note_line' => '' !== $note ? "\n\nTheir note: " . Mailer::safe_var( $note, 300 ) : '' ] );
+		}
+		return [ 'ok' => true, 'declined' => true ];
+	}
+
 	public static function schedule( $req ) {
 		$uid = Rest::uid();
 		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
@@ -691,6 +756,9 @@ final class Cast {
 		$h = self::host_of( $r );
 		if ( ! $h ) { return Rest::err( 'no_host', 'The show has no host configured yet.', 503 ); }
 		if ( (int) $h->ID === $uid || (int) $h->ID === (int) $r['partner_id'] ) { return Rest::err( 'own_show', 'Your host cannot be one of you.', 400 ); }
+		// THE HOST'S WORD COMES FIRST. A time is booked in the host's own calendar; the host looks
+		// at the couple and their frame and confirms before that hour is theirs to take.
+		if ( (int) ( $r['confirmed_at'] ?? 0 ) <= 0 ) { return Rest::err( 'unconfirmed', 'Your host hasn’t confirmed the episode yet — you will be told the moment they do, and the times open then.', 409 ); }
 		if ( ! self::rule( $h ) ) { return Rest::err( 'closed', 'Your host’s calendar is not open yet.', 409 ); }
 
 		// A recording already booked stands: moving it is the host's act from the meeting page, or
