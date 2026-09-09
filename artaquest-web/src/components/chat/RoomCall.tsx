@@ -1226,7 +1226,9 @@ export function RoomCall({ room, roomKey, me, onLeft, episode }: {
       {/* PRIMARY: reachable with one thumb, 40px tall, and Leave where a thumb already is. It
           WRAPS: five pills and a countdown do not fit across 393px, and a control bar that
           overflows is a control bar with a Leave button nobody can reach. */}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Room on the right, on a phone: the shell's floating ArtaBot launcher sits in that corner
+          and was covering the Leave button — the one control that must never be under anything. */}
+      <div className={`flex flex-wrap items-center gap-2 ${focus ? "" : "pe-16 sm:pe-0"}`}>
         {timerEnds && (
           <span className={`${btn} ${left <= 10 ? "bg-yang text-on-accent" : "border border-line text-ink"}`}
             aria-live="polite" data-ay-skip="1">

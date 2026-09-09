@@ -472,7 +472,17 @@ export default function Calendar() {
       <div className="mx-auto flex w-full max-w-[1076px] flex-col gap-4 md:flex-row md:items-start lg:gap-7">
         <main className="flex w-full min-w-0 flex-col gap-4 md:max-w-2xl md:flex-1">
           <Segmented className="[&>button]:h-10" label="Your time" value={view}
-            onChange={(v) => setView(v as "ahead" | "free")}
+            onChange={(v) => {
+              const next = v as "ahead" | "free";
+              setView(next);
+              // The tab lives in the URL too, so the back button and a shared link both mean
+              // something — it was read from ?tab= once and never written back.
+              try {
+                const u = new URL(window.location.href);
+                if (next === "free") u.searchParams.set("tab", "free"); else u.searchParams.delete("tab");
+                window.history.replaceState(window.history.state, "", u.toString());
+              } catch { /* nothing to do without a URL */ }
+            }}
             options={[{ value: "ahead", label: "Ahead" }, { value: "free", label: "When I’m free" }]} />
 
           {view === "free" ? (

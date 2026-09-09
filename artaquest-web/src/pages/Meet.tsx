@@ -1463,7 +1463,9 @@ function MeetingPage({ id }: { id: number }) {
             </p>
             <HostZoneLine meet={meet} />
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              {meet.status !== "cancelled" && now < Number(meet.end_ts) && (
+              {/* Only while it is still ahead — "Starts 56 seconds ago" under a "Happening now" pill
+                  is two surfaces disagreeing about one clock. */}
+              {meet.status !== "cancelled" && now < Number(meet.start_ts) && (
                 <p className="text-[12.5px] text-ink-2">Starts <span data-ay-skip="1">{fmtRelative(meet.start_ts, now)}</span></p>
               )}
               {meet.status !== "cancelled" && (
