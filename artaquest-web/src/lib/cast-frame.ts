@@ -22,9 +22,14 @@ export function timelineRows(side: CastSide, married_y: number): CastRow[] {
     const label = `Born ${Number(m[3])} ${MONTHS[Number(m[2]) - 1] || ""}${side.place ? ` · ${side.place}` : ""}`;
     out.push({ y: Number(m[1]), l: label });
   }
-  if (married_y > 0) out.push({ y: married_y, l: "Married" });
-  const rest = (side.rows || []).filter((r) => r && r.y > 0 && r.l).slice().sort((p, q) => p.y - q.y);
-  return [...out, ...rest].slice(0, 8);
+  // IN YEAR ORDER, birth first. The wedding used to be pinned second whatever its year, so a
+  // milestone from before the marriage read as if it came after it. Birth stays at the top even
+  // when a stray milestone predates it — a rail that starts anywhere but the birth is unreadable.
+  const later = [
+    ...(married_y > 0 ? [{ y: married_y, l: "Married" }] : []),
+    ...(side.rows || []).filter((r) => r && r.y > 0 && r.l),
+  ].sort((p, q) => p.y - q.y);
+  return [...out, ...later].slice(0, 8);
 }
 
 export const firstName = (name: string) => (name || "").trim().split(/\s+/)[0] || "";
