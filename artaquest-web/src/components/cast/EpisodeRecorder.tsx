@@ -101,6 +101,25 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
 
   useEffect(() => { state.current = { names, cursorA, cursorB }; }, [names, cursorA, cursorB]);
 
+  /** WHOSE PICTURE HAS NOT ARRIVED. A window recorded before its guest's video reached this
+   *  device is a dark window on the record — the host is told before pressing Record, in words,
+   *  and may still record (a guest whose camera is off is a choice, not a fault). */
+  const [missing, setMissing] = useState<string[]>([]);
+  useEffect(() => {
+    const read = () => {
+      const out: string[] = [];
+      for (const side of [spec.a, spec.b]) {
+        const s = feedFor(side.uid);
+        const t = s?.getVideoTracks()[0];
+        if (!t || t.readyState !== "live" || t.muted) out.push(side.name || "a guest");
+      }
+      setMissing((cur) => (cur.join("|") === out.join("|") ? cur : out));
+    };
+    read();
+    const iv = window.setInterval(read, 1500);
+    return () => window.clearInterval(iv);
+  }, [feedFor, spec]);
+
   const nextBoth = useCallback(() => {
     setCursorA((i) => Math.min(rows.a.length - 1, i + 1));
     setCursorB((i) => Math.min(rows.b.length - 1, i + 1));
@@ -337,7 +356,7 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
           <canvas ref={canvas} width={FRAME_W} height={FRAME_H} className="w-full rounded-card bg-black" aria-label="The episode frame as it is being recorded" />
           <div className="flex flex-wrap items-center gap-2">
             {!rec ? (
-              <button type="button" onClick={() => void start()} className={`${btn} bg-yang px-4 text-on-accent`} disabled={!type}>Record</button>
+              <button type="button" onClick={() => void start()} className={`${btn} bg-yang px-4 text-on-accent`} disabled={!type}>{missing.length ? "Record anyway" : "Record"}</button>
             ) : (
               <button type="button" onClick={stop} className={`${btn} bg-red-600 px-4 text-white`}>Stop &amp; save</button>
             )}
@@ -354,6 +373,11 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
             <button type="button" onClick={() => setCursorB((i) => Math.min(rows.b.length - 1, i + 1))} disabled={cursorB >= rows.b.length - 1} className={`${btn} border border-line text-ink-2 disabled:opacity-40`} data-ay-skip="1">{nameB} → next</button>
             <button type="button" onClick={() => setCursorB((i) => Math.max(0, i - 1))} disabled={cursorB <= 0} className={`${btn} border border-line text-ink-2 disabled:opacity-40`} data-ay-skip="1">{nameB} ← back</button>
           </div>
+          {!rec && missing.length > 0 && (
+            <p className="text-[12.5px] leading-relaxed text-yang" role="status">
+              No picture yet from <span data-ay-skip="1">{missing.join(" and ")}</span> — their window would record dark. Wait for it, ask them to turn their camera on, or record anyway.
+            </p>
+          )}
           <p className="text-[12px] leading-relaxed text-ink-3">
             {type
               ? <>1920×1080 at 30 fps, {type.label}, 8 Mbit/s — upload it to YouTube as it is. {diskOk !== false
