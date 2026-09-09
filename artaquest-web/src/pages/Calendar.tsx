@@ -414,10 +414,15 @@ export default function Calendar() {
    *  for a timed one, UTC for a date — so a deadline sits under the day it is actually due. */
   const groups = useMemo<DayGroup[]>(() => {
     const out: DayGroup[] = [];
+    // BY KEY, NOT BY ADJACENCY. Timed items are keyed in the viewer's zone and all-day ones in
+    // UTC, so a list sorted by instant is NOT sorted by key — west of Greenwich a deadline dated
+    // the 10th sorts before a meeting at 23:00 on the 9th, and folding only against the previous
+    // group printed the 9th twice with a duplicate React key between them.
+    const byKey = new Map<string, DayGroup>();
     for (const it of items || []) {
       const key = dayKey(it.start_ts, zoneOf(it));
-      const last = out[out.length - 1];
-      if (last && last.key === key) { last.items.push(it); continue; }
+      const last = byKey.get(key);
+      if (last) { last.items.push(it); continue; }
       // Today and Tomorrow are OUR words and are left translatable; every other heading is machine
       // output and is marked at the call site. The key is parsed back at UTC noon purely to format
       // it, so no zone can drag the heading onto a neighbouring day.
@@ -432,7 +437,9 @@ export default function Calendar() {
         }, "UTC"),
         items: [it],
       });
+      byKey.set(key, out[out.length - 1]);
     }
+    out.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
     return out;
   }, [items, todayKey, tomorrowKey]);
 

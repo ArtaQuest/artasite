@@ -4,7 +4,7 @@ import {
   ApiError,
   meetCalRotate, meetEmailPrefs, meetCancel, meetCreate, meetGet, meetInvite, meetList, meetLobby,
   meetRetime, meetRetimeRespond, castEpisode,
-  meetNow, meetOpen, meetRsvp, meetSeat, meetUninvite, meetUpdate, roomsCall,
+  meetEnd, meetLeave, meetNow, meetOpen, meetRsvp, meetSeat, meetUninvite, meetUpdate, roomsCall,
   type Meet as MeetRow, type MeetCal, type MeetGuest, type MeetLobby, type MeetRsvp,
 } from "../lib/api";
 import { isLoggedIn, localePath } from "../lib/wp";
@@ -17,6 +17,7 @@ import { RoomCall } from "../components/chat/RoomCall";
 import type { EpisodeSpec } from "../lib/episode-frame";
 import { CallModeChoice } from "../components/chat/CallPanel";
 import { CALL_MODES, callModePref, deviceSuggestedMode, rememberCallMode } from "../components/chat/callmode";
+import { PreJoin } from "../components/chat/PreJoin";
 import type { CallMode } from "../lib/webrtc";
 import {
   Avatar, Button, cx, EmptyState, ErrorNote, Field, Input, LoadMoreButton, PageHero,
@@ -235,11 +236,12 @@ function GuestList({ guests, seats, hostId, isHost, bound, busy, onRemove }: {
           <li key={g.id} className="flex items-center gap-2.5">
             {/* A name in a guest list is a person you may not know yet, and it went nowhere. It is
                 a link to their profile now — the only route this page offered to anyone in it. */}
-            <Link to={localePath(`/u/${g.slug}`)} data-ay-skip="1"
+            <Link to={localePath(`/u/${g.slug}`)}
               className="group flex min-h-[40px] min-w-0 flex-1 items-center gap-2.5 outline-none">
               <Avatar src={g.avatar} name={g.name} className="h-8 w-8 shrink-0" />
               <span className="min-w-0 flex-1">
-                <span className={cx("block text-ink group-hover:text-yang", nameClass(g.name, 14))}>{g.name}</span>
+                {/* The NAME is skipped; the standing beneath it is our own words and stays translatable. */}
+                <span className={cx("block text-ink group-hover:text-yang", nameClass(g.name, 14))} data-ay-skip="1">{g.name}</span>
                 <span className="block truncate text-[12px] text-ink-2">{standing(g)}</span>
               </span>
             </Link>
@@ -272,7 +274,7 @@ function PrivacyNote() {
 
 /** The subscription panel. The URL is a signature over the member, not a stored token — resetting it
  *  is the only revocation there is, so the control says exactly what it costs. */
-function CalendarPanel({ cal, onRotate }: { cal: MeetCal | null; onRotate: (c: MeetCal) => void }) {
+function CalendarPanel({ cal, failed, onRotate }: { cal: MeetCal | null; failed?: boolean; onRotate: (c: MeetCal) => void }) {
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -309,7 +311,9 @@ function CalendarPanel({ cal, onRotate }: { cal: MeetCal | null; onRotate: (c: M
         Every meeting you’re invited to, kept up to date
       </p>
       {!cal ? (
-        <StatusNote className="py-6">Fetching your calendar address…</StatusNote>
+        failed
+          ? <ErrorNote>Couldn’t fetch your calendar address — reload to try again.</ErrorNote>
+          : <StatusNote className="py-6">Fetching your calendar address…</StatusNote>
       ) : (
         <>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -382,7 +386,9 @@ function MeetEmailToggle() {
 function NewMeetingForm({ seatsMax, onDone, onClose }: {
   seatsMax: number; onDone: (m: MeetRow, warnings: string[]) => void; onClose: () => void;
 }) {
-  const [initial] = useState(() => tsToZoned(Math.round(Date.now() / 1000) + 3600, VIEWER_TZ));
+  // The next half hour at least an hour out — "13:47" is not a time anybody schedules a meeting for.
+  const [initial] = useState(() => tsToZoned(Math.ceil((Math.round(Date.now() / 1000) + 3600) / 1800) * 1800, VIEWER_TZ));
+  const [openedAt] = useState(() => Math.round(Date.now() / 1000));
   const [title, setTitle] = useState("");
   const [agenda, setAgenda] = useState("");
   const [date, setDate] = useState(initial.date);
@@ -449,7 +455,7 @@ function NewMeetingForm({ seatsMax, onDone, onClose }: {
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <Field label="Date" className="flex-1">
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <Input type="date" value={date} min={tsToZoned(openedAt, tz).date} onChange={(e) => setDate(e.target.value)} />
         </Field>
         <Field label="Time" className="flex-1">
           <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
@@ -463,7 +469,7 @@ function NewMeetingForm({ seatsMax, onDone, onClose }: {
         </Field>
         <Field label="People" className="flex-1"
           hint="A call with no server in the middle tops out at five">
-          <Select value={String(seats)} onChange={(v) => setSeats(Number(v))} label="People"
+          <Select value={String(seats)} onChange={(v) => { const n = Number(v); setSeats(n); setGuests((cur) => cur.slice(0, Math.max(0, n - 1))); }} label="People"
             options={seatOptions} />
         </Field>
       </div>
@@ -474,7 +480,7 @@ function NewMeetingForm({ seatsMax, onDone, onClose }: {
           a formatted date is a live value the i18n mesh would otherwise persist into the PUBLIC
           translations table. */}
       <Field label="Time zone" hint={start ? <>That is <span data-ay-skip="1">{longWhen(start)}</span> where you are</> : undefined}>
-        <Select value={tz} onChange={setTz} label="Time zone" options={ZONES} />
+        <Select value={tz} onChange={setTz} label="Time zone" options={ZONES} skipOptions />
       </Field>
 
       <Field label="Guests" optional hint="Members, by their @username">
@@ -630,6 +636,16 @@ function MeetList({ embedded = false }: { embedded?: boolean }) {
 
   useEffect(() => { setItems(null); load(); }, [load]);
 
+  /** THE LIST KEEPS UP. `phase` is computed by the server at fetch time, so a page left open through
+   *  T-15m used to keep saying "Scheduled" about the meeting the member was about to join, with no
+   *  Join on the row until a reload. Re-read once a minute while the tab is visible, and on return. */
+  useEffect(() => {
+    const again = () => { if (!document.hidden && scope === "upcoming") load(); };
+    const t = window.setInterval(again, 60000);
+    document.addEventListener("visibilitychange", again);
+    return () => { window.clearInterval(t); document.removeEventListener("visibilitychange", again); };
+  }, [load, scope]);
+
   /** The list, cut into days. The server already returns them in order, so this is a fold rather
    *  than a sort — and it stays a fold, because re-sorting here would silently disagree with the
    *  cursor the "load more" button pages on. */
@@ -660,7 +676,7 @@ function MeetList({ embedded = false }: { embedded?: boolean }) {
     if (starting) return;
     setStarting(true); setStartErr(null);
     try {
-      const r = await meetNow();
+      const r = await meetNow({ tz: VIEWER_TZ });
       nav(localePath(`/meet/${r.meet.id}`));
     } catch (e) {
       setStarting(false);
@@ -772,7 +788,10 @@ function MeetList({ embedded = false }: { embedded?: boolean }) {
     </>
   );
 
-  if (embedded) return body;
+  /* Embedded in ArtaChat, the calendar subscription and the email switch still need a home — the
+     meeting letters point at them ("turn off Email me about my meetings"), and this is now the
+     only page the list lives on. */
+  if (embedded) return <>{body}<CalendarPanel cal={cal} failed={failed} onRotate={setCal} /></>;
 
   return (
     <div className="flex flex-col gap-5 pb-12">
@@ -786,7 +805,7 @@ function MeetList({ embedded = false }: { embedded?: boolean }) {
 
         <aside className="flex w-full flex-col gap-3 md:order-2 md:w-[300px] md:shrink-0 lg:w-[330px]"
           aria-label="Search, calendar and what Meet is">
-          <CalendarPanel cal={cal} onRotate={setCal} />
+          <CalendarPanel cal={cal} failed={failed} onRotate={setCal} />
           <PrivacyNote />
         </aside>
       </div>
@@ -799,15 +818,22 @@ export function MeetingsPanel() { return <MeetList embedded />; }
 
 /* ───────────────────────── /meet/:id — one meeting ───────────────────────── */
 
-function HostControls({ meet, busy, onInvite, onRetime, onCancel }: {
-  meet: MeetRow; busy: boolean;
+function HostControls({ meet, busy, now, onInvite, onRetime, onEdit, onEnd, onCancel }: {
+  meet: MeetRow; busy: boolean; now: number;
   onInvite: (handle: string) => void;
   onRetime: (start: number, minutes: number, tz: string) => void;
+  onEdit: (title: string, agenda: string) => void;
+  onEnd: () => void;
   onCancel: () => void;
 }) {
   const [handle, setHandle] = useState("");
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(String(meet.title || ""));
+  const [agenda, setAgenda] = useState(String(meet.agenda || ""));
   const [confirming, setConfirming] = useState(false);
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const started = Number(meet.start_ts) <= now;
   const from = useMemo(() => tsToZoned(Number(meet.start_ts), meet.tz || VIEWER_TZ), [meet.start_ts, meet.tz]);
   const [date, setDate] = useState(from.date);
   const [time, setTime] = useState(from.time);
@@ -821,17 +847,37 @@ function HostControls({ meet, busy, onInvite, onRetime, onCancel }: {
       <div className="mt-3 flex gap-2">
         <Input value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="@username" className="flex-1"
           aria-label="Invite a member by username"
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onInvite(handle); setHandle(""); } }} />
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (!busy && handle.trim()) { onInvite(handle); setHandle(""); } } }} />
         <button type="button" disabled={busy || !handle.trim()} onClick={() => { onInvite(handle); setHandle(""); }}
           className="h-11 shrink-0 rounded-pill bg-yang px-4 text-[13.5px] font-bold text-on-accent disabled:opacity-50">
           Invite
         </button>
       </div>
 
+      {/* THE WORDS. A typo in a title used to be permanent from the page, though the server took
+          a new one all along. */}
+      <div className="mt-3 border-t border-line pt-3">
+        <button type="button" aria-expanded={editing}
+          onClick={() => setEditing((o) => { if (!o) { setTitle(String(meet.title || "")); setAgenda(String(meet.agenda || "")); } return !o; })}
+          className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink">
+          {editing ? "Keep the words" : "Title and agenda"}
+        </button>
+        {editing && (
+          <div className="mt-2.5 flex flex-col gap-2.5">
+            <Field label="Title" required><Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={60} /></Field>
+            <Field label="Agenda" optional><Textarea value={agenda} onChange={(e) => setAgenda(e.target.value)} rows={3} maxLength={500} /></Field>
+            <div>
+              <button type="button" disabled={busy || !title.trim()} onClick={() => { onEdit(title.trim(), agenda.trim()); setEditing(false); }}
+                className="h-10 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">Save</button>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Not while it is happening. Moving a meeting that has already started is not a thing a
           host does — they invite the missing person, or they end it — and the server would refuse
           the new start as being in the past anyway. */}
-      {meet.status === "scheduled" && (
+      {meet.status === "scheduled" && !started && (
       <div className="mt-3 border-t border-line pt-3">
         {/* Refill from the meeting each time the panel opens. Initialising the fields once meant
             that after a successful retime the form still showed the OLD time, and a second edit
@@ -850,7 +896,7 @@ function HostControls({ meet, busy, onInvite, onRetime, onCancel }: {
         {open && (
           <div className="mt-2.5 flex flex-col gap-2.5">
             <div className="flex flex-col gap-2.5 sm:flex-row">
-              <Field label="Date" className="flex-1"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+              <Field label="Date" className="flex-1"><Input type="date" value={date} min={tsToZoned(now, tz).date} onChange={(e) => setDate(e.target.value)} /></Field>
               <Field label="Time" className="flex-1"><Input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></Field>
             </div>
             <Field label="Length"
@@ -871,6 +917,25 @@ function HostControls({ meet, busy, onInvite, onRetime, onCancel }: {
           </div>
         )}
       </div>
+      )}
+
+      {/* ENDING is not cancelling. A meeting that ran and finished early used to have only "Cancel",
+          which emails every guest that it was called off. */}
+      {started && Number(meet.end_ts) > now && (
+        <div className="mt-3 border-t border-line pt-3">
+          {confirmEnd ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[12.5px] text-ink-2">The room closes for everyone and the entry keeps its time.</span>
+              <button type="button" disabled={busy} onClick={() => { setConfirmEnd(false); onEnd(); }}
+                className="h-10 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">End it</button>
+              <button type="button" onClick={() => setConfirmEnd(false)}
+                className="h-10 rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2">Keep going</button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setConfirmEnd(true)}
+              className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink">End the meeting</button>
+          )}
+        </div>
       )}
 
       <div className="mt-3 border-t border-line pt-3">
@@ -912,6 +977,10 @@ function JoinAs() {
   const chosen = CALL_MODES.find((m) => m.value === mode);
   return (
     <div className="mt-4 border-t border-line pt-3 text-start">
+      {/* SEE YOURSELF BEFORE ANYONE ELSE DOES. The preview opens the camera and microphone on
+          request, shows the picture and the level, and lets the member pick which device — the
+          choice is remembered for the call and for the next one. */}
+      <PreJoin mode={mode} />
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <p className="text-[12.5px] text-ink-2">
           You’ll join with <span className="font-semibold text-ink">{chosen?.label}</span>
@@ -1159,7 +1228,9 @@ function MeetingPage({ id }: { id: number }) {
       ticks.current += 1;
       if (inFlight || dead) return;
       inFlight = true;
-      timer = undefined;
+      // A tick pulled forward by an action must RETIRE the one that was pending, or the two chains
+      // both keep scheduling successors and every button press doubles the poll rate for good.
+      if (timer) { clearTimeout(timer); timer = undefined; }
       let wait = CALM_POLL_MS;
       try {
         const L = await meetLobby(id);
@@ -1229,11 +1300,18 @@ function MeetingPage({ id }: { id: number }) {
   // Being in the room and being on the call are two different rosters. Join once per bound room —
   // once only, so leaving the call does not immediately put you back in it.
   const roomId = Number(lobby?.room_id || 0);
+  const [joinTry, setJoinTry] = useState(0);
   useEffect(() => {
     if (!roomId || !hasKey || joinedRoom.current === roomId) return;
     joinedRoom.current = roomId;
-    void roomsCall(roomId, "join").catch(() => undefined);
-  }, [roomId, hasKey]);
+    // A failed join is retried, and said. Marking the room joined BEFORE the answer meant one lost
+    // request left the member looking at the chat with no call and no explanation.
+    void roomsCall(roomId, "join").catch(() => {
+      joinedRoom.current = 0;
+      setNote("Couldn’t join the call — trying again.");
+      window.setTimeout(() => setJoinTry((t) => t + 1), 3000);
+    });
+  }, [roomId, hasKey, joinTry]);
 
   const isHost = !!meet && Number(meet.host_id) === me && me > 0;
   const myRsvp: MeetRsvp = guests.find((g) => g.id === me)?.rsvp || "none";
@@ -1279,7 +1357,7 @@ function MeetingPage({ id }: { id: number }) {
   const [askAt, setAskAt] = useState("");
   const doAsk = () => act(async () => {
     const t = Math.round(new Date(askAt).getTime() / 1000);
-    if (!t) return;
+    if (!t || Number.isNaN(t)) throw new Error("Pick a date and a time.");
     const r = await meetRetime(id, t);
     setMeet(r.meet); setAskOpen(false); setAskAt("");
     tickNow.current();
@@ -1295,6 +1373,25 @@ function MeetingPage({ id }: { id: number }) {
     setMeet(r.meet);
     tickNow.current();
   }, "Couldn’t cancel the meeting.");
+  const doEdit = (title: string, agenda: string) => act(async () => {
+    const r = await meetUpdate({ id, title, agenda });
+    setMeet(r.meet);
+  }, "Couldn’t save that.");
+  const doEnd = () => act(async () => {
+    const r = await meetEnd(id);
+    setMeet(r.meet);
+    tickNow.current();
+  }, "Couldn’t end the meeting.");
+  const doLeave = () => act(async () => {
+    await meetLeave(id);
+    nav(localePath("/messages/?box=meetings"));
+  }, "Couldn’t leave the meeting.");
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const copyLink = () => {
+    const url = window.location.origin + localePath(`/meet/${id}`);
+    navigator.clipboard?.writeText(url).then(() => { setCopied(true); window.setTimeout(() => setCopied(false), 2000); }).catch(() => setNote("Couldn’t copy — the address bar has the link."));
+  };
 
   async function doOpen() {
     if (opening) return;
@@ -1365,12 +1462,19 @@ function MeetingPage({ id }: { id: number }) {
               <span className="text-ink-2"> · {durationLabel(minutes)}</span>
             </p>
             <HostZoneLine meet={meet} />
-            {meet.status !== "cancelled" && now < Number(meet.end_ts) && (
-              <p className="text-[12.5px] text-ink-2">Starts <span data-ay-skip="1">{fmtRelative(meet.start_ts, now)}</span></p>
-            )}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {meet.status !== "cancelled" && now < Number(meet.end_ts) && (
+                <p className="text-[12.5px] text-ink-2">Starts <span data-ay-skip="1">{fmtRelative(meet.start_ts, now)}</span></p>
+              )}
+              {meet.status !== "cancelled" && (
+                <button type="button" onClick={copyLink}
+                  className="inline-flex min-h-[40px] items-center text-[12.5px] font-semibold text-ink-2 underline underline-offset-2 hover:text-ink">
+                  {copied ? "Link copied" : "Copy the link"}
+                </button>
+              )}
+            </div>
           </header>
 
-          {err && <ErrorNote>{err}</ErrorNote>}
           {note && <StatusNote className="py-2">{note}</StatusNote>}
 
           {live ? (
@@ -1400,16 +1504,22 @@ function MeetingPage({ id }: { id: number }) {
             </section>
           )}
 
-          {meet.agenda && !live && (
-            <section className="rounded-card border border-line bg-space-2 p-4" aria-label="Agenda">
-              <h2 className="text-[14px] font-semibold text-ink">Agenda</h2>
+          {/* The agenda is for the meeting it belongs to — so it stays reachable DURING the call,
+              folded under a heading rather than gone. */}
+          {meet.agenda && (
+            <details open={!live} className="rounded-card border border-line bg-space-2 p-4">
+              <summary className="cursor-pointer text-[14px] font-semibold text-ink">Agenda</summary>
               <p data-ay-skip="1" className="mt-2 whitespace-pre-wrap text-[14px] leading-relaxed text-ink-2">{meet.agenda}</p>
-            </section>
+            </details>
           )}
         </main>
 
         <aside className={`flex w-full flex-col gap-3 md:order-2 md:w-[300px] md:shrink-0 lg:w-[330px] ${
           live ? "md:min-h-0 md:overflow-y-auto" : ""}`} aria-label="Search, guests and calendar">
+          {/* WHERE THE CONTROLS ARE. Every action that can fail lives in this column, and on a phone
+              this column is a screen below the header — an error rendered up there was an error
+              nobody saw. */}
+          {err && <ErrorNote>{err}</ErrorNote>}
           {meet.status !== "cancelled" && me > 0 && !isHost && (
             <div className="rounded-card border border-line bg-space-2 p-4">
               <RsvpControl mine={myRsvp} busy={busy} onPick={(r) => void doRsvp(r)} />
@@ -1425,16 +1535,24 @@ function MeetingPage({ id }: { id: number }) {
                   its calendar entry until the host says yes. */}
               {meet.status === "scheduled" && Number(meet.start_ts) > now && (
                 <div className="mt-3 border-t border-line pt-3">
+                  {/* WHOSE ask, in the READER's zone. This said "You asked" to every guest, about a
+                      time somebody else proposed, and echoed it in the host's zone — so a Londoner
+                      who typed 15:00 was told they had asked for 17:00. */}
                   {Number(meet.retime_ts) > 0 ? (
                     <p className="text-[12.5px] leading-relaxed text-ink-2">
-                      You asked for <span className="font-semibold text-ink" data-ay-skip="1">{longWhen(Number(meet.retime_ts), meet.tz)}</span>.
+                      {Number(meet.retime_by) === me
+                        ? <>You asked for </>
+                        : <><span data-ay-skip="1">{guests.find((g) => g.id === Number(meet.retime_by))?.name || "Another guest"}</span> asked for </>}
+                      <span className="font-semibold text-ink" data-ay-skip="1">{longWhen(Number(meet.retime_ts))}</span>.
                       {" "}Waiting for <span data-ay-skip="1">{guests.find((g) => g.id === Number(meet.host_id))?.name || "the host"}</span> to answer — until then it stays as it is.
                     </p>
                   ) : askOpen ? (
                     <div className="flex flex-col gap-2">
                       <label htmlFor="aq-ask-when" className="text-[12.5px] font-semibold text-ink">Suggest a time</label>
-                      <input id="aq-ask-when" type="datetime-local" value={askAt} onChange={(e) => setAskAt(e.target.value)}
-                        className="h-10 rounded-field border border-line bg-space-2 px-3 text-[14px] text-ink outline-none focus:border-yin-light" />
+                      <input id="aq-ask-when" type="datetime-local" value={askAt} min={tsToZoned(now + 600, VIEWER_TZ).date + "T" + tsToZoned(now + 600, VIEWER_TZ).time}
+                        onChange={(e) => setAskAt(e.target.value)}
+                        className="h-11 rounded-field border border-line bg-space-2 px-3 text-[14px] text-ink outline-none focus:border-yin-light" />
+                      <p className="text-[12px] text-ink-2">In your own time zone. Nothing moves until the host agrees.</p>
                       <div className="flex flex-wrap gap-2">
                         <button type="button" disabled={busy || !askAt} onClick={() => void doAsk()}
                           className="h-10 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">Ask</button>
@@ -1466,6 +1584,25 @@ function MeetingPage({ id }: { id: number }) {
                   )}
                 </div>
               )}
+              {/* A WAY OUT. "Can't make it" keeps the row, the calendar entry and the seat; this gives
+                  all three back — and, unlike a declined RSVP, leaves nothing that blocks a later
+                  change of heart. */}
+              {!(String(meet.context_type) === "book" && guests.length === 2) && Number(meet.end_ts) > now && (
+                <div className="mt-3 border-t border-line pt-3">
+                  {confirmLeave ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[12.5px] text-ink-2">It leaves your calendar, and the host is told.</span>
+                      <button type="button" disabled={busy} onClick={() => { setConfirmLeave(false); void doLeave(); }}
+                        className="h-10 rounded-pill bg-yang px-4 text-[13px] font-bold text-on-accent disabled:opacity-50">Leave it</button>
+                      <button type="button" onClick={() => setConfirmLeave(false)}
+                        className="h-10 rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2">Stay</button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => setConfirmLeave(true)}
+                      className="inline-flex min-h-[40px] items-center text-[12.5px] font-semibold text-ink-2 underline underline-offset-2 hover:text-ink">Leave this meeting</button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -1482,8 +1619,8 @@ function MeetingPage({ id }: { id: number }) {
                 {" "}asked for a different time
               </h2>
               <p className="mt-1.5 text-[13px] leading-relaxed text-ink-2">
-                They suggested <span className="font-semibold text-ink" data-ay-skip="1">{longWhen(Number(meet.retime_ts), meet.tz)}</span>.
-                {" "}It is <span data-ay-skip="1">{longWhen(meet.start_ts, meet.tz)}</span> now, and nothing moves until you decide.
+                They suggested <span className="font-semibold text-ink" data-ay-skip="1">{longWhen(Number(meet.retime_ts))}</span>.
+                {" "}It is <span data-ay-skip="1">{longWhen(meet.start_ts)}</span> now, and nothing moves until you decide.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="button" disabled={busy} onClick={() => void doAnswerAsk(true)}
@@ -1500,9 +1637,11 @@ function MeetingPage({ id }: { id: number }) {
               they were waiting for, no way to call it off. The server accepts both (Meetings::invite,
               ::cancel); only the page said no. */}
           {isHost && (meet.status === "scheduled" || meet.status === "live") && (
-            <HostControls meet={meet} busy={busy}
+            <HostControls meet={meet} busy={busy} now={now}
               onInvite={doInvite}
               onRetime={(s, m, tz) => void doRetime(s, m, tz)}
+              onEdit={(t, a) => void doEdit(t, a)}
+              onEnd={() => void doEnd()}
               onCancel={() => void doCancel()} />
           )}
 

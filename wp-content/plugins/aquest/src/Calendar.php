@@ -145,7 +145,7 @@ final class Calendar {
 		foreach ( $rows as $m ) {
 			$cancelled = 'cancelled' === (string) $m['status'];
 			$detail    = trim( (string) ( $m['agenda'] ?? '' ) );
-			$out[] = self::item(
+			$item = self::item(
 				'meeting', (int) $m['id'], (string) $m['title'],
 				(int) $m['start_ts'], (int) $m['end_ts'], false,
 				'/meet/' . (int) $m['id'],
@@ -157,6 +157,12 @@ final class Calendar {
 				// feeds is looking at one meeting, not two.
 				'artameet-' . (int) $m['id']
 			);
+			// ONE Google link per meeting. ArtaMeet composes its own — join link, seat count and the
+			// sentence about what is and is not encrypted — and this feed used to compose a second,
+			// barer one for the same row. Two wordings for one event is exactly the drift both files
+			// claim to prevent.
+			$item['gcal_url'] = Meetings::gcal_url( $m );
+			$out[] = $item;
 		}
 		return $out;
 	}

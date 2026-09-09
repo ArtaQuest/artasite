@@ -454,7 +454,25 @@ export type ChatPayload =
   /** The visible record of a call. `why` distinguishes a normal hangup from one nobody answered. */
   | { v: 2; t: "call"; act: "start" | "end"; sid?: string; dur?: number; why?: "declined" | "missed" | "failed" }
   /** The handshake. Never rendered; see the note above. */
-  | { v: 2; t: "rtc"; kind: "offer" | "answer" | "bye"; sid: string; sdp?: string; to?: number }
+  | { v: 2; t: "rtc"; kind: "offer" | "answer" | "bye"; sid: string; sdp?: string; to?: number;
+      /** An ICE restart on an EXISTING connection (same sid): the answerer renegotiates rather
+       *  than building a second peer connection for the same person. */
+      restart?: boolean;
+      /** On a `bye`: "and offer to me again" — the answering side gave up on a dead connection and
+       *  wants a fresh one, rather than leaving the call. */
+      retry?: boolean }
+  /** This member's microphone is on or off — so the others can show it, as every call surface does. */
+  | { v: 2; t: "mic"; on: boolean }
+  /** A reaction in a CALL — an emoji that floats over the sender's tile for a moment. Distinct
+   *  from the message reaction above, which references a row. */
+  | { v: 2; t: "cheer"; emoji: string }
+  /** The host asks ONE member to mute (`to`), or everyone (`to` absent). The member's own device
+   *  does the muting and says who asked; nothing here can reach into somebody else's microphone. */
+  | { v: 2; t: "hush"; to?: number }
+  /** The host ends the call for everyone. Each device leaves on its own; the room stays. */
+  | { v: 2; t: "end" }
+  /** Somebody started or stopped sharing a screen — so every device can put it on the stage. */
+  | { v: 2; t: "share"; on: boolean }
   /** One whiteboard stroke, a clear, or an undo of the sender's own last stroke. Points are
    *  normalised 0..1 so the drawing is the same shape on a phone and a laptop — see
    *  components/chat/Whiteboard. */

@@ -590,6 +590,8 @@ final class Rest {
 		[ 'POST', 'meet/cancel',                   'Meetings::cancel',    'user' ], // host only; the row STAYS (STATUS:CANCELLED)
 		[ 'POST', 'meet/invite',                   'Meetings::invite',    'user' ], // host only
 		[ 'POST', 'meet/uninvite',                 'Meetings::uninvite',  'user' ], // host only
+		[ 'POST', 'meet/leave',                    'Meetings::leave',     'user' ], // a guest takes themselves off the list
+		[ 'POST', 'meet/end',                      'Meetings::end',       'user' ], // host only; closes a meeting that has run — not a cancellation
 		[ 'POST', 'meet/rsvp',                     'Meetings::rsvp',      'user' ], // guest: yes|no|maybe
 		[ 'POST', 'meet/retime',                   'Meetings::retime',    'user' ], // guest: ask for a different time (a proposal, not a change)
 		[ 'POST', 'meet/retime-respond',           'Meetings::retime_respond', 'user' ], // host: accept it (goes through the ordinary retime) or decline
@@ -624,6 +626,7 @@ final class Rest {
 		[ 'GET',  'rooms/messages',                'Rooms::messages',     'user' ], // ?id=&after=|&cursor=
 		[ 'POST', 'rooms/send',                    'Rooms::send',         'user' ], // append one sealed row
 		[ 'POST', 'rooms/call',                    'Rooms::call',         'user' ], // join/leave the call roster (the handshake rides the room's own messages)
+		[ 'GET',  'rooms/ice',                     'Rooms::ice',          'user' ], // STUN + (from the Vault) a TURN relay for the pairs STUN cannot join
 		[ 'POST', 'rooms/mute',                    'Rooms::mute',         'user' ], // pull a remote GIF/image server-side so the browser can seal it — SSRF-fenced
 		[ 'GET',  'chat/email-prefs',             'Chat::email_prefs', 'user'  ], // is this member emailed about messages that arrive while away?
 		[ 'POST', 'chat/email-prefs',             'Chat::email_prefs', 'user'  ], // …and turn it off/on

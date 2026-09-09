@@ -155,7 +155,7 @@ final class Meetings {
 	 * Empty for a cancelled meeting, and for anything undated: "add this to my calendar" is not an
 	 * offer to make about a meeting that is not happening.
 	 */
-	private static function gcal_url( $m ) {
+	public static function gcal_url( $m ) {
 		$start = (int) $m['start_ts'];
 		$end   = (int) $m['end_ts'];
 		if ( $start <= 0 || $end <= $start || 'cancelled' === (string) $m['status'] ) { return ''; }
@@ -628,6 +628,12 @@ final class Meetings {
 		if ( $start < $now + 300 )      { return Rest::err( 'too_soon', 'Suggest a time at least five minutes out.', 400 ); }
 		if ( $start > $now + 31536000 ) { return Rest::err( 'too_far', 'Suggest a time within the next year.', 400 ); }
 		if ( $start === (int) $m['start_ts'] ) { return Rest::err( 'same_time', 'That is when it is already.', 400 ); }
+		// ONE proposal at a time, and it belongs to whoever made it. A second guest's ask used to
+		// overwrite the first in silence, and the first guest then read the other person's time as
+		// their own.
+		if ( (int) $m['retime_ts'] > 0 && (int) $m['retime_by'] !== $uid ) {
+			return Rest::err( 'pending', 'Somebody else has already suggested a time — the host answers that first.', 409 );
+		}
 
 		Data::update( 'aq_meets', [ 'retime_ts' => $start, 'retime_by' => $uid, 'updated' => $now ], [ 'id' => $mid ] );
 		// Same sanitiser the letters use: a display name reaches a subject line here too.
@@ -820,6 +826,54 @@ final class Meetings {
 	 * A bound room is left alone: deleting it would be the server destroying member data it cannot
 	 * read and cannot judge.
 	 */
+	/**
+	 * POST meet/end {id} — the HOST closes a meeting that has run. Not a cancellation: nobody is
+	 * told it "was cancelled", the calendar entry keeps its time, and the room is disposed of by
+	 * the ordinary tick as soon as the new end has passed. A meeting that has not started yet is
+	 * cancelled, not ended — that is the honest word for it.
+	 */
+	public static function end( $req ) {
+		if ( Rest::throttle( 'aq_meet_edit', 30, 300 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+		$mid = Rest::pint( $req, 'id', 0 );
+		$m   = $mid ? self::row( $mid ) : null;
+		if ( ! $m || ! self::guest_row( $mid, $uid ) ) { return Rest::err( 'not_found', 'No such meeting.', 404 ); }
+		if ( (int) $m['host_id'] !== $uid ) { return Rest::err( 'not_host', 'Only the host can end this meeting.', 403 ); }
+		$now = Data::now();
+		if ( ! in_array( (string) $m['status'], [ 'scheduled', 'live' ], true ) || (int) $m['end_ts'] <= $now ) {
+			return [ 'ok' => true, 'already' => true, 'meet' => self::meet_payload( $m ) ];
+		}
+		if ( (int) $m['start_ts'] > $now ) { return Rest::err( 'not_started', 'This meeting hasn’t started — cancel it instead.', 400 ); }
+		Data::update( 'aq_meets', [ 'end_ts' => $now, 'seq' => (int) $m['seq'] + 1, 'updated' => $now ], [ 'id' => $mid ] );
+		// The room goes now, not on the next tick: whoever is still in it is told by their own call
+		// surface, and nothing of the conversation is kept.
+		delete_transient( 'aq_meet_tick' );
+		return [ 'ok' => true, 'meet' => self::meet_payload( self::row( $mid ) ) ];
+	}
+
+	/**
+	 * POST meet/leave {id} — a GUEST takes themselves off a meeting. RSVP "no" keeps the row, the
+	 * calendar entry and the seat; leaving gives all three back. The host cannot leave their own
+	 * meeting — they cancel it.
+	 */
+	public static function leave( $req ) {
+		if ( Rest::throttle( 'aq_meet_invite', 30, 60 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
+		global $wpdb;
+		$uid = Rest::uid();
+		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
+		$mid = Rest::pint( $req, 'id', 0 );
+		$m   = $mid ? self::row( $mid ) : null;
+		if ( ! $m || ! self::guest_row( $mid, $uid ) ) { return Rest::err( 'not_found', 'No such meeting.', 404 ); }
+		if ( (int) $m['host_id'] === $uid ) { return Rest::err( 'is_host', 'You host this meeting — cancel it instead.', 400 ); }
+		$wpdb->delete( Data::t( 'aq_meet_guests' ), [ 'meet_id' => $mid, 'user_id' => $uid ] );
+		$left = (int) $m['room_id'] > 0 ? self::unseat_from_room( (int) $m['room_id'], $uid ) : false;
+		// The host is told, quietly — a guest who leaves is a seat that has come free.
+		$who = Mailer::safe_var( get_userdata( $uid )->display_name ?? 'A guest', 40 );
+		Notify::push( (int) $m['host_id'], 'meeting', $who . ' left ' . $m['title'], '', '/meet/' . $mid, 'mtleft' . $mid . '-' . $uid );
+		return [ 'ok' => true, 'left_room' => $left ];
+	}
+
 	public static function cancel( $req ) {
 		if ( Rest::throttle( 'aq_meet_edit', 30, 300 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$uid = Rest::uid();
@@ -1008,7 +1062,10 @@ final class Meetings {
 			$gid = (int) $g['user_id'];
 			if ( get_transient( 'aq_meet_here_' . $mid . '_' . $gid ) ) { $here[] = $gid; }
 			if ( $rid > 0 && in_array( $gid, $in_room, true ) && self::holds_key( $rid, $gid, $epoch ) ) { $holders[] = $gid; }
-			if ( $rid > 0 && ! (int) $g['seated'] ) { $unseated[] = $gid; }
+			// ONLY SOMEBODY seat() COULD SEAT. A guest who declined, or who has no device key yet, is
+			// skipped by seat() every time — so naming them here made every present key-holder POST
+			// meet/seat on every poll for the whole meeting, straight into that route's throttle.
+			if ( $rid > 0 && ! (int) $g['seated'] && 'no' !== (string) $g['rsvp'] && self::has_device( $gid ) ) { $unseated[] = $gid; }
 		}
 		$present = array_values( array_intersect( $holders, $here ) );
 
@@ -1146,7 +1203,7 @@ final class Meetings {
 	 *
 	 * Returns true when the member is in the room afterwards.
 	 */
-	private static function seat_in_room( $rid, $target ) {
+	public static function seat_in_room( $rid, $target ) {
 		$rid    = (int) $rid;
 		$target = (int) $target;
 		if ( ! $rid || ! $target ) { return false; }

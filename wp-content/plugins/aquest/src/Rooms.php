@@ -770,6 +770,57 @@ final class Rooms {
 		return [ 'ok' => true, 'in_call' => self::call_roster( $rid ) ];
 	}
 
+	/**
+	 * GET rooms/ice — the ICE servers a call is built with.
+	 *
+	 * STUN alone joins most pairs of devices; the pairs it cannot (symmetric NAT, a carrier's CGNAT,
+	 * an office that allows nothing but 443) need a TURN RELAY, which forwards the encrypted packets
+	 * and can read none of them. The relay is configured in the Vault, never here, in one of two
+	 * shapes: a static relay (`AQ_TURN_URLS` comma-separated, `AQ_TURN_USER`, `AQ_TURN_PASS`) or a
+	 * Cloudflare Realtime TURN key (`AQ_CF_TURN_KEY_ID`, `AQ_CF_TURN_KEY_TOKEN`), from which
+	 * short-lived credentials are minted and cached for everybody. With neither, the answer is the
+	 * STUN list and `relay:false`, and the call surface words a failed connection accordingly.
+	 */
+	const TURN_TTL_S   = 43200; // minted credentials live twice as long as the cache
+	const TURN_CACHE_S = 21600;
+	public static function ice() {
+		$stun = [
+			[ 'urls' => [ 'stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302' ] ],
+			[ 'urls' => [ 'stun:stun.cloudflare.com:3478' ] ],
+		];
+		$turn = [];
+		$urls = trim( (string) Secrets::get( 'AQ_TURN_URLS' ) );
+		if ( $urls !== '' ) {
+			$list = array_values( array_filter( array_map( 'trim', explode( ',', $urls ) ) ) );
+			if ( $list ) {
+				$turn[] = [ 'urls' => $list, 'username' => (string) Secrets::get( 'AQ_TURN_USER' ), 'credential' => (string) Secrets::get( 'AQ_TURN_PASS' ) ];
+			}
+		}
+		$kid = trim( (string) Secrets::get( 'AQ_CF_TURN_KEY_ID' ) );
+		$tok = trim( (string) Secrets::get( 'AQ_CF_TURN_KEY_TOKEN' ) );
+		if ( $kid !== '' && $tok !== '' ) {
+			$cached = get_transient( 'aq_turn_cf' );
+			if ( is_array( $cached ) && ! empty( $cached['urls'] ) ) {
+				$turn[] = $cached;
+			} else {
+				$r = wp_remote_post( 'https://rtc.live.cloudflare.com/v1/turn/keys/' . rawurlencode( $kid ) . '/credentials/generate-ice-servers', [
+					'timeout' => 8,
+					'headers' => [ 'Authorization' => 'Bearer ' . $tok, 'Content-Type' => 'application/json' ],
+					'body'    => wp_json_encode( [ 'ttl' => self::TURN_TTL_S ] ),
+				] );
+				$j = is_wp_error( $r ) ? null : json_decode( wp_remote_retrieve_body( $r ), true );
+				$servers = is_array( $j ) && ! empty( $j['iceServers'] ) ? $j['iceServers'] : ( is_array( $j ) && ! empty( $j['ice_servers'] ) ? $j['ice_servers'] : null );
+				$first = is_array( $servers ) ? ( isset( $servers['urls'] ) ? $servers : ( $servers[0] ?? null ) ) : null;
+				if ( is_array( $first ) && ! empty( $first['urls'] ) && ! empty( $first['username'] ) ) {
+					$entry = [ 'urls' => (array) $first['urls'], 'username' => (string) $first['username'], 'credential' => (string) $first['credential'] ];
+					set_transient( 'aq_turn_cf', $entry, self::TURN_CACHE_S );
+					$turn[] = $entry;
+				}
+			}
+		}
+		return [ 'ok' => true, 'servers' => array_merge( $stun, $turn ), 'relay' => count( $turn ) > 0 ];
+	}
+
 	/** POST rooms/mute {id, on} — this member's own notification switch for this room. */
 	public static function mute( $req ) {
 		self::ensure_tables();

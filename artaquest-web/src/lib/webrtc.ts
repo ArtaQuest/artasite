@@ -39,13 +39,30 @@
  * negotiated away, early, in that order, and the member is told why in words.
  */
 
-/** ICE servers. STUN only: there is no TURN, so a call behind symmetric NAT can fail to connect —
- *  the UI says that plainly rather than spinning forever. Adding a TURN relay later is a config
- *  change here and nothing else. */
-const ICE_SERVERS: RTCIceServer[] = [
+/**
+ * ICE servers. STUN by default, so two devices find each other's public address; a TURN RELAY,
+ * when the server hands one out (`rooms/ice`, from the Vault), for the pairs that STUN cannot
+ * join — symmetric NAT, a carrier's CGNAT, a corporate firewall that allows nothing but 443. A
+ * relay carries only the encrypted media packets and can read none of them, so it costs nothing
+ * that matters here. `setIceServers` is called by the call surface before its first offer; until
+ * then, and whenever the fetch fails, the STUN list below is what a connection is built with.
+ */
+const STUN_SERVERS: RTCIceServer[] = [
   { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
   { urls: ["stun:stun.cloudflare.com:3478"] },
 ];
+let ICE_SERVERS: RTCIceServer[] = STUN_SERVERS;
+/** Install the servers the backend handed out. An empty or malformed list leaves STUN in place. */
+export function setIceServers(list: unknown): void {
+  if (!Array.isArray(list)) return;
+  const ok = list.filter((x): x is RTCIceServer => !!x && typeof x === "object"
+    && (typeof (x as RTCIceServer).urls === "string" || Array.isArray((x as RTCIceServer).urls)));
+  if (ok.length) ICE_SERVERS = ok;
+}
+/** True when a relay is among the servers — the UI words a failure differently with one. */
+export function hasRelay(): boolean {
+  return ICE_SERVERS.some((s) => ([] as string[]).concat(s.urls as string | string[]).some((u) => /^turns?:/i.test(u)));
+}
 
 /** How long to wait for ICE gathering before sending anyway. Gathering "completes" only after every
  *  server has answered or timed out, and one unreachable STUN server should not hold a call. The
@@ -88,16 +105,21 @@ export type LinkReport = {
 };
 
 export type CallState =
-  | "idle"        // nothing happening
-  | "calling"     // we made an offer, waiting for them
-  | "ringing"     // an offer arrived, waiting for us
-  | "connecting"  // both sides have exchanged SDP; ICE is doing its work
-  | "live"        // media flowing
+  | "idle"          // nothing happening
+  | "calling"       // we made an offer, waiting for them
+  | "ringing"       // an offer arrived, waiting for us
+  | "connecting"    // both sides have exchanged SDP; ICE is doing its work
+  | "live"          // media flowing
+  | "reconnecting"  // the path dropped; ICE is looking for another, and a restart is on its way
   | "ended"
-  | "failed";     // ICE gave up — almost always symmetric NAT with no relay to fall back to
+  | "failed";       // ICE gave up — almost always symmetric NAT with no relay to fall back to
 
 export type CallHandlers = {
   onState: (s: CallState) => void;
+  /** The connection has been lost for long enough that only a fresh ICE exchange can bring it
+   *  back. Whoever owns the signalling decides which side sends the restart offer (`restart()`)
+   *  and how often to try; the engine only says that it is time. */
+  onRestart?: () => void;
   /** The link, about every two seconds. What the UI tells the member with it is its business. */
   onLink?: (r: LinkReport) => void;
   onRemote: (stream: MediaStream | null) => void;
@@ -195,6 +217,11 @@ const RAIL_DOWN: Record<SendMode, number> = { audio: 128, low: 300, full: 800 };
 /** How often the link is sampled. Two seconds is long enough for a delta to mean something and
  *  short enough that a member does not sit through six seconds of broken words. */
 const STATS_MS = 2000;
+
+/** How long a "disconnected" connection is given to heal itself before an ICE restart is asked
+ *  for. Browsers report disconnected on a few seconds of missing packets and recover most of them
+ *  unaided; restarting sooner throws away a path that was about to come back. */
+const LOST_MS = 6000;
 
 /** Sustained samples before a step. DOWN is fast — by the time loss is visible the words are
  *  already going. UP is slow, and gets slower each time recovery turns out to have been premature,
@@ -312,13 +339,65 @@ export function suggestedMode(): CallMode {
  */
 export async function openCallMedia(mode: CallMode = "auto"): Promise<MediaStream> {
   const m = mode === "auto" ? (suggestedMode() as SendMode) : mode;
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: MIC,
-    video: m === "audio" ? false : CAPTURE[m],
+  const pref = devicePrefs();
+  const ask = (withPref: boolean): MediaStreamConstraints => ({
+    audio: withPref && pref.mic ? { ...MIC, deviceId: { ideal: pref.mic } } : MIC,
+    video: m === "audio" ? false
+      : withPref && pref.cam ? { ...CAPTURE[m], deviceId: { ideal: pref.cam } } : CAPTURE[m],
   });
+  let stream: MediaStream;
+  try { stream = await navigator.mediaDevices.getUserMedia(ask(true)); }
+  catch (e) {
+    // A remembered device that is no longer plugged in must not cost the call: ask again for
+    // whatever the browser has. `ideal` already degrades quietly on most browsers; this is for the
+    // ones that do not.
+    if (!pref.mic && !pref.cam) throw e;
+    stream = await navigator.mediaDevices.getUserMedia(ask(false));
+  }
   const track = stream.getVideoTracks()[0];
   if (track && m !== "audio") await shapeCapture(track, m);
   return stream;
+}
+
+/* ── WHICH CAMERA, WHICH MICROPHONE, WHICH SPEAKER ────────────────────────────────────────────
+ * A device choice is a fact about this computer, not about a meeting, so it is remembered here per
+ * browser. Empty means "whatever the browser picks", which is right for almost everyone. */
+const DEVICES_KEY = "aq_call_devices";
+export type DevicePrefs = { cam?: string; mic?: string; out?: string };
+export function devicePrefs(): DevicePrefs {
+  try {
+    const v = JSON.parse(localStorage.getItem(DEVICES_KEY) || "{}") as DevicePrefs;
+    return v && typeof v === "object" ? v : {};
+  } catch { return {}; }
+}
+export function rememberDevices(p: DevicePrefs): void {
+  try { localStorage.setItem(DEVICES_KEY, JSON.stringify({ ...devicePrefs(), ...p })); } catch { /* private mode */ }
+}
+/** Every camera, microphone and speaker the browser will name. Labels are empty until a
+ *  permission has been granted once, which is why the pre-join preview asks first. */
+export async function listDevices(): Promise<{ cams: MediaDeviceInfo[]; mics: MediaDeviceInfo[]; outs: MediaDeviceInfo[] }> {
+  const empty = { cams: [], mics: [], outs: [] };
+  if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices) return empty;
+  try {
+    const all = await navigator.mediaDevices.enumerateDevices();
+    return {
+      cams: all.filter((d) => d.kind === "videoinput"),
+      mics: all.filter((d) => d.kind === "audioinput"),
+      outs: all.filter((d) => d.kind === "audiooutput"),
+    };
+  } catch { return empty; }
+}
+/** Open ONE replacement track of a kind on a named device — for switching mid-call. */
+export async function openDevice(kind: "cam" | "mic", deviceId: string, mode: CallMode = "auto"): Promise<MediaStreamTrack> {
+  const m = mode === "auto" ? (suggestedMode() as SendMode) : mode;
+  const cons: MediaStreamConstraints = kind === "mic"
+    ? { audio: { ...MIC, deviceId: { exact: deviceId } }, video: false }
+    : { audio: false, video: { ...CAPTURE[m === "audio" ? "low" : m], deviceId: { exact: deviceId } } };
+  const s = await navigator.mediaDevices.getUserMedia(cons);
+  const t = kind === "mic" ? s.getAudioTracks()[0] : s.getVideoTracks()[0];
+  if (!t) throw new Error("no track");
+  if (kind === "cam" && m !== "audio") await shapeCapture(t, m);
+  return t;
 }
 
 /** Remember what a shared track was last shaped to, so retuning a five-way mesh does not hit the
@@ -494,6 +573,11 @@ export class Call {
   private videoTrack: MediaStreamTrack | null = null;
 
   private timer: number | null = null;
+  /** Counts down from "disconnected" to asking for a restart. */
+  private lostTimer: number | null = null;
+  private clearLostTimer(): void {
+    if (this.lostTimer !== null) { window.clearTimeout(this.lostTimer); this.lostTimer = null; }
+  }
   /** False until the encoder plan has actually been accepted. Safari hands back a sender with no
    *  encodings until negotiation has settled, so the first attempt can silently do nothing — the
    *  sampler keeps retrying until one lands rather than leaving a call uncapped forever. */
@@ -572,11 +656,25 @@ export class Call {
     pc.onconnectionstatechange = () => {
       if (this.done) return;
       switch (pc.connectionState) {
-        case "connected": this.h.onState("live"); break;
-        // `failed` is terminal and, with no TURN, usually means symmetric NAT on one side.
-        case "failed": this.h.onState("failed"); break;
-        case "disconnected": break; // transient — ICE may recover on its own; don't kill the call
-        case "closed": this.h.onState("ended"); break;
+        case "connected": this.clearLostTimer(); this.h.onState("live"); break;
+        // `failed` is terminal for THIS ICE session — but not for the call. An ICE restart asks
+        // both sides for fresh candidates (a relay among them, if there is one) on the same
+        // negotiated media, and it is the difference between a phone that changed networks in a
+        // lift and a phone that is told "Couldn't connect" for the rest of the meeting.
+        case "failed": this.clearLostTimer(); this.h.onState("failed"); this.h.onRestart?.(); break;
+        // Transient more often than not — wifi to 5G, a router hiccup — and ICE heals many of
+        // these on its own within a few seconds. Say "reconnecting", then, if it has not healed
+        // by LOST_MS, ask for a restart rather than sitting on a dead path in silence.
+        case "disconnected":
+          this.h.onState("reconnecting");
+          this.clearLostTimer();
+          this.lostTimer = window.setTimeout(() => {
+            this.lostTimer = null;
+            if (this.done || !this.pc) return;
+            if (this.pc.connectionState === "disconnected" || this.pc.connectionState === "failed") this.h.onRestart?.();
+          }, LOST_MS);
+          break;
+        case "closed": this.clearLostTimer(); this.h.onState("ended"); break;
       }
     };
     this.pc = pc;
@@ -829,6 +927,48 @@ export class Call {
     return JSON.stringify(pc.localDescription);
   }
 
+  /**
+   * AN ICE RESTART, from the offering side — the same media, a new path.
+   *
+   * `iceRestart: true` makes the browser gather candidates afresh (and, with a relay configured,
+   * allocate a relay again), without touching the negotiated tracks or codecs. The answering side
+   * takes this offer through `renegotiate()`. It is only sent from a settled state: an offer on top
+   * of an offer is the one thing WebRTC cannot untangle, so a restart that finds signalling mid-way
+   * simply reports nothing and the caller tries again on its next beat.
+   */
+  async restart(): Promise<string> {
+    const pc = this.pc;
+    if (!pc || this.done || pc.signalingState !== "stable") return "";
+    this.prev = null;                                    // the old path's counters mean nothing now
+    await this.setLocal(pc, await pc.createOffer({ iceRestart: true }));
+    await this.gathered(pc);
+    this.h.onState("connecting");
+    return JSON.stringify(pc.localDescription);
+  }
+
+  /** The answering side of a restart (or any renegotiation) on an existing connection. */
+  async renegotiate(offerSdp: string): Promise<string> {
+    const pc = this.pc;
+    if (!pc || this.done) return "";
+    // Glare on a restart: both sides decided the path was dead at once. The offerer in this file is
+    // fixed by uid, so this side can only ever be the answerer — roll back anything half-made.
+    if (pc.signalingState === "have-local-offer") {
+      try { await pc.setLocalDescription({ type: "rollback" }); } catch { /* not supported; fall through */ }
+    }
+    await this.setRemote(pc, JSON.parse(offerSdp) as RTCSessionDescriptionInit);
+    await this.setLocal(pc, await pc.createAnswer());
+    await this.gathered(pc);
+    this.prev = null;
+    this.h.onState("connecting");
+    return JSON.stringify(pc.localDescription);
+  }
+
+  /** A different microphone, mid-call: the new track goes into the sender that already exists.
+   *  No renegotiation — the same act as swapping the camera. */
+  replaceAudio(track: MediaStreamTrack): void {
+    this.audioSender?.replaceTrack(track).catch(() => undefined);
+  }
+
   /** CALLER: apply their answer. After this ICE connects the two directly. */
   async accept(answerSdp: string): Promise<void> {
     if (!this.pc || this.done) return;
@@ -1000,6 +1140,7 @@ export class Call {
     if (this.done) return;
     this.done = true;
     if (this.timer !== null) { clearInterval(this.timer); this.timer = null; }
+    this.clearLostTimer();
     netInfo()?.removeEventListener?.("change", this.onNetChange);
     Call.live.delete(this);
     if (this.ownsMedia) this.local?.getTracks().forEach((t) => t.stop());

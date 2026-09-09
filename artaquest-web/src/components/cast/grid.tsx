@@ -146,10 +146,11 @@ export function DayGrid({ month, dayMap, todayKey, horizonKey, selected, onChoos
             }
             const pct = busiest ? Math.max(12, Math.round((free / busiest) * 100)) : 0;
             return (
-              <button key={key} type="button" role="gridcell" ref={setRef} tabIndex={roving}
-                aria-selected={on} {...(isToday ? { "aria-current": "date" as const } : {})}
+              <div key={key} role="gridcell" aria-selected={on}>
+              <button type="button" ref={setRef} tabIndex={roving}
+                aria-pressed={on} {...(isToday ? { "aria-current": "date" as const } : {})}
                 onClick={() => onChoose(key)}
-                className={cx("group grid place-items-center outline-none", CELL_H)}>
+                className={cx("group grid w-full place-items-center outline-none", CELL_H)}>
                 <span aria-hidden
                   className={cx("relative grid h-9 w-9 place-items-center rounded-full text-[15px] font-semibold tabular-nums transition-colors duration-150 md:h-11 md:w-11 md:text-[17px]",
                     on ? "bg-yang text-on-accent shadow-card"
@@ -162,6 +163,7 @@ export function DayGrid({ month, dayMap, todayKey, horizonKey, selected, onChoos
                   <span data-ay-skip="1">{dayHeadingLong(key)}</span>, <span data-ay-skip="1">{free}</span> times free
                 </span>
               </button>
+              </div>
             );
           })}
         </div>

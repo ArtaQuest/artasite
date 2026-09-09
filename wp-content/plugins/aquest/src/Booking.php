@@ -237,9 +237,9 @@ final class Booking {
 	 * public answer is computed FROM them and consists of instants the caller may still have. That
 	 * is what makes the free/busy endpoint genuinely free/busy rather than a redacted diary.
 	 */
-	private static function busy( $owner, $from, $to, $buffer_s ) {
+	private static function busy( $owner, $from, $to, $buffer_s, $except = [] ) {
 		$rows = Data::all(
-			'SELECT m.start_ts, m.end_ts FROM ' . Data::t( 'aq_meets' ) . ' m JOIN ' . Data::t( 'aq_meet_guests' ) . ' g'
+			'SELECT m.id, m.start_ts, m.end_ts FROM ' . Data::t( 'aq_meets' ) . ' m JOIN ' . Data::t( 'aq_meet_guests' ) . ' g'
 			. ' ON g.meet_id = m.id AND g.user_id = %d'
 			. " WHERE m.status <> 'cancelled' AND m.end_ts + %d > %d AND m.start_ts - %d < %d"
 			. ' ORDER BY m.start_ts ASC LIMIT %d',
@@ -247,12 +247,36 @@ final class Booking {
 		);
 		$out = [];
 		foreach ( $rows as $m ) {
+			// A GROUP BOOKING WITH A SEAT LEFT does not close its own slot — that is what "up to N
+			// people" means. Everything else the owner is in blocks as before.
+			if ( $except && in_array( (int) $m['id'], $except, true ) ) { continue; }
 			$s = (int) $m['start_ts'] - (int) $buffer_s;
 			$e = (int) $m['end_ts'] + (int) $buffer_s;
 			// A row with no length would block nothing; treat it as the slot length so a malformed
 			// meeting errs towards protecting the owner rather than towards double-booking them.
 			if ( $e <= $s ) { $e = $s + 1; }
 			$out[] = [ $s, $e ];
+		}
+		return $out;
+	}
+
+	/**
+	 * Meetings booked from THIS rule that still have a seat free — the ones a second visitor may
+	 * join rather than be refused. Only a rule with more than two seats ever has any; a two-seat
+	 * rule's booking is full by construction.
+	 */
+	private static function open_groups( $r, $from, $to ) {
+		if ( (int) $r['seats'] <= 2 ) { return []; }
+		$rows = Data::all(
+			'SELECT m.id, m.seats, (SELECT COUNT(*) FROM ' . Data::t( 'aq_meet_guests' ) . ' g WHERE g.meet_id = m.id) AS taken'
+			. ' FROM ' . Data::t( 'aq_meets' ) . ' m'
+			. " WHERE m.host_id = %d AND m.context_type = 'book' AND m.context_id = %d AND m.status <> 'cancelled'"
+			. ' AND m.end_ts > %d AND m.start_ts < %d LIMIT 200',
+			[ (int) $r['user_id'], (int) $r['id'], (int) $from, (int) $to ]
+		);
+		$out = [];
+		foreach ( $rows as $m ) {
+			if ( (int) $m['taken'] < min( (int) $m['seats'], (int) $r['seats'] ) ) { $out[] = (int) $m['id']; }
 		}
 		return $out;
 	}
@@ -358,7 +382,7 @@ final class Booking {
 			$offered = self::grid( $r, $from, $to, self::MAX_SLOTS );
 			// One busy read for the whole window, widened by the slot length so a meeting that starts
 			// before the window's end and runs past it still closes the slot it lands on.
-			$busy = self::busy( (int) $u->ID, $from - $buffer, $to + $dur + $buffer, $buffer );
+			$busy = self::busy( (int) $u->ID, $from - $buffer, $to + $dur + $buffer, $buffer, self::open_groups( $r, $from - $buffer, $to + $dur + $buffer ) );
 			foreach ( $offered as $ts ) {
 				if ( self::is_free( $ts, $dur, $busy ) ) { $slots[] = $ts; }
 			}
@@ -416,6 +440,50 @@ final class Booking {
 	 * rearrange your day and you cannot decline is not a diary you would hand out. The person who
 	 * booked keeps everything a guest has — the room, the reminders, the RSVP, the .ics.
 	 */
+	/**
+	 * Seat a second (third, fourth) booker into a group booking at the same instant. Returns the
+	 * same shape take() answers with, or null when there is no seat — the caller then refuses.
+	 */
+	private static function join_group( $mid, $r, $uid, $now ) {
+		if ( (int) $r['seats'] <= 2 ) { return null; }
+		$m = Data::one( 'SELECT * FROM ' . Data::t( 'aq_meets' ) . ' WHERE id = %d', [ (int) $mid ] );
+		if ( ! $m || 'book' !== (string) $m['context_type'] || (int) $m['context_id'] !== (int) $r['id'] ) { return null; }
+		if ( ! in_array( (string) $m['status'], [ 'scheduled', 'live' ], true ) ) { return null; }
+		$guests = Data::all( 'SELECT user_id FROM ' . Data::t( 'aq_meet_guests' ) . ' WHERE meet_id = %d', [ (int) $mid ] );
+		$ids    = array_map( static fn ( $g ) => (int) $g['user_id'], $guests );
+		$cap    = min( (int) $m['seats'], (int) $r['seats'] );
+		if ( in_array( (int) $uid, $ids, true ) ) { return Rest::err( 'already', 'You already have this time.', 409 ); }
+		if ( count( $ids ) >= $cap ) { return null; }
+		Data::insert( 'aq_meet_guests', [
+			'meet_id' => (int) $mid, 'user_id' => (int) $uid, 'role' => 'guest',
+			'rsvp' => 'yes', 'invited_by' => (int) $m['host_id'], 'invited' => $now, 'rsvp_ts' => $now,
+		] );
+		if ( (int) $m['room_id'] > 0 ) { Meetings::seat_in_room( (int) $m['room_id'], (int) $uid ); }
+		$owner = (int) $m['host_id'];
+		$mtz   = in_array( (string) $r['tz'], timezone_identifiers_list(), true ) ? (string) $r['tz'] : 'UTC';
+		$when  = Meetings::when_line( [ 'tz' => $mtz, 'start_ts' => (int) $m['start_ts'] ] );
+		$who   = Mailer::safe_var( self::card( $uid )['name'] );
+		Notify::push( $owner, 'meeting', $who . ' joined ' . $m['title'], '', '/meet/' . $mid, 'bookjoin' . $mid . '-' . $uid );
+		Notify::mail( (int) $uid, 'meet_confirmed', [
+			'title'      => Mailer::safe_var( (string) $m['title'], 90 ),
+			'host'       => Mailer::safe_var( self::card( $owner )['name'] ),
+			'when'       => $when,
+			'when_short' => (string) wp_date( 'D j M, H:i', (int) $m['start_ts'], new \DateTimeZone( $mtz ) ),
+			'meet_url'   => '/meet/' . $mid,
+		] );
+		$show = new \WP_REST_Request();
+		$show->set_param( 'id', (int) $mid );
+		$full = Meetings::get( $show );
+		$full = is_array( $full ) ? $full : [];
+		return [
+			'ok' => true, 'id' => (int) $mid, 'meet_id' => (int) $mid, 'joined' => true,
+			'meet' => $full['meet'] ?? null, 'guests' => $full['guests'] ?? [],
+			'url' => '/meet/' . $mid, 'start_ts' => (int) $m['start_ts'], 'end_ts' => (int) $m['end_ts'],
+			'minutes' => (int) $r['minutes'], 'tz' => (string) $r['tz'], 'title' => (string) $m['title'],
+			'with' => self::card( $owner ), 'warnings' => [],
+		];
+	}
+
 	public static function take( $req ) {
 		if ( Rest::throttle( 'aq_book_take', 8, 300 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$uid = Rest::uid();
@@ -472,6 +540,12 @@ final class Booking {
 			// subscriber can see, and frees the claim for the next person.
 			$held = Data::one( 'SELECT id, status FROM ' . Data::t( 'aq_meets' ) . ' WHERE ctx_key = %s', [ $claim ] );
 			if ( $held && 'cancelled' !== (string) $held['status'] ) {
+				// "UP TO N PEOPLE" IS A PROMISE THIS ROUTE NOW KEEPS. A rule with seats to spare and a
+				// booking at this instant with a seat free takes the second visitor INTO that meeting
+				// rather than turning them away — the same seat_partner act ArtaCast performs, done
+				// here for anyone.
+				$joined = self::join_group( (int) $held['id'], $r, $uid, $now );
+				if ( is_array( $joined ) ) { return $joined; }
 				return Rest::err( 'taken', 'Somebody just took that time. Pick another.', 409 );
 			}
 			if ( $held ) {
@@ -479,7 +553,7 @@ final class Booking {
 			}
 
 			$buffer = (int) $r['buffer_min'] * 60;
-			$busy   = self::busy( $owner, $start - $buffer - $dur, $start + $dur + $buffer, $buffer );
+			$busy   = self::busy( $owner, $start - $buffer - $dur, $start + $dur + $buffer, $buffer, self::open_groups( $r, $start - $buffer - $dur, $start + $dur + $buffer ) );
 			if ( ! self::is_free( $start, $dur, $busy ) ) {
 				return Rest::err( 'taken', 'Somebody just took that time. Pick another.', 409 );
 			}

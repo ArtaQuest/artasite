@@ -2711,6 +2711,8 @@ export function roomsSend(id: number, b: { iv: string; ct: string; blob?: string
 export function roomsCall(id: number, action: "join" | "leave") {
   return post<{ ok: boolean; in_call: number[] }>("/rooms/call", { id, action });
 }
+/** The ICE servers to build a call with — STUN, plus a relay when the Vault holds one. */
+export function roomsIce() { return get<{ ok: boolean; servers: RTCIceServer[]; relay: boolean }>("/rooms/ice", { nc: Date.now() }); }
 export function roomsMute(id: number, on: boolean) { return post<{ ok: boolean }>("/rooms/mute", { id, on: on ? 1 : 0 }); }
 
 // ── ArtaMeet — scheduled meetings (src/Meetings.php) ────────────────────────
@@ -2825,7 +2827,7 @@ export function meetCreate(b: {
  * is the only sequence lib/rooms.ts will mint under. So the only field this promises is `meet` —
  * everything else is optional because navigating to the meeting is the whole of the handover.
  */
-export function meetNow(b?: { title?: string; minutes?: number; guests?: string[] }) {
+export function meetNow(b?: { title?: string; minutes?: number; guests?: string[]; tz?: string }) {
   return post<{
     ok: boolean; meet: Meet; guests?: MeetGuest[]; cal?: MeetCal;
     room_id?: number; epoch?: number; mint?: boolean; seated?: boolean;
@@ -2841,6 +2843,10 @@ export function meetUpdate(b: {
 /** The row is kept, not deleted: a cancelled meeting has to go on saying it is cancelled to every
  *  calendar subscribed to it. */
 export function meetCancel(id: number) { return post<{ ok: boolean; meet: Meet; already?: boolean }>("/meet/cancel", { id }); }
+/** Host only: close a meeting that has run. Not a cancellation — the entry keeps its time. */
+export function meetEnd(id: number) { return post<{ ok: boolean; meet: Meet; already?: boolean }>("/meet/end", { id }); }
+/** A guest takes themselves off the list — seat, calendar entry and room all given back. */
+export function meetLeave(id: number) { return post<{ ok: boolean; left_room?: boolean }>("/meet/leave", { id }); }
 
 /** Ask the host for a different time. A GUEST only — the host just moves it. */
 export function meetRetime(id: number, start: number) {
@@ -3086,7 +3092,7 @@ export async function bookSlots(b: { user: string; type: string; from: number; t
  * refusal, not a double booking — re-read the window and pick again.
  */
 export function bookTake(b: { user: string; type: string; start: number; note?: string }) {
-  return post<{ ok: boolean; meet?: Meet; id?: number }>("/book/take", {
+  return post<{ ok: boolean; meet?: Meet; id?: number; joined?: boolean }>("/book/take", {
     user: b.user, type: b.type, start: Math.round(b.start), note: b.note || "",
   });
 }

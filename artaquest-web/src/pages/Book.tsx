@@ -238,7 +238,9 @@ function wallToTs(iso: string, min: number, tz: string): number {
 /** Minutes from midnight → the clock face the reader's locale writes ("2:00 pm" or "14:00"). Built
  *  on a fixed UTC day so the number is shown as itself, in nobody's zone. */
 function minuteClock(min: number): string {
-  const m = Math.max(0, Math.min(1439, Math.round(min)));
+  // 1440 is a legal "until": midnight at the END of the day, which the server accepts and which
+  // clamping to 1439 rendered as 11:59 PM.
+  const m = Math.max(0, Math.min(1440, Math.round(min)));
   return fmt(Math.round(Date.UTC(1970, 0, 1, 0, m) / 1000), { hour: "2-digit", minute: "2-digit", ...HOUR_OPTS }, "UTC");
 }
 
@@ -357,7 +359,14 @@ function localWindow(r: BookRule, tz: string): string {
   const a = wallToTs(iso, r.from_min, r.tz);
   const b = wallToTs(iso, r.to_min, r.tz);
   if (!a || !b) return "";
-  return `${clockOnly(a, tz)} – ${clockOnly(b, tz)}`;
+  // Tokyo's 09:00–17:00 is New York's 8:00 PM – 4:00 AM — and without the day said, that reads as
+  // a window that runs backwards. Name the day where it differs from the owner's.
+  const dayOf = (ts: number, z: string) => dayKey(ts, z);
+  const shift = (ts: number) => {
+    const d = dayOf(ts, tz), o = dayOf(ts, r.tz);
+    return d === o ? "" : d > o ? " the next day" : " the day before";
+  };
+  return `${clockOnly(a, tz)}${shift(a)} – ${clockOnly(b, tz)}${shift(b)}`;
 }
 
 /* ───────────────────────── sign-in ─────────────────────────
@@ -564,10 +573,13 @@ function DayGrid({ month, dayMap, todayKey, horizonKey, selected, onChoose, onMo
             }
             const pct = busiest ? Math.max(12, Math.round((free / busiest) * 100)) : 0;
             return (
-              <button key={key} type="button" role="gridcell" ref={setRef} tabIndex={roving}
-                aria-selected={on} {...(isToday ? { "aria-current": "date" as const } : {})}
+              <div key={key} role="gridcell" aria-selected={on}>
+              {/* role="gridcell" ON the button replaced its button role, so assistive tech never said
+                  "button". The cell is the wrapper; the button stays a button. */}
+              <button type="button" ref={setRef} tabIndex={roving}
+                aria-pressed={on} {...(isToday ? { "aria-current": "date" as const } : {})}
                 onClick={() => onChoose(key)}
-                className={cx("group grid place-items-center outline-none", CELL_H)}>
+                className={cx("group grid w-full place-items-center outline-none", CELL_H)}>
                 {/* A CIRCLE, not a bordered box. Every free day used to be a rounded rectangle with a
                     border and a small bar chart inside it, and twenty of those in a grid read as a
                     wall of controls rather than as a month — the page looked busy while saying very
@@ -590,6 +602,7 @@ function DayGrid({ month, dayMap, todayKey, horizonKey, selected, onChoose, onMo
                   <span data-ay-skip="1">{dayHeadingLong(key)}</span>, <span data-ay-skip="1">{free}</span> times free
                 </span>
               </button>
+              </div>
             );
           })}
         </div>
@@ -662,6 +675,10 @@ function VisitorPage({ handle }: { handle: string }) {
   // because they are no longer free and must not colour a density bar or count towards a day.
   const [vanished, setVanished] = useState<number[]>([]);
   const [slotsFailed, setSlotsFailed] = useState(false);
+  const [slotsMsg, setSlotsMsg] = useState("");
+  /** The server's clock against this device's, so "today" and "past" are the diary's, not the
+   *  laptop's. Both answers carry `now`; a device a day fast used to lose a day of slots. */
+  const clockOff = useRef(0);
   // The furthest instant the server actually ANSWERED for, which is its own clamp (SPAN_MAX_S = 62
   // days) and can be nearer than the horizon the rule advertises. The month grid is bounded by this
   // rather than by the rule, so it cannot page into a month nobody was asked about and then report
@@ -695,7 +712,7 @@ function VisitorPage({ handle }: { handle: string }) {
   const skipFocus = useRef(true);
 
   useEffect(() => {
-    const t = window.setInterval(() => setNow(Math.round(Date.now() / 1000)), 60000);
+    const t = window.setInterval(() => setNow(Math.round(Date.now() / 1000) + clockOff.current), 60000);
     return () => window.clearInterval(t);
   }, []);
 
@@ -704,6 +721,7 @@ function VisitorPage({ handle }: { handle: string }) {
     bookPage(handle)
       .then((p) => {
         if (stop) return;
+        if (p.now) { clockOff.current = Number(p.now) - Math.round(Date.now() / 1000); setNow(Number(p.now)); }
         setOwner(p.owner);
         setTypes(p.types || []);
       })
@@ -753,6 +771,7 @@ function VisitorPage({ handle }: { handle: string }) {
       bookSlots({ user: handle, type: type.slug, from: cursor, to }).then((r) => {
         if (mine !== seq.current) return 0;
         all.push(...r.starts);
+        if (r.now) clockOff.current = Number(r.now) - Math.round(Date.now() / 1000);
         // `to` is the window the server ANSWERED, which is its own clamp (SPAN_MAX_S = 62 days) and
         // may be nearer than the horizon the rule advertises. The grid is bounded by this, not by
         // the rule, so it never opens a month nothing was asked about.
@@ -781,25 +800,31 @@ function VisitorPage({ handle }: { handle: string }) {
       // read is a re-read that already has a good grid on screen, so a failure there must leave it
       // alone — blanking is precisely what `quiet` exists to prevent, and doing it here stranded a
       // visitor holding a chosen time with no diary around it.
-      .catch(() => {
+      .catch((e) => {
         if (mine !== seq.current || quiet) return;
         setStarts(null);
         setSlotsFailed(true);
+        // The server's own sentence — "slow down", "no longer offering" — not one word for all.
+        setSlotsMsg(errText(e, "Couldn’t load the free times."));
       });
   }, [handle, type]);
 
   useEffect(() => { loadSlots(); }, [loadSlots]);
 
+  /** Nothing before the notice the owner asks for — measured on the ticking clock, so a page left
+   *  open past a slot's time stops offering it rather than offering it and then refusing it. */
+  const floorTs = now + (Number(type?.notice_h) || 0) * 3600;
   const groups = useMemo<DayGroup[]>(() => {
     const out: DayGroup[] = [];
     for (const ts of starts || []) {
+      if (ts < floorTs) continue;
       const key = dayKey(ts, displayTz);
       const last = out[out.length - 1];
       if (last && last.key === key) { last.starts.push(ts); continue; }
       out.push({ key, starts: [ts] });
     }
     return out;
-  }, [starts, displayTz]);
+  }, [starts, displayTz, floorTs]);
 
   const dayMap = useMemo(() => new Map(groups.map((g) => [g.key, g.starts])), [groups]);
   const monthsWithSlots = useMemo(() => new Set(groups.map((g) => monthOf(g.key))), [groups]);
@@ -822,7 +847,9 @@ function VisitorPage({ handle }: { handle: string }) {
   const timesFloor = useMemo(() => {
     let most = 0;
     for (const g of groups) most = Math.max(most, g.starts.length);
-    const rows = Math.max(1, Math.ceil(most / 3));
+    // Reserve for the busiest day, but never more than six rows: a rule offering thirty times a day
+    // was reserving 600px of blank under a day with three, which is the flat-236px bug inverted.
+    const rows = Math.min(6, Math.max(1, Math.ceil(most / 3)));
     return 45 + rows * 48 + (rows - 1) * 8;
   }, [groups]);
 
@@ -984,7 +1011,9 @@ function VisitorPage({ handle }: { handle: string }) {
 
   const ownerName = owner?.name || "";
   const ownerTz = owner?.tz || "";
-  const bothZones = !!ownerTz && ownerTz !== displayTz;
+  // Gated on the two people's zones, never on what is DISPLAYED: gating on displayTz unmounted the
+  // Yours/Theirs switch the moment "Theirs" was pressed, with no way back but the 400-entry picker.
+  const bothZones = !!ownerTz && ownerTz !== VIEWER_TZ;
   const me = currentUser();
 
 
@@ -1007,7 +1036,9 @@ function VisitorPage({ handle }: { handle: string }) {
       <p className="mt-0.5 text-[12.5px] text-ink-2">
         {displayTz === VIEWER_TZ
           ? "That is your own zone"
-          : <>That is <span data-ay-skip="1">{ownerName}</span>’s zone, not yours</>}
+          : displayTz === ownerTz
+            ? <>That is <span data-ay-skip="1">{ownerName}</span>’s zone, not yours</>
+            : <>Neither your zone nor <span data-ay-skip="1">{ownerName}</span>’s</>}
         {bothZones && (
           <>
             {" · "}
@@ -1019,7 +1050,7 @@ function VisitorPage({ handle }: { handle: string }) {
       <div className="mt-2 flex flex-col items-center gap-1">
         {bothZones && (
           <Segmented className={SEG_HIT} label="Show times in"
-            value={displayTz === ownerTz ? "them" : "you"}
+            value={displayTz === ownerTz ? "them" : displayTz === VIEWER_TZ ? "you" : ""}
             onChange={(v) => setDisplayTz(v === "them" ? ownerTz : VIEWER_TZ)}
             options={[{ value: "you", label: "Yours" }, { value: "them", label: "Theirs" }]} />
         )}
@@ -1277,7 +1308,7 @@ function VisitorPage({ handle }: { handle: string }) {
 
       {slotsFailed && (
         <ErrorNote>
-          Couldn’t load the free times.{" "}
+          {slotsMsg || "Couldn’t load the free times."}{" "}
           <button type="button" className="-my-2 inline-flex min-h-[40px] items-center py-2 font-semibold underline" onClick={() => loadSlots()}>Try again</button>
         </ErrorNote>
       )}
@@ -1788,12 +1819,13 @@ export function AvailabilityPanel({ share = "rail" }: { share?: "rail" | "inline
 
   useEffect(() => { load(); }, [load]);
 
+  const [actErr, setActErr] = useState("");
   async function stopOffering(rule: BookRule) {
-    setBusyId(rule.id);
+    setBusyId(rule.id); setActErr("");
     try {
       await bookRuleOff(rule.id);
       load();
-    } catch { setFailed(true); } finally { setBusyId(0); }
+    } catch (e) { setActErr(errText(e, "Couldn’t pause that.")); } finally { setBusyId(0); }
   }
 
   async function startOffering(rule: BookRule) {
@@ -1805,7 +1837,7 @@ export function AvailabilityPanel({ share = "rail" }: { share?: "rail" | "inline
         from_min: rule.from_min, to_min: rule.to_min, active: 1,
       });
       load();
-    } catch { setFailed(true); } finally { setBusyId(0); }
+    } catch (e) { setActErr(errText(e, "Couldn’t offer that again.")); } finally { setBusyId(0); }
   }
 
   if (!isLoggedIn()) {
@@ -1820,6 +1852,7 @@ export function AvailabilityPanel({ share = "rail" }: { share?: "rail" | "inline
     <>
       {share === "inline" && handle && <ShareCard handle={handle} url={shareUrl} />}
       <div className="flex w-full min-w-0 flex-col gap-4">
+          {actErr && <ErrorNote>{actErr}</ErrorNote>}
           {failed ? (
             <ErrorNote>
               Couldn’t load your availability.{" "}
