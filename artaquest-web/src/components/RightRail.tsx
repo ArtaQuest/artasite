@@ -90,8 +90,18 @@ export function ShellRail() {
  */
 function RailDefaults() {
   const filled = useRailFilled();
-  const rail = useRail(!filled);
-  if (filled) return null;
+  const rail = useRail(true);
+  // THE NEWS IS ON EVERY PAGE, WITHOUT EXCEPTION (operator 2026-09-09). A page's own cards go first;
+  // the day's headlines and ArtaNews follow them. Only the discovery cards — topics, challenges,
+  // who to follow — step aside for a page that brought its own.
+  if (filled) {
+    return (
+      <>
+        <TodaysNewsCard items={rail.headlines} />
+        <NewsCard items={rail.news} />
+      </>
+    );
+  }
   return (
     <>
       <TodaysNewsCard items={rail.headlines} />

@@ -113,6 +113,12 @@ final class Cast {
 		);
 	}
 
+	/** The first host who is not this member — the default host for a host's own request. */
+	public static function other_host( $uid ) {
+		foreach ( self::hosts() as $hu ) { if ( (int) $hu->ID !== (int) $uid ) { return $hu; } }
+		return null;
+	}
+
 	/** Is this member a host — one whose shelf holds episodes and whose device records. */
 	public static function is_host_uid( $uid ) {
 		$uid = (int) $uid;
@@ -310,8 +316,10 @@ final class Cast {
 		if ( $want > 0 && self::is_host( $uid ) ) { $r = self::row( $want ); }
 		if ( ! $r && $uid ) { $r = self::mine( $uid ); }
 
-		// The host that matters is the one on MY request; before there is one, the primary host.
+		// The host that matters is the one on MY request; before there is one, the primary host —
+		// or, for a host looking at the page, the first OTHER host, since nobody hosts themselves.
 		$h    = $r ? self::host_of( $r ) : self::host();
+		if ( ! $r && $h && $uid && (int) $h->ID === $uid ) { $h = self::other_host( $uid ) ?: $h; }
 		$rule = self::rule( $h );
 		$card = $h ? ( self::card( $h->ID ) + [ 'tz' => (string) ( $rule['tz'] ?? '' ) ] ) : null;
 		$hosts = [];
@@ -439,9 +447,13 @@ final class Cast {
 		}
 
 		if ( ! $r ) {
-			// Nobody hosts their own episode: the host of a NEW request is the chosen one or the
-			// primary, and neither may be the person asking.
-			if ( (int) ( $data['host_id'] ?? $h->ID ) === $uid ) { return Rest::err( 'own_show', 'You are the host — the guests fill this in. Choose another host to appear yourself.', 400 ); }
+			// Nobody hosts their own episode — but a host may certainly APPEAR on one. A new request
+			// from a host defaults to the first other host; only with nobody else hosting is it refused.
+			if ( (int) ( $data['host_id'] ?? $h->ID ) === $uid ) {
+				$other = self::other_host( $uid );
+				if ( ! $other ) { return Rest::err( 'own_show', 'You are the only host, so nobody can host you yet. Ask a member to volunteer to host first.', 400 ); }
+				$data['host_id'] = (int) $other->ID;
+			}
 			// A fresh row starts with what we already know about the requester: their public name and
 			// their stated birthday — both are theirs to correct on the form.
 			$me = get_userdata( $uid );

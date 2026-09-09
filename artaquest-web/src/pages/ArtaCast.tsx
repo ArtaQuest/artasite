@@ -802,12 +802,15 @@ export default function ArtaCast() {
     return frame(hero, <section role="status" className="rounded-card border border-line bg-space-2 p-5 text-[13px] text-ink-2">Loading…</section>, null);
   }
 
-  // ── the host ──
-  if (page.is_host && !request) {
-    return frame(
-      <PageHero eyebrow="ArtaCast" title={page.hosting ? "Your show" : "The show"}
-        lede={page.hosting ? "Couples book any free slot in your calendar. Here is who has asked to come on, and where each episode stands." : "Here is who has asked to come on, and where each episode stands."} />,
-      <>
+  // ── the host (or an operator): their panel sits ABOVE whatever else they are here for. A host
+  //    may also ask to appear — on another host's episode — so the request form follows below,
+  //    exactly as for any member. ──
+  const hostHero = page.is_host ? (
+    <PageHero eyebrow="ArtaCast" title={page.hosting ? "Your show" : "The show"}
+        lede={page.hosting ? "Couples book any free slot in your calendar. Here is who has asked to come on, and where each episode stands." : "Here is who has asked to come on, and where each episode stands."} />
+  ) : null;
+  const hostBlock = page.is_host ? (
+    <>
         <HostPanel page={page} onPreview={setHostPreview} previewing={hostPreview?.id || 0} />
         {hostPreview && (
           <>
@@ -828,21 +831,21 @@ export default function ArtaCast() {
             </section>
           </>
         )}
-      </>,
-      null,
-    );
-  }
+    </>
+  ) : null;
 
   // ── a stranger, or a member who has not asked yet ──
   if (!request || !form) {
     const back = `/artacast/${entry.invite ? `?invite=${encodeURIComponent(entry.invite)}` : ""}`;
     return frame(
-      hero,
+      hostHero || hero,
       <>
+        {hostBlock}
         {withdrawNote && <p role="status" className="rounded-card border border-line bg-space-2 px-4 py-3 text-[13.5px] text-ink-2">{withdrawNote}</p>}
         {inviteFail && <ErrorNote>{inviteFail}</ErrorNote>}
         <section className="rounded-card border border-line bg-space-2 p-4 md:p-5">
-          <h2 className="text-[16px] font-bold text-ink">How it works</h2>
+          <h2 className="text-[16px] font-bold text-ink">{page.is_host ? "Appear on an episode yourself" : "How it works"}</h2>
+          {page.is_host && <p className="mt-2 text-[13.5px] leading-relaxed text-ink-2">Nobody hosts their own episode: your request goes to another host{host ? <> — <span data-ay-skip="1">{host.name}</span></> : null}. Everything else is the same as for any couple.</p>}
           <ol className="mt-3 flex flex-col gap-2 text-[14px] leading-relaxed text-ink-2">
             <li><b className="text-ink">1 · You.</b> Your name, one line in your own words, a photograph — and, if you like, where and when you were born and a few milestones for the timeline.</li>
             <li><b className="text-ink">2 · Your partner.</b> The same for them, and their email: they get a single-use link, sign in as themselves, and are seated in the recording.</li>
@@ -903,6 +906,7 @@ export default function ArtaCast() {
         ? <>Fill in the two of you, invite your partner, and pick a time with <span data-ay-skip="1">{hostName}</span>. Everything saves as you type.</>
         : <><span data-ay-skip="1">{request.requester?.name || "Your partner"}</span> asked for you both to appear. Check your own details, add a photo, and see your frame.</>} />,
     <>
+      {hostBlock}
       {joinedNote && <p role="status" className="rounded-card border border-yang/30 bg-yang/[0.07] px-4 py-3 text-[13.5px] text-ink">{joinedNote}</p>}
       {inviteFail && <ErrorNote>{inviteFail}</ErrorNote>}
       {booked && (
