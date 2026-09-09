@@ -321,10 +321,13 @@ except Exception as e:
 try:
     for iso in json.loads(ISO_JSON or "[]"):
         try:
-            download(iso["url"], os.path.join(WORK, "ISO-" + os.path.basename(iso["name"])))
-            step("iso", True, name=iso["name"])
+            # The guest's browser already names its file ISO-<name>; do not prefix it twice. And
+            # step()'s first parameter is `name`, so the track's name travels as `track`.
+            base = os.path.basename(iso["name"])
+            download(iso["url"], os.path.join(WORK, base if base.startswith("ISO-") else "ISO-" + base))
+            step("iso", True, track=iso["name"])
         except Exception as e:
-            step("iso", False, name=iso.get("name"), error=str(e)[:200])
+            step("iso", False, track=iso.get("name"), error=str(e)[:200])
 except Exception as e:
     step("iso-list", False, error=str(e)[:200])
 
