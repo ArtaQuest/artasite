@@ -18,6 +18,7 @@ import type { EpisodeSpec } from "../lib/episode-frame";
 import { CallModeChoice } from "../components/chat/CallPanel";
 import { CALL_MODES, callModePref, deviceSuggestedMode, rememberCallMode } from "../components/chat/callmode";
 import { PreJoin } from "../components/chat/PreJoin";
+import { NewsCards } from "../components/RightRail";
 import type { CallMode } from "../lib/webrtc";
 import {
   Avatar, Button, cx, EmptyState, ErrorNote, Field, Input, LoadMoreButton, PageHero,
@@ -1668,6 +1669,8 @@ function MeetingPage({ id }: { id: number }) {
           <Link to={localePath("/messages/?box=meetings")} className="inline-flex min-h-[40px] items-center text-[13px] font-semibold text-ink-2 hover:text-ink">
             ← All your meetings
           </Link>
+          {/* THE NEWS, HERE TOO: the meeting page carries its own column instead of the shell's. */}
+          <NewsCards className="flex flex-col gap-3" />
         </aside>
       </div>
     </div>

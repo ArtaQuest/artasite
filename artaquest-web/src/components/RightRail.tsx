@@ -113,6 +113,21 @@ function RailDefaults() {
   );
 }
 
+/**
+ * THE NEWS, wherever there is no shell column. The two app panes (ArtaChat, a meeting) size
+ * themselves to the viewport and carry no right column, so they mount this inside their own
+ * layout — the operator's rule is that the news is on every page, without exception.
+ */
+export function NewsCards({ className }: { className?: string }) {
+  const rail = useRail(true);
+  return (
+    <div className={className}>
+      <TodaysNewsCard items={rail.headlines} />
+      <NewsCard items={rail.news} />
+    </div>
+  );
+}
+
 export function RailPortal({ children, mobile = "inline" }: { children: ReactNode; mobile?: "inline" | "none" }) {
   useIsFilling();
   const node = useRailNode();

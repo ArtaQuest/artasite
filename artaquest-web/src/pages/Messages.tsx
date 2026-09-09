@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { NewsCards } from "../components/RightRail";
 import {
   chatCall, chatEmailPrefs, chatGetKey, chatKnock, chatMembers, chatMessages, chatRelation, chatSend,
   chatSetTtl, chatTyping, chatUnsend, chatUploadBlob,
@@ -2652,6 +2653,8 @@ export default function Messages() {
                 Accept and it becomes an ordinary conversation; decline and they can’t write again.</span>
               </p>
             </details>
+          {/* THE NEWS, HERE TOO. This pane has no shell column, and the rule is every page without exception. */}
+          <NewsCards className="flex shrink-0 flex-col gap-3" />
           </aside>
           {side === "meetings" ? (
             /* The diary, in the main pane. It is full-width content rather than a conversation, so

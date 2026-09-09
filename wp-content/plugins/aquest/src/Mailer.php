@@ -402,10 +402,25 @@ class Mailer {
 			$pre = apply_filters( 'aq_mail_send', null, $key, $to, $subject, $vars ); // test seam
 			if ( $pre !== null ) { return (bool) $pre; }
 		}
+		// NEVER TO A RESERVED DOMAIN. RFC 2606 / 6761 names (.test, .example, .invalid, .localhost,
+		// example.com/net/org) cannot belong to a real person; a letter to one leaves this host,
+		// bounces at the relay and lands in the operator's inbox as "Undelivered Mail Returned to
+		// Sender" — five of them per test run. Answered as sent, so nothing upstream retries.
+		if ( self::unroutable( $to ) ) { return true; }
 		return wp_mail( $to, $subject, $html, [
 			'Content-Type: text/html; charset=UTF-8',
 			'From: ' . self::FROM_NAME . ' <' . self::FROM_EMAIL . '>',
 		] );
+	}
+
+	/** True for an address whose domain is reserved for documentation and testing. */
+	public static function unroutable( $to ) {
+		$to   = strtolower( trim( (string) $to ) );
+		$at   = strrpos( $to, '@' );
+		$host = false === $at ? '' : substr( $to, $at + 1 );
+		if ( '' === $host ) { return true; }
+		if ( preg_match( '/(^|\.)(test|example|invalid|localhost|local)$/', $host ) ) { return true; }
+		return in_array( $host, [ 'example.com', 'example.net', 'example.org' ], true );
 	}
 
 	/**
