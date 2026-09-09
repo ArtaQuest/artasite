@@ -467,7 +467,9 @@ function HostPanel({ page, onPreview, previewing }: { page: CastPage; onPreview:
       // NO STEP FOR THE HOST. The first time the host looks at their show, the hours open themselves
       // with the show's defaults in the host's own zone; the sentence below says what they are and
       // where to change them. A show whose hours a couple cannot book is a show nobody is on.
-      if (!r.rule) {
+      // ONLY FOR A HOST: an operator sees the requests but has no calendar here to open, and asking
+      // the server to open one was answered "Only a host has recording hours" on every visit.
+      if (!r.rule && page.hosting) {
         try { const o = await castHostOpen(VIEWER_TZ); if (!stop) { setRule(o.rule); setOpened(true); } }
         catch (e) { if (!stop) setErr(errText(e, "Couldn’t open the hours.")); }
       }
@@ -485,6 +487,19 @@ function HostPanel({ page, onPreview, previewing }: { page: CastPage; onPreview:
   const label = (r: CastRequest) => [r.a.name, r.b.name].filter(Boolean).join(" & ") || `Request #${r.id}`;
   return (
     <>
+      {!page.hosting && (
+        <section className="rounded-card border border-line bg-space-2 p-4 md:p-5" aria-label="Operator view">
+          <h2 className="text-[16px] font-bold text-ink">You’re looking after the show</h2>
+          <p className="mt-2 text-[13.5px] leading-relaxed text-ink-2">
+            As an operator you see every request and where each episode stands. The recordings are booked in
+            {" "}<span data-ay-skip="1">{page.host?.name || "the host"}</span>’s calendar
+            {page.host?.slug && <> (<a className="underline" href={localePath(`/u/${encodeURIComponent(page.host.slug)}/`)} data-ay-skip="1">@{page.host.slug}</a>)</>}.
+            To take episodes yourself, volunteer to host below and your own calendar opens.
+          </p>
+          <div className="mt-3"><Button variant="outline" onClick={() => { castVolunteer(true, VIEWER_TZ).then(() => window.location.reload()).catch((e) => setErr(errText(e, "Couldn’t sign you up to host."))); }}>Volunteer to host</Button></div>
+        </section>
+      )}
+      {page.hosting && (
       <section className="rounded-card border border-line bg-space-2 p-4 md:p-5" aria-label="Recording hours">
         <h2 className="text-[16px] font-bold text-ink">Recording hours</h2>
         {rule ? (
@@ -496,14 +511,16 @@ function HostPanel({ page, onPreview, previewing }: { page: CastPage; onPreview:
         ) : (
           <>
             <p className="mt-2 text-[13.5px] leading-relaxed text-ink-2">
-              No couple can book a recording until you open hours. This writes an ordinary booking rule called “ArtaCast recording” — weekday afternoons, 90 minutes, three seats, in your own zone — which you can then shape at /book like any other.
+              No couple can book a recording until you open hours. This writes an ordinary booking rule called “ArtaCast recording” — any free 90-minute slot, any day 9 AM to 9 PM in your own zone, three seats, up to 60 days ahead — which you can then shape at /book like any other. Every meeting already in your calendar blocks its time on its own.
             </p>
             <div className="mt-3"><Button onClick={() => void open()} disabled={opening}>{opening ? "Opening…" : "Open recording hours"}</Button></div>
           </>
         )}
         {err && <div className="mt-3"><ErrorNote>{err}</ErrorNote></div>}
       </section>
-      <StoredEpisodes />
+      )}
+      {!page.hosting && err && <ErrorNote>{err}</ErrorNote>}
+      {page.hosting && <StoredEpisodes />}
       <section className="rounded-card border border-line bg-space-2 p-4 md:p-5" aria-label="Requests">
         <h2 className="text-[16px] font-bold text-ink">Requests</h2>
         {items === null ? <p className="mt-2 text-[13px] text-ink-2">Loading…</p>
@@ -788,7 +805,8 @@ export default function ArtaCast() {
   // ── the host ──
   if (page.is_host && !request) {
     return frame(
-      <PageHero eyebrow="ArtaCast" title="Your show" lede="Couples book any free slot in your calendar. Here is who has asked to come on, and where each episode stands." />,
+      <PageHero eyebrow="ArtaCast" title={page.hosting ? "Your show" : "The show"}
+        lede={page.hosting ? "Couples book any free slot in your calendar. Here is who has asked to come on, and where each episode stands." : "Here is who has asked to come on, and where each episode stands."} />,
       <>
         <HostPanel page={page} onPreview={setHostPreview} previewing={hostPreview?.id || 0} />
         {hostPreview && (

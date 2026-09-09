@@ -3169,7 +3169,11 @@ export type CastPage = {
   rule: BookRule | null;
   open: boolean;
   me: number;
+  /** May see the requests: a host, or an operator. */
   is_host: boolean;
+  /** Has a calendar couples book — a host proper. False for an operator who is not one. */
+  hosting: boolean;
+  operator?: boolean;
   request: CastRequest | null;
   now: number;
 };

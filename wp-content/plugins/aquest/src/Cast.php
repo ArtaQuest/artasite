@@ -324,7 +324,12 @@ final class Cast {
 			'rule'    => $rule,
 			'open'    => (bool) $rule,
 			'me'      => $uid,
+			// TWO DIFFERENT FACTS. `is_host` is "may see the requests" — hosts AND operators. `hosting`
+			// is "has a calendar couples book" — hosts only. The page conflated them, so an operator who
+			// is not a host was shown "Open recording hours" and then refused by host-open.
 			'is_host' => self::is_host( $uid ),
+			'hosting' => self::is_host_uid( $uid ),
+			'operator' => $uid > 0 && current_user_can( 'manage_options' ),
 			'request' => $r ? self::payload( $r, $uid ) : null,
 			'now'     => Data::now(),
 		];
