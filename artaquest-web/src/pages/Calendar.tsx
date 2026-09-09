@@ -192,7 +192,9 @@ function NextUp({ it, now }: { it: CalendarItem; now: number }) {
       <p className="mt-1.5 text-[14px] leading-relaxed text-ink-2" data-ay-skip="1">{whenLine(it)}</p>
       <p className="mt-0.5 text-[12.5px] text-ink-2">
         {it.status === "cancelled" ? "Cancelled — it stays here so nobody turns up to it by mistake" : (
-          <>Starts <span data-ay-skip="1">{fmtRelative(it.start_ts, now)}</span></>
+          Number(it.start_ts) > now
+            ? <>Starts <span data-ay-skip="1">{fmtRelative(it.start_ts, now)}</span></>
+            : <>Happening now</>
         )}
       </p>
       {it.detail && <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-2" data-ay-skip="1">{it.detail}</p>}

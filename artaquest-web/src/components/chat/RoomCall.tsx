@@ -619,12 +619,15 @@ export function RoomCall({ room, roomKey, me, onLeft, episode }: {
    */
   useEffect(() => {
     const onVis = () => {
+      // NEVER REMEMBERED. This is the device economising, not the member choosing — and a reload
+      // hides the page on its way out, so persisting the audio rung here meant every member came
+      // back from a reload with no camera and "Sound only" under their own name.
       if (document.visibilityState === "hidden") {
-        if (modeRef.current !== "audio") { hiddenFrom.current = modeRef.current; applyMode("audio"); }
+        if (modeRef.current !== "audio") { hiddenFrom.current = modeRef.current; applyMode("audio", false); }
       } else if (hiddenFrom.current) {
         const back = hiddenFrom.current;
         hiddenFrom.current = null;
-        applyMode(back);
+        applyMode(back, false);
       }
     };
     document.addEventListener("visibilitychange", onVis);
@@ -632,11 +635,11 @@ export function RoomCall({ room, roomKey, me, onLeft, episode }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function applyMode(next: CallMode) {
-    if (next === modeRef.current) { setPanel(""); return; }
+  function applyMode(next: CallMode, remember = true) {
+    if (next === modeRef.current) { if (remember) setPanel(""); return; }
     modeRef.current = next;
     setMode(next);
-    rememberCallMode(next);
+    if (remember) rememberCallMode(next);
     for (const c of calls.current.values()) tellCall(c, next);
     const hasCam = !!media.current?.getVideoTracks().length;
     if (next !== "audio" && !hasCam) void addCamera();
