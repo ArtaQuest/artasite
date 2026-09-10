@@ -1145,6 +1145,14 @@ export function RoomCall({ room, roomKey, me, onLeft, episode, meeting }: {
   const fitStyle = fit && fit.tileW > 0
     ? { gridTemplateColumns: `repeat(${fit.cols}, ${Math.floor(fit.tileW)}px)`, justifyContent: "center", alignContent: "center" } as React.CSSProperties
     : undefined;
+  /** OFF THE STAGE the grid still has a height budget: 38% of the viewport for the whole block of
+   *  tiles, whatever the column count. The call sits above the thread inside a section that clips
+   *  its overflow, and one full-width 16:9 tile in a short window ate the section — the toolbar,
+   *  and the member's own chin, went below the fold with nothing to scroll. Width is what is
+   *  capped, because a tile's height follows from its width; the ratio of columns to rows turns
+   *  the block's height budget into a width. */
+  const wideCols = total <= 1 ? 1 : total <= 4 ? 2 : 3;
+  const offStageStyle = { maxWidth: `calc(min(38dvh, 300px) * 16 / 9 * ${wideCols / Math.ceil(total / wideCols)})` } as React.CSSProperties;
 
   const anyHand = Object.entries(hands).some(([, up]) => up);
   const relay = hasRelay();
@@ -1337,7 +1345,11 @@ export function RoomCall({ room, roomKey, me, onLeft, episode, meeting }: {
     <section
       className={focus
         ? "fixed inset-0 z-[95] flex flex-col bg-space-2"
-        : "flex flex-col border-b border-line bg-space-1"}
+        // Off the stage the surface NEVER SHRINKS: the meeting page bounds the card (md:max-h-[820px])
+        // so the thread can scroll inside it, and a call block that gave way to the thread put its
+        // own toolbar — and Leave — below the card's edge. The block keeps its height (the grid's
+        // budget above, offStageStyle, is what keeps that height small) and the thread takes the rest.
+        : "flex shrink-0 flex-col border-b border-line bg-space-1"}
       aria-label="Room call">
 
       {/* WHAT EVERYONE IS LOOKING AT. One stage with a switch, rather than a video strip that a
@@ -1378,7 +1390,8 @@ export function RoomCall({ room, roomKey, me, onLeft, episode, meeting }: {
           own copy of every tile, so the grid is hidden there too; the stage's tiles carry the media
           while it is up, and the grid's take over the moment it is shown again. */}
       <div ref={gridRef} className={`grid grid-flow-row-dense gap-1 p-1 ${
-        view !== "grid" ? "hidden" : focus ? "min-h-0 flex-1" : ""} ${fitStyle ? "" : gridCols}`} style={fitStyle}>
+        view !== "grid" ? "hidden" : focus ? "min-h-0 flex-1" : "mx-auto w-full"} ${fitStyle ? "" : gridCols}`}
+        style={fitStyle ?? (focus ? undefined : offStageStyle)}>
         {view === "grid" && myTile}
         {view === "grid" && tiles.map((p) => tileFor(p, p.uid === speaker && tiles.length >= 2 && !fit))}
       </div>

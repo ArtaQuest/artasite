@@ -28,6 +28,7 @@
  * N−1 copies of the picture. Background blur stays where it was: on the camera, when the platform
  * offers it (`getCapabilities().backgroundBlur`), and nowhere otherwise.
  */
+import { type Detection, bestFace, clusterDetections, greyOf } from "./pico";
 import {
   type Box, type Exposure, Framer, Governor, Motion, THUMB_H, THUMB_W,
   exposureAt, exposureFor, faceFromMask, fullFrame, histMean, lumaHist, lumaPlane, skinMask, thumbGain,
@@ -115,7 +116,51 @@ function modestDevice(): boolean {
   return (cores > 0 && cores <= 4) || (mem > 0 && mem <= 4);
 }
 
-/* ── THE PLATFORM FACE DETECTOR, where there is one ────────────────────────────────────────────── */
+/* ── THE FACE DETECTOR ─────────────────────────────────────────────────────────────────────────── */
+
+/** pico's scan plane: 320×180. A face in a call is 30–90px across at this size; smaller than
+ *  MIN_FACE is somebody across the room, and the scan cost falls with the square of it. */
+const SCAN_W = 320;
+const SCAN_H = 180;
+const SCAN = { minsize: 28, maxsize: 180, shiftfactor: 0.12, scalefactor: 1.1 };
+/** Detections from the last few ticks are pooled before clustering (pico's "detection memory"):
+ *  a face hit in three consecutive scans outscores a one-off by three to one. */
+const MEMORY = 3;
+
+/**
+ * ONE WORKER PER PAGE, started the first time a face is wanted, holding the cascade (240 KB,
+ * fetched once, cached by the service worker like every asset under the theme's app/). Every
+ * engine on the page scans through it; each scan is a transferred grey plane out and a short list
+ * of detections back, and none of it touches the thread the call is encoding on.
+ */
+type PicoWorker = { post: (grey: Uint8Array, w: number, h: number) => Promise<Detection[]> };
+let picoWorker: Promise<PicoWorker | null> | null = null;
+function loadPico(): Promise<PicoWorker | null> {
+  if (picoWorker) return picoWorker;
+  picoWorker = new Promise<PicoWorker | null>((resolve) => {
+    let w: Worker;
+    try { w = new Worker(new URL("./pico.worker.ts", import.meta.url), { type: "module" }); }
+    catch { resolve(null); return; }
+    const waiting = new Map<number, (d: Detection[]) => void>();
+    let seq = 0;
+    w.onmessage = (e: MessageEvent<{ t: "loaded"; ok: boolean } | { t: "dets"; id: number; dets: Detection[] }>) => {
+      const m = e.data;
+      if (m.t === "loaded") {
+        if (!m.ok) { w.terminate(); resolve(null); return; }
+        resolve({
+          post: (grey, width, height) => new Promise((res) => {
+            const id = ++seq;
+            waiting.set(id, res);
+            w.postMessage({ t: "scan", id, grey: grey.buffer, w: width, h: height, p: SCAN }, [grey.buffer]);
+          }),
+        });
+      } else { waiting.get(m.id)?.(m.dets); waiting.delete(m.id); }
+    };
+    w.onerror = () => { resolve(null); };
+    w.postMessage({ t: "load", url: (import.meta.env.BASE_URL || "/") + "look/facefinder" });
+  });
+  return picoWorker;
+}
 
 type DetectedFace = { boundingBox: { x: number; y: number; width: number; height: number } };
 type FaceDetectorLike = { detect(src: HTMLVideoElement | HTMLCanvasElement): Promise<DetectedFace[]> };
@@ -236,7 +281,7 @@ export type LookStats = {
   /** The face last accepted by the framer, in source coordinates, or null. */
   face: Box | null;
   /** Which detector is finding it. */
-  detector: "platform" | "skin";
+  detector: "platform" | "pico" | "skin";
   /** The exposure currently applied. */
   exposure: Exposure;
   /** The crop currently drawn. */
@@ -270,6 +315,11 @@ class Look {
   private readonly gov: Governor;
   private detector: FaceDetectorLike | null;
   private detecting = false;
+  /** pico, once its worker is up; the skin heuristic stands in until then and if it never comes. */
+  private pico: PicoWorker | null = null;
+  private picoAsked = false;
+  private readonly scan: CanvasRenderingContext2D | null;
+  private recent: Detection[][] = [];
   private lastDetect = 0;
   private lastFrame = 0;
   private srcW = 0; private srcH = 0;
@@ -299,7 +349,7 @@ class Look {
     this.outW = this.srcW; this.outH = this.srcH;
     this.outFps = Math.min(30, Math.max(1, Math.round(st.frameRate || 30)));
     // The heuristic finder gets a shorter leash than a platform detector: see Framer.
-    this.framer = new Framer(this.srcW / this.srcH, this.outW / this.outH, this.detector ? 2 : 1.7);
+    this.framer = new Framer(this.srcW / this.srcH, this.outW / this.outH, 1.8);
     this.crop = this.framer.crop;
 
     this.video = document.createElement("video");
@@ -318,6 +368,9 @@ class Look {
     const t = document.createElement("canvas");
     t.width = THUMB_W; t.height = THUMB_H;
     this.thumb = t.getContext("2d", { willReadFrequently: true });
+    const sc = document.createElement("canvas");
+    sc.width = SCAN_W; sc.height = SCAN_H;
+    this.scan = sc.getContext("2d", { willReadFrequently: true });
 
     this.initGl();
     this.canvas.addEventListener("webglcontextlost", (e) => { e.preventDefault(); this.gl = null; });
@@ -630,6 +683,31 @@ class Look {
       gain = thumbGain(histMean(hist));
     }
     if (!face) return;
+    if (!this.detector && !this.pico && !this.picoAsked) {
+      this.picoAsked = true;
+      void loadPico().then((p) => { if (!this.disposed) this.pico = p; });
+    }
+    if (px) this.motion.observe(lumaPlane(px, THUMB_W * THUMB_H));
+    if (this.pico && this.scan) {
+      if (this.detecting) return;   // the last scan is still out: never queue up behind a slow machine
+      // pico on a 320×180 grey plane, in the worker; the last MEMORY answers pooled and clustered,
+      // and — like every heuristic here — gated on movement, so a face on a poster stays a poster.
+      let grey: Uint8Array;
+      try {
+        this.scan.drawImage(this.video, 0, 0, SCAN_W, SCAN_H);
+        grey = greyOf(this.scan.getImageData(0, 0, SCAN_W, SCAN_H).data, SCAN_W * SCAN_H);
+      } catch { return; }
+      this.detecting = true;
+      this.pico.post(grey, SCAN_W, SCAN_H).then((dets) => {
+        this.detecting = false;
+        if (this.disposed) return;
+        this.recent.push(dets);
+        if (this.recent.length > MEMORY) this.recent.shift();
+        const f = bestFace(clusterDetections(([] as Detection[]).concat(...this.recent)), SCAN_W, SCAN_H);
+        this.accept(f ? { x: f.x, y: f.y, w: f.w, h: f.h } : null, performance.now());
+      });
+      return;
+    }
     if (this.detector && !this.detecting) {
       this.detecting = true;
       const w = this.srcW, h = this.srcH;
@@ -637,8 +715,7 @@ class Look {
         this.detecting = false;
         const f = faces[0]?.boundingBox;
         const box: Box | null = f && w > 0 && h > 0 ? { x: f.x / w, y: f.y / h, w: f.width / w, h: f.height / h } : null;
-        this.lastFace = box;
-        this.framer.observe(box, performance.now());
+        this.accept(box, performance.now());
       }).catch(() => {
         // "Face detection service unavailable" — Chrome on a machine without the platform model.
         this.detecting = false;
@@ -653,11 +730,28 @@ class Look {
     }
   }
 
+  /**
+   * A detector's answer, weighed before the framer hears it. A found face must sit on cells that
+   * have moved lately (a face on a poster stays a poster). A MISS is not yet an absence: a person
+   * who turns to a second screen, laughs into a hand or looks down at a keyboard is still there,
+   * and the motion map knows it — so while the last face's cells keep moving, the last face stands.
+   * Only when that place goes still does the miss reach the framer, which then waits its own four
+   * seconds before widening. This is what stops the picture breathing in and out with every glance.
+   */
+  private accept(found: Box | null, now: number): void {
+    const warm = this.motion.warm;
+    let box: Box | null = null;
+    if (found && (!warm || this.motion.gate(found))) box = found;
+    else if (!found && this.lastFace && warm && this.motion.gate(this.lastFace)) box = this.lastFace;
+    this.lastFace = box;
+    this.framer.observe(box, now);
+  }
+
   stats(): LookStats {
     return {
       level: this.gov.level, costMs: this.gov.costMs, fps: this.fps,
       src: { w: this.srcW, h: this.srcH }, out: { w: this.outW, h: this.outH },
-      face: this.framer.lastFace, detector: this.detector ? "platform" : "skin",
+      face: this.framer.lastFace, detector: this.detector ? "platform" : this.pico ? "pico" : "skin",
       exposure: this.exp, crop: this.crop, frames: this.frames,
     };
   }

@@ -166,6 +166,24 @@ test("framer: the heuristic path zooms less", () => {
   const fr = new M.Framer(16 / 9, 16 / 9, 1.7); fr.observe(face, 0); fr.observe(face, 700);
   assert.ok(fr.goal.h >= 1 / 1.7 - 1e-9);
 });
+test("pico: the shipped cascade unpacks, rejects flat grey, and finds nothing where there is nothing", async () => {
+  const P = await import("../artaquest-web/src/lib/pico.ts");
+  const { readFileSync } = await import("node:fs");
+  const bytes = new Uint8Array(readFileSync(new URL("../artaquest-web/public/look/facefinder", import.meta.url)));
+  const dv = new DataView(bytes.buffer);
+  assert.equal(dv.getInt32(8, true), 6, "tree depth"); assert.equal(dv.getInt32(12, true), 468, "trees");
+  const classify = P.unpackCascade(bytes);
+  const flat = new Uint8Array(320 * 180).fill(128);
+  assert.equal(classify(90, 160, 60, flat, 320), -1, "flat grey is not a face");
+  const dets = P.runCascade(flat, 180, 320, classify, { minsize: 28, maxsize: 180, shiftfactor: 0.12, scalefactor: 1.1 });
+  assert.equal(dets.length, 0);
+  // Clustering: three overlapping hits become one with the summed score; a distant one stays apart.
+  const cl = P.clusterDetections([{ r: 50, c: 50, s: 40, q: 30 }, { r: 52, c: 51, s: 40, q: 25 }, { r: 49, c: 50, s: 44, q: 20 }, { r: 150, c: 250, s: 40, q: 10 }]);
+  assert.equal(cl.length, 2); assert.ok(Math.abs(cl[0].q - 75) < 1e-9);
+  const face = P.bestFace(cl, 320, 180, 60);
+  assert.ok(face && Math.abs(face.x * 320 - (cl[0].c - cl[0].s / 2)) < 1e-9 && face.q === cl[0].q);
+  assert.equal(P.bestFace(cl, 320, 180, 80), null, "below the score floor");
+});
 test("opening: thin lines vanish, a block survives", () => {
   const m = new Uint8Array(W * H);
   for (let x = 0; x < W; x++) m[10 * W + x] = 1;                          // a 1-cell line

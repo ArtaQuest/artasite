@@ -66,7 +66,7 @@ export function Appearance({ track }: { track: MediaStreamTrack | null | undefin
         </span>
         <Switch on={s.frame} onChange={(on) => setLook({ frame: on })} label="Auto-framing" />
       </div>
-      <p className="pt-2 text-[12px] leading-relaxed text-ink-3">
+      <p className="pt-2 text-[12px] leading-relaxed text-ink-3" data-detector={stat?.detector}>
         {!track ? "Turn the camera on to see it."
           : !stat ? "The camera goes out as it is."
           : stat.level === 0 ? "Paused to keep the call smooth — this device is busy. It comes back by itself."
