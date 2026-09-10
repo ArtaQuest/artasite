@@ -593,6 +593,12 @@ final class Rest {
 		[ 'POST', 'meet/uninvite',                 'Meetings::uninvite',  'user' ], // host only
 		[ 'POST', 'meet/leave',                    'Meetings::leave',     'user' ], // a guest takes themselves off the list
 		[ 'POST', 'meet/end',                      'Meetings::end',       'user' ], // host only; closes a meeting that has run — not a cancellation
+		// EVERY MEETING IS RECORDABLE, and finished the way an ArtaCast episode is (2026-09-10).
+		[ 'GET',  'meet/recording',                'Record::state',       'user' ], // ?id= — is there a take, and where has its finishing got to
+		[ 'POST', 'meet/recorded',                 'Record::recorded',    'user' ], // the host's device finished writing
+		[ 'POST', 'meet/finish',                   'Record::finish',      'user' ], // the raw is on the shelf — clean it on Kaggle
+		[ 'POST', 'meet/iso',                      'Record::iso',         'user' ], // a guest's own camera track
+		[ 'GET',  'meet/final',                    'Record::final',       'user' ], // fresh signed links to the finished file
 		[ 'POST', 'meet/rsvp',                     'Meetings::rsvp',      'user' ], // guest: yes|no|maybe
 		[ 'POST', 'meet/retime',                   'Meetings::retime',    'user' ], // guest: ask for a different time (a proposal, not a change)
 		[ 'POST', 'meet/retime-respond',           'Meetings::retime_respond', 'user' ], // host: accept it (goes through the ordinary retime) or decline

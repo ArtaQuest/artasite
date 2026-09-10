@@ -1109,7 +1109,7 @@ final class Cast {
 	 * script's JSON arrives with its quotes escaped (`ARTACAST_DONE {\"model\": …}\n"`); a plain log
 	 * ends the line at a real newline. Both shapes are read; anything else is null.
 	 */
-	private static function done_json( $log ) {
+	public static function done_json( $log ) {
 		$log = (string) $log;
 		$p = strpos( $log, 'ARTACAST_DONE ' );
 		if ( false === $p ) { return null; }
@@ -1126,7 +1126,7 @@ final class Cast {
 	}
 
 	/** The verdict from what the kernel left behind: its report file and its own last line. */
-	private static function judge_output( $files, $log ) {
+	public static function judge_output( $files, $log ) {
 		$report = false;
 		foreach ( (array) $files as $f ) { if ( str_ends_with( (string) $f['name'], '-report.json' ) ) { $report = true; } }
 		$j = self::done_json( $log );

@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.77.0';
+	const VERSION = '1.78.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -1036,6 +1036,31 @@ final class Schema {
 				KEY host_status (host_id, status),
 				KEY invite_token (invite_token)",
 
+			// EVERY MEETING IS RECORDABLE (2026-09-10). One row per meeting, written the first time
+			// that meeting is recorded: what the host's device wrote, where the finishing run got to,
+			// and the guests' isolated camera tracks. The recording itself never touches this server.
+			'aq_meet_records' => "
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				meet_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				host_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				recorded_at INT UNSIGNED NOT NULL DEFAULT 0,
+				recorded_note VARCHAR(100) NOT NULL DEFAULT '',
+				raw_media_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				thumb_url VARCHAR(255) NOT NULL DEFAULT '',
+				pipe_state VARCHAR(12) NOT NULL DEFAULT '',
+				pipe_kernel VARCHAR(96) NOT NULL DEFAULT '',
+				pipe_started INT UNSIGNED NOT NULL DEFAULT 0,
+				pipe_done INT UNSIGNED NOT NULL DEFAULT 0,
+				pipe_note VARCHAR(255) NOT NULL DEFAULT '',
+				pipe_tries TINYINT UNSIGNED NOT NULL DEFAULT 0,
+				final_files TEXT NULL,
+				iso_files TEXT NULL,
+				created INT UNSIGNED NOT NULL DEFAULT 0,
+				updated INT UNSIGNED NOT NULL DEFAULT 0,
+				PRIMARY KEY  (id),
+				UNIQUE KEY meet (meet_id),
+				KEY host_state (host_id, pipe_state)",
+
 			'aq_grant_meetings' => "
 				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 				grant_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
@@ -1274,6 +1299,7 @@ final class Schema {
 			'aq_meet_rules' => [ 'desc' => 'When a member is open to being booked. A rule, not a diary — the free/busy answer is computed against aq_meets at read time, and a booking becomes an ordinary meeting.', 'cols' => [ 'days' => '7-char mask, Monday first', 'from_min' => 'minutes from midnight in the owner\'s own tz', 'notice_h' => 'how little warning is acceptable' ] ],
 			'aq_meets' => [ 'desc' => 'ArtaMeet — a scheduled meeting. The E2EE room that carries it is bound at T-15m and released after, so room_id is 0 for almost all of a meeting\'s life.', 'cols' => [ 'room_id' => 'the ArtaRooms room, only while live', 'seq' => 'iCalendar SEQUENCE — clients ignore an updated event without it', 'sort_key' => 'start_ts*1e7+id, a unique keyset cursor (start_ts alone ties)', 'ctx_key' => 'idempotency handle, e.g. grant:12:t-14' ] ],
 			'aq_meet_guests' => [ 'desc' => 'Who is invited to an ArtaMeet, and whether they have been seated in its room yet.', 'cols' => [ 'rsvp' => 'none|yes|no|maybe', 'seated' => 'when they were added to the live room (0 = not yet)' ] ],
+			'aq_meet_records' => [ 'desc' => 'Every meeting is recordable, and what comes out is what ArtaCast ships: the host\'s browser composites the call, writes it to their own computer, sends it to their shelf, and the same finishing script cleans the voices and sets the loudness on Kaggle. One row per meeting.', 'cols' => [ 'meet_id' => 'the meeting (aq_meets)', 'recorded_at' => 'when the host\'s device finished writing', 'raw_media_id' => 'the raw on the host\'s shelf, deleted once the finished file exists', 'pipe_state' => 'finishing: queued | running | done | failed', 'final_files' => 'the finished outputs as Kaggle listed them', 'iso_files' => 'each guest\'s own camera track' ] ],
 			'aq_cast_requests' => [ 'desc' => 'ArtaCast — a couple\'s request to appear on the show: the facts the episode frame airs (names, one line each, birth, photographs, the year they married, milestones), the partner\'s invitation, and the recording (an ordinary aq_meets row booked from the host\'s published hours).', 'cols' => [ 'status' => 'draft | scheduled | cancelled', 'a_*' => 'the member who asked', 'b_*' => 'their partner', 'a_rows' => 'milestones as [{y, l}] for the timeline', 'invite_token' => 'sha256 of the partner\'s single-use link (masked)', 'b_email' => 'the partner\'s address, typed by their spouse (masked)', 'meet_id' => 'the recording, once booked', 'recorded_at' => 'when the host\'s device finished writing the episode', 'raw_media_id' => 'the raw recording on the host\'s ArtaCloud shelf (aq_media)', 'pipe_state' => 'finishing on Kaggle: queued | running | done | failed', 'pipe_kernel' => 'the Kaggle script kernel that cleans the voices and normalises loudness', 'final_files' => 'the finished outputs (names + sizes) as Kaggle listed them', 'confirmed_at' => 'when the host confirmed the episode (0 = not yet; booking waits for it)' ] ],
 			'aq_grant_meetings' => [ 'desc' => 'Scheduled group working sessions for a grant\'s registrants.', 'cols' => [ 'reminder_key' => 'milestone (e.g. t-14, t-1)', 'meet_url' => 'RETIRED — the Google Meet link these sessions used before ArtaMeet; kept for the record, read by nothing' ] ],
 			'aq_competitions'   => [ 'desc' => 'Kaggle-style predictive-modelling contests. Public train/test data are files under uploads/competitions/<slug>/; the hidden holdout targets are server-only (never in this public DB).', 'cols' => [ 'owner_uid' => 'the member who opened the competition', 'metric' => 'scorer (r2)', 'holdout' => 'how the hidden test split is defined', 'status' => 'active | closed', 'n_train' => 'training rows', 'n_test' => 'holdout rows', 'n_features' => 'features per row', 'n_targets' => 'number of prediction targets', 'prize' => 'coin prize pool paid 50/30/20 to the top-3 at the deadline (0 = no prize)', 'thread_id' => 'the competition\'s official discussion thread (aq_threads.id)' ] ],

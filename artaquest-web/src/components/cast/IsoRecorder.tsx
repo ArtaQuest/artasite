@@ -31,7 +31,13 @@ async function eligible(): Promise<{ ok: boolean; why: string }> {
   } catch { return { ok: false, why: "storage unavailable" }; }
 }
 
-export function IsoRecorder({ local, on, meetId, me, spec }: { local: MediaStream | null; on: boolean; meetId: number; me: number; spec: EpisodeSpec }) {
+export function IsoRecorder({ local, on, meetId, me, spec, who: whoName }: {
+  local: MediaStream | null; on: boolean; meetId: number; me: number;
+  /** The episode this track belongs to, or null when it is an ordinary meeting. */
+  spec: EpisodeSpec | null;
+  /** The guest's own name, when there is no episode spec to read it from. */
+  who?: string;
+}) {
   const [phase, setPhase] = useState<"idle" | "recording" | "saving" | "sent" | "skipped">("idle");
   const [why, setWhy] = useState("");
   const [send, setSend] = useState<SendState | undefined>(undefined);
@@ -49,13 +55,13 @@ export function IsoRecorder({ local, on, meetId, me, spec }: { local: MediaStrea
       if (!e.ok) { setPhase("skipped"); setWhy(e.why); return; }
       const type = pickRecordingType();
       if (!type || !local) { setPhase("skipped"); setWhy("this browser cannot record"); return; }
-      const who = spec.a.uid === me ? spec.a.name : spec.b.name;
+      const who = spec ? (spec.a.uid === me ? spec.a.name : spec.b.name) : (whoName || "guest");
       const clean = (s: string) => (s || "").normalize("NFKD").replace(/[^\w]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 24) || "guest";
       const n = `ISO-${clean(who)}-${meetId}-${Date.now()}.${type.ext}`;
       const w = await openRecording(n);
       if (cancelled || !w) { setPhase("skipped"); setWhy("could not open a file"); return; }
       writable.current = w; name.current = n;
-      await writeSidecar(n, { meet_id: meetId, request_id: 0, spec, at: Date.now(), iso: true });
+      await writeSidecar(n, { meet_id: meetId, request_id: 0, spec, at: Date.now(), iso: true, kind: spec ? "cast" : "meet" });
       const stream = new MediaStream(local.getTracks());
       let mr: MediaRecorder;
       try { mr = new MediaRecorder(stream, { mimeType: type.mime, videoBitsPerSecond: ISO_VIDEO_BPS, audioBitsPerSecond: ISO_AUDIO_BPS }); }
@@ -68,7 +74,7 @@ export function IsoRecorder({ local, on, meetId, me, spec }: { local: MediaStrea
           try { await w.close(); } catch { /* the store refused the close; the bytes so far are there */ }
           writable.current = null;
           setPhase("sent");
-          sendIso(n, meetId).catch(() => undefined);
+          sendIso(n, meetId, spec ? "cast" : "meet").catch(() => undefined);
         })();
       };
       mr.start(2000);

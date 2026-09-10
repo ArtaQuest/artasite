@@ -16,6 +16,7 @@ import { callModePref, deviceSuggestedMode, rememberCallMode, useVideoLive } fro
 import { Whiteboard, type Ping, type Stroke } from "./Whiteboard";
 import { EpisodeRecorder } from "../cast/EpisodeRecorder";
 import { IsoRecorder } from "../cast/IsoRecorder";
+import { MeetingRecorder } from "./MeetingRecorder";
 import { reshapeCapture, setStudio } from "../../lib/webrtc";
 import type { EpisodeSpec } from "../../lib/episode-frame";
 
@@ -255,11 +256,14 @@ function linkGrade(l: LinkReport | undefined): 0 | 1 | 2 | 3 {
   return 1;
 }
 
-export function RoomCall({ room, roomKey, me, onLeft, episode }: {
+export function RoomCall({ room, roomKey, me, onLeft, episode, meeting }: {
   room: Room;
   roomKey: CryptoKey | null;
   me: number;
   onLeft: () => void;
+  /** Present when this call IS a meeting and not an ArtaCast episode: the host gets the same
+   *  recorder over a plain grid, and what comes out takes the identical road home. */
+  meeting?: { id: number; title: string; hostId: number } | null;
   /** Present when this call is an ArtaCast recording: the host gets the episode recorder, every
    *  camera opens on the studio profile (lib/webrtc setStudio), and the room is told when the
    *  host is recording. */
@@ -1388,9 +1392,9 @@ export function RoomCall({ room, roomKey, me, onLeft, episode }: {
       )}
       {/* EVERYONE IS TOLD. A recording the guests cannot see is a recording they did not agree to;
           the host's device says so through the room, and this line stays for as long as it is on. */}
-      {episode && recOn && episode.host_id !== me && (
+      {recOn && (episode ? episode.host_id !== me : meeting ? meeting.hostId !== me : false) && (
         <p className="flex items-center gap-2 border-t border-line px-3 py-1.5 text-[12.5px] font-semibold text-ink" role="status">
-          <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" aria-hidden /> The host is recording this episode
+          <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" aria-hidden /> {episode ? "The host is recording this episode" : "The host is recording this meeting"}
         </p>
       )}
       {episode && episode.host_id !== me && (
@@ -1400,6 +1404,17 @@ export function RoomCall({ room, roomKey, me, onLeft, episode }: {
         <EpisodeRecorder spec={episode} local={local} me={me} meetId={episode.meet_id}
           peers={tiles.map((p) => ({ uid: p.uid, stream: p.stream }))}
           onRecState={(on) => { setRecOn(on); void signal({ v: 2, t: "rec", on }); }} />
+      )}
+      {/* EVERY MEETING IS RECORDABLE. The host of an ordinary meeting gets the same panel over a
+          plain grid; each guest's own camera is kept at full quality beside it, as on the show. */}
+      {!episode && meeting && meeting.hostId === me && (
+        <MeetingRecorder meetId={meeting.id} title={meeting.title} local={local} me={me}
+          myName={nameOf(me)?.name || "You"}
+          peers={tiles.map((p) => ({ uid: p.uid, stream: p.stream, name: nameOf(p.uid)?.name || "Guest" }))}
+          onRecState={(on) => { setRecOn(on); void signal({ v: 2, t: "rec", on }); }} />
+      )}
+      {!episode && meeting && meeting.hostId !== me && (
+        <IsoRecorder local={local} on={recOn} meetId={meeting.id} me={me} spec={null} who={nameOf(me)?.name || "guest"} />
       )}
       {controls}
     </section>

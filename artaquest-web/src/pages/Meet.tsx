@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ApiError,
   meetCalRotate, meetEmailPrefs, meetCancel, meetCreate, meetGet, meetInvite, meetList, meetLobby,
-  meetRetime, meetRetimeRespond, castEpisode,
+  meetRetime, meetRecording, meetFinal, meetFinish, meetRetimeRespond, castEpisode,
   meetEnd, meetLeave, meetNow, meetOpen, meetRsvp, meetSeat, meetUninvite, meetUpdate, roomsCall,
   type Meet as MeetRow, type MeetCal, type MeetGuest, type MeetLobby, type MeetRsvp,
 } from "../lib/api";
@@ -15,6 +15,7 @@ import { shouldAnchor } from "../lib/anchor";
 import { RoomThread } from "../components/chat/RoomThread";
 import { RoomCall } from "../components/chat/RoomCall";
 import type { EpisodeSpec } from "../lib/episode-frame";
+import type { MeetRecording } from "../lib/api";
 import { CallModeChoice } from "../components/chat/CallPanel";
 import { CALL_MODES, callModePref, deviceSuggestedMode, rememberCallMode } from "../components/chat/callmode";
 import { PreJoin } from "../components/chat/PreJoin";
@@ -1488,7 +1489,8 @@ function MeetingPage({ id }: { id: number }) {
               /* NEVER the call surface without a key: without one every offer and answer is dropped
                  before it is sent, so the camera opens and nobody can see or hear you. */
               renderCall={(room, key, meId, leaveCall) => (key && room.in_call.includes(meId)
-                ? <RoomCall room={room} roomKey={key} me={meId} onLeft={leaveCall} episode={episode} />
+                ? <RoomCall room={room} roomKey={key} me={meId} onLeft={leaveCall} episode={episode}
+                    meeting={{ id: Number(meet.id), title: meet.title || "Meeting", hostId: Number(meet.host_id) }} />
                 : null)} />
           ) : lobby ? (
             <JoinPanel lobby={lobby} guests={guests} busy={busy} now={now} opening={opening} onOpen={() => void doOpen()} />
@@ -1505,6 +1507,12 @@ function MeetingPage({ id }: { id: number }) {
                   : "The host records the episode on their own computer. Nothing is recorded on yours. Use a laptop with a good camera if you can — the recording asks your camera for 720p — sit facing a window or a lamp, and keep your face in the middle of the picture."}
               </p>
             </section>
+          )}
+
+          {/* THE RECORDING, after the room. What the host's device wrote is on their computer already;
+              this is where the cleaned, levelled release file arrives a few minutes later. */}
+          {!episode && Number(meet.host_id) === me && meet.status !== "cancelled" && (
+            <MeetingRecordingPanel meetId={Number(meet.id)} live={live} />
           )}
 
           {/* The agenda is for the meeting it belongs to — so it stays reachable DURING the call,
@@ -1674,6 +1682,50 @@ function MeetingPage({ id }: { id: number }) {
         </aside>
       </div>
     </div>
+  );
+}
+
+/**
+ * WHERE A MEETING'S RECORDING ENDS UP. The host pressed Record in the call; the file went to their
+ * Downloads and then, on its own, to their shelf and to Kaggle. This is the only place they have to
+ * look for the finished one: the same cleaned, −14 LUFS, YouTube-ready file an episode gets.
+ */
+function MeetingRecordingPanel({ meetId, live }: { meetId: number; live: boolean }) {
+  const [rec, setRec] = useState<MeetRecording | null>(null);
+  const [files, setFiles] = useState<{ name: string; url: string }[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let stop = false;
+    const read = () => { meetRecording(meetId).then((r) => { if (!stop) setRec(r.recording); }).catch(() => undefined); };
+    read();
+    // While a run is going, ask again; once it is done or absent, leave it alone.
+    const iv = window.setInterval(read, 60000);
+    return () => { stop = true; window.clearInterval(iv); };
+  }, [meetId]);
+  if (!rec || (!rec.recorded.at && !rec.state)) return null;
+  const done = rec.state === "done";
+  return (
+    <section className="rounded-card border border-line bg-space-2 p-4" aria-label="The recording">
+      <h2 className="text-[14px] font-semibold text-ink">The recording</h2>
+      <p className="mt-2 text-[13.5px] leading-relaxed text-ink-2">
+        {rec.recorded.at > 0 && <>Recorded <span data-ay-skip="1">{rec.recorded.note}</span>. </>}
+        {rec.state === "running" ? "Being cleaned and levelled for release — a few minutes."
+          : done ? "Cleaned, levelled and ready to upload."
+          : rec.state === "failed" ? (rec.retrying ? "The finishing run was refused — it is being tried again." : `Finishing failed: ${rec.note}`)
+          : live ? "Press Record in the call to record this meeting." : "It is on your computer already."}
+      </p>
+      {done && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {files
+            ? files.map((f) => <Button key={f.name} size="sm" variant="outline" href={f.url}>{/\.mp4$|\.webm$/.test(f.name) ? "Final video" : /thumbnail/.test(f.name) ? "Thumbnail" : /report/.test(f.name) ? "Report" : f.name}</Button>)
+            : <Button size="sm" disabled={busy} onClick={() => { setBusy(true); meetFinal(meetId).then((r) => setFiles(r.files)).catch(() => undefined).finally(() => setBusy(false)); }}>{busy ? "One moment…" : "Get the file"}</Button>}
+        </div>
+      )}
+      {rec.state === "failed" && !rec.retrying && rec.raw > 0 && (
+        <div className="mt-3"><Button size="sm" variant="outline" disabled={busy}
+          onClick={() => { setBusy(true); meetFinish(meetId, rec.raw).then(() => meetRecording(meetId)).then((r) => setRec(r.recording)).catch(() => undefined).finally(() => setBusy(false)); }}>Try again</Button></div>
+      )}
+    </section>
   );
 }
 

@@ -298,6 +298,15 @@ class Mailer {
 			'vars'     => [ 'host', 'names', 'note_line' ],
 			'sample'   => [ 'host' => 'Arash', 'names' => 'Mohammadreza & Ana', 'note_line' => '' ],
 		],
+		'rec_final' => [
+			'label'    => 'A meeting recording is finished',
+			'audience' => 'member',
+			'subject'  => 'Your recording of “{{title}}” is ready',
+			'body'     => "The recording of {{title}} has been finished: the voices were cleaned with {{model}}, the loudness set to YouTube's target, and the picture left exactly as it was recorded.\n\nOpen the meeting to download the final file and the report — the links are made fresh each time the page is opened.",
+			'cta'      => [ 'Open the meeting', '{{meet_url}}' ],
+			'vars'     => [ 'title', 'model', 'meet_url' ],
+			'sample'   => [ 'title' => 'A chat with Arash', 'model' => 'MossFormer2_SE_48K', 'meet_url' => '/meet/1' ],
+		],
 		'cast_final' => [
 			'label'    => 'ArtaCast — the episode is finished',
 			'audience' => 'member',

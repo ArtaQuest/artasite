@@ -1,4 +1,4 @@
-import { castFinish, castIso, uploadImage } from "./api";
+import { castFinish, castIso, meetFinish, meetIso, uploadImage } from "./api";
 import { listRecordings, openRecording, recordingFile } from "./episode-store";
 import type { EpisodeSpec } from "./episode-frame";
 
@@ -14,7 +14,8 @@ import type { EpisodeSpec } from "./episode-frame";
  * which meeting a file belongs to, so nothing has to be typed.
  */
 
-export type Sidecar = { meet_id: number; request_id: number; spec: EpisodeSpec; at: number; upload_id?: number; upload_bytes?: number; /** a guest's own camera track, not the master */ iso?: boolean };
+/** `kind` says which road the file takes home: an ArtaCast episode, or any other meeting. */
+export type Sidecar = { meet_id: number; request_id: number; spec: EpisodeSpec | null; at: number; kind?: "cast" | "meet"; upload_id?: number; upload_bytes?: number; /** a guest's own camera track, not the master */ iso?: boolean };
 export type SendState = { name: string; phase: "idle" | "uploading" | "thumb" | "starting" | "done" | "error"; frac: number; note: string; at: number };
 
 const registry = new Map<string, SendState>();
@@ -114,7 +115,7 @@ async function uploadResumable(name: string, f: File, side: Sidecar | null, meet
 
 /** Upload the episode and start finishing it. Resolves when Kaggle has been asked. Safe to call
  *  again for the same file: a second send resumes the same shelf item at the server's byte count. */
-export async function sendForFinishing(name: string, meetId: number, file?: File | null): Promise<void> {
+export async function sendForFinishing(name: string, meetId: number, file?: File | null, kind: "cast" | "meet" = "cast"): Promise<void> {
   const cur = registry.get(name);
   if (cur && (cur.phase === "uploading" || cur.phase === "thumb" || cur.phase === "starting")) return;
   set(name, { phase: "uploading", frac: 0, note: "" });
@@ -131,8 +132,9 @@ export async function sendForFinishing(name: string, meetId: number, file?: File
       try { thumb = (await uploadImage(await dataUrl(t))).url || ""; } catch { thumb = ""; }
     }
     set(name, { phase: "starting" });
-    await castFinish(meetId, item.id, thumb);
-    set(name, { phase: "done", note: "Finishing on Kaggle — you will be emailed when the episode is ready." });
+    if (kind === "meet") await meetFinish(meetId, item.id, thumb);
+    else await castFinish(meetId, item.id, thumb);
+    set(name, { phase: "done", note: "Finishing on Kaggle — you will be emailed when it is ready." });
   } catch (e) {
     set(name, { phase: "error", note: (e as Error)?.message || "The upload failed." });
     throw e;
@@ -140,7 +142,7 @@ export async function sendForFinishing(name: string, meetId: number, file?: File
 }
 
 /** A guest's isolated track: to their shelf, then attached to the request. Same resumable path. */
-export async function sendIso(name: string, meetId: number): Promise<void> {
+export async function sendIso(name: string, meetId: number, kind: "cast" | "meet" = "cast"): Promise<void> {
   const cur = registry.get(name);
   if (cur && (cur.phase === "uploading" || cur.phase === "thumb" || cur.phase === "starting")) return;
   set(name, { phase: "uploading", frac: 0, note: "" });
@@ -150,7 +152,8 @@ export async function sendIso(name: string, meetId: number): Promise<void> {
     const side = await readSidecar(name);
     const mediaId = await uploadResumable(name, f, side, meetId, (frac) => set(name, { frac }));
     set(name, { phase: "starting" });
-    await castIso(meetId, mediaId);
+    if (kind === "meet") await meetIso(meetId, mediaId);
+    else await castIso(meetId, mediaId);
     set(name, { phase: "done", note: "Your camera recording is with the editor." });
   } catch (e) {
     set(name, { phase: "error", note: (e as Error)?.message || "The upload failed." });

@@ -3179,6 +3179,37 @@ export type CastPage = {
   request: CastRequest | null;
   now: number;
 };
+/* ── Every meeting is recordable, and finished the way an episode is ── */
+export type MeetRecording = {
+  meet: number;
+  recorded: { at: number; note: string };
+  state: string; note: string; started: number; done: number;
+  files: { name: string }[];
+  raw: number; kernel: string; tries: number;
+  iso: { uid: number; name: string; bytes: number; url: string }[];
+  retrying: boolean;
+};
+/** Is there a take of this meeting, and where has its finishing got to? Anyone in the meeting. */
+export function meetRecording(id: number) {
+  return get<{ ok: boolean; recording: MeetRecording }>("/meet/recording", { id });
+}
+/** The host's device finished writing — length, size and format, for the meeting page. */
+export function meetRecorded(id: number, v: { seconds: number; bytes: number; format: string }) {
+  return post<{ ok: boolean; note: string }>("/meet/recorded", { id, ...v });
+}
+/** The raw is on the host's shelf: clean it on Kaggle. Calling again is the retry. */
+export function meetFinish(id: number, media_id: number, thumb?: string) {
+  return post<{ ok: boolean; recording: MeetRecording }>("/meet/finish", { id, media_id, ...(thumb ? { thumb } : {}) });
+}
+/** A guest's own camera track, attached to the meeting for the editor. */
+export function meetIso(id: number, media_id: number) {
+  return post<{ ok: boolean }>("/meet/iso", { id, media_id });
+}
+/** Fresh signed links to the finished file. Host only. */
+export function meetFinal(id: number) {
+  return get<{ ok: boolean; files: { name: string; url: string }[]; summary: string; kernel: string }>("/meet/final", { id });
+}
+
 export function castPage(id?: number) {
   return get<CastPage>("/artacast/page", id ? { id } : undefined);
 }

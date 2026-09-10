@@ -655,7 +655,12 @@ final class Media {
 	private static function cast_host_bytes( $uid ) {
 		if ( ! class_exists( '\\AQ\\Cast' ) ) { return 0; }
 		if ( Cast::is_host_uid( $uid ) ) { return self::CAST_HOST_BYTES; }
-		return Cast::is_live_guest( $uid ) ? self::CAST_GUEST_BYTES : 0;
+		if ( Cast::is_live_guest( $uid ) ) { return self::CAST_GUEST_BYTES; }
+		// EVERY MEETING IS RECORDABLE (2026-09-10), so everyone in a meeting that is running or ran
+		// this week carries the same standing grant an episode's guests do — the raw has to land
+		// somewhere between the host's Stop and Kaggle's answer, and it is deleted as soon as the
+		// finished file exists.
+		return Record::is_live_party( $uid ) ? self::CAST_GUEST_BYTES : 0;
 	}
 	public static function file_max( $uid ) {
 		return self::cast_host_bytes( $uid ) > 0 ? self::CAST_FILE_MAX : self::FILE_MAX;
