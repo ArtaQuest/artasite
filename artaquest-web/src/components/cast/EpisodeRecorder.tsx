@@ -152,6 +152,7 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
    *  device is a dark window on the record — the host is told before pressing Record, in words,
    *  and may still record (a guest whose camera is off is a choice, not a fault). */
   const [noPicture, setNoPicture] = useState<string[]>([]);
+  const lastMissing = useRef<string>("");
   useEffect(() => {
     const read = () => {
       const out: string[] = [];
@@ -161,7 +162,12 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
         const v = videoFor(side.uid);
         if (!v || v.videoWidth === 0 || v.readyState < 2) out.push(side.name || "a guest");
       }
-      setNoPicture((cur) => (cur.join("|") === out.join("|") ? cur : out));
+      // Said only when it has been true for TWO reads: a feed that arrived a second ago has no
+      // frame yet, and a line that flashes for every newcomer teaches the host to ignore it.
+      const key = out.join("|");
+      const settled = key === lastMissing.current ? out : [];
+      lastMissing.current = key;
+      setNoPicture((cur) => (cur.join("|") === settled.join("|") ? cur : settled));
     };
     read();
     const iv = window.setInterval(read, 1500);

@@ -1009,7 +1009,13 @@ final class Cast {
 	/** The file name the finished episode carries — the kit's, minus the extension. */
 	private static function out_base( $r ) {
 		$clean = fn( $s ) => trim( preg_replace( '/[^A-Za-z0-9]+/', '-', remove_accents( (string) $s ) ), '-' ) ?: 'guest';
-		return 'ArtaCast-' . mb_substr( $clean( $r['a_name'] ), 0, 24 ) . '-' . mb_substr( $clean( $r['b_name'] ), 0, 24 ) . '-' . wp_date( 'Y-m-d', (int) ( $r['start_ts'] ?: Data::now() ) );
+		// THE DAY IT WAS RECORDED, ON THE HOST'S CLOCK — the same day the host's browser wrote into the
+		// raw file's name at Stop. The booked slot on the site's clock could differ by a day from both.
+		$h  = self::host_of( $r );
+		$tz = $h ? (string) ( self::rule( $h )['tz'] ?? '' ) : '';
+		$tz = in_array( $tz, timezone_identifiers_list(), true ) ? new \DateTimeZone( $tz ) : null;
+		$at = (int) ( $r['recorded_at'] ?: ( $r['start_ts'] ?: Data::now() ) );
+		return 'ArtaCast-' . mb_substr( $clean( $r['a_name'] ), 0, 24 ) . '-' . mb_substr( $clean( $r['b_name'] ), 0, 24 ) . '-' . wp_date( 'Y-m-d', $at, $tz );
 	}
 
 	private static function pipeline_start( $r, $item ) {
