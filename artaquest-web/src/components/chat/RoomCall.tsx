@@ -328,6 +328,8 @@ export function RoomCall({ room, roomKey, me, onLeft, episode }: {
    *  means they threw their side away and built a new one — a reload fast enough that the roster
    *  never noticed — and the connection we are holding for them is dead. */
   const remoteSid = useRef(new Map<number, string>());
+  /** When each peer's connection was BEGUN, for the handshake watchdog below. */
+  const begunAt = useRef(new Map<number, number>());
   /** ICE restarts attempted per peer since it was last live, and the timer for the next. */
   const restarts = useRef(new Map<number, number>());
   const restartTimers = useRef(new Map<number, number>());
@@ -428,8 +430,16 @@ export function RoomCall({ room, roomKey, me, onLeft, episode }: {
   async function signal(p: ChatPayload) {
     if (!roomKey) return;
     const sealed = await sealRoomMessage(roomKey, encodePayload(p), room.id, me);
-    // notify 0: a handshake must never ring anybody's bell.
-    await roomsSend(room.id, { ...sealed, notify: 0 }).catch(() => undefined);
+    // A HANDSHAKE IS SENT UNTIL IT IS SENT. One refused write — a rate limit at the edge, a blink of
+    // the network — used to lose an offer for good, and the other side then waited on a connection
+    // nobody was building. The rtc payloads retry with a backoff; the rest get one more try.
+    const tries = p.t === "rtc" ? 4 : 2;
+    for (let i = 0; i < tries; i++) {
+      // notify 0: a handshake must never ring anybody's bell.
+      const ok = await roomsSend(room.id, { ...sealed, notify: 0 }).then(() => true).catch(() => false);
+      if (ok) return;
+      await new Promise((r) => window.setTimeout(r, 1500 * 2 ** i));
+    }
   }
 
   /** A line for the member that goes away by itself. */
@@ -598,9 +608,38 @@ export function RoomCall({ room, roomKey, me, onLeft, episode }: {
       },
     }, modeRef.current);
     calls.current.set(uid, c);
+    begunAt.current.set(uid, Date.now());
     setPeers((cur) => ({ ...cur, [uid]: { uid, call: c, stream: null, state: "connecting" } }));
     return c;
   }
+
+  /**
+   * THE HANDSHAKE WATCHDOG. A connection that was begun and never went live — an offer that was
+   * never answered, an answer that never arrived, ICE that never completed — is torn down after a
+   * patience and built again. The offering side simply offers afresh; the answering side asks for
+   * a fresh offer with `bye retry`. Without this, one lost message meant a tile that said
+   * "Connecting…" for the whole meeting.
+   */
+  const HANDSHAKE_MS = 25000;
+  useEffect(() => {
+    if (!roomKey) return;
+    const t = window.setInterval(() => {
+      const now = Date.now();
+      for (const [uid, c] of calls.current) {
+        if (c.closed) continue;
+        const p = peersRef.current[uid];
+        if (p && (p.state === "live" || p.state === "reconnecting" || p.state === "failed")) continue;
+        const began = begunAt.current.get(uid) || now;
+        if (now - began < HANDSHAKE_MS) continue;
+        if (!others.includes(uid)) continue;
+        forget(uid);
+        if (me < uid) setRetryTick((x) => x + 1);
+        else void signal({ v: 2, t: "rtc", kind: "bye", sid: sid.current, to: uid, retry: true });
+      }
+    }, 5000);
+    return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomKey, others.join(",")]);
 
   /** Hand a call the member's preference. Wrapped because a browser without the encoding API is
    *  supposed to lose the ceiling, not the call. */
