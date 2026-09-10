@@ -72,7 +72,11 @@ function exactDate(ymd: string): boolean {
  */
 export function IdentityGate() {
   const u = currentUser();
-  const [name, setName] = useState(u?.name || "");
+  // NOT A NAME, A GUESS. A brand-new account's display name is made from the email address
+  // ("newjoiner-1789" from newjoiner-1789@…), so prefilling it hands the member a word to delete
+  // before they can type their own. `has_identity === false` means they have never stated one, so
+  // whatever is there is ours, not theirs: start empty and let the placeholder ask.
+  const [name, setName] = useState(u?.has_identity === false ? "" : (u?.name || ""));
   const [bday, setBday] = useState(u?.birthday || "");
   // Nationality (ISO 3166-1 alpha-2). Seeded from the account when it already has one (a stale shell
   // that re-opened the gate must not overwrite a stated claim with a guess), otherwise from the
