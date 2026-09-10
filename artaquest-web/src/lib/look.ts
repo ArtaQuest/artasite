@@ -29,8 +29,8 @@
  * offers it (`getCapabilities().backgroundBlur`), and nowhere otherwise.
  */
 import {
-  type Box, type Exposure, Framer, Governor, THUMB_H, THUMB_W,
-  exposureAt, exposureFor, faceFromMask, fullFrame, histMean, lumaHist, skinMask, thumbGain,
+  type Box, type Exposure, Framer, Governor, Motion, THUMB_H, THUMB_W,
+  exposureAt, exposureFor, faceFromMask, fullFrame, histMean, lumaHist, lumaPlane, skinMask, thumbGain,
 } from "./look-math";
 
 /* ── SETTINGS ──────────────────────────────────────────────────────────────────────────────────── */
@@ -265,6 +265,8 @@ class Look {
   private fboW = 0; private fboH = 0;
   private readonly thumb: CanvasRenderingContext2D | null;
   private readonly framer: Framer;
+  /** Where the picture has been moving — the furniture filter for the skin face-finder. */
+  private readonly motion = new Motion(THUMB_W, THUMB_H);
   private readonly gov: Governor;
   private detector: FaceDetectorLike | null;
   private detecting = false;
@@ -296,7 +298,8 @@ class Look {
     this.srcW = st.width || 640; this.srcH = st.height || 360;
     this.outW = this.srcW; this.outH = this.srcH;
     this.outFps = Math.min(30, Math.max(1, Math.round(st.frameRate || 30)));
-    this.framer = new Framer(this.srcW / this.srcH, this.outW / this.outH);
+    // The heuristic finder gets a shorter leash than a platform detector: see Framer.
+    this.framer = new Framer(this.srcW / this.srcH, this.outW / this.outH, this.detector ? 2 : 1.7);
     this.crop = this.framer.crop;
 
     this.video = document.createElement("video");
@@ -642,7 +645,9 @@ class Look {
         this.detector = null;
       });
     } else if (px) {
-      const box = faceFromMask(skinMask(px, THUMB_W, THUMB_H, gain), THUMB_W, THUMB_H, this.lastFace);
+      // A candidate has to sit on cells that have MOVED lately, or it is the furniture.
+      this.motion.observe(lumaPlane(px, THUMB_W * THUMB_H));
+      const box = faceFromMask(skinMask(px, THUMB_W, THUMB_H, gain), THUMB_W, THUMB_H, this.lastFace, (b) => this.motion.gate(b));
       this.lastFace = box;
       this.framer.observe(box, now);
     }

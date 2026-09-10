@@ -180,6 +180,84 @@ export function thumbGain(mean: number): number {
   return mean <= 0 ? 1 : Math.min(3.5, Math.max(1, 0.45 / mean));
 }
 
+/** The thumbnail's luma plane, 0..255 per cell. */
+export function lumaPlane(rgba: Uint8ClampedArray | Uint8Array, n: number): Uint8Array {
+  const out = new Uint8Array(n);
+  for (let i = 0, p = 0; i < n; i++, p += 4) out[i] = (0.299 * rgba[p] + 0.587 * rgba[p + 1] + 0.114 * rgba[p + 2]) | 0;
+  return out;
+}
+
+/**
+ * MOTION — the cue that tells a person from the furniture.
+ *
+ * Skin chroma alone took a shelf of beige books for a face and zoomed a live call onto it, and no
+ * amount of shape filtering makes wood stop being wood-coloured. What a bookshelf never does is
+ * MOVE. A person talking, nodding, breathing, leaning into a sentence keeps a few cells of the
+ * thumbnail changing all the time; the room behind them changes only with the light. So every
+ * face candidate must sit on cells that have moved recently, more than the picture as a whole.
+ *
+ * `alive` holds, per cell, a smoothed recent frame difference that decays over about ten seconds
+ * of stillness, so a pause for thought does not drop the face. The test is RELATIVE to the median
+ * cell, which absorbs sensor grain and a camera re-exposing the whole frame, plus an absolute
+ * floor so a perfectly clean, perfectly still picture never passes anything. Until eight ticks
+ * (two seconds) have been seen nothing passes at all: the honest failure is the wide shot.
+ */
+export class Motion {
+  readonly alive: Float32Array;
+  private ema: Float32Array;
+  private prev: Uint8Array | null = null;
+  private ticks = 0;
+  private median = 0;
+  private readonly w: number;
+  private readonly h: number;
+  static readonly WARM_TICKS = 8;
+  /** Absolute floor, luma levels: below this a box is furniture whatever the median says. */
+  static readonly FLOOR = 2.0;
+  /** A face's cells must have moved this many times more than the median cell. */
+  static readonly RATIO = 3;
+
+  constructor(w: number, h: number) {
+    this.w = w; this.h = h;
+    this.alive = new Float32Array(w * h);
+    this.ema = new Float32Array(w * h);
+  }
+
+  observe(luma: Uint8Array): void {
+    const n = this.w * this.h;
+    if (this.prev) {
+      for (let i = 0; i < n; i++) {
+        const d = Math.abs(luma[i] - this.prev[i]);
+        this.ema[i] = this.ema[i] * 0.7 + d * 0.3;
+        this.alive[i] = Math.max(this.alive[i] * 0.96, this.ema[i]);
+      }
+      // The median of every fourth cell: the same number, a quarter of the sort.
+      const sample: number[] = [];
+      for (let i = 0; i < n; i += 4) sample.push(this.alive[i]);
+      sample.sort((a, b) => a - b);
+      this.median = sample[sample.length >> 1];
+    }
+    this.prev = Uint8Array.from(luma);
+    this.ticks++;
+  }
+
+  get warm(): boolean { return this.ticks >= Motion.WARM_TICKS; }
+
+  /** Mean recent movement inside a normalised box, in luma levels. */
+  energy(box: Box): number {
+    const x0 = Math.max(0, Math.floor(box.x * this.w)), x1 = Math.min(this.w, Math.ceil((box.x + box.w) * this.w));
+    const y0 = Math.max(0, Math.floor(box.y * this.h)), y1 = Math.min(this.h, Math.ceil((box.y + box.h) * this.h));
+    let s = 0, c = 0;
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { s += this.alive[y * this.w + x]; c++; }
+    return c ? s / c : 0;
+  }
+
+  /** May this box be a person? */
+  gate(box: Box): boolean {
+    if (!this.warm) return false;
+    return this.energy(box) >= Math.max(Motion.FLOOR, this.median * Motion.RATIO);
+  }
+}
+
 /** 256-bin luma histogram of the thumbnail. */
 export function lumaHist(rgba: Uint8ClampedArray | Uint8Array, n: number): Uint32Array {
   const h = new Uint32Array(256);
@@ -202,7 +280,7 @@ export function lumaHist(rgba: Uint8ClampedArray | Uint8Array, n: number): Uint3
  * Returns null rather than guessing. The framer treats null as "hold, then drift back to the full
  * picture", which is the right failure: a wrong face zooms the call onto a lamp.
  */
-export function faceFromMask(raw: Uint8Array, w: number, h: number, prev: Box | null): Box | null {
+export function faceFromMask(raw: Uint8Array, w: number, h: number, prev: Box | null, accept?: (box: Box) => boolean): Box | null {
   const mask = opened(raw, w, h);
   const total = w * h;
   const { list, labels } = blobs(mask, w, h);
@@ -244,10 +322,12 @@ export function faceFromMask(raw: Uint8Array, w: number, h: number, prev: Box | 
     if (aspect < 0.5 || aspect > 1.7) continue;                         // sticks and bands
     const cx = (hx0 + bw / 2) / w, cy = (b.y0 + bh / 2) / h;
     if (cy > 0.78) continue;                                            // hands on the desk
+    const box: Box = { x: hx0 / w, y: b.y0 / h, w: bw / w, h: bh / h };
+    if (accept && !accept(box)) continue;                               // furniture: see Motion
     let score = cells / total;                                          // bigger is more face-like
     score -= 0.4 * Math.hypot(cx - 0.5, cy - 0.42);                     // nearer the middle
     if (prev) score += 0.6 * (1 - Math.min(1, Math.hypot(cx - (prev.x + prev.w / 2), cy - (prev.y + prev.h / 2)) * 4));
-    if (score > bestScore) { bestScore = score; best = { x: hx0 / w, y: b.y0 / h, w: bw / w, h: bh / h }; }
+    if (score > bestScore) { bestScore = score; best = box; }
   }
   return best;
 }
@@ -269,9 +349,9 @@ const EYE_LINE = 0.42;
  * Always inside the source, never enlarged past MAX_ZOOM, and always the OUTPUT's shape so nothing
  * is stretched.
  */
-export function frameFor(face: Box, srcAspect: number, outAspect: number): Box {
+export function frameFor(face: Box, srcAspect: number, outAspect: number, maxZoom = MAX_ZOOM): Box {
   // Crop height in normalised units; width follows from the aspects.
-  let h = Math.min(1, Math.max(1 / MAX_ZOOM, face.h / FACE_SHARE));
+  let h = Math.min(1, Math.max(1 / maxZoom, face.h / FACE_SHARE));
   let w = h * (outAspect / srcAspect);
   if (w > 1) { w = 1; h = w * (srcAspect / outAspect); }
   if (h > 1) { h = 1; w = h * (outAspect / srcAspect); }
@@ -316,9 +396,12 @@ export class Framer {
 
   private srcAspect: number;
   private outAspect: number;
+  /** The heuristic face-finder is trusted less than a platform detector: a wrong zoom of 1.7×
+   *  is a mild fault, a wrong zoom of 2× is a call cropped onto a lamp. */
+  private readonly maxZoom: number;
 
-  constructor(srcAspect: number, outAspect: number) {
-    this.srcAspect = srcAspect; this.outAspect = outAspect;
+  constructor(srcAspect: number, outAspect: number, maxZoom = MAX_ZOOM) {
+    this.srcAspect = srcAspect; this.outAspect = outAspect; this.maxZoom = maxZoom;
     this.target = this.cur = fullFrame(srcAspect, outAspect);
   }
 
@@ -344,7 +427,7 @@ export class Framer {
     }
     this.lastSeen = now;
     this.face = face;
-    const want = frameFor(face, this.srcAspect, this.outAspect);
+    const want = frameFor(face, this.srcAspect, this.outAspect, this.maxZoom);
     if (!differs(want, this.target)) { this.pending = null; return; }
     if (this.pending && !differs(want, this.pending)) {
       if (now - this.pendingSince >= Framer.SETTLE_MS) { this.target = want; this.pending = null; }

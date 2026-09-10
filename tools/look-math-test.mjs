@@ -126,6 +126,46 @@ test("face: a room lit only by the screen (a fifth of daylight) still yields the
   const cx = (lifted.x + lifted.w / 2) * W, cy = (lifted.y + lifted.h / 2) * H;
   assert.ok(Math.abs(cx - 48) < 2 && Math.abs(cy - 22) < 3, `centre ${cx},${cy}`);
 });
+test("motion: nothing passes until warm; a still shelf never passes; a moving face does", () => {
+  const m = new M.Motion(W, H);
+  const still = new Uint8Array(W * H).fill(90);
+  const faceBox = { x: 0.45, y: 0.25, w: 0.15, h: 0.3 }, shelfBox = { x: 0.05, y: 0.05, w: 0.3, h: 0.15 };
+  for (let t = 0; t < 4; t++) m.observe(still);
+  assert.equal(m.gate(faceBox), false, "cold");
+  for (let t = 0; t < 12; t++) m.observe(still);
+  assert.ok(m.warm); assert.equal(m.gate(faceBox), false, "a still picture passes nothing");
+  let seed = 7; const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  for (let t = 0; t < 20; t++) {
+    const f = new Uint8Array(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      let v = 90 + (rnd() - 0.5) * 4;
+      if (x / W >= faceBox.x && x / W < faceBox.x + faceBox.w && y / H >= faceBox.y && y / H < faceBox.y + faceBox.h) v += (t % 2 ? 8 : -8);
+      f[y * W + x] = v;
+    }
+    m.observe(f);
+  }
+  assert.ok(m.gate(faceBox), `face moves: ${m.energy(faceBox).toFixed(2)}`);
+  assert.equal(m.gate(shelfBox), false, `shelf still: ${m.energy(shelfBox).toFixed(2)}`);
+  for (let t = 0; t < 32; t++) m.observe(still);
+  assert.ok(m.gate(faceBox), "held through a pause");
+  for (let t = 0; t < 60; t++) m.observe(still);
+  assert.equal(m.gate(faceBox), false, "gone after a long stillness");
+});
+test("face: with a gate, a skin-coloured square of furniture in the middle loses to the face beside it", () => {
+  const px = scene({ face: { cx: 24, cy: 22, rx: 7, ry: 9 }, shelf: false });
+  for (let y = 14; y < 30; y++) for (let x = 40; x < 56; x++) { const p = (y * W + x) * 4; px[p] = 190; px[p + 1] = 130; px[p + 2] = 70; }
+  const mask = M.skinMask(px, W, H);
+  const ungated = M.faceFromMask(mask, W, H, null);
+  assert.ok(ungated && Math.abs((ungated.x + ungated.w / 2) * W - 48) < 3, "without the gate the furniture wins (it is bigger and central)");
+  const gated = M.faceFromMask(mask, W, H, null, (b) => (b.x + b.w / 2) * W < 40);
+  assert.ok(gated && Math.abs((gated.x + gated.w / 2) * W - 24) < 2, "with it, the face");
+});
+test("framer: the heuristic path zooms less", () => {
+  const face = { x: 0.45, y: 0.3, w: 0.06, h: 0.08 };
+  assert.ok(M.frameFor(face, 16 / 9, 16 / 9, 1.7).h > M.frameFor(face, 16 / 9, 16 / 9, 2).h);
+  const fr = new M.Framer(16 / 9, 16 / 9, 1.7); fr.observe(face, 0); fr.observe(face, 700);
+  assert.ok(fr.goal.h >= 1 / 1.7 - 1e-9);
+});
 test("opening: thin lines vanish, a block survives", () => {
   const m = new Uint8Array(W * H);
   for (let x = 0; x < W; x++) m[10 * W + x] = 1;                          // a 1-cell line
