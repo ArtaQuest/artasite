@@ -1,3 +1,4 @@
+import { MILESTONES } from "../lib/cast-frame";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { RailPortal } from "../components/RightRail";
 import {
@@ -43,7 +44,7 @@ import {
 
 const AUTOSAVE_MS = 700;
 const PHOTO_EDGE = 1600;
-const ROWS_MAX = 6;
+const ROWS_MAX = MILESTONES;
 const LINK_HIT = "inline-flex min-h-[40px] items-center";
 
 const EMPTY_SIDE: CastSide = { name: "", subtitle: "", born: "", place: "", photo: "", rows: [] };
@@ -106,7 +107,7 @@ function PhotoField({ side, value, busy, onFile }: { side: "a" | "b"; value: str
         <Button variant="outline" size="sm" disabled={busy} onClick={() => ref.current?.click()}>
           {busy ? "Uploading…" : value ? "Change photo" : "Choose a photo"}
         </Button>
-        <p className="mt-1 text-[12px] leading-snug text-ink-3">A clear, well-lit picture of the face. Landscape if you have one — it fills a 16:9 window.</p>
+        <p className="mt-1 text-[12px] leading-snug text-ink-3">{value ? "Your profile picture, unless you choose another." : "A clear picture of the face."}</p>
       </div>
       <input ref={ref} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" aria-label={`Photo for ${side === "a" ? "you" : "your partner"}`}
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
@@ -114,22 +115,22 @@ function PhotoField({ side, value, busy, onFile }: { side: "a" | "b"; value: str
   );
 }
 
+/** EXACTLY three milestones, always shown: the two rails must run in step, so nobody adds or
+ *  removes a row — they fill the three. A blank row is simply not finished yet. */
 function RowsEditor({ rows, onChange }: { rows: CastRow[]; onChange: (r: CastRow[]) => void }) {
-  const set = (i: number, patch: Partial<CastRow>) => onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const fixed = Array.from({ length: ROWS_MAX }, (_, i) => rows[i] || { y: 0, l: "" });
+  const set = (i: number, patch: Partial<CastRow>) => onChange(fixed.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   return (
     <div className="flex flex-col gap-2">
-      {rows.map((r, i) => (
+      {fixed.map((r, i) => (
         <div key={i} className="flex items-center gap-2">
-          <Input inputMode="numeric" value={r.y || ""} placeholder="Year" aria-label="Year" className="w-24 shrink-0 tabular-nums"
+          <span className="w-4 shrink-0 text-center text-[12px] text-ink-3" aria-hidden data-ay-skip="1">{i + 1}</span>
+          <Input inputMode="numeric" value={r.y || ""} placeholder="Year" aria-label={`Milestone ${i + 1} year`} className="w-24 shrink-0 tabular-nums"
             onChange={(e) => set(i, { y: Number(e.target.value.replace(/\D/g, "").slice(0, 4)) || 0 })} />
-          <Input value={r.l} placeholder="What happened, in a few words" aria-label="Milestone" maxLength={40} className="min-w-0 flex-1"
+          <Input value={r.l} placeholder="What happened" aria-label={`Milestone ${i + 1}`} maxLength={40} className="min-w-0 flex-1"
             onChange={(e) => set(i, { l: e.target.value })} />
-          <IconButton label="Remove this milestone" className="h-10 w-10 shrink-0" onClick={() => onChange(rows.filter((_, j) => j !== i))}>×</IconButton>
         </div>
       ))}
-      {rows.length < ROWS_MAX && (
-        <div><LinkButton className={LINK_HIT} onClick={() => onChange([...rows, { y: 0, l: "" }])}>+ Add a milestone</LinkButton></div>
-      )}
     </div>
   );
 }
@@ -138,33 +139,30 @@ function SideForm({ who, side, photoBusy, onChange, onFile, sideKey }: {
   who: string; side: CastSide; photoBusy: boolean; sideKey: "a" | "b";
   onChange: (s: CastSide) => void; onFile: (f: File) => void;
 }) {
-  const [rowsOpen, setRowsOpen] = useState(side.rows.length > 0);
   return (
     <div className="flex flex-col gap-4">
-      <Field label="Name" required hint="Exactly as it should air. It is never shortened — a long name wraps.">
-        <Input value={side.name} maxLength={60} placeholder={who === "you" ? "Your full name" : "Their full name"} onChange={(e) => onChange({ ...side, name: e.target.value })} />
-      </Field>
-      <Field label="One line, in your own words" required hint="What you are — “Master baker”, “Head nurse”. It airs under the name, on one line.">
-        <Input value={side.subtitle} maxLength={40} placeholder="Master baker" onChange={(e) => onChange({ ...side, subtitle: e.target.value })} />
+      <Field label="Photo" required>
+        <PhotoField side={sideKey} value={side.photo} busy={photoBusy} onFile={onFile} />
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Date of birth" optional hint="Opens the timeline: “1951 · Born 9 May”.">
+        <Field label="Name" required>
+          <Input value={side.name} maxLength={60} placeholder={who === "you" ? "Your full name" : "Their full name"} onChange={(e) => onChange({ ...side, name: e.target.value })} />
+        </Field>
+        <Field label="One line" required hint="Airs under the name — “Master baker”.">
+          <Input value={side.subtitle} maxLength={40} placeholder="Master baker" onChange={(e) => onChange({ ...side, subtitle: e.target.value })} />
+        </Field>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Date of birth" required>
           <Input type="date" value={side.born} max={new Date().toISOString().slice(0, 10)} onChange={(e) => onChange({ ...side, born: e.target.value })} />
         </Field>
         <Field label="Place of birth" optional>
           <Input value={side.place} maxLength={40} placeholder="Tabriz" onChange={(e) => onChange({ ...side, place: e.target.value })} />
         </Field>
       </div>
-      <Field label="Photo" required>
-        <PhotoField side={sideKey} value={side.photo} busy={photoBusy} onFile={onFile} />
+      <Field label="Three milestones" required hint="A year and a few words each — the story is told in these, his turn, then hers.">
+        <RowsEditor rows={side.rows} onChange={(rows) => onChange({ ...side, rows })} />
       </Field>
-      {rowsOpen ? (
-        <Field label="Milestones" optional hint={<>Up to <span data-ay-skip="1">{ROWS_MAX}</span> of the moments that matter — a move, a first shop, a grandchild. Year and a few words each.</>}>
-          <RowsEditor rows={side.rows} onChange={(rows) => onChange({ ...side, rows })} />
-        </Field>
-      ) : (
-        <div><LinkButton className={LINK_HIT} onClick={() => setRowsOpen(true)}>+ Add milestones for the timeline (optional)</LinkButton></div>
-      )}
     </div>
   );
 }
@@ -867,10 +865,10 @@ export default function ArtaCast() {
           <h2 className="text-[16px] font-bold text-ink">{page.is_host ? "Appear on an episode yourself" : "How it works"}</h2>
           {page.is_host && <p className="mt-2 text-[13.5px] leading-relaxed text-ink-2">Nobody hosts their own episode: your request goes to another host{host ? <> — <span data-ay-skip="1">{host.name}</span></> : null}. Everything else is the same as for any couple.</p>}
           <ol className="mt-3 flex flex-col gap-2 text-[14px] leading-relaxed text-ink-2">
-            <li><b className="text-ink">1 · You.</b> Your name, one line in your own words, a photograph — and, if you like, where and when you were born and a few milestones for the timeline.</li>
-            <li><b className="text-ink">2 · Your partner.</b> The same for them, and their email: they get a single-use link, sign in as themselves, and are seated in the recording.</li>
-            <li><b className="text-ink">3 · Your frame.</b> The thumbnail and the episode frame draw themselves from what you type, live.</li>
-            <li><b className="text-ink">4 · A time.</b> Pick any free slot in your host’s calendar{hosts.length > 1 ? " — and choose which host" : ""}. It becomes an ArtaMeet video call in all three calendars, and the episode is recorded and finished for YouTube from there.</li>
+            <li><b className="text-ink">1 · The two of you.</b> A photo, a name, a line, a birth date and three milestones each.</li>
+            <li><b className="text-ink">2 · Your partner joins</b> from a link you send them.</li>
+            <li><b className="text-ink">3 · The host confirms,</b> and you pick a time in their calendar.</li>
+            <li><b className="text-ink">4 · The recording</b> is a video call; the episode is finished for YouTube on its own.</li>
           </ol>
           <div className="mt-4">
             {signedIn
@@ -938,10 +936,7 @@ export default function ArtaCast() {
           <p className="mt-2 text-[15px] font-semibold text-ink" data-ay-skip="1">{longInstant(booked.start_ts, VIEWER_TZ)}</p>
           {booked.tz && booked.tz !== VIEWER_TZ && <p className="mt-1 text-[13px] text-ink-2"><span data-ay-skip="1">{clockOnly(booked.start_ts, booked.tz)}</span> for <span data-ay-skip="1">{hostName}</span> in <span data-ay-skip="1">{booked.tz}</span></p>}
           <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
-            It is an ordinary ArtaMeet now — in your calendar, in <span data-ay-skip="1">{hostName}</span>’s{request.partner ? <>, and in <span data-ay-skip="1">{request.partner.name}</span>’s</> : ". Your partner is seated the moment they accept the invitation"}. The room opens fifteen minutes before, from the meeting page. You can still change photos and details until then.
-          </p>
-          <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
-            On the day: a laptop with a good camera, facing a window or a lamp, each of you on your own device if you can. The host records the episode on their computer; your own camera is recorded on yours at full quality for the editor, and sent on its own afterwards.
+            In all three calendars. The room opens fifteen minutes before. On the day: a laptop, a good camera, light on your face.
           </p>
           {request.stage && (
             <p className="mt-2 text-[13px] font-semibold text-ink" role="status">
@@ -963,7 +958,7 @@ export default function ArtaCast() {
       {isA && (
         <section className="rounded-card border border-line bg-space-2 p-4 md:p-5" aria-label="You">
           <h2 className="text-[16px] font-bold text-ink">You</h2>
-          <p className="mt-1 text-[12.5px] text-ink-3">The left window of the frame.</p>
+          <p className="mt-1 text-[12.5px] text-ink-3">Left window.</p>
           <div className="mt-4">
             <SideForm who="you" sideKey="a" side={form.a} photoBusy={photoBusy.a} onChange={(a) => setForm({ ...form, a })} onFile={(f) => void onFile("a", f)} />
           </div>
@@ -972,7 +967,7 @@ export default function ArtaCast() {
 
       <section className="rounded-card border border-line bg-space-2 p-4 md:p-5" aria-label={isA ? "Your partner" : "You"}>
         <h2 className="text-[16px] font-bold text-ink">{isA ? "Your partner" : "You"}</h2>
-        <p className="mt-1 text-[12.5px] text-ink-3">The right window of the frame.{isA && !request.partner && " Fill in what you can — they check and correct it when they join."}</p>
+        <p className="mt-1 text-[12.5px] text-ink-3">Right window.{isA && !request.partner && " They correct it when they join."}</p>
         <div className="mt-4">
           <SideForm who={isA ? "them" : "you"} sideKey="b" side={form.b} photoBusy={photoBusy.b} onChange={(b) => setForm({ ...form, b })} onFile={(f) => void onFile("b", f)} />
         </div>
@@ -988,7 +983,7 @@ export default function ArtaCast() {
               </p>
             ) : (
               <>
-                <p className="mt-1 text-[12.5px] leading-snug text-ink-3">They get a single-use link: they sign in as themselves, check their details, and are seated in the recording. Nothing happens until they click.</p>
+                <p className="mt-1 text-[12.5px] leading-snug text-ink-3">A single-use link. They sign in as themselves and check their side.</p>
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
                   <Field label="Their email" className="min-w-0 flex-1">
                     <Input type="email" inputMode="email" autoComplete="off" value={form.b_email} placeholder="partner@example.com" onChange={(e) => setForm({ ...form, b_email: e.target.value })} />
@@ -1041,11 +1036,11 @@ export default function ArtaCast() {
                 </div>
               </Field>
             )}
-            <Field label="The year you married" optional hint="The thumbnail’s hook — “47 years married” — and the second row of both timelines.">
+            <Field label="The year you married" required hint="The thumbnail’s number.">
               <Input inputMode="numeric" value={form.married_y || ""} placeholder="1979" className="w-32 tabular-nums"
                 onChange={(e) => setForm({ ...form, married_y: Number(e.target.value.replace(/\D/g, "").slice(0, 4)) || 0 })} />
             </Field>
-            <Field label="A few lines for the host" optional hint="How you met, what you would like to talk about. Only the host reads this before the recording.">
+            <Field label="For the host" optional hint="How you met, what to talk about. Only the host reads it.">
               <Textarea rows={4} maxLength={800} value={form.story} placeholder="We met in 1978 at…" onChange={(e) => setForm({ ...form, story: e.target.value })} />
             </Field>
           </div>

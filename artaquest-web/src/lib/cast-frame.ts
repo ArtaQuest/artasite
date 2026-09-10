@@ -15,6 +15,31 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 
 /** The rows one spouse's rail shows: their birth first (date AND place air here and nowhere else),
  *  the wedding, then their own milestones in year order. Eight at most — the kit's ceiling. */
+/** Milestones per person — the same for both, so the two rails run in step. */
+export const MILESTONES = 3;
+
+/**
+ * THE STORY IS ONE LINE, told in turns: his first row, then hers, then his next, then hers — the
+ * conversation starts with him and ends with her. Each chapter names one rail and one row; with
+ * both rails the same length (MILESTONES is mandatory for both) that is 2×rows chapters.
+ */
+export type Chapter = { rail: "a" | "b"; row: number };
+export function chapterSequence(nA: number, nB: number): Chapter[] {
+  const out: Chapter[] = [];
+  for (let i = 0; i < Math.max(nA, nB); i++) {
+    if (i < nA) out.push({ rail: "a", row: i });
+    if (i < nB) out.push({ rail: "b", row: i });
+  }
+  return out;
+}
+/** Where each rail's gold has reached at chapter `c` (−1 = nothing yet), and which rail speaks. */
+export function cursorsAt(seq: Chapter[], c: number): { a: number; b: number; active: "a" | "b" | null } {
+  let a = -1, b = -1;
+  const upTo = Math.max(-1, Math.min(seq.length - 1, c));
+  for (let i = 0; i <= upTo; i++) { if (seq[i].rail === "a") a = seq[i].row; else b = seq[i].row; }
+  return { a, b, active: upTo >= 0 ? seq[upTo].rail : null };
+}
+
 export function timelineRows(side: CastSide, married_y: number): CastRow[] {
   const out: CastRow[] = [];
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(side.born || "");

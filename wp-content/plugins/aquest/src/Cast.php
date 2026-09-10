@@ -65,7 +65,8 @@ final class Cast {
 	const SUBTITLE_MAX  = 40;
 	const PLACE_MAX     = 40;
 	const STORY_MAX     = 800;
-	const ROWS_MAX      = 6;
+	/** Milestones per person — exactly this many, the same for both, so the two rails run in step. */
+	const ROWS_MAX      = 3;
 	const ROW_LABEL_MAX = 40;
 	const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 
@@ -203,12 +204,16 @@ final class Cast {
 		];
 	}
 
-	/** A side is COMPLETE when the frame can be cut from it: a name, the one line under it, and a
-	 *  photograph. Birth and milestones make the timelines richer and are never a gate. */
+	/** A side is COMPLETE when the frame can be cut from it AND its rail is full: a name, the one
+	 *  line under it, a photograph, the date of birth, and exactly ROWS_MAX milestones. The two
+	 *  rails must run in step — the story goes his turn, her turn — so neither may be short. */
 	private static function complete( $r, $s ) {
+		$rows = Data::dec( (string) ( $r[ $s . '_rows' ] ?? '' ) );
 		return '' !== trim( (string) ( $r[ $s . '_name' ] ?? '' ) )
 			&& '' !== trim( (string) ( $r[ $s . '_subtitle' ] ?? '' ) )
-			&& '' !== (string) ( $r[ $s . '_photo' ] ?? '' );
+			&& '' !== (string) ( $r[ $s . '_photo' ] ?? '' )
+			&& '' !== (string) ( $r[ $s . '_born' ] ?? '' )
+			&& is_array( $rows ) && count( $rows ) >= self::ROWS_MAX;
 	}
 
 	private static function role_of( $r, $uid ) {
@@ -772,7 +777,7 @@ final class Cast {
 		$r = self::mine( $uid );
 		if ( ! $r || 'a' !== self::role_of( $r, $uid ) ) { return Rest::err( 'no_request', 'Start your request first.', 404 ); }
 		if ( ! self::complete( $r, 'a' ) || ! self::complete( $r, 'b' ) ) {
-			return Rest::err( 'incomplete', 'Both of you need a name, a line and a photograph before a time can be booked.', 409 );
+			return Rest::err( 'incomplete', 'Both of you need a name, a line, a photograph, a date of birth and three milestones before a time can be booked.', 409 );
 		}
 		$h = self::host_of( $r );
 		if ( ! $h ) { return Rest::err( 'no_host', 'The show has no host configured yet.', 503 ); }

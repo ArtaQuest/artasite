@@ -4,7 +4,7 @@ import {
   type EpisodeSpec, type FrameInput,
 } from "../../lib/episode-frame";
 import { sendForFinishing, sendState, subscribeSend, writeSidecar, writeThumb, type SendState } from "../../lib/episode-upload";
-import { firstName } from "../../lib/cast-frame";
+import { chapterSequence, cursorsAt, firstName } from "../../lib/cast-frame";
 import { castRecorded } from "../../lib/api";
 import { canStore, deleteRecording, listRecordings, openRecording, recordingFile, type StoredRecording, type Writable } from "../../lib/episode-store";
 
@@ -70,10 +70,10 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
   const [err, setErr] = useState("");
   const [done, setDone] = useState<{ name: string; bytes: number; seconds: number; label: string; url: string } | null>(null);
   const [names, setNames] = useState(true);
-  const [cursorA, setCursorA] = useState(0);
-  const [cursorB, setCursorB] = useState(0);
+  /** The chapter the story is on: him, then her, then him… see lib/cast-frame chapterSequence. */
+  const [chapter, setChapter] = useState(0);
   const [open, setOpen] = useState(true);
-  const state = useRef({ names: true, cursorA: 0, cursorB: 0 });
+  const state = useRef({ names: true, cursorA: 0, cursorB: -1, active: "a" as "a" | "b" | null });
   /** Where the gold IS on each rail, sliding towards the chapter the host chose — the slider is
    *  animated in the draw loop, so a press moves the record smoothly rather than in a jump. */
   const slide = useRef({ a: 0, b: 0, at: 0 });
@@ -99,17 +99,19 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
   const rows = useMemo(() => episodeRows(spec), [spec]);
   const type = useMemo(() => pickRecordingType(), []);
 
-  useEffect(() => { state.current = { names, cursorA, cursorB }; }, [names, cursorA, cursorB]);
-
-
-  const nextBoth = useCallback(() => {
-    setCursorA((i) => Math.min(rows.a.length - 1, i + 1));
-    setCursorB((i) => Math.min(rows.b.length - 1, i + 1));
-  }, [rows]);
-  const backBoth = useCallback(() => {
-    setCursorA((i) => Math.max(0, i - 1));
-    setCursorB((i) => Math.max(0, i - 1));
-  }, []);
+  const seq = useMemo(() => chapterSequence(rows.a.length, rows.b.length), [rows]);
+  const at = useMemo(() => cursorsAt(seq, chapter), [seq, chapter]);
+  useEffect(() => { state.current = { names, cursorA: at.a, cursorB: at.b, active: at.active }; }, [names, at]);
+  const nextBoth = useCallback(() => setChapter((c) => Math.min(seq.length - 1, c + 1)), [seq]);
+  const backBoth = useCallback(() => setChapter((c) => Math.max(0, c - 1)), []);
+  /** The chapter in words: whose turn, which year, what happened. */
+  const chapterLine = (() => {
+    const ch = seq[chapter];
+    if (!ch) return "";
+    const row = (ch.rail === "a" ? rows.a : rows.b)[ch.row];
+    const who = firstName(ch.rail === "a" ? spec.a.name : spec.b.name) || (ch.rail === "a" ? "Left" : "Right");
+    return row ? `${who} · ${row.y} ${row.l}` : who;
+  })();
   // Arrow keys drive the chapters while the panel is open and nothing is being typed.
   useEffect(() => {
     if (!open) return;
@@ -198,7 +200,7 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
       if (Math.abs(slide.current.b - state.current.cursorB) < 0.004) slide.current.b = state.current.cursorB;
       const input: FrameInput = {
         a: videoFor(spec.a.uid), b: videoFor(spec.b.uid), host: videoFor(spec.host_id),
-        cursorA: slide.current.a, cursorB: slide.current.b, names: state.current.names,
+        cursorA: slide.current.a, cursorB: slide.current.b, active: state.current.active, names: state.current.names,
       };
       drawEpisodeFrame(ctx, spec, rows, input);
     };
@@ -348,7 +350,6 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
   }
 
   const btn = "inline-flex h-10 shrink-0 items-center rounded-pill px-3 text-[12.5px] font-semibold";
-  const nameA = firstName(spec.a.name) || "Left", nameB = firstName(spec.b.name) || "Right";
   const missing = [spec.a.uid, spec.b.uid].filter((u) => !feedFor(u)?.getVideoTracks().length).length;
 
   return (
@@ -374,14 +375,13 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
             {/* THE HOST DRIVES THE STORY. One press moves both timelines to the next chapter — the
                 gold slides down each rail as the conversation reaches that year — and the arrow keys
                 do the same while the call has the keyboard. Each spouse can also be moved alone. */}
-            <button type="button" onClick={nextBoth} disabled={cursorA >= rows.a.length - 1 && cursorB >= rows.b.length - 1}
+            <button type="button" onClick={backBoth} disabled={chapter <= 0}
+              className={`${btn} border border-line text-ink-2 disabled:opacity-40`} title="←" aria-label="Back a chapter">←</button>
+            <button type="button" onClick={nextBoth} disabled={chapter >= seq.length - 1}
               className={`${btn} bg-yin/15 text-ink disabled:opacity-40`} title="→">Next chapter</button>
-            <button type="button" onClick={backBoth} disabled={cursorA <= 0 && cursorB <= 0}
-              className={`${btn} border border-line text-ink-2 disabled:opacity-40`} title="←">Back a chapter</button>
-            <button type="button" onClick={() => setCursorA((i) => Math.min(rows.a.length - 1, i + 1))} disabled={cursorA >= rows.a.length - 1} className={`${btn} border border-line text-ink-2 disabled:opacity-40`} data-ay-skip="1">{nameA} → next</button>
-            <button type="button" onClick={() => setCursorA((i) => Math.max(0, i - 1))} disabled={cursorA <= 0} className={`${btn} border border-line text-ink-2 disabled:opacity-40`} data-ay-skip="1">{nameA} ← back</button>
-            <button type="button" onClick={() => setCursorB((i) => Math.min(rows.b.length - 1, i + 1))} disabled={cursorB >= rows.b.length - 1} className={`${btn} border border-line text-ink-2 disabled:opacity-40`} data-ay-skip="1">{nameB} → next</button>
-            <button type="button" onClick={() => setCursorB((i) => Math.max(0, i - 1))} disabled={cursorB <= 0} className={`${btn} border border-line text-ink-2 disabled:opacity-40`} data-ay-skip="1">{nameB} ← back</button>
+            <span className="text-[12.5px] text-ink-2" aria-live="polite">
+              <span data-ay-skip="1">{chapter + 1}/{seq.length}</span> · <span data-ay-skip="1">{chapterLine}</span>
+            </span>
           </div>
           {!rec && noPicture.length > 0 && (
             <p className="text-[12.5px] leading-relaxed text-yang" role="status">

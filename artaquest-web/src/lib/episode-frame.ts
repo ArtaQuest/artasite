@@ -35,6 +35,8 @@ export type FrameInput = {
   /** Index of the current row on each rail — the gold reaches this far, the cursor sits here. */
   cursorA: number;
   cursorB: number;
+  /** Whose turn the story is on — that rail's current row is bright; the other's is merely reached. */
+  active?: "a" | "b" | null;
   /** Lower-thirds shown or hidden (they come in on a guest's first words and leave later). */
   names: boolean;
 };
@@ -175,26 +177,26 @@ function lowerThird(ctx: CanvasRenderingContext2D, side: CastSide, wx: number, w
 
 /** One spouse's timeline: his reads left to right from the left rail, hers right to left from
  *  the right rail. The rail is gold as far as the cursor, ink-3 ahead; the cursor's tick is 34. */
-function timeline(ctx: CanvasRenderingContext2D, rows: CastRow[], right: boolean, top: number, cursor: number) {
+function timeline(ctx: CanvasRenderingContext2D, rows: CastRow[], right: boolean, top: number, cursor: number, active: boolean) {
   const n = rows.length;
   if (!n) return;
   const x0 = right ? 1312 : 32;
   const railX = right ? x0 + 576 - 9 - 6 : x0 + 9;
   // The cursor may sit BETWEEN rows while it slides: the gold rail follows it exactly, the ticks
-  // and the ink change over at the halfway point.
-  const cur = Math.max(0, Math.min(n - 1, cursor));
+  // and the ink change over at the halfway point. Below zero the rail has not been reached yet.
+  const cur = Math.max(-1, Math.min(n - 1, cursor));
   const at = Math.round(cur);
   ctx.fillStyle = INK3;
   ctx.fillRect(railX, top + 32, 6, Math.max(0, (n - 1) * 64));
   ctx.fillStyle = GOLD;
-  ctx.fillRect(railX, top + 32, 6, cur * 64);
+  ctx.fillRect(railX, top + 32, 6, Math.max(0, cur) * 64);
   rows.forEach((r, i) => {
     const y = top + i * 64;
     const past = i < at, now = i === at;
-    const tickW = now ? 34 : 24;
+    const tickW = now && active ? 34 : 24;
     ctx.fillStyle = i <= at ? GOLD : INK3;
     ctx.fillRect(right ? x0 + 576 - tickW : x0, y + 29, tickW, 6);
-    const color = now ? INK1 : past ? INK2 : INK3;
+    const color = now ? (active ? INK1 : INK2) : past ? INK2 : INK3;
     ctx.fillStyle = color;
     ctx.textBaseline = "middle";
     ctx.font = `700 32px ${DISPLAY}`;
@@ -235,8 +237,8 @@ export function drawEpisodeFrame(ctx: CanvasRenderingContext2D, spec: EpisodeSpe
     lowerThird(ctx, spec.a, 32, 18, 912, 513);
     lowerThird(ctx, spec.b, 976, 18, 912, 513);
   }
-  timeline(ctx, rows.a, false, rows.top, input.cursorA);
-  timeline(ctx, rows.b, true, rows.top, input.cursorB);
+  timeline(ctx, rows.a, false, rows.top, input.cursorA, input.active !== "b");
+  timeline(ctx, rows.b, true, rows.top, input.cursorB, input.active === "b");
 }
 
 /** The container/codec MediaRecorder will write, best first: H.264 + AAC in MP4 is what every
