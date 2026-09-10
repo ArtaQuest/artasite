@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "./ui";
-import { currentUser, isLoggedIn, localePath } from "../lib/wp";
+import { currentUser, isLoggedIn } from "../lib/wp";
 import { BIRTHDAY_REQUIRED_EVENT } from "../lib/api";
 import { VerifyApi } from "../lib/verify";
 import { DobWheel } from "./DobWheel";
@@ -91,6 +91,9 @@ export function IdentityGate() {
   const [lives, setLives] = useState("");
   const [langs, setLangs] = useState<string[]>([]);
   const [refused, setRefused] = useState(false); // the server said birthday_required
+  /** The optional half, closed. Six fields at the door read as six required fields however they are
+   *  labelled; three do not. Whoever wants to say more opens one line and says it. */
+  const [more, setMore] = useState(false);
 
   // The backend is the authority: any refusal opens the step, whatever the shell believed.
   useEffect(() => {
@@ -135,8 +138,13 @@ export function IdentityGate() {
       if (r?.ok && (rel || lives || langs.length)) {
         try { await postProfileUpdate(name.trim(), "", undefined, undefined, rel, lives, langs); } catch { /* their profile, not their gate */ }
       }
-      // A full navigation refetches AQ_USER, so the gate clears rather than lingering on stale flags.
-      if (r?.ok) window.location.assign(localePath("/"));
+      // STAY WHERE THEY WERE. A full navigation is still wanted — it refetches AQ_USER, so the gate
+      // clears rather than lingering on stale flags — but to THIS page, not the front page. Someone
+      // halfway through asking to appear on the show, or booking a time, met this dialog, filled it
+      // in and was dropped at the landing page with their work behind them; there is nothing to
+      // announce at "/" that they were not already doing here. `replace` so the gate leaves no step
+      // in the back button, and the query string rides along (an invitation link lives there).
+      if (r?.ok) window.location.replace(window.location.pathname + window.location.search);
       else setErr(r?.message || r?.error || "Couldn't save — check your details.");
     } catch {
       setErr("Couldn't save — please try again.");
@@ -164,9 +172,7 @@ export function IdentityGate() {
             What is left is a heading, two labels and the ONE line that appears when a date is
             actually wrong — feedback, not explanation. */}
         <h2 id="aq-gate-title" className="text-[22px] font-bold leading-tight text-ink">Tell us who you are</h2>
-        {/* The gate got longer, so it now says which part is compulsory — otherwise a member reads
-            six fields and assumes all six are. Three are. */}
-        <p className="mt-1 text-[13px] text-ink-3">Your name, date of birth and nationality are required. The rest you can fill in now or later.</p>
+        <p className="mt-1 text-[13px] text-ink-3">Three things, once.</p>
 
         <div className="mt-4 space-y-3">
           <label className="block">
@@ -202,29 +208,38 @@ export function IdentityGate() {
                 picked again: it is now their choice, not our guess. */}
             <select value={nat} onChange={(e) => { setNat(e.target.value); setGuessed(false); }} aria-label="Nationality" className={field}>
               <option value="">Choose your nationality…</option>
-              {countries.map((c) => <option key={c.code} value={c.code}>{`${flagEmoji(c.code)} ${c.name}`}</option>)}
+              {/* NAME FIRST. A native select jumps to the option whose LABEL starts with what you
+                  type, and every label used to start with the same thing — a flag emoji — so
+                  pressing "i" for Iran matched nothing and the keyboard was dead in a list of ~250.
+                  The flag now trails the name, where it decorates instead of blocking. */}
+              {countries.map((c) => <option key={c.code} value={c.code}>{`${c.name} ${flagEmoji(c.code)}`}</option>)}
             </select>
             {guessed && (
               <span className="mt-1 block text-[12px] text-ink-3">Guessed from your connection — change it if it is wrong.</span>
             )}
           </div>
-          {/* THE REST OF THE PROFILE, asked once. Every one of these is optional and says so, and the
-              button does not wait on them. They are here because a member who states them now never
-              has to find the settings page to do it — which is where all three sat unfilled. */}
-          <div className="block">
+          {/* THE REST OF THE PROFILE, folded away. Every one of these is optional and the button
+              never waits on them, so they open on request rather than standing in the way of it. */}
+          {!more && (
+            <button type="button" onClick={() => setMore(true)}
+              className="min-h-11 text-start text-[13px] text-ink-2 underline underline-offset-2 hover:text-yang">
+              Add where you live, your languages and more
+            </button>
+          )}
+          <div className={more ? "block" : "hidden"}>
             <span className="mb-1 block text-[13px] font-medium text-ink-2">Where you live <span className="font-normal text-ink-3">(optional)</span></span>
             <CitySelect value={lives} suggestFromTimezone
               onPick={(c) => setLives(cityLabel(c))} onClear={() => setLives("")}
               placeholder="Start typing your city…" />
           </div>
-          <div className="block">
+          <div className={more ? "block" : "hidden"}>
             <span className="mb-1 block text-[13px] font-medium text-ink-2">Relationship <span className="font-normal text-ink-3">(optional)</span></span>
             <select value={rel} onChange={(e) => setRel(e.target.value)} aria-label="Relationship status" className={field}>
               <option value="">Prefer not to say</option>
               {RELATIONSHIPS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
             </select>
           </div>
-          <div className="block">
+          <div className={more ? "block" : "hidden"}>
             <span className="mb-1 block text-[13px] font-medium text-ink-2">Languages you speak <span className="font-normal text-ink-3">(optional)</span></span>
             {langs.length > 0 && (
               <ul className="mb-1.5 flex list-none flex-wrap gap-1.5">
