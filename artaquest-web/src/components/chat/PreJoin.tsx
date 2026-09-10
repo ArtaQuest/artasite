@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { devicePrefs, listDevices, mediaErrorMessage, rememberDevices, type CallMode } from "../../lib/webrtc";
+import { dress } from "../../lib/look";
+import { Appearance } from "./Appearance";
 
 /**
  * THE MIRROR BEFORE THE DOOR.
@@ -40,6 +42,11 @@ export function PreJoin({ mode }: { mode: CallMode }) {
         return;
       }
       if (dead) { s.getTracks().forEach((t) => t.stop()); return; }
+      // The mirror shows the DRESSED picture — the same lib/look pass the call will send — so the
+      // appearance switches below can be judged here, before anybody else sees it. Stopping the
+      // dressed track stops the camera behind it.
+      const cam = s.getVideoTracks()[0];
+      if (cam) { const d = dress(cam); if (d !== cam) { s.removeTrack(cam); s.addTrack(d); } }
       setStream(s);
       setList(await listDevices());
     })();
@@ -140,6 +147,12 @@ export function PreJoin({ mode }: { mode: CallMode }) {
             </label>
           )}
         </div>
+      )}
+      {wantVideo && stream && (
+        <details className="mt-2 rounded-card border border-line px-3 py-1.5">
+          <summary className="cursor-pointer text-[13px] font-semibold text-ink-2">Appearance</summary>
+          <Appearance track={stream.getVideoTracks()[0]} />
+        </details>
       )}
       <div className="mt-2 flex items-center justify-between gap-2">
         <p className="text-[12px] leading-relaxed text-ink-3">Only you can see this. The camera closes when you press Done.</p>

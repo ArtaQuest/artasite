@@ -47,6 +47,8 @@
  * that matters here. `setIceServers` is called by the call surface before its first offer; until
  * then, and whenever the fetch fails, the STUN list below is what a connection is built with.
  */
+import { dress } from "./look";
+
 const STUN_SERVERS: RTCIceServer[] = [
   { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
   { urls: ["stun:stun.cloudflare.com:3478"] },
@@ -355,8 +357,40 @@ export async function openCallMedia(mode: CallMode = "auto"): Promise<MediaStrea
     stream = await navigator.mediaDevices.getUserMedia(ask(false));
   }
   const track = stream.getVideoTracks()[0];
-  if (track && m !== "audio") await shapeCapture(track, m);
+  if (track && m !== "audio") {
+    await shapeCapture(track, m);
+    dressInto(stream, track);
+  }
   return stream;
+}
+
+/**
+ * THE LOOK GOES ON HERE. Every camera track a call uses passes through one of the three openers in
+ * this file, and each hands the raw track to lib/look's `dress` before anybody else sees it. The
+ * dressed track is what the stream carries, what every sender sends, what the tile and the recorder
+ * draw — and it answers `applyConstraints`/`getSettings` like the camera, so `shapeCapture` above
+ * keeps shaping it without knowing. Where the browser cannot dress (no WebGL), `dress` returns the
+ * raw track and nothing here notices.
+ */
+function dressInto(stream: MediaStream, raw: MediaStreamTrack): MediaStreamTrack {
+  const t = dress(raw);
+  if (t !== raw) { stream.removeTrack(raw); stream.addTrack(t); }
+  return t;
+}
+
+/**
+ * The camera again, mid-call — after sound-only, or when the shared stream has only a microphone.
+ * A remembered camera is asked for with `ideal`, so one that is unplugged costs nothing; the track
+ * comes back shaped to the mode and dressed.
+ */
+export async function openCamera(deviceId: string | undefined, mode: CallMode = "auto"): Promise<MediaStreamTrack> {
+  const m = mode === "auto" ? (suggestedMode() as SendMode) : mode;
+  const cap = CAPTURE[m === "audio" ? "full" : m];
+  const s = await navigator.mediaDevices.getUserMedia({ audio: false, video: deviceId ? { ...cap, deviceId: { ideal: deviceId } } : cap });
+  const t = s.getVideoTracks()[0];
+  if (!t) throw new Error("no track");
+  if (m !== "audio") await shapeCapture(t, m);
+  return dressInto(s, t);
 }
 
 /* ── WHICH CAMERA, WHICH MICROPHONE, WHICH SPEAKER ────────────────────────────────────────────
@@ -396,8 +430,9 @@ export async function openDevice(kind: "cam" | "mic", deviceId: string, mode: Ca
   const s = await navigator.mediaDevices.getUserMedia(cons);
   const t = kind === "mic" ? s.getAudioTracks()[0] : s.getVideoTracks()[0];
   if (!t) throw new Error("no track");
-  if (kind === "cam" && m !== "audio") await shapeCapture(t, m);
-  return t;
+  if (kind !== "cam") return t;
+  if (m !== "audio") await shapeCapture(t, m);
+  return dressInto(s, t);
 }
 
 /** Remember what a shared track was last shaped to, so retuning a five-way mesh does not hit the

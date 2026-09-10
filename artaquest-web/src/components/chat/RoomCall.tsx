@@ -6,7 +6,7 @@ import {
 } from "../../lib/e2ee";
 import {
   Call, callSupported, devicePrefs, hasRelay, listDevices, mediaErrorMessage, newCallSid, openCallMedia,
-  openDevice, rememberDevices, setIceServers,
+  openCamera, openDevice, rememberDevices, setIceServers,
   type CallMode, type CallState, type LinkReport,
 } from "../../lib/webrtc";
 import { WINDOW, elect, publishAnchor, score as linkScore, type Sample, type ScoreTable } from "../../lib/anchor";
@@ -17,6 +17,7 @@ import { Whiteboard, type Ping, type Stroke } from "./Whiteboard";
 import { EpisodeRecorder } from "../cast/EpisodeRecorder";
 import { IsoRecorder } from "../cast/IsoRecorder";
 import { MeetingRecorder } from "./MeetingRecorder";
+import { Appearance } from "./Appearance";
 import { reshapeCapture, setStudio } from "../../lib/webrtc";
 import type { EpisodeSpec } from "../../lib/episode-frame";
 
@@ -60,13 +61,6 @@ import type { EpisodeSpec } from "../../lib/episode-frame";
  */
 
 type Peer = { uid: number; call: Call; stream: MediaStream | null; state: CallState | string };
-
-/** Re-opening a camera part-way through a call, when the shared stream has only a microphone in
- *  it. A modest starting request: the engine reshapes the track to the mode it is actually sending
- *  at (`shapeCapture`, driven from setMode below), so this only has to be sane, not exact. */
-const CAM: MediaTrackConstraints = {
-  width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 24, max: 30 },
-};
 
 /** The three sending modes in order, for "which of these is the better one". */
 const RUNG: Record<Exclude<CallMode, "auto">, number> = { audio: 0, low: 1, full: 2 };
@@ -326,6 +320,11 @@ export function RoomCall({ room, roomKey, me, onLeft, episode, meeting }: {
   const calls = useRef(new Map<number, Call>());
   const seen = useRef(new Set<number>());
   const media = useRef<MediaStream | null>(null);
+  /** The camera being opened RIGHT NOW, so two callers in the same tick share one request. */
+  const opening = useRef<Promise<MediaStream | null> | null>(null);
+  /** True between teardown and the next mount: a camera that finishes opening after we have left
+   *  is stopped on arrival instead of being kept. */
+  const torn = useRef(false);
   const lastSig = useRef(0);
   const sid = useRef(newCallSid());
   /** The session id each peer is CURRENTLY offering under. A different one from the same person
@@ -462,16 +461,27 @@ export function RoomCall({ room, roomKey, me, onLeft, episode, meeting }: {
    */
   async function localMedia(): Promise<MediaStream | null> {
     if (media.current) return media.current;
-    try {
-      const s = await openCallMedia(modeRef.current);
-      media.current = s;
-      setLocal(s);
-      setCamOn(s.getVideoTracks().length > 0);
-      return s;
-    } catch (e) {
-      setErr(mediaErrorMessage(e));
-      return null;
-    }
+    // ONE REQUEST, HOWEVER MANY ASK. The roster loop offers to every new peer in the same tick, and
+    // each offer wants the camera; before this, two callers arriving while getUserMedia was still
+    // in flight opened it TWICE, the second stream replaced the first in `media`, and the first —
+    // its hardware light on — was never stopped by anyone, not even by leaving. Measured in dev
+    // (StrictMode mounts twice): two cameras open, one left running after Leave.
+    if (opening.current) return opening.current;
+    const p = (async () => {
+      try {
+        const s = await openCallMedia(modeRef.current);
+        if (torn.current) { s.getTracks().forEach((t) => t.stop()); return null; }   // we left while it opened
+        media.current = s;
+        setLocal(s);
+        setCamOn(s.getVideoTracks().length > 0);
+        return s;
+      } catch (e) {
+        setErr(mediaErrorMessage(e));
+        return null;
+      } finally { opening.current = null; }
+    })();
+    opening.current = p;
+    return p;
   }
 
   /**
@@ -708,10 +718,9 @@ export function RoomCall({ room, roomKey, me, onLeft, episode, meeting }: {
     const s = media.current;
     if (!s) return;
     try {
-      const pref = deviceId || devicePrefs().cam;
-      const fresh = await navigator.mediaDevices.getUserMedia({ audio: false, video: pref ? { ...CAM, deviceId: { ideal: pref } } : CAM });
-      const track = fresh.getVideoTracks()[0];
-      if (!track) return;
+      // The engine opens it: shaped to the mode we are sending at, and dressed (lib/look) like
+      // every other camera track in the call.
+      const track = await openCamera(deviceId || devicePrefs().cam, modeRef.current);
       s.getVideoTracks().forEach((t) => { t.stop(); s.removeTrack(t); });
       s.addTrack(track);
       for (const c of calls.current.values()) { c.replaceVideo(track); tellCall(c, modeRef.current); }
@@ -788,6 +797,7 @@ export function RoomCall({ room, roomKey, me, onLeft, episode, meeting }: {
 
   useEffect(() => {
     if (!callSupported()) { setErr("This browser can’t make calls."); return; }
+    torn.current = false;
     void localMedia();
     void roomsCall(room.id, "join").then((r) => { rosterOkAt.current = Date.now(); setRoster(r.in_call); }).catch(() => undefined);
     // Every 4s, not 12: this both refreshes the beacon AND returns the roster, which is what tells
@@ -807,6 +817,7 @@ export function RoomCall({ room, roomKey, me, onLeft, episode, meeting }: {
       open.clear();
       timers.forEach((id) => window.clearTimeout(id));
       timers.clear();
+      torn.current = true;
       mine.current?.getTracks().forEach((t2) => t2.stop());
       mine.current = null;
     };
@@ -1508,6 +1519,12 @@ function Devices({ local, sinkId, onCam, onMic, onOut, onNote }: {
         </label>
       )}
       {list.mics.length === 0 && list.cams.length === 0 && <p className="text-[12px] text-ink-3 sm:col-span-3">No devices to choose between.</p>}
+      {/* HOW YOU LOOK, under which camera. The switches are live on the dressed track the call is
+          already sending, so nothing here renegotiates or reopens anything. */}
+      <div className="sm:col-span-3">
+        <h3 className="text-[12px] font-semibold text-ink-3">Appearance</h3>
+        <Appearance track={camTrack} />
+      </div>
     </div>
   );
 }
