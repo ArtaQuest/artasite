@@ -604,6 +604,7 @@ export default function ArtaCast() {
   });
   const [page, setPage] = useState<CastPage | null>(null);
   const [pageErr, setPageErr] = useState("");
+  const [loadTry, setLoadTry] = useState(0);
   const [request, setRequest] = useState<CastRequest | null>(null);
   const [form, setForm] = useState<Form | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -661,11 +662,13 @@ export default function ArtaCast() {
         if (p.request) { setRequest(p.request); setForm(formOf(p.request)); }
         if (acceptNote.current) setJoinedNote(acceptNote.current);
       } catch (e) {
-        if (!stop) setPageErr(errText(e, "ArtaCast couldn’t be loaded."));
+        // A rate limit is a moment, not a closed show: say so, and offer the retry the button below
+        // provides. Everything else keeps the server's own sentence.
+        if (!stop) setPageErr(e instanceof ApiError && e.status === 429 ? "Busy for a moment — try again in a few seconds." : errText(e, "ArtaCast couldn’t be loaded."));
       }
     })();
     return () => { stop = true; };
-  }, [entry.invite, signedIn]);
+  }, [entry.invite, signedIn, loadTry]);
 
   const role = request?.role || "";
 
@@ -814,7 +817,8 @@ export default function ArtaCast() {
     lede={<>The ArtaQuest show where <span data-ay-skip="1">{hostName}</span> talks with couples about how they stayed together. Tell us who you are, invite your other half, see your episode take shape, and pick a time.</>} />;
 
   if (pageErr) {
-    return frame(hero, <EmptyState title="ArtaCast isn’t open right now" body={pageErr} action={<Button href={localePath("/works/")} variant="outline">Look around ArtaQuest</Button>} />, null);
+    return frame(hero, <EmptyState title={/Busy for a moment/.test(pageErr) ? "One moment" : "ArtaCast isn’t open right now"} body={pageErr}
+      action={<Button onClick={() => { setPageErr(""); setPage(null); setLoadTry((t) => t + 1); }}>Try again</Button>} />, null);
   }
   if (!page) {
     return frame(hero, <section role="status" className="rounded-card border border-line bg-space-2 p-5 text-[13px] text-ink-2">Loading…</section>, null);
