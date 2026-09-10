@@ -156,16 +156,17 @@ export function EpisodeRecorder({ spec, local, peers, me, meetId, onRecState }: 
     const read = () => {
       const out: string[] = [];
       for (const side of [spec.a, spec.b]) {
-        const s = feedFor(side.uid);
-        const t = s?.getVideoTracks()[0];
-        if (!t || t.readyState !== "live" || t.muted) out.push(side.name || "a guest");
+        // Judged by FRAMES, not by the track's flags: a received track flickers "muted" for a
+        // moment as packets pause, and that moment was reported as a missing picture.
+        const v = videoFor(side.uid);
+        if (!v || v.videoWidth === 0 || v.readyState < 2) out.push(side.name || "a guest");
       }
       setNoPicture((cur) => (cur.join("|") === out.join("|") ? cur : out));
     };
     read();
     const iv = window.setInterval(read, 1500);
     return () => window.clearInterval(iv);
-  }, [feedFor, spec]);
+  }, [videoFor, spec]);
 
   // The draw loop runs while the panel is open, recording or not: the small live picture is how
   // the host frames the shot before pressing Record.

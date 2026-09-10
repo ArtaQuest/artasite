@@ -271,6 +271,15 @@ class Mailer {
 		/* ArtaCast — the finishing run on Kaggle produced the release file. The letter deliberately
 		 * carries no download link: Kaggle's URLs are signed and short-lived, so they are minted when
 		 * the host opens their show page. */
+		'cast_ready' => [
+			'label'    => 'ArtaCast — a couple is ready for the host to confirm',
+			'audience' => 'member',
+			'subject'  => '{{names}} are ready for your word on ArtaCast',
+			'body'     => "{{names}} have filled in everything — both halves, portraits, the year they married — and are waiting for you.\n\nOpen your show, look at their frame, and confirm the episode. They can pick a recording time in your calendar the moment you do; declining tells them plainly and closes the request.",
+			'cta'      => [ 'Open your show', '/artacast/' ],
+			'vars'     => [ 'names' ],
+			'sample'   => [ 'names' => 'Mohammadreza & Ana' ],
+		],
 		'cast_confirmed' => [
 			'label'    => 'ArtaCast — the host confirmed the episode',
 			'audience' => 'member',

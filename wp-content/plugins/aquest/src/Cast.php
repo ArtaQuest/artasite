@@ -480,6 +480,7 @@ final class Cast {
 			Data::update( 'aq_cast_requests', $data, [ 'id' => (int) $r['id'] ] );
 			$r = self::row( (int) $r['id'] );
 		}
+		self::tell_host_ready( $r );
 		return [ 'ok' => true, 'request' => self::payload( $r, $uid ) ];
 	}
 
@@ -633,6 +634,7 @@ final class Cast {
 
 		$r = self::row( (int) $r['id'] );
 		if ( (int) $r['meet_id'] > 0 ) { self::seat_partner( $r ); }
+		self::tell_host_ready( $r );
 
 		$pname = Mailer::safe_var( self::card( $uid )['name'] );
 		Notify::push( (int) $r['requester_id'], 'artacast', $pname . ' joined your ArtaCast request', '', '/artacast/', 'castacc' . (int) $r['id'] );
@@ -688,6 +690,25 @@ final class Cast {
 	 * passed back verbatim, the same two letters. What this adds afterwards is the show's own
 	 * wording on the meeting, the partner's chair, and the row's link to it.
 	 */
+	/**
+	 * THE HOST IS TOLD ONCE, the moment a request has everything: both halves complete, the partner
+	 * seated, nothing confirmed yet. A confirmation step nobody is told about is a request that sits
+	 * unread. Exactly once per request — the Notify ref carries the id — and never for an operator's
+	 * benefit; the host of the request is the one whose word is waited for.
+	 */
+	private static function tell_host_ready( $r ) {
+		if ( ! $r || 'cancelled' === (string) $r['status'] || (int) ( $r['confirmed_at'] ?? 0 ) > 0 ) { return; }
+		if ( (int) $r['partner_id'] <= 0 || ! self::complete( $r, 'a' ) || ! self::complete( $r, 'b' ) ) { return; }
+		$h = self::host_of( $r );
+		if ( ! $h ) { return; }
+		$names = trim( (string) $r['a_name'] . ' & ' . (string) $r['b_name'] );
+		Notify::push_mail(
+			(int) $h->ID, 'artacast', Mailer::safe_var( $names, 80 ) . ' are ready for your word',
+			'Look at their frame and confirm the episode — they can book a time once you do.', '/artacast/',
+			'castready' . (int) $r['id'], 'cast_ready', [ 'names' => Mailer::safe_var( $names, 90 ) ]
+		);
+	}
+
 	/** The member's OWN picture — uploaded, or their typology pick — never the season sigil or a
 	 *  gravatar, which are not portraits. Empty when we hold none. */
 	public static function portrait_of( $uid ) {
