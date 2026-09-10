@@ -783,7 +783,16 @@ final class Auth {
 	}
 
 	private static function sign_in( $user, $redirect, $why = null ) {
-		if ( ! $user ) { return Rest::err( 'signin_failed', 'Could not sign you in.', 400, $why ? [ 'reason' => (string) $why ] : [] ); }
+		if ( ! $user ) {
+			// A DEAD END IS NOT AN ANSWER. The platform's own spam gate refuses a registration by
+			// handing back nothing (`empty_data`, Atomic's Akismet signup check) — the member did
+			// nothing wrong and, told only "could not sign you in", has nowhere to go. Name the
+			// other door instead. Everything else keeps the plain sentence.
+			$msg = 'empty_data' === (string) $why
+				? 'We couldn’t create your account from this browser. Try “Continue with Google”, or try again from another browser.'
+				: 'Could not sign you in.';
+			return Rest::err( 'signin_failed', $msg, 400, $why ? [ 'reason' => (string) $why ] : [] );
+		}
 		wp_set_current_user( $user->ID );
 		wp_set_auth_cookie( $user->ID, true );
 		// Alert the member if this device is new (bell + email). Wrapped so a notification hiccup can
