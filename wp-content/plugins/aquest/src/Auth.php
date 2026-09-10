@@ -163,8 +163,9 @@ final class Auth {
 			delete_transient( self::fail_key( $email ) );
 			delete_transient( self::lock_key( $email ) );
 			delete_transient( self::locknum_key( $email ) );
-			$user = self::find_or_create( $email );
-			return self::sign_in( $user, Rest::p( $req, 'redirect', '/' ) );
+			$why  = null;
+			$user = self::find_or_create( $email, '', $why );
+			return self::sign_in( $user, Rest::p( $req, 'redirect', '/' ), $why );
 		}
 
 		// WRONG code from here. A cooldown lock rejects further GUESSES (never the correct code above).
@@ -725,7 +726,7 @@ final class Auth {
 		}
 	}
 
-	private static function find_or_create( $email, $name = '' ) {
+	private static function find_or_create( $email, $name = '', &$why = null ) {
 		$user = get_user_by( 'email', $email );
 		if ( $user ) { return $user; }
 		$login = self::unique_login( $email );
@@ -736,7 +737,16 @@ final class Auth {
 			'display_name' => $name ?: ucwords( str_replace( [ '.', '_', '-' ], ' ', strstr( $email, '@', true ) ) ),
 			'role'         => 'subscriber',
 		] );
-		return is_wp_error( $uid ) ? null : get_user_by( 'id', $uid );
+		// WHY IT REFUSED, kept. "Could not sign you in." told the member nothing and told us less:
+		// a sign-up that fails here is a door that does not open, and every hour it stays unexplained
+		// is a person who cannot join. The code (never a secret — WordPress's own error slug) rides
+		// back in the answer and goes to the log.
+		if ( is_wp_error( $uid ) ) {
+			$why = (string) $uid->get_error_code();
+			error_log( '[aq] sign-up refused for ' . $email . ' as @' . $login . ': ' . $why . ' — ' . $uid->get_error_message() );
+			return null;
+		}
+		return get_user_by( 'id', $uid );
 	}
 
 	private static function unique_login( $email ) {
@@ -772,8 +782,8 @@ final class Auth {
 		return esc_url_raw( $raw ) ?: '/';
 	}
 
-	private static function sign_in( $user, $redirect ) {
-		if ( ! $user ) { return Rest::err( 'signin_failed', 'Could not sign you in.' ); }
+	private static function sign_in( $user, $redirect, $why = null ) {
+		if ( ! $user ) { return Rest::err( 'signin_failed', 'Could not sign you in.', 400, $why ? [ 'reason' => (string) $why ] : [] ); }
 		wp_set_current_user( $user->ID );
 		wp_set_auth_cookie( $user->ID, true );
 		// Alert the member if this device is new (bell + email). Wrapped so a notification hiccup can
