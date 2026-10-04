@@ -279,7 +279,10 @@ final class Tickets {
 			$where[] = 'user_id = %d'; $args[] = $uid;
 		}
 		if ( isset( self::KINDS[ $kind ] ) ) { $where[] = 'kind = %s'; $args[] = $kind; }
-		[ $rows, $next ] = Data::page( 'aq_tickets', implode( ' AND ', $where ), $args, $cursor, 30 );
+		[ $rows, $next ] = Data::page( 'aq_tickets', implode( ' AND ', $where ), $args, $cursor, 30, 'DESC', 'id', [
+			'id', 'user_id', 'kind', 'title', 'body', 'screenshot', 'where_url', 'status', 'msg_count',
+			'branch', 'pr_url', 'deploy_sha', 'arch_ok', 'attempts', 'points_awarded', 'created', 'resolved_at',
+		] );
 		return [ 'items' => array_map( [ self::class, 'shape' ], $rows ), 'next' => $next ];
 	}
 
@@ -288,7 +291,7 @@ final class Tickets {
 		$t = self::row( Rest::pint( $req, 'id', 0 ) );
 		if ( ! $t ) { return Rest::err( 'not_found', 'No such ticket', 404 ); }
 		$cursor = Rest::pint( $req, 'cursor', 0 );
-		[ $rows, $next ] = Data::page( 'aq_ticket_messages', 'ticket_id = %d', [ (int) $t['id'] ], $cursor, 100, 'ASC' );
+		[ $rows, $next ] = Data::page( 'aq_ticket_messages', 'ticket_id = %d', [ (int) $t['id'] ], $cursor, 100, 'ASC', 'id', [ 'id', 'role', 'body', 'meta', 'created' ] );
 		$ticket = self::shape( $t );
 		// The original chat prompt that triggered a chat-filed contribution (#121) — only on the detail
 		// view, so the board list never pays for it.

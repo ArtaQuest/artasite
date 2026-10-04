@@ -94,15 +94,21 @@ final class Data {
 	 * [ items, next ] where `next` is the id to pass as ?cursor for the following
 	 * page, or null at the end. O(page) at any depth, unlike OFFSET.
 	 *
-	 * @param string $key     aq_* table
-	 * @param string $where   extra WHERE (without the cursor clause), e.g. "status = 'publish'"
-	 * @param array  $args    args for $where placeholders
-	 * @param int    $cursor  exclusive upper-bound id (0 = first page)
-	 * @param int    $limit   page size
-	 * @param string $order   'DESC' (newest first) or 'ASC'
-	 * @param string $cur_col id column to page on
+	 * Columns are projected. The default is every column except LONGTEXT: a list
+	 * read must not pull a notebook body or an article just because the table has
+	 * one. Pass the columns the caller serialises. Pass ['*'] only when the row's
+	 * blobs are themselves the payload.
+	 *
+	 * @param string            $key     aq_* table
+	 * @param string            $where   extra WHERE (without the cursor clause), e.g. "status = 'publish'"
+	 * @param array             $args    args for $where placeholders
+	 * @param int               $cursor  exclusive upper-bound id (0 = first page)
+	 * @param int               $limit   page size
+	 * @param string            $order   'DESC' (newest first) or 'ASC'
+	 * @param string            $cur_col id column to page on
+	 * @param array|string|null $select  column list, ['*'], or null for the narrow default
 	 */
-	public static function page( $key, $where, $args, $cursor, $limit, $order = 'DESC', $cur_col = 'id' ) {
+	public static function page( $key, $where, $args, $cursor, $limit, $order = 'DESC', $cur_col = 'id', $select = null ) {
 		global $wpdb;
 		$t = self::t( $key );
 		$limit = max( 1, min( 100, (int) $limit ) );
@@ -110,7 +116,7 @@ final class Data {
 		$clauses = [];
 		if ( $where ) { $clauses[] = "($where)"; }
 		if ( $cursor > 0 ) { $clauses[] = "$cur_col $cmp %d"; $args[] = (int) $cursor; }
-		$sql = "SELECT * FROM $t" . ( $clauses ? ' WHERE ' . implode( ' AND ', $clauses ) : '' )
+		$sql = 'SELECT ' . self::project( $t, $select, $cur_col ) . " FROM $t" . ( $clauses ? ' WHERE ' . implode( ' AND ', $clauses ) : '' )
 			. " ORDER BY $cur_col $order LIMIT %d";
 		$args[] = $limit + 1;
 		$rows = $wpdb->get_results( $wpdb->prepare( $sql, $args ), ARRAY_A ) ?: [];
@@ -121,6 +127,59 @@ final class Data {
 			$rows = array_slice( $rows, 0, $limit );
 		}
 		return [ $rows, $next ];
+	}
+
+	/**
+	 * SQL column list for a read of $table (already prefixed).
+	 *
+	 * null     — every column except LONGTEXT (memoised SHOW COLUMNS). SELECT *
+	 *            only if the table cannot be described, so a missing table fails
+	 *            the way it used to rather than as a made-up column list.
+	 * ['*']    — SELECT *. The caller needs the blobs.
+	 * list     — those identifiers. $cur_col is added when the cursor reads it
+	 *            and the caller left it out.
+	 */
+	public static function project( $table, $select = null, $cur_col = '' ) {
+		if ( $select === '*' || $select === [ '*' ] ) { return '*'; }
+		if ( is_array( $select ) && $select ) {
+			$cols = self::idents( $select );
+			$cur  = self::ident( $cur_col );
+			if ( $cur !== '' && ! in_array( $cur, $cols, true ) ) { $cols[] = $cur; }
+			if ( $cols ) { return implode( ', ', array_map( static fn( $c ) => '`' . $c . '`', $cols ) ); }
+		}
+		return self::narrow( $table );
+	}
+
+	/** Identifier-safe column names. Anything else is dropped, never interpolated. */
+	private static function idents( $cols ) {
+		$out = [];
+		foreach ( (array) $cols as $c ) {
+			$c = self::ident( $c );
+			if ( $c !== '' ) { $out[] = $c; }
+		}
+		return $out;
+	}
+
+	private static function ident( $c ) {
+		$c = (string) $c;
+		return preg_match( '/^[A-Za-z_][A-Za-z0-9_]*$/', $c ) ? $c : '';
+	}
+
+	/** Every column of $table except LONGTEXT, or '*' when the table cannot be described. */
+	private static function narrow( $table ) {
+		static $memo = [];
+		if ( isset( $memo[ $table ] ) ) { return $memo[ $table ]; }
+		if ( ! preg_match( '/^[A-Za-z0-9_]+$/', (string) $table ) ) { return $memo[ $table ] = '*'; }
+		global $wpdb;
+		$rows = $wpdb->get_results( 'SHOW COLUMNS FROM `' . $table . '`', ARRAY_A );
+		if ( ! $rows ) { return $memo[ $table ] = '*'; }
+		$keep = [];
+		foreach ( $rows as $r ) {
+			if ( stripos( (string) ( $r['Type'] ?? '' ), 'longtext' ) !== false ) { continue; }
+			$f = self::ident( $r['Field'] ?? '' );
+			if ( $f !== '' ) { $keep[] = '`' . $f . '`'; }
+		}
+		return $memo[ $table ] = $keep ? implode( ', ', $keep ) : '*';
 	}
 
 	/**
@@ -135,9 +194,10 @@ final class Data {
 	 * @param string $extra_where extra WHERE without the cursor clause, e.g. "status = 'publish'"
 	 * @param array  $extra_args  args for $extra_where placeholders
 	 * @param int    $cursor      keyset cursor (0 = first page)
-	 * @param int    $limit       page size
+	 * @param int               $limit       page size
+	 * @param array|string|null $select      columns to read (see page()); null = narrow default
 	 */
-	public static function search_page( $key, $cols, $q, $extra_where, $extra_args, $cursor, $limit ) {
+	public static function search_page( $key, $cols, $q, $extra_where, $extra_args, $cursor, $limit, $select = null ) {
 		global $wpdb;
 		$where = (string) $extra_where;
 		$args  = (array) $extra_args;
@@ -149,7 +209,7 @@ final class Data {
 			$clause = '(' . implode( ' OR ', $ors ) . ')';
 			$where  = $where !== '' ? "$where AND $clause" : $clause;
 		}
-		return self::page( $key, $where, $args, $cursor, $limit );
+		return self::page( $key, $where, $args, $cursor, $limit, 'DESC', 'id', $select );
 	}
 
 	public static function dec( $v ) { return json_decode( (string) $v, true ) ?: null; }

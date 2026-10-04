@@ -910,15 +910,50 @@ final class Rest {
 	}
 
 	/**
-	 * Simple per-user/per-IP fixed-window rate limit on a key. Returns true if the
-	 * caller is over the limit (the handler should bail). Backed by transients.
+	 * Per-user/per-IP fixed-window rate limit. Returns true if the caller is over
+	 * the limit (the handler should bail).
+	 *
+	 * The counter is atomic: wp_cache_incr where an object cache is present, otherwise
+	 * the same option-row lock Economy uses for money, so a burst cannot all read the
+	 * same count and all write count+1. The window is armed only when the counter is
+	 * created — an allowed call must not push the expiry back, or "30 per hour" never
+	 * expires while traffic continues.
 	 */
 	public static function throttle( $bucket, $limit = 30, $window = 60 ) {
-		$id = self::uid() ?: ( $_SERVER['REMOTE_ADDR'] ?? '0' );
-		$k  = 'aq_rl_' . md5( $bucket . '|' . $id );
-		$n  = (int) get_transient( $k );
-		if ( $n >= $limit ) { return true; }
-		set_transient( $k, $n + 1, $window );
-		return false;
+		$id    = self::uid() ?: ( $_SERVER['REMOTE_ADDR'] ?? '0' );
+		$k     = 'aq_rl_' . md5( $bucket . '|' . $id );
+		$limit = (int) $limit;
+		if ( wp_using_ext_object_cache() ) {
+			$added = wp_cache_add( $k, 0, 'aq_rl', (int) $window );
+			$n     = wp_cache_incr( $k, 1, 'aq_rl' );
+			if ( false !== $n ) { return (int) $n > $limit; }
+			// The backend stored the key but cannot increment it. Count this one call
+			// and do not also fall through onto the transient counter.
+			if ( $added ) {
+				wp_cache_set( $k, 1, 'aq_rl', (int) $window );
+				return 1 > $limit;
+			}
+		}
+		$lock = 'rl_' . $k;
+		$got  = false;
+		for ( $i = 0; $i < 8 && ! $got; $i++ ) {
+			$got = Economy::acquire_lock( $lock, 10 );
+			if ( ! $got ) { usleep( 25000 ); }
+		}
+		if ( ! $got ) { return true; } // could not serialise the increment — refuse, don't let the burst through
+		try {
+			$n = get_transient( $k );
+			if ( false === $n ) {
+				set_transient( $k, 1, (int) $window );
+				return 1 > $limit;
+			}
+			$n = (int) $n;
+			if ( $n >= $limit ) { return true; }
+			// Value only. set_transient() would re-arm the timeout on every allowed call.
+			update_option( '_transient_' . $k, $n + 1, false );
+			return false;
+		} finally {
+			Economy::release_lock( $lock );
+		}
 	}
 }

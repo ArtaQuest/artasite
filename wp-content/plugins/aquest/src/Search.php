@@ -61,7 +61,10 @@ final class Search {
 			// The same rows and the same filter as the public feed's GET /notebooks?q= (published only),
 			// widened from title+abstract to include the SLUG: a stranger arriving from a citation has
 			// the /nb/<id>/<slug> URL in hand, and searching what they were given must find the work.
-			[ $rows, $next ] = Data::search_page( 'aq_notebooks', [ 'title', 'slug', 'abstract' ], $q, "status = 'published'", [], Rest::pint( $req, 'cursor_notebooks', 0 ), $limit );
+			[ $rows, $next ] = Data::search_page( 'aq_notebooks', [ 'title', 'slug', 'abstract' ], $q, "status = 'published'", [], Rest::pint( $req, 'cursor_notebooks', 0 ), $limit, [
+				'id', 'kind', 'slug', 'title', 'abstract', 'thumb', 'hearts', 'comments', 'view_count',
+				'doi', 'author_id', 'kg_owner', 'kg_facts', 'kg_url', 'published_at',
+			] );
 			$out['results']['notebooks'] = [ 'items' => array_map( [ self::class, 'notebook_card' ], $rows ), 'next' => $next ];
 		}
 		if ( $want( 'discussions' ) ) {

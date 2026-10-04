@@ -313,7 +313,9 @@ final class Science {
 		$args    = [];
 		if ( in_array( $kind, [ 'dataset', 'model' ], true ) ) { $clauses[] = 'kind = %s'; $args[] = $kind; }
 		if ( $aid ) { $clauses[] = 'author_id = %d'; $args[] = $aid; }
-		[ $rows, $next ] = Data::page( 'aq_research_artifacts', implode( ' AND ', $clauses ), $args, $cursor, 30 );
+		[ $rows, $next ] = Data::page( 'aq_research_artifacts', implode( ' AND ', $clauses ), $args, $cursor, 30, 'DESC', 'id', [
+			'id', 'author_id', 'kind', 'title', 'description', 'url', 'meta', 'status', 'created',
+		] );
 		$names = self::author_names( $rows );
 		return [ 'items' => array_map( static fn( $r ) => self::artifact_card( $r, $names ), $rows ), 'next' => $next ];
 	}
@@ -544,7 +546,11 @@ final class Science {
 		if ( $status && in_array( $status, self::STATUSES, true ) ) { $clauses[] = 'status = %s'; $args[] = $status; }
 		if ( $journal && isset( self::JOURNALS[ $journal ] ) )      { $clauses[] = 'journal = %s'; $args[] = $journal; }
 		$where = implode( ' AND ', $clauses );
-		[ $rows, $next ] = Data::page( 'aq_submissions', $where, $args, $cursor, 30 );
+		[ $rows, $next ] = Data::page( 'aq_submissions', $where, $args, $cursor, 30, 'DESC', 'id', [
+			'id', 'author_id', 'journal', 'title', 'status', 'round', 'score', 'reproduced',
+			'doi', 'record_url', 'colab_url', 'kaggle_url', 'pdf_url', 'thumb_url', 'thread_id',
+			'dataset_id', 'model_id', 'template_ok', 'created', 'updated',
+		] );
 		$names = self::author_names( $rows );
 		return [ 'items' => array_map( static fn( $r ) => self::card( $r, $names ), $rows ), 'next' => $next ];
 	}

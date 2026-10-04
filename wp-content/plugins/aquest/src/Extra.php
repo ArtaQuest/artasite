@@ -2981,12 +2981,15 @@ final class Extra {
 	 *  record, extended at most yearly, not a live feed. The relay serves it to every notebook
 	 *  as data/climate-daily.csv. */
 	public static function climate_daily() {
-		$path = wp_get_upload_dir()['basedir'] . '/aq-data/climate-daily.csv';
+		$up   = wp_get_upload_dir();
+		$path = $up['basedir'] . '/aq-data/climate-daily.csv';
 		if ( ! is_readable( $path ) ) { return Rest::err( 'not_provisioned', 'The climate rail file is missing', 404 ); }
-		header( 'Content-Type: text/csv; charset=utf-8' );
-		header( 'Cache-Control: public, max-age=86400, s-maxage=86400' );
-		readfile( $path );
-		exit;
+		// The file already lives under uploads. Redirecting there gives Content-Length, Range
+		// and the edge cache, and takes the PHP worker out of a 1.6 MB readfile().
+		$resp = new \WP_REST_Response( null, 302 );
+		$resp->header( 'Location', $up['baseurl'] . '/aq-data/climate-daily.csv' );
+		$resp->header( 'Cache-Control', 'public, max-age=300' );
+		return $resp;
 	}
 
 	/** GET /citations/quarterly — data-shelf rail: citations per research subfield per QUARTER
@@ -3448,6 +3451,8 @@ final class Extra {
 			}
 
 			if ( Stripe::enabled() ) {
+				// An outbound call to the payment provider. Same ceiling as shop_order (10/3600).
+				if ( Rest::throttle( 'course_checkout', 10, 3600 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 				// Return the DONOR to /donate/, not the retired /enroll/ — that is where the thank-you
 				// belongs, and where an ArtaCredit gift can tell them what it now covers. The wallet's
 				// "your coins are in your wallet" is not what happened to a gift.
@@ -3967,6 +3972,11 @@ final class Extra {
 	 * published total, and adversarial-review activity. Public + CDN-cacheable like every GET.
 	 */
 	public static function studio_pulse( $req = null ) {
+		// ~26 aggregate queries (ensure_tables + GROUP BY + COUNT). The shape moves on a
+		// human timescale, so one minute of cache is the whole fix — an anonymous GET no
+		// longer recomputes it.
+		$cached = get_transient( 'aq_studio_pulse' );
+		if ( is_array( $cached ) ) { return $cached; }
 		Library::ensure_tables(); Music::ensure_tables(); Motion::ensure_tables();
 		Film::ensure_tables(); Illustration::ensure_tables(); Science::ensure_tables(); Reviews::ensure_tables();
 		$day = Data::now() - 86400;
@@ -4018,6 +4028,8 @@ final class Extra {
 				'published'  => (int) Data::col( 'SELECT COUNT(*) FROM ' . Data::t( 'aq_submissions' ) . " WHERE status = 'accepted'" ),
 			] + $rounds( 'aq_paper_reviews', '', [] ),
 		];
-		return [ 'model' => 'claude-opus-5', 'points_per_coin' => Economy::POINTS_PER_COIN, 'kinds' => $kinds ];
+		$out = [ 'model' => 'claude-opus-5', 'points_per_coin' => Economy::POINTS_PER_COIN, 'kinds' => $kinds ];
+		set_transient( 'aq_studio_pulse', $out, MINUTE_IN_SECONDS );
+		return $out;
 	}
 }

@@ -80,6 +80,8 @@ class Demo {
 	/** POST demo/submit { title, brief, code_url } — queue an animation SOURCE for review. */
 	public static function submit( $req ) {
 		self::ensure_tables();
+		// Same ceiling as the other studio creates that queue a render (aq_anim, aq_track): 20/3600.
+		if ( Rest::throttle( 'aq_demo_submit', 20, 3600 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$title = sanitize_text_field( (string) Rest::p( $req, 'title', '' ) );
 		$brief = sanitize_textarea_field( (string) Rest::p( $req, 'brief', '' ) );
 		$code  = trim( (string) Rest::p( $req, 'code_url', '' ) );

@@ -318,7 +318,9 @@ final class Library {
 		self::ensure_tables();
 		$cursor = Rest::pint( $req, 'cursor', 0 );
 		$q      = (string) Rest::p( $req, 'q', '' );
-		[ $rows, $next ] = Data::search_page( 'aq_documents', [ 'title', 'summary' ], $q, "status = 'published'", [], $cursor, 24 );
+		[ $rows, $next ] = Data::search_page( 'aq_documents', [ 'title', 'summary' ], $q, "status = 'published'", [], $cursor, 24, [
+			'id', 'author_id', 'slug', 'title', 'summary', 'thumb', 'pages', 'view_count', 'created',
+		] );
 		$names = self::author_names( $rows );
 		return [ 'items' => array_map( static fn( $r ) => self::card( $r, $names ), $rows ), 'next' => $next ];
 	}
