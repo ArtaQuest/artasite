@@ -231,40 +231,69 @@ final class Offline {
 	// widest pipe out of the database we have: any credential the explorer masks and this one does
 	// not is simply downloadable. One decision point, or the two drift and the gap is a leak.
 	// ───────────────────────────────────────────────────────────────────────────
+	/** Stop a page once the redacted JSON crosses this. One row is always kept, so a single
+	 *  wide row cannot stall the cursor; everything after it waits for the next page. */
+	const DB_BYTE_BUDGET = 1500000;
+
 	public static function db_table( $req ) {
 		global $wpdb;
+		// A public bulk read. Same window as search (60/60) — not a tighter cap than that sibling.
+		if ( Rest::throttle( 'offline_db', 60, 60 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$raw = (string) Rest::p( $req, 'table', '' );
 		$table = null;
 		foreach ( Extra::all_table_names() as $name ) {
 			if ( $name === $raw || $name === $wpdb->prefix . $raw ) { $table = $name; break; }
 		}
-		if ( ! $table ) { return Rest::err( 'bad_table', 'Unknown table', 404 ); }
+		if ( ! $table || ! preg_match( '/^[A-Za-z0-9_]+$/', $table ) ) { return Rest::err( 'bad_table', 'Unknown table', 404 ); }
 
-		// Keyset by the table's own rowid where available (SQLite + MySQL both expose an id/ROWID-ish
-		// path); fall back to OFFSET only if no usable key. We try the common `id` PK first.
 		$cursor = Rest::pint( $req, 'cursor', 0 );
 		$limit  = min( 3000, max( 100, Rest::pint( $req, 'limit', 1500 ) ) );
-		// Detect an `id` column cross-DB (SQLite + MySQL) by sampling a row — keyset on it when present,
-		// else OFFSET. (pragma_table_info is SQLite-only and would fatal on production MySQL.)
-		$sample = $wpdb->get_row( "SELECT * FROM `$table` LIMIT 1", ARRAY_A );
-		$has_id = is_array( $sample ) && array_key_exists( 'id', $sample );
-		if ( $has_id ) {
-			$rows = $wpdb->get_results( $wpdb->prepare(
-				"SELECT * FROM `$table` WHERE id > %d ORDER BY id ASC LIMIT %d", $cursor, $limit
-			), ARRAY_A ) ?: [];
-			$next = count( $rows ) >= $limit ? (int) end( $rows )['id'] : null;
+		// Column list from SHOW COLUMNS, not SELECT * and not a sampled row (that sample was
+		// itself a full-width read). LONGTEXT is left out: that is the unbounded width.
+		$fields = $wpdb->get_results( "SHOW COLUMNS FROM `$table`", ARRAY_A ) ?: [];
+		$has_id = false;
+		$keep   = [];
+		foreach ( $fields as $f ) {
+			$col = (string) ( $f['Field'] ?? '' );
+			if ( ! preg_match( '/^[A-Za-z_][A-Za-z0-9_]*$/', $col ) ) { continue; }
+			if ( strcasecmp( $col, 'id' ) === 0 ) { $has_id = true; }
+			if ( stripos( (string) ( $f['Type'] ?? '' ), 'longtext' ) !== false ) { continue; }
+			$keep[] = '`' . $col . '`';
+		}
+		$proj = $keep ? implode( ', ', $keep ) : '*';
+		// No id column: there is no keyset, and the caller's cursor is NOT an OFFSET. Deep
+		// offsets are a scan, and OFFSET pagination is against the house rules. First page only.
+		if ( ! $has_id ) {
+			if ( $cursor > 0 ) {
+				return [ 'table' => $table, 'columns' => [], 'rows' => [], 'next' => null ];
+			}
+			$rows = $wpdb->get_results( $wpdb->prepare( "SELECT {$proj} FROM `{$table}` LIMIT %d", $limit ), ARRAY_A ) ?: [];
+			$next = null;
 		} else {
 			$rows = $wpdb->get_results( $wpdb->prepare(
-				"SELECT * FROM `$table` LIMIT %d OFFSET %d", $limit, $cursor
+				"SELECT {$proj} FROM `{$table}` WHERE id > %d ORDER BY id ASC LIMIT %d", $cursor, $limit
 			), ARRAY_A ) ?: [];
-			$next = count( $rows ) >= $limit ? $cursor + $limit : null;
+			$next = null;
 		}
-		$rows = array_map( fn( $r ) => Extra::redact_row( $table, $r ), $rows );
+		$kept  = [];
+		$bytes = 0;
+		$cut   = false;
+		foreach ( $rows as $r ) {
+			$r = Extra::redact_row( $table, $r );
+			$n = strlen( (string) wp_json_encode( $r ) );
+			if ( $kept && $bytes + $n > self::DB_BYTE_BUDGET ) { $cut = true; break; }
+			$kept[] = $r;
+			$bytes += $n;
+		}
 		// Columns come from the REDACTED row, never the raw one: a redaction rule that drops a cell
 		// instead of masking it would otherwise leave `columns` advertising a field the rows no
 		// longer carry, and a consumer zipping the two together would mis-align every value.
-		$cols = $rows ? array_keys( reset( $rows ) ) : [];
-		return [ 'table' => $table, 'columns' => $cols, 'rows' => $rows, 'next' => $next ];
+		$cols = $kept ? array_keys( reset( $kept ) ) : [];
+		if ( $has_id ) {
+			$more = $cut || count( $rows ) >= $limit;
+			$next = ( $more && $kept ) ? (int) end( $kept )['id'] : null;
+		}
+		return [ 'table' => $table, 'columns' => $cols, 'rows' => $kept, 'next' => $next ];
 	}
 
 	// ───────────────────────────────────────────────────────────────────────────
@@ -325,19 +354,12 @@ final class Offline {
 	}
 
 	// ───────────────────────────────────────────────────────────────────────────
-	// GET offline/media/{lesson_id}/stream?itag= — same-origin Range-aware proxy of one
-	// progressive format, so the browser can fetch + cache the bytes (googlevideo blocks
-	// cross-origin reads). Streams straight through; never buffers the whole file in memory.
+	// GET offline/media/{lesson_id}/stream?itag= — resolve one progressive format and
+	// redirect to it. The bytes are googlevideo's; a PHP worker must not sit in the path.
 	// ───────────────────────────────────────────────────────────────────────────
-	/** Wall-clock ceiling for one proxied stream. Generous for a real download of a lesson video on a
-	 *  slow line; finite, which is the point — the old @set_time_limit(0) had none. */
-	const STREAM_MAX_SECONDS = 900;
-
 	public static function media_stream( $req ) {
-		// This route is 'public' and it holds a PHP worker for as long as the CLIENT chooses to read.
-		// Without a ceiling, opening a handful of connections and then reading at one byte a second —
-		// or never reading at all — occupies the whole worker pool and the site stops answering for
-		// everyone. The cost is real whether or not the caller is signed in, so the limit is too.
+		// Resolving the URL still calls YouTube. The byte copy no longer happens here, but a
+		// loop of lookups is the same outbound cost the old proxy was throttled for.
 		if ( Rest::throttle( 'offline_stream', 120, 600 ) ) {
 			return Rest::err( 'rate_limited', 'Too many video streams at once. Pause and try again shortly.', 429 );
 		}
@@ -349,55 +371,24 @@ final class Offline {
 		}
 		$player = self::yt_player( (string) $l['video'] );
 		$url = '';
-		$mime = 'video/mp4';
 		foreach ( $player['streamingData']['formats'] ?? [] as $f ) {
 			if ( (int) ( $f['itag'] ?? 0 ) === $itag && ! empty( $f['url'] ) ) {
-				$url  = (string) $f['url'];
-				$mime = (string) ( $f['mimeType'] ?? 'video/mp4' );
+				$url = (string) $f['url'];
 				break;
 			}
 		}
 		if ( $url === '' ) { return Rest::err( 'unavailable', 'This quality is not downloadable for this video', 503 ); }
 
-		// Stream the upstream file through to the client. Pass a Range header through when present so a
-		// resumed/partial fetch works; otherwise stream the whole file.
-		$range = isset( $_SERVER['HTTP_RANGE'] ) ? (string) $_SERVER['HTTP_RANGE'] : '';
-		@set_time_limit( self::STREAM_MAX_SECONDS + 30 ); // finite, unlike the 0 this used to pass
-		$deadline = time() + self::STREAM_MAX_SECONDS;
-		while ( ob_get_level() > 0 ) { @ob_end_clean(); }
-		$headers = [ 'User-Agent' => 'Mozilla/5.0', 'Accept' => '*/*' ];
-		if ( $range !== '' ) { $headers['Range'] = $range; }
-		$ctx = stream_context_create( [ 'http' => [ 'method' => 'GET', 'header' => self::header_lines( $headers ), 'timeout' => 30, 'ignore_errors' => true ] ] );
-		$fh  = @fopen( $url, 'rb', false, $ctx );
-		if ( ! $fh ) { return Rest::err( 'upstream', 'Could not open the video stream', 502 ); }
-
-		// Mirror the upstream status + key headers (so a 206 partial is reported as 206).
-		$status = 200; $clen = ''; $crange = '';
-		foreach ( ( $http_response_header ?? [] ) as $h ) {
-			if ( preg_match( '#^HTTP/\S+\s+(\d{3})#', $h, $m ) ) { $status = (int) $m[1]; }
-			elseif ( stripos( $h, 'Content-Length:' ) === 0 ) { $clen = trim( substr( $h, 15 ) ); }
-			elseif ( stripos( $h, 'Content-Range:' ) === 0 ) { $crange = trim( substr( $h, 14 ) ); }
+		// Do not proxy the bytes. A 302 to the upstream URL lets the client (and curl -L)
+		// fetch Content-Length and Range itself; the origin only resolved which URL.
+		$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+		if ( $host === '' || substr( $host, -16 ) !== 'googlevideo.com' ) {
+			return Rest::err( 'unavailable', 'This quality is not downloadable for this video', 503 );
 		}
-		status_header( $status === 206 ? 206 : 200 );
-		header( 'Content-Type: ' . $mime );
-		header( 'Accept-Ranges: bytes' );
-		header( 'Cache-Control: private, max-age=0' );
-		header( 'Access-Control-Allow-Origin: ' . ( $_SERVER['HTTP_ORIGIN'] ?? '*' ) );
-		if ( $clen !== '' )   { header( 'Content-Length: ' . $clen ); }
-		if ( $crange !== '' ) { header( 'Content-Range: ' . $crange ); }
-		// Stop copying the moment the client goes away or the budget is spent. Without either test the
-		// loop is driven entirely by how fast the CLIENT chooses to read, which is what let a handful of
-		// deliberately-slow connections hold the worker pool open indefinitely.
-		ignore_user_abort( false );
-		while ( ! feof( $fh ) ) {
-			$chunk = fread( $fh, 256 * 1024 );
-			if ( $chunk === false ) { break; }
-			echo $chunk;
-			@ob_flush(); @flush();
-			if ( connection_aborted() || time() > $deadline ) { break; }
-		}
-		fclose( $fh );
-		exit;
+		$resp = new \WP_REST_Response( null, 302 );
+		$resp->header( 'Location', $url );
+		$resp->header( 'Cache-Control', 'private, max-age=60' );
+		return $resp;
 	}
 
 	// ───────────────────────────────────────────────────────────────────────────
@@ -591,51 +582,56 @@ final class Offline {
 		$os   = (string) Rest::p( $req, 'os', 'mac' );
 		$map  = [ 'mac' => 'yt-dlp_macos', 'linux' => 'yt-dlp_linux', 'windows' => 'yt-dlp.exe' ];
 		$name = $map[ $os ] ?? 'yt-dlp_macos';
-		@set_time_limit( 0 );
-		$url = self::resolve_ytdlp_url( $name );
-		if ( $url === '' ) { status_header( 502 ); header( 'Content-Type: text/plain' ); echo 'mirror unavailable — please try again'; exit; }
-		// CACHE THE BINARY, DON'T RE-FETCH IT PER REQUEST. This used to pull ~35 MB from GitHub on
-		// EVERY call, with a 180-second timeout and no throttle at all — so each anonymous request
-		// pinned a PHP worker for as long as GitHub cared to take, moved 35 MB in and 35 MB out, and
-		// counted against our GitHub rate limit. A handful of concurrent callers was enough to hold
-		// the worker pool. The asset is immutable per version, so one copy serves everyone: keep it
-		// on disk for CACHE_S and re-fetch only when it is missing, stale or truncated.
-		$cached = rtrim( get_temp_dir(), '/\\' ) . '/aq-ytdlp-' . preg_replace( '/[^A-Za-z0-9._-]/', '', $name );
-		$fresh  = file_exists( $cached ) && filesize( $cached ) > 1000000
-			&& ( time() - (int) filemtime( $cached ) ) < self::YTDLP_CACHE_S;
+		$up   = wp_upload_dir();
+		if ( ! empty( $up['error'] ) ) { return Rest::err( 'mirror', 'mirror unavailable — please try again', 502 ); }
+		$dir  = $up['basedir'] . '/aq-data/ytdlp';
+		if ( ! is_dir( $dir ) ) { wp_mkdir_p( $dir ); }
+		$dest = $dir . '/' . $name;
+		$have = static function () use ( $dest ) {
+			return is_readable( $dest ) && filesize( $dest ) > 1000000;
+		};
+		// The binary lives under uploads. A hit is a 302, not a readfile of ~40 MB through PHP.
+		// A miss still fetches once (throttled, and under the lock so two misses don't both pull).
+		$fresh = $have() && ( time() - (int) filemtime( $dest ) ) < self::YTDLP_CACHE_S;
 		if ( ! $fresh ) {
-			// Only a fetch is rationed — a cache HIT costs a readfile and is left alone, so the
-			// common path stays free for every caller, script or human.
-			if ( Rest::throttle( 'ytdlp_fetch', 4, 3600 ) ) {
-				status_header( 429 ); header( 'Content-Type: text/plain' );
-				echo 'the mirror is refreshing its copy — try again in a minute'; exit;
-			}
-			$tmp = tempnam( sys_get_temp_dir(), 'aqytdlp' );
-			if ( ! $tmp ) { status_header( 502 ); header( 'Content-Type: text/plain' ); echo 'mirror temp error — please try again'; exit; }
-			$resp = wp_remote_get( $url, [ 'timeout' => 120, 'redirection' => 5, 'user-agent' => 'ArtaQuest', 'stream' => true, 'filename' => $tmp ] );
-			$got  = file_exists( $tmp ) ? (int) filesize( $tmp ) : 0;
-			if ( is_wp_error( $resp ) || wp_remote_retrieve_response_code( $resp ) !== 200 || $got < 1000000 ) {
-				@unlink( $tmp );
-				// A stale copy beats no copy: serve what we have rather than failing the download.
-				if ( ! file_exists( $cached ) || filesize( $cached ) < 1000000 ) {
-					status_header( 502 ); header( 'Content-Type: text/plain' ); echo 'mirror could not fetch the tool — please try again'; exit;
-				}
+			if ( ! Economy::acquire_lock( 'ytdlp_' . $name, 150 ) ) {
+				if ( ! $have() ) { return Rest::err( 'rate_limited', 'the mirror is refreshing its copy — try again in a minute', 429 ); }
 			} else {
-				@rename( $tmp, $cached ) || @copy( $tmp, $cached );
-				@unlink( $tmp );
+				try {
+					$fresh = $have() && ( time() - (int) filemtime( $dest ) ) < self::YTDLP_CACHE_S;
+					if ( ! $fresh ) {
+						$limited = Rest::throttle( 'ytdlp_fetch', 4, 3600 );
+						if ( $limited && ! $have() ) {
+							return Rest::err( 'rate_limited', 'the mirror is refreshing its copy — try again in a minute', 429 );
+						}
+						if ( ! $limited ) {
+							$url = self::resolve_ytdlp_url( $name );
+							if ( $url === '' && ! $have() ) {
+								return Rest::err( 'mirror', 'mirror unavailable — please try again', 502 );
+							}
+							if ( $url !== '' ) {
+								$part = $dest . '.part';
+								$resp = wp_remote_get( $url, [ 'timeout' => 120, 'redirection' => 5, 'user-agent' => 'ArtaQuest', 'stream' => true, 'filename' => $part ] );
+								$got  = file_exists( $part ) ? (int) filesize( $part ) : 0;
+								if ( is_wp_error( $resp ) || (int) wp_remote_retrieve_response_code( $resp ) !== 200 || $got < 1000000 ) {
+									@unlink( $part );
+									if ( ! $have() ) { return Rest::err( 'mirror', 'mirror could not fetch the tool — please try again', 502 ); }
+								} else {
+									@rename( $part, $dest );
+								}
+							}
+						}
+					}
+				} finally {
+					Economy::release_lock( 'ytdlp_' . $name );
+				}
 			}
 		}
-		$tmp  = $cached;
-		$size = file_exists( $tmp ) ? (int) filesize( $tmp ) : 0;
-		if ( $size < 1000000 ) { status_header( 502 ); header( 'Content-Type: text/plain' ); echo 'mirror could not fetch the tool — please try again'; exit; }
-		while ( ob_get_level() > 0 ) { @ob_end_clean(); }
-		status_header( 200 );
-		header( 'Content-Type: application/octet-stream' );
-		header( 'Content-Disposition: attachment; filename="' . $name . '"' );
-		header( 'Content-Length: ' . $size );
-		header( 'Cache-Control: public, max-age=86400' );
-		readfile( $tmp );
-		exit;   // NOTE: $tmp is the CACHE now — never unlink it here
+		if ( ! $have() ) { return Rest::err( 'mirror', 'mirror could not fetch the tool — please try again', 502 ); }
+		$resp = new \WP_REST_Response( null, 302 );
+		$resp->header( 'Location', $up['baseurl'] . '/aq-data/ytdlp/' . rawurlencode( $name ) );
+		$resp->header( 'Cache-Control', 'public, max-age=300' );
+		return $resp;
 	}
 
 	/** The versioned download URL for a yt-dlp asset, via the GitHub API (cached 12h). We DON'T use the
@@ -769,13 +765,6 @@ final class Offline {
 		if ( is_wp_error( $resp ) || wp_remote_retrieve_response_code( $resp ) !== 200 ) { return null; }
 		$data = json_decode( wp_remote_retrieve_body( $resp ), true );
 		return is_array( $data ) ? $data : null;
-	}
-
-	/** Flatten a header map to the "K: V\r\n" lines stream_context wants. */
-	private static function header_lines( array $h ) {
-		$out = '';
-		foreach ( $h as $k => $v ) { $out .= $k . ': ' . $v . "\r\n"; }
-		return $out;
 	}
 
 	// ───────────────────────────────────────────────────────────────────────────

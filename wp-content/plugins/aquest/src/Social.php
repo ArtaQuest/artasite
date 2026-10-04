@@ -279,6 +279,9 @@ final class Social {
 		$uid = Rest::uid();
 		$tid = Rest::pint( $req, 'target_id' );
 		if ( ! $tid || $tid === $uid ) { return Rest::err( 'bad_input', 'Invalid target' ); }
+		// Same window as a comment (30/600) — a follow is the same class of social write.
+		if ( Rest::throttle( 'follow', 30, 600 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
+		if ( ! get_userdata( $tid ) ) { return Rest::err( 'not_found', 'No such member', 404 ); }
 		$on = Rest::pint( $req, 'on', 1 );
 		if ( $on ) {
 			$new = Data::upsert( 'aq_follows', [ 'follower_id' => $uid, 'target_id' => $tid ], [ 'created' => Data::now() ] );

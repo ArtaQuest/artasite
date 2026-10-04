@@ -169,6 +169,16 @@ final class Notebook {
 	                                  //   declaration it could never provision is refused at save time
 	const PAGE            = 24;
 
+	/** Columns card() actually serialises. The feed must not read ipynb / ipynb_out /
+	 *  requirements / checks / selection — those are the megabyte blobs. assets and
+	 *  kg_facts stay because the card sends them (file list, Kaggle author). */
+	const CARD_COLS = [
+		'id', 'kind', 'slug', 'title', 'abstract', 'thumb', 'teaser', 'teaser_light',
+		'calm', 'calm_measured', 'assets', 'hearts', 'comments', 'view_count', 'score',
+		'status', 'doi', 'colab_url', 'kaggle_url', 'size_bytes', 'author_id',
+		'kg_owner', 'kg_facts', 'kg_url', 'published_at', 'created', 'updated',
+	];
+
 	/** kind => the offline deliverable the executed notebook must produce (measured + veto-enforced).
 	 *  THE ROSTER (operator orders 2026-07-22, Music restored 2026-07-26): eleven kinds — Survey,
 	 *  Dataset, Model, Article, 2D/3D Illustration, 2D/3D Animation, 2D/3D Game, Music. 3D kinds
@@ -750,6 +760,17 @@ final class Notebook {
 		return Data::one( 'SELECT * FROM ' . Data::t( 'aq_notebooks' ) . ' WHERE id = %d', [ (int) $id ] );
 	}
 
+	/** The same row card() can render, without the notebook body. One post in the home
+	 *  feed used to pull a full aq_notebooks row — ipynb and all — per card. */
+	private static function card_row( $id ) {
+		$id = (int) $id;
+		if ( $id <= 0 ) { return null; }
+		return Data::one(
+			'SELECT ' . Data::project( Data::t( 'aq_notebooks' ), self::CARD_COLS ) . ' FROM ' . Data::t( 'aq_notebooks' ) . ' WHERE id = %d',
+			[ $id ]
+		);
+	}
+
 	private static function can_edit( $row, $uid ) {
 		return $row && ( (int) $row['author_id'] === (int) $uid || current_user_can( 'manage_options' ) );
 	}
@@ -1076,14 +1097,14 @@ final class Notebook {
 		}
 		if ( $sort === 'top' ) {
 			global $wpdb;
-			$sql  = 'SELECT * FROM ' . Data::t( 'aq_notebooks' ) . " WHERE {$where} ORDER BY hearts DESC, id DESC LIMIT 100";
+			$sql  = 'SELECT ' . Data::project( Data::t( 'aq_notebooks' ), self::CARD_COLS ) . ' FROM ' . Data::t( 'aq_notebooks' ) . " WHERE {$where} ORDER BY hearts DESC, id DESC LIMIT 100";
 			$rows = $args ? Data::all( $sql, $args ) : $wpdb->get_results( $sql, ARRAY_A );
 			return [ 'items' => array_map( [ self::class, 'card' ], $rows ?: [] ), 'next' => null ];
 		}
 		if ( $q !== '' ) {
-			[ $rows, $next ] = Data::search_page( 'aq_notebooks', [ 'title', 'abstract' ], $q, $where, $args, $cursor, self::PAGE );
+			[ $rows, $next ] = Data::search_page( 'aq_notebooks', [ 'title', 'abstract' ], $q, $where, $args, $cursor, self::PAGE, self::CARD_COLS );
 		} else {
-			[ $rows, $next ] = Data::page( 'aq_notebooks', $where, $args, $cursor, self::PAGE );
+			[ $rows, $next ] = Data::page( 'aq_notebooks', $where, $args, $cursor, self::PAGE, 'DESC', 'id', self::CARD_COLS );
 		}
 		return [ 'items' => array_map( [ self::class, 'card' ], $rows ), 'next' => $next ];
 	}
@@ -1423,7 +1444,7 @@ final class Notebook {
 	}
 
 	private static function post_out( $p, $depth = 0 ) {
-		$nb = $p['nb_id'] ? self::row( $p['nb_id'] ) : null;
+		$nb = $p['nb_id'] ? self::card_row( $p['nb_id'] ) : null;
 		$re = null;
 		if ( $depth === 0 && ! empty( $p['repost_id'] ) ) {
 			$row = Data::one( 'SELECT * FROM ' . Data::t( 'aq_posts' ) . ' WHERE id = %d', [ (int) $p['repost_id'] ] );
@@ -1611,7 +1632,7 @@ final class Notebook {
 	public static function mine( $req ) {
 		self::ensure_tables();
 		$cursor = Rest::pint( $req, 'cursor', 0 );
-		[ $rows, $next ] = Data::page( 'aq_notebooks', "author_id = %d AND status NOT IN ('removed','deleted')", [ Rest::uid() ], $cursor, self::PAGE );
+		[ $rows, $next ] = Data::page( 'aq_notebooks', "author_id = %d AND status NOT IN ('removed','deleted')", [ Rest::uid() ], $cursor, self::PAGE, 'DESC', 'id', self::CARD_COLS );
 		return [ 'items' => array_map( [ self::class, 'card' ], $rows ), 'next' => $next ];
 	}
 
@@ -1765,6 +1786,10 @@ final class Notebook {
 	 *  either way the human behind the author's inbox remains the sole publication authority. */
 	public static function publish( $req ) {
 		self::ensure_tables();
+		// Mirror pulls the chosen files off Kaggle before the confirm email. Same ceiling as
+		// Kernel::import (20/3600), the other path that copies bytes in from Kaggle — not the
+		// cheaper checklist re-read (40/600).
+		if ( Rest::throttle( 'aq_nb_publish', 20, 3600 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$uid = Rest::uid();
 		$r   = self::row( Rest::pint( $req, 'id' ) );
 		if ( ! self::can_edit( $r, $uid ) ) { return Rest::err( 'not_found', 'No such notebook', 404 ); }
