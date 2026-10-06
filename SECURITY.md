@@ -49,6 +49,12 @@ Two conclusions are in the code now, and both should stay there:
   what was already downloadable, and the nightly `/offline` export mirrors whatever the explorer
   served. Anything that was once publicly readable must be treated as disclosed and **rotated** —
   the redaction buys the time to rotate, and nothing more.
+- **ArtaTask phone sync is ciphertext, and the table is not in the explorer.** `aq_task_sync`
+  holds follower / following / mutual / session-claim / prefs blobs for the phone. The key is
+  derived from `AUTH_KEY`/`AUTH_SALT` or `AQ_TASK_SYNC_KEY` (wp-config, env, or the vault file —
+  never a row). The table is in `Extra::PRIVATE_TABLES`, so `/data` and the nightly export skip
+  it entirely. This replaced Cloudflare Workers KV; nothing on this path reads KV. See
+  `docs/artatask-sync.md`.
 
 ## Hardening already in place
 

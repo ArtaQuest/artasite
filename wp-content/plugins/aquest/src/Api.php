@@ -44,6 +44,7 @@ final class Api {
 		'read'    => 'read your own studio: drafts, checklists, wallet, notifications, feed',
 		'write'   => 'attach a Kaggle notebook, run the checklist, choose its output files, request publication, post, comment, heart, follow',
 		'economy' => 'move real value: found/enter challenges (fee debits), buy/sell coins, payout status + connect, bursary applications',
+		'sync'    => 'read and write your ArtaTask phone sync blobs (followers, following, mutuals, session claim, prefs)',
 	];
 
 	/**
@@ -144,6 +145,10 @@ final class Api {
 		'coins/sell'                                 => [ 'POST' => 'economy' ],
 		'coins/payout/connect'                       => [ 'POST' => 'economy' ],
 		'bursary/apply'                              => [ 'POST' => 'economy' ],
+		// ArtaTask phone sync. Its own scope so a notebook/agent token cannot read the
+		// phone's social graph. Paths must match Rest::ROUTES exactly.
+		'task-sync'                                  => [ 'GET' => 'sync' ],
+		'task-sync/(?P<name>[a-z0-9_.]+)'            => [ 'GET' => 'sync', 'PUT' => 'sync', 'POST' => 'sync', 'DELETE' => 'sync' ],
 	];
 
 	/** The token row authenticating THIS request, or null (cookie session / anonymous). */
@@ -295,7 +300,7 @@ final class Api {
 		$label = sanitize_text_field( mb_substr( (string) Rest::p( $req, 'label', '' ), 0, 80 ) );
 		if ( $label === '' ) { $label = 'API token'; }
 		$want   = (array) Rest::p( $req, 'scopes', [ 'read', 'write' ] );
-		$scopes = array_values( array_intersect( [ 'read', 'write', 'economy' ], array_map( 'sanitize_key', $want ) ) );
+		$scopes = array_values( array_intersect( array_keys( self::SCOPES ), array_map( 'sanitize_key', $want ) ) );
 		if ( ! $scopes ) { $scopes = [ 'read' ]; }
 		$active = (int) Data::col( 'SELECT COUNT(*) FROM ' . Data::t( 'aq_api_tokens' ) . ' WHERE user_id = %d AND revoked = 0', [ $uid ] );
 		if ( $active >= self::MAX_TOKENS ) {
@@ -340,7 +345,7 @@ final class Api {
 			'via'    => self::via_token() ? 'token' : 'session',
 			'scopes' => self::via_token()
 				? array_values( array_filter( array_map( 'trim', explode( ',', (string) self::$token['scopes'] ) ) ) )
-				: [ 'read', 'write', 'economy' ],
+				: array_keys( self::SCOPES ),
 			'rate'   => [ 'limit' => self::RATE_LIMIT, 'window' => 'hour' ],
 		];
 	}
@@ -382,7 +387,7 @@ final class Api {
 				'how'    => 'Create a personal access token at Account → API tokens (or /developers). Send it as `Authorization: Bearer aq_…` (or `X-AQ-Token: aq_…`). Tokens are shown once, stored only as a hash, and revocable any time.',
 				'check'  => 'GET ' . $base . '/api/ping',
 				'scopes' => self::SCOPES,
-				'notes'  => 'GET routes marked public need no auth; a token simply personalises them (your own drafts resolve). Routes marked auth=user with token_scope=null are session-only — a token is refused there by construction (account deletion, sessions, token management, passkey enrollment, cart checkout, chat, identity, operator surfaces, legacy studio-family publishing). Coins buy/sell/payout ARE reachable, under the economy scope.',
+				'notes'  => 'GET routes marked public need no auth; a token simply personalises them (your own drafts resolve). Routes marked auth=user with token_scope=null are session-only — a token is refused there by construction (account deletion, sessions, token management, passkey enrollment, cart checkout, chat, identity, operator surfaces, legacy studio-family publishing). Coins buy/sell/payout ARE reachable, under the economy scope. ArtaTask phone sync (task-sync) needs the sync scope — read/write tokens cannot reach it. Contract: docs/artatask-sync.md.',
 			],
 			'publishing' => [
 				'principle' => 'Everything up to publication is free and fully programmatic. A submission is a PUBLIC KAGGLE NOTEBOOK THAT HAS BEEN RUN: you POST its URL, choose which of its output files to publish, and an exhaustive reproducibility checklist reads the facts back from the public Kaggle API — which answers with no credential at all, so anyone can re-run the same checks and contradict us. Nothing is scored, ranked, graded or judged, and no AI reviews anything. PUBLICATION IS THE AUTHOR\'S ALONE, and cryptographically so: requesting publish emails the CONTENT CREATOR\'s own registered address a single-use confirm link; opening it, the author\'s device signs the exact work with their passkey (WebAuthn) — a private key that never exists on the server — and only that signature publishes the work and mints the permanent DOI. The signature is recorded in the public ledger and re-verified forever, so no API token, AI agent, or even a process with full server/source access can forge a publication. Publishing requires an enrolled passkey (add one at Account -> Publication signing key). Anything unconfirmed stays a private draft.',

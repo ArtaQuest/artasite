@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.78.0';
+	const VERSION = '1.79.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -1235,6 +1235,20 @@ final class Schema {
 				UNIQUE KEY slug (slug),
 				KEY event (event_id),
 				KEY pub (status, published)",
+
+			// 1.79.0 — ArtaTask phone sync. Replaces Cloudflare Workers KV (TASK_SYNC).
+			// One row per (member, filename). ciphertext is a libsodium secretbox envelope;
+			// the key is not in this table (TaskSync.php). Withheld from /data via
+			// Extra::PRIVATE_TABLES. SQL comments must stay OUT of the string below.
+			'aq_task_sync' => "
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				blob_name VARCHAR(64) NOT NULL DEFAULT '',
+				ciphertext LONGTEXT NULL,
+				bytes INT UNSIGNED NOT NULL DEFAULT 0,
+				updated BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				PRIMARY KEY  (id),
+				UNIQUE KEY user_blob (user_id, blob_name)",
 		];
 	}
 
@@ -1305,6 +1319,11 @@ final class Schema {
 			'aq_competitions'   => [ 'desc' => 'Kaggle-style predictive-modelling contests. Public train/test data are files under uploads/competitions/<slug>/; the hidden holdout targets are server-only (never in this public DB).', 'cols' => [ 'owner_uid' => 'the member who opened the competition', 'metric' => 'scorer (r2)', 'holdout' => 'how the hidden test split is defined', 'status' => 'active | closed', 'n_train' => 'training rows', 'n_test' => 'holdout rows', 'n_features' => 'features per row', 'n_targets' => 'number of prediction targets', 'prize' => 'coin prize pool paid 50/30/20 to the top-3 at the deadline (0 = no prize)', 'thread_id' => 'the competition\'s official discussion thread (aq_threads.id)' ] ],
 			'aq_comp_subs'      => [ 'desc' => 'APPEND-ONLY competition submissions. The leaderboard takes the MAX score per member, so a better submission outranks earlier ones and a worse one never demotes them.', 'cols' => [ 'comp_id' => 'the competition', 'uid' => 'submitter', 'score' => 'R² against the hidden holdout', 'place' => 'leaderboard position snapshot at submission time', 'note' => 'optional submitter note', 'score' => 'R\xc2\xb2 on the PUBLIC holdout half (the live leaderboard); the private half decides the prize at the deadline', 'preds' => 'the submitted predictions (JSON, holdout rows only; oversized blobs stored as "gz:"+base64(deflate)) — kept so the private-half prize can be re-scored at settlement; public like every row here (they are the submitter\'s own guesses, not the hidden answers)', 'phase' => 'phase-metric telemetry (JSON): the full shift→R² distribution, the best shift, its zodiac sign, the per-30°-sector zodiac distribution and rep — which sky rotation the model locked onto, and how decisively', 'code_url' => 'open code the member submitted for adversarial review', 'method' => 'the member\'s method write-up', 'review' => 'review state: none | submitted | reviewing | verified | flagged | revisions-requested', 'verified' => 'the ArtaCompete reviewer ran the code + confirmed the score reproduces with no holdout leakage — required to win the prize' ] ],
 			'aq_comp_reviews'   => [ 'desc' => 'Adversarial review rounds for a competition SOLUTION (the ArtaScience mirror). The ArtaCompete relay clones + RUNS the member\'s open code against the public data, checks the leaderboard score reproduces and probes for holdout leakage/hardcoding, and returns a verdict per round; only a verified solution wins the prize.', 'cols' => [ 'sub_id' => 'the reviewed submission', 'round' => 'review round', 'verdict' => 'verify | revise | reject', 'verified' => 'the code reproduced the score with no leakage', 'score' => 'reviewer confidence 0-100', 'report' => 'the reviewer report', 'model' => 'reviewer model', 'effort' => 'reviewer reasoning effort', 'runtime_s' => 'review runtime (s)' ] ],
+			'aq_task_sync'      => [ 'desc' => 'ArtaTask phone sync (followers, following, mutuals, session claim, prefs). WITHHELD from /data and the nightly export (Extra::PRIVATE_TABLES). The payload is libsodium ciphertext; the key lives in wp-config / AQ_TASK_SYNC_KEY, never in the row. Replaces Cloudflare Workers KV.', 'cols' => [
+				'blob_name' => 'one of strava_followers.json, strava_following.json, mutual_connections.json, session_claim.json, prefs.json',
+				'ciphertext' => 'base64( version || nonce || secretbox ). Not plaintext. Version 0x01 is derived from AUTH_KEY/AUTH_SALT; 0x02 is AQ_TASK_SYNC_KEY',
+				'bytes' => 'length of the sealed plaintext JSON',
+			] ],
 		];
 	}
 

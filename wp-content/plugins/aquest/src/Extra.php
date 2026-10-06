@@ -1124,8 +1124,14 @@ final class Extra {
 	 *  built end-to-end encryption for chat, which IS the decision that a conversation is private —
 	 *  and metadata that names both parties, the timing and the block state gives away most of what
 	 *  the encryption was for. Same reasoning as aq_order_ship above: the database is public; who a
-	 *  member talks to is not what it is a record OF. */
-	const PRIVATE_TABLES = [ 'aq_doc_sources', 'aq_order_ship', 'aq_chats', 'aq_chat_msgs' ];
+	 *  member talks to is not what it is a record OF.
+	 *
+	 *  aq_task_sync: ArtaTask phone sync (Strava followers / following / mutuals, the session
+	 *  claim, phone prefs). The column is already ciphertext (TaskSync.php) — the key is
+	 *  AUTH_KEY/AUTH_SALT or AQ_TASK_SYNC_KEY, never a row — and the table is withheld as well
+	 *  so /data and the nightly export do not publish who has a blob or the ciphertext itself.
+	 *  See docs/artatask-sync.md. */
+	const PRIVATE_TABLES = [ 'aq_doc_sources', 'aq_order_ship', 'aq_chats', 'aq_chat_msgs', 'aq_task_sync' ];
 
 	public static function all_table_names() {
 		global $wpdb;
@@ -1169,7 +1175,7 @@ final class Extra {
 			// 2026-08-04 masking is default-deny by the SHAPE of a key or value, not a list of cells we
 			// remembered. Naming a count ("five values are masked") would understate it and imply we
 			// know every credential any plugin stores — which is the assumption that failed.
-			return [ 'tables' => $tables, 'note' => 'Fully public. Every table and every row is listed, and every value is shown exactly as stored — except a credential\'s value, which is withheld. Secrets never touch the database (they live in the environment), and to keep that true whoever writes them, masking is default-deny: a key or a value shaped like a credential is withheld automatically, from any plugin, not only the cases we thought to name. The known ones: active sign-in session tokens, sign-in code transients, password-reset keys, the verifier for a live publication confirm link, and API token hashes. Only the value goes — the row, its key and every other column stay visible. Two tables are withheld whole: a member\'s private book source files and a shop order\'s delivery address. Row counts are engine estimates for very large tables.' ];
+			return [ 'tables' => $tables, 'note' => 'Fully public. Every table and every row is listed, and every value is shown exactly as stored — except a credential\'s value, which is withheld. Secrets never touch the database (they live in the environment), and to keep that true whoever writes them, masking is default-deny: a key or a value shaped like a credential is withheld automatically, from any plugin, not only the cases we thought to name. The known ones: active sign-in session tokens, sign-in code transients, password-reset keys, the verifier for a live publication confirm link, and API token hashes. Only the value goes — the row, its key and every other column stay visible. Some tables are withheld whole: a member\'s private book source files, a shop order\'s delivery address, chat metadata, and ArtaTask phone-sync ciphertext. Row counts are engine estimates for very large tables.' ];
 		}
 
 		// Validate the requested table against the real list (prevents arbitrary identifiers).

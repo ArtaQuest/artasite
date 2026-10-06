@@ -64,6 +64,15 @@ per-user lock serialises concurrent sells. Redeeming shrinks the gold backing in
 system from one call: `GET /wp-json/aq/v1/stripe/status` (masked booleans only — never a secret value).
 Note: Connect transfers draw on the platform's Stripe balance, which is funded by coin purchases.
 
+## ArtaTask phone sync
+
+The phone's followers / following / mutuals / session claim / prefs used to live in
+Cloudflare Workers KV. They are now `aq_task_sync` (libsodium ciphertext, table withheld
+from `/data`) behind `GET|PUT|POST|DELETE /wp-json/aq/v1/task-sync/…`. A personal access
+token needs the `sync` scope. Contract, including how to leave KV and why LinkedIn /
+Facebook request-status must never be sent there: `docs/artatask-sync.md` at the
+repository root.
+
 ## Conventions
 
 - All SQL via `$wpdb->prepare()`; input sanitized; output escaped.
