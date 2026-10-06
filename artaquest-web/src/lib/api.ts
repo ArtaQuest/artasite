@@ -795,7 +795,7 @@ export const Sessions = {
 // Personal access tokens for programmatic + AI-agent use. Session-only management (a token can
 // never mint or revoke tokens); the raw token appears once, in the create response, then only
 // its hash survives. Publication stays behind the dual email gate whatever the credential.
-export type ApiTokenScope = "read" | "write" | "economy";
+export type ApiTokenScope = "read" | "write" | "economy" | "sync";
 export type ApiTokenItem = {
   id: number; label: string; prefix: string; scopes: ApiTokenScope[];
   calls: number; last_used: number; created: number; revoked: boolean;

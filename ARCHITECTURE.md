@@ -120,6 +120,15 @@ first. Only the *value* is withheld — the row, its key and every other column 
 promise holds exactly. And masking is never the fix by itself: what was downloadable has been
 downloaded, so the remedy is rotation, and redaction only buys the time to do it.
 
+ArtaTask phone sync is the case that has to keep that premise while still holding member
+data on the server. The five JSON blobs that used to sit in Cloudflare Workers KV
+(`TASK_SYNC`) are rows in `aq_task_sync`: libsodium ciphertext, key derived from
+`wp-config.php` `AUTH_KEY`/`AUTH_SALT` or from `AQ_TASK_SYNC_KEY` (env / vault — never a
+column). The table is in `Extra::PRIVATE_TABLES`, so `/data`, `GET /aq/v1/schema` and the
+nightly export skip it. Meeting-room end-to-end keys were not reused: those keys never
+reach the server, and the phone has to read the plaintext back. There is no Workers KV,
+D1, or new worker on this path. Contract and KV cutover: [docs/artatask-sync.md](docs/artatask-sync.md).
+
 ## 3. The notebook + publication model
 
 This is the whole content model. Everything a member publishes, in every category, is a

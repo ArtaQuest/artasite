@@ -50,6 +50,7 @@ final class Vault {
 		'YOUTUBE_SA_JSON'            => [ 'YouTube service-account JSON — primary auth for the video view monitor', 90, 'YOUTUBE_API_KEY' ],
 		'YOUTUBE_API_KEY'            => [ 'YouTube Data API key — optional alternative to the service account', 180, 'YOUTUBE_SA_JSON' ],
 		'AQ_WORKER_TOKEN'            => [ 'ArtaDev autonomous-worker shared token (X-AQ-Worker)', 90 ],
+		'AQ_TASK_SYNC_KEY'           => [ 'Optional dedicated key for ArtaTask phone-sync blobs (aq_task_sync). When unset, the key is derived from AUTH_KEY/AUTH_SALT. See docs/artatask-sync.md', 365, true ],
 		// (HuggingFace PURGED 2026-08-02 — operator: "purge all the HF accounts or dependencies. we use
 		//  Kaggle exclusively for datasets so no need for buckets." HF_TOKEN…HF_TOKEN_5 were the ZeroGPU
 		//  quota-rotation pool for the studio relays, and HF_S3_KEY/HF_S3_SECRET were an object-storage
