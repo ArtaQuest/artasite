@@ -348,6 +348,7 @@ const SCOPE_HELP: Record<ApiTokenScope, string> = {
   read: "read your studio, wallet, feed and notifications",
   write: "create, edit and run works; request publication; post, comment, heart, follow",
   economy: "move real value: challenges, coin buy/sell, payouts, bursary applications",
+  sync: "read and write your ArtaTask phone sync (followers, following, mutuals, session, prefs) — nothing else",
 };
 
 function TokenManager() {

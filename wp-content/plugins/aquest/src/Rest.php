@@ -726,6 +726,18 @@ final class Rest {
 		// wrote `ipynb` with NO published-status guard — the one write CLAUDE.md forbids outright,
 		// because sig(ipynb) is what the author's confirmation ledger row, the DB publish-guard and
 		// integrity_sweep() are all keyed on. Removed with their handlers.
+
+		// ── ArtaTask phone sync (src/TaskSync.php) ───────────────────────────
+		// The five JSON blobs that used to live in Cloudflare Workers KV (TASK_SYNC).
+		// No KV, D1, or worker. A session can call these; a personal access token can
+		// only if it carries the `sync` scope (Api::TOKEN_ROUTES). The path has no user
+		// id — the caller is the row. POST is the same write as PUT. Contract:
+		// docs/artatask-sync.md.
+		[ 'GET',    'task-sync',                         'TaskSync::index',  'user' ],
+		[ 'GET',    'task-sync/(?P<name>[a-z0-9_.]+)',   'TaskSync::get',    'user' ],
+		[ 'PUT',    'task-sync/(?P<name>[a-z0-9_.]+)',   'TaskSync::put',    'user' ],
+		[ 'POST',   'task-sync/(?P<name>[a-z0-9_.]+)',   'TaskSync::put',    'user' ],
+		[ 'DELETE', 'task-sync/(?P<name>[a-z0-9_.]+)',   'TaskSync::remove', 'user' ],
 	];
 
 	public static function register() {

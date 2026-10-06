@@ -238,9 +238,10 @@ export default function Developers() {
           <p className="text-[15px] leading-relaxed text-ink-2">
             A token signs requests in as you, within its scopes: <b>read</b> (your studio, wallet, feed,
             notifications), <b>write</b> (create drafts, run the checklist, pick output files, request
-            publication, post, comment, heart, follow)
-            and <b>economy</b> (challenges, coin buy/sell, payouts, bursary applications — this one moves real value,
-            so it is a separate opt-in). Tokens can never touch account security, payments, chat keys, identity documents or token
+            publication, post, comment, heart, follow),{" "}
+            <b>economy</b> (challenges, coin buy/sell, payouts, bursary applications — this one moves real value,
+            so it is a separate opt-in), and <b>sync</b> (ArtaTask phone sync only: followers, following, mutuals,
+            session claim, prefs — a read or write token cannot reach it). Tokens can never touch account security, payments, chat keys, identity documents or token
             management, and a token owned by an operator still carries no operator powers.
           </p>
         </section>
