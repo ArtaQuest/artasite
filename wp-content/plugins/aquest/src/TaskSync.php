@@ -31,8 +31,9 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * user id: the signed-in member (cookie session, or a personal access token with the
  * `sync` scope) is the only row key a request can touch.
  *
- * Names are an allow-list. Live LinkedIn/Facebook request-status checks are not blobs and
- * are rejected here; they must not be pointed at KV either. See docs/artatask-sync.md.
+ * Names are an allow-list. requestStatus.json carries LinkedIn/Instagram/Facebook
+ * acceptance research events (still sealed here); on PUT the plaintext is also
+ * unpacked into the public aq_arash_request_* tables. See docs/artatask-sync.md.
  */
 final class TaskSync {
 
@@ -45,19 +46,24 @@ final class TaskSync {
 		'mutual_connections.json',
 		'session_claim.json',
 		'prefs.json',
+		'requestStatus.json',
 	];
 
 	const WRITE_LIMIT = 120; // puts + deletes per member per hour
 	const READ_LIMIT  = 600;
 
-	/** '' when $raw is not one of NAMES. Never a path, never requestStatus, never a social-network check. */
+	/** '' when $raw is not one of NAMES. Never a path. requestStatus is allow-listed. */
 	public static function canonical_name( $raw ) {
 		$n = strtolower( trim( (string) $raw ) );
 		$n = str_replace( '\\', '/', $n );
 		$n = basename( $n );
 		if ( $n === '' || $n === '.' || $n === '..' ) { return ''; }
 		if ( substr( $n, -5 ) !== '.json' ) { $n .= '.json'; }
-		return in_array( $n, self::NAMES, true ) ? $n : '';
+		if ( $n === 'requeststatus.json' ) { return 'requestStatus.json'; }
+		foreach ( self::NAMES as $allowed ) {
+			if ( strtolower( $allowed ) === $n ) { return $allowed; }
+		}
+		return '';
 	}
 
 	public static function available() {
@@ -199,7 +205,13 @@ final class TaskSync {
 			[ 'ciphertext' => $ct, 'bytes' => $bytes, 'updated' => $now ],
 			[ 'user_id' => $uid, 'blob_name' => $name ]
 		);
-		return [ 'ok' => true, 'name' => $name, 'bytes' => $bytes, 'updated' => $now ];
+		$research = null;
+		if ( $name === 'requestStatus.json' && class_exists( __NAMESPACE__ . '\\ArashAcceptance' ) ) {
+			$research = ArashAcceptance::ingest_blob( $uid, $plain );
+		}
+		$out = [ 'ok' => true, 'name' => $name, 'bytes' => $bytes, 'updated' => $now ];
+		if ( is_array( $research ) ) { $out['research'] = $research; }
+		return $out;
 	}
 
 	/** DELETE /task-sync/{name} — idempotent. Does not need the key (the row just goes away). */
@@ -287,7 +299,7 @@ final class TaskSync {
 	private static function bad_name() {
 		return Rest::err(
 			'bad_name',
-			'Unknown sync blob. Allowed: ' . implode( ', ', self::NAMES ) . '. Live checks (LinkedIn or Facebook request status) are not stored here.',
+			'Unknown sync blob. Allowed: ' . implode( ', ', self::NAMES ) . '.',
 			400
 		);
 	}

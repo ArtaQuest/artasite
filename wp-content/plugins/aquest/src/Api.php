@@ -149,6 +149,9 @@ final class Api {
 		// phone's social graph. Paths must match Rest::ROUTES exactly.
 		'task-sync'                                  => [ 'GET' => 'sync' ],
 		'task-sync/(?P<name>[a-z0-9_.]+)'            => [ 'GET' => 'sync', 'PUT' => 'sync', 'POST' => 'sync', 'DELETE' => 'sync' ],
+		'arash/acceptance'                           => [ 'GET' => 'sync' ],
+		'arash/acceptance/plot-data'                 => [ 'GET' => 'sync' ],
+		'arash/acceptance/events.csv'                => [ 'GET' => 'sync' ],
 	];
 
 	/** The token row authenticating THIS request, or null (cookie session / anonymous). */

@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.79.0';
+	const VERSION = '1.80.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -1249,6 +1249,60 @@ final class Schema {
 				updated BIGINT UNSIGNED NOT NULL DEFAULT 0,
 				PRIMARY KEY  (id),
 				UNIQUE KEY user_blob (user_id, blob_name)",
+			'aq_arash_request_events' => "
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				person_key VARCHAR(64) NOT NULL DEFAULT '',
+				platform VARCHAR(16) NOT NULL DEFAULT '',
+				handle VARCHAR(255) NULL,
+				profile_url TEXT NULL,
+				mutual_count SMALLINT NULL,
+				treatment_bin SMALLINT NULL,
+				request_status VARCHAR(16) NOT NULL DEFAULT '',
+				observed_at_ms BIGINT NOT NULL DEFAULT 0,
+				observed_at DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00',
+				session_id VARCHAR(64) NULL,
+				device_id VARCHAR(64) NULL,
+				list_complete TINYINT(1) NOT NULL DEFAULT 0,
+				source VARCHAR(64) NOT NULL DEFAULT 'request_check',
+				raw_signals LONGTEXT NULL,
+				created_at DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00',
+				PRIMARY KEY  (id),
+				UNIQUE KEY idem (person_key, platform, observed_at_ms, request_status),
+				KEY by_day (observed_at, platform),
+				KEY by_user (user_id, platform)",
+			'aq_arash_request_state' => "
+				person_key VARCHAR(64) NOT NULL DEFAULT '',
+				platform VARCHAR(16) NOT NULL DEFAULT '',
+				user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+				handle VARCHAR(255) NULL,
+				profile_url TEXT NULL,
+				mutual_count SMALLINT NULL,
+				treatment_bin SMALLINT NULL,
+				request_status VARCHAR(16) NOT NULL DEFAULT '',
+				first_pending_at_ms BIGINT NULL,
+				first_accepted_at_ms BIGINT NULL,
+				first_gone_at_ms BIGINT NULL,
+				last_observed_at_ms BIGINT NOT NULL DEFAULT 0,
+				last_session_id VARCHAR(64) NULL,
+				last_device_id VARCHAR(64) NULL,
+				updated_at DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00',
+				PRIMARY KEY  (person_key, platform),
+				KEY by_platform (platform, request_status)",
+			'aq_arash_acceptance_daily' => "
+				day DATE NOT NULL DEFAULT '1970-01-01',
+				platform VARCHAR(16) NOT NULL DEFAULT '',
+				mutual_count SMALLINT NOT NULL DEFAULT -1,
+				treatment_bin SMALLINT NOT NULL DEFAULT -1,
+				n_pending INT UNSIGNED NOT NULL DEFAULT 0,
+				n_accepted INT UNSIGNED NOT NULL DEFAULT 0,
+				n_gone INT UNSIGNED NOT NULL DEFAULT 0,
+				n_observed INT UNSIGNED NOT NULL DEFAULT 0,
+				acceptance_rate DOUBLE NULL,
+				cumulative_acceptance_rate DOUBLE NULL,
+				updated_at DATETIME NOT NULL DEFAULT '1970-01-01 00:00:00',
+				PRIMARY KEY  (day, platform, mutual_count, treatment_bin),
+				KEY by_platform_day (platform, day)",
 		];
 	}
 
@@ -1319,10 +1373,29 @@ final class Schema {
 			'aq_competitions'   => [ 'desc' => 'Kaggle-style predictive-modelling contests. Public train/test data are files under uploads/competitions/<slug>/; the hidden holdout targets are server-only (never in this public DB).', 'cols' => [ 'owner_uid' => 'the member who opened the competition', 'metric' => 'scorer (r2)', 'holdout' => 'how the hidden test split is defined', 'status' => 'active | closed', 'n_train' => 'training rows', 'n_test' => 'holdout rows', 'n_features' => 'features per row', 'n_targets' => 'number of prediction targets', 'prize' => 'coin prize pool paid 50/30/20 to the top-3 at the deadline (0 = no prize)', 'thread_id' => 'the competition\'s official discussion thread (aq_threads.id)' ] ],
 			'aq_comp_subs'      => [ 'desc' => 'APPEND-ONLY competition submissions. The leaderboard takes the MAX score per member, so a better submission outranks earlier ones and a worse one never demotes them.', 'cols' => [ 'comp_id' => 'the competition', 'uid' => 'submitter', 'score' => 'R² against the hidden holdout', 'place' => 'leaderboard position snapshot at submission time', 'note' => 'optional submitter note', 'score' => 'R\xc2\xb2 on the PUBLIC holdout half (the live leaderboard); the private half decides the prize at the deadline', 'preds' => 'the submitted predictions (JSON, holdout rows only; oversized blobs stored as "gz:"+base64(deflate)) — kept so the private-half prize can be re-scored at settlement; public like every row here (they are the submitter\'s own guesses, not the hidden answers)', 'phase' => 'phase-metric telemetry (JSON): the full shift→R² distribution, the best shift, its zodiac sign, the per-30°-sector zodiac distribution and rep — which sky rotation the model locked onto, and how decisively', 'code_url' => 'open code the member submitted for adversarial review', 'method' => 'the member\'s method write-up', 'review' => 'review state: none | submitted | reviewing | verified | flagged | revisions-requested', 'verified' => 'the ArtaCompete reviewer ran the code + confirmed the score reproduces with no holdout leakage — required to win the prize' ] ],
 			'aq_comp_reviews'   => [ 'desc' => 'Adversarial review rounds for a competition SOLUTION (the ArtaScience mirror). The ArtaCompete relay clones + RUNS the member\'s open code against the public data, checks the leaderboard score reproduces and probes for holdout leakage/hardcoding, and returns a verdict per round; only a verified solution wins the prize.', 'cols' => [ 'sub_id' => 'the reviewed submission', 'round' => 'review round', 'verdict' => 'verify | revise | reject', 'verified' => 'the code reproduced the score with no leakage', 'score' => 'reviewer confidence 0-100', 'report' => 'the reviewer report', 'model' => 'reviewer model', 'effort' => 'reviewer reasoning effort', 'runtime_s' => 'review runtime (s)' ] ],
-			'aq_task_sync'      => [ 'desc' => 'ArtaTask phone sync (followers, following, mutuals, session claim, prefs). WITHHELD from /data and the nightly export (Extra::PRIVATE_TABLES). The payload is libsodium ciphertext; the key lives in wp-config / AQ_TASK_SYNC_KEY, never in the row. Replaces Cloudflare Workers KV.', 'cols' => [
-				'blob_name' => 'one of strava_followers.json, strava_following.json, mutual_connections.json, session_claim.json, prefs.json',
+			'aq_task_sync'      => [ 'desc' => 'ArtaTask phone sync (followers, following, mutuals, session claim, prefs, requestStatus). WITHHELD from /data and the nightly export (Extra::PRIVATE_TABLES). The payload is libsodium ciphertext; the key lives in wp-config / AQ_TASK_SYNC_KEY, never in the row. Replaces Cloudflare Workers KV.', 'cols' => [
+				'blob_name' => 'one of strava_followers.json, strava_following.json, mutual_connections.json, session_claim.json, prefs.json, requestStatus.json',
 				'ciphertext' => 'base64( version || nonce || secretbox ). Not plaintext. Version 0x01 is derived from AUTH_KEY/AUTH_SALT; 0x02 is AQ_TASK_SYNC_KEY',
 				'bytes' => 'length of the sealed plaintext JSON',
+			] ],
+			'aq_arash_request_events' => [ 'desc' => 'Arash LinkedIn/Instagram/Facebook request-check observations (append-only). Public under /data for research publication. Source of truth for acceptance-rate plots; on-device JSON is cache only.', 'cols' => [
+				'person_key' => 'stable id of the stored person',
+				'platform' => 'linkedin | instagram | facebook',
+				'mutual_count' => '3–9 when known at pending time',
+				'treatment_bin' => 'research bin (defaults to mutual_count when 3–9)',
+				'request_status' => 'pending | accepted | gone',
+				'observed_at_ms' => 'phone clock ms',
+				'list_complete' => '1 only when sent + connections/following were fully scrolled',
+				'source' => 'always request_check for phone sessions',
+			] ],
+			'aq_arash_request_state' => [ 'desc' => 'Current request-check snapshot per (person_key, platform). Upserted from events.', 'cols' => [
+				'first_pending_at_ms' => 'first time seen pending',
+				'first_accepted_at_ms' => 'first time seen accepted',
+				'first_gone_at_ms' => 'first time seen gone',
+			] ],
+			'aq_arash_acceptance_daily' => [ 'desc' => 'Materialized daily acceptance rates for plots. Rebuild from aq_arash_request_events. acceptance_rate = n_accepted/(n_accepted+n_pending) among still-known. NULL mutual_count/treatment_bin stored as sentinel -1 in the PK.', 'cols' => [
+				'acceptance_rate' => 'n_accepted / (n_accepted + n_pending)',
+				'cumulative_acceptance_rate' => 'same rate over all events up to and including this day for the platform',
 			] ],
 		];
 	}

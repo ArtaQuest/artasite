@@ -738,6 +738,10 @@ final class Rest {
 		[ 'PUT',    'task-sync/(?P<name>[a-z0-9_.]+)',   'TaskSync::put',    'user' ],
 		[ 'POST',   'task-sync/(?P<name>[a-z0-9_.]+)',   'TaskSync::put',    'user' ],
 		[ 'DELETE', 'task-sync/(?P<name>[a-z0-9_.]+)',   'TaskSync::remove', 'user' ],
+		// Arash acceptance research (public /data tables; sync token can read plot series).
+		[ 'GET',    'arash/acceptance',                  'ArashAcceptance::acceptance',  'user' ],
+		[ 'GET',    'arash/acceptance/plot-data',         'ArashAcceptance::plot_data',   'user' ],
+		[ 'GET',    'arash/acceptance/events.csv',        'ArashAcceptance::events_csv',  'user' ],
 	];
 
 	public static function register() {
