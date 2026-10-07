@@ -5,7 +5,7 @@
  * No WordPress, no database, no network. Proves the envelope round-trips, that the
  * plaintext is not recoverable from the stored bytes without the key, that a
  * dedicated AQ_TASK_SYNC_KEY does not strand rows sealed with the wp-config salts,
- * and that requestStatus / LinkedIn / Facebook names are not blobs.
+ * and that requestStatus.json is allow-listed for LI/IG/FB research ingest.
  *
  * Run: php wp-content/plugins/aquest/tools/test-task-sync.php
  * Prints PASS/FAIL per assertion and exits non-zero on any failure.
@@ -74,13 +74,15 @@ foreach ( [
 }
 $ok( TaskSync::canonical_name( '../prefs.json' ) === 'prefs.json', 'a path is reduced to the filename' );
 foreach ( [
-	'requestStatus', 'requestStatus.json', 'request_status', 'requeststatus',
+	'request_status', 'linkedin_request_check', 'facebook_request_check',
 	'linkedin', 'facebook', 'linkedin_request.json', 'facebook_request_check',
 	'strava_followers.json.json', 'prefs.json.bak', '',
 ] as $name ) {
 	$ok( TaskSync::canonical_name( $name ) === '', 'rejected name: ' . var_export( $name, true ) );
 }
 $ok( TaskSync::canonical_name( 'strava_followers.json' ) === 'strava_followers.json', 'canonical filename keeps .json' );
+$ok( TaskSync::canonical_name( 'requestStatus.json' ) === 'requestStatus.json', 'requestStatus.json is allowed' );
+$ok( TaskSync::canonical_name( 'requeststatus' ) === 'requestStatus.json', 'requeststatus stem canonicalizes' );
 
 $ok( ( TaskSync::parse_blob( '{}' )['body'] ?? '' ) === '{}', 'empty object is a blob and stays {}' );
 $ok( ( TaskSync::parse_blob( "[]\n" )['body'] ?? '' ) === "[]\n", 'array blob keeps the original bytes' );

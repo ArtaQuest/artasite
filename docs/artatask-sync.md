@@ -1,6 +1,6 @@
 # ArtaTask phone sync — main SQL, not Workers KV
 
-ArtaTask used to keep five JSON files per member in Cloudflare Workers KV
+ArtaTask used to keep six JSON files per member in Cloudflare Workers KV
 (`TASK_SYNC`, keys `u:<wp user id>:<filename>`). That namespace is the only KV
 consumer on the ArtaQuest account, and it was burning the free-tier daily cap.
 Those blobs now live in the artasite MySQL (SQLite in Studio) table `aq_task_sync`,
@@ -19,6 +19,14 @@ document is the contract that PR should call.
 | `mutual_connections.json` | same | mutuals JSON |
 | `session_claim.json` | same | session claim JSON |
 | `prefs.json` | same | prefs JSON |
+| `requestStatus.json` | same | LI/IG/FB acceptance research events (append-friendly cache) |
+
+`requestStatus.json` is sealed in `aq_task_sync` like the other blobs. On every
+successful PUT the server also unpacks each event into the public research
+tables `aq_arash_request_events`, `aq_arash_request_state`, and rebuilds
+`aq_arash_acceptance_daily` (visible under `/data` for publication plots).
+Endpoints: `GET /wp-json/aq/v1/arash/acceptance`,
+`…/arash/acceptance/plot-data`, `…/arash/acceptance/events.csv` (sync-scope token).
 
 One row per `(user_id, blob_name)`. `user_id` is the WordPress user id — the same
 id the KV key put after `u:`. The ciphertext column is a libsodium secretbox
