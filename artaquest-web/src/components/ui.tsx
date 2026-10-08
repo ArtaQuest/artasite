@@ -14,6 +14,7 @@ import { createVoteCaster } from "../lib/votes";
 import { watchMath } from "../lib/math";
 import { countryName, flagEmoji } from "../lib/flags";
 import { nameClass } from "../lib/fmt";
+import { chipArtaHtml } from "../lib/mentions";
 
 /** Classname joiner with Tailwind conflict resolution (last wins) — so a primitive's
  *  default utilities can be safely overridden by a caller's className. */
@@ -865,14 +866,16 @@ export function RichText({ html, className, srcLang }: { html: string; className
   const ref = useRef<HTMLDivElement>(null);
   // Typeset the `.aq-math` nodes AND keep them typeset: re-render if the i18n engine (this block is a
   // translated `[data-ay-tr]` root) or any re-render reverts a node to its raw "$…$" source. (#143)
-  useEffect(() => watchMath(ref.current, "nodes"), [html]);
+  // An @arta mention in member text reads as the Arta chip (the stored text keeps "@arta").
+  const shown = useMemo(() => chipArtaHtml(html), [html]);
+  useEffect(() => watchMath(ref.current, "nodes"), [shown]);
   const mark = srcLang !== undefined
     ? { "data-ay-tr": "1", "data-ay-src": srcLang || "en" }
     : { "data-ay-skip": "1" };
   // dir="auto" because this renders MEMBER-authored text — comments, thread bodies, descriptions —
   // whose language is independent of the page's. Pairs with `unicode-bidi: plaintext` on .aq-prose so
   // multi-paragraph bodies resolve per paragraph, not from the opening word of the whole block.
-  return <div ref={ref} dir="auto" {...mark} className={cx("aq-prose", className)} dangerouslySetInnerHTML={{ __html: html }} />;
+  return <div ref={ref} dir="auto" {...mark} className={cx("aq-prose", className)} dangerouslySetInnerHTML={{ __html: shown }} />;
 }
 
 /* ───────────────────────── LogoMark (brand A-in-ring) ───────────────────────── */

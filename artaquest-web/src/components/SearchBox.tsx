@@ -8,6 +8,7 @@ import { Link } from "react-router-dom";
 import { BlueCheck } from "./BlueCheck";
 import { nameClass } from "../lib/fmt";
 import { isLoggedIn } from "../lib/auth";
+import { displayMentions } from "../lib/mentions";
 
 type SearchHit = { url: string; title: string; sub?: string; person?: MemberCard };
 type SearchResults = { q: string; people: SearchHit[]; posts: SearchHit[] };
@@ -75,8 +76,8 @@ function Group({ label, hits, cursor, base }: { label: string; hits: SearchHit[]
                       type steps down. A post's TITLE still truncates — a title is a sentence whose
                       first line identifies it; half a name identifies nobody. A post's sub-line
                       carries the work's AUTHOR name ("Article · <author>"), so it wraps too. */}
-                  <span className={`block font-medium text-ink ${h.person ? nameClass(h.title) : "truncate text-[14px]"}`}>{h.title}{h.person?.verified && <BlueCheck size={15} className="ms-1" />}</span>
-                  {h.sub && <span className={`block text-[12px] text-ink-3 ${h.person ? "break-all leading-tight" : "break-words leading-tight"}`}>{h.sub}</span>}
+                  <span className={`block font-medium text-ink ${h.person ? nameClass(h.title) : "truncate text-[14px]"}`}>{h.person ? h.title : displayMentions(h.title)}{h.person?.verified && <BlueCheck size={15} className="ms-1" />}</span>
+                  {h.sub && <span className={`block text-[12px] text-ink-3 ${h.person ? "break-all leading-tight" : "break-words leading-tight"}`}>{h.person ? h.sub : displayMentions(h.sub)}</span>}
                 </span>
               </a>
             </li>
@@ -236,8 +237,8 @@ export function SearchBox({ autoFocus = false, compact = false }: { autoFocus?: 
           {/* ASK — @arta, in the search field's own end corner (operator 2026-08-16), the way X puts
               its assistant in search. Opens the feed composer with "@arta " ready. Members only. */}
           {ask ? (
-            <Link to="/works/?compose=%40arta%20" title="Ask @arta — in a public post; Arta replies in the thread"
-              aria-label="Ask @arta in a public post"
+            <Link to="/works/?compose=%40arta%20" title="Ask Arta in a public post; Arta replies in the thread"
+              aria-label="Ask Arta in a public post"
               className="-me-2.5 flex h-8 shrink-0 items-center gap-1.5 rounded-pill border border-yang/30 bg-yang/[0.08] ps-0.5 pe-3 text-[13px] font-semibold text-ink transition-colors hover:border-yang/60 hover:bg-yang/[0.16] focus-visible:border-yang">
               <ArtaAvatar className="h-7 w-7" />
               Ask

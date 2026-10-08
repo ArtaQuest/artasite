@@ -153,7 +153,7 @@ function BottomTabs() {
       {T.slice(0, 2).map(tab)}
       {/* @arta in the centre slot — same glassy gold/blue circle, now opens the feed composer
           with "@arta " ready to type (public-only; the private chat is retired). */}
-      <Link to="/works/?compose=%40arta%20" aria-label="Ask @arta in a public post"
+      <Link to="/works/?compose=%40arta%20" aria-label="Ask Arta in a public post"
         className="-mt-4 grid h-12 w-12 shrink-0 place-items-center self-center rounded-full border border-yang/40 bg-space-1 p-0.5 shadow-lg shadow-black/40 transition-transform active:scale-95">
         <ArtaAvatar className="h-full w-full" />
       </Link>

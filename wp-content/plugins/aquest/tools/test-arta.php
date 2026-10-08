@@ -373,6 +373,9 @@ namespace {
 	t_ok( $after[ $pw1 ]['status'] === 'replied' && $after[ $pw1 ]['reply_id'] > 0 && $after[ $pw2 ]['position'] >= 1, 'a replied mention carries its reply id; the next one keeps its place' );
 	t_ok( Arta::watch( [ 'id' => 0 ] )['items'] === [] && Arta::watch( [ 'id' => 987654 ] )['items'] === [], 'watch on nothing is empty, not an error' );
 	t_ok( strpos( Arta::avatar_url(), '/assets/arta/arta-thinking.svg' ) !== false, 'Arta wears the thinking mascot' );
+	t_ok( Arta::display_mentions( 'Hey @arta how?' ) === 'Hey Arta how?', 'a mention reads as "Arta"' );
+	t_ok( Arta::display_mentions( '@Arta bug: x' ) === 'Arta bug: x' && Arta::display_mentions( '@artabot hi' ) === 'Arta hi', 'any case, and the old alias' );
+	t_ok( Arta::display_mentions( 'x@arta.com, @artas, see @arta.com' ) === 'x@arta.com, @artas, see @arta.com', 'emails, longer handles and domains are left alone' );
 
 	// The brain's token check: closed by default, constant-time, header or Bearer.
 	$_SERVER['HTTP_X_ARTA_TOKEN'] = str_repeat( 't', 40 ); t_ok( Arta::token_ok(), 'token accepted via X-Arta-Token' );

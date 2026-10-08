@@ -6,6 +6,7 @@ import { CoinMark } from "../lib/currency";
 import { nameClass } from "../lib/fmt";
 import { Avatar, FlagBadge, IconButton } from "./ui";
 import { Notifications as NotifyApi, type Notification } from "../lib/api";
+import { displayMentions } from "../lib/mentions";
 
 /** Compact relative time for notification rows ("just now", "3h", "2d", "5 Jun"). */
 function ago(ts: number): string {
@@ -267,8 +268,8 @@ export function UserMenu() {
                         wins the tie. Giving back both needs Notify::push to carry a template and its
                         values separately, so only the values are skipped. */}
                     <span className="min-w-0 flex-1" data-ay-skip="1">
-                      <span className="block text-[13.5px] font-semibold leading-snug text-ink">{n.title}</span>
-                      {n.body && <span className="mt-0.5 block text-[12.5px] leading-snug text-ink-3">{n.body}</span>}
+                      <span className="block text-[13.5px] font-semibold leading-snug text-ink">{displayMentions(n.title)}</span>
+                      {n.body && <span className="mt-0.5 block text-[12.5px] leading-snug text-ink-3">{displayMentions(n.body)}</span>}
                     </span>
                     <span className="shrink-0 text-[11px] tabular-nums text-ink-2" data-ay-skip="1">{ago(n.at)}</span>
                   </>

@@ -109,6 +109,17 @@ final class Arta {
 		return $out;
 	}
 
+	/**
+	 * How a mention READS: "@arta" (or the old @artabot) shown as "Arta" in display copy such as
+	 * notifications, link-card descriptions and structured data. The stored text keeps "@arta", which
+	 * is what detection runs on. Same edges as extract_handles, so an email like x@arta.com is untouched.
+	 */
+	public static function display_mentions( $text ) {
+		$text = (string) $text;
+		if ( '' === $text || false === stripos( $text, '@arta' ) ) { return $text; }
+		return (string) preg_replace( '~(^|[^A-Za-z0-9_@./+\-])@(?:arta|artabot)(?![A-Za-z0-9_\-]|@|\.[A-Za-z0-9])~i', '$1Arta', $text );
+	}
+
 	/** True when the text addresses Arta under any of its handles. */
 	public static function mentions_arta( $text ) {
 		return (bool) array_intersect( self::extract_handles( $text ), self::ALIASES );

@@ -1077,7 +1077,7 @@ function aq_app_head_meta() {
 			$desc = (string) get_the_excerpt( $post );
 		}
 	}
-	$desc = trim( wp_strip_all_tags( $desc ) );
+	$desc = aq_display_mentions( trim( wp_strip_all_tags( $desc ) ) ); // "@arta" reads as "Arta" in link cards
 
 	// Localise the SERP-facing strings (title + description) from the mesh cache so a /xx/ page serves
 	// its localised meta to crawlers + non-JS clients, not English. No-op in English / when uncached.
@@ -1241,7 +1241,7 @@ function aq_app_head_meta() {
 		//      any; a reply-less thread simply has none to list, a soft recommendation not the critical error.
 		$author    = get_userdata( (int) $thread->author_id );
 		$author_ld = aq_seo_forum_author( $author ? $author->display_name : '', $author ? $author->user_nicename : '' );
-		$tbody = trim( wp_strip_all_tags( (string) $thread->body ) );
+		$tbody = aq_display_mentions( trim( wp_strip_all_tags( (string) $thread->body ) ) );
 		if ( '' === $tbody ) {
 			$tbody = trim( (string) $thread->title );
 		}

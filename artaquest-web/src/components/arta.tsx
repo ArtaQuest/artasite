@@ -55,16 +55,16 @@ function Mention({ handle }: { handle: string }) {
   const to = `/u/${arta ? ARTA_HANDLE : handle}`;
   if (arta) {
     return (
-      <Link to={to} onClick={(e) => e.stopPropagation()} data-ay-skip="1"
+      <Link to={to} onClick={(e) => e.stopPropagation()} data-ay-skip="1" title="@arta"
         className="mx-px inline-flex items-baseline rounded-pill bg-yang/[0.14] px-1.5 font-semibold text-yang-ink no-underline ring-1 ring-inset ring-yang/25 transition-colors hover:bg-yang/25">
-        @{handle}
+        Arta
       </Link>
     );
   }
   return <Link to={to} onClick={(e) => e.stopPropagation()} data-ay-skip="1" className="font-medium text-yin-ink hover:underline">@{handle}</Link>;
 }
 
-/** Plain text with every @handle linked; @arta as a chip. */
+/** Plain text with every @handle linked; @arta as a chip that reads "Arta" (the text keeps "@arta"). */
 export function MentionText({ text }: { text: string }) {
   const out: React.ReactNode[] = [];
   let last = 0;
@@ -411,7 +411,7 @@ export function MentionTextarea({ value, onValue, onSubmit, textareaRef, maxGrow
                   {s.arta ? <ArtaBadge size={14} chip={false} /> : null}
                 </span>
                 <span className="block truncate text-[12px] text-ink-3">
-                  <bdi dir="ltr" data-ay-skip="1">@{s.slug}</bdi>{s.arta ? " · answers in public" : ""}
+                  {s.arta ? "Public assistant · answers in the thread" : <bdi dir="ltr" data-ay-skip="1">@{s.slug}</bdi>}
                 </span>
               </span>
             </li>

@@ -1845,3 +1845,20 @@ html[dir="rtl"] .aq-bot-panel { right: auto; left: calc(1.25rem + env(safe-area-
 }
 @keyframes aq-arta-drift { from { background-position: 0% 0%, 100% 100%, 30% 0%, 0 0 } to { background-position: 35% 25%, 65% 75%, 70% 60%, 0 0 } }
 @media (prefers-reduced-motion: reduce) { .aq-arta-cover { animation: none } }
+
+/* The @arta chip inside sanitised HTML (comments, thread bodies — lib/mentions.ts chipArtaHtml).
+   Same look as the React chip in components/arta.tsx: a gold pill that reads "Arta". */
+.aq-prose a.aq-arta-chip, a.aq-arta-chip {
+  display: inline-flex;
+  align-items: baseline;
+  margin-inline: 1px;
+  padding-inline: 0.375rem;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--color-yang) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-yang) 25%, transparent);
+  color: var(--color-yang-ink);
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 0.15s;
+}
+.aq-prose a.aq-arta-chip:hover, a.aq-arta-chip:hover { background: color-mix(in srgb, var(--color-yang) 25%, transparent); text-decoration: none; }
