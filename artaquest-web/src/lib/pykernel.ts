@@ -58,10 +58,13 @@ export function ipynbHref(id: number, slug: string): string {
   return `/wp-json/aq/v1/notebooks/${id}/file/${name || "notebook"}.ipynb`;
 }
 
-/** Kaggle's Copy & Edit destination for a kernel page URL; '' when the work has no kernel. */
+/** The kernel's own page, where Copy & Edit lives; '' when the work has no kernel.
+ *  NOT `<kernel>/edit`: that is the OWNER's editor. Anyone else — signed in or not — is silently
+ *  bounced to this same page, so the link promised an editor and delivered a redirect. The kernel
+ *  page is the honest destination: Copy & Edit there forks it WITH its attached inputs and its
+ *  pinned image, which no import-from-URL can do. */
 export function kaggleRunHref(url: string): string {
-  const base = (url || "").replace(/\/+$/, "");
-  return base === "" ? "" : `${base}/edit`;
+  return (url || "").replace(/\/+$/, "").replace(/\/edit$/, "");
 }
 
 /** The matplotlib theme, read from the LIVE ArtaContrast tokens on <html> — the SPA engine
@@ -77,7 +80,13 @@ export function liveMplTheme(): { ink: string; ink2: string; line: string; dark:
   };
 }
 
-const BOOT_PY = `
+// String.raw, NOT a plain template literal. This is PYTHON source, and a cooked template turns every
+// "\n" in it into a real newline and every \b into a backspace before Pyodide ever sees it — so
+// `code.split("\n")` became an unterminated string literal, BOOT_PY was a SyntaxError, and the Lab
+// died at boot for every notebook ("Runtime failed", Run all never enabled). Python escapes must
+// reach Python verbatim. (No ${} and no backticks may appear below — a raw template still
+// interpolates.)
+const BOOT_PY = String.raw`
 import sys, os, io, json, re, base64, builtins, traceback, warnings
 os.environ["MPLBACKEND"] = "Agg"
 warnings.filterwarnings("ignore", message=".*non-interactive.*cannot be shown.*")
@@ -265,6 +274,16 @@ def _aq_prep(code):
         out.append("")
     return "\n".join(out), pkgs, skipped
 
+def _aq_python_of(raw):
+    """The cell as plain Python (magics blanked) - what the package resolver must read. Pyodide's
+    loadPackagesFromImports PARSES the code it is given, so handing it the raw cell made a single
+    '%matplotlib inline' a SyntaxError, the resolver gave up silently, and numpy/matplotlib/PIL were
+    never fetched: cell 1 of nearly every notebook died with "No module named 'numpy'"."""
+    try:
+        return _aq_prep(raw)[0]
+    except Exception:
+        return raw
+
 async def _aq_run_cell(raw):
     from pyodide.code import eval_code_async
     code, _aq_pkgs, _aq_skipped = _aq_prep(raw)
@@ -331,17 +350,30 @@ async function boot(base) {
     var v = pyodide.runPython("import sys; sys.version.split()[0]");
     post({ t: "ready", python: v });
   } catch (err) {
-    post({ t: "boot-err", error: String(err && err.message || err).slice(0, 400) });
+    // A Python traceback reads top-down and the CAUSE is its last line, so the head of the message
+    // (the old .slice(0, 400)) showed only Pyodide's own frames and never the exception. Keep the
+    // final non-empty line first, then as much of the rest as fits.
+    var msg = String(err && err.message || err);
+    var lines = msg.split("\n").filter(function (l) { return l.trim() !== ""; });
+    var last = lines.length ? lines[lines.length - 1].trim() : msg;
+    post({ t: "boot-err", error: (lines.length > 1 ? last + " — " + msg : msg).slice(0, 600) });
   }
 }
 async function run(id, code) {
   currentCell = id;
   try {
     try {
-      await pyodide.loadPackagesFromImports(code, {
+      var toPy = pyodide.globals.get("_aq_python_of");
+      var plain = code;
+      try { plain = toPy(code); } finally { if (toPy && toPy.destroy) toPy.destroy(); }
+      await pyodide.loadPackagesFromImports(plain, {
         messageCallback: function (s) { post({ t: "pkg", text: s }); }
       });
-    } catch (e) { /* unknown imports raise a real traceback at run time */ }
+    } catch (e) {
+      // Unknown imports still raise a real traceback at run time — but say WHY the fetch failed, or
+      // a network error reads exactly like a missing package.
+      post({ t: "stream", id: id, name: "stderr", text: "could not fetch packages: " + String(e && e.message || e).split("\n").filter(Boolean).pop() + "\n" });
+    }
     // micropip is NOT in the base runtime, so 'import micropip' fails unless the wheel is fetched
     // first. Only pay for it when the cell actually asks to install something.
     if (/^[ \t]*[%!]{1,2}(pip|conda)\b/m.test(code)) {
@@ -383,7 +415,8 @@ export class PyKernel {
     } catch {
       /* local dev — the self-hosted dist only exists on prod */
     }
-    const src = WORKER_JS.replace("__BOOT_PY__", JSON.stringify(BOOT_PY));
+    // A replacer FUNCTION: a replacement STRING interprets `$$`, `$&`, `$'` — and BOOT_PY has `"$$%s$$"`.
+    const src = WORKER_JS.replace("__BOOT_PY__", () => JSON.stringify(BOOT_PY));
     const w = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })), { type: "module" });
     this.worker = w;
     w.onerror = () => { if (w === this.worker) this.hooks.onBootError("worker crashed"); };

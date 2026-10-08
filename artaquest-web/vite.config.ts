@@ -40,6 +40,9 @@ export default defineConfig(({ command }) => ({
       // All uploads (chat blobs, notebook deliverables the reader fetches, narration audio) — the
       // SPA reads these same-origin in prod, so dev must serve them through the proxy too.
       "/wp-content/uploads": { target: WP, changeOrigin: true },
+      // The Lab's self-hosted Pyodide (lib/pykernel.ts). Without this, Vite's SPA fallback answers the
+      // runtime's HEAD probe with index.html and a 200, so dev "found" a runtime that was a web page.
+      "/wp-content/lite": { target: WP, changeOrigin: true },
     },
   },
 }));

@@ -14,13 +14,13 @@
  *   3. **Kaggle.** The final run. It is the submission itself: the reproducibility checklist reads
  *      Kaggle's public API, so this is the only tier that produces evidence a stranger can re-check.
  *
- * **Why the Colab rung downloads instead of deep-linking.** Colab opens notebooks from Drive,
- * GitHub, a gist, or an upload — there is no "open this URL" deep link. This project's legacy
- * `colab_url` values are all `colab.research.google.com/gist/…`, which is exactly why: the gist WAS
- * the workaround, and that pipeline was purged. So this rung does the honest thing it can do with
- * no new credential and no external account: it downloads the exact `.ipynb` and opens Colab, and
- * the copy says so. A one-click Colab link would need the gist pipeline back — an operator call,
- * not something to reinstate quietly.
+ * **How the Colab rung opens with no prompt (2026-10-08).** Colab opens notebooks from Drive,
+ * GitHub, a gist, or an upload — there is no "open this URL" deep link. The old links used its
+ * /gist/ route, which stops every reader at a GitHub OAuth screen (`repo,gist`, read and write)
+ * before showing a cell. Published works are now mirrored verbatim to the PUBLIC repository
+ * ArtaQuest/artabooks, and `colab_url` is Colab's /github/ route on that copy, which opens
+ * anonymously (server: Mirror.php). Until the mirror holds a work — it syncs every 15 minutes —
+ * the rung falls back to downloading the exact `.ipynb` and opening Colab, and says so.
  */
 import { ipynbHref, kaggleRunHref, labRunUrl } from "../lib/pykernel";
 import { cx } from "./ui";
@@ -40,15 +40,14 @@ function openInColab(id: number, slug: string) {
   window.open("https://colab.research.google.com/#create=true", "_blank", "noopener,noreferrer");
 }
 
-type Props = { id: number; slug: string; kaggleUrl?: string; colabUrl?: string; className?: string };
+type Props = { id: number; slug: string; kaggleUrl?: string; colabUrl?: string; kaggleImportUrl?: string; className?: string };
 
-export function RunTiers({ id, slug, kaggleUrl, colabUrl, className }: Props) {
+export function RunTiers({ id, slug, kaggleUrl, colabUrl, kaggleImportUrl, className }: Props) {
   const kaggle = kaggleRunHref(kaggleUrl || "");
-  // A real one-click Colab link exists once the submission has been mirrored to its gist
-  // (Gist::sync_row, server side). Without a gist — no GITHUB_GIST_TOKEN in the Vault, or a
-  // submission that predates the mirror — the rung falls back to download-and-open, which is the
-  // only honest alternative: Colab has no open-by-URL form.
-  const colab = (colabUrl || "").startsWith("https://colab.research.google.com/") ? colabUrl! : "";
+  // One-click Colab only on the anonymous /github/ route. A legacy /gist/ value is refused here even
+  // if one is ever served again: that route is the OAuth prompt this card exists to avoid.
+  const colab = (colabUrl || "").startsWith("https://colab.research.google.com/github/") ? colabUrl! : "";
+  const kgImport = (kaggleImportUrl || "").startsWith("https://www.kaggle.com/kernels/welcome?src=") ? kaggleImportUrl! : "";
 
   const rung = "flex flex-wrap items-baseline gap-x-2 gap-y-1";
   const num = "grid h-5 w-5 shrink-0 place-items-center rounded-full border border-line text-[11px] font-bold text-ink-3";
@@ -97,7 +96,7 @@ export function RunTiers({ id, slug, kaggleUrl, colabUrl, className }: Props) {
             </p>
             <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-3">
               {colab !== ""
-                ? "For the heavy work — a GPU, large installs. Opens straight in Colab from the copy of the notebook we keep on GitHub."
+                ? "For the heavy work — a GPU, large installs. Opens straight in Colab from the public copy we keep on GitHub — no sign-in to look, a Google account to run."
                 : "For the heavy work — a GPU, large installs. This saves the notebook and opens Colab; drop the file in there (Colab opens notebooks from Drive, GitHub or an upload, so there is no one-click link we can honestly give you)."}
             </p>
           </div>
@@ -119,6 +118,15 @@ export function RunTiers({ id, slug, kaggleUrl, colabUrl, className }: Props) {
               The one that counts. Copy &amp; Edit, then Run All, from the same public inputs — this
               is the tier the reproducibility checklist reads, so it is the only run a stranger can
               check for themselves.
+              {kgImport !== "" && (
+                <>
+                  {" "}Or{" "}
+                  <a className="font-semibold text-yin-ink hover:underline" href={kgImport} target="_blank" rel="noopener noreferrer">
+                    import this exact published copy
+                  </a>{" "}
+                  as a new Kaggle notebook.
+                </>
+              )}
             </p>
           </div>
         </li>

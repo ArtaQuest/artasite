@@ -961,7 +961,10 @@ final class Notebook {
 			'score'        => (int) $r['score'],
 			'status'       => (string) $r['status'],
 			'doi_link'     => $r['doi'] !== '' ? Doi::nb_link( $r['id'] ) : '',
-			'colab_url'    => (string) $r['colab_url'],   // legacy rows only — no longer written
+			// Colab's GitHub route on the public mirror (Mirror.php) — never the stored gist link, whose
+			// /gist/ route stops every reader at a GitHub OAuth prompt. Cache-only here: a feed render
+			// must not wait on GitHub; full() below probes.
+			'colab_url'    => Mirror::colab_url( $r, false ),
 			'kaggle_url'   => (string) ( $r['kaggle_url'] ?? '' ),
 			'size_bytes'   => (int) $r['size_bytes'],
 			'author'       => self::author_card( $r['author_id'] ),
@@ -986,6 +989,9 @@ final class Notebook {
 
 	private static function full( $r, $owner ) {
 		$out            = self::card( $r );
+		// The page is where the run-it links are used, so here the mirror IS probed (cached after).
+		$out['colab_url']         = Mirror::colab_url( $r );
+		$out['kaggle_import_url'] = Mirror::kaggle_import_url( $r, false );
 		$out['ipynb']   = (string) ( $r['ipynb'] ?? '' );
 		// The submission's OWN environment (2026-07-26), public like everything else about a work:
 		// a reader can see the exact pinned stack a result was produced under, and reproduce it.

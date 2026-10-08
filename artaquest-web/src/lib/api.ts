@@ -1749,6 +1749,7 @@ export type NotebookCard = {
    *  consider only measured works — static works never flag). */
   calm_measured: boolean;
   thumb: string; assets: NbAsset[]; hearts: number; comments: number; views: number; score: number; status: "draft" | "pending" | "published" | "removed";
+  /** Colab's anonymous /github/ route on the public mirror (ArtaQuest/artabooks); '' until mirrored. */
   doi_link: string; colab_url: string; kaggle_url?: string; size_bytes: number;
   author: { id: number; name: string; slug: string; avatar: string };
   /** WHO WROTE THE NOTEBOOK, as Kaggle reports it. `author` above is the ArtaQuest member who
@@ -1798,6 +1799,8 @@ export const NB_MODEL_SHA_RE = /^[0-9a-f]{64}$/;
 export type NotebookFull = NotebookCard & {
   ipynb: string;            // the source (canonical JSON string)
   ipynb_out: string;        // the executed notebook with outputs ('' until first clean run)
+  /** Kaggle's new-notebook-from-URL form on the public mirror's exact bytes ('' until mirrored). */
+  kaggle_import_url?: string;
   /** THE REQUIREMENTS FILE — the literal text of a requirements.txt, installed before the
    *  kernel starts so the work reproduces in the environment it claims. Every requirement is
    *  FULLY PINNED (`name==version`); blank lines and #comments survive verbatim. '' is valid

@@ -155,9 +155,10 @@ export default function NotebookBook() {
         <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden><path d="M8 5v14l11-7z" /></svg>
         <span className="aq-read-label">Run in browser</span>
       </a>
-      {/* Tier 2. A gist-backed Colab link is a plain anchor; without one the rung saves the file and
+      {/* Tier 2. The public mirror's anonymous /github/ Colab route is a plain anchor (a /gist/ link
+          is refused — that route asks for GitHub OAuth); without one the rung saves the file and
           opens Colab, because Colab has no open-by-URL form. */}
-      {(nb.colab_url || "").startsWith("https://colab.research.google.com/") ? (
+      {(nb.colab_url || "").startsWith("https://colab.research.google.com/github/") ? (
         <a className="aq-read-ctl aq-read-hide-sm" href={nb.colab_url} target="_blank" rel="noopener noreferrer"
            title="Tier 2 — the heavy one: opens straight in Colab, for a GPU and large installs">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg>
