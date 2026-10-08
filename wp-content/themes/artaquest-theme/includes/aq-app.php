@@ -636,7 +636,7 @@ function aq_app_seo_html() {
 				if ( $links ) {
 					$html .= '<h2>' . esc_html( sprintf( '%s elsewhere', $name ) ) . '</h2><ul>';
 					foreach ( $links as $k => $url ) {
-						$label = ucfirst( (string) $k );
+						$label = method_exists( 'AQ\Auth', 'link_label' ) ? ( \AQ\Auth::link_label( (string) $k ) ?: ucfirst( (string) $k ) ) : ucfirst( (string) $k );
 						$html .= '<li><a rel="me nofollow ugc" href="' . esc_url( (string) $url ) . '">' . esc_html( $label ) . '</a></li>';
 					}
 					$html .= '</ul>';

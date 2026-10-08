@@ -8,6 +8,7 @@ import { aqCountryId } from "./geo";
 import type { TypologyTag, Selections } from "./typology-meta";
 import { aqFetch } from "./offline/fetch";
 import { ApiError } from "./api";
+import { SOCIAL_FIELDS, type Social } from "./socials";
 
 const BASE = "/wp-json";
 const NONCE =
@@ -349,7 +350,7 @@ export type TrackPoints = {
 const ZERO_TRACKS: TrackPoints = { learn: 0, donate: 0, volunteer: 0, outreach: 0 };
 export type EnrolledCourse = { id?: number; value: string; url: string; resume?: string; image?: string; lessons?: number; pct?: number; cert?: boolean };
 export type Dashboard = {
-  user: { name: string; avatar: string; slug?: string; bio?: string; country?: string; palm?: string; links?: Partial<Record<ProfileLinkKey, string>>; relationship?: string; location?: string; languages?: string[] };
+  user: { name: string; avatar: string; slug?: string; bio?: string; country?: string; palm?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; relationship?: string; location?: string; languages?: string[] };
   coins: number; points: number;
   tier: { label?: string; next: string | null; pct: number; remaining: number };
   stats: Stat[]; courses: EnrolledCourse[];
@@ -360,12 +361,12 @@ export async function getDashboard(): Promise<Dashboard | null> {
   try {
     const [d, me] = await Promise.all([
       get<{ courses: EnrolledCourse[]; points: number; coins: number }>(`${AQ}/dashboard`),
-      get<{ user: ({ name: string; slug: string; avatar: string; country?: string; palm?: string; tier: string; bio?: string; links?: Partial<Record<ProfileLinkKey, string>>; relationship?: string; location?: string; languages?: string[]; completed?: number; works?: number; progress?: { label: string; next: string | null; pct: number; remaining: number } }) | null }>(`${AQ}/me`),
+      get<{ user: ({ name: string; slug: string; avatar: string; country?: string; palm?: string; tier: string; bio?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; relationship?: string; location?: string; languages?: string[]; completed?: number; works?: number; progress?: { label: string; next: string | null; pct: number; remaining: number } }) | null }>(`${AQ}/me`),
     ]);
     const u = me.user;
     const courses = d.courses || [];
     return {
-      user: { name: u?.name || "Quester", avatar: u?.avatar || "", slug: u?.slug, bio: u?.bio || "", country: u?.country || "", palm: u?.palm || "", links: u?.links, relationship: u?.relationship || "", location: u?.location || "", languages: u?.languages ?? [] },
+      user: { name: u?.name || "Quester", avatar: u?.avatar || "", slug: u?.slug, bio: u?.bio || "", country: u?.country || "", palm: u?.palm || "", links: u?.links, socials: Array.isArray(u?.socials) ? u.socials : [], relationship: u?.relationship || "", location: u?.location || "", languages: u?.languages ?? [] },
       coins: d.coins, points: d.points,
       // Real rank-ring progress, computed server-side (Economy::tier_progress) — was hardcoded next:null/pct:0.
       tier: u?.progress ?? { label: u?.tier || "Quester", next: null, pct: 0, remaining: 0 },
@@ -393,23 +394,25 @@ export async function postProfileUpdate(
   name: string,
   bio: string,
   username?: string,
+  /** key → what the member typed (a handle or a profile URL), sent as `socials`. */
   links?: Partial<Record<ProfileLinkKey, string>>,
   // Both follow the links contract: `undefined` means LEAVE IT ALONE, "" means stop saying.
   relationship?: string,
   location?: string,
   languages?: string[],
-): Promise<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; relationship?: string; location?: string; languages?: string[]; message?: string }> {
+): Promise<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; relationship?: string; location?: string; languages?: string[]; message?: string }> {
   try {
     const body: Record<string, unknown> = { name, bio };
     if (username) body.username = username; // only sent when the member actually changed their handle
     // OMITTED means "leave them alone"; {} means "clear them". A caller that does not edit links must
     // not wipe them, so this is only sent when the caller actually has a value to state.
-    if (links) body.links = links;
+    // Sent as `socials` (the handle map, 2026-10-08); the server still reads `links` from older shells.
+    if (links) body.socials = links;
     if (relationship !== undefined) body.relationship = relationship;
     if (location !== undefined) body.location = location;
     if (languages !== undefined) body.languages = languages;
-    const r = await post<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; relationship?: string; location?: string; languages?: string[] }>(`${AQ}/profile-update`, body);
-    return { ok: !!r.ok, name: r.name ?? name, bio: r.bio ?? bio, slug: r.slug, links: r.links, relationship: r.relationship, location: r.location, languages: r.languages };
+    const r = await post<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; relationship?: string; location?: string; languages?: string[] }>(`${AQ}/profile-update`, body);
+    return { ok: !!r.ok, name: r.name ?? name, bio: r.bio ?? bio, slug: r.slug, links: r.links, socials: r.socials, relationship: r.relationship, location: r.location, languages: r.languages };
   } catch (e) {
     // Surface the server's reason (taken / reserved / invalid / rate-limited) so the form can show it.
     return { ok: false, name, bio, message: e instanceof Error ? e.message : undefined };
@@ -962,13 +965,12 @@ export async function getVideoCommentStats(video: string, days = 90): Promise<Vi
 }
 
 // ── Profiles ──────────────────────────────────────────────────────────────────
+export type { Social };
 /** The networks a member may list, in the order a profile shows them. Mirrors AQ\Auth::LINKS —
- *  add a key there first; anything unknown is dropped by the server rather than stored. */
-export const PROFILE_LINKS = [
-  ["website", "Website"], ["github", "GitHub"], ["scholar", "Google Scholar"], ["orcid", "ORCID"],
-  ["linkedin", "LinkedIn"], ["x", "X"], ["mastodon", "Mastodon"],
-] as const;
-export type ProfileLinkKey = (typeof PROFILE_LINKS)[number][0];
+ *  add a key there first; anything unknown is dropped by the server rather than stored. The full
+ *  registry (labels, placeholders, which have no public page) lives in lib/socials.ts. */
+export const PROFILE_LINKS = SOCIAL_FIELDS.map((f) => [f.key, f.label] as const);
+export type ProfileLinkKey = string;
 
 /** Relationship options, in the order the picker lists them. MIRRORS `AQ\Auth::RELATIONSHIPS` —
  *  the server refuses any key not in its own copy, so the two lists must not drift. The empty key
@@ -999,6 +1001,8 @@ export type Profile = {
   /** Where else this member is. Keys are AQ\Auth::LINKS; every value is an absolute https URL,
    *  host-checked server-side at save time, so a renderer may link it without re-validating. */
   links?: Partial<Record<ProfileLinkKey, string>>;
+  /** Every social handle they have set, in profile order — what the profile renders (lib/socials.ts). */
+  socials?: Social[];
   /** UTC midnight of the day they were last around; 0 when never recorded. Day-granular by
    *  design — render it with lastSeenLabel(), never relAgo(). */
   lastSeen?: number;
@@ -1074,6 +1078,7 @@ type ProfileR = {
   age?: number;
   birthday?: string; full_name?: string; season?: number; verified?: boolean;
   links?: Partial<Record<ProfileLinkKey, string>>;
+  socials?: Social[];
   last_seen?: number;
   // Self-declared, both. Added to the endpoint 2026-08-10; they must be listed HERE and mapped in
   // getProfile below, or the SPA silently drops them exactly as it once dropped the birthday.
@@ -1127,14 +1132,11 @@ export async function getProfile(slug: string): Promise<Profile | null> {
   try {
     const pr = await get<ProfileR>(`${AQ}/profile?slug=${encodeURIComponent(slug)}`);
     return {
-      id: pr.id, name: pr.name, slug: pr.slug, avatar: pr.avatar, palm: pr.palm || "", banner: pr.banner || "", email: pr.email || "", bio: pr.bio || "", links: pr.links || undefined, lastSeen: pr.last_seen || 0,
+      id: pr.id, name: pr.name, slug: pr.slug, avatar: pr.avatar, palm: pr.palm || "", banner: pr.banner || "", email: pr.email || "", bio: pr.bio || "", links: pr.links || undefined, socials: Array.isArray(pr.socials) ? pr.socials : [], lastSeen: pr.last_seen || 0,
       // Public identity facts the endpoint has always emitted but the SPA used to drop on the floor.
       age: pr.age ?? 0, birthday: pr.birthday || "", fullName: pr.full_name || "", season: pr.season ?? 0, verified: !!pr.verified,
-      // The stated nationality (back on 2026-08-18) — mapped EXPLICITLY, because this object is built
-      // field by field with no spread: the plumbing for these two was cut on 2026-08-12 and a server
-      // that emits them again is not enough on its own. Both are the same claim; `country` is the name
-      // every <Avatar country> reads for its flag, `nationality` the labelled fact.
-      country: pr.country || "", nationality: pr.nationality || "",
+      // No nationality since 2026-10-08 (operator: "I want the nationality removed") — the server no
+      // longer emits it, and the profile no longer shows a flag.
       relationship: pr.relationship || "", location: pr.location || "", languages: pr.languages ?? [],
       coins: pr.coins ?? 0, points: pr.points, completed: pr.completed ?? 0,
       breakdown: { ...ZERO_TRACKS, ...pr.breakdown, total: pr.points },
