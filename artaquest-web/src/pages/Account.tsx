@@ -3,6 +3,7 @@ import { DobWheel } from "../components/DobWheel";
 import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, LANGS_MAX, postProfileUpdate, CATEGORY_MAX, type CourseCard, type Dashboard, type Social, type UsernameCheck } from "../lib/wp";
 import { SOCIAL_FIELDS, WEBSITE_FIELD } from "../lib/socials";
 import { SocialIcon } from "../components/SocialLinks";
+import { SocialOrder } from "../components/SocialOrder";
 import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, KaggleIds, Passkeys, ShellAccount, UsageApi, myParticipation, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type KaggleIdItem, type SessionItem, type ShellInfo, type ShellKey, type UsageInfo, type BursaryResult, type BursaryStatus, type ShareKit , type Footprint } from "../lib/api";
 import { signOut } from "../lib/auth";
 import { VerifyApi, fileToImage, type VerifyStatus } from "../lib/verify";
@@ -43,6 +44,24 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
   };
   const [initialLinks, setInitialLinks] = useState<Record<string, string>>(() => savedSocials(user.socials));
   const [links, setLinks] = useState<Record<string, string>>(() => savedSocials(user.socials));
+  // THE MEMBER'S ICON ORDER. The server returns `socials` already in it (their saved order, then the
+  // default network-size ranking), so the keys in that order ARE the saved order. `order` is what is
+  // being edited; networks filled in since are appended in ranking order (see liveOrder).
+  const serverOrder = (list?: Social[]) => (list ?? []).map((x) => x.key).filter((k) => k !== WEBSITE_FIELD.key);
+  const [savedOrder, setSavedOrder] = useState<string[]>(() => serverOrder(user.socials));
+  const [order, setOrder] = useState<string[]>(() => serverOrder(user.socials));
+  const [ordering, setOrdering] = useState(false);
+  const filledKeys = SOCIAL_FIELDS.filter((f) => (links[f.key] || "").trim()).map((f) => f.key);
+  const liveOrder = [...order.filter((k) => filledKeys.includes(k)), ...filledKeys.filter((k) => !order.includes(k))];
+  const savedLive = [...savedOrder.filter((k) => filledKeys.includes(k)), ...filledKeys.filter((k) => !savedOrder.includes(k))];
+  const orderDirty = liveOrder.join(",") !== savedLive.join(",");
+  const isDefaultOrder = liveOrder.join(",") === filledKeys.join(","); // filledKeys is in ranking order
+  // The editor lists the networks in the SAVED order too (not the live one, so a row never jumps
+  // away from the field being typed in), then the rest by ranking.
+  const fieldsInOrder = [
+    ...savedOrder.map((k) => SOCIAL_FIELDS.find((f) => f.key === k)).filter((f): f is (typeof SOCIAL_FIELDS)[number] => !!f),
+    ...SOCIAL_FIELDS.filter((f) => !savedOrder.includes(f.key)),
+  ];
   // The networks list folds: the ones already filled in, plus the first few, until the member asks
   // for all of them — thirty-four inputs at once is a form to endure, on a phone most of all.
   const [allNets, setAllNets] = useState(false);
@@ -55,7 +74,7 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
   const [msg, setMsg] = useState("");
   const usernameChanged = username !== (user.slug || "") && username !== "";
   const linksDirty = [WEBSITE_FIELD, ...SOCIAL_FIELDS].some(({ key: k }) => (links[k] || "").trim() !== (initialLinks[k] || ""));
-  const dirty = name.trim() !== user.name || bio !== (user.bio || "") || usernameChanged || linksDirty
+  const dirty = name.trim() !== user.name || bio !== (user.bio || "") || usernameChanged || linksDirty || orderDirty
     || category !== (user.category || "") || location !== (user.location || "")
     || langs.join(",") !== (user.languages ?? []).join(",");
 
@@ -74,11 +93,14 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
     setSaving(true);
     setMsg("");
     try {
-      const r = await postProfileUpdate(name.trim(), bio, usernameChanged ? username : undefined, links, category.trim(), location.trim(), langs);
+      // The order is sent only when the member changed it — and as [] when it is the default ranking,
+      // so nobody is pinned to a custom order they never chose.
+      const r = await postProfileUpdate(name.trim(), bio, usernameChanged ? username : undefined, links, category.trim(), location.trim(), langs,
+        orderDirty ? (isDefaultOrder ? [] : liveOrder) : undefined);
       if (!r.ok) { setMsg(r.message || "Could not save — try again"); return; }
       // Adopt the NORMALISED handles: a pasted URL comes back as the handle it names, "artafather"
       // on Bluesky comes back as artafather.bsky.social — the form shows what the profile will show.
-      if (r.socials) { const n = savedSocials(r.socials); setLinks(n); setInitialLinks(n); }
+      if (r.socials) { const n = savedSocials(r.socials); setLinks(n); setInitialLinks(n); setSavedOrder(serverOrder(r.socials)); setOrder(serverOrder(r.socials)); }
       // Adopt what was STORED, not what was typed: the server trims and caps the location, so a
       // 70-character entry must come back as the 60 the profile will actually show.
       if (r.category !== undefined) setCategory(r.category);
@@ -235,10 +257,46 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
             <span className="text-[12px] font-normal tabular-nums text-ink-3">{SOCIAL_FIELDS.filter((f) => (links[f.key] || "").trim()).length} added</span>
           </span>
           <span className="text-[12.5px] font-normal text-ink-3">
-            Public — shown on your profile as icons, biggest network first. Type just your handle, or paste the address of your profile.
+            Public — shown on your profile as icons{isDefaultOrder ? ", biggest network first" : ", in your order"}. Type just your handle, or paste the address of your profile.
           </span>
+          {/* YOUR ORDER — the filled-in networks, first shown first. Folded behind a button: with
+              thirty networks it is a long list, and most visits to this form are not to reorder. */}
+          {liveOrder.length > 1 && (
+            <div className="mt-1 rounded-card border border-line bg-space-2/40 p-2 sm:p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 ps-1">
+                <span className="min-w-0 text-[13px] font-semibold text-ink-2">
+                  Icon order <span className="font-normal text-ink-3">· {isDefaultOrder ? "biggest network first" : "your own order"}</span>
+                </span>
+                <span className="flex items-center gap-1">
+                  {ordering && !isDefaultOrder && (
+                    <button type="button" onClick={() => setOrder(filledKeys)}
+                      className="min-h-10 rounded-pill px-3 text-[12.5px] font-semibold text-ink-3 transition-colors hover:text-yang">
+                      Reset
+                    </button>
+                  )}
+                  <button type="button" onClick={() => setOrdering((v) => !v)} aria-expanded={ordering} aria-controls="aq-social-order"
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-pill border border-line px-3.5 text-[12.5px] font-semibold text-ink-2 transition-colors hover:border-yang hover:text-ink">
+                    {ordering ? "Done" : "Reorder"}
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden
+                      className={ordering ? "rotate-180" : ""}><path d="m6 9 6 6 6-6" /></svg>
+                  </button>
+                </span>
+              </div>
+              {ordering ? (
+                <div id="aq-social-order" className="mt-2">
+                  <SocialOrder items={liveOrder.map((k) => ({ key: k, label: SOCIAL_FIELDS.find((f) => f.key === k)?.label || k, handle: (links[k] || "").trim() }))}
+                    onChange={setOrder} />
+                </div>
+              ) : (
+                <div className="mt-1.5 flex flex-wrap items-center gap-2 ps-1" aria-hidden>
+                  {liveOrder.slice(0, 12).map((k) => <SocialIcon key={k} k={k} size={16} className="text-ink-3" />)}
+                  {liveOrder.length > 12 && <span className="text-[12px] text-ink-3">+{liveOrder.length - 12}</span>}
+                </div>
+              )}
+            </div>
+          )}
           <div className="mt-1 grid gap-x-4 gap-y-2 sm:grid-cols-2">
-            {SOCIAL_FIELDS.map((f, i) => {
+            {fieldsInOrder.map((f, i) => {
               const filled = !!(links[f.key] || "").trim() || !!initialLinks[f.key];
               if (!allNets && !filled && i >= 9) return null;
               return (
@@ -257,7 +315,7 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
               );
             })}
           </div>
-          {!allNets && SOCIAL_FIELDS.some((f, i) => i >= 9 && !(links[f.key] || "").trim() && !initialLinks[f.key]) && (
+          {!allNets && fieldsInOrder.some((f, i) => i >= 9 && !(links[f.key] || "").trim() && !initialLinks[f.key]) && (
             <button type="button" onClick={() => setAllNets(true)}
               className="mt-1 inline-flex min-h-11 items-center gap-1.5 self-start rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yang hover:text-ink">
               Show all {SOCIAL_FIELDS.length}

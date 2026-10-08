@@ -17,22 +17,26 @@ export function SocialIcon({ k, size = 20, className }: { k: string; size?: numb
   return <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" aria-hidden className={className}><path d={d} /></svg>;
 }
 
-/* ONE ROW, ALWAYS (operator 2026-10-08: "there should be only one row and rest with +"). A cell is
-   44px — a full tap target. The row holds as many as its measured width allows with at least a 6px
-   gap; when some are folded behind "+N" the leftover width is shared out between the cells (up to
-   12px), so the "+" sits flush with the row's end instead of leaving a ragged gap after it. */
-const CELL = 44;
-const MIN_GAP = 6;
+/* ONE ROW, ALWAYS (operator 2026-10-08: "there should be only one row and rest with +"). SMALL
+   MARKS (operator 2026-10-08, later: "the social links should be smaller"): a 32px circle with a 16px
+   glyph, 6–10px apart. The TAP AREA is bigger than the mark — an invisible ::before reaching HIT px
+   past each edge (38px square), never into a neighbour because the gap is never under 2×HIT. The row
+   holds as many as its measured width allows; when some are folded behind "+N" the leftover width is
+   shared out between the cells (up to MAX_GAP), so the "+" sits flush with the row's end. */
+const CELL = 32;
+const HIT = 3;     // invisible reach past each edge: 32 + 2×3 = a 38px target
+const MIN_GAP = 6; // = 2×HIT — targets touch at the tightest, never overlap
 const GAP = 8;     // when everything fits: the natural spacing, left-aligned
-const MAX_GAP = 12;
+const MAX_GAP = 10;
 
 /** How many CELL px cells fit in `width` with at least MIN_GAP px between them. */
 function capacity(width: number): number {
   return Math.max(1, Math.floor((width + MIN_GAP) / (CELL + MIN_GAP)));
 }
 
-const staticCls = "grid h-11 w-11 shrink-0 place-items-center rounded-full border border-line bg-space-1 text-ink-2";
-const cellCls = "grid h-11 w-11 shrink-0 place-items-center rounded-full border border-line bg-space-1 text-ink-2 transition-colors hover:border-yang hover:text-yang focus-visible:border-yang focus-visible:text-yang focus-visible:outline-none";
+const markCls = "relative grid h-8 w-8 shrink-0 place-items-center rounded-full border border-line bg-space-1 text-ink-2 before:absolute before:-inset-[3px] before:rounded-full before:content-['']";
+const staticCls = markCls;
+const cellCls = `${markCls} transition-colors hover:border-yang hover:text-yang focus-visible:border-yang focus-visible:text-yang focus-visible:outline-none`;
 
 /**
  * Where else this member is — round brand marks under the bio (operator 2026-10-08, reversing
@@ -43,7 +47,7 @@ const cellCls = "grid h-11 w-11 shrink-0 place-items-center rounded-full border 
  * accessible name and the hover title.
  *
  * EXACTLY ONE ROW on every screen. The row's width is measured (ResizeObserver, before paint, so it
- * never flashes a wrong count) and holds as many 44px marks as fit; when they do not all fit, the
+ * never flashes a wrong count) and holds as many 32px marks as fit; when they do not all fit, the
  * last slot is "+N" and opens the rest — a bottom sheet on a phone, a popover under the button from
  * `sm` up. The row never wraps and never scrolls sideways; when everything fits there is no "+".
  *
@@ -66,7 +70,8 @@ export function SocialLinks({ socials, name }: { socials: Social[]; name: string
   useLayoutEffect(() => {
     const el = rowRef.current;
     if (!el) return;
-    const measure = () => setWidth(el.clientWidth);
+    // clientWidth includes the HIT padding on both sides (see the row below); the marks get the rest.
+    const measure = () => setWidth(Math.max(0, el.clientWidth - 2 * HIT));
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -91,7 +96,9 @@ export function SocialLinks({ socials, name }: { socials: Social[]; name: string
     <div className="mt-4 min-w-0">
       <h2 className="sr-only">{`${name} elsewhere`}</h2>
       {/* overflow-hidden is only a guard: the count is computed to fit, so nothing is ever cut. */}
-      <div ref={rowRef} className="flex h-11 min-w-0 flex-nowrap overflow-hidden" role="list" aria-label="Social profiles"
+      {/* The row is padded by HIT on every side and pulled back out by the same amount, so the marks
+          stay aligned with the text above while their invisible tap rings are not clipped. */}
+      <div ref={rowRef} className="-m-[3px] flex h-[38px] min-w-0 flex-nowrap items-center overflow-hidden p-[3px]" role="list" aria-label="Social profiles"
         style={{ gap, visibility: width ? undefined : "hidden" }}>
         {shown.map((s) => (
           <div role="listitem" key={s.key} className="shrink-0"><Mark s={s} /></div>
@@ -101,7 +108,7 @@ export function SocialLinks({ socials, name }: { socials: Social[]; name: string
             <button ref={moreRef} type="button" onClick={() => setOpen((v) => !v)}
               aria-haspopup="dialog" aria-expanded={open} aria-label={`${rest.length} more social profiles`}
               title={`${rest.length} more`}
-              className={cx(cellCls, "text-[13px] font-bold tabular-nums", open && "border-yang text-yang")}>
+              className={cx(cellCls, "text-[11.5px] font-bold tabular-nums tracking-tight", open && "border-yang text-yang")}>
               +{rest.length}
             </button>
           </div>
@@ -119,13 +126,13 @@ function Mark({ s }: { s: Social }) {
   const label = `${s.label}: ${displayHandle(s)}`;
   return s.url ? (
     <a href={s.url} target="_blank" rel="me nofollow ugc noopener noreferrer" aria-label={label} title={label} className={cellCls}>
-      <SocialIcon k={s.key} />
+      <SocialIcon k={s.key} size={16} />
     </a>
   ) : (
     // Not a control: nothing happens on tap, so it has no hover/focus state either. role="img" with
     // the label gives a screen reader the network and the handle; the title gives the mouse the same.
     <span role="img" aria-label={label} title={label} className={staticCls}>
-      <SocialIcon k={s.key} />
+      <SocialIcon k={s.key} size={16} />
     </span>
   );
 }

@@ -351,7 +351,7 @@ export type TrackPoints = {
 const ZERO_TRACKS: TrackPoints = { learn: 0, donate: 0, volunteer: 0, outreach: 0 };
 export type EnrolledCourse = { id?: number; value: string; url: string; resume?: string; image?: string; lessons?: number; pct?: number; cert?: boolean };
 export type Dashboard = {
-  user: { name: string; avatar: string; slug?: string; bio?: string; country?: string; palm?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; location?: string; category?: string; languages?: string[] };
+  user: { name: string; avatar: string; slug?: string; bio?: string; country?: string; palm?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; linksOrder?: string[]; location?: string; category?: string; languages?: string[] };
   coins: number; points: number;
   tier: { label?: string; next: string | null; pct: number; remaining: number };
   stats: Stat[]; courses: EnrolledCourse[];
@@ -362,12 +362,12 @@ export async function getDashboard(): Promise<Dashboard | null> {
   try {
     const [d, me] = await Promise.all([
       get<{ courses: EnrolledCourse[]; points: number; coins: number }>(`${AQ}/dashboard`),
-      get<{ user: ({ name: string; slug: string; avatar: string; country?: string; palm?: string; tier: string; bio?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; location?: string; category?: string; languages?: string[]; completed?: number; works?: number; progress?: { label: string; next: string | null; pct: number; remaining: number } }) | null }>(`${AQ}/me`),
+      get<{ user: ({ name: string; slug: string; avatar: string; country?: string; palm?: string; tier: string; bio?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; links_order?: string[]; location?: string; category?: string; languages?: string[]; completed?: number; works?: number; progress?: { label: string; next: string | null; pct: number; remaining: number } }) | null }>(`${AQ}/me`),
     ]);
     const u = me.user;
     const courses = d.courses || [];
     return {
-      user: { name: u?.name || "Quester", avatar: u?.avatar || "", slug: u?.slug, bio: u?.bio || "", country: u?.country || "", palm: u?.palm || "", links: u?.links, socials: Array.isArray(u?.socials) ? u.socials : [], location: u?.location || "", category: u?.category || "", languages: u?.languages ?? [] },
+      user: { name: u?.name || "Quester", avatar: u?.avatar || "", slug: u?.slug, bio: u?.bio || "", country: u?.country || "", palm: u?.palm || "", links: u?.links, socials: Array.isArray(u?.socials) ? u.socials : [], linksOrder: Array.isArray(u?.links_order) ? u.links_order : [], location: u?.location || "", category: u?.category || "", languages: u?.languages ?? [] },
       coins: d.coins, points: d.points,
       // Real rank-ring progress, computed server-side (Economy::tier_progress) — was hardcoded next:null/pct:0.
       tier: u?.progress ?? { label: u?.tier || "Quester", next: null, pct: 0, remaining: 0 },
@@ -402,7 +402,10 @@ export async function postProfileUpdate(
   category?: string,
   location?: string,
   languages?: string[],
-): Promise<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; category?: string; location?: string; languages?: string[]; message?: string }> {
+  /** The member's icon order — network keys, first shown first. `undefined` leaves it alone; [] goes
+   *  back to the default network-size ranking. Sanitised server-side (Auth::clean_order). */
+  linksOrder?: string[],
+): Promise<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; linksOrder?: string[]; category?: string; location?: string; languages?: string[]; message?: string }> {
   try {
     const body: Record<string, unknown> = { name, bio };
     if (username) body.username = username; // only sent when the member actually changed their handle
@@ -413,8 +416,9 @@ export async function postProfileUpdate(
     if (category !== undefined) body.category = category;
     if (location !== undefined) body.location = location;
     if (languages !== undefined) body.languages = languages;
-    const r = await post<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; category?: string; location?: string; languages?: string[] }>(`${AQ}/profile-update`, body);
-    return { ok: !!r.ok, name: r.name ?? name, bio: r.bio ?? bio, slug: r.slug, links: r.links, socials: r.socials, category: r.category, location: r.location, languages: r.languages };
+    if (linksOrder !== undefined) body.links_order = linksOrder;
+    const r = await post<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; links_order?: string[]; category?: string; location?: string; languages?: string[] }>(`${AQ}/profile-update`, body);
+    return { ok: !!r.ok, name: r.name ?? name, bio: r.bio ?? bio, slug: r.slug, links: r.links, socials: r.socials, linksOrder: r.links_order, category: r.category, location: r.location, languages: r.languages };
   } catch (e) {
     // Surface the server's reason (taken / reserved / invalid / rate-limited) so the form can show it.
     return { ok: false, name, bio, message: e instanceof Error ? e.message : undefined };
