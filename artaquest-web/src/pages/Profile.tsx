@@ -221,8 +221,8 @@ function SendCoins({ slug, name, onSent, compact }: { slug: string; name: string
       <Button type="button" variant="outline" onClick={() => { setOpen(true); setDone(false); setMsg(""); }}
         aria-label={`Send coins to ${name}`}
         className={compact
-          ? "h-9 w-9 px-0 text-[13.5px] sm:h-10 sm:w-auto sm:px-4 sm:text-[14px]"
-          : "h-9 px-3.5 text-[13.5px] font-semibold sm:h-10 sm:px-5 sm:text-[14px]"}
+          ? "h-9 w-9 bg-space-2 px-0 text-[13.5px] sm:h-10 sm:w-auto sm:px-4 sm:text-[14px]"
+          : "h-9 bg-space-2 px-3.5 text-[13.5px] font-semibold sm:h-10 sm:px-5 sm:text-[14px]"}
         title={`Send coins to ${name}`}>
         {compact ? (
           <>
@@ -385,9 +385,11 @@ export default function Profile() {
   // because the actions share the avatar's row and two worded buttons do not fit beside a 96px
   // portrait at 360px. The words return from `sm`; the accessible name is always the full label.
   const bookLabel = isOwn ? "Book me" : "Book a time";
+  // Solid bg-space-2 on the outline Book control so it never washes out against the cover
+  // gradient (operator 2026-10-08 defect on live mobile after PR #71).
   const bookButton = p ? (
     <Button href={localePath(`/book/${encodeURIComponent(p.slug)}`)} variant="outline" aria-label={bookLabel}
-      className="h-9 w-9 px-0 text-[13.5px] sm:h-10 sm:w-auto sm:px-5 sm:text-[14px]" title={isOwn ? "Your public booking page — the link you share" : "See when they are free and take a time"}>
+      className="h-9 w-9 bg-space-2 px-0 text-[13.5px] sm:h-10 sm:w-auto sm:px-5 sm:text-[14px]" title={isOwn ? "Your public booking page — the link you share" : "See when they are free and take a time"}>
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="sm:hidden">
         <rect x="3.5" y="5" width="17" height="15.5" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" />
       </svg>
@@ -463,9 +465,9 @@ export default function Profile() {
           <div className="px-4 pb-4 sm:px-6 sm:pb-5">
             {/* X-LIKE HEADER (operator 2026-10-08, after PR #70: "look at how ugly it is").
                 Clear rows, left-aligned content, nothing floating in the top-right:
-                  1. Avatar straddling the cover + action group (Book FIRST, then Follow…) on the
-                     same baseline. Counts sit as a compact inline line under the buttons on phones,
-                     beside them from `sm` — never a squeezed stacked column.
+                  1. Avatar straddling the cover. Action group (Book FIRST, then Follow) sits fully
+                     on the card below the cover on phones; from `sm` it shares the avatar baseline.
+                     Counts under the buttons on phones, beside them from `sm`.
                   2. Name + badge, with tier and coins as small chips on the same line.
                   3. @handle
                   4. Four social marks + "+N", left-aligned
@@ -474,11 +476,15 @@ export default function Profile() {
                   7. Quiet "Active …" line
                 `relative z-10` on the avatar row is load-bearing (cover is positioned; without it the
                 radial overlay paints over the portrait). */}
-            <div className="relative z-10 -mt-9 flex items-end justify-between gap-3 sm:-mt-12 sm:gap-4">
+            {/* Avatar overlaps the cover; on phones the action cluster is pushed CLEAR of the
+                gradient (mt ≈ overhang) so Book/Follow never straddle the cover edge (operator
+                2026-10-08 defect on live mobile). From `sm` they sit on the avatar baseline again. */}
+            <div className="relative z-10 -mt-9 flex items-start justify-between gap-3 sm:-mt-12 sm:gap-4">
               <Avatar priority src={p.avatar} name={p.name} palm={p.palm || undefined}
                 className="h-[4.5rem] w-[4.5rem] shrink-0 bg-space-2 text-[24px] ring-[3px] ring-space-2 sm:h-28 sm:w-28 sm:text-[2rem] sm:ring-[4px]" />
-              {/* ACTIONS + COUNTS — right of the avatar, Book first (operator 2026-10-08). */}
-              <div className="flex min-w-0 flex-col items-end gap-1.5 pb-0.5 sm:flex-row sm:items-center sm:gap-3.5 sm:pb-1">
+              {/* ACTIONS + COUNTS — Book first. mt clears the cover overhang on EVERY breakpoint so a
+                  wrapping action row can never climb back into the gradient (1024 defect). */}
+              <div className="mt-[2.75rem] flex min-w-0 flex-col items-end gap-1.5 sm:mt-14 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-x-3.5 sm:gap-y-2">
                 {/* COUNTS — always one horizontal line. Under the buttons on phones; beside them from sm. */}
                 <div className="order-2 flex flex-wrap items-center justify-end gap-x-1 text-[13px] leading-none text-ink-3 sm:order-1 sm:text-[14px]">
                   <button type="button" onClick={() => setListDir((d) => (d === "following" ? null : "following"))}
@@ -498,7 +504,7 @@ export default function Profile() {
                     <>
                       {bookButton}
                       <a href={localePath("/user-account/?settings=1")}
-                        className="inline-flex h-9 items-center rounded-pill border border-line px-3.5 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yang hover:text-ink sm:h-10 sm:px-4 sm:text-[13.5px]">
+                        className="inline-flex h-9 items-center rounded-pill border border-line bg-space-2 px-3.5 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yang hover:text-ink sm:h-10 sm:px-4 sm:text-[13.5px]">
                         Edit profile
                       </a>
                     </>
@@ -507,14 +513,14 @@ export default function Profile() {
                       {bookButton}
                       <Button type="button" onClick={toggleFollow} disabled={followBusy}
                         variant={following ? "outline" : "primaryYin"}
-                        className="h-9 px-4 text-[13.5px] font-semibold transition-opacity disabled:opacity-60 sm:h-10 sm:px-5 sm:text-[14px]">
+                        className="h-9 bg-space-2 px-4 text-[13.5px] font-semibold transition-opacity disabled:opacity-60 sm:h-10 sm:px-5 sm:text-[14px]">
                         {following ? "Following" : "Follow"}
                       </Button>
                       {/* Message + Send coins join this row from `sm` (room beside Follow). On phones
                           they sit on the secondary row below so the avatar baseline stays clean. */}
                       <span className="hidden sm:contents">
                         <Button href={localePath(`/messages/?with=${encodeURIComponent(p.slug)}`)} variant="outline" aria-label="Message"
-                          className="h-10 px-4 text-[14px]" title="Send an encrypted message">Message</Button>
+                          className="h-10 bg-space-2 px-4 text-[14px]" title="Send an encrypted message">Message</Button>
                         <SendCoins slug={p.slug} name={p.fullName?.trim() || p.name} onSent={() => undefined} />
                       </span>
                     </>
@@ -533,7 +539,7 @@ export default function Profile() {
             {!isOwn && isLoggedIn() ? (
               <div className="mt-2 flex flex-wrap items-center justify-end gap-2 sm:hidden">
                 <Button href={localePath(`/messages/?with=${encodeURIComponent(p.slug)}`)} variant="outline" aria-label="Message"
-                  className="h-9 px-3.5 text-[13.5px] font-semibold" title="Send an encrypted message">Message</Button>
+                  className="h-9 bg-space-2 px-3.5 text-[13.5px] font-semibold" title="Send an encrypted message">Message</Button>
                 <SendCoins slug={p.slug} name={p.fullName?.trim() || p.name} onSent={() => undefined} />
               </div>
             ) : null}
