@@ -13,7 +13,7 @@ import { NB_KIND_META, NbCard } from "../components/nbview";
 import { BlueCheck } from "../components/BlueCheck";
 import { Avatar, Button, EmptyState, HeartGlyph, Input, LoadMoreButton, Pill, StatusNote, cx } from "../components/ui";
 import {
-  currentUser, fmtBirthday, followUser, getFollows, getProfile, isLoggedIn, lastSeenLabel, localePath, relAgo, relationshipLabel,
+  currentUser, fmtBirthday, followUser, getFollows, getProfile, isLoggedIn, lastSeenLabel, localePath, relAgo,
   type FollowRow, type Profile as ProfileData,
 } from "../lib/wp";
 import { Coins } from "../lib/currency";
@@ -21,6 +21,7 @@ import { sendCoins } from "../lib/api";
 import { nameClass } from "../lib/fmt";
 import { VerifyApi, fileToImage } from "../lib/verify";
 import { SocialLinks } from "../components/SocialLinks";
+import { bareUrl } from "../lib/socials";
 
 /** The feed API filters by author (GET /notebooks?author=<slug>); the shared params type
  *  doesn't declare `author` yet, so widen it locally rather than touching api.ts (other
@@ -32,26 +33,27 @@ const listByAuthor = (author: string, cursor?: number) =>
 // ── little pieces ─────────────────────────────────────────────────────────────
 
 /**
- * One stated fact in the About grid: a glyph, a quiet label, and the value in reading weight.
- *
- * A LABEL, not a bare icon. The old header ran eight different kinds of fact together in one
- * wrapping line — a status, a city, a list of languages, a birthday, two currencies and two dates —
- * and a reader had to decode each from its glyph. On a page someone is reading to decide whether
- * they want to know this person, that is the whole content of the page, so it gets named rows.
+ * One item of the X-style meta row under the bio: a small grey glyph and the fact beside it, inline,
+ * wrapping as whole items (operator 2026-10-08: "make it more like X"). What the member does, where
+ * they live, their website, when they were born and when they joined — each says what it is through
+ * its glyph and its wording ("Born …", "Joined …"), the way a reader of any profile already parses it.
  */
-function Fact({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
+function MetaItem({ icon, children, label }: { icon: React.ReactNode; children: React.ReactNode; label: string }) {
   return (
-    <div className="flex min-w-0 items-start gap-2.5">
-      <span aria-hidden className="mt-0.5 shrink-0 text-yang">{icon}</span>
-      <span className="min-w-0">
-        <span className="block text-[11.5px] font-semibold uppercase tracking-wider text-ink-3">{label}</span>
-        <span className="mt-0.5 block text-[14.5px] leading-snug text-ink">{children}</span>
-      </span>
-    </div>
+    <li className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+      <span aria-hidden className="shrink-0">{icon}</span>
+      <span className="sr-only">{label}: </span>
+      <span className="min-w-0 wrap-anywhere">{children}</span>
+    </li>
   );
 }
 
-const FACT_SVG = { viewBox: "0 0 24 24", width: 16, height: 16, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
+const META_SVG = { viewBox: "0 0 24 24", width: 18, height: 18, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
+const ICON_BRIEFCASE = <svg {...META_SVG}><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8.5 7V5.5A1.5 1.5 0 0 1 10 4h4a1.5 1.5 0 0 1 1.5 1.5V7M3 12.5h18" /></svg>;
+const ICON_PIN = <svg {...META_SVG}><path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11z" /><circle cx="12" cy="10" r="2.6" /></svg>;
+const ICON_LINK = <svg {...META_SVG}><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1.1 1.1" /><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1.1-1.1" /></svg>;
+const ICON_BALLOON = <svg {...META_SVG}><path d="M12 3a6 6 0 0 0-6 6c0 3.7 2.9 7 6 7s6-3.3 6-7a6 6 0 0 0-6-6z" /><path d="m12 16-1 1.8h2zM12 17.8c0 1.6-1.6 1.9-1.6 3.2" /></svg>;
+const ICON_CALENDAR = <svg {...META_SVG}><rect x="3.5" y="5" width="17" height="15.5" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" /></svg>;
 
 /** Header placeholder while the profile payload loads — holds the layout, no jumps. */
 function HeaderSkeleton() {
@@ -244,14 +246,17 @@ export default function Profile() {
   const { slug = "" } = useParams();
   const [p, setP] = useState<ProfileData | null>(null);
 
-  // What this member has NOT said yet — used only on their own profile, to turn an empty-looking
-  // card into one tap. Order matches the settings form so the prompt reads like a to-do list.
-  // Languages are not listed either: the card stopped showing "Speaks" on 2026-08-18 (operator).
+  // What this member has NOT said yet — used only on their own profile, to turn a sparse header into
+  // one tap. Order matches the settings form so the prompt reads like a to-do list. The website is
+  // stored with the handles but shown in the meta row, so it is split out here.
+  const website = p?.socials?.find((x) => x.key === "website" && x.url);
+  const networks = (p?.socials ?? []).filter((x) => x.key !== "website");
   const missingFacts = !p ? [] : [
-    p.location?.trim() ? "" : "Where you live",
-    relationshipLabel(p.relationship) ? "" : "Relationship",
     p.bio?.trim() ? "" : "Bio",
-    p.socials?.length ? "" : "Social profiles",
+    p.category?.trim() ? "" : "What you do",
+    p.location?.trim() ? "" : "Where you live",
+    website ? "" : "Website",
+    networks.length ? "" : "Social profiles",
   ].filter(Boolean);
   const [missing, setMissing] = useState(false);
   useEffect(() => {
@@ -359,10 +364,17 @@ export default function Profile() {
    *  it. Every other route to it — the Meet page, the share card on the booking page itself —
    *  assumes you already know the URL exists. The label changes because the act does: a visitor
    *  takes a time, an owner copies the link they are about to send. */
+  // On a PHONE it is a round calendar button beside Follow — the X header's icon-button pattern —
+  // because the actions share the avatar's row and two worded buttons do not fit beside a 96px
+  // portrait at 360px. The words return from `sm`; the accessible name is always the full label.
+  const bookLabel = isOwn ? "Book me" : "Book a time";
   const bookButton = p ? (
-    <Button href={localePath(`/book/${encodeURIComponent(p.slug)}`)} variant="outline"
-      className="h-10 px-5 text-[14px]" title={isOwn ? "Your public booking page — the link you share" : "See when they are free and take a time"}>
-      {isOwn ? "Book me" : "Book a time"}
+    <Button href={localePath(`/book/${encodeURIComponent(p.slug)}`)} variant="outline" aria-label={bookLabel}
+      className="h-10 w-10 px-0 text-[14px] sm:w-auto sm:px-5" title={isOwn ? "Your public booking page — the link you share" : "See when they are free and take a time"}>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="sm:hidden">
+        <rect x="3.5" y="5" width="17" height="15.5" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" />
+      </svg>
+      <span className="hidden sm:inline">{bookLabel}</span>
     </Button>
   ) : null;
 
@@ -458,214 +470,168 @@ export default function Profile() {
                 does not fit beside the avatar alone (then it takes a line under the avatar, whole,
                 thanks to `wrap-anywhere`); the avatar stays `shrink-0`; below `sm` the column layout is
                 unchanged. A name is never truncated. Measured at 390/700/1100/1440 through ArtaFocus. */}
-            <div className="relative z-10 -mt-10 flex flex-col gap-3 sm:-mt-14 sm:flex-row sm:items-end sm:gap-5">
+            {/* X-STYLE (operator 2026-10-08: "make it more like X"). The avatar straddles the cover's
+                edge with the ACTIONS at the right of the same row, dropped just below the cover so a
+                wrap onto a second line never climbs over the picture. Then, in reading order: the
+                name, the @handle, the bio (line breaks and emoji as written), the meta row (what they
+                do · where · website · born · joined), the network marks, and the counts.
+
+                `relative z-10` is LOAD-BEARING. The cover above is `position: relative`, and a
+                positioned element paints in a later step than non-positioned block content regardless
+                of DOM order — while this row was static the cover's white radial overlay painted over
+                the avatar's top 40px. Positioning the row puts it in the same paint step, where
+                later-in-DOM wins.
+
+                The avatar is `shrink-0`, the actions `min-w-0` and wrapping toward the end, so four
+                buttons for a signed-in visitor fold onto two right-aligned lines instead of running off
+                the card (the 2026-08-18 overflow this row once had). Never the name in this row: it
+                takes its own line below, whole, and is never truncated. */}
+            <div className="relative z-10 -mt-10 flex items-start justify-between gap-3 sm:-mt-14">
               {/* priority: above the fold and normally this page's LCP element — lazy-loading it
                   made the browser wait for layout before even starting the request. Carries the
-                  opt-in palm flip. NO nationality flag since 2026-10-08 (operator: "I want the
-                  nationality removed") — the server no longer emits one. */}
+                  opt-in palm flip. No nationality flag since 2026-10-08. */}
               <Avatar priority src={p.avatar} name={p.name} palm={p.palm || undefined}
-                className="h-24 w-24 shrink-0 bg-space-2 text-3xl ring-4 ring-space-2 sm:h-32 sm:w-32" />
-              <div className="min-w-0 grow shrink basis-0 sm:basis-auto sm:pb-1">
-                {/* THE REAL NAME IS THE HEADING. `p.name` is display_name — the handle a member is
-                    addressed by, and frequently not a name at all ("Arash" for Arash Ashrafnejad).
-                    full_name is what the identity gate collected and what the page title, description
-                    and Person schema say, so the visible heading agreeing with them is both the
-                    honest label and the one a visitor arriving from a name search expects.
-
-                    NEVER TRUNCATED. A name wraps; `overflow-wrap: anywhere` (Tailwind's `wrap-anywhere`)
-                    lets a single long token break rather than overflow, and — unlike `break-word` — it
-                    counts those breaks in the flex item's min-content size, so the item can actually
-                    shrink to fit. */}
-                <h1 className="flex items-center gap-2 text-[26px] font-extrabold leading-tight tracking-tight sm:text-[30px]">
-                  <span className="min-w-0 wrap-anywhere">{p.fullName?.trim() || p.name}</span>
-                  {p.verified && <BlueCheck size={20} className="shrink-0" />}
-                </h1>
-                {/* THE HANDLE. It is how you are addressed here and the only thing /messages/?with=
-                    accepts, so "what is this person's handle" was a question their own profile could
-                    not answer. Shown whenever it adds something the heading has not already said.
-                    Never truncated either: the handle is a slug, so it may break anywhere; the "goes
-                    by" name beside it wraps at spaces first. */}
-                {(p.fullName?.trim() && p.fullName.trim() !== p.name ? p.name : p.slug) && (
-                  <p className="mt-0.5 text-[14px] text-ink-3 wrap-anywhere">
-                    <span className="break-all">@{p.slug}</span>
-                    {p.fullName?.trim() && p.fullName.trim() !== p.name && p.name !== p.slug && (
-                      <span className="text-ink-3"> · goes by {p.name}</span>
-                    )}
-                  </p>
+                className="h-20 w-20 shrink-0 bg-space-2 text-[26px] ring-4 ring-space-2 sm:h-32 sm:w-32 sm:text-3xl" />
+              <div className="min-w-0 pt-11 sm:pt-16">
+                {isOwn ? (
+                  <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2">
+                    {bookButton}
+                    <a href={localePath("/user-account/?settings=1")} className="text-[13.5px] font-semibold text-ink-3 transition-colors hover:text-yang">
+                      Edit profile <span aria-hidden className="inline-block rtl:-scale-x-100">→</span>
+                    </a>
+                  </div>
+                ) : isLoggedIn() ? (
+                  /* Follow + Message. Until this existed the ONLY way to open a conversation was typing
+                     a member's exact @handle into the ArtaChat sidebar — this is the entry point the
+                     /messages/?with= deep link was always built for. */
+                  <div className="flex min-w-0 flex-wrap justify-end gap-2">
+                    <Button type="button" onClick={toggleFollow} disabled={followBusy}
+                      variant={following ? "outline" : "primaryYin"}
+                      className="h-10 px-5 text-[14px] disabled:opacity-60 sm:px-6">
+                      {following ? "Following" : "Follow"}
+                    </Button>
+                    <Button href={localePath(`/messages/?with=${encodeURIComponent(p.slug)}`)} variant="outline" aria-label="Message"
+                      className="h-10 w-10 px-0 text-[14px] sm:w-auto sm:px-5" title="Send an encrypted message">
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="sm:hidden">
+                        <rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3.5 6.5 8.5 6.5 8.5-6.5" />
+                      </svg>
+                      <span className="hidden sm:inline">Message</span>
+                    </Button>
+                    {bookButton}
+                    <SendCoins slug={p.slug} name={p.fullName?.trim() || p.name} onSent={() => undefined} />
+                  </div>
+                ) : (
+                  /* SIGNED OUT — and a booking link belongs HERE most of all. Every other action on
+                     this page needs an account, so they were all correctly behind one, and "Book a
+                     time" got swept along with them. It should not have been: book/page and book/slots
+                     are deliberately public, the booking page is built to be readable by a stranger,
+                     and this profile is the thing a member actually shares. Hiding the link from
+                     signed-out visitors meant the one audience it exists for could not see it. */
+                  <div className="flex min-w-0 flex-wrap justify-end gap-2">
+                    <Button href={loginHref} variant="primaryYin" className="h-10 px-5 text-[14px] sm:px-6">Follow</Button>
+                    {bookButton}
+                  </div>
                 )}
               </div>
             </div>
 
-
-            {/* STANDING + ACTIVITY + FOLLOW COUNTS on ONE line, with the ACTIONS at its right (operator
-                2026-08-18, "forgot to fit the rest of data": the button row had been sitting alone at
-                the right of an empty line, with three short left-aligned rows stacked under it). The
-                meta block asks for 18rem (`sm:basis-72`) and then grows: with less than that left
-                beside the buttons it would crumble into one chip per line (measured: four buttons in a
-                686px column left it 190px), so instead the buttons drop to a line of their own — still
-                at the right, `ms-auto`, folding toward it in a narrow shell column — and the meta takes
-                the whole line above them. When there IS room (two buttons at 686px, four at 976px) they
-                share the line, meta left, buttons right. Below `sm` the two stack.
-                Chips kept as chips and kept together: what this member has earned and when they were
-                last around are one category, deliberately NOT mixed with the stated facts below. */}
-            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-2">
-            <div className="flex min-w-0 grow shrink basis-0 flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-ink-3 sm:basis-72">
-              {p.tier && <Pill className="px-3 py-0.5 text-[13px]">{p.tier}</Pill>}
-              {/* ONE currency on this page: ArtaCoin (operator 2026-08-15). The lifetime points score
-                  used to sit here in gold beside it, and two numbers in two currencies on one line is
-                  a thing to decode rather than a fact to read — especially on a page people now come
-                  to in order to meet someone. Points still exist, are still earned, and still rank the
-                  Careers and Grants pages; they are simply not what this page is about.
-                  THE WALLET, in the open: the whole coin ledger is already published — every entry
-                  downloadable from /data/ — so a balance was public in fact while being absent from
-                  the one page about this member. */}
-              <span className="inline-flex items-center gap-1 rounded-pill bg-yin/15 px-3 py-0.5 font-semibold text-yin-ink"
-                title="Coins in their wallet — every entry in the coin ledger is public">
-                <Coins n={p.coins ?? 0} />
-              </span>
-              {p.joined && <span>Joined {p.joined}</span>}
-              {/* Last seen, to the DAY — the server never records finer, because this database is
-                  published and an exact activity log for every member is not something anybody asked
-                  to publish. lastSeenLabel says only what that granularity supports; relAgo would
-                  render the same value as "9h ago" and invent precision. */}
-              {p.lastSeen ? <span>{lastSeenLabel(p.lastSeen)}</span> : null}
-              {/* Each count is a live control: tap it to open the respective list below. Kept as one
-                  unit ("2 followers · 2 following") so a wrap never splits the pair. */}
-              <span className="whitespace-nowrap text-[13.5px]">
-                <button type="button" onClick={() => setListDir((d) => (d === "followers" ? null : "followers"))}
-                  aria-expanded={listDir === "followers"} title="Show the followers list"
-                  className="group -my-2 py-2 transition-colors hover:text-yang">
-                  <b className="text-ink-2 tabular-nums transition-colors group-hover:text-yang">{followers.toLocaleString()}</b> follower{followers === 1 ? "" : "s"}
-                </button>
-                {" · "}
-                <button type="button" onClick={() => setListDir((d) => (d === "following" ? null : "following"))}
-                  aria-expanded={listDir === "following"} title="Show the following list"
-                  className="group -my-2 py-2 transition-colors hover:text-yang">
-                  <b className="text-ink-2 tabular-nums transition-colors group-hover:text-yang">{(p.stats?.following ?? 0).toLocaleString()}</b> following
-                </button>
-              </span>
-            </div>
-              {/* The actions sit at the RIGHT of this row (operator 2026-08-18), with the member's
-                  standing and activity filling the space to their left — see the note above the row.
-
-                  ONE definition, rendered from two branches. Beside Message it reads as the same act
-                  at two speeds — say something now, or take some of their time later — and on its own
-                  it is the only thing a signed-out reader can actually do with this person. Written
-                  once because the last time it existed in only one branch, that was the bug. The
-                  booking page says plainly when somebody is not offering any time, so it never leads
-                  anywhere embarrassing. */}
-              {isOwn ? (
-                <div className="flex min-w-0 max-w-full flex-wrap items-center gap-3 sm:ms-auto sm:justify-end">
-                  {bookButton}
-                  <a href={localePath("/user-account/?settings=1")} className="self-start text-[13.5px] font-semibold text-ink-3 transition-colors hover:text-yang sm:self-auto">
-                    Edit profile <span aria-hidden className="inline-block rtl:-scale-x-100">→</span>
-                  </a>
-                </div>
-              ) : isLoggedIn() ? (
-                /* Follow + Message. Until this existed the ONLY way to open a conversation was typing
-                   a member's exact @handle into the ArtaChat sidebar — this is the entry point the
-                   /messages/?with= deep link was always built for. */
-                <div className="flex min-w-0 max-w-full flex-wrap gap-2 sm:ms-auto sm:justify-end">
-                  <Button type="button" onClick={toggleFollow} disabled={followBusy}
-                    variant={following ? "outline" : "primaryYin"}
-                    className="h-10 px-6 text-[14px] disabled:opacity-60">
-                    {following ? "Following" : "Follow"}
-                  </Button>
-                  <Button href={localePath(`/messages/?with=${encodeURIComponent(p.slug)}`)} variant="outline"
-                    className="h-10 px-5 text-[14px]" title="Send an encrypted message">
-                    Message
-                  </Button>
-                  {bookButton}
-                  <SendCoins slug={p.slug} name={p.fullName?.trim() || p.name} onSent={() => undefined} />
-                </div>
-              ) : (
-                /* SIGNED OUT — and a booking link belongs HERE most of all. Every other action on
-                   this page needs an account, so they were all correctly behind one, and "Book a
-                   time" got swept along with them. It should not have been: book/page and book/slots
-                   are deliberately public, the booking page is built to be readable by a stranger,
-                   and this profile is the thing a member actually shares. Hiding the link from
-                   signed-out visitors meant the one audience it exists for could not see it. */
-                <div className="flex min-w-0 max-w-full flex-wrap gap-2 sm:ms-auto sm:justify-end">
-                  <Button href={loginHref} variant="primaryYin" className="h-10 px-6 text-[14px]">Follow</Button>
-                  {bookButton}
-                </div>
-              )}
+            {/* THE REAL NAME IS THE HEADING — full_name when there is one, the display name otherwise:
+                it is what the page title, description and Person schema say. NEVER TRUNCATED:
+                `wrap-anywhere` lets one long token break rather than overflow. */}
+            <div className="mt-3 min-w-0">
+              <h1 className="flex items-center gap-2 text-[24px] font-extrabold leading-tight tracking-tight sm:text-[28px]">
+                <span className="min-w-0 wrap-anywhere">{p.fullName?.trim() || p.name}</span>
+                {p.verified && <BlueCheck size={20} className="shrink-0" />}
+              </h1>
+              {/* THE HANDLE — how you are addressed here and what /messages/?with= accepts. */}
+              <p className="mt-0.5 text-[15px] text-ink-3 wrap-anywhere">
+                <span className="break-all">@{p.slug}</span>
+                {p.fullName?.trim() && p.fullName.trim() !== p.name && p.name !== p.slug && (
+                  <span> · goes by {p.name}</span>
+                )}
+              </p>
             </div>
 
-            {/* THE BIO, under the standing line — the actions stay near the top whatever its length.
-                Text, never HTML (the server strips tags too); `wrap-anywhere` so a pasted URL or a
-                long unbroken word wraps instead of pushing the card wider than a phone. */}
-            {p.bio && <p className="mt-4 max-w-2xl whitespace-pre-wrap text-[15px] leading-relaxed text-ink-2 wrap-anywhere">{p.bio}</p>}
+            {/* THE BIO, straight under the handle as on X. Text, never HTML (the server strips tags);
+                pre-wrap keeps the member's line breaks, and emoji render as typed. `wrap-anywhere` so
+                a pasted URL or a long unbroken word wraps instead of widening the card on a phone. */}
+            {p.bio && <p className="mt-3 max-w-2xl whitespace-pre-wrap text-[15px] leading-normal text-ink wrap-anywhere">{p.bio}</p>}
+
+            {/* THE META ROW — small grey glyph + text, inline, wrapping whole items (X's row). Born and
+                the city live here now; the separate "About" card left with relationship status
+                (operator 2026-10-08: "remove relationship status"). The DATE of birth, never a derived
+                age (operator 2026-07-27, reaffirmed 2026-08-15). The website is the one accent: a link
+                showing the bare domain. Joined is the real ArtaQuest join date. */}
+            {(p.category?.trim() || p.location?.trim() || website || fmtBirthday(p.birthday) || p.joined) ? (
+              <ul className="mt-3 flex list-none flex-wrap items-center gap-x-4 gap-y-1.5 text-[14.5px] text-ink-3" aria-label="About">
+                {p.category?.trim() ? <MetaItem icon={ICON_BRIEFCASE} label="Does"><span data-ay-skip="1">{p.category.trim()}</span></MetaItem> : null}
+                {p.location?.trim() ? <MetaItem icon={ICON_PIN} label="Lives in"><span data-ay-skip="1">{p.location.trim()}</span></MetaItem> : null}
+                {website ? (
+                  <MetaItem icon={ICON_LINK} label="Website">
+                    <a href={website.url} target="_blank" rel="me nofollow ugc noopener noreferrer" data-ay-skip="1"
+                      className="text-yin-ink hover:underline focus-visible:underline">{bareUrl(website.url)}</a>
+                  </MetaItem>
+                ) : null}
+                {fmtBirthday(p.birthday) ? <MetaItem icon={ICON_BALLOON} label="Birthday"><span className="whitespace-nowrap">Born {fmtBirthday(p.birthday)}</span></MetaItem> : null}
+                {p.joined ? <MetaItem icon={ICON_CALENDAR} label="Joined"><span className="whitespace-nowrap">Joined {p.joined}</span></MetaItem> : null}
+              </ul>
+            ) : null}
+
+            {/* WHERE ELSE THEY ARE — one row of network marks, biggest network first, "+N" for the
+                rest (components/SocialLinks.tsx). The website is in the meta row above, not here. */}
+            {networks.length > 0 && <SocialLinks socials={networks} name={p.fullName?.trim() || p.name} />}
+
+            {/* THE COUNTS, as X shows them: the number bold in ink, the word in grey — Following, then
+                Followers. Each is a live control that opens its list below. Then what this member has
+                earned and when they were last around, quieter, on the same wrapping line. */}
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[14.5px] text-ink-3">
+              <button type="button" onClick={() => setListDir((d) => (d === "following" ? null : "following"))}
+                aria-expanded={listDir === "following"} title="Show the following list"
+                className="group -my-2 py-2 transition-colors hover:text-ink">
+                <b className="font-bold text-ink tabular-nums">{(p.stats?.following ?? 0).toLocaleString()}</b> Following
+              </button>
+              <button type="button" onClick={() => setListDir((d) => (d === "followers" ? null : "followers"))}
+                aria-expanded={listDir === "followers"} title="Show the followers list"
+                className="group -my-2 py-2 transition-colors hover:text-ink">
+                <b className="font-bold text-ink tabular-nums">{followers.toLocaleString()}</b> {followers === 1 ? "Follower" : "Followers"}
+              </button>
+              <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px]">
+                {p.tier && <Pill className="px-3 py-0.5 text-[13px]">{p.tier}</Pill>}
+                {/* ONE currency on this page: ArtaCoin (operator 2026-08-15). The whole coin ledger is
+                    already published, so the balance is public in fact. */}
+                <span className="inline-flex items-center gap-1 rounded-pill bg-yin/15 px-3 py-0.5 font-semibold text-yin-ink"
+                  title="Coins in their wallet — every entry in the coin ledger is public">
+                  <Coins n={p.coins ?? 0} />
+                </span>
+                {/* Last seen, to the DAY — the server never records finer. */}
+                {p.lastSeen ? <span>{lastSeenLabel(p.lastSeen)}</span> : null}
+              </span>
+            </div>
+
+            {/* YOUR OWN profile, and something is unsaid: one quiet link to the settings form. Shown to
+                NOBODY else — a visitor has no business seeing what this person declined to answer. */}
+            {isOwn && missingFacts.length > 0 ? (
+              <a href={localePath("/user-account/?settings=1")}
+                className="group mt-4 flex min-w-0 items-start gap-2.5 rounded-card border border-dashed border-line px-3 py-2 transition-colors hover:border-yang">
+                <span aria-hidden className="mt-0.5 shrink-0 text-ink-3 transition-colors group-hover:text-yang">
+                  <svg {...META_SVG} width={16} height={16}><path d="M12 5v14M5 12h14" /></svg>
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[11.5px] font-semibold uppercase tracking-wider text-ink-3">Add to your profile</span>
+                  <span className="mt-0.5 block text-[14px] leading-snug text-ink-2 transition-colors group-hover:text-ink">
+                    {missingFacts.join(" · ")}
+                  </span>
+                </span>
+              </a>
+            ) : null}
             {bannerMsg && <p role="alert" className="mt-3 text-[12.5px] text-yin-ink">{bannerMsg}</p>}
-
-            {/* WHERE ELSE THEY ARE — back on the page (operator 2026-10-08, reversing 2026-08-18's
-                "remove all the social links"): a grid of brand marks under the bio, every network
-                the member has listed. See components/SocialLinks.tsx. */}
-            {p.socials && p.socials.length > 0 && <SocialLinks socials={p.socials} name={p.fullName?.trim() || p.name} />}
           </div>
         </header>
       )}
 
-      {/* ── Follower / following list (inline, opened from the counts above) ── */}
-      {/* ── WHAT THEY SAY ABOUT THEMSELVES ──
-          Every value here was typed or picked by this member: nothing is inferred, and nothing is
-          derived from an IP address or a header. Rows appear only when there is something to say —
-          a member who has filled none of this in gets no card at all, rather than a grid of blanks
-          advertising what they declined to answer. */}
-      {/* AUTO-FIT columns, not `lg:grid-cols-4`: the shell gives this page a ~686px column at a
-          1440px window (and ~410px at 1100px), where four fixed columns were 137px each and
-          "February 15, 1994" broke after the comma (operator's Born screenshot, 2026-08-18). Each
-          fact now asks for 11rem and the row holds as many as fit — three at 686px, one on a phone. */}
-      {p && (isOwn || fmtBirthday(p.birthday) || p.location?.trim() || relationshipLabel(p.relationship)) ? (
-        <section className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-x-8 gap-y-5 rounded-card border border-line bg-space-2 px-5 py-5" aria-label="About">
-          {/* ORDER (operator 2026-08-18): Born, then Lives in, then Relationship. "Speaks" (the
-              languages) left the card the same day; the languages are still collected and public,
-              they are simply not a row here.
-              The DATE, to everyone — no derived age. Operator 2026-07-27, reaffirmed 2026-08-15:
-              "printing it turns a fact the member stated into a label the site puts on them", and it
-              re-renders differently every birthday. Between 08-14 and 08-15 this showed a derived age
-              to visitors and the date only to the member; that was my call and the operator reversed
-              it. `p.age` still arrives from the API for other clients — do not render it here. */}
-          {fmtBirthday(p.birthday) ? (
-            <Fact label="Born" icon={<svg {...FACT_SVG}><path d="M4 20h16v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2Zm0-3h16" /><path d="M12 12V8m0-4v1.5M8 12V9m8 3V9" /></svg>}>
-              <span className="whitespace-nowrap">{fmtBirthday(p.birthday)}</span>
-            </Fact>
-          ) : null}
-          {p.location?.trim() ? (
-            <Fact label="Lives in" icon={<svg {...FACT_SVG}><path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11z" /><circle cx="12" cy="10" r="2.6" /></svg>}>
-              <span data-ay-skip="1">{p.location.trim()}</span>
-            </Fact>
-          ) : null}
-          {relationshipLabel(p.relationship) ? (
-            <Fact label="Relationship" icon={<svg {...FACT_SVG}><path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9z" /></svg>}>
-              {relationshipLabel(p.relationship)}
-            </Fact>
-          ) : null}
-          {/* NO "Nationality" row here, and no flag after the date (operator 2026-08-18: "this is
-              enough, no need for separate section or after dob") — the flag chip on the avatar in the
-              header is the one place the stated nationality shows on this page. It is a claim, like
-              the date of birth; the blue check beside the name is the only verification signal. */}
-          {/* YOUR OWN profile, and something is unsaid. A card holding one lonely row reads as broken
-              rather than as sparse, and the member looking at it is the one person who can fix that —
-              so the gaps become an invitation instead of empty space. Shown to NOBODY else: a visitor
-              has no business seeing a list of what this person declined to answer. */}
-          {isOwn && missingFacts.length > 0 ? (
-            <a href={localePath("/user-account/?settings=1")}
-              className="group flex min-w-0 items-start gap-2.5 rounded-card border border-dashed border-line px-3 py-2 transition-colors hover:border-yang">
-              <span aria-hidden className="mt-0.5 shrink-0 text-ink-3 transition-colors group-hover:text-yang">
-                <svg {...FACT_SVG}><path d="M12 5v14M5 12h14" /></svg>
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[11.5px] font-semibold uppercase tracking-wider text-ink-3">Add to your profile</span>
-                <span className="mt-0.5 block text-[14px] leading-snug text-ink-2 transition-colors group-hover:text-ink">
-                  {missingFacts.join(" · ")}
-                </span>
-              </span>
-            </a>
-          ) : null}
-        </section>
-      ) : null}
-
+      {/* ── Follower / following list (inline, opened from the counts above) ──
+          No separate "About" card any more (operator 2026-10-08, "make it more like X"): Born and the
+          city moved into the header's meta row, and relationship status was removed. */}
       {p && listDir && (
         <FollowPanel slug={p.slug} dir={listDir}
           count={listDir === "followers" ? followers : p.stats?.following ?? 0}

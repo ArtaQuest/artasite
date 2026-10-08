@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { SOCIAL_ICONS } from "../lib/social-icons";
 import { displayHandle, type Social } from "../lib/socials";
@@ -17,19 +17,6 @@ export function SocialIcon({ k, size = 20, className }: { k: string; size?: numb
   return <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" aria-hidden className={className}><path d={d} /></svg>;
 }
 
-/** Copy text, with the textarea fallback for a context where the async clipboard is refused. */
-async function copyText(text: string): Promise<boolean> {
-  try { await navigator.clipboard.writeText(text); return true; } catch { /* fall through */ }
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
-    document.body.appendChild(ta); ta.select();
-    const ok = document.execCommand("copy");
-    ta.remove();
-    return ok;
-  } catch { return false; }
-}
-
 /* ONE ROW, ALWAYS (operator 2026-10-08: "there should be only one row and rest with +"). A cell is
    44px — a full tap target. The row holds as many as its measured width allows with at least a 6px
    gap; when some are folded behind "+N" the leftover width is shared out between the cells (up to
@@ -44,6 +31,7 @@ function capacity(width: number): number {
   return Math.max(1, Math.floor((width + MIN_GAP) / (CELL + MIN_GAP)));
 }
 
+const staticCls = "grid h-11 w-11 shrink-0 place-items-center rounded-full border border-line bg-space-1 text-ink-2";
 const cellCls = "grid h-11 w-11 shrink-0 place-items-center rounded-full border border-line bg-space-1 text-ink-2 transition-colors hover:border-yang hover:text-yang focus-visible:border-yang focus-visible:text-yang focus-visible:outline-none";
 
 /**
@@ -59,16 +47,21 @@ const cellCls = "grid h-11 w-11 shrink-0 place-items-center rounded-full border 
  * last slot is "+N" and opens the rest — a bottom sheet on a phone, a popover under the button from
  * `sm` up. The row never wraps and never scrolls sideways; when everything fits there is no "+".
  *
- * WeChat and a Discord username have no public page: their mark COPIES the ID and says so. Links open
- * in a new tab with rel="me nofollow ugc" — `me` is the identity claim (it is what Mastodon's
- * verification reads), nofollow ugc because a member wrote it.
+ * ORDER is the server's: the biggest networks first (operator 2026-10-08, "rank them based on
+ * registered accounts"), so the marks that fit before "+N" are the ones a visitor most likely uses.
+ *
+ * WeChat and a Discord username have no public page, so their mark is NOT a link and there is no
+ * copy button (operator 2026-10-08: "remove copy ID") — it is the plain icon with the handle as its
+ * tooltip and accessible name, and plain text in the "+N" list. A numeric Discord user id does have
+ * a page (discord.com/users/<id>) and links like any other. Links open in a new tab with
+ * rel="me nofollow ugc" — `me` is the identity claim (it is what Mastodon's verification reads),
+ * nofollow ugc because a member wrote it.
  */
 export function SocialLinks({ socials, name }: { socials: Social[]; name: string }) {
   const rowRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
   const [width, setWidth] = useState(0); // 0 = not measured yet
   const [open, setOpen] = useState(false);
-  const [note, setNote] = useState("");
 
   useLayoutEffect(() => {
     const el = rowRef.current;
@@ -91,15 +84,8 @@ export function SocialLinks({ socials, name }: { socials: Social[]; name: string
   // A grown window can leave nothing behind the "+": close what it opened.
   useEffect(() => { if (!rest.length && open) setOpen(false); }, [rest.length, open]);
 
-  const copy = useCallback(async (s: Social) => {
-    const ok = await copyText(s.handle);
-    setNote(ok ? `${s.label} ID copied: ${s.handle}` : `${s.label}: ${s.handle}`);
-    return ok;
-  }, []);
-
   if (!n) return null;
   const close = () => { setOpen(false); moreRef.current?.focus(); };
-  const rowHasCopy = shown.some((s) => !s.url);
 
   return (
     <div className="mt-4 min-w-0">
@@ -108,7 +94,7 @@ export function SocialLinks({ socials, name }: { socials: Social[]; name: string
       <div ref={rowRef} className="flex h-11 min-w-0 flex-nowrap overflow-hidden" role="list" aria-label="Social profiles"
         style={{ gap, visibility: width ? undefined : "hidden" }}>
         {shown.map((s) => (
-          <div role="listitem" key={s.key} className="shrink-0"><Mark s={s} onCopy={copy} /></div>
+          <div role="listitem" key={s.key} className="shrink-0"><Mark s={s} /></div>
         ))}
         {rest.length > 0 && (
           <div role="listitem" className="shrink-0">
@@ -121,30 +107,26 @@ export function SocialLinks({ socials, name }: { socials: Social[]; name: string
           </div>
         )}
       </div>
-      {/* Reserved one line high (only when a copyable mark is in the row) so a copy confirmation
-          never shifts the page under the finger. */}
-      {rowHasCopy && (
-        <p role="status" aria-live="polite" className="mt-1.5 min-h-[1.25rem] text-[12.5px] text-ink-3 wrap-anywhere">{note}</p>
-      )}
       {open && rest.length > 0 && (
-        <MorePanel items={rest} total={n} name={name} anchor={moreRef} onClose={close} onCopy={copy} />
+        <MorePanel items={rest} total={n} name={name} anchor={moreRef} onClose={close} />
       )}
     </div>
   );
 }
 
-/** One round mark: a link, or — for an ID with no public page — a copy button. */
-function Mark({ s, onCopy }: { s: Social; onCopy: (s: Social) => Promise<boolean> }) {
+/** One round mark: a link, or — for an ID with no public page — the plain mark, named. */
+function Mark({ s }: { s: Social }) {
   const label = `${s.label}: ${displayHandle(s)}`;
   return s.url ? (
     <a href={s.url} target="_blank" rel="me nofollow ugc noopener noreferrer" aria-label={label} title={label} className={cellCls}>
       <SocialIcon k={s.key} />
     </a>
   ) : (
-    <button type="button" aria-label={`${label} — copy`} title={`${label} — tap to copy`} className={cellCls}
-      onClick={() => { void onCopy(s); }}>
+    // Not a control: nothing happens on tap, so it has no hover/focus state either. role="img" with
+    // the label gives a screen reader the network and the handle; the title gives the mouse the same.
+    <span role="img" aria-label={label} title={label} className={staticCls}>
       <SocialIcon k={s.key} />
-    </button>
+    </span>
   );
 }
 
@@ -156,14 +138,13 @@ const wide = () => typeof window !== "undefined" && window.matchMedia("(min-widt
  * swipe-free close on the backdrop); from `sm` up a popover anchored under the "+" button, kept on
  * screen. Escape and an outside tap close it and focus returns to "+".
  */
-function MorePanel({ items, total, name, anchor, onClose, onCopy }: {
+function MorePanel({ items, total, name, anchor, onClose }: {
   items: Social[]; total: number; name: string; anchor: { current: HTMLElement | null };
-  onClose: () => void; onCopy: (s: Social) => Promise<boolean>;
+  onClose: () => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [isWide, setIsWide] = useState(wide);
   const [pos, setPos] = useState<CSSProperties>({});
-  const [copied, setCopied] = useState("");
 
   useLayoutEffect(() => {
     const place = () => {
@@ -184,14 +165,14 @@ function MorePanel({ items, total, name, anchor, onClose, onCopy }: {
     return () => { window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); };
   }, [anchor]);
 
-  // The latest onClose, read through a ref so a parent re-render (a copy note) does not re-run the
-  // effects below — which would steal focus back to the first row.
+  // The latest onClose, read through a ref so a parent re-render does not re-run the effects below
+  // — which would steal focus back to the first row.
   const closeRef = useRef(onClose);
   useEffect(() => { closeRef.current = onClose; }, [onClose]);
 
   // Focus moves INTO the panel once, when it opens.
   useEffect(() => {
-    panelRef.current?.querySelector<HTMLElement>("a,button:not([data-close])")?.focus({ preventScroll: true });
+    (panelRef.current?.querySelector<HTMLElement>("a") ?? panelRef.current?.querySelector<HTMLElement>("button"))?.focus({ preventScroll: true });
   }, []);
 
   useEffect(() => {
@@ -227,11 +208,9 @@ function MorePanel({ items, total, name, anchor, onClose, onCopy }: {
               <span className="block truncate text-[14px] font-semibold leading-tight text-ink">{s.label}</span>
               <span className="block truncate text-[12.5px] leading-tight text-ink-3" data-ay-skip="1">{handle}</span>
             </span>
-            {!s.url && (
-              <span className="shrink-0 text-[12px] font-medium text-ink-3 group-hover:text-yang">{copied === s.key ? "Copied" : "Copy ID"}</span>
-            )}
           </>
         );
+        const rowStatic = "flex min-h-12 w-full items-center gap-3 px-2.5 py-1.5";
         const row = "group flex min-h-12 w-full items-center gap-3 rounded-xl px-2.5 py-1.5 text-left transition-colors hover:bg-veil/5 focus-visible:bg-veil/5 focus-visible:outline-none";
         return (
           <li key={s.key}>
@@ -239,10 +218,8 @@ function MorePanel({ items, total, name, anchor, onClose, onCopy }: {
               <a href={s.url} target="_blank" rel="me nofollow ugc noopener noreferrer" className={row}
                 aria-label={`${s.label}: ${handle}`}>{inner}</a>
             ) : (
-              <button type="button" className={row} aria-label={`${s.label}: ${handle} — copy`}
-                onClick={async () => { if (await onCopy(s)) { setCopied(s.key); window.setTimeout(() => setCopied((k) => (k === s.key ? "" : k)), 1800); } }}>
-                {inner}
-              </button>
+              // No page to open: the same row as plain text, with no hover state promising a tap.
+              <div className={rowStatic}>{inner}</div>
             )}
           </li>
         );

@@ -810,12 +810,14 @@ final class Social {
 			// a consumer typed against a keyed object would be handed a list on exactly the members who
 			// have set nothing — which is most of them.
 			'links'      => (object) Auth::links( $id ),        // where else this member is, key => https URL of a profile
-			// Every handle they have set, in profile order: [{key, label, handle, url, profile}]. `url`
-			// is '' for an ID with no web address (WeChat, a Discord username) — the page offers it to
-			// copy. This is what the profile renders; `links` above stays for API consumers and SEO.
+			// Every handle they have set, in profile order (largest network first): [{key, label,
+			// handle, url, profile}]. `url` is '' for an ID with no web address (WeChat, a Discord
+			// username) — the page shows it as text. This is what the profile renders; `links` above
+			// stays for API consumers and SEO.
 			'socials'    => Auth::socials( $id ),
-			'relationship' => Auth::relationship( $id ),       // '' = not saying; the profile then renders nothing
+			// No relationship status since 2026-10-08 (operator: "remove relationship status").
 			'location'     => Auth::location( $id ),           // what the MEMBER typed; never inferred from an IP
+			'category'     => Auth::category( $id ),           // what they do, in their words — the briefcase item
 			// RESOLVED here, not in the browser: the page must not depend on window.AQ_I18N being
 			// present to name a language it was just handed (see I18n::language_meta).
 			'languages'    => array_values( array_filter( array_map(
