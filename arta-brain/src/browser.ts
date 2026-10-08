@@ -7,9 +7,34 @@ import { type Engine, EngineBusy, EngineDown } from "./engine";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * How the browser is started. On Linux: Playwright's own Chromium. On the operator's Mac
+ * (ARTA_BROWSER_CHANNEL=chrome): the installed Google Chrome on a DEDICATED profile directory — never the
+ * operator's everyday profile. That profile is signed in with plain Chrome (deploy/macos/arta-brain.sh
+ * login), which encrypts its cookies with the login Keychain; Playwright normally swaps in a mock
+ * keychain on macOS, which would make that sign-in unreadable, so on macOS with a real Chrome we keep the
+ * real Keychain. Nothing here hides automation.
+ */
+export function launchOptions(cfg: Config, headless: boolean, platform: NodeJS.Platform = process.platform) {
+  const opts: {
+    headless: boolean; viewport: { width: number; height: number }; locale: string; args: string[];
+    channel?: string; ignoreDefaultArgs?: string[];
+  } = {
+    headless,
+    viewport: { width: 1280, height: 900 },
+    locale: "en-US",
+    args: platform === "linux" ? ["--disable-dev-shm-usage"] : [],
+  };
+  if (cfg.browserChannel) {
+    opts.channel = cfg.browserChannel;
+    if (platform === "darwin") opts.ignoreDefaultArgs = ["--use-mock-keychain"];
+  }
+  return opts;
+}
+
+/**
  * The operator's chat subscription, driven in a real browser profile that the operator signed into
- * by hand (deploy/install.sh login). One page, one prompt at a time, a fresh conversation for every
- * mention so no member's text can leak into another's answer.
+ * by hand (deploy/install.sh login, or deploy/macos/arta-brain.sh login). One prompt at a time, and a NEW
+ * tab with a NEW conversation for every mention, so no member's text can leak into another's answer.
  *
  * What this is NOT: there is no fingerprint spoofing, no stealth plugin, no CAPTCHA solving and no
  * randomised "human" behaviour. It is an ordinary browser at a slow, fixed pace (see Pacer); if the
@@ -27,24 +52,27 @@ export class BrowserEngine implements Engine {
     if (this.ctx) return this.ctx;
     const { chromium } = await import("playwright");
     mkdirSync(this.cfg.profileDir, { recursive: true });
-    this.ctx = await chromium.launchPersistentContext(this.cfg.profileDir, {
-      headless,
-      viewport: { width: 1280, height: 900 },
-      locale: "en-US",
-      args: ["--disable-dev-shm-usage"],
-    });
+    this.ctx = await chromium.launchPersistentContext(this.cfg.profileDir, launchOptions(this.cfg, headless));
     this.ctx.on("close", () => { this.ctx = null; });
     return this.ctx;
   }
 
+  /** A NEW tab every time: nothing a previous mention left in the page (scroll, drafts, app state) survives. */
   private async page(headless?: boolean): Promise<Page> {
     const ctx = await this.context(headless);
-    const p = ctx.pages()[0] ?? (await ctx.newPage());
-    p.setDefaultTimeout(20_000);
-    return p;
+    const fresh = await ctx.newPage();
+    for (const old of ctx.pages()) if (old !== fresh) await old.close().catch(() => {});
+    fresh.setDefaultTimeout(20_000);
+    return fresh;
   }
 
-  /** Open a fresh conversation and make sure we can type into it. */
+  /**
+   * Open a NEW conversation and make sure we can type into it. Every mention gets its own conversation so
+   * nothing one member wrote can reach another member's answer: a new tab on the chat page, then — if the
+   * app restored an earlier conversation (any answer already on screen) — the "new chat" control
+   * (ARTA_SEL_NEW_CHAT). If the page still shows an earlier answer, we refuse to send (EngineDown) rather
+   * than ask inside someone else's context.
+   */
   private async open(): Promise<Page> {
     if (!/^(https:\/\/|http:\/\/127\.0\.0\.1[:/])/.test(this.cfg.chatUrl)) throw new EngineDown("ARTA_CHAT_URL not set");
     const p = await this.page();
@@ -59,16 +87,33 @@ export class BrowserEngine implements Engine {
     } catch {
       const out = await p.locator(this.cfg.sel.signedOut).first().isVisible().catch(() => false);
       await this.shot(p, out ? "signed-out" : "no-input");
-      throw new EngineDown(out ? "signed out — run deploy/install.sh login" : "chat input not found — re-run calibrate");
+      throw new EngineDown(out ? "signed out — sign in again (login)" : "chat input not found — re-run calibrate");
     }
+    await this.ensureFresh(p);
     return p;
+  }
+
+  /** No earlier answer may be on screen when we send. Uses the new-chat control once if needed. */
+  private async ensureFresh(p: Page): Promise<void> {
+    if (!this.cfg.sel.answer) return; // calibrate/check before ARTA_SEL_ANSWER exists: nothing is sent to a member
+    const answers = p.locator(this.cfg.sel.answer);
+    await sleep(800); // let an app that restores the last conversation finish rendering it
+    if ((await answers.count()) === 0) return;
+    if (this.cfg.sel.newChat) {
+      await p.locator(this.cfg.sel.newChat).first().click({ timeout: 10_000 }).catch(() => {});
+      await p.locator(this.cfg.sel.input).first().waitFor({ state: "visible", timeout: 20_000 }).catch(() => {});
+      await sleep(800);
+      if ((await answers.count()) === 0) return;
+    }
+    await this.shot(p, "not-fresh");
+    throw new EngineDown("the chat page opened an earlier conversation — set ARTA_SEL_NEW_CHAT to its new-chat control");
   }
 
   async ask(prompt: string, timeoutMs: number): Promise<string> {
     if (!this.cfg.sel.answer) throw new EngineDown("ARTA_SEL_ANSWER not set — run calibrate");
     const p = await this.open();
     const answers = p.locator(this.cfg.sel.answer);
-    const before = await answers.count();
+    const before = await answers.count(); // 0: open() guarantees a fresh conversation
     const input = p.locator(this.cfg.sel.input).first();
     await input.click();
     await input.fill(prompt);
@@ -142,7 +187,7 @@ export class BrowserEngine implements Engine {
     return [];
   }
 
-  /** Headed session for the operator's one-time sign-in (DISPLAY must point at the VNC display). */
+  /** Headed session for the operator's one-time sign-in (on Linux, DISPLAY must point at the VNC display). */
   async openForLogin(): Promise<void> {
     const p = await this.page(false);
     if (this.cfg.chatUrl) await p.goto(this.cfg.chatUrl, { waitUntil: "domcontentloaded" }).catch(() => {});

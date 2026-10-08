@@ -2,8 +2,9 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 /**
- * Every setting the brain reads, in one place. On the VM they come from the systemd
- * EnvironmentFile (~/.config/arta-brain/env, mode 600 — see deploy/install.sh). Nothing here ever
+ * Every setting the brain reads, in one place. On a Linux host they come from the systemd
+ * EnvironmentFile (~/.config/arta-brain/env, mode 600 — see deploy/install.sh); on the operator's Mac
+ * from ~/ArtaBrain/env (deploy/macos/arta-brain.sh). Nothing here ever
  * logs a value; `missing()` reports names only.
  *
  * There is deliberately NO paid model API in here. Arta answers only through the operator's
@@ -23,6 +24,7 @@ export type Config = {
   profileDir: string;         // the persistent browser profile holding the sign-in
   stateDir: string;           // pacer state, heartbeat, probe screenshots
   headless: boolean;
+  browserChannel: string;     // "" = Playwright's own Chromium; "chrome" = the installed Google Chrome (the Mac setup)
 
   minGapSec: number;          // at least this long between two prompts
   perHour: number;            // prompts per rolling hour
@@ -33,7 +35,8 @@ export type Config = {
   busyPauseSec: number;       // pause after the chat page reports a usage limit without saying until when
   downPauseSec: number;       // pause after the page is signed out / broken, before trying again
 
-  sel: { input: string; send: string; answer: string; signedOut: string; limitText: string };
+  // newChat: optional "new conversation" control, clicked when the page opens on an earlier conversation.
+  sel: { input: string; send: string; answer: string; newChat: string; signedOut: string; limitText: string };
 };
 
 const int = (v: string | undefined, d: number, min = 0) => {
@@ -56,6 +59,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     profileDir: env.ARTA_PROFILE_DIR || join(home, ".local/share/arta-brain/profile"),
     stateDir: env.ARTA_STATE_DIR || join(home, ".local/state/arta-brain"),
     headless: env.ARTA_HEADLESS !== "0",
+    browserChannel: env.ARTA_BROWSER_CHANNEL || "",
 
     minGapSec: int(env.ARTA_MIN_GAP_SEC, 45, 5),
     perHour: int(env.ARTA_PER_HOUR, 30, 1),
@@ -70,6 +74,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       input: env.ARTA_SEL_INPUT || 'textarea, div[contenteditable="true"]',
       send: env.ARTA_SEL_SEND || "",
       answer: env.ARTA_SEL_ANSWER || "",
+      newChat: env.ARTA_SEL_NEW_CHAT || "",
       signedOut: env.ARTA_SEL_SIGNED_OUT || 'a[href*="login"], a[href*="signin"], a[href*="sign-in"]',
       limitText: env.ARTA_LIMIT_TEXT || "(reached|hit) (your|the) (usage |message |rate )?limit|too many (requests|messages)|try again (in|later)|limit resets",
     },

@@ -4,8 +4,8 @@ Arta is a real ArtaQuest member (`@arta`, display name **Arta**). Members talk t
 tag `@arta` in a feed post, a reply or a comment, and Arta answers in that thread. Start with `bug:` and
 Arta files a GitHub issue in `ArtaQuest/artasite` (labels `bug`, `from-arta`) and links it in the reply.
 
-This directory is the brain: one small Node daemon on the operator's **artabot VM** (Azure, rg
-`artaquest-relay`, swedencentral). It is never deployed by the site's CI — `main.yml` ships `wp-content/`
+This directory is the brain: one small Node daemon on the operator's own Mac (see below; it was first
+built for the Azure VM `artabot`, whose Linux installer `deploy/install.sh` still works). It is never deployed by the site's CI — `main.yml` ships `wp-content/`
 only.
 
 ## Nothing is paid per reply
@@ -74,6 +74,37 @@ logged; `check` prints names only.
 | `ARTA_MIN_GAP_SEC`, `ARTA_PER_HOUR`, `ARTA_PER_DAY` | pace caps |
 | `BUGS_PER_USER_PER_DAY`, `BUGS_PER_DAY` | GitHub issue caps (3 / 40) |
 | `ARTA_DRY_RUN` | `1` = log answers, post nothing |
+
+## Run on the operator's Mac (current host)
+
+The VM sign-in was refused by the service, so the brain runs on the operator's own Mac, signed in from
+there. No git checkout on the Mac: build here, copy the bundle, install production dependencies there.
+
+```bash
+# on a build machine, from this directory:
+npm ci && npm test && npm run build
+tar czf arta-brain-mac.tgz dist/src package.json package-lock.json deploy
+# on the Mac:
+mkdir -p ~/ArtaBrain/app && tar xzf arta-brain-mac.tgz -C ~/ArtaBrain/app
+cd ~/ArtaBrain/app && PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm ci --omit=dev
+ln -sf ~/ArtaBrain/app/deploy/macos/arta-brain.sh ~/ArtaBrain/arta-brain
+# ~/ArtaBrain/env (mode 600): deploy/env.example with the token, ARTA_CHAT_URL and ARTA_DRY_RUN=1
+~/ArtaBrain/arta-brain install-agent   # writes the LaunchAgent, NOT loaded (disabled until start)
+~/ArtaBrain/arta-brain login           # plain Chrome on ~/ArtaBrain/chrome-profile; sign in, then ⌘Q
+~/ArtaBrain/arta-brain check           # then calibrate → set ARTA_SEL_ANSWER (and ARTA_SEL_NEW_CHAT)
+~/ArtaBrain/arta-brain start           # launchd, KeepAlive; logs in ~/ArtaBrain/logs
+```
+
+The profile is a dedicated directory, never the everyday Chrome profile. The daemon drives the installed
+Chrome (`ARTA_BROWSER_CHANNEL=chrome`), in a visible window by default (`ARTA_HEADLESS=0`). A sleeping Mac
+answers nothing — mentions wait in the queue until it wakes.
+
+## Every mention gets a new conversation
+
+`BrowserEngine.open()` opens a new tab on `ARTA_CHAT_URL` for each mention. If the page shows an earlier
+answer (an app that reopens the last conversation), it clicks `ARTA_SEL_NEW_CHAT`; if an earlier answer is
+still on screen, it refuses to send (`ENGINE DOWN`), so no member's words can reach another's answer. The
+smoke test (`npm run smoke`) proves both paths against a stand-in page that restores its last conversation.
 
 ## Develop
 
