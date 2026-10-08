@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { localePath } from "../lib/wp";
 import { listNotebooks, normalizeNbKind, searchMembers, type MemberCard } from "../lib/api";
 import { NB_KIND_META } from "./nbview";
-import { Avatar, LogoMark } from "./ui";
+import { Avatar } from "./ui";
+import { ArtaAvatar } from "./arta";
+import { Link } from "react-router-dom";
 import { nameClass } from "../lib/fmt";
 import { isLoggedIn } from "../lib/auth";
 
@@ -233,11 +235,12 @@ export function SearchBox({ autoFocus = false, compact = false }: { autoFocus?: 
           {/* ASK — @arta, in the search field's own end corner (operator 2026-08-16), the way X puts
               its assistant in search. Opens the feed composer with "@arta " ready. Members only. */}
           {ask ? (
-            <a href="/works/?compose=%40arta%20" title="Ask @arta"
-              className="-me-2.5 flex h-8 shrink-0 items-center gap-1.5 rounded-pill border border-line bg-space-1 px-2.5 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yang/60 hover:text-ink">
-              <LogoMark className="h-4 w-4" />
+            <Link to="/works/?compose=%40arta%20" title="Ask @arta — in a public post; Arta replies in the thread"
+              aria-label="Ask @arta in a public post"
+              className="-me-2.5 flex h-8 shrink-0 items-center gap-1.5 rounded-pill border border-yang/30 bg-yang/[0.08] ps-0.5 pe-3 text-[13px] font-semibold text-ink transition-colors hover:border-yang/60 hover:bg-yang/[0.16] focus-visible:border-yang">
+              <ArtaAvatar className="h-7 w-7" />
               Ask
-            </a>
+            </Link>
           ) : null}
         </div>
       </form>

@@ -833,6 +833,48 @@ final class Arta {
 		];
 	}
 
+	/**
+	 * GET arta/watch/{id} — public: where Arta is with the mentions in ONE thread (post {id} and its
+	 * direct replies), so the page that asked can show "Queued #3" / "thinking…" / "offline" instead
+	 * of a sentence that is right only half the time, and stop polling the moment the answer lands.
+	 * Everything here is already public (the posts are public, the queue length is on arta/status);
+	 * no author, body or note leaves this route — only statuses and positions.
+	 */
+	public static function watch( $req ) {
+		self::ensure_tables();
+		$id   = (int) Rest::pint( $req, 'id', 0 );
+		$arta = self::known_uid();
+		$st   = self::public_status( $req );
+		$out  = [ 'online' => $st['online'], 'enabled' => $st['enabled'], 'paused_until' => $st['paused_until'], 'queued' => $st['queued'], 'items' => [] ];
+		if ( $id <= 0 || ! $arta ) { return $out; }
+		$rows = Data::all( 'SELECT id FROM ' . Data::t( 'aq_posts' ) . ' WHERE id = %d OR parent_id = %d ORDER BY id DESC LIMIT 60', [ $id, $id ] );
+		$ids  = array_map( 'intval', array_column( (array) $rows, 'id' ) );
+		if ( ! $ids ) { return $out; }
+		$T  = Data::t( 'aq_mentions' );
+		$in = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		$ms = Data::all( "SELECT id, src_id, status, reply_id, created FROM $T WHERE src_type = 'post' AND target_uid = %d AND src_id IN ($in) ORDER BY id", array_merge( [ $arta ], $ids ) );
+		$since = time() - self::MAX_AGE;
+		foreach ( (array) $ms as $m ) {
+			$s   = (string) $m['status'];
+			$pos = 0;
+			if ( $s === 'queued' ) {
+				$pos = 1 + (int) Data::col( "SELECT COUNT(*) FROM $T WHERE status IN ('queued','working') AND created >= %d AND id < %d", [ $since, (int) $m['id'] ] );
+			}
+			$out['items'][] = [ 'post_id' => (int) $m['src_id'], 'status' => $s, 'position' => $pos, 'reply_id' => (int) $m['reply_id'] ];
+		}
+		return $out;
+	}
+
+	/**
+	 * Arta's picture: the mascot in its thinking pose (assets/arta/), the same figure the site's
+	 * companion draws. A code-level override (Verify::own_picture asks here first), so it holds in
+	 * every environment without a migration and cannot be replaced by an upload to the bot account.
+	 */
+	public static function avatar_url() {
+		$base = defined( 'AQ_URL' ) ? AQ_URL : '';
+		return $base . '/assets/arta/arta-thinking.svg?v=1';
+	}
+
 	// ═════════════════════════════════════════════════════════════════════════════════════════════
 	// Housekeeping (cron, every 5 minutes): expire what is too old, free what a dead brain held
 	// ═════════════════════════════════════════════════════════════════════════════════════════════

@@ -1049,6 +1049,17 @@ export type ArtaStatus = { handle: string; name: string; enabled: boolean; onlin
 export function artaStatus() {
   return get<ArtaStatus>("/arta/status");
 }
+/** Where Arta is with each @arta mention in ONE thread (the post and its direct replies) — statuses
+ *  and queue positions only, never text. `replied` carries the reply's post id. */
+export type ArtaMentionState = { post_id: number; status: "queued" | "working" | "replying" | "replied" | "skipped" | "failed" | "limited" | "expired"; position: number; reply_id: number };
+export type ArtaWatch = { online: boolean; enabled: boolean; paused_until: number; queued: number; items: ArtaMentionState[] };
+export function artaWatch(postId: number) {
+  return get<ArtaWatch>(`/arta/watch/${postId}`);
+}
+/** Arta's recent public replies, newest first, each with the post it answers. */
+export function artaReplies(cursor?: number) {
+  return get<{ items: (FeedPostT & { parent: FeedPostT | null })[]; next: number | null }>("/arta/replies", cursor ? { cursor } : undefined);
+}
 
 /** Server-injected first-paint identity (window.AQ_USER), present before any fetch. */
 export function currentUser(): { id?: number; name: string; avatar: string; slug?: string; country?: string } | null {

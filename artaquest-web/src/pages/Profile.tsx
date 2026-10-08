@@ -17,7 +17,8 @@ import {
   type FollowRow, type Profile as ProfileData,
 } from "../lib/wp";
 import { Coins } from "../lib/currency";
-import { sendCoins } from "../lib/api";
+import { sendCoins, ARTA_HANDLE } from "../lib/api";
+import ArtaBotProfile from "./ArtaBotProfile";
 import { nameClass } from "../lib/fmt";
 import { VerifyApi, fileToImage } from "../lib/verify";
 import { SocialLinks } from "../components/SocialLinks";
@@ -353,6 +354,12 @@ export default function Profile() {
   const loginHref = typeof window !== "undefined"
     ? `${localePath("/login/")}?redirect_to=${encodeURIComponent(window.location.pathname)}`
     : localePath("/login/");
+
+  // ARTA — the public assistant gets its own variant: no wallet, diary or inbox (the server refuses
+  // all three), its status, a how-to, and its recent public answers instead of a notebook grid.
+  if (p && (p.bot || p.slug === ARTA_HANDLE)) {
+    return <ArtaBotProfile p={p} following={following} followers={followers} followBusy={followBusy} onToggleFollow={toggleFollow} loginHref={loginHref} />;
+  }
 
   /** Shown to a signed-in visitor beside Message, to a signed-out one beside Follow, and — since
    *  2026-08-16 — to the MEMBER THEMSELVES beside Edit profile. The same element in all three

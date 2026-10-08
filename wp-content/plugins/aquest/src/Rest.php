@@ -324,6 +324,8 @@ final class Rest {
 		//    the Arta brain's side (a daemon that PULLS from here), authenticated by AQ_ARTA_REPLY_TOKEN ('arta' auth). They are
 		//    all POST so no edge or page cache can ever store a response. ──
 		[ 'GET',  'arta/status',                   'Arta::public_status',    'public' ],
+		[ 'GET',  'arta/watch/(?P<id>[0-9]+)',     'Arta::watch',            'public' ], // statuses + queue positions of the mentions in one thread
+		[ 'GET',  'arta/replies',                  'Notebook::arta_replies', 'public' ], // Arta's recent public replies, each with the post it answers
 		[ 'POST', 'arta/pending',                  'Arta::pending',          'arta'   ], // the brain's poll + heartbeat
 		[ 'POST', 'arta/mentions/(?P<id>[0-9]+)/claim',  'Arta::claim',      'arta'   ],
 		[ 'POST', 'arta/mentions/(?P<id>[0-9]+)/status', 'Arta::status',     'arta'   ],

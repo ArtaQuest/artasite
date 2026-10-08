@@ -353,6 +353,27 @@ namespace {
 	$cbody = (string) $pdo->query( "SELECT body FROM wp_aq_comments WHERE author_id = 9000 AND parent_id = $cid2" )->fetchColumn();
 	t_ok( strpos( $cbody, "Files:\ndiagram.png — https://cdn.test/arta/" ) !== false, 'a comment reply lists its files as links under the text' );
 
+	// arta/watch: one thread's mentions, as statuses and queue positions only.
+	$GLOBALS['T_OPTS']['aq_arta_beat'] = time();
+	$pw  = $post( 1, 'a thread about priors' );
+	$pw1 = $post( 41, '@arta what is a prior?', $pw );
+	$pw2 = $post( 42, '@arta and a posterior?', $pw );
+	$mw1 = Arta::record( 'post', $pw1, 41, '@arta what is a prior?', 'post', $pw );
+	$mw2 = Arta::record( 'post', $pw2, 42, '@arta and a posterior?', 'post', $pw );
+	$w   = Arta::watch( [ 'id' => $pw ] );
+	$by  = array_column( $w['items'], null, 'post_id' );
+	$raw = wp_json_encode( $w );
+	t_ok( count( $w['items'] ) === 2 && $by[ $pw1 ]['status'] === 'queued' && $by[ $pw2 ]['status'] === 'queued', 'watch lists every mention in the thread' );
+	t_ok( $by[ $pw2 ]['position'] === $by[ $pw1 ]['position'] + 1 && $by[ $pw1 ]['position'] >= 1, 'watch gives queue positions in order' );
+	t_ok( strpos( $raw, 'prior' ) === false && strpos( $raw, 'author' ) === false, 'watch carries no text and no author' );
+	Arta::claim( [ 'id' => $mw1 ] );
+	t_ok( array_column( Arta::watch( [ 'id' => $pw ] )['items'], null, 'post_id' )[ $pw1 ]['status'] === 'working', 'a claimed mention reads as working' );
+	Arta::reply( [ 'mention_id' => $mw1, 'body' => 'A prior is what you believed before the data.' ] );
+	$after = array_column( Arta::watch( [ 'id' => $pw ] )['items'], null, 'post_id' );
+	t_ok( $after[ $pw1 ]['status'] === 'replied' && $after[ $pw1 ]['reply_id'] > 0 && $after[ $pw2 ]['position'] >= 1, 'a replied mention carries its reply id; the next one keeps its place' );
+	t_ok( Arta::watch( [ 'id' => 0 ] )['items'] === [] && Arta::watch( [ 'id' => 987654 ] )['items'] === [], 'watch on nothing is empty, not an error' );
+	t_ok( strpos( Arta::avatar_url(), '/assets/arta/arta-thinking.svg' ) !== false, 'Arta wears the thinking mascot' );
+
 	// The brain's token check: closed by default, constant-time, header or Bearer.
 	$_SERVER['HTTP_X_ARTA_TOKEN'] = str_repeat( 't', 40 ); t_ok( Arta::token_ok(), 'token accepted via X-Arta-Token' );
 	$_SERVER['HTTP_X_ARTA_TOKEN'] = 'wrong'; t_ok( ! Arta::token_ok(), 'wrong token refused' );
