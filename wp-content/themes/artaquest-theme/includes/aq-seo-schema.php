@@ -74,50 +74,34 @@ function aq_unprefixed_url( $url ) {
  * A dead entry is worse than a missing one: Google FOLLOWS these, and an unresolvable profile
  * weakens the entity rather than describing it. Verify a URL resolves before adding it.
  *
- * ⚠️ STILL MIRRORED in artaquest-web/src/components/Footer.tsx (SOCIALS) — the visible SPA footer.
- * That one is React and genuinely cannot share this constant, so it remains a hand-kept copy:
- * change a handle here and you MUST change it there too.
+ * ⚠️ STILL MIRRORED in artaquest-web/src/lib/brand-links.ts (SOCIALS) — the visible SPA footer.
+ * That one is React and cannot share this constant, so it remains a hand-kept fallback copy:
+ * change a handle here and you MUST change it there too. Live, this function prefers the first
+ * four of /u/artafather's ordered socials so a member reorder stays in sync.
  *
  * @return array<string,string> platform key => profile URL (empty entries filtered out).
  */
 function aq_social_profiles() {
+	// Prefer the first four of /u/artafather's ordered socials (operator 2026-10-08: "also show
+	// the same four for the artasite footer (for artafather)"). Falls back to the hard-coded
+	// Instagram / Facebook / LinkedIn / X URLs that match the SPA footer (brand-links.ts).
+	if ( class_exists( '\\AQ\\Auth' ) && method_exists( '\\AQ\\Auth', 'socials' ) ) {
+		$u = get_user_by( 'slug', 'artafather' );
+		if ( $u ) {
+			$out = array();
+			foreach ( \AQ\Auth::socials( (int) $u->ID ) as $s ) {
+				if ( empty( $s['key'] ) || 'website' === $s['key'] || empty( $s['url'] ) ) { continue; }
+				$out[ $s['key'] ] = $s['url'];
+				if ( count( $out ) >= 4 ) { break; }
+			}
+			if ( count( $out ) >= 4 ) { return $out; }
+		}
+	}
 	return array_filter( array(
-		'youtube'   => get_option( 'aq_social_youtube', 'https://www.youtube.com/@ArtaQuest' ),
-		'linkedin'  => get_option( 'aq_social_linkedin', 'https://www.linkedin.com/company/artaquest' ),
-		// GitHub is not decoration here: it is the source-code CDN every submitted notebook is
-		// mirrored to as a public gist, which is what makes the one-click Colab link possible
-		// (src/Gist.php). Verified 2026-07-30: the account resolves and holds the gists.
-		'github'    => get_option( 'aq_social_github', 'https://github.com/ArtaQuest' ),
-		// Kaggle is the least decorative link on this list (operator 2026-08-02). Every submission IS
-		// a public Kaggle notebook that has been run, so this is the provenance of the whole substrate
-		// and belongs in `sameAs` as much as in the footer. Points at the FOUNDATION'S ORGANISATION
-		// rather than the artafather account it used to (operator 2026-08-13): the org is the entity
-		// this schema is about, and a personal account is a different one.
-		'kaggle'    => get_option( 'aq_social_kaggle', 'https://www.kaggle.com/organizations/artaquest-foundation' ),
-		// X, restored 2026-08-15 (operator), pointing at @artafather. Two things worth knowing before
-		// anyone "corrects" this:
-		//   • It is NOT the old @arta_quest, which is dead — 404 on 2026-08-13 when X was pulled, and
-		//     404 again today. The handle changed; the entry did not merely come back.
-		//   • @artafather is the founder's handle, and the Kaggle line two rules up was deliberately
-		//     moved OFF that same account so `sameAs` would name the ORGANISATION. The difference is
-		//     that a Kaggle ORG account exists and an X one does not: there is no @artaquest to point
-		//     at, so this is the platform's only X presence, and the footer presents it as such.
-		//     If an organisation account is ever created, move this the way Kaggle was moved.
+		'instagram' => get_option( 'aq_social_instagram', 'https://www.instagram.com/artafather/' ),
+		'facebook'  => get_option( 'aq_social_facebook', 'https://www.facebook.com/artafather' ),
+		'linkedin'  => get_option( 'aq_social_linkedin', 'https://www.linkedin.com/in/artafather/' ),
 		'x'         => get_option( 'aq_social_x', 'https://x.com/artafather' ),
-		/*
-		 * PARKED. 2026-07-31 (operator: "only keep ista, x, linked, github for now", then "replace
-		 * insta with youtube"). X was removed 2026-08-13 and RESTORED 2026-08-15 under a new handle —
-		 * it is live above, not parked. These are OUT of both the footer and `sameAs` together, per
-		 * the sync rule above — a schema link the footer dropped is a claim about an account nobody
-		 * can find.
-		 * "For now": the handles are kept here so restoring one is a single uncommented line, and so
-		 * the next person does not have to go and rediscover them.
-		 *   'instagram' => 'https://www.instagram.com/arta_quest'   (resolves 200; swapped for YouTube)
-		 *   'tiktok'    => 'https://www.tiktok.com/@arta_quest'
-		 *   'facebook'  => 'https://www.facebook.com/artaquest/'
-		 *   'pinterest' => 'https://pinterest.com/artaquest/'
-		 * Restoring one means adding it BOTH here and to SOCIALS in Footer.tsx.
-		 */
 	) );
 }
 

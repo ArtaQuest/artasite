@@ -17,99 +17,49 @@ export function SocialIcon({ k, size = 20, className }: { k: string; size?: numb
   return <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" aria-hidden className={className}><path d={d} /></svg>;
 }
 
-/* ONE ROW, ALWAYS (operator 2026-10-08: "there should be only one row and rest with +"). SMALL
-   MARKS (operator 2026-10-08, later: "the social links should be smaller"): a 32px circle with a 16px
-   glyph, 6–10px apart. The TAP AREA is bigger than the mark — an invisible ::before reaching HIT px
-   past each edge (38px square), never into a neighbour because the gap is never under 2×HIT. The row
-   holds as many as its measured width allows; when some are folded behind "+N" the leftover width is
-   shared out between the cells (up to MAX_GAP), so the "+" sits flush with the row's end. */
-const CELL = 32;
-const HIT = 3;     // invisible reach past each edge: 32 + 2×3 = a 38px target
-const MIN_GAP = 6; // = 2×HIT — targets touch at the tightest, never overlap
-const GAP = 8;     // when everything fits: the natural spacing, left-aligned
-const MAX_GAP = 10;
-
-/** How many CELL px cells fit in `width` with at least MIN_GAP px between them. */
-function capacity(width: number): number {
-  return Math.max(1, Math.floor((width + MIN_GAP) / (CELL + MIN_GAP)));
-}
-
-const markCls = "relative grid h-8 w-8 shrink-0 place-items-center rounded-full border border-line bg-space-1 text-ink-2 before:absolute before:-inset-[3px] before:rounded-full before:content-['']";
+/* ALWAYS FOUR marks, then "+" for the rest (operator 2026-10-08: "just use Instagram, Facebook,
+   LinkedIn X and rest in the …", then corrected to "+"). No width measuring — every viewport shows
+   the member's first four in their saved (or default) order. 32px circle, 16px glyph, 6px gap, 38px
+   invisible hit via ::before. "+" matches the mark size; its accessible name carries the count. */
+const SHOW = 4;
+const markCls = "relative grid h-8 w-8 shrink-0 place-items-center rounded-full border border-line bg-space-1 text-ink-2 transition-colors before:absolute before:-inset-[3px] before:rounded-full before:content-['']";
 const staticCls = markCls;
-const cellCls = `${markCls} transition-colors hover:border-yang hover:text-yang focus-visible:border-yang focus-visible:text-yang focus-visible:outline-none`;
+const cellCls = `${markCls} hover:border-yang hover:text-yang focus-visible:border-yang focus-visible:text-yang focus-visible:outline-none`;
 
 /**
- * Where else this member is — round brand marks under the bio (operator 2026-10-08, reversing
- * 2026-08-18's "remove all the social links": the profile is now meant to carry them).
- *
- * MARKS, NOT CHIPS. Thirty-odd pills each reading "@artafather" is a wall of the same word; a row of
- * recognisable logos is scannable at a glance, and the network plus the handle travel in the
- * accessible name and the hover title.
- *
- * EXACTLY ONE ROW on every screen. The row's width is measured (ResizeObserver, before paint, so it
- * never flashes a wrong count) and holds as many 32px marks as fit; when they do not all fit, the
- * last slot is "+N" and opens the rest — a bottom sheet on a phone, a popover under the button from
- * `sm` up. The row never wraps and never scrolls sideways; when everything fits there is no "+".
- *
- * ORDER is the server's: the biggest networks first (operator 2026-10-08, "rank them based on
- * registered accounts"), so the marks that fit before "+N" are the ones a visitor most likely uses.
- *
- * WeChat and a Discord username have no public page, so their mark is NOT a link and there is no
- * copy button (operator 2026-10-08: "remove copy ID") — it is the plain icon with the handle as its
- * tooltip and accessible name, and plain text in the "+N" list. A numeric Discord user id does have
- * a page (discord.com/users/<id>) and links like any other. Links open in a new tab with
- * rel="me nofollow ugc" — `me` is the identity claim (it is what Mastodon's verification reads),
- * nofollow ugc because a member wrote it.
+ * Where else this member is — round brand marks next to the handle (operator 2026-10-08,
+ * "relocate it to look aesthetically nice"). Exactly four marks, then "+" for the rest (sheet on a
+ * phone, popover from `sm`). ORDER is the server's: the member's saved order first, then the size
+ * ranking. Website lives in the meta row, never here.
  */
-export function SocialLinks({ socials, name }: { socials: Social[]; name: string }) {
-  const rowRef = useRef<HTMLDivElement>(null);
+export function SocialLinks({ socials, name, className }: { socials: Social[]; name: string; className?: string }) {
   const moreRef = useRef<HTMLButtonElement>(null);
-  const [width, setWidth] = useState(0); // 0 = not measured yet
   const [open, setOpen] = useState(false);
 
-  useLayoutEffect(() => {
-    const el = rowRef.current;
-    if (!el) return;
-    // clientWidth includes the HIT padding on both sides (see the row below); the marks get the rest.
-    const measure = () => setWidth(Math.max(0, el.clientWidth - 2 * HIT));
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
   const n = socials.length;
-  const cap = width ? capacity(width) : 6;
-  const folds = n > cap;
-  const shownCount = folds ? cap - 1 : n;
-  const gap = folds && cap > 1 ? Math.min(MAX_GAP, Math.floor((width - cap * CELL) / (cap - 1))) : GAP;
-  const shown = socials.slice(0, shownCount);
-  const rest = socials.slice(shownCount);
+  const shown = socials.slice(0, SHOW);
+  const rest = socials.slice(SHOW);
+  const close = () => { setOpen(false); moreRef.current?.focus(); };
 
-  // A grown window can leave nothing behind the "+": close what it opened.
   useEffect(() => { if (!rest.length && open) setOpen(false); }, [rest.length, open]);
 
   if (!n) return null;
-  const close = () => { setOpen(false); moreRef.current?.focus(); };
 
   return (
-    <div className="mt-4 min-w-0">
+    <div className={cx("min-w-0", className)}>
       <h2 className="sr-only">{`${name} elsewhere`}</h2>
-      {/* overflow-hidden is only a guard: the count is computed to fit, so nothing is ever cut. */}
-      {/* The row is padded by HIT on every side and pulled back out by the same amount, so the marks
-          stay aligned with the text above while their invisible tap rings are not clipped. */}
-      <div ref={rowRef} className="-m-[3px] flex h-[38px] min-w-0 flex-nowrap items-center overflow-hidden p-[3px]" role="list" aria-label="Social profiles"
-        style={{ gap, visibility: width ? undefined : "hidden" }}>
+      <div className="-m-[3px] flex h-[38px] flex-nowrap items-center gap-2 overflow-visible p-[3px]" role="list" aria-label="Social profiles">
         {shown.map((s) => (
           <div role="listitem" key={s.key} className="shrink-0"><Mark s={s} /></div>
         ))}
         {rest.length > 0 && (
           <div role="listitem" className="shrink-0">
             <button ref={moreRef} type="button" onClick={() => setOpen((v) => !v)}
-              aria-haspopup="dialog" aria-expanded={open} aria-label={`${rest.length} more social profiles`}
-              title={`${rest.length} more`}
-              className={cx(cellCls, "text-[11.5px] font-bold tabular-nums tracking-tight", open && "border-yang text-yang")}>
-              +{rest.length}
+              aria-haspopup="dialog" aria-expanded={open}
+              aria-label={`More profiles (${rest.length})`}
+              title={`${rest.length} more profiles`}
+              className={cx(cellCls, "text-[18px] font-semibold leading-none", open && "border-yang text-yang")}>
+              <span aria-hidden>+</span>
             </button>
           </div>
         )}
@@ -121,7 +71,6 @@ export function SocialLinks({ socials, name }: { socials: Social[]; name: string
   );
 }
 
-/** One round mark: a link, or — for an ID with no public page — the plain mark, named. */
 function Mark({ s }: { s: Social }) {
   const label = `${s.label}: ${displayHandle(s)}`;
   return s.url ? (
@@ -129,8 +78,6 @@ function Mark({ s }: { s: Social }) {
       <SocialIcon k={s.key} size={16} />
     </a>
   ) : (
-    // Not a control: nothing happens on tap, so it has no hover/focus state either. role="img" with
-    // the label gives a screen reader the network and the handle; the title gives the mouse the same.
     <span role="img" aria-label={label} title={label} className={staticCls}>
       <SocialIcon k={s.key} size={16} />
     </span>
@@ -140,10 +87,9 @@ function Mark({ s }: { s: Social }) {
 const wide = () => typeof window !== "undefined" && window.matchMedia("(min-width: 640px)").matches;
 
 /**
- * The rest, behind "+N". A list, not a second grid of marks: here there is room to NAME each one,
- * so every row reads icon · network · handle, 48px tall. Phones get a bottom sheet (thumb reach,
- * swipe-free close on the backdrop); from `sm` up a popover anchored under the "+" button, kept on
- * screen. Escape and an outside tap close it and focus returns to "+".
+ * The rest, behind "+". A polished list: icon · network · handle, ranked. Header carries the count
+ * ("27 more profiles"). Phone = bottom sheet; from `sm` = popover under "+". Escape / outside tap
+ * closes and focus returns to "+".
  */
 function MorePanel({ items, total, name, anchor, onClose }: {
   items: Social[]; total: number; name: string; anchor: { current: HTMLElement | null };
@@ -160,11 +106,11 @@ function MorePanel({ items, total, name, anchor, onClose }: {
       const a = anchor.current;
       if (!w || !a) return;
       const r = a.getBoundingClientRect();
-      const width = Math.min(360, window.innerWidth - 24);
+      const width = Math.min(340, window.innerWidth - 24);
       const left = Math.max(12, Math.min(r.right - width, window.innerWidth - width - 12));
       const below = window.innerHeight - r.bottom - 16;
-      const top = below >= 260 ? r.bottom + 8 : Math.max(12, r.top - 8 - Math.min(420, r.top - 20));
-      setPos({ top, left, width, maxHeight: below >= 260 ? Math.min(420, below) : Math.min(420, r.top - 20) });
+      const top = below >= 260 ? r.bottom + 8 : Math.max(12, r.top - 8 - Math.min(440, r.top - 20));
+      setPos({ top, left, width, maxHeight: below >= 260 ? Math.min(440, below) : Math.min(440, r.top - 20) });
     };
     place();
     window.addEventListener("resize", place);
@@ -172,12 +118,9 @@ function MorePanel({ items, total, name, anchor, onClose }: {
     return () => { window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); };
   }, [anchor]);
 
-  // The latest onClose, read through a ref so a parent re-render does not re-run the effects below
-  // — which would steal focus back to the first row.
   const closeRef = useRef(onClose);
   useEffect(() => { closeRef.current = onClose; }, [onClose]);
 
-  // Focus moves INTO the panel once, when it opens.
   useEffect(() => {
     (panelRef.current?.querySelector<HTMLElement>("a") ?? panelRef.current?.querySelector<HTMLElement>("button"))?.focus({ preventScroll: true });
   }, []);
@@ -194,7 +137,6 @@ function MorePanel({ items, total, name, anchor, onClose }: {
     return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("pointerdown", onDown); };
   }, [anchor]);
 
-  // The page behind a phone sheet stays put.
   useEffect(() => {
     if (isWide) return;
     const prev = document.body.style.overflow;
@@ -203,29 +145,34 @@ function MorePanel({ items, total, name, anchor, onClose }: {
   }, [isWide]);
 
   const rows = (
-    <ul className="list-none">
+    <ul className="list-none divide-y divide-line/60">
       {items.map((s) => {
         const handle = displayHandle(s);
         const inner = (
           <>
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line bg-space-1 text-ink-2 group-hover:border-yang group-hover:text-yang group-focus-visible:border-yang group-focus-visible:text-yang">
-              <SocialIcon k={s.key} size={18} />
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line bg-space-2 text-ink-2 transition-colors group-hover:border-yang group-hover:text-yang group-focus-visible:border-yang group-focus-visible:text-yang">
+              <SocialIcon k={s.key} size={17} />
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[14px] font-semibold leading-tight text-ink">{s.label}</span>
-              <span className="block truncate text-[12.5px] leading-tight text-ink-3" data-ay-skip="1">{handle}</span>
+              <span className="mt-0.5 block truncate text-[12.5px] leading-tight text-ink-3" data-ay-skip="1">{handle}</span>
             </span>
+            {s.url ? (
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden
+                className="me-0.5 shrink-0 text-ink-3 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                <path d="M7 17 17 7M9 7h8v8" />
+              </svg>
+            ) : null}
           </>
         );
-        const rowStatic = "flex min-h-12 w-full items-center gap-3 px-2.5 py-1.5";
-        const row = "group flex min-h-12 w-full items-center gap-3 rounded-xl px-2.5 py-1.5 text-left transition-colors hover:bg-veil/5 focus-visible:bg-veil/5 focus-visible:outline-none";
+        const rowStatic = "flex min-h-12 w-full items-center gap-3 px-3 py-2";
+        const row = "group flex min-h-12 w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-veil/[0.06] focus-visible:bg-veil/[0.06] focus-visible:outline-none";
         return (
           <li key={s.key}>
             {s.url ? (
               <a href={s.url} target="_blank" rel="me nofollow ugc noopener noreferrer" className={row}
                 aria-label={`${s.label}: ${handle}`}>{inner}</a>
             ) : (
-              // No page to open: the same row as plain text, with no hover state promising a tap.
               <div className={rowStatic}>{inner}</div>
             )}
           </li>
@@ -234,33 +181,43 @@ function MorePanel({ items, total, name, anchor, onClose }: {
     </ul>
   );
 
-  const title = `${items.length} more of ${total}`;
+  const title = `${items.length} more profile${items.length === 1 ? "" : "s"}`;
   if (isWide) {
     return createPortal(
-      <div ref={panelRef} role="dialog" aria-label={`${name} — ${title} social profiles`}
+      <div ref={panelRef} role="dialog" aria-label={`${name} — ${title}`}
         style={pos}
-        className="fixed z-[100] flex flex-col overflow-hidden rounded-card border border-line bg-space-1 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-          <p className="text-[13px] font-semibold text-ink-2">{title} profiles</p>
-          <button type="button" data-close onClick={onClose} aria-label="Close" className="grid h-8 w-8 place-items-center rounded-full text-ink-3 hover:bg-veil/5 hover:text-ink">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+        className="fixed z-[100] flex flex-col overflow-hidden rounded-2xl border border-line bg-space-1 shadow-[0_24px_48px_-12px_rgba(2,8,20,0.55)]">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-3">
+          <div className="min-w-0">
+            <p className="truncate text-[13.5px] font-semibold text-ink">{title}</p>
+            <p className="truncate text-[11.5px] text-ink-3">{total} in total · your order</p>
+          </div>
+          <button type="button" data-close onClick={onClose} aria-label="Close"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-3 transition-colors hover:bg-veil/10 hover:text-ink focus-visible:outline-2 focus-visible:outline-yang">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
           </button>
         </div>
-        <div className="min-h-0 overflow-y-auto overscroll-contain p-1.5">{rows}</div>
+        <div className="min-h-0 overflow-y-auto overscroll-contain py-1">{rows}</div>
       </div>,
       document.body,
     );
   }
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-end bg-space-0/70 backdrop-blur-[2px]">
-      <div ref={panelRef} role="dialog" aria-modal="true" aria-label={`${name} — ${title} social profiles`}
-        className="flex max-h-[78vh] w-full flex-col rounded-t-[1.5rem] border border-b-0 border-line bg-space-1 shadow-2xl">
-        <div aria-hidden className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-veil/20" />
-        <div className="flex shrink-0 items-center justify-between px-5 pb-1 pt-2">
-          <p className="text-[15px] font-bold text-ink">{title} profiles</p>
-          <button type="button" data-close onClick={onClose} className="-mr-2 h-11 px-3 text-[14px] font-semibold text-ink-2 hover:text-yang">Done</button>
+    <div className="fixed inset-0 z-[100] flex items-end bg-space-0/70 backdrop-blur-[2px]" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label={`${name} — ${title}`}
+        className="flex max-h-[80vh] w-full flex-col rounded-t-[1.5rem] border border-b-0 border-line bg-space-1 shadow-2xl">
+        <div aria-hidden className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-veil/25" />
+        <div className="flex shrink-0 items-center justify-between gap-3 px-5 pb-2 pt-2.5">
+          <div className="min-w-0">
+            <p className="truncate text-[16px] font-bold tracking-tight text-ink">{title}</p>
+            <p className="truncate text-[12.5px] text-ink-3">{total} in total · your order</p>
+          </div>
+          <button type="button" data-close onClick={onClose}
+            className="-me-1.5 inline-flex h-11 items-center rounded-pill px-3.5 text-[14px] font-semibold text-ink-2 transition-colors hover:text-yang focus-visible:outline-2 focus-visible:outline-yang">
+            Done
+          </button>
         </div>
-        <div className="min-h-0 overflow-y-auto overscroll-contain px-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{rows}</div>
+        <div className="min-h-0 overflow-y-auto overscroll-contain pb-[max(0.75rem,env(safe-area-inset-bottom))]">{rows}</div>
       </div>
     </div>,
     document.body,

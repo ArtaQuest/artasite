@@ -11,55 +11,18 @@ export const LEGAL: { label: string; href: string }[] = [
 ];
 
 /**
- * The official ArtaQuest accounts.
- *
- * ⚠️ This list is MIRRORED as the Organization node's `sameAs` in
- * wp-content/themes/artaquest-theme/includes/aq-seo-schema.php (the `aq_social_*` option
- * defaults). Change one and you must change the other — `sameAs` is how Google resolves which
- * "ArtaQuest" this is and what a knowledge panel is built from, so a footer link the schema
- * doesn't know about is invisible to search, and a schema link the footer dropped is a claim
- * about an account nobody can find. (The X handle here was `artaquestorg` until 2026-07-27,
- * which 404s — it had gone stale in BOTH copies at once, which is exactly the failure mode.)
+ * The official ArtaQuest accounts — the SAME four as /u/artafather's profile icons (operator
+ * 2026-10-08: "also show the same four for the artasite footer (for artafather)"). Instagram,
+ * Facebook, LinkedIn, X, in that order, linking to artafather. MIRRORED as Organization `sameAs`
+ * in aq-seo-schema.php (`aq_social_profiles`): change one and you must change the other. Prefer
+ * reading from the artafather account on the PHP side so a reorder there stays in sync; this SPA
+ * copy is the fallback the footer paints before/without that.
  */
-/* The Kaggle mark is a LETTER, and a letter does not centre like a logo. Measured by filling the
-   path to a canvas and taking the centroid of the painted pixels: its bounding box sits at 49.9% of
-   the icon (dead centre) while its INK sits at 42.1% — the heavy vertical stem is on the left and the
-   arms that reach right are thin, so a box-centred "k" reads as shoved left. Its viewBox is therefore
-   shifted 40.8 units left (7.91% of 516), which moves the glyph right until the ink is centred.
-   The same measurement puts the ink 8.38% LOW, and that one is deliberately NOT corrected: the
-   letterform is 516.1 units tall in a 516 box, so it already fills the height and any vertical shift
-   clips it — fixing it needs the viewBox ~17% larger, which would render the k visibly smaller than
-   every icon beside it. A centred-but-full-size mark beats a perfectly-centred shrunken one. */
-export const SOCIALS: { label: string; href: string; path: string; viewBox?: string }[] = [
-  // YouTube took Instagram's slot (operator, 2026-07-31). Verified before the swap: the channel
-  // resolves 200. Instagram's handle is parked in aq_social_profiles() alongside the other three.
-  { label: "YouTube", href: "https://www.youtube.com/@ArtaQuest", path: "M23.5 6.19a3.02 3.02 0 00-2.12-2.14C19.5 3.55 12 3.55 12 3.55s-7.5 0-9.38.5A3.02 3.02 0 00.5 6.19C0 8.07 0 12 0 12s0 3.93.5 5.81a3.02 3.02 0 002.12 2.14c1.88.5 9.38.5 9.38.5s7.5 0 9.38-.5a3.02 3.02 0 002.12-2.14C24 15.93 24 12 24 12s0-3.93-.5-5.81zM9.6 15.6V8.4l6.2 3.6-6.2 3.6z" },
-  // LinkedIn replaced the WhatsApp channel (operator, 2026-07-27). Note this is the FOLLOW
-  // link — the "share to WhatsApp" action in SharePanel/Funds is a different thing and stays.
-  { label: "LinkedIn", href: "https://www.linkedin.com/company/artaquest", path: "M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" },
-  // GitHub is not decoration: it is the source-code CDN every submitted notebook is mirrored to
-  // as a public gist, which is what makes the one-click Colab link possible (src/Gist.php).
-  { label: "GitHub", href: "https://github.com/ArtaQuest", path: "M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3z" },
-  // X, restored 2026-08-15 (operator). It was removed on 08-13 because the handle it pointed at,
-  // @arta_quest, is DEAD — re-checked today and it still answers 404, which is why the URL changed
-  // rather than the entry simply coming back. @artafather resolves 200 (checked before linking:
-  // a social row is the one place on the site where a broken link is the whole content of the link).
-  { label: "X", href: "https://x.com/artafather", path: "M18.9 1.15h3.68l-8.04 9.19L24 22.85h-7.4l-5.8-7.58-6.64 7.58H.48l8.6-9.83L0 1.15h7.59l5.24 6.93 6.07-6.93zm-1.29 19.5h2.04L6.48 3.24H4.29L17.61 20.65z" },
-  // Kaggle is the least decorative link here (operator 2026-08-02): every submission IS a public
-  // Kaggle notebook that has been run, and `artafather` is the account hosting the platform's own
-  // heavy data — the model weights and dataset files this site serves. The mark is drawn on a 512
-  // grid rather than the 24 the others use, so it carries its own viewBox instead of being
-  // hand-rescaled (rescaling a path by eye is how a logo ends up subtly wrong forever).
-  //
-  // The viewBox is NOT the artwork's declared 0 0 512 512, and that is the point. Measured, the
-  // glyph occupies x 43.6..306.3 and y 0..516.1 — so on a 512 grid it sits 81 units left of
-  // centre (16% of the width) and overhangs the bottom by four. In a round social button that
-  // reads as a letter shoved into the corner, which is what it looked like.
-  //
-  // So the box is a SQUARE of the glyph's own height, centred on the glyph's own centre
-  // (175.0, 258.1): the mark keeps exactly the size it renders at today, stops being clipped, and
-  // sits in the middle. Derived, not nudged — a magic offset chosen by eye is how the next person
-  // ends up nudging it again.
-  { label: "Kaggle", href: "https://www.kaggle.com/organizations/artaquest-foundation", viewBox: "-123.8 0 516 516", path: "M304.2 501.5L158.4 320.3 298.2 185c2.6-2.3 3.6-5.6 2.6-8.9-1-3.3-4.3-5.6-7.9-5.6h-56.9c-4.3 0-8.6 1.7-11.9 4.9L96.8 297.5V6.9c0-4.3-3.6-6.9-6.9-6.9H50.5c-4.3 0-6.9 2.6-6.9 6.9v498.2c0 4.3 2.6 6.9 6.9 6.9h39.4c3.3 0 6.9-2.6 6.9-6.9V354.8l131.1 156.4c3.3 3.3 6.9 4.9 11.9 4.9h58.2c3.6 0 6.6-2.3 7.6-5.6.7-2.9 0-6.2-1.4-9z" },
+export const SOCIALS: { label: string; href: string; path: string; viewBox?: string; key?: string }[] = [
+  { label: "Instagram", key: "instagram", href: "https://www.instagram.com/artafather/", path: "M7.0301.084c-1.2768.0602-2.1487.264-2.911.5634-.7888.3075-1.4575.72-2.1228 1.3877-.6652.6677-1.075 1.3368-1.3802 2.127-.2954.7638-.4956 1.6365-.552 2.914-.0564 1.2775-.0689 1.6882-.0626 4.947.0062 3.2586.0206 3.6671.0825 4.9473.061 1.2765.264 2.1482.5635 2.9107.308.7889.72 1.4573 1.388 2.1228.6679.6655 1.3365 1.0743 2.1285 1.38.7632.295 1.6361.4961 2.9134.552 1.2773.056 1.6884.069 4.9462.0627 3.2578-.0062 3.668-.0207 4.9478-.0814 1.28-.0607 2.147-.2652 2.9098-.5633.7889-.3086 1.4578-.72 2.1228-1.3881.665-.6682 1.0745-1.3378 1.3795-2.1284.2957-.7632.4966-1.636.552-2.9124.056-1.2809.0692-1.6898.063-4.948-.0063-3.2583-.021-3.6668-.0817-4.9465-.0607-1.2797-.264-2.1487-.5633-2.9117-.3084-.7889-.72-1.4568-1.3876-2.1228C21.2982 1.33 20.628.9208 19.8378.6165 19.074.321 18.2017.1197 16.9244.0645 15.6471.0093 15.236-.005 11.977.0014 8.718.0076 8.31.0215 7.0301.0839m.1402 21.6932c-1.17-.0509-1.8053-.2453-2.2287-.408-.5606-.216-.96-.4771-1.3819-.895-.422-.4178-.6811-.8186-.9-1.378-.1644-.4234-.3624-1.058-.4171-2.228-.0595-1.2645-.072-1.6442-.079-4.848-.007-3.2037.0053-3.583.0607-4.848.05-1.169.2456-1.805.408-2.2282.216-.5613.4762-.96.895-1.3816.4188-.4217.8184-.6814 1.3783-.9003.423-.1651 1.0575-.3614 2.227-.4171 1.2655-.06 1.6447-.072 4.848-.079 3.2033-.007 3.5835.005 4.8495.0608 1.169.0508 1.8053.2445 2.228.408.5608.216.96.4754 1.3816.895.4217.4194.6816.8176.9005 1.3787.1653.4217.3617 1.056.4169 2.2263.0602 1.2655.0739 1.645.0796 4.848.0058 3.203-.0055 3.5834-.061 4.848-.051 1.17-.245 1.8055-.408 2.2294-.216.5604-.4763.96-.8954 1.3814-.419.4215-.8181.6811-1.3783.9-.4224.1649-1.0577.3617-2.2262.4174-1.2656.0595-1.6448.072-4.8493.079-3.2045.007-3.5825-.006-4.848-.0608M16.953 5.5864A1.44 1.44 0 1 0 18.39 4.144a1.44 1.44 0 0 0-1.437 1.4424M5.8385 12.012c.0067 3.4032 2.7706 6.1557 6.173 6.1493 3.4026-.0065 6.157-2.7701 6.1506-6.1733-.0065-3.4032-2.771-6.1565-6.174-6.1498-3.403.0067-6.156 2.771-6.1496 6.1738M8 12.0077a4 4 0 1 1 4.008 3.9921A3.9996 3.9996 0 0 1 8 12.0077" },
+  { label: "Facebook",  key: "facebook",  href: "https://www.facebook.com/artafather", path: "M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036 26.805 26.805 0 0 0-.733-.009c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0-.679.622c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z" },
+  { label: "LinkedIn",  key: "linkedin",  href: "https://www.linkedin.com/in/artafather/", path: "M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" },
+  { label: "X",         key: "x",         href: "https://x.com/artafather", path: "M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z" },
 ];
+
 

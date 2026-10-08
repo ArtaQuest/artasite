@@ -3,7 +3,7 @@ import { DobWheel } from "../components/DobWheel";
 import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, LANGS_MAX, postProfileUpdate, CATEGORY_MAX, type CourseCard, type Dashboard, type Social, type UsernameCheck } from "../lib/wp";
 import { SOCIAL_FIELDS, WEBSITE_FIELD } from "../lib/socials";
 import { SocialIcon } from "../components/SocialLinks";
-import { SocialOrder } from "../components/SocialOrder";
+import { SocialOrder, PROFILE_SHOW } from "../components/SocialOrder";
 import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, KaggleIds, Passkeys, ShellAccount, UsageApi, myParticipation, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type KaggleIdItem, type SessionItem, type ShellInfo, type ShellKey, type UsageInfo, type BursaryResult, type BursaryStatus, type ShareKit , type Footprint } from "../lib/api";
 import { signOut } from "../lib/auth";
 import { VerifyApi, fileToImage, type VerifyStatus } from "../lib/verify";
@@ -257,7 +257,7 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
             <span className="text-[12px] font-normal tabular-nums text-ink-3">{SOCIAL_FIELDS.filter((f) => (links[f.key] || "").trim()).length} added</span>
           </span>
           <span className="text-[12.5px] font-normal text-ink-3">
-            Public — shown on your profile as icons{isDefaultOrder ? ", biggest network first" : ", in your order"}. Type just your handle, or paste the address of your profile.
+            Public — the first four icons sit on your profile; the rest open from +. {isDefaultOrder ? "Biggest network first until you reorder." : "In your order."} Type just your handle, or paste the address of your profile.
           </span>
           {/* YOUR ORDER — the filled-in networks, first shown first. Folded behind a button: with
               thirty networks it is a long list, and most visits to this form are not to reorder. */}
@@ -265,7 +265,7 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
             <div className="mt-1 rounded-card border border-line bg-space-2/40 p-2 sm:p-3">
               <div className="flex flex-wrap items-center justify-between gap-2 ps-1">
                 <span className="min-w-0 text-[13px] font-semibold text-ink-2">
-                  Icon order <span className="font-normal text-ink-3">· {isDefaultOrder ? "biggest network first" : "your own order"}</span>
+                  Icon order <span className="font-normal text-ink-3">· first 4 on profile · {isDefaultOrder ? "biggest network first" : "your own order"}</span>
                 </span>
                 <span className="flex items-center gap-1">
                   {ordering && !isDefaultOrder && (
@@ -289,8 +289,14 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
                 </div>
               ) : (
                 <div className="mt-1.5 flex flex-wrap items-center gap-2 ps-1" aria-hidden>
-                  {liveOrder.slice(0, 12).map((k) => <SocialIcon key={k} k={k} size={16} className="text-ink-3" />)}
-                  {liveOrder.length > 12 && <span className="text-[12px] text-ink-3">+{liveOrder.length - 12}</span>}
+                  {liveOrder.slice(0, PROFILE_SHOW).map((k) => (
+                    <span key={k} className="grid h-8 w-8 place-items-center rounded-full border border-line bg-space-1 text-ink-2">
+                      <SocialIcon k={k} size={16} />
+                    </span>
+                  ))}
+                  {liveOrder.length > PROFILE_SHOW && (
+                    <span className="grid h-8 w-8 place-items-center rounded-full border border-line bg-space-1 text-[15px] font-semibold leading-none text-ink-3" title={`${liveOrder.length - PROFILE_SHOW} more`}>+</span>
+                  )}
                 </div>
               )}
             </div>

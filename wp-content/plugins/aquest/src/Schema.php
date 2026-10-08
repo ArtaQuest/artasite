@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.83.0';
+	const VERSION = '1.84.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -2237,6 +2237,21 @@ final class Schema {
 				Verify::grant_badge( (int) $u->ID, true, 'operator directive 2026-10-08' );
 			}
 			update_option( 'aq_founder_bluecheck_v1', '1', false );
+		}
+
+		// 1.84.0 — operator 2026-10-08: "just use Instagram, Facebook, LinkedIn X and rest in the +".
+		// On /u/arash and /u/artafather (the same person): save an icon order that puts those four
+		// first; every other filled network follows in the default size ranking. One shot, gated —
+		// a later reorder by the member is never overwritten.
+		if ( get_option( 'aq_founder_social_order_v1' ) !== '1' && class_exists( '\AQ\Auth' ) && method_exists( '\AQ\Auth', 'clean_order' ) ) {
+			$want = Auth::clean_order( [ 'instagram', 'facebook', 'linkedin', 'x' ] );
+			if ( $want ) {
+				foreach ( [ 'arash', 'artafather' ] as $slug ) {
+					$u = get_user_by( 'slug', $slug );
+					if ( $u ) { update_user_meta( (int) $u->ID, Auth::LINKS_ORDER_META, wp_json_encode( $want ) ); }
+				}
+			}
+			update_option( 'aq_founder_social_order_v1', '1', false );
 		}
 
 		// 1.62.2 — SEASONS REFRAME (operator directive 2026-07-10): astrology leaves the platform
