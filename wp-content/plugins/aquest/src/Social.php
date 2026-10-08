@@ -827,6 +827,7 @@ final class Social {
 			'last_seen'  => Auth::last_seen( $id ),            // UTC midnight of their last active day; 0 = never recorded
 			'joined'     => Verify::joined_label( $u->user_registered ), // clamped to the platform launch (ticket #103)
 			'verified'   => Verify::is_verified( $id ),         // the blue check
+			'bot'        => class_exists( '\\AQ\\Arta' ) && Arta::is_arta( $id ), // Arta: the assistant profile (no wallet, diary or DMs)
 			'full_name'  => Verify::full_name( $id ),           // public (radical transparency)
 			// PUBLIC, and the exact date. Operator 2026-08-15, reaffirming 2026-07-27 ("the DATE only —
 			// no derived age") and 2026-05-22 ("data (except passwords) is public, including

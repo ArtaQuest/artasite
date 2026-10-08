@@ -1502,6 +1502,26 @@ final class Notebook {
 	 *  than a new /post/{id} path, so no server routing, title or 404 handling had to change. */
 	public static function post_url( $id ) { return '/works/?post=' . (int) $id; }
 
+	/**
+	 * GET arta/replies?cursor= — Arta's public replies, newest first, each with the post it answers
+	 * (`parent`), for the assistant's own profile. Arta publishes no notebooks, so without this its
+	 * profile is an empty "No posts yet" — the one page where its work should be easiest to read.
+	 */
+	public static function arta_replies( $req ) {
+		self::ensure_tables();
+		$arta = Arta::known_uid();
+		if ( ! $arta ) { return [ 'items' => [], 'next' => null ]; }
+		[ $rows, $next ] = Data::page( 'aq_posts', 'author_id = %d AND parent_id > 0', [ $arta ], Rest::pint( $req, 'cursor', 0 ), 10 );
+		$items = array_map( function ( $p ) {
+			$out = self::post_out( $p, 1 );
+			$par = Data::one( 'SELECT * FROM ' . Data::t( 'aq_posts' ) . ' WHERE id = %d', [ (int) $p['parent_id'] ] );
+			$out['parent'] = $par ? self::post_out( $par, 1 ) : null;
+			return $out;
+		}, (array) $rows );
+		return [ 'items' => $items, 'next' => $next ];
+	}
+
+
 	/** GET posts/{id}/replies?cursor= — a post's direct replies, oldest first (a conversation reads down). */
 	public static function post_replies( $req ) {
 		self::ensure_tables();

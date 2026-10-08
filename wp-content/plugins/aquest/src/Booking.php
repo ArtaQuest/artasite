@@ -314,6 +314,7 @@ final class Booking {
 		if ( Rest::throttle( 'aq_book_page', 120, 300 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$u = self::member( Rest::p( $req, 'user', '' ) );
 		if ( ! $u ) { return Rest::err( 'not_found', 'No such member.', 404 ); }
+		if ( Arta::is_arta( (int) $u->ID ) ) { return Rest::err( 'arta_public_only', 'Arta has no diary — mention @arta in a public post instead.', 404 ); }
 
 		$rows = Data::all(
 			'SELECT * FROM ' . Data::t( 'aq_meet_rules' ) . ' WHERE user_id = %d AND active = 1 ORDER BY id ASC LIMIT %d',
@@ -363,6 +364,7 @@ final class Booking {
 		if ( Rest::throttle( 'aq_book_slots', 120, 300 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$u = self::member( Rest::p( $req, 'user', '' ) );
 		if ( ! $u ) { return Rest::err( 'not_found', 'No such member.', 404 ); }
+		if ( Arta::is_arta( (int) $u->ID ) ) { return Rest::err( 'arta_public_only', 'Arta has no diary — mention @arta in a public post instead.', 404 ); }
 		$r = self::rule_row( $u->ID, sanitize_title( (string) Rest::p( $req, 'type', '' ) ) );
 		if ( ! $r || ! (int) $r['active'] ) { return Rest::err( 'not_offered', 'That is not on offer.', 404 ); }
 
@@ -492,6 +494,7 @@ final class Booking {
 		$u = self::member( Rest::p( $req, 'user', '' ) );
 		if ( ! $u ) { return Rest::err( 'not_found', 'No such member.', 404 ); }
 		$owner = (int) $u->ID;
+		if ( Arta::is_arta( $owner ) ) { return Rest::err( 'arta_public_only', 'Arta has no diary — mention @arta in a public post instead.', 403 ); }
 		// Your own diary is not something to take a slot out of — the meeting would have one person
 		// in it, and Meetings would invite you to a meeting you are already hosting.
 		if ( $owner === $uid ) { return Rest::err( 'own_page', 'This is your own booking page.', 400 ); }

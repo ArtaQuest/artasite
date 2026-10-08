@@ -479,6 +479,8 @@ final class Verify {
 	private static function own_picture( $uid ) {
 		$uid = (int) $uid;
 		if ( $uid <= 0 ) { return ''; }
+		// Arta wears the mascot (Arta::avatar_url) — the bot's picture is code, not an upload.
+		if ( class_exists( '\\AQ\\Arta' ) && Arta::is_arta( $uid ) ) { return Arta::avatar_url(); }
 		$up = (string) get_user_meta( $uid, 'aq_avatar_url', true );
 		if ( $up !== '' ) { return $up; }
 		$pick = (string) get_user_meta( $uid, 'aq_typology_pic', true );

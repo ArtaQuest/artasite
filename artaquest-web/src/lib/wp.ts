@@ -1009,6 +1009,7 @@ export type Profile = {
   birthday?: string;
   fullName?: string;
   verified?: boolean; // the blue check (Verify::is_verified)
+  bot?: boolean; // Arta, the public assistant — the profile renders its own assistant variant
   season?: number; // the ONE season this member follows (1…12 cycle position; 0 = none on record)
   palm?: string; // opt-in palm "back photo" (ticket #94) → the avatar flips to it; '' if unset
   banner?: string; // the picture behind the profile header (member-set, 2026-08-18); '' → the gold→blue band
@@ -1068,7 +1069,7 @@ type ProfileR = {
   /** Whole years, computed server-side (Verify::age) — an API convenience emitted BESIDE the exact
    *  `birthday` below, never instead of it. 0 = no valid date on record. */
   age?: number;
-  birthday?: string; full_name?: string; season?: number; verified?: boolean;
+  birthday?: string; full_name?: string; season?: number; verified?: boolean; bot?: boolean;
   links?: Partial<Record<ProfileLinkKey, string>>;
   socials?: Social[];
   last_seen?: number;
@@ -1126,7 +1127,7 @@ export async function getProfile(slug: string): Promise<Profile | null> {
     return {
       id: pr.id, name: pr.name, slug: pr.slug, avatar: pr.avatar, palm: pr.palm || "", banner: pr.banner || "", email: pr.email || "", bio: pr.bio || "", links: pr.links || undefined, socials: Array.isArray(pr.socials) ? pr.socials : [], lastSeen: pr.last_seen || 0,
       // Public identity facts the endpoint has always emitted but the SPA used to drop on the floor.
-      age: pr.age ?? 0, birthday: pr.birthday || "", fullName: pr.full_name || "", season: pr.season ?? 0, verified: !!pr.verified,
+      age: pr.age ?? 0, birthday: pr.birthday || "", fullName: pr.full_name || "", season: pr.season ?? 0, verified: !!pr.verified, bot: !!pr.bot,
       // No nationality since 2026-10-08 (operator: "I want the nationality removed") — the server no
       // longer emits it, and the profile no longer shows a flag.
       location: pr.location || "", category: pr.category || "", languages: pr.languages ?? [],

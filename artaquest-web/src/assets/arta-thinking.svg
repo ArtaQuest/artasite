@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400" role="img" aria-label="Arta, thinking">
+  <title>Arta, thinking</title>
+  <defs>
+    <radialGradient id="bg" cx="38%" cy="30%" r="80%">
+      <stop offset="0" stop-color="#1f2a5c"/>
+      <stop offset="0.55" stop-color="#141833"/>
+      <stop offset="1" stop-color="#0d0d0f"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e8b923"/>
+      <stop offset="1" stop-color="#4a72ff"/>
+    </linearGradient>
+    <clipPath id="disc"><circle cx="200" cy="200" r="200"/></clipPath>
+  </defs>
+  <circle cx="200" cy="200" r="200" fill="url(#bg)"/>
+  <g clip-path="url(#disc)">
+    <g transform="translate(-231.68 -64.12) scale(1.42)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <!-- the thought: blue, because anything Arta makes or wields is blue -->
+      <g stroke="#4a72ff" stroke-width="7.1">
+        <circle cx="313" cy="126" r="3.8" fill="#4a72ff" stroke="none"/>
+        <circle cx="322" cy="112" r="5.4" fill="#4a72ff" stroke="none"/>
+        <path transform="translate(327 66) scale(0.74)" d="M5 30 a14 14 0 0 1 10 -22 a17 17 0 0 1 30 -6 a15 15 0 0 1 24 12 a13 13 0 0 1 -4 24 a15 15 0 0 1 -24 8 a17 17 0 0 1 -28 -2 a12 12 0 0 1 -8 -14 z" fill="#0f1430"/>
+      </g>
+      <!-- the spark inside it: gold, the why -->
+      <path transform="translate(353 84) scale(0.78)" d="M0 -15 L3.6 -3.6 L15 0 L3.6 3.6 L0 15 L-3.6 3.6 L-15 0 L-3.6 -3.6 Z" fill="#e8b923"/>
+      <!-- Arta: the companion's own figure, gold, faceless -->
+      <g stroke="#e8b923" stroke-width="11.5">
+        <path d="M300.0 237.7 L282.2 286.5 L242.4 320.0"/><path d="M300.0 237.7 L312.6 288.1 L316.2 340.0"/>
+        <path d="M300.0 237.7 L292.7 168.1"/>
+        <path d="M292.7 168.1 L321.5 186.5 L306.5 214.5"/><path d="M292.7 168.1 L264.6 187.0 L280.5 161.0"/>
+        <circle cx="293.5" cy="144.1" r="20"/>
+      </g>
+    </g>
+  </g>
+  <circle cx="200" cy="200" r="196" fill="none" stroke="url(#rim)" stroke-opacity="0.55" stroke-width="8"/>
+</svg>

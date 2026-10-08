@@ -16,7 +16,9 @@ import {
   myNotebooks, liteRunUrl,
   type Challenge, type FeedPostT, type LibraryItem,
   type NbKind, type NotebookCard,
-  normalizeNbKind, artaStatus } from "../lib/api";
+  normalizeNbKind } from "../lib/api";
+import { isArta, isArtaFile, mentionsArta, pillState, useArtaWatch } from "../lib/arta";
+import { ArtaAvatar, ArtaBadge, ArtaFiles, ArtaHint, ArtaMarkdown, ArtaStatusPill, MentionText, MentionTextarea } from "../components/arta";
 import { assetItem, NB_KIND_META, teaserSrc, TeaserVideo, useAqTheme, useCalmFlag } from "../components/nbview";
 import { AutoLoopVideo, FeedPlayer, LibraryMedia, LibraryPicker } from "../components/library";
 import { SharePanel } from "../components/SharePanel";
@@ -41,40 +43,12 @@ import { currentUser, localePath } from "../lib/wp";
 // ── one post ─────────────────────────────────────────────────────────────────
 
 
-// ── @mentions + Arta ─────────────────────────────────────────────────────────
-// Mirrors Arta::extract_handles on the server (src/Arta.php): an @ that is not glued to a word, an
-// email or a path, then a 3-30 char handle. A capture group instead of a lookbehind so older Safari
-// parses it.
-const MENTION_RE = /(^|[^A-Za-z0-9_@./+-])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,28}[A-Za-z0-9])?)(?![A-Za-z0-9_-]|@|\.[A-Za-z0-9])/g;
-const ARTA_RE = /(^|[^A-Za-z0-9_@./+-])@(arta|artabot)(?![A-Za-z0-9_-]|@|\.[A-Za-z0-9])/i;
-function mentionsArta(text: string): boolean { return ARTA_RE.test(text || ""); }
-
-/** Post text with every @handle linked to that member's profile. Plain text otherwise. */
-function MentionText({ text }: { text: string }) {
-  const out: React.ReactNode[] = [];
-  let last = 0;
-  for (const m of text.matchAll(MENTION_RE)) {
-    const at = (m.index ?? 0) + m[1].length;
-    if (m[2].length < 3) continue;
-    if (at > last) out.push(text.slice(last, at));
-    const handle = m[2].toLowerCase() === "artabot" ? "arta" : m[2];
-    out.push(<Link key={at} to={`/u/${handle}`} onClick={(e) => e.stopPropagation()} className="text-yin-ink hover:underline">@{m[2]}</Link>);
-    last = at + 1 + m[2].length;
-  }
-  if (last < text.length) out.push(text.slice(last));
-  return <>{out}</>;
-}
-
-/** The small marker on Arta's own posts — an automated account should never pass for a person. */
-function BotBadge() {
-  return <span title="Automated account" className="shrink-0 rounded-pill bg-yin/15 px-1.5 py-px text-[10.5px] font-semibold text-yin-light">AI</span>;
-}
-
 /**
- * A post's replies, oldest first, with a reply box. When `watch` is set (the viewer just tagged
- * @arta) it re-checks every few seconds for a while so Arta's answer appears without a reload.
+ * A post's replies, oldest first, with a reply box. Arta's answers arrive as replies too; the parent
+ * FeedPost watches its own @arta mention and bumps `reloadKey` when the answer lands, so this list
+ * refreshes itself without a page reload.
  */
-function PostReplies({ postId, onCount, watch }: { postId: number; onCount: (n: number) => void; watch?: boolean }) {
+function PostReplies({ postId, onCount, reloadKey = 0, pill }: { postId: number; onCount: (n: number) => void; reloadKey?: number; pill?: React.ReactNode }) {
   const [items, setItems] = useState<FeedPostT[] | null>(null);
   const [mine, setMine] = useState<Set<number>>(new Set());
   const [next, setNext] = useState<number | null>(null);
@@ -82,36 +56,16 @@ function PostReplies({ postId, onCount, watch }: { postId: number; onCount: (n: 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [fresh, setFresh] = useState<Set<number>>(new Set());
-  const [waiting, setWaiting] = useState(!!watch);
-  // Arta answers from a queue at a steady pace, so a slow answer is normal, not an error. When the
-  // viewer is watching, say honestly whether it is on its way or waiting for Arta to be back.
-  const [away, setAway] = useState(false);
-  const [late, setLate] = useState(false);
-  useEffect(() => {
-    if (!watch) return;
-    artaStatus().then((st) => setAway(!st.online || st.paused_until * 1000 > Date.now())).catch(() => {});
-  }, [watch]);
   const load = useCallback(() => listReplies(postId).then((r) => {
     setItems(r.items); setNext(r.next); setMine(new Set(r.mine || []));
     return r.items;
   }), [postId]);
-  useEffect(() => { load().catch(() => setItems([])); }, [load]);
-  useEffect(() => {
-    if (!waiting) return;
-    let n = 0;
-    const t = window.setInterval(() => {
-      n++;
-      load().then((rows) => {
-        if (rows.some((r) => r.author.bot)) { setWaiting(false); setLate(false); }
-        else if (n >= 20) { setWaiting(false); setLate(true); }
-      }).catch(() => {});
-      if (n >= 20) setWaiting(false);
-    }, 6000);
-    return () => window.clearInterval(t);
-  }, [waiting, load]);
+  useEffect(() => { load().catch(() => setItems([])); }, [load, reloadKey]);
+  const left = CHAR_LIMIT - text.length;
+  const canSend = !!text.trim() && left >= 0 && !busy;
   const send = () => {
     const body = text.trim();
-    if (!body || body.length > CHAR_LIMIT || busy) return;
+    if (!canSend) return;
     setBusy(true); setErr("");
     replyToPost(postId, body)
       .then((p) => {
@@ -124,37 +78,60 @@ function PostReplies({ postId, onCount, watch }: { postId: number; onCount: (n: 
       .finally(() => setBusy(false));
   };
   return (
-    <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} className="mt-2 cursor-default">
-      {items === null ? <p className="py-2 text-[13px] text-ink-3">Loading replies…</p> : null}
+    <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} className="mt-2 flex cursor-default flex-col gap-2.5">
+      {items === null ? (
+        <div className="overflow-hidden rounded-2xl border border-line" aria-label="Loading replies" role="status">
+          <ReplySkeleton /><ReplySkeleton short />
+        </div>
+      ) : null}
       {items && items.length ? (
-        <div className="divide-y divide-line rounded-2xl border border-line bg-space-1/60">
-          {items.map((r) => <FeedPost key={r.id} post={r} hearted={mine.has(r.id)} watchArta={fresh.has(r.id) && mentionsArta(r.body)}
-            onDeleted={(id) => { setItems((cur) => (cur || []).filter((x) => x.id !== id)); onCount(-1); }} />)}
+        <div className="overflow-hidden rounded-2xl border border-line bg-space-1/50">
+          <div className="divide-y divide-line">
+            {items.map((r) => <FeedPost key={r.id} post={r} nested hearted={mine.has(r.id)} watchArta={fresh.has(r.id) && mentionsArta(r.body)}
+              onDeleted={(id) => { setItems((cur) => (cur || []).filter((x) => x.id !== id)); onCount(-1); }} />)}
+          </div>
+          {next != null ? (
+            <button type="button" className="w-full border-t border-line px-4 py-2.5 text-start text-[13px] font-semibold text-yin-ink transition-colors hover:bg-veil/[0.04]"
+              onClick={() => listReplies(postId, next).then((r) => { setItems((cur) => [...(cur || []), ...r.items]); setNext(r.next); }).catch(() => {})}>
+              Show more replies
+            </button>
+          ) : null}
         </div>
       ) : null}
-      {next != null ? (
-        <button type="button" className="mt-1 text-[13px] text-yin-ink hover:underline"
-          onClick={() => listReplies(postId, next).then((r) => { setItems((cur) => [...(cur || []), ...r.items]); setNext(r.next); }).catch(() => {})}>
-          Show more replies
-        </button>
-      ) : null}
-      {waiting || late ? (
-        <p role="status" className="mt-2 text-[12.5px] text-ink-3">
-          {away || late
-            ? "Arta has a queue right now. Your question is in it and the answer will appear here — no need to ask again."
-            : "Arta is reading this — the answer will appear here."}
-        </p>
-      ) : null}
+      {pill ? <div className="flex">{pill}</div> : null}
       {isLoggedIn() ? (
-        <div className="mt-2 flex items-end gap-2">
-          <textarea value={text} onChange={(e) => setText(e.currentTarget.value)} rows={1} maxLength={CHAR_LIMIT + 60}
-            placeholder="Post your reply — tag @arta to ask Arta" aria-label="Reply"
-            className="min-h-[40px] flex-1 resize-none rounded-xl border border-line bg-space-1 p-2 text-[14px] text-ink outline-none focus:border-yin-ink" />
-          <button type="button" onClick={send} disabled={busy || !text.trim() || text.length > CHAR_LIMIT}
-            className="rounded-pill bg-yang px-3 py-2 text-[13px] font-bold text-on-accent disabled:opacity-40">Reply</button>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-end gap-2">
+            <MentionTextarea value={text} onValue={setText} onSubmit={send} rows={1} maxLength={CHAR_LIMIT + 60} maxGrow={160}
+              placeholder="Post your reply" aria-label="Write a reply" wrapClassName="min-w-0 flex-1"
+              className="block min-h-[42px] w-full resize-none rounded-2xl border border-line bg-space-1 px-3.5 py-2.5 text-[14.5px] leading-snug text-ink outline-none transition-colors placeholder:text-ink-3 focus:border-yin-ink" />
+            <button type="button" onClick={send} disabled={!canSend}
+              className={cx("h-[42px] shrink-0 rounded-pill px-4 text-[14px] font-bold transition-colors",
+                canSend ? "bg-yang text-on-accent shadow-sm hover:bg-yang-light" : "cursor-not-allowed bg-veil/[0.07] text-ink-3")}>
+              {busy ? "Sending…" : "Reply"}
+            </button>
+          </div>
+          <div className="flex min-w-0 items-start gap-3 px-1">
+            <ArtaHint text={text} className="min-w-0 flex-1" />
+            {left <= 40 ? (
+              <span aria-live="polite" className={cx("shrink-0 text-[12px] font-semibold tabular-nums", left < 0 ? "text-rose-400" : left <= 20 ? "text-yang-ink" : "text-ink-3")}>{left}</span>
+            ) : null}
+          </div>
         </div>
       ) : null}
-      {err ? <p role="status" className="mt-1 text-[12.5px] text-yang">{err}</p> : null}
+      {err ? <p role="alert" className="text-[12.5px] text-rose-400">{err}</p> : null}
+    </div>
+  );
+}
+
+function ReplySkeleton({ short }: { short?: boolean }) {
+  return (
+    <div className="flex gap-3 border-b border-line px-4 py-3 last:border-b-0" aria-hidden>
+      <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-veil/[0.08]" />
+      <div className="flex-1">
+        <div className="h-3 w-28 animate-pulse rounded bg-veil/[0.08]" />
+        <div className={cx("mt-2 h-3.5 animate-pulse rounded bg-veil/[0.06]", short ? "w-2/5" : "w-4/5")} />
+      </div>
     </div>
   );
 }
@@ -414,12 +391,48 @@ function OwnMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => voi
   );
 }
 
-function FeedPost({ post, onDeleted, hearted, watchArta, openReplies }: { post: FeedPostT; onDeleted?: (id: number) => void; hearted?: boolean; watchArta?: boolean; openReplies?: boolean }) {
+/** One verb in a post's action row: a round icon that tints on hover/focus, its count beside it in
+ *  tabular figures (blank at 0, but the slot keeps its width so rows line up), a 44px hit target. */
+function Act({ label, count, onClick, active, tone = "yin", pressed, expanded, title, children }: {
+  label: string; count?: number; onClick: (e: React.MouseEvent) => void; active?: boolean; tone?: "yin" | "yang";
+  pressed?: boolean; expanded?: boolean; title?: string; children: React.ReactNode;
+}) {
+  const yin = tone === "yin";
+  return (
+    <button type="button" onClick={onClick} aria-label={label} aria-pressed={pressed} aria-expanded={expanded} title={title || label}
+      className={cx("group -my-1.5 inline-flex min-h-11 min-w-11 items-center gap-0.5 rounded-pill pe-1.5 text-[13px] tabular-nums outline-none transition-colors",
+        active ? (yin ? "text-yin-ink" : "text-yang-ink") : cx("text-ink-3", yin ? "hover:text-yin-ink focus-visible:text-yin-ink" : "hover:text-yang-ink focus-visible:text-yang-ink"))}>
+      <span className={cx("grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors group-focus-visible:ring-2 group-focus-visible:ring-focus",
+        yin ? "group-hover:bg-yin/[0.12]" : "group-hover:bg-yang/[0.14]")}>
+        {children}
+      </span>
+      <span className="min-w-[2ch] text-start">{count && count > 0 ? fmtCount(count) : ""}</span>
+    </button>
+  );
+}
+
+const ICO = { viewBox: "0 0 24 24", width: 17, height: 17, fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
+
+function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: { post: FeedPostT; onDeleted?: (id: number) => void; hearted?: boolean; watchArta?: boolean; openReplies?: boolean; nested?: boolean }) {
   const nb = post.nb;
+  const bot = isArta(post.author);
   // Text posts carry their own conversation (replies are posts with a parent); a work keeps its
   // notebook comment thread below.
   const [replyOpen, setReplyOpen] = useState(!!watchArta || !!openReplies);
   const [replyCount, setReplyCount] = useState(post.replies || 0);
+  // ARTA'S ANSWER, LIVE. A post that asks @arta (and is young enough to still be answered — the
+  // server expires a mention after 48h) watches its own mention: a pill says where it is, and when
+  // the answer lands the thread refreshes (or opens, for the member who just asked).
+  const [mountedAt] = useState(() => Date.now() / 1000);
+  const asks = !nb && !bot && mentionsArta(post.body) && mountedAt - post.created < 172800;
+  const [reloadKey, setReloadKey] = useState(0);
+  const { data: watch } = useArtaWatch(post.id, asks, () => {
+    setReplyCount((n) => n + 1);
+    if (replyOpen) setReloadKey((k) => k + 1);
+    else if (watchArta) setReplyOpen(true);
+  });
+  const pst = asks ? pillState(watch, (m) => m.post_id === post.id) : null;
+  const pill = pst ? <ArtaStatusPill state={pst} onShow={replyOpen ? undefined : () => setReplyOpen(true)} /> : null;
   const me = currentUser();
   const own = !!me?.slug && me.slug === post.author.slug;
   const [body, setBody] = useState(post.body);
@@ -473,22 +486,28 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies }: { post: 
     navigator.vibrate?.(12);
   };
   return (
-    <article className="relative px-4 py-4 transition-colors hover:bg-space-2/40" onDoubleClick={doubleTap}>
+    <article onDoubleClick={doubleTap}
+      className={cx("relative transition-colors", nested ? "px-3.5 py-3" : "px-4 py-4",
+        bot ? "bg-gradient-to-br from-yang/[0.07] via-transparent to-yin/[0.05] hover:from-yang/[0.10]" : "hover:bg-space-2/40")}>
+      {/* Arta's replies carry a hairline of the brand pair down their leading edge — distinct, not loud. */}
+      {bot ? <span aria-hidden className="pointer-events-none absolute inset-y-3 start-0 w-[3px] rounded-e-full bg-gradient-to-b from-yang to-yin opacity-80" /> : null}
       {burst ? (
         <span aria-hidden className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
           <span className="animate-ping text-5xl">❤️</span>
         </span>
       ) : null}
-      <div className="flex gap-3">
-        <Link to={`/u/${post.author.slug}`} className="shrink-0 self-start">
-          <Avatar name={post.author.name} src={post.author.avatar} className="h-10 w-10" />
+      <div className={cx("flex", nested ? "gap-2.5 sm:gap-3" : "gap-3")}>
+        <Link to={`/u/${post.author.slug}`} className="shrink-0 self-start" aria-label={post.author.name} tabIndex={-1}>
+          {bot
+            ? <ArtaAvatar className={cx(nested ? "h-8 w-8 sm:h-9 sm:w-9" : "h-10 w-10", "ring-1 ring-yang/40")} />
+            : <Avatar name={post.author.name} src={post.author.avatar} className={nested ? "h-8 w-8 sm:h-9 sm:w-9" : "h-10 w-10"} />}
         </Link>
         <div className="min-w-0 flex-1" ref={bodyRef}>
           {/* X's byline: bold name, muted @handle, dot, relative time — then the ⋯ corner menu on
               your own posts. The handle doubles as the profile link's visible address. */}
           <div className="flex items-center gap-1.5 text-sm">
-            <Link to={`/u/${post.author.slug}`} className={`font-bold text-ink hover:underline ${nameClass(post.author.name)}`}>{post.author.name}</Link>
-            {post.author.bot ? <BotBadge /> : null}
+            <Link to={`/u/${post.author.slug}`} className={`min-w-0 truncate font-bold text-ink hover:underline ${nameClass(post.author.name)}`}>{post.author.name}</Link>
+            {bot ? <ArtaBadge /> : null}
             <Link to={`/u/${post.author.slug}`} tabIndex={-1} className="hidden min-w-0 shrink-[2] break-all text-ink-3 sm:block"><bdi dir="ltr" data-ay-skip="1">@{post.author.slug}</bdi></Link>
             <span className="text-ink-3">·</span>
             <time className="shrink-0 text-ink-3" dateTime={new Date(post.created * 1000).toISOString()}>{timeAgo(post.created)}</time>
@@ -529,11 +548,15 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies }: { post: 
                     }}>Save</button>
                 </div>
               </div>
-            ) : body ? <p className="mt-0.5 whitespace-pre-wrap text-[15px] leading-relaxed text-ink"><MentionText text={body} /></p> : null}
+            ) : body ? (
+              bot ? <ArtaMarkdown text={body} className="mt-0.5" />
+                : <p className="mt-0.5 whitespace-pre-wrap text-[15px] leading-relaxed text-ink [overflow-wrap:anywhere]"><MentionText text={body} /></p>
+            ) : null}
             {writeErr ? (
               <p role="status" className="mt-1 text-[12.5px] text-yang" onClick={(e) => e.stopPropagation()}>{writeErr}</p>
             ) : null}
-            <PostMedia items={mediaOf(post)} />
+            <PostMedia items={bot ? mediaOf(post).filter((m) => !isArtaFile(m)) : mediaOf(post)} />
+            {bot ? <ArtaFiles items={mediaOf(post).filter(isArtaFile)} /> : null}
             {post.repost ? (
               <div className="mt-2 rounded-2xl border border-line bg-space-2/40 px-3 py-2.5">
                 <p className="flex items-center gap-1.5 text-[13px]">
@@ -550,51 +573,37 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies }: { post: 
           {/* The attached work stands OUTSIDE the height clamp: a player half-hidden behind a
               Show more fade is a broken control, and the lean card is short by construction. */}
           {nb ? <NbBlock nb={nb} /> : null}
-          {/* X's action row: the icons SPREAD across the card (justify-between up to X's ~425px),
-              in X's order — reply · repost · heart · views · run. Counts hug their icons; Edit /
-              Delete moved to the ⋯ corner menu above. Quote lives beside repost, X's split. */}
-          <div className="mt-1 flex max-w-[425px] items-center justify-between gap-x-0.5 text-[13px] text-ink-3 min-[400px]:gap-x-2">
+          {/* X's action row: the verbs SPREAD across the card (justify-between up to ~460px), in X's
+              order — reply · repost · quote · heart, then views · share · run for a work. Every verb is
+              the same Act: a round icon that tints on hover/focus, its count beside it, 44px tall.
+              Quote is an icon now (it was the one worded control, which threw the spacing off). */}
+          <div className="-ms-2 mt-1 flex max-w-[460px] items-center justify-between text-[13px] text-ink-3">
             {nb ? (
-              <button type="button" onClick={(e) => { e.stopPropagation(); setTalk((v) => !v); }} aria-expanded={talk}
-                className={cx("-my-2 -ms-1.5 inline-flex min-h-11 items-center gap-1 rounded-pill px-1 py-2 transition-colors min-[400px]:px-1.5", talk ? "text-yin-ink" : "hover:text-yin-ink")} aria-label="Reply">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M21 11.5a8.4 8.4 0 0 1-9.4 8.3L3 21l1.2-3.6A8.4 8.4 0 1 1 21 11.5Z" /></svg>
-                {nb.comments > 0 ? nb.comments : ""}
-              </button>
+              <Act label={nb.comments > 0 ? `Reply, ${nb.comments} comments` : "Reply"} count={nb.comments} expanded={talk} active={talk}
+                onClick={(e) => { e.stopPropagation(); setTalk((v) => !v); }}>
+                <svg {...ICO}><path d="M21 11.5a8.4 8.4 0 0 1-9.4 8.3L3 21l1.2-3.6A8.4 8.4 0 1 1 21 11.5Z" /></svg>
+              </Act>
             ) : !post.repost || post.body ? (
-              <button type="button" onClick={(e) => { e.stopPropagation(); setReplyOpen((v) => !v); }} aria-expanded={replyOpen}
-                className={cx("-my-2 -ms-1.5 inline-flex min-h-11 items-center gap-1 rounded-pill px-1 py-2 transition-colors min-[400px]:px-1.5", replyOpen ? "text-yin-ink" : "hover:text-yin-ink")} aria-label="Reply">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M21 11.5a8.4 8.4 0 0 1-9.4 8.3L3 21l1.2-3.6A8.4 8.4 0 1 1 21 11.5Z" /></svg>
-                {replyCount > 0 ? replyCount : ""}
-              </button>
+              <Act label={replyCount > 0 ? `Reply, ${replyCount} ${replyCount === 1 ? "reply" : "replies"}` : "Reply"} count={replyCount} expanded={replyOpen} active={replyOpen}
+                onClick={(e) => { e.stopPropagation(); setReplyOpen((v) => !v); }}>
+                <svg {...ICO}><path d="M21 11.5a8.4 8.4 0 0 1-9.4 8.3L3 21l1.2-3.6A8.4 8.4 0 1 1 21 11.5Z" /></svg>
+              </Act>
             ) : null}
-            <span className="inline-flex items-center">
-              <button type="button" onClick={doRepost} aria-label="Repost" aria-pressed={reposted}
-                className={cx("-my-2 inline-flex min-h-11 items-center gap-1 rounded-pill px-1 py-2 transition-colors min-[400px]:px-1.5", reposted ? "text-yang-ink" : "hover:text-yang-ink")}>
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M17 2l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 22l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></svg>
-                {reposts > 0 ? reposts : ""}
-              </button>
-              {/* Same 44px target as its neighbours: this was a bare 12px text run, the one control
-                  in the row a thumb could miss. */}
-              <button type="button" onClick={(e) => { e.stopPropagation(); quoteIntent?.(post); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                aria-label="Quote" className="-my-2 inline-flex min-h-11 items-center rounded-pill px-1 py-2 text-[12px] transition-colors hover:text-yang-ink min-[400px]:px-1.5">
-                {/* Share joined this row and pushed "Run it" off the card at 360px (measured on
-                    prod). The word becomes a glyph on a phone; nothing is dropped. */}
-                <span className="hidden min-[400px]:inline">Quote</span>
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="min-[400px]:hidden">
-                  <path d="M9 7H6a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h2v2a2 2 0 0 1-2 2" /><path d="M19 7h-3a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h2v2a2 2 0 0 1-2 2" />
-                </svg>
-              </button>
-            </span>
-            <button type="button" onClick={toggleHeart} aria-pressed={mine} aria-label={mine ? "Remove heart" : "Heart"}
-              className={cx("-my-2 inline-flex min-h-11 items-center gap-1 rounded-pill px-1 py-2 transition-colors min-[400px]:px-1.5", mine ? "text-yang" : "hover:text-yang")}>
-              <span className={cx("inline-flex transition-transform duration-300", pop && "scale-[1.35]")}><HeartGlyph size={16} filled={mine} /></span>
-              {hearts > 0 ? hearts : ""}
-            </button>
+            <Act label={reposted ? "Reposted" : "Repost"} count={reposts} tone="yang" pressed={reposted} active={reposted} onClick={doRepost}>
+              <svg {...ICO}><path d="M17 2l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 22l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></svg>
+            </Act>
+            <Act label="Quote" tone="yang" title="Quote — repost with your own words"
+              onClick={(e) => { e.stopPropagation(); quoteIntent?.(post); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
+              <svg {...ICO}><path d="M9 7H6a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h2v2a2 2 0 0 1-2 2" /><path d="M19 7h-3a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h2v2a2 2 0 0 1-2 2" /></svg>
+            </Act>
+            <Act label={mine ? "Remove heart" : "Heart"} count={hearts} tone="yang" pressed={mine} active={mine} onClick={toggleHeart}>
+              <span className={cx("inline-flex transition-transform duration-300", pop && "scale-[1.35]", mine && "text-yang")}><HeartGlyph size={17} filled={mine} /></span>
+            </Act>
             {/* Always rendered for a work, zero included: a count that disappears at 0 made two
                 cards in the same timeline look like different kinds of card. */}
             {nb ? (
-              <span className="inline-flex items-center gap-1" title="Views">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M4 20V10M12 20V4M20 20v-7" strokeLinecap="round" /></svg>
+              <span className="inline-flex min-h-11 items-center gap-0.5 pe-1.5 tabular-nums" title="Views" aria-label={`${nb.views} views`}>
+                <span className="grid h-8 w-8 place-items-center"><svg {...ICO} width={16} height={16}><path d="M4 20V10M12 20V4M20 20v-7" /></svg></span>
                 {fmtCount(nb.views)}
               </span>
             ) : null}
@@ -617,8 +626,12 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies }: { post: 
               <span className="hidden min-[400px]:inline">Run it&nbsp;↗</span><span className="min-[400px]:hidden">Run&nbsp;↗</span>
             </a> : null}
           </div>
+          {!replyOpen && pill ? <div className="mt-1.5 flex">{pill}</div> : null}
           {replyOpen && !nb ? (
-            <PostReplies postId={post.id} watch={watchArta} onCount={(d) => setReplyCount((n) => Math.max(0, n + d))} />
+            // On a phone the thread breaks out of the avatar gutter so nested replies keep a readable measure.
+            <div className={nested ? "" : "-ms-[52px] sm:ms-0"}>
+              <PostReplies postId={post.id} reloadKey={reloadKey} pill={pill} onCount={(d) => setReplyCount((n) => Math.max(0, n + d))} />
+            </div>
           ) : null}
           {talk && nb ? (
             <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} className="mt-3 cursor-default rounded-2xl border border-line bg-space-1/60 p-3">
@@ -631,15 +644,24 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies }: { post: 
   );
 }
 
-function PostSkeleton() {
+/** Holds a post's layout while the timeline loads: byline, two text lines, the action row — and a
+ *  media box only on some, because most posts are text and a column of grey 16:9 slabs promised
+ *  a timeline that was not coming. */
+function PostSkeleton({ media = false }: { media?: boolean }) {
   return (
     <div className="flex gap-3 px-4 py-4" aria-hidden>
-      <div className="h-10 w-10 animate-pulse rounded-full bg-veil/[0.08]" />
-      <div className="flex-1">
-        <div className="h-3.5 w-40 animate-pulse rounded bg-veil/[0.08]" />
-        <div className="mt-2 h-4 w-4/5 animate-pulse rounded bg-veil/[0.08]" />
-        <div className="mt-2 h-3.5 w-3/5 animate-pulse rounded bg-veil/[0.08]" />
-        <div className="mt-3 aspect-[16/9] animate-pulse rounded-2xl bg-veil/[0.06]" />
+      <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-veil/[0.08]" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <div className="h-3.5 w-24 animate-pulse rounded bg-veil/[0.09]" />
+          <div className="h-3 w-16 animate-pulse rounded bg-veil/[0.06]" />
+        </div>
+        <div className="mt-2.5 h-3.5 w-11/12 animate-pulse rounded bg-veil/[0.07]" />
+        <div className="mt-2 h-3.5 w-3/5 animate-pulse rounded bg-veil/[0.07]" />
+        {media ? <div className="mt-3 aspect-[16/9] animate-pulse rounded-2xl bg-veil/[0.05]" /> : null}
+        <div className="mt-3.5 flex max-w-[460px] justify-between pe-6">
+          {[0, 1, 2, 3].map((k) => <div key={k} className="h-4 w-8 animate-pulse rounded-pill bg-veil/[0.05]" />)}
+        </div>
       </div>
     </div>
   );
@@ -752,10 +774,10 @@ function Composer({ onPosted, initialText = "" }: { onPosted: (p: FeedPostT) => 
       <div className="flex gap-3">
         <Avatar name={me?.name} src={me?.avatar} className="h-10 w-10 shrink-0" />
         <div className="min-w-0 flex-1">
-          <textarea ref={box} value={text} onChange={(e) => setText(e.currentTarget.value)} onFocus={() => setOpen(true)}
+          <MentionTextarea textareaRef={box} value={text} onValue={setText} onSubmit={() => post()} onFocus={() => setOpen(true)}
             rows={open ? 3 : 1} maxLength={CHAR_LIMIT + 60} placeholder={quote ? "Say something about this…" : "What's happening?"}
             aria-label="Compose a post"
-            className="w-full resize-none bg-transparent pt-1.5 text-[17px] leading-snug text-ink outline-none placeholder:text-ink-2" />
+            className="block w-full resize-none bg-transparent pt-1.5 text-[17px] leading-snug text-ink outline-none placeholder:text-ink-2" />
           {quote ? (
             <div className="mb-2 rounded-xl border border-line bg-space-2/60 px-3 py-2 text-[13px] text-ink-3">
               Quoting <span className="font-semibold text-ink-2">{quote.author.name}</span>: {quote.body || quote.nb?.title}
@@ -848,10 +870,12 @@ function Composer({ onPosted, initialText = "" }: { onPosted: (p: FeedPostT) => 
                     className={left < 0 ? "text-yang" : left <= 20 ? "text-yang-ink" : "text-yin-ink"} />
                 </svg>
                 <button type="button" onClick={post} disabled={empty || left < 0 || busy}
-                  className="shrink-0 rounded-pill bg-yang px-4 py-1.5 text-sm font-bold text-on-accent transition-opacity disabled:opacity-40">
+                  className={cx("h-9 shrink-0 rounded-pill px-4 text-sm font-bold transition-colors",
+                    empty || left < 0 || busy ? "cursor-not-allowed bg-veil/[0.07] text-ink-3" : "bg-yang text-on-accent shadow-sm hover:bg-yang-light")}>
                   {busy ? "Posting…" : "Post"}
                 </button>
               </div>
+              <ArtaHint text={text} className="pt-2" />
             </>
           ) : null}
         </div>
@@ -1029,7 +1053,7 @@ export default function Feed({ initialKind, embedded = false }: { initialKind?: 
 
         {/* The timeline. On phones the rail modules interleave a few posts down, X-style. */}
         {loading ? (
-          <div className="divide-y divide-line">{Array.from({ length: 5 }, (_, i) => <PostSkeleton key={i} />)}</div>
+          <div className="divide-y divide-line" role="status" aria-label="Loading the feed">{Array.from({ length: 5 }, (_, i) => <PostSkeleton key={i} media={i === 1 || i === 4} />)}</div>
         ) : items.length ? (
           <>
             <div className="divide-y divide-line">
@@ -1050,7 +1074,13 @@ export default function Feed({ initialKind, embedded = false }: { initialKind?: 
                 {more ? "Loading more…" : ""}
               </div>
             ) : (
-              <p className="border-t border-line py-8 text-center text-[13px] text-ink-3">You're all caught up</p>
+              <div className="flex flex-col items-center gap-1.5 border-t border-line px-4 py-10 text-center">
+                <span aria-hidden className="grid h-10 w-10 place-items-center rounded-full bg-yang/[0.12] text-yang-ink">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+                </span>
+                <p className="text-[14px] font-semibold text-ink">You're all caught up</p>
+                {isLoggedIn() ? <p className="text-[13px] text-ink-3">Got a question? <Link to="/works/?compose=%40arta%20" className="font-semibold text-yang-ink hover:underline">Ask @arta in public</Link></p> : null}
+              </div>
             )}
           </>
         ) : (
