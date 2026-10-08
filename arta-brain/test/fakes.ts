@@ -1,5 +1,5 @@
 import { loadConfig, type Config } from "../src/config";
-import type { Engine } from "../src/engine";
+import type { Engine, EngineAnswer } from "../src/engine";
 import type { Fetch } from "../src/http";
 import type { Mention } from "../src/types";
 
@@ -18,10 +18,10 @@ export const mention = (over: Partial<Mention> = {}): Mention => ({
 
 type Call = { url: string; method: string; headers: Record<string, string>; body: unknown };
 
-type Answer = string | Error;
+type Answer = string | Error | EngineAnswer;
 
 /** A fake network (WordPress + GitHub, recording every call) and a fake chat engine. */
-export function fakeNet(opts: { llm?: Answer | ((n: number) => Answer); mention?: Mention | null; issues?: unknown[]; claimStatus?: number; replyStatus?: number; pending?: Mention[] }) {
+export function fakeNet(opts: { llm?: Answer | ((n: number) => Answer); mention?: Mention | null; issues?: unknown[]; claimStatus?: number; replyStatus?: number; pending?: Mention[]; files?: Record<string, Uint8Array> }) {
   const calls: Call[] = [];
   const issues: Record<string, unknown>[] = (opts.issues as Record<string, unknown>[]) ?? [];
   let llmN = 0;
@@ -29,7 +29,17 @@ export function fakeNet(opts: { llm?: Answer | ((n: number) => Answer); mention?
   const f: Fetch = async (url, init = {}) => {
     const method = (init.method || "GET").toUpperCase();
     const headers = Object.fromEntries(Object.entries((init.headers as Record<string, string>) || {}).map(([k, v]) => [k.toLowerCase(), v]));
-    const body = init.body ? JSON.parse(String(init.body)) : undefined;
+    let body: unknown;
+    if (init.body instanceof FormData) {
+      const o: Record<string, unknown> = { files: [] as { name: string; type: string; size: number; text: string }[] };
+      const entries: [string, FormDataEntryValue][] = [];
+      init.body.forEach((v, k) => entries.push([k, v]));
+      for (const [k, v] of entries) {
+        if (typeof v === "string") o[k] = v;
+        else (o.files as unknown[]).push({ field: k, name: (v as File).name, type: v.type, size: v.size, text: await v.text() });
+      }
+      body = o;
+    } else body = init.body ? JSON.parse(String(init.body)) : undefined;
     calls.push({ url, method, headers, body });
     if (url.startsWith("https://wp.test/wp-json/aq/v1/")) {
       const p = url.slice("https://wp.test/wp-json/aq/v1/".length);
@@ -42,6 +52,11 @@ export function fakeNet(opts: { llm?: Answer | ((n: number) => Answer); mention?
       if (p === "arta/reply") return opts.replyStatus ? json(opts.replyStatus, { code: "x" }) : json(200, { ok: true, duplicate: false, url: "https://artaquest.com/works/?post=99" });
       if (p === "arta/pending") return json(200, { items: opts.pending ?? [mention({ id: 21 }), mention({ id: 22 })] });
       return json(404, {});
+    }
+    if (url.startsWith("https://cdn.test/")) {
+      const f = opts.files?.[url];
+      if (f === undefined) return new Response("nope", { status: 404 });
+      return new Response(f, { status: 200, headers: f.byteLength > 0 ? { "content-length": String(f.byteLength) } : {} });
     }
     if (url.startsWith("https://api.github.com/repos/ArtaQuest/artasite/issues")) {
       if (headers.authorization !== "Bearer gh") return json(401, {});
@@ -56,15 +71,18 @@ export function fakeNet(opts: { llm?: Answer | ((n: number) => Answer); mention?
     return json(404, {});
   };
   const prompts: string[] = [];
+  const attached: { path: string; bytes: number; exists: boolean }[][] = [];
   const engine: Engine = {
-    async ask(prompt: string) {
+    async ask(prompt: string, _t: number, files: string[] = []) {
       llmN++;
       prompts.push(prompt);
+      const { statSync } = await import("node:fs");
+      attached.push(files.map((path) => ({ path, bytes: statSync(path).size, exists: true })));
       const out = typeof opts.llm === "function" ? opts.llm(llmN) : (opts.llm ?? JSON.stringify({ kind: "answer", reply: "A p-value is…" }));
       if (out instanceof Error) throw out;
       return out;
     },
     async close() {},
   };
-  return { f, calls, issues, engine, prompts, llmCount: () => llmN };
+  return { f, calls, issues, engine, prompts, attached, llmCount: () => llmN };
 }

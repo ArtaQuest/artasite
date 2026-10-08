@@ -91,13 +91,40 @@ ln -sf ~/ArtaBrain/app/deploy/macos/arta-brain.sh ~/ArtaBrain/arta-brain
 # ~/ArtaBrain/env (mode 600): deploy/env.example with the token, ARTA_CHAT_URL and ARTA_DRY_RUN=1
 ~/ArtaBrain/arta-brain install-agent   # writes the LaunchAgent, NOT loaded (disabled until start)
 ~/ArtaBrain/arta-brain login           # plain Chrome on ~/ArtaBrain/chrome-profile; sign in, then ⌘Q
-~/ArtaBrain/arta-brain check           # then calibrate → set ARTA_SEL_ANSWER (and ARTA_SEL_NEW_CHAT)
+~/ArtaBrain/arta-brain check           # then calibrate (top mode + a tiny PNG) → ARTA_SEL_ANSWER, ARTA_SEL_BUSY
 ~/ArtaBrain/arta-brain start           # launchd, KeepAlive; logs in ~/ArtaBrain/logs
 ```
 
 The profile is a dedicated directory, never the everyday Chrome profile. The daemon drives the installed
 Chrome (`ARTA_BROWSER_CHANNEL=chrome`), in a visible window by default (`ARTA_HEADLESS=0`). A sleeping Mac
 answers nothing — mentions wait in the queue until it wakes.
+
+## Highest effort, every time
+
+Before each prompt, in each new conversation, the engine opens the page's mode picker and chooses the
+first of `ARTA_MODE_LABELS` (default `Heavy,Expert,Thinking,Auto`) that the account offers. An option that
+is missing, disabled or an upgrade offer — or a click after which the picker does not show the new label —
+is remembered as unavailable and the next one is tried; it is logged once and never retried in a loop.
+The choice is **verified** by reading the picker's label back. A mode's own usage-limit notice pauses
+Arta like any other limit. Answers may think for minutes: `ARTA_ANSWER_TIMEOUT_SEC` defaults to 600, and
+an answer counts as finished only when its text has stopped changing **and** the page's stop control is
+gone (`ARTA_SEL_BUSY`).
+
+## Files in and out
+
+- **In.** `arta/pending` and `claim` list the public files on the mentioning post and on the posts above
+  it (so "@arta what's this?" under a picture works): name, mime, size, URL, and `skip` (type / size /
+  count) for the ones not handed over. At most 4 files, 20 MB each, only types the chat page reads
+  (PNG, JPEG, GIF, WebP, PDF, text, Markdown, CSV, JSON). The brain downloads them (https only, size
+  enforced while streaming) to a private temp dir, uploads them through the page's attach control, waits
+  until the uploads finish, sends, and deletes the copies. Whatever could not be attached is named in
+  the prompt.
+- **Out.** When the answer does not fit the reply limit (or the model wrote a longer `details`), the reply
+  is trimmed and the complete answer is attached as `answer.md`. Images the answer generated (and file
+  links in it) are fetched through the signed-in page and attached. `arta/reply` takes them as
+  multipart `files[]`; the site sniffs every file from its bytes (never the name), allows only the types
+  above, caps 4 files / 10 MB each / 25 MB per reply, stores them content-addressed in the existing media
+  store and shows them on the reply like any post attachment (on comments, as links under the text).
 
 ## Every mention gets a new conversation
 

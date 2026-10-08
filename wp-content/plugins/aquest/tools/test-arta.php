@@ -70,6 +70,11 @@ namespace {
 namespace AQ {
 	// Collaborators Arta calls, reduced to what the assertions need to observe.
 	final class Secrets { public static function get( $k ) { return (string) ( $GLOBALS['T_SECRETS'][ $k ] ?? '' ); } }
+	final class Media {
+		public static $stored = [];
+		public static function url( $k ) { return 'https://cdn.test/' . ltrim( (string) $k, '/' ); }
+		public static function put_public_file( $k, $path, $mime ) { self::$stored[ $k ] = [ $mime, filesize( $path ) ]; return true; }
+	}
 	final class Notify { public static function push( $uid, $type, $title, $body = '', $url = '', $key = '' ) { $GLOBALS['T_NOTIFY'][] = compact( 'uid', 'type', 'title', 'body', 'url', 'key' ); } }
 	final class Tickets { public static $opened = []; public static function open_from_arta( ...$a ) { self::$opened[] = $a; return 1; } }
 	final class Rest {
@@ -170,6 +175,10 @@ namespace {
 	$pdo->exec( "CREATE TABLE wp_aq_comments (id INTEGER PRIMARY KEY AUTOINCREMENT, context_type TEXT, context_id INTEGER, course_id INTEGER DEFAULT 0, parent_id INTEGER DEFAULT 0,
 		author_id INTEGER, body TEXT, lang TEXT DEFAULT 'en', reply_count INTEGER DEFAULT 0, flagged INTEGER DEFAULT 0, modq INTEGER DEFAULT 0, created INTEGER)" );
 	$pdo->exec( 'CREATE TABLE wp_aq_threads (id INTEGER PRIMARY KEY, title TEXT, body TEXT, comment_count INTEGER DEFAULT 0)' );
+	$pdo->exec( 'CREATE TABLE wp_aq_post_media (id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER, lib_id INTEGER, pos INTEGER DEFAULT 0, created INTEGER DEFAULT 0)' );
+	$pdo->exec( "CREATE TABLE wp_aq_library (id INTEGER PRIMARY KEY AUTOINCREMENT, nb_id INTEGER, name TEXT, label TEXT DEFAULT '', mime TEXT, bytes INTEGER, cdn_key TEXT)" );
+	$pdo->exec( "CREATE TABLE wp_aq_notebooks (id INTEGER PRIMARY KEY, status TEXT, comments INTEGER DEFAULT 0)" );
+	$pdo->exec( "CREATE TABLE wp_aq_arta_files (id INTEGER PRIMARY KEY AUTOINCREMENT, mention_id INTEGER, reply_type TEXT, reply_id INTEGER, pos INTEGER, name TEXT, class TEXT, mime TEXT, bytes INTEGER, sha256 TEXT, cdn_key TEXT, created INTEGER)" );
 	$GLOBALS['T_OPTS']['aq_arta_table_version'] = Arta::TABLE_VERSION; // the table above stands in for dbDelta's
 	$mk = function ( $id, $slug, $name, $bot = false ) {
 		$u = (object) [ 'ID' => $id, 'user_nicename' => $slug, 'user_login' => $slug, 'display_name' => $name, 'meta' => $bot ? [ '_aq_is_bot' => 1 ] : [] ];
@@ -278,6 +287,71 @@ namespace {
 	$pdo->exec( 'UPDATE wp_aq_mentions SET created = ' . ( time() - Arta::MAX_AGE - 5 ) . " WHERE id = $mq" );
 	Arta::reconcile_tick();
 	t_ok( \AQ\Data::one( 'SELECT status FROM wp_aq_mentions WHERE id = %d', [ $mq ] )['status'] === 'expired', 'a mention older than MAX_AGE expires' );
+
+	// ── Files IN: a reply under a picture carries the picture (and the caps hold) ──────────────────
+	$pdo->exec( "INSERT INTO wp_aq_notebooks (id, status) VALUES (50, 'published'), (51, 'draft')" );
+	$lib = function ( $nb, $name, $mime, $bytes ) use ( $pdo ) {
+		\AQ\Data::insert( 'aq_library', [ 'nb_id' => $nb, 'name' => "output/$name", 'label' => '', 'mime' => $mime, 'bytes' => $bytes, 'cdn_key' => "lib/$name" ] );
+		return (int) $pdo->lastInsertId();
+	};
+	$pp = $post( 2, 'look at my plot' );
+	$files_on_pp = [
+		$lib( 50, 'plot.png', 'image/png', 120000 ),
+		$lib( 50, 'huge.png', 'image/png', Arta::ATTACH_BYTES + 1 ),
+		$lib( 50, 'model.zip', 'application/zip', 5000 ),
+		$lib( 51, 'draft.png', 'image/png', 100 ),          // unpublished work: never offered
+		$lib( 50, 'b.jpg', 'image/jpeg', 10 ), $lib( 50, 'c.webp', 'image/webp', 10 ), $lib( 50, 'd.pdf', 'application/pdf', 10 ),
+		$lib( 50, 'e.csv', 'text/csv', 10 ),
+	];
+	foreach ( $files_on_pp as $pos => $lid ) { \AQ\Data::insert( 'aq_post_media', [ 'post_id' => $pp, 'lib_id' => $lid, 'pos' => $pos, 'created' => time() ] ); }
+	$pr = $post( 1, "@arta what's this?", $pp );
+	$mr = Arta::record( 'post', $pr, 1, "@arta what's this?", 'post', $pr );
+	$att = Arta::claim( [ 'id' => $mr ] )['mention']['attachments'] ?? [];
+	$by  = array_column( $att, null, 'name' );
+	t_ok( isset( $by['plot.png'] ) && $by['plot.png']['url'] === 'https://cdn.test/lib/plot.png' && $by['plot.png']['mime'] === 'image/png' && $by['plot.png']['bytes'] === 120000 && $by['plot.png']['from'] === 'parent' && $by['plot.png']['skip'] === '', 'a reply under a picture carries the parent post\'s file (url, mime, size, name)' );
+	t_ok( ( $by['huge.png']['skip'] ?? '' ) === 'size' && ( $by['model.zip']['skip'] ?? '' ) === 'type', 'oversized and unsupported files are listed with the reason, not handed over' );
+	t_ok( ! isset( $by['draft.png'] ), 'a file from an unpublished work is never offered' );
+	t_ok( count( array_filter( $att, fn( $a ) => $a['skip'] === '' ) ) === Arta::ATTACH_MAX && ( $by['e.csv']['skip'] ?? '' ) === 'count', 'at most ATTACH_MAX files are handed over; the rest say count' );
+	$pend_att = array_values( array_filter( Arta::pending( [ 'status' => 'working', 'limit' => 50 ] )['items'], fn( $i ) => $i['id'] === $mr ) );
+	t_ok( isset( $pend_att[0]['attachments'] ) && count( $pend_att[0]['attachments'] ) === count( $att ), 'pending carries the same attachments' );
+
+	// ── Files OUT: sniffed, capped, stored once, rendered like attachments ──────────────────────────
+	$tmpf = function ( $bytes ) { $f = tempnam( sys_get_temp_dir(), 'arta' ); file_put_contents( $f, $bytes ); return $f; };
+	$png  = base64_decode( 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' );
+	t_ok( Arta::sniff( $tmpf( $png ), 'x.bin' ) === 'image/png', 'sniff: PNG by its bytes, whatever the name' );
+	t_ok( Arta::sniff( $tmpf( "<svg onload=alert(1)></svg>" ), 'a.md' ) === '' && Arta::sniff( $tmpf( "<!DOCTYPE html><script>x</script>" ), 'a.txt' ) === '', 'sniff: SVG/HTML refused even as text' );
+	t_ok( Arta::sniff( $tmpf( "MZ\x90\x00\x03\x00\x00\x00" ), 'a.png' ) === '' && Arta::sniff( $tmpf( "PK\x03\x04zip" ), 'a.txt' ) === '', 'sniff: executables and archives refused' );
+	t_ok( Arta::sniff( $tmpf( "\x89PNG\r\n\x1a\nnot really" ), 'a.png' ) === '', 'sniff: a PNG header on junk is refused' );
+	t_ok( Arta::sniff( $tmpf( '{"a":1}' ), 'a.json' ) === 'application/json' && Arta::sniff( $tmpf( '{broken' ), 'a.json' ) === '', 'sniff: JSON must parse' );
+	t_ok( Arta::sniff( $tmpf( "# Answer\n\nfull text ✓" ), 'answer.md' ) === 'text/markdown', 'sniff: UTF-8 Markdown accepted' );
+
+	$pf = $post( 3, '@arta draw a square' ); $mf2 = Arta::record( 'post', $pf, 3, '@arta draw a square', 'post', $pf );
+	Arta::claim( [ 'id' => $mf2 ] );
+	$up = [ 'files' => [
+		[ 'name' => 'square.png', 'tmp_name' => $tmpf( $png ), 'error' => 0 ],
+		[ 'name' => 'answer.md', 'tmp_name' => $tmpf( "# Full answer\n\n```py\nprint(1)\n```\n" ), 'error' => 0 ],
+		[ 'name' => 'evil.png', 'tmp_name' => $tmpf( '<html><script>alert(1)</script>' ), 'error' => 0 ],
+		[ 'name' => 'tool.exe', 'tmp_name' => $tmpf( "MZ\x90\x00" ), 'error' => 0 ],
+	] ];
+	$rf = Arta::reply( [ 'mention_id' => $mf2, 'body' => 'Here is your square (full answer attached).', 'kind' => 'answer', '_files' => $up ] );
+	$reply_post = (int) $pdo->query( "SELECT id FROM wp_aq_posts WHERE parent_id = $pf AND author_id = 9000" )->fetchColumn();
+	$cards = Arta::files_for( 'post', $reply_post );
+	t_ok( ! empty( $rf['ok'] ) && $rf['files'] === 2 && count( $rf['dropped'] ) === 2, 'reply stores the two valid files and names the two refused' );
+	t_ok( count( $cards ) === 2 && $cards[0]['class'] === 'image' && $cards[0]['mime'] === 'image/png' && $cards[1]['class'] === 'doc' && $cards[1]['name'] === 'answer.md' && $cards[0]['id'] < 0, 'the reply renders them as attachment cards (image, doc)' );
+	t_ok( isset( \AQ\Media::$stored[ 'arta/' . hash( 'sha256', $png ) . '.png' ] ) && count( \AQ\Media::$stored ) === 2, 'files land content-addressed in the media store, nothing refused is stored' );
+	$rf2 = Arta::reply( [ 'mention_id' => $mf2, 'body' => 'again', '_files' => $up ] );
+	t_ok( ! empty( $rf2['duplicate'] ) && count( Arta::files_for( 'post', $reply_post ) ) === 2 && count( \AQ\Media::$stored ) === 2, 'a retried reply stores no second copy' );
+	$many = [ 'files' => [ 'name' => [ 'a.png', 'b.png', 'c.png', 'd.png', 'e.png' ], 'tmp_name' => array_map( fn() => $tmpf( $png ), range( 1, 5 ) ), 'error' => [ 0, 0, 0, 0, 0 ] ] ];
+	[ $okf, $drop ] = Arta::reply_files( [ '_files' => $many ] );
+	t_ok( count( $okf ) === Arta::REPLY_FILES_MAX && count( $drop ) === 1, 'PHP files[] shape parsed; at most REPLY_FILES_MAX files per reply' );
+
+	\AQ\Data::insert( 'aq_comments', [ 'context_type' => 'thread', 'context_id' => 7, 'author_id' => 1, 'body' => '@arta make a diagram', 'created' => time() ] );
+	$cid2 = (int) $pdo->lastInsertId();
+	$mc2 = Arta::record( 'comment', $cid2, 1, '@arta make a diagram', 'thread', 7 );
+	Arta::claim( [ 'id' => $mc2 ] );
+	Arta::reply( [ 'mention_id' => $mc2, 'body' => 'Here it is.', '_files' => [ 'files' => [ [ 'name' => 'diagram.png', 'tmp_name' => $tmpf( $png ), 'error' => 0 ] ] ] ] );
+	$cbody = (string) $pdo->query( "SELECT body FROM wp_aq_comments WHERE author_id = 9000 AND parent_id = $cid2" )->fetchColumn();
+	t_ok( strpos( $cbody, "Files:\ndiagram.png — https://cdn.test/arta/" ) !== false, 'a comment reply lists its files as links under the text' );
 
 	// The brain's token check: closed by default, constant-time, header or Bearer.
 	$_SERVER['HTTP_X_ARTA_TOKEN'] = str_repeat( 't', 40 ); t_ok( Arta::token_ok(), 'token accepted via X-Arta-Token' );

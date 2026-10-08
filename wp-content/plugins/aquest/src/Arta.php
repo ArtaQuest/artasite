@@ -47,7 +47,7 @@ final class Arta {
 	];
 	const BIO = 'ArtaQuest’s public assistant. Mention @arta in a post or a comment and I reply in the thread, in public. Start with “bug:” to report a problem and I file it on GitHub for the team.';
 
-	const TABLE_VERSION = '1';
+	const TABLE_VERSION = '2';   // 2: aq_arta_files (files on Arta's replies)
 	const IDENTITY_VERSION = '1';
 
 	// ── Limits. A participant, not a flood. ──────────────────────────────────────────────────────
@@ -58,6 +58,25 @@ final class Arta {
 	const MAX_HANDLES     = 5;      // @-mentions honoured per post — more is a spam pattern, not a conversation
 	const POST_MAX        = 280;    // feed posts and replies — the same ceiling every member writes under
 	const COMMENT_MAX     = 2000;
+
+	// ── Files IN: what a mention's post (and the posts above it) carries, handed to the brain. ─────
+	// The brain uploads these to the chat page, so only types that page reads are offered, and a few.
+	const ATTACH_MAX   = 4;          // files the brain attaches per mention
+	const ATTACH_LIST  = 8;          // files LISTED per mention (the rest of a long thread is not worth naming)
+	const ATTACH_BYTES = 20971520;   // 20 MB each
+	const ATTACH_MIMES = [ 'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/json' ];
+
+	// ── Files OUT: what the brain may attach to Arta's reply (generated images, the full long answer).
+	// Sniffed from the bytes, never trusted from the name or the declared type; anything else is refused.
+	const REPLY_FILES_MAX   = 4;
+	const REPLY_FILE_BYTES  = 10485760;  // 10 MB each
+	const REPLY_TOTAL_BYTES = 26214400;  // 25 MB per reply
+	/** sniffed mime => [ extension, Library class ] — the ONLY types Arta's replies can carry. */
+	const REPLY_TYPES = [
+		'image/png' => [ 'png', 'image' ], 'image/jpeg' => [ 'jpg', 'image' ], 'image/gif' => [ 'gif', 'image' ], 'image/webp' => [ 'webp', 'image' ],
+		'application/pdf' => [ 'pdf', 'doc' ], 'text/plain' => [ 'txt', 'doc' ], 'text/markdown' => [ 'md', 'doc' ],
+		'text/csv' => [ 'csv', 'data' ], 'application/json' => [ 'json', 'data' ],
+	];
 	const MAX_AGE         = 172800; // 48 h — after that a mention expires unanswered rather than surfacing late
 	const CLAIM_TTL       = 900;    // a brain claim older than this is presumed dead and re-queued
 	const BEAT_FRESH      = 120;    // the brain counts as online if it polled within this many seconds
@@ -187,6 +206,25 @@ final class Arta {
 			KEY status_id (status, id),
 			KEY author_created (author_id, created),
 			KEY created (created)
+		) {$charset};" );
+		// Files on Arta's replies. Content-addressed in the public media store (key arta/<sha256>.<ext>);
+		// a row ties one stored file to one reply so the reply renders it like a post attachment.
+		dbDelta( "CREATE TABLE {$wpdb->prefix}aq_arta_files (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			mention_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			reply_type VARCHAR(12) NOT NULL DEFAULT '',
+			reply_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			pos TINYINT UNSIGNED NOT NULL DEFAULT 0,
+			name VARCHAR(120) NOT NULL DEFAULT '',
+			class VARCHAR(12) NOT NULL DEFAULT '',
+			mime VARCHAR(64) NOT NULL DEFAULT '',
+			bytes INT UNSIGNED NOT NULL DEFAULT 0,
+			sha256 CHAR(64) NOT NULL DEFAULT '',
+			cdn_key VARCHAR(190) NOT NULL DEFAULT '',
+			created INT UNSIGNED NOT NULL DEFAULT 0,
+			PRIMARY KEY  (id),
+			KEY reply (reply_type, reply_id, pos),
+			KEY mention (mention_id)
 		) {$charset};" );
 		update_option( 'aq_arta_table_version', self::TABLE_VERSION, true );
 	}
@@ -382,12 +420,15 @@ final class Arta {
 		$src  = self::source( $m );
 		if ( ! $src ) { return null; }
 		$ctx  = [];
+		$ids  = [];   // posts whose files travel with the mention: the mentioning post, then upwards
 		if ( $m['src_type'] === 'post' ) {
+			$ids[] = (int) $src['id'];
 			$pid = (int) $src['parent_id'];
 			for ( $i = 0; $pid && $i < 4; $i++ ) {
 				$p = Data::one( 'SELECT id, author_id, body, parent_id FROM ' . Data::t( 'aq_posts' ) . ' WHERE id = %d', [ $pid ] );
 				if ( ! $p ) { break; }
 				array_unshift( $ctx, [ 'author' => self::who( $p['author_id'] ), 'body' => (string) $p['body'] ] );
+				$ids[] = (int) $p['id'];
 				$pid = (int) $p['parent_id'];
 			}
 			$url = home_url( Notebook::post_url( (int) $src['id'] ) );
@@ -421,8 +462,143 @@ final class Arta {
 				'author' => self::who( $src['author_id'] ),
 			],
 			'context'   => $ctx,
+			// Public files on the mentioning post and the posts above it ("@arta what's this?" under a
+			// picture). `skip` names why one is listed but not handed over: type | size | count.
+			'attachments' => $ids ? self::attachments_for_posts( $ids ) : [],
 		];
 	}
+
+	/**
+	 * The Library files attached to these posts (nearest first), as the brain receives them. Only
+	 * published files — the same join the feed uses — so nothing private or withdrawn can leak in.
+	 */
+	public static function attachments_for_posts( array $ids ) {
+		$out = []; $taken = 0;
+		foreach ( array_values( $ids ) as $i => $pid ) {
+			$rows = Data::all(
+				'SELECT l.name, l.label, l.mime, l.bytes, l.cdn_key FROM ' . Data::t( 'aq_post_media' ) . ' m'
+				. ' JOIN ' . Data::t( 'aq_library' ) . ' l ON l.id = m.lib_id'
+				. ' JOIN ' . Data::t( 'aq_notebooks' ) . " n ON n.id = l.nb_id AND n.status = 'published'"
+				. ' WHERE m.post_id = %d ORDER BY m.pos, m.id', [ (int) $pid ] );
+			foreach ( (array) $rows as $r ) {
+				if ( count( $out ) >= self::ATTACH_LIST ) { break 2; }
+				$mime  = strtolower( trim( (string) $r['mime'] ) );
+				$bytes = (int) $r['bytes'];
+				$skip  = '';
+				if ( ! in_array( $mime, self::ATTACH_MIMES, true ) ) { $skip = 'type'; }
+				elseif ( $bytes <= 0 || $bytes > self::ATTACH_BYTES ) { $skip = 'size'; }
+				elseif ( $taken >= self::ATTACH_MAX ) { $skip = 'count'; }
+				else { $taken++; }
+				$name = basename( (string) ( $r['label'] !== '' && $r['label'] !== null ? $r['label'] : $r['name'] ) );
+				$out[] = [
+					'name' => mb_substr( $name, 0, 120 ), 'mime' => $mime, 'bytes' => $bytes,
+					'url'  => Media::url( (string) $r['cdn_key'] ),
+					'from' => $i === 0 ? 'mention' : 'parent', 'post_id' => (int) $pid, 'skip' => $skip,
+				];
+			}
+		}
+		return $out;
+	}
+
+	/** Arta's reply files, shaped like Library cards so the feed renders them as post attachments. */
+	public static function files_for( $type, $id ) {
+		if ( (string) get_option( 'aq_arta_table_version' ) !== self::TABLE_VERSION ) { return []; }
+		$rows = Data::all( 'SELECT * FROM ' . Data::t( 'aq_arta_files' ) . ' WHERE reply_type = %s AND reply_id = %d ORDER BY pos, id', [ (string) $type, (int) $id ] );
+		return array_map( function ( $r ) {
+			return [
+				'id' => -(int) $r['id'], 'nb_id' => 0, 'name' => (string) $r['name'], 'label' => (string) $r['name'],
+				'class' => (string) $r['class'], 'mime' => (string) $r['mime'], 'bytes' => (int) $r['bytes'],
+				'sha256' => (string) $r['sha256'], 'url' => Media::url( (string) $r['cdn_key'] ), 'uses' => 0, 'mine' => false,
+			];
+		}, (array) $rows );
+	}
+
+	/** The account id Arta is known by, without creating it (cheap enough for every feed card). */
+	public static function known_uid() {
+		return (int) get_option( 'aq_artabot_uid', 0 );
+	}
+
+	/**
+	 * What the bytes ARE, from their first bytes and (for text) their encoding — never from the name
+	 * or the declared type. Returns one of REPLY_TYPES' keys, or '' to refuse. Images must also parse
+	 * as images; text must be valid UTF-8 without NUL bytes, and JSON must parse. Anything executable,
+	 * archived, HTML or SVG falls through to ''.
+	 */
+	public static function sniff( $path, $name ) {
+		$fh = @fopen( $path, 'rb' );
+		if ( ! $fh ) { return ''; }
+		$head = (string) fread( $fh, 16 );
+		fclose( $fh );
+		$mime = '';
+		if ( strncmp( $head, "\x89PNG\r\n\x1a\n", 8 ) === 0 ) { $mime = 'image/png'; }
+		elseif ( strncmp( $head, "\xFF\xD8\xFF", 3 ) === 0 ) { $mime = 'image/jpeg'; }
+		elseif ( strncmp( $head, 'GIF87a', 6 ) === 0 || strncmp( $head, 'GIF89a', 6 ) === 0 ) { $mime = 'image/gif'; }
+		elseif ( strncmp( $head, 'RIFF', 4 ) === 0 && substr( $head, 8, 4 ) === 'WEBP' ) { $mime = 'image/webp'; }
+		elseif ( strncmp( $head, '%PDF-', 5 ) === 0 ) { $mime = 'application/pdf'; }
+		if ( $mime !== '' ) {
+			if ( class_exists( 'finfo' ) ) {
+				$fi = ( new \finfo( FILEINFO_MIME_TYPE ) )->file( $path );
+				if ( is_string( $fi ) && $fi !== $mime && ! ( $mime === 'image/webp' && $fi === 'image/x-webp' ) ) { return ''; }
+			}
+			if ( strpos( $mime, 'image/' ) === 0 && function_exists( 'getimagesize' ) && ! @getimagesize( $path ) ) { return ''; }
+			return $mime;
+		}
+		// Text: the whole file (≤ REPLY_FILE_BYTES) must be clean UTF-8.
+		$text = (string) @file_get_contents( $path );
+		if ( $text === '' || ! mb_check_encoding( $text, 'UTF-8' ) ) { return ''; }
+		// Control characters (other than tab, newlines and form feed) mean binary — an archive or a
+		// program whose first bytes happened to be printable.
+		if ( preg_match( '/[\x00-\x08\x0B\x0E-\x1F\x7F]/', $text ) ) { return ''; }
+		$lead = strtolower( ltrim( substr( $text, 0, 512 ), "\xEF\xBB\xBF \t\r\n" ) );
+		foreach ( [ '<!doctype', '<html', '<svg', '<?xml', '<script', '<?php' ] as $bad ) {
+			if ( strpos( $lead, $bad ) === 0 ) { return ''; }
+		}
+		$ext = strtolower( (string) pathinfo( (string) $name, PATHINFO_EXTENSION ) );
+		if ( $ext === 'json' ) { return json_decode( $text ) !== null || trim( $text ) === 'null' ? 'application/json' : ''; }
+		if ( $ext === 'csv' ) { return 'text/csv'; }
+		if ( $ext === 'md' || $ext === 'markdown' ) { return 'text/markdown'; }
+		return 'text/plain';
+	}
+
+	/**
+	 * The files on a reply request (multipart field `files[]`), validated. Returns [ ok, dropped ]:
+	 * ok = [ path, name, mime, ext, class, bytes, sha ]; dropped = human-readable reasons. Nothing is
+	 * stored here — that happens only once this request has won the right to reply.
+	 */
+	public static function reply_files( $req ) {
+		$real = is_object( $req ) && method_exists( $req, 'get_file_params' );
+		$raw  = $real ? (array) $req->get_file_params() : (array) ( $req['_files'] ?? [] );
+		$f    = $raw['files'] ?? ( $raw['files[]'] ?? [] );
+		$list = [];
+		if ( isset( $f['name'] ) && is_array( $f['name'] ) ) {
+			foreach ( array_keys( $f['name'] ) as $k ) {
+				$list[] = [ 'name' => $f['name'][ $k ] ?? '', 'tmp_name' => $f['tmp_name'][ $k ] ?? '', 'error' => $f['error'][ $k ] ?? 1 ];
+			}
+		} elseif ( isset( $f['name'] ) ) {
+			$list[] = $f;
+		} else {
+			$list = array_values( array_filter( (array) $f, 'is_array' ) );
+		}
+		$ok = []; $dropped = []; $total = 0;
+		foreach ( $list as $one ) {
+			$name = preg_replace( '/[^A-Za-z0-9._ -]+/', '_', basename( (string) ( $one['name'] ?? 'file' ) ) );
+			$name = trim( mb_substr( (string) $name, 0, 80 ), ' .' ) ?: 'file';
+			$tmp  = (string) ( $one['tmp_name'] ?? '' );
+			if ( count( $ok ) >= self::REPLY_FILES_MAX ) { $dropped[] = "$name: more than " . self::REPLY_FILES_MAX . ' files'; continue; }
+			if ( (int) ( $one['error'] ?? 1 ) !== 0 || $tmp === '' || ! is_file( $tmp ) || ( $real && ! is_uploaded_file( $tmp ) ) ) { $dropped[] = "$name: upload failed"; continue; }
+			$bytes = (int) filesize( $tmp );
+			if ( $bytes <= 0 || $bytes > self::REPLY_FILE_BYTES ) { $dropped[] = "$name: size"; continue; }
+			if ( $total + $bytes > self::REPLY_TOTAL_BYTES ) { $dropped[] = "$name: total size"; continue; }
+			$mime = self::sniff( $tmp, $name );
+			if ( $mime === '' || ! isset( self::REPLY_TYPES[ $mime ] ) ) { $dropped[] = "$name: type"; continue; }
+			[ $ext, $class ] = self::REPLY_TYPES[ $mime ];
+			$base  = (string) pathinfo( $name, PATHINFO_FILENAME );
+			$total += $bytes;
+			$ok[] = [ 'path' => $tmp, 'name' => ( $base !== '' ? $base : 'file' ) . '.' . $ext, 'mime' => $mime, 'ext' => $ext, 'class' => $class, 'bytes' => $bytes, 'sha' => hash_file( 'sha256', $tmp ) ];
+		}
+		return [ $ok, $dropped ];
+	}
+
 
 	private static function source( $m ) {
 		if ( $m['src_type'] === 'post' ) {
@@ -520,6 +696,7 @@ final class Arta {
 
 	/**
 	 * POST arta/reply {mention_id, body, kind?: answer|bug|declined, issue_url?, issue_number?, issue_title?}
+	 * — JSON, or multipart/form-data with up to REPLY_FILES_MAX files in `files[]` (see reply_files).
 	 *
 	 * Writes Arta's public reply in the mention's own thread — EXACTLY ONCE. The row is moved to
 	 * `replying` with a conditional UPDATE before anything is written, so two concurrent calls cannot
@@ -542,6 +719,7 @@ final class Arta {
 		$max  = $m['src_type'] === 'post' ? self::POST_MAX : self::COMMENT_MAX;
 		$body = self::sanitize_reply( (string) Rest::p( $req, 'body', '' ), $max );
 		if ( mb_strlen( $body ) < 2 ) { return Rest::err( 'empty', 'Reply body is empty' ); }
+		[ $files, $dropped ] = self::reply_files( $req );
 
 		$now = time();
 		$won = $wpdb->query( $wpdb->prepare(
@@ -557,6 +735,21 @@ final class Arta {
 		$src = self::source( $m );
 		if ( ! $src ) { self::set_status( $id, 'skipped', 'source deleted' ); return Rest::err( 'gone', 'The post was deleted', 410 ); }
 
+		// Files are stored only now that this request owns the reply. Content-addressed keys make a
+		// retry's second store of the same bytes a no-op overwrite of identical content.
+		$stored = [];
+		foreach ( $files as $f ) {
+			$key = 'arta/' . $f['sha'] . '.' . $f['ext'];
+			if ( Media::put_public_file( $key, $f['path'], $f['mime'] ) ) { $stored[] = $f + [ 'key' => $key ]; }
+			else { $dropped[] = $f['name'] . ': store failed'; }
+		}
+		// A comment has no attachment strip, so its files are listed under the text as links.
+		if ( $stored && $m['src_type'] !== 'post' ) {
+			$list = "\n\nFiles:";
+			foreach ( $stored as $f ) { $list .= "\n" . $f['name'] . ' — ' . Media::url( $f['key'] ); }
+			$body = self::clip( $body, max( 20, $max - mb_strlen( $list ) ) ) . $list;
+		}
+
 		$arta = self::uid();
 		[ $type, $rid ] = $m['src_type'] === 'post'
 			? [ 'post', Notebook::insert_reply( $arta, (int) $src['id'], $body ) ]
@@ -564,6 +757,13 @@ final class Arta {
 		if ( ! $rid ) {
 			self::set_status( $id, 'queued', 'reply insert failed' );
 			return Rest::err( 'server_error', 'Could not write the reply', 500 );
+		}
+		foreach ( array_values( $stored ) as $pos => $f ) {
+			Data::insert( 'aq_arta_files', [
+				'mention_id' => $id, 'reply_type' => $type, 'reply_id' => (int) $rid, 'pos' => $pos,
+				'name' => $f['name'], 'class' => $f['class'], 'mime' => $f['mime'], 'bytes' => $f['bytes'],
+				'sha256' => $f['sha'], 'cdn_key' => $f['key'], 'created' => time(),
+			] );
 		}
 		Data::update( 'aq_mentions', [
 			'status' => 'replied', 'reply_type' => $type, 'reply_id' => (int) $rid, 'kind' => $kind,
@@ -575,7 +775,7 @@ final class Arta {
 		if ( $kind === 'bug' && $issue !== '' ) {
 			self::link_ticket( $m, $src, (string) Rest::p( $req, 'issue_title', '' ), $issue );
 		}
-		return [ 'ok' => true, 'duplicate' => false, 'reply_type' => $type, 'reply_id' => (int) $rid, 'url' => $url ];
+		return [ 'ok' => true, 'duplicate' => false, 'reply_type' => $type, 'reply_id' => (int) $rid, 'url' => $url, 'files' => count( $stored ), 'dropped' => $dropped ];
 	}
 
 	private static function reply_url( $m ) {

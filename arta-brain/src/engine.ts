@@ -1,10 +1,17 @@
+import type { OutFile } from "./types";
+
 /**
  * What answers Arta's prompts. The only production implementation is BrowserEngine (the operator's
  * signed-in chat subscription); tests use a fake. There is intentionally no paid-API engine.
  */
+export type EngineAnswer = { text: string; files: OutFile[]; mode?: string };
+
 export interface Engine {
-  /** One prompt in, the assistant's full text out. Throws EngineBusy / EngineDown / Error. */
-  ask(prompt: string, timeoutMs: number): Promise<string>;
+  /**
+   * One prompt in (plus local files to attach), the assistant's full text out — and any files it
+   * produced. A plain string means text only. Throws EngineBusy / EngineDown / Error.
+   */
+  ask(prompt: string, timeoutMs: number, files?: string[]): Promise<string | EngineAnswer>;
   close(): Promise<void>;
 }
 
