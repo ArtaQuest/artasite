@@ -19,13 +19,16 @@
     <path transform="translate(263 60) scale(0.86)" d="M5 30 a14 14 0 0 1 10 -22 a17 17 0 0 1 30 -6 a15 15 0 0 1 24 12 a13 13 0 0 1 -4 24 a15 15 0 0 1 -24 8 a17 17 0 0 1 -28 -2 a12 12 0 0 1 -8 -14 z" fill="#0f1430" stroke="#4a72ff" stroke-width="9"/>
     <!-- the spark inside it: gold, the why -->
     <path transform="translate(294 77) scale(0.95)" d="M0 -15 L3.6 -3.6 L15 0 L3.6 3.6 L0 15 L-3.6 3.6 L-15 0 L-3.6 -3.6 Z" fill="#e8b923"/>
-    <!-- Arta, upper body and close up: the companion's own figure, gold, faceless (on purpose); fingertip to the chin -->
+    <!-- Arta, upper body and close up: the companion's own figure, gold, faceless (on purpose).
+         The thinker: torso straight down from the head; upper arm out to the elbow, forearm angled up,
+         and a small fist at the chin. The other arm hangs at the side. -->
     <g stroke="#e8b923" stroke-width="22">
-      <path d="M183 256 L202 430"/>
-      <path d="M189 300 L278 354 L262 440"/>
-      <path d="M189 300 L100 352 L137 248"/>
-      <circle cx="176" cy="168" r="74"/>
+      <path d="M180 256 L198 430"/>
+      <path d="M186 298 L262 352 L254 440"/>
+      <path d="M186 298 L82 326 L113 247"/>
     </g>
+    <circle cx="113" cy="244" r="20" fill="#e8b923"/>
+    <circle cx="176" cy="168" r="74" stroke="#e8b923" stroke-width="22"/>
   </g>
   <circle cx="200" cy="200" r="196" fill="none" stroke="url(#rim)" stroke-opacity="0.55" stroke-width="8"/>
 </svg>
