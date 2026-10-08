@@ -20,6 +20,7 @@ import { Coins } from "../lib/currency";
 import { sendCoins } from "../lib/api";
 import { nameClass } from "../lib/fmt";
 import { VerifyApi, fileToImage } from "../lib/verify";
+import { SocialLinks } from "../components/SocialLinks";
 
 /** The feed API filters by author (GET /notebooks?author=<slug>); the shared params type
  *  doesn't declare `author` yet, so widen it locally rather than touching api.ts (other
@@ -249,10 +250,8 @@ export default function Profile() {
   const missingFacts = !p ? [] : [
     p.location?.trim() ? "" : "Where you live",
     relationshipLabel(p.relationship) ? "" : "Relationship",
-    // Nationality is deliberately NOT listed: this card links to the settings editor, and the
-    // nationality picker lives in the Identity section further down the Account page — a prompt
-    // that lands somewhere without the field is worse than none. Every member states one at
-    // sign-up now, and the operator set the existing accounts' by hand (2026-08-18).
+    p.bio?.trim() ? "" : "Bio",
+    p.socials?.length ? "" : "Social profiles",
   ].filter(Boolean);
   const [missing, setMissing] = useState(false);
   useEffect(() => {
@@ -462,16 +461,9 @@ export default function Profile() {
             <div className="relative z-10 -mt-10 flex flex-col gap-3 sm:-mt-14 sm:flex-row sm:items-end sm:gap-5">
               {/* priority: above the fold and normally this page's LCP element — lazy-loading it
                   made the browser wait for layout before even starting the request. Carries the
-                  STATED nationality flag and the opt-in palm flip. THE FLAG CHIP ON THE AVATAR IS THE
-                  ONE PLACE the nationality shows on this page (operator 2026-08-18, settled after two
-                  rounds: "this is enough, no need for separate section or after dob") — no
-                  "Nationality" row in the About card, nothing after the date of birth. The flag is a
-                  claim, exactly like the date of birth below — the member picked it; the blue check
-                  beside the name is the verification signal, not the flag. `country` is what the
-                  backend chose to expose and today carries the same value; the claim is read first
-                  so the flag never depends on which one arrived. */}
+                  opt-in palm flip. NO nationality flag since 2026-10-08 (operator: "I want the
+                  nationality removed") — the server no longer emits one. */}
               <Avatar priority src={p.avatar} name={p.name} palm={p.palm || undefined}
-                country={p.nationality || p.country || undefined}
                 className="h-24 w-24 shrink-0 bg-space-2 text-3xl ring-4 ring-space-2 sm:h-32 sm:w-32" />
               <div className="min-w-0 grow shrink basis-0 sm:basis-auto sm:pb-1">
                 {/* THE REAL NAME IS THE HEADING. `p.name` is display_name — the handle a member is
@@ -600,13 +592,16 @@ export default function Profile() {
               )}
             </div>
 
-            {/* THE BIO, under the standing line — the actions stay near the top whatever its length. */}
-            {p.bio && <p className="mt-4 max-w-2xl whitespace-pre-wrap text-[15px] leading-relaxed text-ink-2">{p.bio}</p>}
+            {/* THE BIO, under the standing line — the actions stay near the top whatever its length.
+                Text, never HTML (the server strips tags too); `wrap-anywhere` so a pasted URL or a
+                long unbroken word wraps instead of pushing the card wider than a phone. */}
+            {p.bio && <p className="mt-4 max-w-2xl whitespace-pre-wrap text-[15px] leading-relaxed text-ink-2 wrap-anywhere">{p.bio}</p>}
             {bannerMsg && <p role="alert" className="mt-3 text-[12.5px] text-yin-ink">{bannerMsg}</p>}
 
-            {/* NO social links here (operator 2026-08-18: "remove all the social links"). They are
-                still collected in Settings, because they feed the Person schema's sameAs (aq-app.php)
-                — an indexer's fact, not a row of pills on the page. */}
+            {/* WHERE ELSE THEY ARE — back on the page (operator 2026-10-08, reversing 2026-08-18's
+                "remove all the social links"): a grid of brand marks under the bio, every network
+                the member has listed. See components/SocialLinks.tsx. */}
+            {p.socials && p.socials.length > 0 && <SocialLinks socials={p.socials} name={p.fullName?.trim() || p.name} />}
           </div>
         </header>
       )}

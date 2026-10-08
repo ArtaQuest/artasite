@@ -201,7 +201,7 @@ final class Rest {
 
 		// ── Identity + verification (blue check) ──────────────────────────────
 		[ 'GET',  'verify/status',                 'Verify::status',          'user' ],
-		[ 'POST', 'identity',                      'Verify::set_identity',    'user' ], // name + birthday (required to post) + nationality (asked at sign-up; the profile flag; checked by the blue check)
+		[ 'POST', 'identity',                      'Verify::set_identity',    'user' ], // date of birth (the whole sign-up step; required to post) + optional full legal name (read by the blue check). Nationality is no longer accepted (2026-10-08)
 		[ 'POST', 'identity/birthtime',            'Verify::set_birthtime',   'user' ], // fine-tune birth time (places the long-term goal)
 		[ 'POST', 'profile/photo',                 'Verify::set_photo',       'user' ], // change avatar only — no ID-verify, free
 		[ 'POST', 'profile/palm',                  'Verify::set_palm_photo',  'user' ], // palm "back photo" — opt-in self-verify, free

@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.80.0';
+	const VERSION = '1.81.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -2176,6 +2176,28 @@ final class Schema {
 			}
 			delete_transient( 'aq_topic_facets_v3' );
 			update_option( 'aq_astro_soften_v1', self::VERSION, true );
+		}
+
+		// 1.81.0 — THE FOUNDER'S SOCIAL HANDLES (operator 2026-10-08: "set all for /u/arash user with
+		// artafather handle"). Both of the operator's accounts — /u/arash, which the instruction names,
+		// and /u/artafather, the founder profile the About page links to and which already carried the
+		// artafather GitHub, LinkedIn and X handles. Every network gets `artafather`, in the form that
+		// network needs: Bluesky as artafather.bsky.social, Mastodon as artafather@mastodon.social.
+		// Only those keys are written (a website, Google Scholar or ORCID on record stays as it is),
+		// each through the same validator the settings form uses. One shot, gated on its own option,
+		// so editing a handle afterwards is never overwritten by a later schema bump.
+		if ( get_option( 'aq_founder_socials_v1' ) !== '1' && class_exists( '\\AQ\\Auth' ) && method_exists( '\\AQ\\Auth', 'seed_socials' ) ) {
+			$h   = 'artafather';
+			$map = array_fill_keys( [ 'linkedin', 'instagram', 'facebook', 'threads', 'tiktok', 'pinterest', 'reddit', 'snapchat', 'quora',
+				'youtube', 'vk', 'x', 'telegram', 'wechat', 'discord', 'twitch', 'github', 'strava', 'letterboxd', 'goodreads', 'soundcloud',
+				'spotify', 'kaggle', 'huggingface', 'medium', 'tumblr', 'rumble', 'bilibili', 'weibo' ], $h );
+			$map['bluesky']  = $h . '.bsky.social';
+			$map['mastodon'] = $h . '@mastodon.social';
+			foreach ( [ 'arash', 'artafather' ] as $slug ) {
+				$u = get_user_by( 'slug', $slug );
+				if ( $u ) { Auth::seed_socials( (int) $u->ID, $map ); }
+			}
+			update_option( 'aq_founder_socials_v1', '1', false );
 		}
 
 		// 1.62.2 — SEASONS REFRAME (operator directive 2026-07-10): astrology leaves the platform
