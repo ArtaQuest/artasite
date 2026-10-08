@@ -248,7 +248,7 @@ body {
   overflow-x: hidden; /* off-canvas drawers (UserMenu/sidebar) must never cause sideways scroll */
   overflow-x: clip;   /* progressive upgrade: clip (unlike hidden) keeps <body> off the scroll-container
                          path, so position:sticky still resolves to the page and position:fixed launchers
-                         (e.g. ArtaBot) stay pinned to the viewport on mobile even if a child overflows */
+                         (e.g. Arta) stay pinned to the viewport on mobile even if a child overflows */
 }
 
 /* The messaging DRAWER (LinkedIn-style, operator 2026-07-30) — must ALWAYS clear the device's
@@ -256,7 +256,7 @@ body {
    browser tabs keep the system bar OUTSIDE the viewport, so env() alone seats the drawer on the
    bottom edge. The one liar is the INSTALLED-APP display mode: Android WebAPK/standalone paints the
    page edge-to-edge UNDER the nav bar while reporting a 0 inset (the Samsung device in ticket #4 —
-   "couldn't see ArtaBot", tucked beneath the bar). Floor the clearance to a typical ~48px nav bar
+   "couldn't see Arta", tucked beneath the bar). Floor the clearance to a typical ~48px nav bar
    THERE ONLY; an unconditional phone-wide floor left it hanging 52px above the corner in every
    normal browser tab. The drawer's bottom and its body's height both derive from this one var, so
    flooring the baseline moves them together.
@@ -546,9 +546,9 @@ select option, select optgroup { color: #111; background: #fff; }
 .aq-prose .aq-md-bq { margin: 0.9em 0; padding: 0.5em 0.9em; border-inline-start: 3px solid var(--color-yang); background: rgba(232, 185, 35, 0.06); color: var(--color-ink-2); border-start-end-radius: 4px; border-end-end-radius: 4px; }
 /* An audio player sized for a chat bubble rather than a page. */
 .aq-prose .aq-md-audio { display: block; width: 100%; margin: 0.6em 0; height: 40px; }
-/* An interactive panel ArtaBot built. Tall enough to be usable, capped so it never eats the thread. */
+/* An interactive panel Arta built. Tall enough to be usable, capped so it never eats the thread. */
 .aq-prose .aq-md-frame { display: block; width: 100%; height: min(62vh, 420px); margin: 0.6em 0; border-radius: 10px; border: 1px solid var(--color-line); background: var(--color-space-2); }
-/* Media ArtaBot produced, inline in a bubble: never wider than the bubble, never a layout jump. */
+/* Media Arta produced, inline in a bubble: never wider than the bubble, never a layout jump. */
 .aq-prose .aq-md-img { display: block; max-width: 100%; height: auto; margin: 0.6em 0; border-radius: 10px; border: 1px solid var(--color-line); background: var(--color-space-2); }
 .aq-prose .aq-md-code { background: color-mix(in srgb, var(--color-veil) 8%, transparent); padding: 0.12em 0.4em; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }
 .aq-prose .aq-md-pre { background: var(--color-space-3); padding: 0.9em 1em; border-radius: 6px; overflow-x: auto; margin: 0 0 0.9em; }
@@ -1647,7 +1647,7 @@ html[data-theme="dark"] .aq-pdf-crop[data-invert] svg { filter: invert(1) hue-ro
 .aq-vl-video { display: block; width: 100%; max-height: 78vh; background: #000; }
 .aq-vl-loading { display: flex; align-items: center; justify-content: center; min-height: 40vh; }
 /* The player bar owns the bottom strip while it is up: sit above other fixed furniture, and lift the
-   ArtaBot launcher clear of it (hit-testing proved the launcher was swallowing the Next-track click). */
+   Arta launcher clear of it (hit-testing proved the launcher was swallowing the Next-track click). */
 .aq-pl-bar { z-index: 61; }
 html[data-aq-player="1"] .aq-bot-panel { bottom: calc(4.25rem + var(--aq-safe-bottom)); }
 
@@ -1680,7 +1680,7 @@ html[data-aq-modal="1"] .aq-bot-panel { visibility: hidden; opacity: 0; pointer-
   background: color-mix(in srgb, currentColor 18%, transparent); overflow: hidden; }
 .aq-lib-cont-bar > span { display: block; height: 100%; background: var(--color-yang); }
 
-/* ── ArtaBot live answer ─────────────────────────────────────────────────────────
+/* ── Arta live answer ─────────────────────────────────────────────────────────
    The caret that follows the words while a reply is still being written, and the thinking dots shown
    before the first token lands. Brand only (yang/yin) — no third accent. Both are decorative and
    aria-hidden; a reader on prefers-reduced-motion gets the same information without the movement. */

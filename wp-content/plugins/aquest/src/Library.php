@@ -95,7 +95,7 @@ final class Library {
 	}
 
 	/**
-	 * ONE-TIME relaunch purge (2026-07-02). ArtaPublishing relaunched with Claude Fable 5 as the editor;
+	 * ONE-TIME relaunch purge (2026-07-02). ArtaPublishing relaunched with a new model as the editor;
 	 * every book project from the earlier pipeline — including the bundled seed example (now retired,
 	 * data/library-seed.json deleted) — is removed so the library restarts clean. Bounded by a fixed
 	 * cutoff baked in at write time, so a book created AFTER this code existed is never touched, and

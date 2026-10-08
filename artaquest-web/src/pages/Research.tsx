@@ -349,13 +349,10 @@ function CodeViewer({ id, url }: { id: number; url: string }) {
   return <pre className="max-h-[480px] overflow-auto rounded-card border border-line bg-space-1 p-3 font-mono text-[12px] leading-relaxed text-ink-2"><code>{data.text}</code></pre>;
 }
 
-/** Human label for the reviewer model id (e.g. "claude-fable-5" → "Claude Fable 5",
- *  "claude-opus-4-8" → "Claude Opus 4.8" — single- and two-number model families). */
+/** The reviewer is always presented as ArtaScience — the model behind it is not named on the
+ *  platform. Kept as a function so older review rows (whatever id they stored) render the same. */
 function modelLabel(m?: string) {
-  if (!m) return "";
-  const x = m.match(/(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d+))?/i);
-  if (x) return `Claude ${x[1][0].toUpperCase()}${x[1].slice(1)} ${x[2]}${x[3] ? `.${x[3]}` : ""}`;
-  return m.replace(/^claude-/, "");
+  return m ? "ArtaScience" : "";
 }
 /** The seven scoring axes, in WEIGHT order (reproducibility first) — keys match the reviewer's
  *  `scores` object; the weights are the public rubric documented on /artascience. */
@@ -1712,7 +1709,7 @@ function Foot({ name = PORTAL }: { name?: string }) {
 // ── The shared review model, explained once (reused by the hub + every journal's About) ─────────────
 function ReviewModelExplainer() {
   return (
-    <p className="text-[15px] leading-relaxed text-ink-2">Every ArtaQuest journal runs a <b className="text-ink">fully automated, end-to-end AI review process</b>. There is no human peer review. The reviewer — ArtaScience, Claude running at maximum effort with tools — clones your code, fetches your data, <b className="text-ink">runs the analysis itself</b>, and checks whether the results reproduce your claims. It returns a reproduced (yes/no) verdict, a score, and a detailed report, and either accepts, requests revisions, or rejects. Revisions loop: address the report, resubmit, and a fresh round is reviewed — for as many rounds as it takes. Only work that <i>reproduces</i> is accepted. Every submission and every round of feedback is public. In the spirit of radical transparency, the reviewer's <a className="font-semibold text-yin-light hover:underline" href="/artascience">exact prompt is published and annotated line by line — see how ArtaScience works <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a></p>
+    <p className="text-[15px] leading-relaxed text-ink-2">Every ArtaQuest journal runs a <b className="text-ink">fully automated, end-to-end AI review process</b>. There is no human peer review. The reviewer — ArtaScience, an AI reviewer running at maximum effort with tools — clones your code, fetches your data, <b className="text-ink">runs the analysis itself</b>, and checks whether the results reproduce your claims. It returns a reproduced (yes/no) verdict, a score, and a detailed report, and either accepts, requests revisions, or rejects. Revisions loop: address the report, resubmit, and a fresh round is reviewed — for as many rounds as it takes. Only work that <i>reproduces</i> is accepted. Every submission and every round of feedback is public. In the spirit of radical transparency, the reviewer's <a className="font-semibold text-yin-light hover:underline" href="/artascience">exact prompt is published and annotated line by line — see how ArtaScience works <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a></p>
   );
 }
 

@@ -48,7 +48,7 @@ namespace AQ;
  */
 final class Notebook {
 
-	const TABLE_VERSION = '22'; // 22 = the Kaggle checklist reset: kg_* columns + aq_library
+	const TABLE_VERSION = '23'; // 22 = the Kaggle checklist reset: kg_* columns + aq_library; 23 = post replies (parent_id/root_id/reply_count)
 
 	/** Publishing REQUIRES the author's device passkey signature (operator 2026-07-24: "only the
 	 *  user can publish, not even server/source access"). Email-only confirmation is forgeable by
@@ -332,9 +332,13 @@ final class Notebook {
 			repost_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			hearts INT NOT NULL DEFAULT 0,
 			reposts INT NOT NULL DEFAULT 0,
+			parent_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			root_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			reply_count INT UNSIGNED NOT NULL DEFAULT 0,
 			created INT UNSIGNED NOT NULL DEFAULT 0,
 			PRIMARY KEY  (id),
-			KEY feed (id), KEY author (author_id, id), KEY nb (nb_id), KEY top (hearts, id)
+			KEY feed (id), KEY author (author_id, id), KEY nb (nb_id), KEY top (hearts, id),
+			KEY parent (parent_id, id)
 		) {$charset};" );
 		// One-shot backfill: every already-published notebook gets its wrapping post.
 		global $wpdb;
@@ -924,14 +928,22 @@ final class Notebook {
 			[ $uid ] );
 	}
 
+	/** @var array<int,array> per-request memo — a feed page shows the same few authors many times over */
+	private static $cards = [];
+
 	public static function author_card( $uid ) {
-		$u = get_userdata( (int) $uid );
-		return [
-			'id'     => (int) $uid,
+		$uid = (int) $uid;
+		if ( isset( self::$cards[ $uid ] ) ) { return self::$cards[ $uid ]; }
+		$u = get_userdata( $uid );
+		$c = [
+			'id'     => $uid,
 			'name'   => $u ? (string) $u->display_name : 'Member',
 			'slug'   => $u ? (string) $u->user_nicename : '',
-			'avatar' => class_exists( '\\AQ\\Verify' ) ? (string) Verify::avatar_url( (int) $uid ) : '',
+			'avatar' => class_exists( '\\AQ\\Verify' ) ? (string) Verify::avatar_url( $uid ) : '',
 		];
+		if ( Arta::is_arta( $uid ) ) { $c['bot'] = true; } // the UI badges Arta's replies as automated
+		if ( count( self::$cards ) < 500 ) { self::$cards[ $uid ] = $c; }
+		return $c;
 	}
 
 	private static function card( $r ) {
@@ -1269,6 +1281,7 @@ final class Notebook {
 		if ( $pc && (int) $pc['author_id'] !== $uid && (int) $pc['author_id'] !== (int) $r['author_id'] ) {
 			Notify::push( (int) $pc['author_id'], 'reply', $who . ' replied to your comment', mb_substr( $body, 0, 120 ), $url, 'nbcr' . $cid );
 		}
+		if ( ! $flagged ) { Arta::record( 'comment', (int) $cid, $uid, $body, 'notebook', (int) $r['id'], $url . '#c' . (int) $cid ); }
 		return [ 'ok' => true, 'id' => (int) $cid, 'flagged' => $flagged ];
 	}
 
@@ -1401,7 +1414,9 @@ final class Notebook {
 		self::ensure_tables();
 		$cursor = Rest::pint( $req, 'cursor', 0 );
 		$kind   = sanitize_key( (string) Rest::p( $req, 'kind', '' ) );
-		$where  = '1=1';
+		// Replies live in their post's thread, not on the timeline (X's model). parent_id = 0 also
+		// lets the (parent_id, id) index serve the newest-first page directly.
+		$where  = 'parent_id = 0';
 		$args   = [];
 		if ( $kind !== '' && isset( self::KINDS[ $kind ] ) ) {
 			$where .= ' AND nb_id IN (SELECT id FROM ' . Data::t( 'aq_notebooks' ) . ' WHERE kind = %s)';
@@ -1459,7 +1474,59 @@ final class Notebook {
 			'nb' => $nb && ! self::gone( $nb ) ? self::card( $nb ) : null,
 			'media' => $media,
 			'repost' => $re,
+			'parent_id' => (int) ( $p['parent_id'] ?? 0 ),
+			'replies' => (int) ( $p['reply_count'] ?? 0 ),
 		];
+	}
+
+	/**
+	 * GET posts/{id} — one post and the post it answers (for the focused view at /works/?post={id}).
+	 * A deleted post is 404; its replies stay readable under their own ids.
+	 */
+	public static function post_get( $req ) {
+		self::ensure_tables();
+		$p = Data::one( 'SELECT * FROM ' . Data::t( 'aq_posts' ) . ' WHERE id = %d', [ Rest::pint( $req, 'id' ) ] );
+		if ( ! $p ) { return Rest::err( 'not_found', 'No such post', 404 ); }
+		$out = self::post_out( $p );
+		$par = (int) ( $p['parent_id'] ?? 0 ) ? Data::one( 'SELECT * FROM ' . Data::t( 'aq_posts' ) . ' WHERE id = %d', [ (int) $p['parent_id'] ] ) : null;
+		$out['parent'] = $par ? self::post_out( $par, 1 ) : null;
+		$out['mine']   = self::my_hearts( array_filter( [ $p, $par ] ) );
+		return $out;
+	}
+
+	/** Where one post lives in the app: the feed focused on it. A query on an existing SPA route rather
+	 *  than a new /post/{id} path, so no server routing, title or 404 handling had to change. */
+	public static function post_url( $id ) { return '/works/?post=' . (int) $id; }
+
+	/** GET posts/{id}/replies?cursor= — a post's direct replies, oldest first (a conversation reads down). */
+	public static function post_replies( $req ) {
+		self::ensure_tables();
+		$id = Rest::pint( $req, 'id' );
+		[ $rows, $next ] = Data::page( 'aq_posts', 'parent_id = %d', [ $id ], Rest::pint( $req, 'cursor', 0 ), self::PAGE, 'ASC' );
+		return [ 'items' => array_map( [ self::class, 'post_out' ], $rows ), 'next' => $next, 'mine' => self::my_hearts( $rows ) ];
+	}
+
+	/**
+	 * Write a text reply under a post. Shared by post_create (a member replying) and Arta::reply
+	 * (Arta answering a mention), so a reply is the same row whoever writes it.
+	 */
+	public static function insert_reply( $uid, $parent_id, $body ) {
+		self::ensure_tables();
+		$par = Data::one( 'SELECT id, root_id, author_id FROM ' . Data::t( 'aq_posts' ) . ' WHERE id = %d', [ (int) $parent_id ] );
+		if ( ! $par ) { return 0; }
+		$root = (int) $par['root_id'] ?: (int) $par['id'];
+		$id   = Data::insert( 'aq_posts', [
+			'author_id' => (int) $uid, 'body' => mb_substr( (string) $body, 0, 280 ), 'nb_id' => 0, 'repost_id' => 0,
+			'parent_id' => (int) $par['id'], 'root_id' => $root, 'created' => Data::now(),
+		] );
+		if ( ! $id ) { return 0; }
+		Data::bump( 'aq_posts', [ 'id' => (int) $par['id'] ], 'reply_count' );
+		if ( (int) $par['author_id'] !== (int) $uid ) {
+			$me = get_userdata( (int) $uid );
+			Notify::push( (int) $par['author_id'], 'reply', ( $me ? $me->display_name : 'Someone' ) . ' replied to your post',
+				mb_substr( (string) $body, 0, 120 ), self::post_url( (int) $id ), 'postr' . $id );
+		}
+		return (int) $id;
 	}
 
 	public static function post_create( $req ) {
@@ -1469,7 +1536,17 @@ final class Notebook {
 		$body = trim( wp_kses( (string) Rest::p( $req, 'body', '' ), [] ) );
 		$nbid = Rest::pint( $req, 'nb_id', 0 );
 		$reid = Rest::pint( $req, 'repost_id', 0 );
+		$pid  = Rest::pint( $req, 'parent_id', 0 );
 		if ( mb_strlen( $body ) > 280 ) { return Rest::err( 'too_long', 'Keep it to 280 characters' ); }
+		// A REPLY is text under another post — no attachments, no repost, its own thread row.
+		if ( $pid ) {
+			if ( $body === '' ) { return Rest::err( 'empty', 'Say something' ); }
+			if ( ! Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_posts' ) . ' WHERE id = %d', [ $pid ] ) ) { return Rest::err( 'not_found', 'No such post', 404 ); }
+			$rid = Notebook::insert_reply( $uid, $pid, $body );
+			if ( ! $rid ) { return Rest::err( 'server_error', 'Could not post', 500 ); }
+			Arta::record( 'post', $rid, $uid, $body, 'post', $pid, self::post_url( $rid ) );
+			return self::post_out( Data::one( 'SELECT * FROM ' . Data::t( 'aq_posts' ) . ' WHERE id = %d', [ $rid ] ) );
+		}
 		// The "is this post empty" test lives BELOW, after the attachments are resolved — a post
 		// that is nothing but a Library item is a perfectly good post.
 		$orig = null;
@@ -1518,6 +1595,7 @@ final class Notebook {
 				Notify::push( (int) $orig['author_id'], 'repost', ( $me ? $me->display_name : 'Someone' ) . ( $body !== '' ? ' quoted your post' : ' reposted your post' ), mb_substr( $body, 0, 120 ), '/works/', 'repost' . $id );
 			}
 		}
+		if ( $id && $body !== '' ) { Arta::record( 'post', (int) $id, $uid, $body, 'post', (int) $id, self::post_url( (int) $id ) ); }
 		return $id ? self::post_out( Data::one( 'SELECT * FROM ' . Data::t( 'aq_posts' ) . ' WHERE id = %d', [ $id ] ) )
 			: Rest::err( 'server_error', 'Could not post', 500 );
 	}
@@ -1576,6 +1654,9 @@ final class Notebook {
 	public static function purge_post( $p ) {
 		global $wpdb;
 		$id = (int) $p['id'];
+		if ( (int) ( $p['parent_id'] ?? 0 ) ) {
+			$wpdb->query( $wpdb->prepare( 'UPDATE ' . Data::t( 'aq_posts' ) . ' SET reply_count = GREATEST(reply_count - 1, 0) WHERE id = %d', (int) $p['parent_id'] ) );
+		}
 		if ( (int) $p['repost_id'] ) {
 			$wpdb->query( $wpdb->prepare( 'UPDATE ' . Data::t( 'aq_posts' ) . ' SET reposts = GREATEST(reposts - 1, 0) WHERE id = %d', (int) $p['repost_id'] ) );
 		}
@@ -2508,7 +2589,7 @@ final class Notebook {
 			'queued'    => (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$runs} WHERE state IN ('queued','claimed')" ),
 			'published' => (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$nbs} WHERE status = 'published'" ),
 			'kinds'     => $by,
-			'model'     => 'claude-opus-5', // ArtaCritic — latest Opus, fleet-wide (operator 2026-07-20); mirrors the relay's CRITIC_MODEL
+			'model'     => 'ArtaAI', // ArtaCritic — the relay's critic model; not named on the platform
 			'pass'      => self::PASS_SCORE, // minimum BALANCE (100 = perfectly centred)
 			'safe'      => [ self::SAFE_LO, self::SAFE_HI ], // the middle-20 safe zone (v3 trade-off gate)
 			'panel'     => self::PANEL_SIZE, // independent double-blind reviewers per run (v2, 2026-07-22)

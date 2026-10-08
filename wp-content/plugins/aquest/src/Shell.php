@@ -10,18 +10,18 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * Operator directive (2026-08-08): "I want each user to have its own linux user with ssh key … each
  * user to be able to ssh to their sandbox into the server." Then, the day after: "ensure everything
  * scales down to zero and unnecessary server costs are avoided." Both are satisfied by the same move —
- * the shell went from an always-on VM to the on-demand containers ArtaBot already runs on. A machine
+ * the shell went from an always-on VM to the on-demand containers Arta already runs on. A machine
  * starts when a member connects and stops when they leave.
  *
  * WHAT A MEMBER IS ACTUALLY GETTING, and why this is not as alarming as "shell access to our server"
- * sounds. Their session runs as their OWN unprivileged uid, in the same container ArtaBot's tool turns
+ * sounds. Their session runs as their OWN unprivileged uid, in the same container Arta's tool turns
  * run in, with a home fetched from the file share and written back when they leave. The share itself is
  * mounted so that only the supervising process can read it, so one member's terminal cannot see
  * another member's files — checked, not asserted: `ls /mnt/aq` from inside a session answers Permission
  * denied. Production, this database and the platform's credentials are not reachable from it at all.
  *
- * What is new is PERSISTENCE: their home survives, and it is the same home ArtaBot works in on their
- * behalf, so "ask ArtaBot to build it, then open a terminal and find it" is one workspace rather than
+ * What is new is PERSISTENCE: their home survives, and it is the same home Arta works in on their
+ * behalf, so "ask Arta to build it, then open a terminal and find it" is one workspace rather than
  * two.
  *
  * SSH itself is not back yet. Container Apps speaks HTTP and nothing else, so `ssh` needs a
@@ -53,7 +53,7 @@ final class Shell {
 	public static function reach() { return self::HOST; }
 
 	/** IS THERE A MACHINE TO REACH? (2026-08-09.) The always-on VM those addresses point at was switched
-	 *  off when ArtaBot moved to on-demand containers that cost nothing while nobody is using them, so
+	 *  off when Arta moved to on-demand containers that cost nothing while nobody is using them, so
 	 *  the ssh line above currently names a box that will not answer. Rather than a flag someone has to
 	 *  remember to flip back, this asks the ONE thing that is true only once the replacement exists: the
 	 *  address of its gateway. No endpoint configured ⇒ the machine is between homes, and the settings
@@ -85,7 +85,7 @@ final class Shell {
 	 *  container, short enough that one copied out of a browser is worthless by the time it travels. */
 	const TICKET_TTL = 120;
 
-	/** The machine a terminal runs on, named in the same ladder ArtaBot's turns are priced by — so the
+	/** The machine a terminal runs on, named in the same ladder Arta's turns are priced by — so the
 	 *  usage page can explain a terminal line without a second set of rates to keep in step. */
 	const TIER = 'medium';
 
@@ -216,7 +216,7 @@ final class Shell {
 	 * and a ticket copied out of someone's browser stops working in minutes.
 	 *
 	 * Nothing is charged here. A terminal is billed for the seconds it actually ran, reported by the
-	 * container when it closes — the same after-the-fact metering every ArtaBot turn uses.
+	 * container when it closes — the same after-the-fact metering every Arta turn uses.
 	 */
 	public static function open( $req ) {
 		self::ensure_table();
@@ -335,7 +335,7 @@ final class Shell {
 	 * POST /relay/shell/roster — every member who should have an account, with their keys.
 	 *
 	 * Members WITHOUT keys are included on purpose. The account and its home are provisioned anyway, so
-	 * ArtaBot has somewhere persistent to work on their behalf from the very first turn; adding a key
+	 * Arta has somewhere persistent to work on their behalf from the very first turn; adding a key
 	 * later opens the door to a workspace that already exists rather than creating one.
 	 */
 	public static function roster( $req ) {

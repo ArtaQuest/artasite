@@ -77,40 +77,10 @@ final class News {
 		'netloss' => [ 'label' => 'Internet connectivity loss', 'fn' => 'detect_netloss', 'svg' => 'connectivity_svg' ],
 		'blackout' => [ 'label' => 'National traffic collapse',  'fn' => 'detect_blackout', 'svg' => 'connectivity_svg' ],
 		'price'   => [ 'label' => 'Commodity price move',      'fn' => 'detect_price', 'svg' => 'price_svg' ],
-		'claude'  => [ 'label' => 'Claude service disruption', 'fn' => 'detect_claude', 'svg' => '' ], // no figure yet — see detection_svg()
 	];
 
-	/**
-	 * THE ONE ADMITTED EXCEPTION TO "INSTRUMENTS ONLY", stated openly rather than smuggled in.
-	 *
-	 * Every other detector reads an instrument that is INDEPENDENT of whatever it measures: a
-	 * seismometer does not work for the earthquake, and the global routing table does not work for
-	 * the government that switched the internet off. A vendor status page is different — the party
-	 * being measured is also the party doing the measuring, which is exactly the arrangement the
-	 * two-tier rule exists to keep out.
-	 *
-	 * It is admitted here for one specific reason: a service outage has no adversarial incentive. A
-	 * state may wish to hide a blackout and an army may wish to deny a strike, but a cloud provider
-	 * gains nothing by inventing its own downtime, and its status page is machine-generated from its
-	 * own monitoring rather than written by a press office. The failure mode is UNDER-reporting, not
-	 * fabrication — and under-reporting costs us a story we never had, while fabrication would cost
-	 * the platform its guarantee.
-	 *
-	 * Two rules keep it honest. We read the STRUCTURED endpoint (component status enums and incident
-	 * impact enums), never the human-written incident prose, so nothing a press office phrases can
-	 * change what we record. And the reading is labelled 'operator-reported' in its confidence, so it
-	 * can never be mistaken on the page for something we measured ourselves.
-	 */
-	const CLAUDE_STATUS_URL = 'https://status.anthropic.com/api/v2/summary.json';
-	/** Statuspage component enums → a severity on the same 0-100 scale the connectivity detectors use. */
-	const CLAUDE_SEVERITY = [
-		'major_outage'         => 100.0,
-		'partial_outage'       => 60.0,
-		'degraded_performance' => 30.0,
-	];
-	/** Incident impact enums → severity, used when an incident is open without a degraded component. */
-	const CLAUDE_IMPACT = [ 'critical' => 100.0, 'major' => 70.0, 'minor' => 30.0 ];
-	const CLAUDE_MIN_SEVERITY = 30.0;   // degraded performance is the floor — 'operational' is not news
+	// (The vendor-status detector — the one instrument that read a provider's own status page — was
+	//  retired 2026-10-08. Its stored rows stay in the ledger; an unregistered detector shows nothing.)
 
 	// ── conflict-sensitive monitoring (operator 2026-07-25: "every public available signal
 	// worldwide, especially Iran, that could be affected by war") ─────────────────────────────
@@ -682,8 +652,6 @@ final class News {
 				return $sev >= ( self::is_blast_row( $r ) ? self::BLAST_MIN_MAG : self::QUAKE_MIN_MAG );
 			case 'price':
 				return $sev >= self::PRICE_SIGMA;
-			case 'claude':
-				return $sev >= self::CLAUDE_MIN_SEVERITY;
 		}
 		return false;   // an unregistered detector shows nothing rather than everything
 	}
@@ -838,9 +806,9 @@ final class News {
 	 *     studio wp eval 'print_r( AQ\News::purge_artabot_posts() );'          # DRY RUN, changes nothing
 	 *     studio wp eval 'print_r( AQ\News::purge_artabot_posts( false ) );'   # actually delete
 	 *
-	 * TARGETING IS NARROW ON PURPOSE. It deletes only notebooks that are BOTH authored by ArtaBot AND
-	 * carry the exact headline of a row in the detection ledger. ArtaBot is a member with other
-	 * reasons to hold work, and "everything ArtaBot ever wrote" is not what was asked for — so a
+	 * TARGETING IS NARROW ON PURPOSE. It deletes only notebooks that are BOTH authored by Arta AND
+	 * carry the exact headline of a row in the detection ledger. Arta is a member with other
+	 * reasons to hold work, and "everything Arta ever wrote" is not what was asked for — so a
 	 * notebook that does not match a detection is left alone and reported separately, where it can be
 	 * seen rather than silently swept up.
 	 *
@@ -900,7 +868,6 @@ final class News {
 			case 'blackout': return number_format( $sev, 0 ) . '% below normal';
 			case 'quake':    return 'M' . number_format( $sev, 1 );
 			case 'price':    return number_format( $sev, 1 ) . 'σ move';
-			case 'claude':   return $sev >= 100 ? 'major outage' : ( $sev >= 60 ? 'partial outage' : 'degraded' );
 		}
 		return '';
 	}
@@ -909,7 +876,7 @@ final class News {
 	 * GET /news — the detections themselves, straight from the instrument ledger.
 	 *
 	 * THIS READS aq_news_events DIRECTLY (operator 2026-07-31: disaster signals belong in the rail
-	 * card "like any other news and not posted"). It used to read ArtaBot's published notebooks,
+	 * card "like any other news and not posted"). It used to read Arta's published notebooks,
 	 * which coupled the card to the posting cron: the rail could only show what had been posted, so
 	 * switching the posting off would have silently emptied it. The card is now the primary surface
 	 * for a detection rather than a pointer to one, and it carries no link, because with nothing
@@ -1448,11 +1415,11 @@ final class News {
 	// ── ArtaNews newsworthiness floors (posting RETIRED 2026-07-31) ────────────────────────────
 	/**
 	 * THE POSTING LOOP IS GONE (operator 2026-07-31: disaster signals belong "in the bottom card like
-	 * any other news and not posted — so not posted under ArtaBot's account").
+	 * any other news and not posted — so not posted under Arta's account").
 	 *
 	 * What used to live here: artanews_tick() picked the loudest unposted detection, artanews_post()
 	 * built a reproducible notebook, ran it on Kaggle and published it as a submission authored by
-	 * ArtaBot, and artanews_ipynb() wrote that notebook. All three are removed — recoverable from git
+	 * Arta, and artanews_ipynb() wrote that notebook. All three are removed — recoverable from git
 	 * history if the decision is ever revisited.
 	 *
 	 * WHAT THAT COST, said plainly rather than left for someone to discover: a posted notebook was a
@@ -2936,105 +2903,6 @@ final class News {
 			$head .= ' (' . number_format( (float) $r['severity'] ) . ' MW)';
 		}
 		return $head;
-	}
-
-	/**
-	 * CLAUDE SERVICE DISRUPTION — the provider's own machine monitoring (see CLAUDE_STATUS_URL above
-	 * for why this one detector is allowed to read a vendor status page at all).
-	 *
-	 * Reads the Statuspage summary endpoint and takes ONLY enums from it: each component's `status`
-	 * and each unresolved incident's `impact`. The incident title is used as a label and never as a
-	 * measurement, so no wording on the status page can change the severity we record.
-	 *
-	 * KEYED ON THE INCIDENT, NOT THE HOUR. The connectivity detector learned this the hard way: a
-	 * per-hour key turned one ongoing national blackout into a fresh page every hour. An outage is a
-	 * single continuing event, so an open incident keeps ONE ekey for its whole life and every later
-	 * poll updates it. Component degradation with no incident attached falls back to a per-day key.
-	 */
-	public static function detect_claude() {
-		$t0   = microtime( true );
-		$raw  = self::fetch( self::CLAUDE_STATUS_URL, 15 );
-		$body = json_decode( $raw, true );
-		// "NO EVENTS" AND "COULD NOT READ THE SOURCE" MUST NOT LOOK THE SAME. detect_tick() records
-		// health as (bool) $rows, which is fine for a detector that normally returns something — but
-		// the healthy state of this one is ZERO events, so that generic rule would file a perfectly
-		// working monitor as a failed source on every tick, and a genuinely unreachable status page
-		// would hide inside the same silence. So report health here, keyed on whether the FETCH
-		// succeeded, not on whether anything was wrong with Claude.
-		if ( ! is_array( $body ) || ! isset( $body['components'] ) ) {
-			Extra::src_health( 'news:claude', false, ( microtime( true ) - $t0 ) * 1000, 0,
-				'' === $raw ? 'status endpoint unreachable' : 'unexpected payload shape' );
-			return [];
-		}
-		$now  = time();
-		$out  = [];
-		$src  = [ 'name' => 'Anthropic status (Statuspage)', 'url' => self::CLAUDE_STATUS_URL, 'retrieved' => $now ];
-
-		// 1) OPEN INCIDENTS — the provider has acknowledged a disruption and given it an impact enum.
-		foreach ( (array) ( $body['incidents'] ?? [] ) as $inc ) {
-			$impact = strtolower( (string) ( $inc['impact'] ?? '' ) );
-			$sev    = (float) ( self::CLAUDE_IMPACT[ $impact ] ?? 0.0 );
-			if ( $sev < self::CLAUDE_MIN_SEVERITY ) { continue; }
-			$ts   = strtotime( (string) ( $inc['started_at'] ?? $inc['created_at'] ?? '' ) ) ?: $now;
-			$name = (string) ( $inc['name'] ?? 'Service incident' );
-			$out[] = [
-				'ekey'       => 'claude_inc_' . (string) ( $inc['id'] ?? md5( $name . $ts ) ),
-				'ts'         => $ts,
-				'lat'        => null, 'lon' => null,
-				'place'      => 'Anthropic', 'country' => '',
-				'severity'   => $sev,
-				'rank'       => $sev,
-				// NOT 'high': this is the measured party reporting on itself. The page must never show
-				// a vendor self-report with the same confidence as a seismometer.
-				'confidence' => 'operator-reported',
-				'kind'       => 'service disruption',
-				'headline'   => 'Claude service disruption — ' . $name,
-				'measures'   => [
-					'Impact'          => $impact,
-					'Incident status' => (string) ( $inc['status'] ?? '' ),
-					'Started (UTC)'   => gmdate( 'c', $ts ),
-					'Components'      => implode( ', ', array_map(
-						static function ( $c ) { return (string) ( $c['name'] ?? '' ); },
-						(array) ( $inc['components'] ?? [] ) ) ),
-				],
-				'source'     => $src,
-			];
-		}
-		if ( $out ) {
-			Extra::src_health( 'news:claude', true, ( microtime( true ) - $t0 ) * 1000, count( $out ) );
-			return $out;
-		}
-
-		// 2) NO OPEN INCIDENT, but a component is degraded — still a measurement, keyed per day.
-		foreach ( (array) ( $body['components'] ?? [] ) as $c ) {
-			if ( ! empty( $c['group'] ) ) { continue; }              // group headers carry no status of their own
-			$status = strtolower( (string) ( $c['status'] ?? '' ) );
-			$sev    = (float) ( self::CLAUDE_SEVERITY[ $status ] ?? 0.0 );
-			if ( $sev < self::CLAUDE_MIN_SEVERITY ) { continue; }
-			$name = (string) ( $c['name'] ?? 'Component' );
-			$ts   = strtotime( (string) ( $c['updated_at'] ?? '' ) ) ?: $now;
-			$out[] = [
-				'ekey'       => 'claude_comp_' . (string) ( $c['id'] ?? sanitize_title( $name ) ) . '_' . gmdate( 'Ymd', $ts ),
-				'ts'         => $ts,
-				'lat'        => null, 'lon' => null,
-				'place'      => 'Anthropic', 'country' => '',
-				'severity'   => $sev,
-				'rank'       => $sev,
-				'confidence' => 'operator-reported',
-				'kind'       => 'service disruption',
-				'headline'   => 'Claude service disruption — ' . $name . ' ' . str_replace( '_', ' ', $status ),
-				'measures'   => [
-					'Component'      => $name,
-					'Status'         => str_replace( '_', ' ', $status ),
-					'Observed (UTC)' => gmdate( 'c', $ts ),
-				],
-				'source'     => $src,
-			];
-		}
-		// A read that found nothing wrong is a SUCCESSFUL read — that is the normal state of a service
-		// monitor and it must not look like an outage of the monitor itself.
-		Extra::src_health( 'news:claude', true, ( microtime( true ) - $t0 ) * 1000, count( $out ) );
-		return $out;
 	}
 
 	/** Bounded GET → body string ('' on any failure — a source outage is never fatal). */

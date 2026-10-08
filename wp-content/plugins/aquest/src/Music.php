@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * SEO-indexed (MusicRecording). The uploaded sources are PRIVATE inspiration — never shared or published.
  *
  * Two KINDS of project share the one lifecycle (`kind`):
- *   • music     — brief → Claude-composed song rendered by an open music model (ACE-Step on the free
+ *   • music     — brief → AI-composed song rendered by an open music model (ACE-Step on the free
  *                 HF ZeroGPU Space is the flagship; artascore/MusicGen/artacompose are fallbacks).
  *                 Before it reaches the author, the draft goes through MULTIPLE ROUNDS of ADVERSARIAL
  *                 IMPROVEMENT (the ArtaScience pattern): each round an AI critic measures the rendered
@@ -28,7 +28,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *
  * Mirrors AQ\Library (brief + private inspiration → original work; queued→processing→review→live;
  * publish charges ArtaCoins; worker relay generates the artifact). Generation runs in the music relay
- * (free/open models + the operator's Claude subscription — no third-party API key, no Vault secret).
+ * (free/open models + the operator's model subscription — no third-party API key, no Vault secret).
  *
  * Three tables (self-install — the Library/Science/Relay pattern, isolated from Schema::VERSION):
  *   • aq_tracks         — one row per PROJECT (brief → generated audio + its lifecycle)
@@ -558,7 +558,7 @@ final class Music {
 			'rounds_24h'  => (int) Data::col( 'SELECT COUNT(*) FROM ' . Data::t( 'aq_track_reviews' ) . ' WHERE created > %d', [ Data::now() - 86400 ] ),
 			'rounds_total' => (int) Data::col( 'SELECT COUNT(*) FROM ' . Data::t( 'aq_track_reviews' ) ),
 			'max_rounds'  => self::MAX_ROUNDS,
-			'model'       => 'claude-opus-5',
+			'model'       => 'ArtaAI',
 		];
 	}
 
@@ -577,7 +577,7 @@ final class Music {
 		// AI cover art rendered by the relay (coverart.py → free HF image Space), sent as base64.
 		$cover_b64 = (string) Rest::p( $req, 'cover_b64', '' );
 		if ( $cover_b64 !== '' ) { $saved = self::save_image( (int) $row['id'], $cover_b64 ); if ( $saved !== '' ) { $cover = $saved; } }
-		$lyrics = mb_substr( sanitize_textarea_field( (string) Rest::p( $req, 'lyrics', '' ) ), 0, 8000 ); // Claude-written lyric sheet
+		$lyrics = mb_substr( sanitize_textarea_field( (string) Rest::p( $req, 'lyrics', '' ) ), 0, 8000 ); // AI-written lyric sheet
 		$url    = self::save_audio( (int) $row['id'], $b64, $mime, $kind === 'audiobook' ? 120 : 60 );
 		if ( $url !== '' && (string) $row['audio_url'] !== '' ) { self::unlink_file( (string) $row['audio_url'], 'music' ); } // recompose replaces the old file
 		if ( $url === '' ) {
@@ -640,7 +640,7 @@ final class Music {
 			'progress'    => (string) ( $row['progress'] ?? '' ),
 			'audio_url'   => ( $pub || $mine ) ? (string) $row['audio_url'] : '',
 			'audio_mime'  => (string) $row['audio_mime'],
-			'lyrics'      => (string) ( $row['lyrics'] ?? '' ), // the Claude-written lyric sheet (public on a published track)
+			'lyrics'      => (string) ( $row['lyrics'] ?? '' ), // the AI-written lyric sheet (public on a published track)
 			'is_owner'    => $mine,
 		];
 		if ( $card['kind'] === 'audiobook' ) {
@@ -659,7 +659,7 @@ final class Music {
 				'report'    => (string) $v['report'],
 				'audio_url' => (string) ( $v['audio_url'] ?? '' ),
 				'metrics'   => Data::dec( (string) ( $v['metrics'] ?? '' ) ),
-				'model'     => (string) $v['model'],
+				'model'     => Artaai::public_model( $v['model'] ),
 				'created'   => (int) $v['created'],
 			], Data::all( 'SELECT * FROM ' . Data::t( 'aq_track_reviews' ) . ' WHERE track_id = %d ORDER BY round ASC', [ (int) $row['id'] ] ) );
 		}

@@ -1897,7 +1897,7 @@ final class Extra {
 	// or drives a click off-platform — instead every trending item is shown as ONE neutral,
 	// AI-written sentence describing what it is about. Summaries are generated in the crawl tick
 	// (off the request path) through the flat-rate subscription relay (Relay::ask → the operator's
-	// headless claude; model choice is free there), cached by content hash in aq_summary_cache so a
+	// headless model CLI; model choice is free there), cached by content hash in aq_summary_cache so a
 	// persistent item is summarised exactly once, and bounded to AI_SUM_BATCH new items per tick.
 	// Fail-soft: relay down/busy or malformed reply ⇒ items keep whatever summary they had (the UI
 	// falls back to the plain title, which is not a pic or a link). This helper ALSO strips `img`
@@ -4024,6 +4024,6 @@ final class Extra {
 				'published'  => (int) Data::col( 'SELECT COUNT(*) FROM ' . Data::t( 'aq_submissions' ) . " WHERE status = 'accepted'" ),
 			] + $rounds( 'aq_paper_reviews', '', [] ),
 		];
-		return [ 'model' => 'claude-opus-5', 'points_per_coin' => Economy::POINTS_PER_COIN, 'kinds' => $kinds ];
+		return [ 'model' => 'ArtaAI', 'points_per_coin' => Economy::POINTS_PER_COIN, 'kinds' => $kinds ];
 	}
 }

@@ -540,13 +540,13 @@ function ArtaaiMode() {
       {note && <StatusNote>{note}</StatusNote>}
       {err && <StatusNote error>{err}</StatusNote>}
 
-      <StatusNote>Every AI system on the platform runs on your Claude Max subscription (via the laptop relays) plus free HuggingFace model backends — nothing here bills the API. Pausing a surface only stops it being handed <em>new</em> jobs: the queue backs up and drains when you resume.</StatusNote>
+      <StatusNote>Every AI system on the platform runs on your flat-rate model subscription (via the laptop relays) plus free HuggingFace model backends — nothing here bills the API. Pausing a surface only stops it being handed <em>new</em> jobs: the queue backs up and drains when you resume.</StatusNote>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <Stat label="Laptop relay" value={snap.laptop_online ? "Online ✓" : "Offline"} hint={`${snap.relays_alive}/${snap.relays_total} relays beating`} />
         <Stat label="Queued" value={snap.total_pending.toLocaleString("en")} hint={`${snap.total_busy} in flight${snap.total_failed ? ` · ${snap.total_failed} failed` : ""}`} />
         <Stat label="AI rounds" value={snap.rounds_24h.toLocaleString("en")} hint="improvement rounds, 24h" />
-        <Stat label="ArtaBot" value={snap.usage.turns_24h.toLocaleString("en")} hint={`chat turns, 24h · ${snap.usage.tokens_24h.toLocaleString("en")} tokens`} />
+        <Stat label="Arta" value={snap.usage.turns_24h.toLocaleString("en")} hint={`chat turns, 24h · ${snap.usage.tokens_24h.toLocaleString("en")} tokens`} />
         <Stat label="ArtaMod queue" value={snap.moderation.queue.toLocaleString("en")} hint={`${snap.moderation.flagged_24h} flagged in 24h`} />
         <Stat label="Subscription" value={snap.park.active ? `Parked ${rel(snap.park.reset_in ?? 0)}` : "Clear ✓"} hint={snap.park.active ? `resumes ~${parkAt}` : "relay work flowing"} />
       </div>
@@ -585,7 +585,7 @@ function ArtaaiMode() {
             <span className="text-[12px] text-ink-3">ArtaMod flag threshold <span className="text-ink-3/70">(calibrated default {snap.moderation.default})</span></span>
             <span className="flex items-center gap-1">
               <Input type="number" aria-label="ArtaMod flag threshold" min={1} max={100} value={thrShown} onChange={(e) => setThr(e.target.value)} className="h-9 w-20 text-[14px]" />
-              <Button variant="outline" tip={{ title: "Set the hate/fear flag line", body: "A comment scoring at or above this (0-100) has its upvotes excluded from the competition and gets a consoling ArtaBot reply. Lower = stricter. Applies to new verdicts and appeals immediately; already-scored comments keep their verdict." }} onClick={() => act("threshold", { action: "threshold", value: thrNum }, `Threshold set to ${thrNum}.`)} disabled={busy === "threshold" || thrNum === snap.moderation.threshold} className="h-9 px-2.5 text-[13px]">{busy === "threshold" ? "…" : "Set"}</Button>
+              <Button variant="outline" tip={{ title: "Set the hate/fear flag line", body: "A comment scoring at or above this (0-100) has its upvotes excluded from the competition and gets a consoling Arta reply. Lower = stricter. Applies to new verdicts and appeals immediately; already-scored comments keep their verdict." }} onClick={() => act("threshold", { action: "threshold", value: thrNum }, `Threshold set to ${thrNum}.`)} disabled={busy === "threshold" || thrNum === snap.moderation.threshold} className="h-9 px-2.5 text-[13px]">{busy === "threshold" ? "…" : "Set"}</Button>
             </span>
           </div>
           <Button variant="outline" tip={{ title: "Drain the moderation queue now", body: "Score every comment waiting in the ArtaMod queue right now, instead of waiting for the 5-minute cron. Needs the laptop relay online; fails open (comments stay queued) otherwise." }} onClick={() => act("moderate", { action: "moderate" }, "Moderation drained.")} disabled={!!busy || !snap.laptop_online} className="h-9 text-[13px]">{busy === "moderate" ? "draining…" : "Run moderation now"}</Button>

@@ -37,7 +37,7 @@ const LIFECYCLE: { n: string; title: string; body: string }[] = [
 // ── Security model, grounded in sandboxProfile() + the stripped child env in the daemon. ────────────
 const SECURITY: { title: string; body: string }[] = [
   { title: "The submission is untrusted data", body: "The reviewer treats the manuscript, README, code comments and data as content to review, never as instructions — a prompt-injection defence written into the SECURITY block of the prompt below." },
-  { title: "A sandbox denies the platform", body: "Claude (and the submission code it runs) is wrapped in a macOS sandbox-exec profile that denies the ArtaQuest repo, the agent state, SSH/AWS/GPG keys, and every other credential store on the machine. The whole process tree is confined." },
+  { title: "A sandbox denies the platform", body: "The reviewer model (and the submission code it runs) is wrapped in a macOS sandbox-exec profile that denies the ArtaQuest repo, the agent state, SSH/AWS/GPG keys, and every other credential store on the machine. The whole process tree is confined." },
   { title: "Secrets are stripped from its environment", body: "Every platform secret — the worker token, the archive token, anything matching TOKEN/SECRET/KEY/PASSWORD — is removed from the reviewer's environment, so the submitted code cannot read one even if it tries." },
   { title: "No API keys on the reviewer machine", body: "Publishing that needs secrets (the DOI, the Colab notebook) runs entirely on the server via its Vault, so no third-party API key ever lives on the machine that runs strangers' code. The network is allowed only so the reviewer can fetch the submission and resolve DOIs." },
 ];
@@ -178,7 +178,7 @@ export default function ArtaScience() {
       <div className="mt-12">
         <SectionTitle kicker="Verbatim">The exact prompt, annotated</SectionTitle>
         <p className="text-[14px] leading-relaxed text-ink-2">
-          The reviewer is run as <code className="rounded bg-space-1 px-1 py-0.5 font-mono text-[12.5px]">claude -p &lt;task&gt; --append-system-prompt &lt;system&gt; --effort max</code> inside the
+          The reviewer runs headless at maximum effort, with a task prompt and an appended system prompt, inside the
           sandbox. Below is every block of both prompts, verbatim. Placeholder tokens like{" "}
           <code className="rounded bg-space-1 px-1 py-0.5 font-mono text-[12.5px]">&lt;journal name&gt;</code>,{" "}
           <code className="rounded bg-space-1 px-1 py-0.5 font-mono text-[12.5px]">&lt;the journal's scope&gt;</code>,{" "}

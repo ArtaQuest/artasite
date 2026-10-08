@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 
 // ── Typewriter reveal ──────────────────────────────────────────────────────────
-// A fresh ArtaBot reply types itself out word by word instead of appearing all at once — the wait for
-// the answer (which can stretch when a turn is relayed through the operator's laptop) reads as ArtaBot
-// composing, not the app stalling. Shared by the floating ArtaBot chat and the contribution thread
+// A fresh Arta reply types itself out word by word instead of appearing all at once — the wait for
+// the answer (which can stretch when a turn is relayed through the operator's laptop) reads as Arta
+// composing, not the app stalling. Shared by the floating Arta chat and the contribution thread
 // (#76) so both surfaces reveal at the same cadence; only a JUST-RECEIVED reply animates, history
 // renders instantly.
 //
 // Render-agnostic: the hook returns the revealed PREFIX of `body` plus a `finish` that skips to the
-// end. The caller decides how to render that prefix — ArtaBot wraps it in RichText (Markdown), the
+// end. The caller decides how to render that prefix — Arta wraps it in RichText (Markdown), the
 // contribution thread renders it as plain text. EITHER WAY the caller must keep the revealing text out
 // of the i18n mesh (a `data-ay-skip` ancestor: RichText without `srcLang`, or a marked plain span), so
 // half-sentences are never collected — or worse, cached — as translations; the finished message,

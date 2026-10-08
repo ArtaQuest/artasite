@@ -206,7 +206,7 @@ final class Rest {
 		[ 'POST', 'profile/photo',                 'Verify::set_photo',       'user' ], // change avatar only — no ID-verify, free
 		[ 'POST', 'profile/palm',                  'Verify::set_palm_photo',  'user' ], // palm "back photo" — opt-in self-verify, free
 		[ 'POST', 'profile/banner',                'Verify::set_banner_photo', 'user' ], // the profile banner — set or {remove:true}, free
-		[ 'POST', 'verify/identity',               'Verify::verify_identity', 'user' ], // ID + selfie → Claude (free)
+		[ 'POST', 'verify/identity',               'Verify::verify_identity', 'user' ], // ID + selfie → AI check (free)
 
 		// ── Offline / "take it with you" (selective full-platform download) ───
 		[ 'GET',  'offline/manifest',              'Offline::manifest',     'public' ], // Download Center catalogue
@@ -225,7 +225,7 @@ final class Rest {
 		[ 'POST', 'i18n/translate',                'I18n::translate',   'public' ],
 		[ 'POST', 'i18n/save',                     'I18n::save',        'public' ],
 		// ArtaTranslate — the mesh's slow second pass (src/Translate.php): every Google edge row is
-		// re-translated by a SOTA open model + adversarial Claude review rounds via the translate relay
+		// re-translated by a SOTA open model + adversarial LLM review rounds via the translate relay
 		// (tools/ticket-agent/translate-relay.mjs), then served in place of the edge translation.
 		[ 'GET',  'translate/status',              'Translate::status',     'public' ], // live queue + recent adversarial upgrades (transparency)
 		[ 'GET',  'translate/rounds',              'Translate::rounds_for', 'public' ], // ?hash=&lang= → the full round-by-round record for one string
@@ -311,7 +311,7 @@ final class Rest {
 		[ 'GET',  'studio/grants/(?P<id>[0-9]+)',  'Extra::grant_studio_get','user' ],
 		[ 'POST', 'bug-finding',                   'Extra::bug_finding',     'user' ],
 
-		// ── Contributions (Claude-triaged tickets) ────────────────────────────
+		// ── Contributions (triaged tickets; @arta files bugs here too) ─────────
 		[ 'POST', 'tickets',                       'Tickets::create',        'user'   ],
 		[ 'POST', 'tickets/upload',                'Tickets::upload',        'user'   ],
 		[ 'GET',  'tickets',                       'Tickets::list',          'public' ],
@@ -319,28 +319,17 @@ final class Rest {
 		[ 'POST', 'tickets/(?P<id>[0-9]+)/message', 'Tickets::post_message', 'user'   ],
 		[ 'POST', 'tickets/(?P<id>[0-9]+)/resolve', 'Tickets::resolve',      'user'   ],
 		[ 'POST', 'tickets/(?P<id>[0-9]+)/reopen',  'Tickets::reopen',       'user'   ],
-		// ArtaBot — the global AI assistant. METERED: a turn is priced when it replies, from what it
-		// measurably used, and the price is the same for every member including the founder (src/Usage.php).
-		[ 'GET',  'artabot',                       'Assistant::history',     'user'   ],
-		// Effort tiers are CEILINGS, not prices: same model (Claude Opus 5) throughout; what changes is
-		// thinking depth, reply length, and how much CPU and RAM the sandbox gets. Public so the SPA can
-		// show what compute costs per minute — the AI part is only knowable once the turn has run.
-		[ 'GET',  'artabot/tiers',                 'Assistant::tiers',       'user'   ], // the tier menu + this member's balance and recent metered lines
-		[ 'POST', 'artabot',                       'Assistant::ask',         'user'   ],
-		// The in-flight answer as it is written (long-poll, ~20s hold — see Assistant::live). Public
-		// because signed-out visitors chat too; the buffer key is derived from the SESSION, never from
-		// input, so a caller can only ever read their own stream.
-		[ 'GET',  'artabot/live',                  'Assistant::live',        'public' ],
-		// PARALLEL CONVERSATIONS. A member may hold several at once and run them at the same time; each
-		// has its own transcript, its own tier (so its own CPU and RAM), its own live stream and its
-		// own bill (src/Assistant.php, src/Usage.php).
-		[ 'GET',  'artabot/sessions',              'Assistant::sessions',      'user'   ],
-		[ 'POST', 'artabot/session',               'Assistant::open_session',  'user'   ],
-		[ 'POST', 'artabot/session/close',         'Assistant::close_session', 'user'   ],
-		[ 'POST', 'artabot/clear',                 'Assistant::clear',       'user'   ],
-		// Subscription relay — the laptop daemon (tools/ticket-agent/artabot-relay.mjs) answers
-		// ArtaBot turns on the operator's Claude Max subscription when the laptop is awake; prod
-		// falls back to the API otherwise (src/Relay.php). Same shared secret as the worker.
+		// ── @arta — the public assistant (src/Arta.php). There is no private channel: a member
+		//    mentions @arta in a post or comment and the reply lands in that thread. The routes below are
+		//    the Arta brain's side (a daemon that PULLS from here), authenticated by AQ_ARTA_REPLY_TOKEN ('arta' auth). They are
+		//    all POST so no edge or page cache can ever store a response. ──
+		[ 'GET',  'arta/status',                   'Arta::public_status',    'public' ],
+		[ 'POST', 'arta/pending',                  'Arta::pending',          'arta'   ], // the brain's poll + heartbeat
+		[ 'POST', 'arta/mentions/(?P<id>[0-9]+)/claim',  'Arta::claim',      'arta'   ],
+		[ 'POST', 'arta/mentions/(?P<id>[0-9]+)/status', 'Arta::status',     'arta'   ],
+		[ 'POST', 'arta/reply',                    'Arta::reply',            'arta'   ], // idempotent: one reply per mention
+		// The model relay — the operator's daemon answers platform-borne model work (ticket triage,
+		// ArtaMod, verification, news) (src/Relay.php). Same shared secret as the worker.
 		[ 'POST', 'relay/poll',                    'Relay::poll',            'worker' ],
 		[ 'POST', 'relay/complete',                'Relay::complete',        'worker' ],
 		// The completion path for the fully-powered tools container, which deliberately holds NO shared
@@ -359,7 +348,7 @@ final class Rest {
 		[ 'GET',  'usage',                         'Usage::mine',            'user'   ],
 		[ 'GET',  'invoices',                      'Usage::invoices',        'user'   ], // …and streams the answer as it writes it (live deltas → a transient, no row writes)
 		// MEMBER SHELLS — every member has their own unix account on the relay VM, reachable as
-		// `ssh <handle>@shell.artaquest.com`, landing in the SAME sandbox ArtaBot's tool turns run in
+		// `ssh <handle>@shell.artaquest.com`, landing in the SAME sandbox Arta's tool turns run in
 		// (src/Shell.php + tools/ticket-agent/artabot-shell.mjs). Only PUBLIC keys are stored, which is
 		// forced by the design of this platform rather than merely chosen: the whole database is
 		// published at /data/, so a private key could never live in it.
@@ -680,6 +669,8 @@ final class Rest {
 		//    Studio. Published files land in the Library, attachable by any member. ──
 		[ 'GET',  'posts',                                   'Notebook::posts',          'public' ], // THE feed: text posts ± a published work ± Library attachments
 		[ 'POST', 'posts',                                   'Notebook::post_create',    'user'   ],
+		[ 'GET',  'posts/(?P<id>[0-9]+)',                    'Notebook::post_get',       'public' ], // one post (+ the post it answers)
+		[ 'GET',  'posts/(?P<id>[0-9]+)/replies',            'Notebook::post_replies',   'public' ], // its replies, oldest first
 		[ 'POST', 'posts/(?P<id>[0-9]+)/heart',              'Notebook::post_heart',     'user'   ],
 		[ 'POST', 'posts/(?P<id>[0-9]+)/edit',               'Notebook::post_edit',      'user'   ],
 		[ 'POST', 'posts/(?P<id>[0-9]+)/delete',             'Notebook::post_delete',    'user'   ],
@@ -723,7 +714,7 @@ final class Rest {
 		// The six relay/nb/* worker routes (poll · beat · review · update · complete · release) drove
 		// the local offline executor + AI review panel, retired 2026-07-28. Nothing enqueues a run any
 		// more (the studio run route went with it), no client in the tree calls them, and relay/nb/update
-		// wrote `ipynb` with NO published-status guard — the one write CLAUDE.md forbids outright,
+		// wrote `ipynb` with NO published-status guard — the one write the repo's agent rules forbid outright,
 		// because sig(ipynb) is what the author's confirmation ledger row, the DB publish-guard and
 		// integrity_sweep() are all keyed on. Removed with their handlers.
 
@@ -769,6 +760,7 @@ final class Rest {
 		if ( $auth === 'public' ) { return true; }
 		if ( $auth === 'admin' )  { return ! Api::via_token() && current_user_can( 'manage_options' ); }
 		if ( $auth === 'worker' ) { return self::worker_ok(); }
+		if ( $auth === 'arta' )   { return Arta::token_ok(); } // the Arta brain's scoped token, nothing else
 		if ( ! is_user_logged_in() ) { return false; } // 'user'
 		// A personal access token signs the request in (Api::determine_user) but reaches ONLY
 		// the Api::TOKEN_ROUTES allow-list, scope- and rate-checked. Cookie sessions pass as ever.
@@ -844,7 +836,7 @@ final class Rest {
 		$uid = self::uid();
 		if ( ! $uid ) { return null; } // public route, or already refused by can()
 		if ( ! class_exists( '\\AQ\\Verify' ) || Verify::has_birthday( $uid ) ) { return null; }
-		// Service accounts (ArtaBot, the balance bot) are not people and have no date of birth to
+		// Service accounts (Arta, the balance bot) are not people and have no date of birth to
 		// state. Identified the way the rest of the codebase identifies them — the aq_artabot_uid
 		// option and the _aq_is_bot flag — never by role, which a real member can also hold.
 		if ( $uid === (int) get_option( 'aq_artabot_uid', 0 ) ) { return null; }
@@ -931,10 +923,14 @@ final class Rest {
 	 */
 	public static function throttle( $bucket, $limit = 30, $window = 60 ) {
 		$id = self::uid() ?: ( $_SERVER['REMOTE_ADDR'] ?? '0' );
-		$k  = 'aq_rl_' . md5( $bucket . '|' . $id );
+		// A TRUE fixed window: the window index is part of the key. The old key was re-set with a
+		// fresh TTL on every hit, so under steady traffic (one busy NAT, a classroom) it never expired
+		// and behaved as "N requests, ever, until the caller goes quiet for a whole window".
+		$w  = max( 1, (int) $window );
+		$k  = 'aq_rl_' . md5( $bucket . '|' . $id . '|' . (int) floor( time() / $w ) );
 		$n  = (int) get_transient( $k );
 		if ( $n >= $limit ) { return true; }
-		set_transient( $k, $n + 1, $window );
+		set_transient( $k, $n + 1, $w );
 		return false;
 	}
 }

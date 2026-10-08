@@ -647,7 +647,7 @@ export default function CourseDetail() {
           )}
         </div>
 
-        {/* lg:me-16 reserves the bottom-right lane the fixed ArtaBot launcher floats in: this right rail
+        {/* lg:me-16 reserves the bottom-right lane the fixed Arta launcher floats in: this right rail
             is flush to the viewport edge, so on common laptop heights the launcher's disc landed on the
             Enrol button and obscured its label (ticket #88). The launcher only auto-hides on touch (it
             stays on for desktop's fine pointer), so the desktop rail must step aside for it. */}

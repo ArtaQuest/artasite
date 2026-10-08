@@ -244,7 +244,7 @@ export function PlayerBar({ p }: { p: ReturnType<typeof usePlayer> }) {
   const motionOff = useMotionOff();
   const [big, setBig] = useState(false);
   const item = state.current;
-  // Mark the document while the bar is up so other fixed furniture (the ArtaBot launcher, which is
+  // Mark the document while the bar is up so other fixed furniture (the Arta launcher, which is
   // also bottom-right at z-60) lifts clear of it — verified by hit-testing: it was swallowing the
   // Next-track click outright.
   useEffect(() => {

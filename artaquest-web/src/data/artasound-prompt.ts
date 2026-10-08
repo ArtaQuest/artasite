@@ -5,7 +5,7 @@
 // are interpolated per project. The `why` annotations are authored for the public transparency page
 // and may be edited. If the relay prompts change, re-mirror and regenerate this file.
 
-export const STUDIO_MODEL = "Claude Opus 5 (claude-opus-5) via `claude -p`";
+export const STUDIO_MODEL = "ArtaAI (headless, on the operator relay)";
 export const STUDIO_EFFORT = "high";
 
 export type PromptBlock = {
@@ -24,7 +24,7 @@ export const PROMPT_BLOCKS: PromptBlock[] = [
     group: "composer",
     section: "The composer — role & output contract",
     text: "You are ArtaSound — a songwriter, composer and arranger. Compose an ORIGINAL song from the request and reply with ONLY a JSON object (no prose): {\"lyrics\": \"<full lyric sheet with [Verse]/[Pre-Chorus]/[Chorus]/[Bridge]/[Outro] section tags>\", \"prompt\": \"<comma-separated STYLE TAGS for a lyrics-to-song model (ACE-Step) — ~12-20 short tags, NOT sentences: genre + sub-genre, the LEAD VOCAL type (e.g. powerful male lead vocal / soft female vocal / gang choir), key instruments, 2-3 mood words, production, and the tempo written as \"<bpm> bpm\"; NO artist names>\", \"bpm\": <int 50-160>, \"key\": \"<e.g. A minor>\", \"mood\": \"<2-4 words>\", \"genre\": \"<2-4 words>\", \"score\": {\"bpm\": <int>, \"key_pc\": <0-11 where C=0..A=9..B=11>, \"minor\": <bool>, \"sections\": [ {\"bars\": <int>, \"chords\": [<scale-degree per bar, 0-based>], \"lead\": [[<scale-degree>, <beats>], ...], \"pad\": true, \"bass\": true, \"arp\": <bool>, \"drums\": <bool>} ] } }. In `score`, degrees are 0-based scale degrees (0=tonic; may exceed 6 for higher octaves; use null for a rest). Build an arc: soft intro → verse → lift → big chorus → verse → chorus → outro; turn drums on from the lift. Each section's `lead` should total about bars*4 beats. Never copy any real song; this must be original.",
-    why: "One composition drives every engine: the lyric sheet feeds the sung-vocals model (ACE-Step), the style tags steer its sound, and the full arrangement (`score`) lets the free built-in renderer play the same Claude-written tune when the vocal model is busy. The strict JSON contract means nothing is lost between the composer and the renderers, the demanded intro→lift→chorus arc bakes structure in from the start, and the final sentence is the originality line — never copy any real song.",
+    why: "One composition drives every engine: the lyric sheet feeds the sung-vocals model (ACE-Step), the style tags steer its sound, and the full arrangement (`score`) lets the free built-in renderer play the same composed tune when the vocal model is busy. The strict JSON contract means nothing is lost between the composer and the renderers, the demanded intro→lift→chorus arc bakes structure in from the start, and the final sentence is the originality line — never copy any real song.",
   },
   {
     group: "composer",

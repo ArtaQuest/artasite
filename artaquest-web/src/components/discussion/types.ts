@@ -24,11 +24,11 @@ export type BoardComment = {
   flagged?: boolean;        // section: ArtaMod set this reply aside from the competition (hate/fear)
   appealed?: boolean;       // section: the one ArtaMod appeal was used
   anchor?: number;          // section: seconds into the video this reply references (0 = unanchored)
-  bot?: boolean;            // section: ArtaBot's own consoling reply
-  ytRef?: YtCommentRef;     // section: an ArtaBot seed referencing the video's top YouTube comment
+  bot?: boolean;            // section: Arta's own consoling reply
+  ytRef?: YtCommentRef;     // section: an Arta seed referencing the video's top YouTube comment
 };
 
-/** A referenced YouTube top comment carried on an ArtaBot seed — the original commenter credited with
+/** A referenced YouTube top comment carried on an Arta seed — the original commenter credited with
  *  their profile name + picture + live thumbs-up, framed as an example the learner may ignore. */
 export type YtCommentRef = { author: string; avatar: string; likes: number; text: string; url: string };
 

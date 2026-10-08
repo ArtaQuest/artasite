@@ -482,11 +482,11 @@ function TokenManager() {
   );
 }
 
-// ── What your work costs ────────────────────────────────────────────────────
-// Charging after the fact is only fair if it can be taken apart, so this shows the parts: what ran,
-// for how long, what the AI cost, what the compute cost, and what that came to in coins at the gold
-// price of the moment. Nothing here is a price list — there isn't one — so the tier table quotes the
-// COMPUTE per minute and says plainly that the AI part is not knowable before the turn runs.
+// ── What your terminal costs ────────────────────────────────────────────────
+// Only terminal sessions are metered now: @arta is free and public, and the old private assistant
+// chat (and its billing) is retired. Charging after the fact is only fair if it can be taken apart,
+// so this shows the parts: what ran, for how long, the compute cost, and what that came to in coins
+// at the gold price of the moment. Older lines from the retired chat stay listed as history.
 function UsageManager() {
   const [info, setInfo] = useState<UsageInfo | null>(null);
   const [days, setDays] = useState<{ day: string; items: number; total_usd: string; total_coins: string; sent: number }[] | null>(null);
@@ -506,10 +506,11 @@ function UsageManager() {
 
   return (
     <section>
-      <h2 className="text-[20px] font-bold tracking-tight">What your work costs</h2>
+      <h2 className="text-[20px] font-bold tracking-tight">What your terminal costs</h2>
       <p className="mt-1 text-[13px] text-ink-3">
-        You are charged only for what actually ran — a turn when it replies, a session when it ends — from the compute it
-        really used and the gold price at the time. Nothing is estimated or held in advance. One ArtaCoin is one milligram
+        Asking @arta is free. Only terminal sessions are charged, and only for what actually ran — a session when it
+        ends — from the compute it really used and the gold price at the time. Assistant usage from the retired private
+        chat that had not been charged yet has been written off. Nothing is estimated or held in advance. One ArtaCoin is one milligram
         of gold, and gold has no fractions of a milligram, so usage adds up exactly and only whole coins are taken; the
         remainder carries to the next day rather than being rounded away in either direction.
       </p>
@@ -551,8 +552,7 @@ function UsageManager() {
             {/* Said plainly, because the compute figure above is the small half of the bill and quoting
                 it alone would read like the whole price. */}
             <p className="mt-2 text-[12px] text-ink-3">
-              Compute only. What the AI itself costs depends on how much thinking a turn actually needs, so it is measured
-              per turn rather than quoted — it is usually most of the bill.
+              Compute per minute of terminal time. Nothing else on this page is charged.
             </p>
           </Card>
 
@@ -616,9 +616,7 @@ function UsageManager() {
 
 // ── Your machine — a real Linux account, reachable over SSH ─────────────────
 // The account is not a shell on ArtaQuest's server: sshd force-commands every session into the SAME
-// sandbox ArtaBot's tool turns run in, with the member's own persistent home. So "ask ArtaBot to
-// build it, then ssh in and find it" is one workspace, and what a member can reach from a terminal
-// is exactly what ArtaBot could already reach on their behalf.
+// sandbox the platform's tool runs use, with the member's own persistent home.
 const TerminalPanel = lazy(() => import("../components/Terminal"));
 
 function ShellManager() {
@@ -661,7 +659,7 @@ function ShellManager() {
       </div>
       <p className="mt-1 text-[13px] text-ink-3">
         You have your own Linux account — a sandbox with a shell, Python, Node, git and the open internet. It is the
-        SAME place ArtaBot works when you ask it to build something, so whatever it makes is waiting for you here. Your
+        same sandbox the platform's tools run in. Your
         files persist on a file share; 2 GB of space. The machine around them, this database and everyone else's files
         are out of reach from it, and there are no ArtaQuest credentials inside.
       </p>
@@ -1116,7 +1114,7 @@ function DeleteAccount() {
 
 // ── Identity & the blue check ────────────────────────────────────────────────
 // Real full name + birthday are required to post (set freely here). The blue check additionally
-// confirms a government ID with Claude — ID front/back + a selfie are sent ONCE for the check and
+// confirms a government ID with an AI vision check — ID front/back + a selfie are sent ONCE for the check and
 // never stored; only the verdict, name, birthday, and the verified profile photo are kept.
 function PhotoTile({ label, hint, value, onPick }: { label: string; hint: string; value?: string; onPick: (f: File | null) => void }) {
   const ref = useRef<HTMLInputElement>(null);
@@ -1321,7 +1319,7 @@ function IdentityVerification() {
         ) : (
           <>
             <h3 className="text-[16px] font-bold">Get the blue check</h3>
-            <p className="text-[13px] text-ink-3">Verifying is free. Add a clear photo of your face (it becomes your profile picture), the front and back of a government photo ID from any country — a passport or national ID card, which establish nationality; a driver licence or residence permit can confirm your name and date of birth but not your nationality — and a selfie. Claude confirms the ID is genuine and that the name (given name and surname), date of birth and nationality on it are yours, and that the same face appears on the ID, the selfie and your photo. Every nationality is accepted — the check is only that what you stated matches your ID. Your ID and selfie are used only for this check and are never stored.</p>
+            <p className="text-[13px] text-ink-3">Verifying is free. Add a clear photo of your face (it becomes your profile picture), the front and back of a government photo ID from any country — a passport or national ID card, which establish nationality; a driver licence or residence permit can confirm your name and date of birth but not your nationality — and a selfie. An AI vision check confirms the ID is genuine and that the name (given name and surname), date of birth and nationality on it are yours, and that the same face appears on the ID, the selfie and your photo. Every nationality is accepted — the check is only that what you stated matches your ID. Your ID and selfie are used only for this check and are never stored.</p>
             {/* A 59px preview of a passport at 1100 was not a preview. 8rem minimum. */}
             <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-3">
               <PhotoTile label="Profile photo" hint="your face" value={imgs.profile_pic} onPick={(f) => pick("profile_pic", f)} />

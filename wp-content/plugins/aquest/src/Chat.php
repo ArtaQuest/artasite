@@ -468,6 +468,7 @@ final class Chat {
 		$uid  = Rest::uid();
 		$peer = Rest::pint( $req, 'with', 0 );
 		if ( ! $peer || ! get_userdata( $peer ) ) { return Rest::err( 'bad_peer', 'No such member', 404 ); }
+		if ( Arta::is_arta( $peer ) ) { return Rest::err( 'arta_public_only', 'Arta only talks in public — mention @arta in a post or a comment.', 403 ); }
 		$chat = self::chat_row( $uid, $peer );
 		if ( ! $chat ) { return Rest::err( 'no_chat', 'Open the conversation first.', 400 ); }
 		$act = (string) Rest::p( $req, 'action', 'ring' );
@@ -889,6 +890,7 @@ final class Chat {
 		$user = ctype_digit( $to ) ? get_userdata( (int) $to ) : get_user_by( 'slug', sanitize_title( $to ) );
 		if ( ! $user || (int) $user->ID === $uid ) { return Rest::err( 'no_member', 'No member with that username.', 404 ); }
 		$peer = (int) $user->ID;
+		if ( Arta::is_arta( $peer ) ) { return Rest::err( 'arta_public_only', 'Arta only talks in public — mention @arta in a post or a comment.', 403 ); }
 		// If they DO have a key, this is the wrong door — the client should seal and send.
 		if ( self::active_key( $peer ) ) { return [ 'ok' => true, 'has_key' => true ]; }
 		$chat = self::ensure_chat( $uid, $peer );
@@ -1212,6 +1214,7 @@ final class Chat {
 		$peer = Rest::pint( $req, 'to', 0 );
 		// Self-chat is allowed — 'notes to yourself' sealed to your own key (operator 2026-07-14).
 		if ( ! $peer || ! get_userdata( $peer ) ) { return Rest::err( 'bad_peer', 'No such member', 404 ); }
+		if ( Arta::is_arta( $peer ) ) { return Rest::err( 'arta_public_only', 'Arta only talks in public — mention @arta in a post or a comment.', 403 ); }
 		$iv   = trim( (string) Rest::p( $req, 'iv', '' ) );
 		$ct   = trim( (string) Rest::p( $req, 'ct', '' ) );
 		$akid = Rest::pint( $req, 'akid', 0 );
@@ -1494,6 +1497,7 @@ final class Chat {
 		$peer = Rest::pint( $req, 'with', 0 );
 		// Self-chat is allowed — 'notes to yourself' sealed to your own key (operator 2026-07-14).
 		if ( ! $peer || ! get_userdata( $peer ) ) { return Rest::err( 'bad_peer', 'No such member', 404 ); }
+		if ( Arta::is_arta( $peer ) ) { return Rest::err( 'arta_public_only', 'Arta only talks in public — mention @arta in a post or a comment.', 403 ); }
 		$ttl = Rest::pint( $req, 'ttl', 0 );
 		if ( ! in_array( $ttl, self::TTLS, true ) ) { return Rest::err( 'bad_ttl', 'Unsupported timer.', 400 ); }
 		// Through ensure_chat, so setting a timer on a conversation that does not exist yet cannot

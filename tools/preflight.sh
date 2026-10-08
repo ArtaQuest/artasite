@@ -261,6 +261,24 @@ if [ -f tools/about-i18n-gate.php ]; then
   else printf '%s\n' "$out" | sed 's/^/    /'; fail "the note drifted from its translations"; mark; fi
 else skip "tools/about-i18n-gate.php missing"; fi
 
+# @arta: mention detection, idempotency, rate limits, webhook signatures and the reply path, run
+# against the real Arta + Data classes over SQLite. Exit 2 = the runner lacks pdo_sqlite/mbstring:
+# reported as a skip, never as a pass.
+step "@arta — mentions, idempotency, the pull queue"
+if [ -f wp-content/plugins/aquest/tools/test-arta.php ]; then
+  out=$("$PHP" wp-content/plugins/aquest/tools/test-arta.php 2>&1); rc=$?
+  if [ $rc -eq 0 ]; then ok "$(printf '%s' "$out" | tail -1)"
+  elif [ $rc -eq 2 ]; then skip "$(printf '%s' "$out" | grep -E '^SKIP' | head -1)"
+  else printf '%s\n' "$out" | grep -E '^FAIL' | sed 's/^/    /'; fail "test-arta.php failed"; mark; fi
+else skip "test-arta.php missing"; fi
+
+# The platform names no AI vendor or model outside a short, reasoned allow-list.
+step "No AI vendor names outside the allow-list"
+if [ -x tools/vendor-names-gate.sh ]; then
+  if out=$(bash tools/vendor-names-gate.sh 2>&1); then ok "$(printf '%s' "$out" | tail -1)"
+  else printf '%s\n' "$out" | sed 's/^/  /'; fail "vendor names found — rename them, or add a reasoned entry to tools/vendor-names-allow.txt"; mark; fi
+else skip "tools/vendor-names-gate.sh missing"; fi
+
 # ── 6. Typecheck, lint, build ──────────────────────────────────────────────────────────────────
 step "Typecheck, lint, build"
 if [ ! -d artaquest-web/node_modules ]; then

@@ -29,7 +29,16 @@ final class Auth {
 	// the per-caller cap. Well above real traffic (a busy day is a few dozen sign-ins) and well below
 	// the relay's daily quota, so tripping it costs a few members a short wait instead of costing
 	// everyone the whole day's authentication.
-	const GLOBAL_SENDS = 300;
+	// 3000/h (2026-10-08, was 300): sized for 10k sign-ups a day with a 5× peak-hour factor — every new
+	// member is by definition an UNKNOWN address, so this ceiling is exactly what onboarding spends.
+	// Still far under the mail provider's quota (Mailer: Azure Communication Services or SMTP).
+	const GLOBAL_SENDS = 3000;
+	/** Per-caller (IP) sign-in code requests. Generous because one school, office, mobile carrier or
+	 *  university NAT puts hundreds of honest people behind one address; the per-ADDRESS limits
+	 *  (5 per 10 min, MAX_SENDS per hour) are what protect an inbox, and they are unchanged. */
+	const CALLER_BURST       = 30;   // per minute — a classroom signing up together
+	const CALLER_PER_HOUR    = 300;
+	const VERIFY_IP_PER_10M  = 400;
 
 	/** POST /auth/request-code {email} — always returns ok (never leaks account existence). */
 	/**
@@ -60,8 +69,9 @@ final class Auth {
 		// which outlives the attack.
 		//
 		// So: a bucket with no address in it, which therefore aggregates per caller. Bot-neutral —
-		// a script signs in as one or two addresses and never comes near 20 in an hour.
-		if ( Rest::throttle( 'code_caller', 20, 3600 ) ) {
+		// a script signs in as one or two addresses and never comes near the cap. Sized (2026-10-08)
+		// for shared networks: CALLER_BURST a minute and CALLER_PER_HOUR an hour per IP.
+		if ( Rest::throttle( 'code_caller_burst', self::CALLER_BURST, 60 ) || Rest::throttle( 'code_caller', self::CALLER_PER_HOUR, 3600 ) ) {
 			return Rest::err( 'rate_limited', 'Too many sign-in codes requested from here. Try again later.', 400 );
 		}
 		if ( Rest::throttle( 'code_' . $email, 5, 600 ) ) {
@@ -147,7 +157,7 @@ final class Auth {
 		$email = sanitize_email( (string) Rest::p( $req, 'email', '' ) );
 		$code  = preg_replace( '/\D/', '', (string) Rest::p( $req, 'code', '' ) );
 		if ( ! is_email( $email ) || strlen( $code ) !== 6 ) { return Rest::err( 'bad_input', 'Invalid email or code' ); }
-		if ( Rest::throttle( 'verify_' . $email, 20, 600 ) || Rest::throttle( 'verify_ip', 40, 600 ) ) {
+		if ( Rest::throttle( 'verify_' . $email, 20, 600 ) || Rest::throttle( 'verify_ip', self::VERIFY_IP_PER_10M, 600 ) ) {
 			return Rest::err( 'rate_limited', 'Too many attempts. Try again shortly.', 400 );
 		}
 		$stored = get_transient( self::key( $email ) );
@@ -188,7 +198,7 @@ final class Auth {
 
 	/** POST /auth/google {credential, redirect} — verify Google ID token, sign in. */
 	public static function google( $req ) {
-		if ( Rest::throttle( 'google_ip', 40, 600 ) ) { return Rest::err( 'rate_limited', 'Too many attempts. Try again shortly.', 400 ); }
+		if ( Rest::throttle( 'google_ip', self::VERIFY_IP_PER_10M, 600 ) ) { return Rest::err( 'rate_limited', 'Too many attempts. Try again shortly.', 400 ); }
 		// ACCEPT EITHER CONFIGURED CLIENT ID, and this is not belt-and-braces — it is the only
 		// correct shape. The Vault and the `aq_google_client_id` option hold DIFFERENT ids on prod
 		// (same Google project, different OAuth clients), and the browser mints its token against
@@ -581,7 +591,7 @@ final class Auth {
 	// (Real users' handles are already protected by the taken-checks below; this covers names
 	// that don't exist as accounts.)
 	const RESERVED_USERNAMES = array(
-		'admin', 'administrator', 'artaquest', 'artabot', 'artadev', 'moderator', 'mod',
+		'admin', 'administrator', 'artaquest', 'arta', 'artabot', 'artadev', 'moderator', 'mod',
 		'support', 'help', 'official', 'staff', 'team', 'security', 'root', 'system', 'anonymous', 'me',
 	);
 
@@ -596,7 +606,7 @@ final class Auth {
 		if ( ! preg_match( '/^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/', $username ) ) {
 			return array( 'code' => 'invalid', 'msg' => 'Usernames are 3–30 characters: lowercase letters, numbers, and hyphens (no hyphen at the ends).' );
 		}
-		if ( in_array( $username, self::RESERVED_USERNAMES, true ) ) {
+		if ( in_array( $username, self::RESERVED_USERNAMES, true ) || Arta::is_reserved( $username ) ) {
 			return array( 'code' => 'reserved', 'msg' => 'That username is reserved.' );
 		}
 		$by_slug = get_user_by( 'slug', $username );
@@ -654,12 +664,17 @@ final class Auth {
 	}
 	/** True once this address has been emailed its quota of codes this window (anti-bomb). */
 	/** Sitewide sign-in-mail counter for the current hour — see GLOBAL_SENDS. */
+	// A FIXED clock-hour window. This was one key re-set with a fresh one-hour TTL on every send —
+	// a sliding window that never expires while sign-ups keep arriving, so under steady onboarding
+	// the counter only ever climbed and the ceiling closed for good. Keyed on the UTC hour, it resets
+	// on the hour whatever the traffic.
+	private static function global_send_key() { return 'aq_mail_h_' . gmdate( 'YmdH' ); }
 	private static function over_global_send_cap() {
-		return (int) get_transient( 'aq_mail_hour' ) >= self::GLOBAL_SENDS;
+		return (int) get_transient( self::global_send_key() ) >= self::GLOBAL_SENDS;
 	}
 	private static function note_global_send() {
-		$n = (int) get_transient( 'aq_mail_hour' );
-		set_transient( 'aq_mail_hour', $n + 1, HOUR_IN_SECONDS );
+		$k = self::global_send_key();
+		set_transient( $k, (int) get_transient( $k ) + 1, 2 * HOUR_IN_SECONDS );
 	}
 
 	private static function over_send_cap( $email ) {
@@ -758,9 +773,16 @@ final class Auth {
 		// database is public and where the handle IS the identity. The guard on the rename route
 		// (username_problem) already refused exactly these; sign-up simply never consulted it.
 		// A reserved base falls back rather than being decorated: @admin2 still reads as staff.
-		if ( in_array( strtolower( $base ), self::RESERVED_USERNAMES, true ) ) { $base = 'quester'; }
-		$login = $base; $i = 1;
-		while ( username_exists( $login ) ) { $login = $base . ( ++$i ); }
+		if ( in_array( strtolower( $base ), self::RESERVED_USERNAMES, true ) || Arta::is_reserved( $base ) ) { $base = 'quester'; }
+		// BOUNDED. This was `while (username_exists) $i++`, one query per taken suffix: harmless at a
+		// few sign-ups a day, but the fallback base is shared ('quester') and common local parts
+		// (info, hello, john) collide, so at 10k sign-ups a day the n-th one walked n rows. A few
+		// sequential tries keep handles tidy; after that a random suffix ends it in one more query.
+		$login = $base;
+		for ( $i = 2; username_exists( $login ) || Arta::is_reserved( $login ); $i++ ) {
+			$login = $i <= 4 ? $base . $i : substr( $base, 0, 50 ) . '-' . strtolower( wp_generate_password( 6, false ) );
+			if ( $i > 12 ) { break; }
+		}
 		return $login;
 	}
 

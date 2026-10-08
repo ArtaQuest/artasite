@@ -348,7 +348,7 @@ const CREATABLE: MakeKind[] = ["book", "music", "audiobook", "animation", "film"
 
 /** Per-kind intro line — each studio keeps its voice inside the one form. */
 const INTRO: Record<MakeKind, ReactNode> = {
-  book: <>ArtaPublishing is your AI editor — Claude Opus 5, Anthropic's flagship model, at maximum effort. Describe the book you want; optionally add a PDF as inspiration. The editor writes a completely original book — no copying — that is published as <strong>your own work</strong>.</>,
+  book: <>ArtaPublishing is your AI editor, working at maximum effort. Describe the book you want; optionally add a PDF as inspiration. The editor writes a completely original book — no copying — that is published as <strong>your own work</strong>.</>,
   music: <>ArtaSound is your AI studio. Describe the music; optionally add a track as inspiration. It composes a completely original piece — no copying — then puts it through rounds of critique and improvement before you hear it. Published as <strong>your own work</strong>.</>,
   audiobook: <>ArtaSound narrates <strong>your own writing</strong> sentence by sentence in any of ~300 voices. Long books are fine — the studio works through them steadily and tells you when it's done.</>,
   animation: <>ArtaMotion scripts a 3Blue1Brown-style explainer of your topic in the ArtaQuest style, then renders it to video — published as <strong>your own work</strong>. Optionally add reference images.</>,

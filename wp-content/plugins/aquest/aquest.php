@@ -3,7 +3,7 @@
  * Plugin Name: ArtaQuest
  * Description: The entire ArtaQuest platform — LMS, economy, social, i18n, funds — in one
  *              lean, dependency-free plugin. Replaces MasterStudy LMS + WooCommerce.
- * Version:     1.20.749
+ * Version:     1.21.0
  * Author:      ArtaQuest Foundation
  * License:     GNU AGPLv3
  * License URI: https://www.gnu.org/licenses/agpl-3.0.html
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 // disagree will send the next person chasing a production divergence that is not there: the
 // header is what get_plugin_data() reads, AQ_VERSION is what /version reports and what the
 // integrity sweep keys on. Bump them together, always.
-define( 'AQ_VERSION', '1.20.749' );
+define( 'AQ_VERSION', '1.21.0' );
 define( 'AQ_DIR', __DIR__ );
 define( 'AQ_URL', plugins_url( '', __FILE__ ) );
 
@@ -37,12 +37,12 @@ spl_autoload_register( function ( $class ) {
  * that worker, yielding "Class AQ\Db not found". Loading all classes up-front (each guarded
  * by class_exists) makes the backend deterministic regardless of autoload/opcache timing.
  */
-foreach ( [ 'Data', 'Schema', 'Cron', 'Secrets', 'Vault', 'Watchdog', 'Integrity', 'Health', 'Rest', 'Auth', 'Sessions', 'Account', 'Verify', 'Courses', 'Topics', 'Typology', 'Learn', 'Economy', 'Season', 'Social', 'Search', 'I18n', 'Funds', 'Extra', 'Offline', 'Notify', 'Meetings', 'Calendar', 'Booking', 'Cast', 'Record', 'Assistant', 'Relay', 'Science', 'Library', 'Music', 'Motion', 'Narrate', 'Film', 'Illustration', 'Fearometer', 'Tickets', 'TaskSync', 'ArashAcceptance', 'Stripe', 'YouTube', 'Console', 'Trends', 'Houses', 'Competitions', 'Translate', 'Artaai', 'Games', 'Challenges', 'Demo', 'Doi', 'Notebook', 'Chat', 'Rooms', 'Shell', 'Api', 'Passkey', 'News', 'Kaggle', 'Kernel', 'Gist', 'Mirror', 'Credits', 'KaggleId', 'Cities', 'Books', 'Pdf' ] as $aq_cls ) {
+foreach ( [ 'Data', 'Schema', 'Cron', 'Secrets', 'Vault', 'Watchdog', 'Integrity', 'Health', 'Rest', 'Auth', 'Sessions', 'Account', 'Verify', 'Courses', 'Topics', 'Typology', 'Learn', 'Economy', 'Season', 'Social', 'Search', 'I18n', 'Funds', 'Extra', 'Offline', 'Notify', 'Meetings', 'Calendar', 'Booking', 'Cast', 'Record', 'Assistant', 'Arta', 'Relay', 'Science', 'Library', 'Music', 'Motion', 'Narrate', 'Film', 'Illustration', 'Fearometer', 'Tickets', 'TaskSync', 'ArashAcceptance', 'Stripe', 'YouTube', 'Console', 'Trends', 'Houses', 'Competitions', 'Translate', 'Artaai', 'Games', 'Challenges', 'Demo', 'Doi', 'Notebook', 'Chat', 'Rooms', 'Shell', 'Api', 'Passkey', 'News', 'Kaggle', 'Kernel', 'Gist', 'Mirror', 'Credits', 'KaggleId', 'Cities', 'Books', 'Pdf' ] as $aq_cls ) {
 	$aq_file = AQ_DIR . '/src/' . $aq_cls . '.php';
 	if ( ! class_exists( 'AQ\\' . $aq_cls, false ) && is_readable( $aq_file ) ) { require_once $aq_file; }
 }
 
-/** Grant the one-time ArtaBot welcome allowance (1k free tokens) on every signup. */
+/** Grant the one-time welcome points on every signup (Economy::grant_signup_allowance). */
 add_action( 'user_register', [ 'AQ\\Economy', 'grant_signup_allowance' ] );
 
 /** The "you have a message" email, sent OFF the chat/send request (see AQ\Chat::email_dm): an
@@ -157,6 +157,7 @@ add_action( 'plugins_loaded', function () {
 		AQ\Schema::install();
 	}
 	AQ\Notify::ensure_table(); // self-installs aq_notifications (no-op once current)
+	AQ\Arta::ensure_tables(); // self-installs aq_mentions — @arta's public mention queue (2026-10-08)
 	AQ\Notebook::ensure_tables(); // self-installs aq_notebooks + aq_nb_runs + aq_nb_reviews — THE feed substrate (2026-07-13)
 	AQ\Api::ensure_table(); // self-installs aq_api_tokens — the developer API layer (2026-07-23)
 	AQ\Passkey::ensure_table(); // self-installs aq_passkeys — publication co-signing keys (2026-07-24)
@@ -368,7 +369,9 @@ add_action( 'plugins_loaded', function () {
 	// that armed it on a previous deploy would otherwise keep firing at a method that no longer
 	// exists. Detection is untouched — the card reads aq_news_events directly now.
 	wp_clear_scheduled_hook( 'aq_artanews' );
-	if ( ! wp_next_scheduled( 'aq_artabot_mentions' ) ) { wp_schedule_event( time() + 240, 'aq_5min', 'aq_artabot_mentions' ); }
+	// The old @artabot poller is replaced by @arta's reconciliation pass (src/Arta.php).
+	wp_clear_scheduled_hook( 'aq_artabot_mentions' );
+	if ( ! wp_next_scheduled( 'aq_arta_reconcile' ) ) { wp_schedule_event( time() + 240, 'aq_5min', 'aq_arta_reconcile' ); }
 } );
 aq_cron_on( 'aq_scholar_refresh', 'aq_scholar_refresh', [ 'AQ\\Extra', 'scholar_refresh_tick' ], 900 );
 aq_cron_on( 'aq_mkt_sample', 'aq_mkt_sample', [ 'AQ\\Extra', 'mkt_sample_tick' ], 600 );
@@ -376,10 +379,13 @@ aq_cron_on( 'aq_mkt_sample', 'aq_mkt_sample', [ 'AQ\\Extra', 'mkt_sample_tick' ]
 aq_cron_on( 'aq_commodities', 'aq_commodities', [ 'AQ\\Extra', 'commodities_tick' ], 600 );
 aq_cron_on( 'aq_news_detect', 'aq_news_detect', [ 'AQ\\News', 'detect_tick' ], 900 );  // ~9MB satellite pull + clustering
 aq_cron_on( 'aq_news_social', 'aq_news_social', [ 'AQ\\News', 'social_tick' ], 300 );  // TIER 2 ONLY — attributed context, never a detection
-// @artabot mentions (operator 2026-07-30): ArtaBot is a participant, not just a publisher — tag it
-// anywhere and it replies in that thread. A CRON, not a comment hook: the relay is async and may be
-// cold, and a hook that throws would take the member's comment down with it.
-aq_cron_on( 'aq_artabot_mentions', 'aq_artabot_mentions', [ 'AQ\\Assistant', 'mention_tick' ], 300 );
+// @arta (2026-10-08): mentions are recorded when the post is written and the Arta brain pulls them
+// (arta/pending); this 5-minute pass only expires stale mentions and releases claims a dead brain held
+// (Arta::reconcile_tick).
+aq_cron_on( 'aq_arta_reconcile', 'aq_arta_reconcile', [ 'AQ\\Arta', 'reconcile_tick' ], 300 );
+// The bot account's one-time rename (artabot → arta). On init so every user API is loaded; a cheap
+// autoloaded-option read on every later request.
+add_action( 'init', [ 'AQ\\Arta', 'migrate_identity' ], 20 );
 // Educational social crawl (operator 2026-07-23): its OWN hourly cron so a Reddit token stall or a
 // YouTube quota trip can't wobble the marketplace tick. Reddit/YouTube/Instagram, each dormant
 // until its Vault secret exists. See Extra::social_crawl_tick.
@@ -433,6 +439,7 @@ register_deactivation_hook( __FILE__, function () {
 	wp_clear_scheduled_hook( 'aq_video_sync' );     // retired
 	wp_clear_scheduled_hook( 'aq_trend_sweep' );
 	wp_clear_scheduled_hook( 'aq_retriage' );
+	wp_clear_scheduled_hook( 'aq_arta_reconcile' );
 	wp_clear_scheduled_hook( 'aq_moderate' );
 	wp_clear_scheduled_hook( 'aq_purge_zero_rate' );
 	wp_clear_scheduled_hook( 'aq_seed_boards' );

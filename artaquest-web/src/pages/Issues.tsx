@@ -3,7 +3,7 @@ import { isLoggedIn, Tickets, KINDS, type Ticket, type TicketMsg, type TicketKin
 import { useTypewriter } from "../lib/useTypewriter";
 import { BackLink, Button, Card, EmptyState, ErrorNote, Field, Input, LoadMoreButton, LogoMark, PageHero, Segmented, StatusNote, Textarea } from "../components/ui";
 
-// Contributions: open a ticket (bug / feature / content / suggestion), ArtaBot triages it in a
+// Contributions: open a ticket (bug / feature / content / suggestion), Arta triages it in a
 // back-and-forth, an autonomous agent may ship a fix, and YOU close it — earning 1 point on the
 // kind's own leaderboard board (Sentinel / Visionary / Curator / Sage). Severity is gone; the model
 // works it out in conversation. The board itself is PUBLIC — everyone sees every contribution, just
@@ -32,7 +32,7 @@ function StatusPill({ status }: { status: string }) {
 const ClipIcon = () => <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden><path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l9.2-9.19a4 4 0 0 1 5.65 5.66l-9.19 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 
 /** /issues/?ticket=N is the canonical link to ONE contribution — it's what the notification bell
- *  (Notify::push in Tickets.php), ArtaBot's chat links ([#N]) and the "your contribution is live"
+ *  (Notify::push in Tickets.php), Arta's chat links ([#N]) and the "your contribution is live"
  *  email all point at. Read it so those links open the thread instead of the generic board (#39). */
 function ticketFromUrl(): number | null {
   if (typeof window === "undefined") return null;
@@ -74,8 +74,8 @@ function Shot({ url, below }: { url: string; below: boolean }) {
   );
 }
 
-/** ArtaBot's freshly-arrived thread lines type themselves in — the same word-by-word reveal as the
- *  floating ArtaBot chat (#76). Plain text (matching the rest of the thread, not Markdown); a tap
+/** Arta's freshly-arrived thread lines type themselves in — the same word-by-word reveal as the
+ *  floating Arta chat (#76). Plain text (matching the rest of the thread, not Markdown); a tap
  *  skips to the end. `data-ay-skip` keeps the half-typed text out of the i18n mesh while it reveals —
  *  the parent swaps to the normal, translatable text node once `onDone` fires. */
 function TypingText({ body, onDone }: { body: string; onDone: () => void }) {
@@ -100,7 +100,7 @@ function Bubble({ m, animate = false, onTypingDone }: { m: TicketMsg; animate?: 
   if (m.role === "system") {
     return <p className="text-center text-[12px] text-ink-3">{m.body} · <span className="opacity-60">{fmtTime(m.at)}</span></p>;
   }
-  // The developer agent and ArtaBot are ONE member-facing persona: both label as ArtaBot (#76);
+  // The developer agent and Arta are ONE member-facing persona: both label as Arta (#76);
   // the ⚙ avatar still quietly marks the developer's build/ship updates.
   const agent = m.role === "agent";
   return (
@@ -108,7 +108,7 @@ function Bubble({ m, animate = false, onTypingDone }: { m: TicketMsg; animate?: 
       {agent ? <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-yin/15 text-[12px]">⚙</span> : <LogoMark className="mt-0.5 h-6 w-6 shrink-0" />}
       <div className="min-w-0 max-w-[85%] whitespace-pre-wrap break-words rounded-card border border-line bg-space-2 px-3.5 py-2.5 text-[14px] leading-relaxed text-ink-2">
         <span className="mb-0.5 flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-wide text-ink-2">
-          <span>ArtaBot</span>
+          <span>Arta</span>
           <span className="font-normal normal-case tracking-normal">{fmtTime(m.at)}</span>
         </span>
         {animate && body
@@ -234,7 +234,7 @@ export default function Issues() {
       .finally(() => setLoadingMore(false));
   }
 
-  // ── Typewriter (#76): ArtaBot's freshly-arrived lines type themselves in. ───────────────────
+  // ── Typewriter (#76): Arta's freshly-arrived lines type themselves in. ───────────────────
   // `seenIds` is every message id already on screen; `primed` guards the FIRST load of a ticket so a
   // deep link / refresh renders history instantly (never replays it as typing). `animIds` is the set
   // currently mid-reveal — a Bubble drops out of it via `endTyping` when its animation finishes.
@@ -250,8 +250,8 @@ export default function Issues() {
     Tickets.get(id)
       .then((d) => {
         const items = d.messages.items;
-        // After the first load, any ArtaBot line we haven't shown before types itself in — so the live
-        // 5s poll reveals ArtaBot's triage (`assistant`) replies and the developer's `agent` "opened /
+        // After the first load, any Arta line we haven't shown before types itself in — so the live
+        // 5s poll reveals Arta's triage (`assistant`) replies and the developer's `agent` "opened /
         // key decision / shipped" beats as composed messages, not popped-in blocks. The member's own
         // messages and system notices never animate; suppressed progress chatter (isProgressNoise) is
         // skipped here too, so a hidden line can't leave a reveal stuck open.
@@ -275,7 +275,7 @@ export default function Issues() {
 
   // Deep link (#39): openId is seeded from ?ticket= in useState above; fetch its thread once on
   // mount. In-page opens fetch via open(), so this runs only for arrivals from a notification,
-  // an ArtaBot chat link, an email, or a refresh/share of an open thread.
+  // an Arta chat link, an email, or a refresh/share of an open thread.
   useEffect(() => { if (openId != null) loadDetail(openId); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Opening a contribution swaps the list for the detail view IN PLACE — it's React state, not a route
@@ -296,7 +296,7 @@ export default function Issues() {
     else window.scrollTo(0, listScrollY.current);
   }, [openId]);
 
-  // Poll an open, not-yet-closed ticket so ArtaBot/agent replies appear live (read-only — fine for
+  // Poll an open, not-yet-closed ticket so Arta/agent replies appear live (read-only — fine for
   // any viewer following someone else's contribution).
   const pollRef = useRef<number | null>(null);
   useEffect(() => {
@@ -323,7 +323,7 @@ export default function Issues() {
       const r = await Tickets.create({ kind, title: title.trim(), body: body.trim(), screenshot: shotUrl, where: where.trim() || undefined });
       setTitle(""); setBody(""); setWhere(""); setShotUrl(""); setShotPreview("");
       loadList();
-      open(r.id); // jump into the thread to see ArtaBot's triage
+      open(r.id); // jump into the thread to see Arta's triage
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Could not submit — please try again");
     } finally { setPosting(false); }
@@ -373,7 +373,7 @@ export default function Issues() {
         )}
 
         {/* The original chat message that triggered a chat-filed contribution (#121), shown with the
-            screenshot (#120) so a developer sees the full context behind the report — ArtaBot files a
+            screenshot (#120) so a developer sees the full context behind the report — Arta files a
             tidied-up title/body, this is the member's own words. break-words/pre-wrap for the same reason
             as the chat bubbles: members paste URLs and error strings (#18). */}
         {t?.chat_prompt && (
@@ -417,7 +417,7 @@ export default function Issues() {
               </button>
               <Textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={1}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(e as unknown as FormEvent); } }}
-                placeholder="Reply to ArtaBot…" className="max-h-32 min-h-[44px] min-w-0 flex-1 resize-none" />
+                placeholder="Reply to Arta…" className="max-h-32 min-h-[44px] min-w-0 flex-1 resize-none" />
               <Button type="submit" disabled={(!reply.trim() && !replyShotUrl) || sending || replyUploading} size="md" className="shrink-0 disabled:opacity-40">Send</Button>
             </div>
             <input ref={replyFileRef} type="file" accept="image/*" className="hidden"
@@ -446,7 +446,7 @@ export default function Issues() {
       <PageHero
         eyebrow="Contributions"
         title="Help shape ArtaQuest"
-        lede="Report a bug, request a feature, suggest an improvement, or share an idea. ArtaBot triages it with you and the best contributions ship automatically — and every contribution is public, just like the discussion boards."
+        lede="Report a bug, request a feature, suggest an improvement, or share an idea. Arta triages it with you and the best contributions ship automatically — and every contribution is public, just like the discussion boards. You can also post “@arta bug: …” anywhere on the feed and Arta files it on GitHub for you."
       />
 
       {/* grid-cols-1 (not the implicit `auto` track) so the single mobile column is minmax(0,1fr) —
@@ -481,7 +481,7 @@ export default function Issues() {
                   ) : (
                     <div className="px-6 py-8 text-center">
                       <p className="text-[15px] font-semibold text-ink">Drop a screenshot, paste it, or click to upload</p>
-                      <p className="mt-1 text-[12px] text-ink-3">PNG / JPEG / WebP / GIF · up to 6 MB · ArtaBot reads it to triage your issue</p>
+                      <p className="mt-1 text-[12px] text-ink-3">PNG / JPEG / WebP / GIF · up to 6 MB · Arta reads it to triage your issue</p>
                     </div>
                   )}
                 </div>
@@ -517,27 +517,21 @@ export default function Issues() {
 
               <Field label="Details">
                 <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} maxLength={6000} required
-                  placeholder="What's happening, what you'd expect, steps to reproduce, or the idea in full. ArtaBot will ask if it needs more." className="w-full resize-y" />
+                  placeholder="What's happening, what you'd expect, steps to reproduce, or the idea in full. Arta will ask if it needs more." className="w-full resize-y" />
               </Field>
 
               {err && <ErrorNote>{err}</ErrorNote>}
               <div className="flex items-center gap-3">
                 <Button type="submit" disabled={title.trim().length <= 3 || body.trim().length <= 10 || uploading || posting} className="disabled:opacity-40">{posting ? "Submitting…" : "Start a contribution"}</Button>
-                <span className="text-[13px] text-ink-3">{uploading ? "Uploading screenshot…" : "ArtaBot replies straight away"}</span>
+                <span className="text-[13px] text-ink-3">{uploading ? "Uploading screenshot…" : "Arta replies straight away"}</span>
               </div>
             </form>
           ) : (
             <Card className="flex flex-col items-start gap-3 p-6">
               <h2 className="text-[18px] font-bold">Sign in to contribute</h2>
-              {/* The sentence that used to end this paragraph — "tell ArtaBot (bottom-right) and it
-                  will file the issue for you, signed in or not" — was false for the only people who
-                  ever read it. ArtaBot is mounted as `{isLoggedIn() && <ArtaBot />}`, so there is no
-                  launcher bottom-right for a signed-out reader, and POST artabot is auth 'user' and
-                  refuses anyway. The anonymous path it described was real once (Assistant::ask_anon)
-                  and still compiles, but nothing has called it since ArtaBot became a reason to sign
-                  up rather than a public service — the code was disconnected and the promise was
-                  left standing. Do not restore the sentence without restoring a caller. */}
-              <p className="text-[14px] leading-relaxed text-ink-2">Anyone can browse every contribution. Sign in to open one of your own — an account links it to you, lets ArtaBot follow up, and is how you hear back.</p>
+              {/* Signed-in members can also file a bug in public: post "@arta bug: …" and Arta opens a
+                  GitHub issue and mirrors it here. There is no anonymous path. */}
+              <p className="text-[14px] leading-relaxed text-ink-2">Anyone can browse every contribution. Sign in to open one of your own — an account links it to you, lets Arta follow up, and is how you hear back.</p>
               <Button href="/login/?redirect_to=/issues/" size="md">Sign in</Button>
             </Card>
           )}
@@ -545,7 +539,7 @@ export default function Issues() {
           <Card className="p-5">
             <h2 className="text-[15px] font-bold">How it works</h2>
             <ol className="mt-3 flex list-none flex-col gap-3 text-[13px] leading-relaxed text-ink-2">
-              <li className="flex gap-3"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-yin/15 text-[12px] font-bold text-yin-light">1</span>You open a contribution and chat it through with ArtaBot — out in the open for everyone to follow.</li>
+              <li className="flex gap-3"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-yin/15 text-[12px] font-bold text-yin-light">1</span>You open a contribution and chat it through with Arta — out in the open for everyone to follow.</li>
               <li className="flex gap-3"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-yin/15 text-[12px] font-bold text-yin-light">2</span>When it's concrete, an agent picks it up and ships the change.</li>
               <li className="flex gap-3"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-yang/15 text-[12px] font-bold text-yang">3</span>You verify and mark it resolved — earning a point on your board (Sentinel · Visionary · Curator · Sage).</li>
             </ol>

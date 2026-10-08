@@ -387,7 +387,7 @@ export default function Wallet() {
       )}
 
       {CHECKOUT_LIVE ? (
-        // #buy is the scroll target for "Top up your wallet" CTAs (e.g. ArtaBot) so landing here goes
+        // #buy is the scroll target for "Top up your wallet" CTAs (e.g. Arta) so landing here goes
         // straight to the Buy-coins form; scroll-mt clears the 60px sticky topbar.
         //
         // `lg:grid-cols-2` was a viewport query spending room the page does not have: the shell hands

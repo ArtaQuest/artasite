@@ -91,7 +91,7 @@ const STEPS = [
   { n: "1", t: "Every reply is read, just after you post", d: "Your reply goes up straight away and joins a queue. Shortly after, an AI reads it once and rates it from 0 to 100 for one thing only: how far it trades in hate or fear." },
   { n: "2", t: "Almost everything passes", d: "Curiosity, criticism, dissent, hard questions, your own worries — all score low and stay exactly as you wrote them. Nothing about the topic is off-limits." },
   { n: "3", t: "Only the far end is set aside", d: "If a reply crosses the line into dehumanising people or frightening them, it’s set aside from the competition — its upvotes stop counting. It is never deleted, and you’re never charged." },
-  { n: "4", t: "ArtaBot leaves a kind note", d: "Instead of a cold rejection, ArtaBot replies gently — a reminder not to be afraid, and to keep a little more faith in people. Reword from a calmer place and your reply counts again." },
+  { n: "4", t: "Arta leaves a kind note", d: "Instead of a cold rejection, Arta replies gently — a reminder not to be afraid, and to keep a little more faith in people. Reword from a calmer place and your reply counts again." },
 ];
 
 function Stat({ value, label }: { value: string; label: string }) {

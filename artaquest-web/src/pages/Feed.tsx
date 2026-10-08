@@ -10,13 +10,13 @@
  */
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { watchMath } from "../lib/math";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  createPost, deletePost, editPost, heartNotebook, heartPost, listPosts,
+  createPost, deletePost, editPost, getPost, heartNotebook, heartPost, listPosts, listReplies, replyToPost,
   myNotebooks, liteRunUrl,
   type Challenge, type FeedPostT, type LibraryItem,
   type NbKind, type NotebookCard,
-  normalizeNbKind } from "../lib/api";
+  normalizeNbKind, artaStatus } from "../lib/api";
 import { assetItem, NB_KIND_META, teaserSrc, TeaserVideo, useAqTheme, useCalmFlag } from "../components/nbview";
 import { AutoLoopVideo, FeedPlayer, LibraryMedia, LibraryPicker } from "../components/library";
 import { SharePanel } from "../components/SharePanel";
@@ -40,6 +40,124 @@ import { currentUser, localePath } from "../lib/wp";
 
 // ── one post ─────────────────────────────────────────────────────────────────
 
+
+// ── @mentions + Arta ─────────────────────────────────────────────────────────
+// Mirrors Arta::extract_handles on the server (src/Arta.php): an @ that is not glued to a word, an
+// email or a path, then a 3-30 char handle. A capture group instead of a lookbehind so older Safari
+// parses it.
+const MENTION_RE = /(^|[^A-Za-z0-9_@./+-])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,28}[A-Za-z0-9])?)(?![A-Za-z0-9_-]|@|\.[A-Za-z0-9])/g;
+const ARTA_RE = /(^|[^A-Za-z0-9_@./+-])@(arta|artabot)(?![A-Za-z0-9_-]|@|\.[A-Za-z0-9])/i;
+function mentionsArta(text: string): boolean { return ARTA_RE.test(text || ""); }
+
+/** Post text with every @handle linked to that member's profile. Plain text otherwise. */
+function MentionText({ text }: { text: string }) {
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(MENTION_RE)) {
+    const at = (m.index ?? 0) + m[1].length;
+    if (m[2].length < 3) continue;
+    if (at > last) out.push(text.slice(last, at));
+    const handle = m[2].toLowerCase() === "artabot" ? "arta" : m[2];
+    out.push(<Link key={at} to={`/u/${handle}`} onClick={(e) => e.stopPropagation()} className="text-yin-ink hover:underline">@{m[2]}</Link>);
+    last = at + 1 + m[2].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return <>{out}</>;
+}
+
+/** The small marker on Arta's own posts — an automated account should never pass for a person. */
+function BotBadge() {
+  return <span title="Automated account" className="shrink-0 rounded-pill bg-yin/15 px-1.5 py-px text-[10.5px] font-semibold text-yin-light">AI</span>;
+}
+
+/**
+ * A post's replies, oldest first, with a reply box. When `watch` is set (the viewer just tagged
+ * @arta) it re-checks every few seconds for a while so Arta's answer appears without a reload.
+ */
+function PostReplies({ postId, onCount, watch }: { postId: number; onCount: (n: number) => void; watch?: boolean }) {
+  const [items, setItems] = useState<FeedPostT[] | null>(null);
+  const [mine, setMine] = useState<Set<number>>(new Set());
+  const [next, setNext] = useState<number | null>(null);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [fresh, setFresh] = useState<Set<number>>(new Set());
+  const [waiting, setWaiting] = useState(!!watch);
+  // Arta answers from a queue at a steady pace, so a slow answer is normal, not an error. When the
+  // viewer is watching, say honestly whether it is on its way or waiting for Arta to be back.
+  const [away, setAway] = useState(false);
+  const [late, setLate] = useState(false);
+  useEffect(() => {
+    if (!watch) return;
+    artaStatus().then((st) => setAway(!st.online || st.paused_until * 1000 > Date.now())).catch(() => {});
+  }, [watch]);
+  const load = useCallback(() => listReplies(postId).then((r) => {
+    setItems(r.items); setNext(r.next); setMine(new Set(r.mine || []));
+    return r.items;
+  }), [postId]);
+  useEffect(() => { load().catch(() => setItems([])); }, [load]);
+  useEffect(() => {
+    if (!waiting) return;
+    let n = 0;
+    const t = window.setInterval(() => {
+      n++;
+      load().then((rows) => {
+        if (rows.some((r) => r.author.bot)) { setWaiting(false); setLate(false); }
+        else if (n >= 20) { setWaiting(false); setLate(true); }
+      }).catch(() => {});
+      if (n >= 20) setWaiting(false);
+    }, 6000);
+    return () => window.clearInterval(t);
+  }, [waiting, load]);
+  const send = () => {
+    const body = text.trim();
+    if (!body || body.length > CHAR_LIMIT || busy) return;
+    setBusy(true); setErr("");
+    replyToPost(postId, body)
+      .then((p) => {
+        setText("");
+        setItems((cur) => [...(cur || []), p]);
+        setFresh((cur) => new Set([...cur, p.id]));
+        onCount(1);
+      })
+      .catch((e: unknown) => setErr((e as { message?: string })?.message || "That reply could not be sent."))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} className="mt-2 cursor-default">
+      {items === null ? <p className="py-2 text-[13px] text-ink-3">Loading replies…</p> : null}
+      {items && items.length ? (
+        <div className="divide-y divide-line rounded-2xl border border-line bg-space-1/60">
+          {items.map((r) => <FeedPost key={r.id} post={r} hearted={mine.has(r.id)} watchArta={fresh.has(r.id) && mentionsArta(r.body)}
+            onDeleted={(id) => { setItems((cur) => (cur || []).filter((x) => x.id !== id)); onCount(-1); }} />)}
+        </div>
+      ) : null}
+      {next != null ? (
+        <button type="button" className="mt-1 text-[13px] text-yin-ink hover:underline"
+          onClick={() => listReplies(postId, next).then((r) => { setItems((cur) => [...(cur || []), ...r.items]); setNext(r.next); }).catch(() => {})}>
+          Show more replies
+        </button>
+      ) : null}
+      {waiting || late ? (
+        <p role="status" className="mt-2 text-[12.5px] text-ink-3">
+          {away || late
+            ? "Arta has a queue right now. Your question is in it and the answer will appear here — no need to ask again."
+            : "Arta is reading this — the answer will appear here."}
+        </p>
+      ) : null}
+      {isLoggedIn() ? (
+        <div className="mt-2 flex items-end gap-2">
+          <textarea value={text} onChange={(e) => setText(e.currentTarget.value)} rows={1} maxLength={CHAR_LIMIT + 60}
+            placeholder="Post your reply — tag @arta to ask Arta" aria-label="Reply"
+            className="min-h-[40px] flex-1 resize-none rounded-xl border border-line bg-space-1 p-2 text-[14px] text-ink outline-none focus:border-yin-ink" />
+          <button type="button" onClick={send} disabled={busy || !text.trim() || text.length > CHAR_LIMIT}
+            className="rounded-pill bg-yang px-3 py-2 text-[13px] font-bold text-on-accent disabled:opacity-40">Reply</button>
+        </div>
+      ) : null}
+      {err ? <p role="status" className="mt-1 text-[12.5px] text-yang">{err}</p> : null}
+    </div>
+  );
+}
 
 /** Height-limits a post's content: anything taller than CAP collapses behind a fade + Show more. */
 const CAP = 560;
@@ -296,8 +414,12 @@ function OwnMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => voi
   );
 }
 
-function FeedPost({ post, onDeleted, hearted }: { post: FeedPostT; onDeleted?: (id: number) => void; hearted?: boolean }) {
+function FeedPost({ post, onDeleted, hearted, watchArta, openReplies }: { post: FeedPostT; onDeleted?: (id: number) => void; hearted?: boolean; watchArta?: boolean; openReplies?: boolean }) {
   const nb = post.nb;
+  // Text posts carry their own conversation (replies are posts with a parent); a work keeps its
+  // notebook comment thread below.
+  const [replyOpen, setReplyOpen] = useState(!!watchArta || !!openReplies);
+  const [replyCount, setReplyCount] = useState(post.replies || 0);
   const me = currentUser();
   const own = !!me?.slug && me.slug === post.author.slug;
   const [body, setBody] = useState(post.body);
@@ -366,6 +488,7 @@ function FeedPost({ post, onDeleted, hearted }: { post: FeedPostT; onDeleted?: (
               your own posts. The handle doubles as the profile link's visible address. */}
           <div className="flex items-center gap-1.5 text-sm">
             <Link to={`/u/${post.author.slug}`} className={`font-bold text-ink hover:underline ${nameClass(post.author.name)}`}>{post.author.name}</Link>
+            {post.author.bot ? <BotBadge /> : null}
             <Link to={`/u/${post.author.slug}`} tabIndex={-1} className="hidden min-w-0 shrink-[2] break-all text-ink-3 sm:block"><bdi dir="ltr" data-ay-skip="1">@{post.author.slug}</bdi></Link>
             <span className="text-ink-3">·</span>
             <time className="shrink-0 text-ink-3" dateTime={new Date(post.created * 1000).toISOString()}>{timeAgo(post.created)}</time>
@@ -406,7 +529,7 @@ function FeedPost({ post, onDeleted, hearted }: { post: FeedPostT; onDeleted?: (
                     }}>Save</button>
                 </div>
               </div>
-            ) : body ? <p className="mt-0.5 whitespace-pre-wrap text-[15px] leading-relaxed text-ink">{body}</p> : null}
+            ) : body ? <p className="mt-0.5 whitespace-pre-wrap text-[15px] leading-relaxed text-ink"><MentionText text={body} /></p> : null}
             {writeErr ? (
               <p role="status" className="mt-1 text-[12.5px] text-yang" onClick={(e) => e.stopPropagation()}>{writeErr}</p>
             ) : null}
@@ -436,6 +559,12 @@ function FeedPost({ post, onDeleted, hearted }: { post: FeedPostT; onDeleted?: (
                 className={cx("-my-2 -ms-1.5 inline-flex min-h-11 items-center gap-1 rounded-pill px-1 py-2 transition-colors min-[400px]:px-1.5", talk ? "text-yin-ink" : "hover:text-yin-ink")} aria-label="Reply">
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M21 11.5a8.4 8.4 0 0 1-9.4 8.3L3 21l1.2-3.6A8.4 8.4 0 1 1 21 11.5Z" /></svg>
                 {nb.comments > 0 ? nb.comments : ""}
+              </button>
+            ) : !post.repost || post.body ? (
+              <button type="button" onClick={(e) => { e.stopPropagation(); setReplyOpen((v) => !v); }} aria-expanded={replyOpen}
+                className={cx("-my-2 -ms-1.5 inline-flex min-h-11 items-center gap-1 rounded-pill px-1 py-2 transition-colors min-[400px]:px-1.5", replyOpen ? "text-yin-ink" : "hover:text-yin-ink")} aria-label="Reply">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M21 11.5a8.4 8.4 0 0 1-9.4 8.3L3 21l1.2-3.6A8.4 8.4 0 1 1 21 11.5Z" /></svg>
+                {replyCount > 0 ? replyCount : ""}
               </button>
             ) : null}
             <span className="inline-flex items-center">
@@ -488,6 +617,9 @@ function FeedPost({ post, onDeleted, hearted }: { post: FeedPostT; onDeleted?: (
               <span className="hidden min-[400px]:inline">Run it&nbsp;↗</span><span className="min-[400px]:hidden">Run&nbsp;↗</span>
             </a> : null}
           </div>
+          {replyOpen && !nb ? (
+            <PostReplies postId={post.id} watch={watchArta} onCount={(d) => setReplyCount((n) => Math.max(0, n + d))} />
+          ) : null}
           {talk && nb ? (
             <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} className="mt-3 cursor-default rounded-2xl border border-line bg-space-1/60 p-3">
               <PostThread id={nb.id} count={nb.comments} />
@@ -544,12 +676,12 @@ function ChallengesStrip({ items }: { items: Challenge[] | null }) {
 const CHAR_LIMIT = 280; // old-Twitter discipline
 let quoteIntent: ((p: FeedPostT) => void) | null = null; // FeedPost → Composer quote channel
 
-function Composer({ onPosted }: { onPosted: (p: FeedPostT) => void }) {
+function Composer({ onPosted, initialText = "" }: { onPosted: (p: FeedPostT) => void; initialText?: string }) {
   const nav = useNavigate();
   const me = currentUser();
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText);
   const [busy, setBusy] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!!initialText);
   const [mine, setMine] = useState<NotebookCard[] | null>(null);
   const [attach, setAttach] = useState<NotebookCard | null>(null);
   const [quote, setQuote] = useState<FeedPostT | null>(null);
@@ -570,6 +702,12 @@ function Composer({ onPosted }: { onPosted: (p: FeedPostT) => void }) {
     return () => { document.removeEventListener("mousedown", down); document.removeEventListener("keydown", key); };
   }, [nbOpen]);
   useEffect(() => { quoteIntent = (p) => { setQuote(p); setOpen(true); box.current?.focus(); }; return () => { quoteIntent = null; }; }, []);
+  // "Ask @arta" links land here with the handle already typed: focus with the caret at the end.
+  useEffect(() => {
+    if (!initialText) return;
+    setText(initialText); setOpen(true);
+    requestAnimationFrame(() => { const ta = box.current; if (ta) { ta.focus(); ta.selectionStart = ta.selectionEnd = ta.value.length; } });
+  }, [initialText]);
   const left = CHAR_LIMIT - text.length;
   // Insert AT THE CARET, not at the end: the old strip appended, so picking an emoji after
   // going back to fix a word dropped it at the tail of the sentence.
@@ -729,8 +867,44 @@ function Composer({ onPosted }: { onPosted: (p: FeedPostT) => void }) {
  * document-structure errors that screen readers and search engines read literally, and the rail's
  * five backend calls are pure cost on a marketing page.
  */
+/**
+ * One post in focus (/works/?post=<id>) — where notifications and Arta's replies link. Shows the
+ * post it answers above it, then the post with its replies open.
+ */
+function PostFocus({ id }: { id: number }) {
+  const [data, setData] = useState<(FeedPostT & { parent: FeedPostT | null; mine?: number[] }) | null>(null);
+  const [gone, setGone] = useState(false);
+  useEffect(() => {
+    setData(null); setGone(false);
+    getPost(id).then(setData).catch(() => setGone(true));
+  }, [id]);
+  if (gone) return <p className="border-b border-line px-4 py-4 text-[14px] text-ink-3">That post is no longer available. <Link to="/works/" className="text-yin-ink hover:underline">Back to the feed</Link></p>;
+  if (!data) return <div className="border-b border-line"><PostSkeleton /></div>;
+  const mine = new Set(data.mine || []);
+  return (
+    <section aria-label="Post" className="border-b-4 border-line">
+      <div className="flex items-center justify-between px-4 pt-3 text-[13px] text-ink-3">
+        <span>Post</span>
+        <Link to="/works/" className="text-yin-ink hover:underline">Close</Link>
+      </div>
+      {data.parent ? (
+        <div className="opacity-80">
+          <FeedPost post={data.parent} hearted={mine.has(data.parent.id)} />
+          <p className="px-4 pb-1 text-[12.5px] text-ink-3">Replying to <Link to={`/u/${data.parent.author.slug}`} className="text-yin-ink hover:underline">@{data.parent.author.slug}</Link></p>
+        </div>
+      ) : null}
+      <FeedPost key={data.id} post={data} hearted={mine.has(data.id)} openReplies />
+    </section>
+  );
+}
+
 export default function Feed({ initialKind, embedded = false }: { initialKind?: NbKind; embedded?: boolean }) {
   const nav = useNavigate();
+  const loc = useLocation();
+  const qs = new URLSearchParams(loc.search);
+  const focusId = embedded ? 0 : Number(qs.get("post") || 0) || 0;
+  const composeText = embedded ? "" : (qs.get("compose") || "").slice(0, 280);
+  const [watching, setWatching] = useState<Set<number>>(new Set());
   const [kind, setKind] = useState<NbKind | "">(initialKind || "");
   // ALWAYS fetch the rail, embedded included. `useRail(!embedded)` handed the landing's embedded
   // feed EMPTY data while the portal below still CLAIMED the shell's right column — so the one page
@@ -838,9 +1012,11 @@ export default function Feed({ initialKind, embedded = false }: { initialKind?: 
         </div>
         )}
 
+        {focusId > 0 ? <PostFocus id={focusId} /> : null}
+
         {/* Composer teaser */}
         {isLoggedIn() ? (
-          <Composer onPosted={(p) => setItems((cur) => [p, ...cur])} />
+          <Composer initialText={composeText} onPosted={(p) => { setItems((cur) => [p, ...cur]); if (mentionsArta(p.body)) setWatching((cur) => new Set([...cur, p.id])); }} />
         ) : (
           <div className="flex items-center gap-3 border-b border-line px-4 py-3.5">
             <p className="text-[14px] text-ink-2">Every post proves itself — it is a public Kaggle notebook that ran, from public inputs, and you can run it again yourself.</p>
@@ -859,7 +1035,7 @@ export default function Feed({ initialKind, embedded = false }: { initialKind?: 
             <div className="divide-y divide-line">
               {items.map((p, i) => (
                 <Fragment key={p.id}>
-                  <FeedPost post={p} hearted={hearted.has(p.id)} onDeleted={(id) => setItems((cur) => cur.filter((x) => x.id !== id))} />
+                  <FeedPost post={p} hearted={hearted.has(p.id)} watchArta={watching.has(p.id)} onDeleted={(id) => setItems((cur) => cur.filter((x) => x.id !== id))} />
                   {/* Phones get the same modules the rail carries on lg+, injected inline — and in the
                       SAME ORDER, which is why the instruments card rides with Who-to-follow down here
                       rather than with the trends block above. "The bottom card" has to mean the same

@@ -805,15 +805,7 @@ export type ApiTokenItem = {
  *  key must never reach this platform, whose whole database is published at /data/. */
 export type ShellKey = { id: number; label: string; fp: string; key: string; at: number };
 export type ShellInfo = { host: string; unix: string; blocked: string; command: string; moving: string; ssh: string; max: number; keys: ShellKey[] };
-/** One of a member's parallel ArtaBot conversations. `tier` is the size of machine it runs on, and
- *  `coins` is what this conversation has cost so far — each session is metered and billed on its own. */
-export type BotSession = { id: number; title: string; tier: string; created: number; last: number; turns: number; coins: number };
 export type UsageTier = { n: number; label: string; effort: string; cpu: number; ram: number; secs: number; maxtok: number; workflow?: boolean; blurb?: string };
-export const BotSessions = {
-  list: () => get<{ items: BotSession[]; max: number; tiers: Record<string, UsageTier> }>("/artabot/sessions", { _: Date.now() }),
-  open: (tier: string, title: string) => post<{ id: number; tier: string }>("/artabot/session", { tier, title }),
-  close: (session: number) => post<{ ok: true }>("/artabot/session/close", { session }),
-};
 
 /** What a member has spent, and on what. Charged only when a turn replies or a session ends. */
 export type UsageLine = { id: number; session_id: number; kind: string; tier: string; started: number; ended: number; secs: number; tokens: number; ai_usd: string; azure_usd: string; total_usd: string; coins: string; note: string };
@@ -1000,7 +992,7 @@ export const BURSARY_GROUPS: { key: string; label: string }[] = [
   { key: "indigenous", label: "Indigenous communities" },
 ];
 
-// ── Contributions (Claude/ArtaBot-triaged tickets) ───────────────────────────
+// ── Contributions (AI-triaged tickets; @arta files bug reports here too) ─────
 export type TicketKind = "bug" | "feature" | "content" | "suggestion";
 export type TicketRole = "user" | "assistant" | "agent" | "system";
 /** Single source of truth for the four contribution kinds → contributor role + UI copy.
@@ -1044,61 +1036,19 @@ export const Tickets = {
   reopen: (id: number) => post<{ ok: boolean }>(`/tickets/${id}/reopen`, {}),
 };
 
-// ── ArtaBot (the global AI assistant; persistent memory; metered per turn) ───
-// `image` is client-only — the data URL of a screenshot the member attached, shown live in their own
-// bubble. The server forwards it to Claude for that turn but never stores or returns it.
-export type ArtabotMsg = { id: number; role: "user" | "assistant"; body: string; tokens?: number; at: number; image?: string; ticket?: { id: number; kind: string; status: string } };
-
-/** `ask` answers one of TWO shapes and the difference is load-bearing: a streamed turn returns no
- *  `reply` at all. Modelling it as a union is deliberate — the previous type claimed `reply` was always
- *  there, so `r.reply.body` typechecked and then crashed the chat on every turn slower than 50s. */
-export type AskResult =
-  | { reply: ArtabotMsg; pending?: undefined }
-  | { pending: true; id: number; tier?: string; live?: boolean; message: string; reply?: undefined };
-
-/** One slice of a live answer. `phase` is "thinking" until the first token, then "writing"; `think` is
- *  Claude's own estimated reasoning-token count. There is no reasoning TEXT to show — Claude Code
- *  streams thinking deltas with an empty string and a signature — so the UI reports progress, never
- *  invented words. `done` means the transcript now has the authoritative reply.
- *
- *  `step` is the TOOL the sandboxed turn is running right now — "Bash: pip install pillow",
- *  "WebSearch: kaggle reproducibility". On a tool turn it is the only thing that moves for minutes at
- *  a time (the thinking-token count stops climbing the moment Claude starts using tools instead of
- *  thinking), so it is what the meter shows. It is the worker's own report of a call it actually made:
- *  never synthesise one, for the same reason the reasoning text is not invented. */
-/** One tool the turn ran: what it was, what it was given, how it went, and what came back. `run` is a
- *  step still going — it is written the instant Claude commits to the tool, before its arguments even
- *  exist, so `arg` fills in a moment later and `out` only once the result lands. */
-export type LiveStep = { id: string; name: string; arg: string; state: "run" | "ok" | "fail"; out: string };
-export type ArtabotLive = { seq: number; text: string; think: number; phase: "" | "thinking" | "writing"; step?: string; steps?: LiveStep[]; secs?: number; done: number; idle?: number };
-// Anonymous visitors carry a stable client id so the server can keep their own conversation
-// across turns (kept in localStorage; logged-in users ignore it).
-function anonId(): string {
-  if (typeof window === "undefined") return "";
-  try {
-    let id = localStorage.getItem("aq_anon_id");
-    if (!id) { id = ((crypto as { randomUUID?: () => string }).randomUUID?.() || Math.random().toString(36).slice(2) + Date.now().toString(36)).replace(/[^a-z0-9]/gi, ""); localStorage.setItem("aq_anon_id", id); }
-    return id;
-  } catch { return ""; }
+// ── Arta (the public assistant) ──────────────────────────────────────────────
+// There is no private chat any more: members talk to Arta by tagging @arta in a public post or
+// comment, and Arta answers in the same thread. `ARTA_HANDLE` is the one place the handle lives.
+export const ARTA_HANDLE = "arta";
+/** Open the composer with "@arta " (plus an optional question) already typed. */
+export function askArtaHref(q = ""): string {
+  const text = `@${ARTA_HANDLE} ${q.trim()}`.trimEnd() + " ";
+  return `/works/?compose=${encodeURIComponent(text)}`;
 }
-export const ArtaBot = {
-  history: (session?: number) =>
-    get<{ items: ArtabotMsg[]; anon?: boolean }>("/artabot", { ...(session ? { session } : {}), anon: anonId() }),
-  // `image` (optional) is a data URL of a screenshot to attach to this turn — sent inline to Claude,
-  // never stored. JSON.stringify drops it when undefined, so text-only turns are unchanged.
-  /** `effort` is how much THINKING to buy for this turn, not a better model — every tier runs Opus 5.
-   *  The server re-reads it from Assistant::TIERS and decides what this member may actually spend, so
-   *  the picker is a request, never an entitlement. */
-  ask: (message: string, image?: string, effort?: string, session?: number) =>
-    post<AskResult>("/artabot", { message, image, effort, session, anon: anonId() }),
-  clear: () => post<{ ok: boolean }>("/artabot/clear", { anon: anonId() }),
-  /** The in-flight answer as it is written. LONG-POLL: the server holds this open (~20s) and answers
-   *  the moment there is something new, so a streaming turn costs ~1 request/s rather than one per
-   *  frame. `text` is the WHOLE answer so far — adopt it, never append it — so a dropped or repeated
-   *  response can't corrupt what the member is reading. */
-  live: (seen: number, session?: number) =>
-    get<ArtabotLive>("/artabot/live", { seen, ...(session ? { session } : {}), anon: anonId(), _: Date.now() }),
-};
+export type ArtaStatus = { handle: string; name: string; enabled: boolean; online: boolean; paused_until: number; queued: number; replied_24h: number; limits: { user_per_hour: number; user_per_day: number } };
+export function artaStatus() {
+  return get<ArtaStatus>("/arta/status");
+}
 
 /** Server-injected first-paint identity (window.AQ_USER), present before any fetch. */
 export function currentUser(): { id?: number; name: string; avatar: string; slug?: string; country?: string } | null {
@@ -1751,7 +1701,7 @@ export type NotebookCard = {
   thumb: string; assets: NbAsset[]; hearts: number; comments: number; views: number; score: number; status: "draft" | "pending" | "published" | "removed";
   /** Colab's anonymous /github/ route on the public mirror (ArtaQuest/artabooks); '' until mirrored. */
   doi_link: string; colab_url: string; kaggle_url?: string; size_bytes: number;
-  author: { id: number; name: string; slug: string; avatar: string };
+  author: { id: number; name: string; slug: string; avatar: string; bot?: boolean };
   /** WHO WROTE THE NOTEBOOK, as Kaggle reports it. `author` above is the ArtaQuest member who
    *  SUBMITTED it — any member may submit any public kernel, so on a re-published work the two
    *  differ and both must be shown. On a self-submitted work they simply agree. */
@@ -2478,6 +2428,9 @@ export type FeedPostT = {
   /** Library attachments (max 4), each carrying the work it came out of — so a re-used
    *  artifact always shows whose run produced it, wherever it turns up. */
   media?: LibraryItem[];
+  /** A reply's parent post id (0 for a top-level post) and how many direct replies it has. */
+  parent_id?: number;
+  replies?: number;
 };
 /** `mine` is the ids of the posts the SIGNED-IN viewer has already hearted — without it the client
  *  cannot know, so a heart silently vanished on every reload and hearting again toggled it off. */
@@ -2493,6 +2446,18 @@ export function createPost(body: string, nbId?: number, repostId?: number, media
     ...(repostId ? { repost_id: repostId } : {}),
     ...(media && media.length ? { media } : {}),
   });
+}
+/** One post, the post it answers (if any), and which of the two the viewer has hearted. */
+export function getPost(id: number) {
+  return get<FeedPostT & { parent: FeedPostT | null; mine?: number[] }>(`/posts/${id}`);
+}
+/** A post's direct replies, oldest first. */
+export function listReplies(id: number, cursor?: number) {
+  return get<Page<FeedPostT> & { mine?: number[] }>(`/posts/${id}/replies`, cursor ? { cursor } : undefined);
+}
+/** Reply under a post. Tag @arta in it and Arta answers in the same thread. */
+export function replyToPost(parentId: number, body: string) {
+  return post<FeedPostT>("/posts", { body, parent_id: parentId });
 }
 export function heartPost(id: number, val: 0 | 1) {
   return post<{ ok: boolean; hearts: number; mine: number }>(`/posts/${id}/heart`, { val });

@@ -13,8 +13,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Serve /llms.txt — the emerging convention (llmstxt.org) that gives AI assistants (ChatGPT,
- * Claude, Perplexity, Gemini) a clean, curated markdown map of the site, the way robots.txt +
+ * Serve /llms.txt — the emerging convention (llmstxt.org) that gives AI assistants a clean,
+ * curated markdown map of the site, the way robots.txt +
  * sitemap.xml serve classical crawlers. We generate it dynamically so the course list always
  * reflects what's actually published. Markdown is served as text/plain (per the convention).
  */
@@ -135,7 +135,7 @@ add_action( 'wp_head', function () {
 /**
  * robots.txt additions. ArtaQuest's mission is maximum open reach + radical transparency, so we
  * EXPLICITLY welcome the AI assistants' crawlers (rather than the common defensive default of
- * blocking them) — being cited/grounded by ChatGPT, Claude, Perplexity and Gemini is exactly the
+ * blocking them) — being cited/grounded by the major AI assistants is exactly the
  * distribution we want. We also point them at /llms.txt (the curated AI map). WP core already
  * appends the wp-sitemap.xml line.
  */
@@ -1484,7 +1484,7 @@ function aq_app_route_seo( $slug ) {
 		'issues'      => array(
 			'Help shape ' . $b,
 			array(
-				'Report a bug, request a feature, suggest an improvement, or share an idea. ArtaBot triages it with you in the open, the best contributions ship automatically, and resolving your own contribution earns you a point on its leaderboard.',
+				'Report a bug, request a feature, suggest an improvement, or share an idea. Arta triages it with you in the open, the best contributions ship automatically, and resolving your own contribution earns you a point on its leaderboard.',
 			),
 		),
 		'reserve'     => array(

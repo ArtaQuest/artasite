@@ -393,7 +393,7 @@ final class Schema {
 			// Renamed from the legacy ArtaYAB name `ay_translations` → `aq_translations` (1.37.0) for
 			// prefix consistency; migrate() does an in-place RENAME so the existing cache is preserved.
 			// 1.59.0 (ArtaTranslate): the table doubles as the UPGRADE QUEUE — every `status='auto'`
-			// (Google edge) row is pending an ArtaTranslate rewrite (SOTA HF model + adversarial Claude
+			// (Google edge) row is pending an ArtaTranslate rewrite (SOTA HF model + adversarial LLM
 			// rounds, src/Translate.php); the relay claims batches via `claimed_at`, upgraded rows become
 			// `status='arta'` with a critic `quality` score. `priority`: 2 = narration segments (an
 			// audiobook is waiting), 1 = legacy fresh-edge captures, 0 = everything else.
@@ -654,9 +654,9 @@ final class Schema {
 				KEY hash (hash),
 				KEY created_at (created_at)",
 
-			// ── Contributions (Claude-triaged tickets) ─────────────────────────
+			// ── Contributions (AI-triaged tickets) ─────────────────────────
 			// The /issues page evolved from a one-shot bug form into ArtaQuest's contribution system:
-			// a member opens a ticket (bug | feature | content | suggestion), Claude triages it in a
+			// a member opens a ticket (bug | feature | content | suggestion), the model triages it in a
 			// back-and-forth (aq_ticket_messages), an autonomous agent may ship a fix, and only the
 			// OWNER closes it (status='resolved') — which awards a flat 1 point on the kind's own track
 			// (bug→Sentinel, feature→Visionary, content→Curator, suggestion→Sage), ranked separately.
@@ -690,7 +690,7 @@ final class Schema {
 				KEY kind_id (kind, id),
 				KEY hash (hash)",
 
-			// The conversation on a ticket. role: user | assistant (Claude triage) | agent (autonomous
+			// The conversation on a ticket. role: user | assistant (AI triage) | agent (autonomous
 			// worker progress) | system (status notes). meta = JSON (Data::enc): classification, run sha…
 			'aq_ticket_messages' => "
 				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -702,8 +702,8 @@ final class Schema {
 				PRIMARY KEY  (id),
 				KEY ticket_id_id (ticket_id, id)",
 
-			// ArtaBot — the platform AI assistant, available everywhere. Each user has ONE persistent
-			// conversation (memory across sessions, like a normal chatbot). Using ArtaBot costs points
+			// Arta — the platform AI assistant, available everywhere. Each user has ONE persistent
+			// conversation (memory across sessions, like a normal chatbot). Using Arta costs points
 			// (≈1 per 1k tokens), drawn from the SPENDABLE balance; standing/tier never falls. tokens =
 			// the turn's input+output (for the cost shown to the user). role: user | assistant.
 			'aq_artabot_messages' => "
@@ -719,7 +719,7 @@ final class Schema {
 				KEY user_id_id (user_id, id),
 				KEY session_id_id (session_id, id)",
 
-			// A member may hold SEVERAL ArtaBot conversations at once and run them in parallel — each
+			// A member may hold SEVERAL Arta conversations at once and run them in parallel — each
 			// with its own transcript, its own tier (so its own CPU and RAM), its own live stream and
 			// its own bill. Before this there was exactly one conversation per member, and one live
 			// buffer keyed on the member, so two turns at the same time would have overwritten each
@@ -1349,17 +1349,18 @@ final class Schema {
 			'aq_cities'         => [ 'desc' => 'The place-of-birth gazetteer: every city over 15,000 people, with coordinates and timezone. GeoNames cities15000, CC BY 4.0.', 'cols' => [ 'name' => 'city name as GeoNames spells it', 'search' => 'accent-folded lowercase name(s), what the type-ahead matches', 'country' => 'ISO 3166-1 alpha-2', 'admin1' => 'GeoNames admin1 code (state/province)', 'lat' => 'latitude, 4dp (~11 m)', 'lon' => 'longitude, 4dp', 'population' => 'used to rank identically-named places', 'tz' => 'IANA timezone' ] ],
 			'aq_follows'        => [ 'desc' => 'Social follow graph, one row per (follower → target).', 'cols' => [] ],
 			'aq_translations'   => [ 'desc' => 'Content-addressed i18n cache: each (string-hash × language) translated once ever, then served to everyone. Also the ArtaTranslate upgrade queue: status auto (Google edge, pending) → arta (rewritten by the SOTA model + adversarial review rounds). Demand-aware: only rows people actually re-read (demand ≥ 1) or that an audiobook waits on (priority 2) are upgraded, most-read first.', 'cols' => [ 'source_hash' => 'md5 of the source string', 'lang' => 'target language', 'translated_text' => 'the cached translation', 'status' => 'auto (edge) | arta (upgraded)', 'quality' => 'ArtaTranslate critic score 0-100', 'priority' => '2 narration · 1 legacy fresh edge · 0 rest', 'demand' => 'cache-hit resolves — how many times visitors re-read this string in this language', 'read_at' => 'last time this row was SERVED anywhere (coarse, ≤1 write/week) — rows unused for months are purged by the nightly GC' ] ],
-			'aq_tr_rounds'      => [ 'desc' => 'ArtaTranslate public record: every adversarial improvement round (draft → critique → rewrite) behind each upgraded translation.', 'cols' => [ 'source_hash' => 'md5 of the source string', 'lang' => 'target language', 'round' => 'round number', 'engine' => 'who produced the candidate (google | HF model | claude critic)', 'candidate' => 'the round\'s translation', 'critique' => 'the adversarial critique', 'score' => 'critic score 0-100' ] ],
+			'aq_tr_rounds'      => [ 'desc' => 'ArtaTranslate public record: every adversarial improvement round (draft → critique → rewrite) behind each upgraded translation.', 'cols' => [ 'source_hash' => 'md5 of the source string', 'lang' => 'target language', 'round' => 'round number', 'engine' => 'who produced the candidate (google | HF model | LLM critic)', 'candidate' => 'the round\'s translation', 'critique' => 'the adversarial critique', 'score' => 'critic score 0-100' ] ],
 			'aq_reviews'        => [ 'desc' => 'Course reviews, one per (user, course).', 'cols' => [ 'rating' => '1–5 stars' ] ],
 			'aq_bursary'        => [ 'desc' => 'Outreach grant covering a learner\'s entry fee (donation-funded).', 'cols' => [ 'group_key' => 'eligibility group the donation was earmarked to', 'amount' => 'coins covered' ] ],
 			'aq_fund_ledger'    => [ 'desc' => 'APPEND-ONLY foundation money ledger (cents), the basis of public financial transparency.', 'cols' => [ 'bucket' => 'fund (bursary | typ_… | crd_…)', 'cents' => 'signed amount' ] ],
 			'aq_credit_gifts'   => [ 'desc' => 'ArtaCredits: one row per donor gift earmarked to a slice of the membership (nationality · age band). Immutable. Entries still available on a gift = entries − the number of aq_credit_grants rows pointing at it.', 'cols' => [ 'bucket' => 'the crd_<country>_<age> fund earmark holding this money', 'entries' => 'entry fees this gift promised to cover', 'unit_cents' => 'what one entry cost at the gold rate quoted when the gift was captured', 'fee_cap' => 'largest single entry fee (₳) this gift will cover', 'donor_name' => 'the name printed on a sponsored entrant\'s certificate; empty when the donor gave anonymously' ] ],
 			'aq_credit_grants'  => [ 'desc' => 'ArtaCredits: one row per entry a donor\'s credit paid for — written only when the member was offered the credit, saw who gave it and for whom, and accepted. Append-only; one per (challenge, member). The slice the gift was given for is on aq_credit_gifts, not here.', 'cols' => [ 'gift_id' => 'the gift this entry was paid from', 'fee' => 'the challenge entry fee covered (₳)', 'cents' => 'what that cost the fund on the day' ] ],
 			'aq_bug_findings'   => [ 'desc' => 'Issue/bug-bounty reports.', 'cols' => [ 'severity' => 'critical | major | minor', 'category' => 'functional | content | …', 'status' => 'pending | accepted | resolved', 'points_awarded' => 'volunteer points granted' ] ],
-			'aq_tickets'        => [ 'desc' => 'Contribution tickets (bug | feature | content | suggestion), Claude-triaged then shipped by the autonomous worker.', 'cols' => [ 'kind' => 'bug→Sentinel | feature→Visionary | content→Curator | suggestion→Sage', 'status' => 'open → triaging → queued → in_progress → (awaiting operator OK) → shipped → resolved', 'arch_ok' => '1 once the operator approved a major architectural change for this ticket', 'resolved_by' => 'user who closed it (the owner)' ] ],
-			'aq_ticket_messages'=> [ 'desc' => 'The conversation on a ticket.', 'cols' => [ 'role' => 'user | assistant (Claude) | agent (worker) | system', 'meta' => 'JSON (classification, run sha, …)' ] ],
-			'aq_artabot_messages'=> [ 'desc' => 'Each user\'s persistent conversation with ArtaBot, the platform AI assistant.', 'cols' => [ 'role' => 'user | assistant', 'tokens' => 'turn input+output tokens', 'cost' => 'points charged' ] ],
-			'aq_artabot_sessions'=> [ 'desc' => 'A member\'s ArtaBot conversations. Several may run at once, each with its own tier (CPU/RAM), its own live stream and its own bill.', 'cols' => [ 'tier' => 'the size of machine this conversation runs on', 'turns' => 'messages answered', 'coins' => 'metered cost accrued by this session' ] ],
+			'aq_tickets'        => [ 'desc' => 'Contribution tickets (bug | feature | content | suggestion), AI-triaged then shipped by the autonomous worker.', 'cols' => [ 'kind' => 'bug→Sentinel | feature→Visionary | content→Curator | suggestion→Sage', 'status' => 'open → triaging → queued → in_progress → (awaiting operator OK) → shipped → resolved', 'arch_ok' => '1 once the operator approved a major architectural change for this ticket', 'resolved_by' => 'user who closed it (the owner)' ] ],
+			'aq_ticket_messages'=> [ 'desc' => 'The conversation on a ticket.', 'cols' => [ 'role' => 'user | assistant (AI) | agent (worker) | system', 'meta' => 'JSON (classification, run sha, …)' ] ],
+			'aq_artabot_messages'=> [ 'desc' => 'RETIRED 2026-10-08 — transcripts of the old private assistant chat (kept read-only; the assistant now speaks only in public as @arta).', 'cols' => [ 'role' => 'user | assistant', 'tokens' => 'turn input+output tokens', 'cost' => 'points charged' ] ],
+			'aq_artabot_sessions'=> [ 'desc' => 'RETIRED 2026-10-08 — sessions of the old private assistant chat (kept read-only; nothing is billed any more).', 'cols' => [ 'tier' => 'the size of machine this conversation runs on', 'turns' => 'messages answered', 'coins' => 'metered cost accrued by this session' ] ],
+			'aq_mentions'       => [ 'desc' => 'Every public @mention: who tagged whom, where, and — for @arta — how Arta answered. One row per (source, mentioned member); the unique key is what makes Arta reply once.', 'cols' => [ 'src_type' => 'post | comment', 'status' => 'queued | working | replying | replied | skipped | failed | limited | expired', 'kind' => 'answer | bug | declined', 'issue_url' => 'GitHub issue Arta opened for a bug report', 'reply_id' => 'the post/comment Arta wrote' ] ],
 			'aq_seasons'        => [ 'desc' => 'Each closed competition season (new-moon resets). The current season is computed, not stored.', 'cols' => [ 'season_key' => 'reset timestamp', 'closed' => '1 once settled + frozen' ] ],
 			'aq_season_results' => [ 'desc' => 'Frozen leaderboard snapshot for a closed (season, course): podium + prizes.', 'cols' => [ 'place' => 'finishing position (1=🥇)', 'votes' => 'final season upvotes', 'prize' => 'coins awarded' ] ],
 			'aq_grants'         => [ 'desc' => 'Community-sourced grant catalogue (Outreach program).', 'cols' => [ 'fit' => 'relevance score', 'deadline' => 'YYYY-MM-DD (empty = rolling)', 'allows_regranting' => 'whether the funder permits bursary re-granting' ] ],

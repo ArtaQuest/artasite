@@ -6,7 +6,7 @@
 // each get their own). The `why` annotations are authored for the public transparency page and may be
 // edited. If a prompt changes, re-dump and regenerate this file.
 
-export const STUDIO_MODEL = "Claude Opus 5 (claude-opus-5) via `claude -p`";
+export const STUDIO_MODEL = "ArtaAI (headless, on the operator relay)";
 export const STUDIO_EFFORT = "high";
 export const PASS_SCORE = 85;
 export const MAX_ROUNDS = 4;

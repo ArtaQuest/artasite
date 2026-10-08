@@ -265,7 +265,7 @@ final class I18n {
 	 *     mask every term  -> تعادل ArtaCoin شما و ArtaQuest Foundation   (balance -> "equilibrium": WRONG)
 	 *
 	 * Masking a token removes the context Google disambiguates the REST of the sentence from, so
-	 * over-masking degrades the surrounding translation. Single distinctive tokens — Kaggle, ArtaBot,
+	 * over-masking degrades the surrounding translation. Single distinctive tokens — Kaggle, Arta,
 	 * Zenodo, DOI — already survive untouched (verified), so masking them costs quality and buys
 	 * nothing. Only names whose parts are ordinary English words need the protection.
 	 *

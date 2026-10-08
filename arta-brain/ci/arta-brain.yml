@@ -1,0 +1,33 @@
+# Arta's brain (arta-brain/) — unit tests with a fake site, chat engine and GitHub, then the browser
+# smoke test against a local stand-in chat page. Installing it on the VM is a separate, manual step
+# (arta-brain/README.md); nothing here touches Azure or any account.
+name: arta-brain
+
+on:
+  push:
+    paths: ['arta-brain/**', '.github/workflows/arta-brain.yml']
+  pull_request:
+    paths: ['arta-brain/**', '.github/workflows/arta-brain.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: arta-brain
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: arta-brain/package-lock.json
+      - run: npm ci --no-audit --no-fund
+        env: { PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1' }
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run smoke

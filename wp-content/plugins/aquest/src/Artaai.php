@@ -6,7 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 /**
  * ArtaAI — the operator's single monitor + control surface for EVERY AI system on the platform
  * (Studio › ArtaAI in the SPA, plus a wp-admin read-out). ArtaQuest runs a dozen AI pipelines, all
- * on the operator's Claude Max SUBSCRIPTION via laptop relays (the paid API was retired 2026-06-13)
+ * on the operator's model SUBSCRIPTION via laptop relays (the paid API was retired 2026-06-13)
  * plus free HuggingFace ZeroGPU model backends. Each is otherwise headless: a heartbeat transient,
  * a self-installed queue table, and a LaunchAgent daemon. This class rolls them ALL up into one
  * snapshot and gives the operator the levers that matter:
@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *                  handlers, so pausing is graceful (the daemon just sees "no work") and additive —
  *                  DEFAULT is never-paused, so behaviour is unchanged until an operator flips it.
  *                  Chat is deliberately NOT pausable: blocking relay/poll would kill the heartbeat
- *                  and push ArtaBot toward the API fallback — the opposite of the no-API rule.
+ *                  and push Arta toward the API fallback — the opposite of the no-API rule.
  *   - RECOVERY   — requeue a surface's stale in-flight rows (a crashed daemon's orphans) on demand
  *                  instead of waiting for that surface's own lazy reclaim
  *   - ARTAMOD    — the hate/fear moderation threshold (Fearometer::limit) is operator-tunable, the
@@ -35,6 +35,15 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * to the (fully public) database.
  */
 final class Artaai {
+
+	/**
+	 * How a stored model id is SHOWN publicly. Review rows keep whatever id the relay reported (the
+	 * record is untouched); pages only ever see the platform's own name for it.
+	 */
+	public static function public_model( $m ) {
+		return trim( (string) $m ) === '' ? '' : 'ArtaAI';
+	}
+
 
 	/**
 	 * Every AI surface, with the metadata needed to monitor + control it. All SQL fragments below
@@ -49,10 +58,10 @@ final class Artaai {
 	 */
 	const SURFACES = [
 		'chat' => [
-			'label' => 'ArtaBot chat', 'group' => 'chat',
-			'blurb' => 'The global assistant + contribution triage; ID verification (Claude vision) rides the same relay.',
+			'label' => 'Triage relay', 'group' => 'chat',
+			'blurb' => 'Contribution triage, ArtaMod and ID verification share this relay. (@arta replies run on the Arta brain, not here.)',
 			'beat' => 'aq_relay_beat', 'launch' => 'org.artaquest.artabot-relay',
-			'model' => Assistant::MODEL, 'effort' => 'low', 'engine' => '', 'pausable' => false, 'poll' => '',
+			'model' => 'ArtaAI', 'effort' => 'low', 'engine' => '', 'pausable' => false, 'poll' => '',
 			'table' => 'aq_relay_jobs', 'ts_col' => 'created', 'title_col' => '',
 			'pending_where' => "status = 'pending'", 'busy_where' => "status = 'claimed'",
 			'done_where' => '', 'failed_where' => '', 'requeue' => null, 'rounds' => null,
@@ -73,7 +82,7 @@ final class Artaai {
 			'label' => 'ArtaScience review', 'group' => 'studio',
 			'blurb' => 'Reproducibility peer review — clones the repo, RUNS the code in a sandbox, and adjudicates.',
 			'beat' => 'aq_science_beat', 'launch' => 'org.artaquest.artascience-relay',
-			'model' => 'claude-opus-5', 'effort' => 'max', 'engine' => '', 'pausable' => true, 'poll' => 'Science::review_poll',
+			'model' => 'ArtaAI', 'effort' => 'max', 'engine' => '', 'pausable' => true, 'poll' => 'Science::review_poll',
 			'table' => 'aq_submissions', 'ts_col' => 'updated', 'title_col' => 'title',
 			'pending_where' => "status = 'submitted'", 'busy_where' => "status = 'reviewing'",
 			'done_where' => "status = 'accepted'", 'done_label' => 'accepted',
@@ -85,7 +94,7 @@ final class Artaai {
 			'label' => 'ArtaPublishing books', 'group' => 'studio',
 			'blurb' => 'The AI book editor — brief + private inspiration → an original book (long books written in parts).',
 			'beat' => 'aq_library_beat', 'launch' => 'org.artaquest.library-relay',
-			'model' => 'claude-opus-5', 'effort' => 'max', 'engine' => '', 'pausable' => true, 'poll' => 'Library::doc_poll',
+			'model' => 'ArtaAI', 'effort' => 'max', 'engine' => '', 'pausable' => true, 'poll' => 'Library::doc_poll',
 			'table' => 'aq_documents', 'ts_col' => 'updated', 'title_col' => 'title',
 			'pending_where' => "book_state = 'queued'", 'busy_where' => "book_state = 'processing'",
 			'done_where' => "book_state IN ('review','live')", 'failed_where' => "book_state = 'failed'",
@@ -96,7 +105,7 @@ final class Artaai {
 			'label' => 'ArtaSound studio', 'group' => 'studio',
 			'blurb' => 'Music composition + audiobooks — adversarial improvement rounds over ACE-Step / Edge-TTS.',
 			'beat' => 'aq_music_beat', 'launch' => 'org.artaquest.music-relay',
-			'model' => 'claude-opus-5', 'effort' => 'max', 'engine' => 'ACE-Step 1.5 · Edge-TTS (HF ZeroGPU)', 'pausable' => true, 'poll' => 'Music::track_poll',
+			'model' => 'ArtaAI', 'effort' => 'max', 'engine' => 'ACE-Step 1.5 · Edge-TTS (HF ZeroGPU)', 'pausable' => true, 'poll' => 'Music::track_poll',
 			'table' => 'aq_tracks', 'ts_col' => 'updated', 'title_col' => 'title',
 			'pending_where' => "track_state = 'queued'", 'busy_where' => "track_state = 'processing'",
 			'done_where' => "track_state IN ('review','live')", 'failed_where' => "track_state = 'failed'",
@@ -107,7 +116,7 @@ final class Artaai {
 			'label' => 'ArtaMotion studio', 'group' => 'studio',
 			'blurb' => '3Blue1Brown-style explainer animations from a brief.',
 			'beat' => 'aq_motion_beat', 'launch' => 'org.artaquest.motion-relay',
-			'model' => 'claude-opus-5', 'effort' => 'max', 'engine' => '', 'pausable' => true, 'poll' => 'Motion::anim_poll',
+			'model' => 'ArtaAI', 'effort' => 'max', 'engine' => '', 'pausable' => true, 'poll' => 'Motion::anim_poll',
 			'table' => 'aq_animations', 'ts_col' => 'updated', 'title_col' => 'title',
 			'pending_where' => "anim_state = 'queued'", 'busy_where' => "anim_state = 'processing'",
 			'done_where' => "anim_state IN ('review','live')", 'failed_where' => "anim_state = 'failed'",
@@ -118,7 +127,7 @@ final class Artaai {
 			'label' => 'ArtaFilm studio', 'group' => 'studio',
 			'blurb' => 'Text-to-video short films — one LTX-Video clip per tick, then stitched.',
 			'beat' => '', 'launch' => 'org.artaquest.film-relay',
-			'model' => 'claude-opus-5', 'effort' => 'max', 'engine' => 'LTX-2.3 (HF ZeroGPU)', 'pausable' => true, 'poll' => 'Film::film_poll',
+			'model' => 'ArtaAI', 'effort' => 'max', 'engine' => 'LTX-2.3 (HF ZeroGPU)', 'pausable' => true, 'poll' => 'Film::film_poll',
 			'table' => 'aq_films', 'ts_col' => 'updated', 'title_col' => 'title',
 			'pending_where' => "film_state = 'queued'", 'busy_where' => "film_state = 'processing'",
 			'done_where' => "film_state IN ('review','live')", 'failed_where' => "film_state = 'failed'",
@@ -127,9 +136,9 @@ final class Artaai {
 		],
 		'illustration' => [
 			'label' => 'ArtaIllustration studio', 'group' => 'studio',
-			'blurb' => 'AI artwork, book covers + plates — Claude-vision critique over FLUX.2 / Qwen-Image.',
+			'blurb' => 'AI artwork, book covers + plates — vision-model critique over FLUX.2 / Qwen-Image.',
 			'beat' => 'aq_illust_beat', 'launch' => 'org.artaquest.illustration-relay',
-			'model' => 'claude-opus-5', 'effort' => 'max', 'engine' => 'FLUX.2 · Qwen-Image · klein (HF ZeroGPU)', 'pausable' => true, 'poll' => 'Illustration::illust_poll',
+			'model' => 'ArtaAI', 'effort' => 'max', 'engine' => 'FLUX.2 · Qwen-Image · klein (HF ZeroGPU)', 'pausable' => true, 'poll' => 'Illustration::illust_poll',
 			'table' => 'aq_illustrations', 'ts_col' => 'updated', 'title_col' => 'title',
 			'pending_where' => "art_state = 'queued'", 'busy_where' => "art_state = 'processing'",
 			'done_where' => "art_state IN ('review','live')", 'failed_where' => "art_state = 'failed'",
@@ -149,9 +158,9 @@ final class Artaai {
 		],
 		'translate' => [
 			'label' => 'ArtaTranslate mesh', 'group' => 'studio',
-			'blurb' => 'Second-pass translation upgrade — dedicated-MT/LLM drafts + Claude adversarial rounds.',
+			'blurb' => 'Second-pass translation upgrade — dedicated-MT/LLM drafts + LLM adversarial rounds.',
 			'beat' => '', 'launch' => 'org.artaquest.translate-relay',
-			'model' => 'claude-opus-5', 'effort' => 'max', 'engine' => 'Hy-MT2 · Gemma-3 (HF inference)', 'pausable' => true, 'poll' => 'Translate::poll',
+			'model' => 'ArtaAI', 'effort' => 'max', 'engine' => 'Hy-MT2 · Gemma-3 (HF inference)', 'pausable' => true, 'poll' => 'Translate::poll',
 			'table' => 'aq_translations', 'ts_col' => '', 'title_col' => '',
 			// Demand-aware (1.60.0): pending = CLAIMABLE rows only — narration sentences (any language) or
 			// strings real visitors re-read (demand ≥ 1, mirror Translate::MIN_DEMAND) in an auto-improvement
@@ -167,7 +176,7 @@ final class Artaai {
 			'label' => 'ArtaCompete review', 'group' => 'studio',
 			'blurb' => 'Adversarial code review for competition solutions — reproduces the claimed score with no leakage.',
 			'beat' => 'aq_compete_beat', 'launch' => 'org.artaquest.artacompete-relay',
-			'model' => 'claude-opus-5', 'effort' => 'max', 'engine' => '', 'pausable' => true, 'poll' => 'Competitions::review_poll',
+			'model' => 'ArtaAI', 'effort' => 'max', 'engine' => '', 'pausable' => true, 'poll' => 'Competitions::review_poll',
 			'table' => 'aq_comp_subs', 'ts_col' => 'updated', 'title_col' => '',
 			'pending_where' => "review = 'submitted'", 'busy_where' => "review = 'reviewing'",
 			'done_where' => "review = 'verified'", 'done_label' => 'verified',
@@ -308,7 +317,7 @@ final class Artaai {
 		];
 	}
 
-	/** ArtaBot relay spend — subscription tokens, so a load gauge rather than a bill. */
+	/** Arta relay spend — subscription tokens, so a load gauge rather than a bill. */
 	private static function usage( $now ) {
 		global $wpdb;
 		$t = Data::t( 'aq_artabot_messages' );
@@ -468,7 +477,7 @@ final class Artaai {
 			[ 'Queued', (string) $snap['total_pending'] ],
 			[ 'In flight', (string) $snap['total_busy'] ],
 			[ 'AI rounds 24h', (string) $snap['rounds_24h'] ],
-			[ 'ArtaBot tokens 24h', number_format_i18n( $snap['usage']['tokens_24h'] ) ],
+			[ 'Arta tokens 24h', number_format_i18n( $snap['usage']['tokens_24h'] ) ],
 			[ 'ArtaMod queue', (string) $snap['moderation']['queue'] ],
 		] as $c ) {
 			echo '<div style="background:#fff;border:1px solid #dcdfe4;border-left:4px solid #2352E8;border-radius:8px;padding:12px 16px;min-width:130px">'
