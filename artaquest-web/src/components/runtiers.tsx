@@ -22,7 +22,8 @@
  * anonymously (server: Mirror.php). Until the mirror holds a work — it syncs every 15 minutes —
  * the rung falls back to downloading the exact `.ipynb` and opening Colab, and says so.
  */
-import { ipynbHref, kaggleRunHref, labRunUrl } from "../lib/pykernel";
+import { useEffect, useState } from "react";
+import { browserBlockers, ipynbHref, kaggleRunHref, labRunUrl } from "../lib/pykernel";
 import { cx } from "./ui";
 
 /**
@@ -40,9 +41,16 @@ function openInColab(id: number, slug: string) {
   window.open("https://colab.research.google.com/#create=true", "_blank", "noopener,noreferrer");
 }
 
-type Props = { id: number; slug: string; kaggleUrl?: string; colabUrl?: string; kaggleImportUrl?: string; className?: string };
+type Props = { id: number; slug: string; kaggleUrl?: string; colabUrl?: string; kaggleImportUrl?: string; ipynb?: string; className?: string };
 
-export function RunTiers({ id, slug, kaggleUrl, colabUrl, kaggleImportUrl, className }: Props) {
+export function RunTiers({ id, slug, kaggleUrl, colabUrl, kaggleImportUrl, ipynb, className }: Props) {
+  // What this work needs that a browser tab cannot give it — said before the click, not after.
+  const [blockers, setBlockers] = useState<string[]>([]);
+  useEffect(() => {
+    let live = true;
+    void browserBlockers(ipynb || "").then((b) => { if (live) setBlockers(b); });
+    return () => { live = false; };
+  }, [ipynb]);
   const kaggle = kaggleRunHref(kaggleUrl || "");
   // One-click Colab only on the anonymous /github/ route. A legacy /gist/ value is refused here even
   // if one is ever served again: that route is the OAuth prompt this card exists to avoid.
@@ -79,6 +87,12 @@ export function RunTiers({ id, slug, kaggleUrl, colabUrl, kaggleImportUrl, class
               Free, instant, no account, and nothing leaves your device. Good for reading the code
               and light changes; it cannot do a GPU.
             </p>
+            {blockers.length > 0 && (
+              <p className="mt-1 text-[12.5px] leading-relaxed text-ink-2">
+                This one needs {blockers.join("; ")}, which a browser tab cannot provide — it will
+                stop part-way here. Run it in Colab or on Kaggle (below).
+              </p>
+            )}
           </div>
         </li>
 

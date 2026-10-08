@@ -67,6 +67,71 @@ export function kaggleRunHref(url: string): string {
   return (url || "").replace(/\/+$/, "").replace(/\/edit$/, "");
 }
 
+/** Top-level standard-library modules (CPython 3.13 sys.stdlib_module_names, public names). */
+const STDLIB = new Set(`
+  abc antigravity argparse array ast asyncio atexit base64 bdb binascii bisect builtins bz2
+  cProfile calendar cmath cmd code codecs codeop collections colorsys compileall concurrent
+  configparser contextlib contextvars copy copyreg csv ctypes curses dataclasses datetime dbm
+  decimal difflib dis doctest email encodings ensurepip enum errno faulthandler fcntl filecmp
+  fileinput fnmatch fractions ftplib functools gc genericpath getopt getpass gettext glob graphlib
+  grp gzip hashlib heapq hmac html http idlelib imaplib importlib inspect io ipaddress itertools
+  json keyword linecache locale logging lzma mailbox marshal math mimetypes mmap modulefinder
+  msvcrt multiprocessing netrc nt ntpath nturl2path numbers opcode operator optparse os pathlib
+  pdb pickle pickletools pkgutil platform plistlib poplib posix posixpath pprint profile pstats
+  pty pwd py_compile pyclbr pydoc pydoc_data pyexpat queue quopri random re readline reprlib
+  resource rlcompleter runpy sched secrets select selectors shelve shlex shutil signal site
+  smtplib socket socketserver sqlite3 sre_compile sre_constants sre_parse ssl stat statistics
+  string stringprep struct subprocess symtable sys sysconfig syslog tabnanny tarfile tempfile
+  termios textwrap this threading time timeit tkinter token tokenize tomllib trace traceback
+  tracemalloc tty turtle turtledemo types typing unicodedata unittest urllib uuid venv warnings
+  wave weakref webbrowser winreg winsound wsgiref xml xmlrpc zipapp zipfile zipimport zlib
+  zoneinfo
+`.split(/\s+/).filter(Boolean));
+
+/**
+ * What in this notebook the in-browser runtime cannot provide — '' entries never; [] when it should
+ * run (or when we cannot tell). Said UP FRONT on the post, because "Runtime failed" or a
+ * ModuleNotFoundError twenty seconds into a run reads as the site being broken, when the truth is
+ * that this work needs a real machine (torch, ffmpeg, Kaggle's input files) and Colab or Kaggle is
+ * the tier for it. Imports are checked against the deployed runtime's own package lock, so the
+ * answer moves with the runtime instead of with a hand-kept list.
+ */
+export async function browserBlockers(ipynb: string): Promise<string[]> {
+  let code: string;
+  try {
+    const nb = JSON.parse(ipynb || "{}") as { cells?: { cell_type?: string; source?: string | string[] }[] };
+    code = (nb.cells || []).filter((c) => c.cell_type === "code")
+      .map((c) => (Array.isArray(c.source) ? c.source.join("") : c.source || "")).join("\n");
+  } catch {
+    return [];
+  }
+  if (!code.trim()) return [];
+  const mods = new Set<string>();
+  for (const m of code.matchAll(/^[ \t]*(?:from[ \t]+([A-Za-z_]\w*)[\w.]*[ \t]+import\b|import[ \t]+([^\n#;]+))/gm)) {
+    if (m[1]) mods.add(m[1]);
+    else for (const part of (m[2] || "").split(",")) {
+      const top = part.trim().split(/[\s.]/)[0];
+      if (/^[A-Za-z_]\w*$/.test(top)) mods.add(top);
+    }
+  }
+  let have: Set<string>;
+  try {
+    let r = await fetch(SELF_BASE() + "pyodide-lock.json");
+    if (!r.ok) r = await fetch(CDN_BASE + "pyodide-lock.json");
+    if (!r.ok) return [];
+    const lock = (await r.json()) as { packages?: Record<string, { imports?: string[] }> };
+    have = new Set(Object.values(lock.packages || {}).flatMap((p) => p.imports || []));
+  } catch {
+    return []; // cannot tell — claim nothing
+  }
+  const out: string[] = [];
+  const missing = [...mods].filter((m) => !STDLIB.has(m) && !have.has(m) && m !== "IPython" && m !== "aq_bridge").sort();
+  if (missing.length) out.push(missing.join(", "));
+  if (/\bsubprocess\.(run|call|check_call|check_output|Popen)\b|\bos\.(system|popen)\(/.test(code)) out.push("external programs (subprocess)");
+  if (/\/kaggle\/input\b/.test(code)) out.push("Kaggle input files (/kaggle/input)");
+  return out;
+}
+
 /** The matplotlib theme, read from the LIVE ArtaContrast tokens on <html> — the SPA engine
  *  (lib/contrast applyContrast) owns them; the kernel only mirrors. */
 export function liveMplTheme(): { ink: string; ink2: string; line: string; dark: boolean } {

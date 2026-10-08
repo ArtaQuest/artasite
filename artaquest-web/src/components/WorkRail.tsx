@@ -81,7 +81,7 @@ export function WorkRail({ nb }: { nb: NotebookFull }) {
     <>
       {/* Running it comes BEFORE citing it: a reader who has just seen the work wants to try it,
           and the citation is what they want after they believe it. */}
-      <RunTiers id={nb.id} slug={nb.slug} kaggleUrl={nb.kaggle?.url || nb.kaggle_url || ""} colabUrl={nb.colab_url} kaggleImportUrl={nb.kaggle_import_url || ""} />
+      <RunTiers id={nb.id} slug={nb.slug} kaggleUrl={nb.kaggle?.url || nb.kaggle_url || ""} colabUrl={nb.colab_url} kaggleImportUrl={nb.kaggle_import_url || ""} ipynb={nb.ipynb} />
       <CiteBox nb={nb} />
       {/* Analytics on the work's own page (operator 2026-07-31), not buried in the Studio. */}
       <WorkStats nb={nb} />

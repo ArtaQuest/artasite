@@ -14,6 +14,23 @@ import { installModelHost } from './lib/model-host'
 // executes at all; this one is for a bundle that starts and then falls over.
 setTimeout(dismissBootScreen, 10000)
 
+// A DEPLOY REPLACES EVERY HASHED CHUNK. A page whose HTML predates it — a tab left open, or the
+// edge serving a STALE copy for its revalidation window (observed 2026-10-08: x-ac STALE, the old
+// entry loaded, and /lab's lazy Lab-<old hash>.js answered 404) — then dies the moment it imports a
+// route it has not visited yet. Vite raises vite:preloadError for exactly that; reload once so the
+// fresh HTML names the fresh chunks. Guarded per URL for a minute, so a chunk that is genuinely
+// missing produces one reload and then the real error, never a loop.
+window.addEventListener('vite:preloadError', (e) => {
+  const key = 'aq-chunk-reload:' + location.pathname
+  try {
+    const last = Number(sessionStorage.getItem(key) || 0)
+    if (Date.now() - last < 60000) return
+    sessionStorage.setItem(key, String(Date.now()))
+  } catch { return }   // no storage → no loop guard → do not risk a reload loop
+  e.preventDefault()
+  location.reload()
+})
+
 // Point every on-device model download at Kaggle (artafather) BEFORE anything can import a model
 // loader — kokoro-js and @huggingface/transformers build HuggingFace URLs inside their own bundles,
 // so this has to be in place first or their first fetch escapes to a host the CSP no longer allows.
