@@ -1,13 +1,15 @@
+import { prepareAttachments } from "./attachments";
 import { fileBug, deriveBug } from "./bugs";
 import type { Config } from "./config";
-import { type Engine, EngineBusy, EngineDown } from "./engine";
+import { type Engine, type EngineAnswer, EngineBusy, EngineDown } from "./engine";
+import type { Fetch } from "./http";
 import type { GitHub } from "./github";
 import { parseDecision, promptText } from "./prompt";
 import { clip } from "./text";
-import type { Mention } from "./types";
+import type { Mention, OutFile } from "./types";
 import type { WpClient } from "./wp";
 
-export type Deps = { cfg: Config; wp: WpClient; engine: Engine; gh: GitHub | null; log: (msg: string) => void; onPrompt?: () => void };
+export type Deps = { cfg: Config; wp: WpClient; engine: Engine; gh: GitHub | null; log: (msg: string) => void; onPrompt?: () => void; fetch?: Fetch };
 export type Outcome = "not-claimed" | "replied" | "bug-filed" | "bug-duplicate" | "bug-capped" | "dry-run";
 
 const ISSUES_PAGE = "https://artaquest.com/issues/";
@@ -45,18 +47,46 @@ export async function handleMention(id: number, d: Deps, attempt = 1, maxAttempt
   }
 }
 
+/**
+ * The files that go out with the reply: when the answer does not fit (or the model wrote a longer
+ * "details"), the complete answer as answer.md FIRST, then whatever the chat produced (images, files),
+ * within the count and size caps. The site checks every file again.
+ */
+export function outgoing(said: string, details: string | undefined, max: number, produced: OutFile[], cfg: Config): { text: string; files: OutFile[] } {
+  const files: OutFile[] = [];
+  let text = said;
+  if (said.length > max || details) {
+    const full = details ? `${said.trim()}\n\n${details.trim()}\n` : `${said.trim()}\n`;
+    files.push({ name: "answer.md", mime: "text/markdown", bytes: new TextEncoder().encode(full) });
+    text = clip(said, max);
+  }
+  for (const f of produced) if (f.bytes.byteLength > 0 && f.bytes.byteLength <= cfg.outFileBytes) files.push(f);
+  return { text, files: files.filter((f) => f.bytes.byteLength <= cfg.outFileBytes).slice(0, cfg.outFilesMax) };
+}
+
 async function answer(m: Mention, d: Deps): Promise<Outcome> {
   const max = m.max_chars || 280;
-  d.onPrompt?.();
-  const raw = await d.engine.ask(promptText(m), d.cfg.answerTimeoutSec * 1000);
-  const dec = parseDecision(raw);
+  const prep = await prepareAttachments(m, d.cfg, d.fetch ?? fetch);
+  let got: EngineAnswer;
+  try {
+    if (prep.notAttached.length) d.log(`mention ${m.id}: ${prep.notAttached.length} file(s) not attached (${prep.notAttached.map((n) => n.why).join(", ")})`);
+    d.onPrompt?.();
+    const raw = await d.engine.ask(promptText(m, prep), d.cfg.answerTimeoutSec * 1000, prep.paths);
+    got = typeof raw === "string" ? { text: raw, files: [] } : raw;
+  } finally {
+    await prep.cleanup();   // the downloaded copies never outlive the prompt
+  }
+  const dec = parseDecision(got.text);
   // The member's own "bug:" prefix always files a report (unless the request was declined).
   if (m.hint === "bug" && dec.kind !== "declined") dec.kind = "bug";
   const said = dec.reply.trim() || (dec.kind === "bug" ? "Thanks for reporting this — I've passed it to the team." : "");
   if (!said) throw new Error("empty answer");
 
+  const out = dec.kind === "declined" ? { text: clip(said, max), files: [] as OutFile[] } : outgoing(said, dec.details, max, got.files, d.cfg);
+
   if (d.cfg.dryRun) {
-    d.log(`dry-run mention ${m.id}: kind=${dec.kind} reply=${JSON.stringify(clip(said, max))}`);
+    const fl = out.files.map((f) => `${f.name} (${f.mime}, ${f.bytes.byteLength} B)`).join(", ");
+    d.log(`dry-run mention ${m.id}: kind=${dec.kind}${got.mode ? ` mode=${got.mode}` : ""} reply=${JSON.stringify(out.text)}${fl ? ` files=[${fl}]` : ""}`);
     await d.wp.status(m.id, "queued", "dry run");
     return "dry-run";
   }
@@ -73,6 +103,6 @@ async function answer(m: Mention, d: Deps): Promise<Outcome> {
     return r.status === "duplicate" ? "bug-duplicate" : "bug-filed";
   }
 
-  await d.wp.reply(m.id, clip(said, max), dec.kind === "bug" ? "answer" : dec.kind);
+  await d.wp.reply(m.id, out.text, dec.kind === "bug" ? "answer" : dec.kind, undefined, out.files);
   return "replied";
 }

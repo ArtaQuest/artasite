@@ -12,7 +12,7 @@ import { WpClient } from "./wp";
 /**
  *   node dist/src/main.js run         the daemon (systemd runs this)
  *   node dist/src/main.js check       settings (names only), site reachability, sign-in state; sends no prompt
- *   node dist/src/main.js calibrate   one harmless prompt; prints selector candidates for ARTA_SEL_ANSWER
+ *   node dist/src/main.js calibrate   one harmless prompt (top mode + a tiny PNG): mode, answer, selector candidates
  *   node dist/src/main.js login       headed browser on $DISPLAY for the operator's one-time sign-in
  */
 const cfg = loadConfig();
@@ -59,11 +59,18 @@ async function check() {
 
 async function calibrate() {
   const engine = new BrowserEngine(cfg, (s) => console.log(`  ${s}`));
-  const found = await engine.calibrate();
+  const r = await engine.calibrate();
   await engine.close();
-  if (!found.length) { console.log("✗ no element with the expected answer appeared — see the screenshot in the state dir"); process.exitCode = 1; return; }
+  console.log(`Mode: ${r.mode || "(no picker found)"}`);
+  console.log(`Attach control: ${r.fileInput}`);
+  console.log(`Answer to "What color is this square?": ${JSON.stringify(r.answer)}`);
+  if (r.busySel.length) {
+    console.log("Controls visible only while the answer was written (ARTA_SEL_BUSY candidates):");
+    for (const b of r.busySel) console.log(`  ${b}`);
+  }
+  if (!r.answerSel.length) { console.log("✗ no element with the expected answer appeared — see the screenshot in the state dir"); process.exitCode = 1; return; }
   console.log("Elements holding the answer (innermost first, then its parents). Pick the most specific stable one for ARTA_SEL_ANSWER:");
-  for (const f of found) console.log(`  ${f}`);
+  for (const f of r.answerSel) console.log(`  ${f}`);
 }
 
 async function login() {

@@ -1,6 +1,6 @@
 import type { Config } from "./config";
 import { type Fetch, HttpError, timed } from "./http";
-import type { Kind, Mention } from "./types";
+import type { Kind, Mention, OutFile } from "./types";
 
 /**
  * The brain's side of the WordPress API (src/Arta.php). Every call is POST — the platform caches
@@ -31,11 +31,23 @@ export class WpClient {
     }
   }
 
-  reply(mentionId: number, body: string, kind: Kind, issue?: { url: string; title: string }) {
-    return this.post<{ ok: boolean; duplicate: boolean; url: string }>("arta/reply", {
-      mention_id: mentionId, body, kind,
-      ...(issue ? { issue_url: issue.url, issue_title: issue.title } : {}),
-    });
+  /**
+   * Arta's one reply. With files it goes as multipart/form-data (`files[]`); the site sniffs every
+   * file again and stores only the types it allows, so this is never the last line of defence.
+   */
+  async reply(mentionId: number, body: string, kind: Kind, issue?: { url: string; title: string }, files: OutFile[] = []) {
+    type R = { ok: boolean; duplicate: boolean; url: string; files?: number; dropped?: string[] };
+    const fields = { mention_id: mentionId, body, kind, ...(issue ? { issue_url: issue.url, issue_title: issue.title } : {}) };
+    if (!files.length) return this.post<R>("arta/reply", fields);
+    const fd = new FormData();
+    for (const [k, v] of Object.entries(fields)) fd.set(k, String(v));
+    for (const f of files) fd.append("files[]", new Blob([f.bytes], { type: f.mime }), f.name);
+    const r = await timed(this.f, `${this.cfg.wpBase}/wp-json/aq/v1/arta/reply`, {
+      method: "POST", headers: { "X-Arta-Token": this.cfg.replyToken, "User-Agent": "arta-brain/1" }, body: fd,
+    }, 120_000);
+    const text = await r.text();
+    if (!r.ok) throw new HttpError(r.status, `WordPress arta/reply → ${r.status}: ${text.slice(0, 200)}`);
+    return (text ? JSON.parse(text) : {}) as R;
   }
 
   status(id: number, status: "skipped" | "failed" | "queued", note: string) {

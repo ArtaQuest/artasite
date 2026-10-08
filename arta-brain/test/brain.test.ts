@@ -11,6 +11,10 @@ import { handleMention } from "../src/worker";
 import { WpClient } from "../src/wp";
 import { launchOptions } from "../src/browser";
 import { loadConfig } from "../src/config";
+import { existsSync } from "node:fs";
+import { prepareAttachments } from "../src/attachments";
+import { solidPng, sniffMime } from "../src/files";
+import { outgoing } from "../src/worker";
 import { cfg, fakeNet, mention } from "./fakes";
 
 const deps = (net: ReturnType<typeof fakeNet>, over = {}) => {
@@ -223,4 +227,97 @@ test("browser launch: Playwright Chromium on Linux; installed Chrome with the re
   assert.deepEqual(mac.ignoreDefaultArgs, ["--use-mock-keychain"], "keeps the sign-in made in plain Chrome readable");
   assert.equal(loadConfig({ ARTA_SEL_NEW_CHAT: "#new" }).sel.newChat, "#new");
   assert.equal(loadConfig({ ARTA_PROFILE_DIR: "/x/chrome-profile" }).profileDir, "/x/chrome-profile");
+});
+
+const att = (over: Partial<import("../src/types").Attachment>) => ({ name: "plot.png", mime: "image/png", bytes: 0, url: "https://cdn.test/plot.png", from: "parent" as const, post_id: 4, skip: "" as const, ...over });
+
+test("attachments IN: downloaded to a temp dir, caps and reasons, https only, cleaned up", async () => {
+  const png = solidPng(4, 4, [255, 0, 0]);
+  const big = new Uint8Array(2 * 1024 * 1024 + 10);
+  const net = fakeNet({ files: { "https://cdn.test/plot.png": png, "https://cdn.test/big.png": big, "https://cdn.test/liar.png": big } });
+  const m = mention({ attachments: [
+    att({ bytes: png.byteLength }),
+    att({ name: "model.zip", mime: "application/zip", url: "https://cdn.test/model.zip", bytes: 10, skip: "type" }),
+    att({ name: "big.png", url: "https://cdn.test/big.png", bytes: big.byteLength }),
+    att({ name: "liar.png", url: "https://cdn.test/liar.png", bytes: 100 }),             // claims 100 B, sends 2 MB
+    att({ name: "local.png", url: "http://10.0.0.4/x.png", bytes: 10 }),
+    att({ name: "gone.png", url: "https://cdn.test/gone.png", bytes: 10 }),
+  ] });
+  const p = await prepareAttachments(m, cfg({ attachBytes: 1024 * 1024 }), net.f);
+  assert.equal(p.paths.length, 1);
+  assert.ok(existsSync(p.paths[0]) && p.paths[0].endsWith("1-plot.png"));
+  const why = Object.fromEntries(p.notAttached.map((n) => [n.a.name, n.why]));
+  assert.deepEqual(why, { "model.zip": "type not supported", "big.png": "too large", "liar.png": "too large", "local.png": "not reachable", "gone.png": "could not be downloaded (404)" });
+  await p.cleanup();
+  assert.ok(!existsSync(p.paths[0]), "temp files are deleted");
+  const many = await prepareAttachments(mention({ attachments: [1, 2, 3].map((i) => att({ name: `p${i}.png`, bytes: png.byteLength })) }), cfg({ attachMax: 2 }), net.f);
+  assert.equal(many.paths.length, 2);
+  assert.equal(many.notAttached[0].why, "too many files");
+  await many.cleanup();
+});
+
+test("prompt lists the attached files and the ones that could not be attached", () => {
+  const a = att({ bytes: 120_000 });
+  const t = promptText(mention(), { attached: [a], notAttached: [{ a: att({ name: "model.zip", mime: "application/zip", bytes: 5_000_000 }), why: "type not supported" }] });
+  assert.match(t, /Files attached to this message[^\n]*\n1\. plot\.png \(image\/png, 117 KB\) — on an earlier post in the thread/);
+  assert.match(t, /could NOT be attached[^\n]*\n- model\.zip \(application\/zip, 4\.8 MB\) — type not supported/);
+  assert.match(t, /"details"/);
+  assert.equal(parseDecision('{"kind":"answer","reply":"short","details":"# Long\\n\\ncode"}').details, "# Long\n\ncode");
+});
+
+test("a mention with a picture: the file reaches the engine, then the temp copy is gone", async () => {
+  const png = solidPng(4, 4, [0, 0, 255]);
+  const m = mention({ attachments: [att({ bytes: png.byteLength })] });
+  const net = fakeNet({ mention: m, files: { "https://cdn.test/plot.png": png } });
+  const out = await handleMention(11, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {}, fetch: net.f });
+  assert.equal(out, "replied");
+  assert.equal(net.attached[0].length, 1);
+  assert.equal(net.attached[0][0].bytes, png.byteLength);
+  assert.ok(!existsSync(net.attached[0][0].path), "deleted after the prompt");
+  assert.match(net.prompts[0], /1\. plot\.png \(image\/png/);
+});
+
+test("files OUT: a long answer is trimmed with the full text attached; generated images ride along (multipart)", async () => {
+  const long = "word ".repeat(120).trim();
+  const img = solidPng(128, 128, [30, 144, 255]);
+  const net = fakeNet({ llm: { text: JSON.stringify({ kind: "answer", reply: long }), files: [{ name: "square-1.png", mime: "image/png", bytes: img }] } });
+  const out = await handleMention(11, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {} });
+  assert.equal(out, "replied");
+  const r = net.calls.find((c) => c.url.endsWith("/arta/reply"))!;
+  const b = r.body as { body: string; files: { field: string; name: string; type: string; size: number; text: string }[]; mention_id: string };
+  assert.ok(b.body.length <= 280 && b.body.endsWith("…"), "the public reply is trimmed to the limit");
+  assert.equal(b.mention_id, "11");
+  assert.deepEqual(b.files.map((f) => [f.field, f.name, f.type]), [["files[]", "answer.md", "text/markdown"], ["files[]", "square-1.png", "image/png"]]);
+  assert.equal(b.files[0].text.trim(), long, "the full answer is the attached file");
+  assert.equal(r.headers["x-arta-token"], "t".repeat(40));
+});
+
+test("outgoing(): details become answer.md, caps hold, a short plain answer sends no file", () => {
+  const c = cfg({ outFilesMax: 2, outFileBytes: 1000 });
+  assert.deepEqual(outgoing("short", undefined, 280, [], c).files, []);
+  const d = outgoing("short", "## steps\n1. a", 280, [], c);
+  assert.equal(d.text, "short");
+  assert.equal(new TextDecoder().decode(d.files[0].bytes), "short\n\n## steps\n1. a\n");
+  const big = { name: "huge.png", mime: "image/png", bytes: new Uint8Array(5000) };
+  const ok = { name: "ok.png", mime: "image/png", bytes: new Uint8Array(10) };
+  assert.deepEqual(outgoing("short", "x", 280, [big, ok, ok, ok], c).files.map((f) => f.name), ["answer.md", "ok.png"]);
+});
+
+test("dry run with files posts nothing and logs what would be attached", async () => {
+  const logs: string[] = [];
+  const net = fakeNet({ llm: { text: JSON.stringify({ kind: "answer", reply: "Here.", details: "full" }), files: [], mode: "Expert" } });
+  const out = await handleMention(11, { cfg: cfg({ dryRun: true }), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: (s) => logs.push(s) });
+  assert.equal(out, "dry-run");
+  assert.equal(net.calls.filter((c) => c.url.endsWith("/arta/reply")).length, 0);
+  assert.match(logs.join("\n"), /mode=Expert reply="Here\." files=\[answer\.md \(text\/markdown, \d+ B\)\]/);
+});
+
+test("config: top-effort defaults, sniffing, and the generated PNG", () => {
+  const c = loadConfig({});
+  assert.deepEqual(c.modeLabels, ["Heavy", "Expert", "Thinking", "Auto"]);
+  assert.equal(c.answerTimeoutSec, 600);
+  assert.deepEqual(loadConfig({ ARTA_MODE_LABELS: "Expert, Auto" }).modeLabels, ["Expert", "Auto"]);
+  assert.match("You've reached your Heavy usage limit", new RegExp(c.sel.limitText, "i"));
+  assert.equal(sniffMime(solidPng(2, 2, [1, 2, 3])), "image/png");
+  assert.equal(sniffMime(new TextEncoder().encode("<svg/>")), "");
 });

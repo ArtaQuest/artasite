@@ -1467,6 +1467,10 @@ final class Notebook {
 			];
 			return $c;
 		}, $media );
+		// Arta's replies carry files (a generated image, the full text of a long answer) in their own
+		// table; they render through the same strip as Library attachments.
+		$arta = Arta::known_uid();
+		if ( $arta && (int) $p['author_id'] === $arta ) { $media = array_merge( $media, Arta::files_for( 'post', (int) $p['id'] ) ); }
 		return [
 			'id' => (int) $p['id'], 'body' => (string) $p['body'], 'hearts' => (int) $p['hearts'],
 			'reposts' => (int) ( $p['reposts'] ?? 0 ), 'created' => (int) $p['created'],
