@@ -265,6 +265,7 @@ final class Auth {
 			'bio'       => (string) get_user_meta( $uid, 'description', true ), // so the saved bio loads back (was never read)
 			'links'     => (object) self::links( $uid ),                          // (object): an empty set is {} not [] — see Social::profile
 			'socials'   => self::socials( $uid ),                                 // every handle, in profile order — what the settings form edits
+			'links_order' => self::links_order( $uid ),                           // the member's saved icon order ([] = the default ranking)
 			// No relationship status since 2026-10-08 (operator: "remove relationship status") — the
 			// stored value is kept, nothing reads it out any more.
 			'location'     => self::location( $uid ),                             // self-declared only — never inferred, see Auth::location
@@ -500,6 +501,44 @@ final class Auth {
 		return $out;
 	}
 
+	/**
+	 * THE MEMBER'S OWN ORDER (operator 2026-10-08: "the social links should be … rankable by the
+	 * user"). `aq_links_order` is a JSON list of network keys, the member's chosen order, written by
+	 * profile_update and SANITISED to the known networks (no website — that lives in the meta row,
+	 * not the icon row; no duplicates; nothing unknown). socials() — and so the profile row, its
+	 * "+N" list, the Account editor and links() — puts those first in that order; every network
+	 * WITHOUT a saved position follows in the default network-size ranking (the LINKS order). No
+	 * saved order (the default, and what an empty list resets to) is just the ranking.
+	 */
+	const LINKS_ORDER_META = 'aq_links_order';
+	public static function links_order( $uid ) {
+		return self::clean_order( get_user_meta( (int) $uid, self::LINKS_ORDER_META, true ) );
+	}
+	/** Anything → a clean list of network keys: an array, a JSON list, or "a,b,c". */
+	public static function clean_order( $in ) {
+		if ( is_string( $in ) ) {
+			$t  = trim( $in );
+			$in = ( '' !== $t && '[' === $t[0] ) ? json_decode( $t, true ) : explode( ',', $t );
+		}
+		$out = array();
+		foreach ( is_array( $in ) ? $in : array() as $k ) {
+			$k = is_string( $k ) ? strtolower( trim( $k ) ) : '';
+			if ( '' === $k || 'website' === $k || ! isset( self::LINKS[ $k ] ) || in_array( $k, $out, true ) ) { continue; }
+			$out[] = $k;
+		}
+		return $out;
+	}
+	/** A key => value map (already in LINKS order) re-sequenced: the website first as always, then
+	 *  the saved order, then everything else in its existing (ranked) order. */
+	private static function ordered( array $map, array $order ) {
+		if ( ! $order ) { return $map; }
+		$out = array();
+		if ( isset( $map['website'] ) ) { $out['website'] = $map['website']; }
+		foreach ( $order as $k ) { if ( isset( $map[ $k ] ) ) { $out[ $k ] = $map[ $k ]; } }
+		foreach ( $map as $k => $v ) { if ( ! isset( $out[ $k ] ) ) { $out[ $k ] = $v; } }
+		return $out;
+	}
+
 	/** The raw stored map, key => handle-or-URL, unknown keys dropped. */
 	private static function stored_links( $uid ) {
 		$raw = get_user_meta( (int) $uid, 'aq_links', true );
@@ -522,7 +561,7 @@ final class Auth {
 	 */
 	public static function socials( $uid ) {
 		$out = array();
-		foreach ( self::stored_links( $uid ) as $k => $v ) {
+		foreach ( self::ordered( self::stored_links( $uid ), self::links_order( $uid ) ) as $k => $v ) {
 			$url = self::social_url( $k, $v );
 			$out[] = array(
 				'key'     => $k,
@@ -776,6 +815,16 @@ final class Auth {
 
 		if ( null !== $links_clean ) { update_user_meta( $uid, 'aq_links', wp_json_encode( $links_clean ) ); }
 
+		// The member's order for their icons (`links_order`, a list of network keys). Same contract:
+		// ABSENT leaves it alone; a list replaces it, sanitised to known networks; an EMPTY list goes
+		// back to the default ranking (the meta is deleted, not stored empty).
+		$order_in = Rest::p( $req, 'links_order', null );
+		if ( null !== $order_in ) {
+			$order = self::clean_order( $order_in );
+			if ( $order ) { update_user_meta( $uid, self::LINKS_ORDER_META, wp_json_encode( $order ) ); }
+			else { delete_user_meta( $uid, self::LINKS_ORDER_META ); }
+		}
+
 		// Category + location. OMITTED means "leave it alone" (same contract as links above), so a
 		// form that only edits the bio cannot silently blank either one. An empty STRING is a real
 		// instruction: stop saying. RELATIONSHIP STATUS is no longer accepted (operator 2026-10-08,
@@ -826,7 +875,7 @@ final class Auth {
 		// handle simultaneously, WP suffixes the loser (-2) — the client must learn what it actually got.
 		// `links` comes back NORMALISED — a member who typed a bare handle sees the real URL that was
 		// stored, so the form shows what the profile will show rather than what they typed.
-		return array( 'ok' => true, 'name' => $u ? $u->display_name : $name, 'bio' => $bio, 'slug' => $u ? $u->user_nicename : '', 'links' => (object) self::links( $uid ), 'socials' => self::socials( $uid ), 'location' => self::location( $uid ), 'category' => self::category( $uid ), 'languages' => self::languages( $uid ) );
+		return array( 'ok' => true, 'name' => $u ? $u->display_name : $name, 'bio' => $bio, 'slug' => $u ? $u->user_nicename : '', 'links' => (object) self::links( $uid ), 'socials' => self::socials( $uid ), 'links_order' => self::links_order( $uid ), 'location' => self::location( $uid ), 'category' => self::category( $uid ), 'languages' => self::languages( $uid ) );
 	}
 
 	/** GET /username/check?u= — live availability for the settings form. Public: every username is

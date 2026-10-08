@@ -815,7 +815,8 @@ final class Social {
 			// handle, url, profile}]. `url` is '' for an ID with no web address (WeChat, a Discord
 			// username) — the page shows it as text. This is what the profile renders; `links` above
 			// stays for API consumers and SEO.
-			'socials'    => Auth::socials( $id ),
+			'socials'    => Auth::socials( $id ),                // in the member's saved order, then the default ranking
+			'links_order' => Auth::links_order( $id ),          // that saved order ([] = the default ranking)
 			// No relationship status since 2026-10-08 (operator: "remove relationship status").
 			'location'     => Auth::location( $id ),           // what the MEMBER typed; never inferred from an IP
 			'category'     => Auth::category( $id ),           // what they do, in their words — the briefcase item

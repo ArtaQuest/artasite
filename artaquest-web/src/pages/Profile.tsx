@@ -478,10 +478,10 @@ export default function Profile() {
                 thanks to `wrap-anywhere`); the avatar stays `shrink-0`; below `sm` the column layout is
                 unchanged. A name is never truncated. Measured at 390/700/1100/1440 through ArtaFocus. */}
             {/* X-STYLE (operator 2026-10-08: "make it more like X"). The avatar straddles the cover's
-                edge with the ACTIONS at the right of the same row, dropped just below the cover so a
-                wrap onto a second line never climbs over the picture. Then, in reading order: the
+                edge with the member's standing (tier, coins, last seen) at the right of the same row;
+                under it the ACTION ROW — counts left, buttons right. Then, in reading order: the
                 name, the @handle, the bio (line breaks and emoji as written), the meta row (what they
-                do · where · website · born · joined), the network marks, and the counts.
+                do · where · website · born · joined) and the network marks.
 
                 `relative z-10` is LOAD-BEARING. The cover above is `position: relative`, and a
                 positioned element paints in a later step than non-positioned block content regardless
@@ -489,17 +489,52 @@ export default function Profile() {
                 the avatar's top 40px. Positioning the row puts it in the same paint step, where
                 later-in-DOM wins.
 
-                The avatar is `shrink-0`, the actions `min-w-0` and wrapping toward the end, so four
-                buttons for a signed-in visitor fold onto two right-aligned lines instead of running off
-                the card (the 2026-08-18 overflow this row once had). Never the name in this row: it
-                takes its own line below, whole, and is never truncated. */}
-            <div className="relative z-10 -mt-10 flex items-start justify-between gap-3 sm:-mt-14">
+                The avatar is `shrink-0`; the action row's buttons are `min-w-0` and wrap toward the
+                end, so four buttons for a signed-in visitor fold onto right-aligned lines instead of
+                running off the card (the 2026-08-18 overflow this row once had). Never the name in
+                these rows: it takes its own line below, whole, and is never truncated. */}
+            <div className="relative z-10 -mt-10 flex items-end justify-between gap-3 sm:-mt-14">
               {/* priority: above the fold and normally this page's LCP element — lazy-loading it
                   made the browser wait for layout before even starting the request. Carries the
                   opt-in palm flip. No nationality flag since 2026-10-08. */}
               <Avatar priority src={p.avatar} name={p.name} palm={p.palm || undefined}
                 className="h-20 w-20 shrink-0 bg-space-2 text-[26px] ring-4 ring-space-2 sm:h-32 sm:w-32 sm:text-3xl" />
-              <div className="min-w-0 pt-11 sm:pt-16">
+              {/* STANDING, beside the portrait: what this member has earned and when they were last
+                  around — quiet, right-aligned, wrapping inside the space the avatar leaves. */}
+              <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2.5 gap-y-1 pb-0.5 text-[12.5px] text-ink-3 sm:pb-2 sm:text-[13px]">
+                {p.tier && <Pill className="px-2.5 py-0.5 text-[12.5px] sm:text-[13px]">{p.tier}</Pill>}
+                {/* ONE currency on this page: ArtaCoin (operator 2026-08-15). The whole coin ledger is
+                    already published, so the balance is public in fact. */}
+                <span className="inline-flex items-center gap-1 rounded-pill bg-yin/15 px-2.5 py-0.5 font-semibold text-yin-ink"
+                  title="Coins in their wallet — every entry in the coin ledger is public">
+                  <Coins n={p.coins ?? 0} />
+                </span>
+                {/* Last seen, to the DAY — the server never records finer. */}
+                {p.lastSeen ? <span className="whitespace-nowrap">{lastSeenLabel(p.lastSeen)}</span> : null}
+              </div>
+            </div>
+
+            {/* THE ACTION ROW (operator 2026-10-08: "follower and followings should be next to follow
+                button"): the counts on the left — X's style, the number bold in ink and the word in
+                grey, each opening its list below — and the buttons on the right, on ONE line under the
+                portrait at every width. Where a signed-in visitor's four buttons cannot share the line
+                with the counts, the buttons wrap onto a second right-aligned line; nothing overlaps. */}
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+              {/* On a phone the two counts STACK (one short line each) so they share the line with
+                  Follow and the calendar button at 360px; from `sm` they sit side by side as on X. */}
+              <div className="flex shrink-0 flex-col items-start gap-y-1 text-[13.5px] leading-tight text-ink-3 sm:flex-row sm:items-center sm:gap-x-4 sm:text-[14.5px]">
+                <button type="button" onClick={() => setListDir((d) => (d === "following" ? null : "following"))}
+                  aria-expanded={listDir === "following"} title="Show the following list"
+                  className="-my-1 whitespace-nowrap py-1 transition-colors hover:text-ink sm:-my-2 sm:py-2">
+                  <b className="font-bold text-ink tabular-nums">{(p.stats?.following ?? 0).toLocaleString()}</b> Following
+                </button>
+                <button type="button" onClick={() => setListDir((d) => (d === "followers" ? null : "followers"))}
+                  aria-expanded={listDir === "followers"} title="Show the followers list"
+                  className="-my-1 whitespace-nowrap py-1 transition-colors hover:text-ink sm:-my-2 sm:py-2">
+                  <b className="font-bold text-ink tabular-nums">{followers.toLocaleString()}</b> {followers === 1 ? "Follower" : "Followers"}
+                </button>
+              </div>
+              <div className="ms-auto min-w-0">
                 {isOwn ? (
                   <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2">
                     {bookButton}
@@ -590,32 +625,8 @@ export default function Profile() {
                 rest (components/SocialLinks.tsx). The website is in the meta row above, not here. */}
             {networks.length > 0 && <SocialLinks socials={networks} name={p.fullName?.trim() || p.name} />}
 
-            {/* THE COUNTS, as X shows them: the number bold in ink, the word in grey — Following, then
-                Followers. Each is a live control that opens its list below. Then what this member has
-                earned and when they were last around, quieter, on the same wrapping line. */}
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[14.5px] text-ink-3">
-              <button type="button" onClick={() => setListDir((d) => (d === "following" ? null : "following"))}
-                aria-expanded={listDir === "following"} title="Show the following list"
-                className="group -my-2 py-2 transition-colors hover:text-ink">
-                <b className="font-bold text-ink tabular-nums">{(p.stats?.following ?? 0).toLocaleString()}</b> Following
-              </button>
-              <button type="button" onClick={() => setListDir((d) => (d === "followers" ? null : "followers"))}
-                aria-expanded={listDir === "followers"} title="Show the followers list"
-                className="group -my-2 py-2 transition-colors hover:text-ink">
-                <b className="font-bold text-ink tabular-nums">{followers.toLocaleString()}</b> {followers === 1 ? "Follower" : "Followers"}
-              </button>
-              <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px]">
-                {p.tier && <Pill className="px-3 py-0.5 text-[13px]">{p.tier}</Pill>}
-                {/* ONE currency on this page: ArtaCoin (operator 2026-08-15). The whole coin ledger is
-                    already published, so the balance is public in fact. */}
-                <span className="inline-flex items-center gap-1 rounded-pill bg-yin/15 px-3 py-0.5 font-semibold text-yin-ink"
-                  title="Coins in their wallet — every entry in the coin ledger is public">
-                  <Coins n={p.coins ?? 0} />
-                </span>
-                {/* Last seen, to the DAY — the server never records finer. */}
-                {p.lastSeen ? <span>{lastSeenLabel(p.lastSeen)}</span> : null}
-              </span>
-            </div>
+            {/* The counts, the tier, the coins and last-seen moved up beside the portrait and the
+                buttons (operator 2026-10-08) — see THE ACTION ROW above. */}
 
             {/* YOUR OWN profile, and something is unsaid: one quiet link to the settings form. Shown to
                 NOBODY else — a visitor has no business seeing what this person declined to answer. */}
