@@ -377,7 +377,7 @@ export default function Profile() {
   const bookLabel = isOwn ? "Book me" : "Book a time";
   const bookButton = p ? (
     <Button href={localePath(`/book/${encodeURIComponent(p.slug)}`)} variant="outline" aria-label={bookLabel}
-      className="h-10 w-10 px-0 text-[14px] sm:w-auto sm:px-5" title={isOwn ? "Your public booking page — the link you share" : "See when they are free and take a time"}>
+      className="h-9 w-9 px-0 text-[13.5px] sm:h-10 sm:w-auto sm:px-5 sm:text-[14px]" title={isOwn ? "Your public booking page — the link you share" : "See when they are free and take a time"}>
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="sm:hidden">
         <rect x="3.5" y="5" width="17" height="15.5" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" />
       </svg>
@@ -398,7 +398,7 @@ export default function Profile() {
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6">
       {/* ── Identity header ── */}
       {!p ? <HeaderSkeleton /> : (
-        <header className="overflow-hidden rounded-card border border-line bg-space-2">
+        <header className="overflow-hidden rounded-card border border-line bg-space-2 shadow-[0_1px_0_rgba(255,255,255,0.03)_inset]">
           {/* THE COVER. Gold on one side, blue on the other, meeting in the middle — the platform's
               own thesis rendered as a band, because gold and blue here are exact additive
               complements. No third hue, no photograph to moderate, and it costs nothing to load.
@@ -417,7 +417,7 @@ export default function Profile() {
               centre-crops anything that is not 3:1 rather than letterboxing it. The container is no
               longer aria-hidden as a whole: the picture is decorative (alt="") and the two gradient
               layers are hidden, but the owner's controls on it must reach assistive tech. */}
-          <div className={p.banner ? "relative aspect-[3/1] max-h-60 w-full" : "relative h-20 w-full sm:h-32"}>
+          <div className={p.banner ? "relative aspect-[3/1] max-h-60 w-full" : "relative h-[4.75rem] w-full sm:h-32"}>
             {p.banner ? (
               <img src={p.banner} alt="" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
             ) : (
@@ -450,7 +450,7 @@ export default function Profile() {
             )}
           </div>
 
-          <div className="px-4 pb-5 sm:px-6">
+          <div className="px-4 pb-5 sm:px-6 sm:pb-6">
             {/* The avatar STRADDLES the cover's edge — the pattern every profile uses, because it
                 anchors the eye and makes the portrait the largest thing on the page. The ring is the
                 card's own background, so the circle punches cleanly out of the gradient in both
@@ -493,16 +493,16 @@ export default function Profile() {
                 end, so four buttons for a signed-in visitor fold onto right-aligned lines instead of
                 running off the card (the 2026-08-18 overflow this row once had). Never the name in
                 these rows: it takes its own line below, whole, and is never truncated. */}
-            <div className="relative z-10 -mt-10 flex items-end justify-between gap-3 sm:-mt-14">
+            <div className="relative z-10 -mt-10 flex items-end justify-between gap-3 sm:-mt-14 md:-mt-16">
               {/* priority: above the fold and normally this page's LCP element — lazy-loading it
                   made the browser wait for layout before even starting the request. Carries the
                   opt-in palm flip. No nationality flag since 2026-10-08. */}
               <Avatar priority src={p.avatar} name={p.name} palm={p.palm || undefined}
-                className="h-20 w-20 shrink-0 bg-space-2 text-[26px] ring-4 ring-space-2 sm:h-32 sm:w-32 sm:text-3xl" />
+                className="h-20 w-20 shrink-0 bg-space-2 text-[26px] ring-[3px] ring-space-2 sm:h-32 sm:w-32 sm:text-3xl sm:ring-4" />
               {/* STANDING, beside the portrait: what this member has earned and when they were last
                   around — quiet, right-aligned, wrapping inside the space the avatar leaves. */}
-              <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2.5 gap-y-1 pb-0.5 text-[12.5px] text-ink-3 sm:pb-2 sm:text-[13px]">
-                {p.tier && <Pill className="px-2.5 py-0.5 text-[12.5px] sm:text-[13px]">{p.tier}</Pill>}
+              <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1.5 pb-0.5 text-[12px] text-ink-3 sm:gap-x-2.5 sm:pb-2.5 sm:text-[13px]">
+                {p.tier && <Pill className="px-2.5 py-0.5 text-[12px] font-semibold sm:text-[12.5px]">{p.tier}</Pill>}
                 {/* ONE currency on this page: ArtaCoin (operator 2026-08-15). The whole coin ledger is
                     already published, so the balance is public in fact. */}
                 <span className="inline-flex items-center gap-1 rounded-pill bg-yin/15 px-2.5 py-0.5 font-semibold text-yin-ink"
@@ -519,10 +519,10 @@ export default function Profile() {
                 grey, each opening its list below — and the buttons on the right, on ONE line under the
                 portrait at every width. Where a signed-in visitor's four buttons cannot share the line
                 with the counts, the buttons wrap onto a second right-aligned line; nothing overlaps. */}
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <div className="mt-3.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 sm:mt-4">
               {/* On a phone the two counts STACK (one short line each) so they share the line with
                   Follow and the calendar button at 360px; from `sm` they sit side by side as on X. */}
-              <div className="flex shrink-0 flex-col items-start gap-y-1 text-[13.5px] leading-tight text-ink-3 sm:flex-row sm:items-center sm:gap-x-4 sm:text-[14.5px]">
+              <div className="flex shrink-0 flex-col items-start gap-y-1 text-[13px] leading-none text-ink-3 sm:flex-row sm:items-center sm:gap-x-4 sm:text-[14.5px] sm:leading-tight">
                 <button type="button" onClick={() => setListDir((d) => (d === "following" ? null : "following"))}
                   aria-expanded={listDir === "following"} title="Show the following list"
                   className="-my-1 whitespace-nowrap py-1 transition-colors hover:text-ink sm:-my-2 sm:py-2">
@@ -549,11 +549,11 @@ export default function Profile() {
                   <div className="flex min-w-0 flex-wrap justify-end gap-2">
                     <Button type="button" onClick={toggleFollow} disabled={followBusy}
                       variant={following ? "outline" : "primaryYin"}
-                      className="h-10 px-5 text-[14px] disabled:opacity-60 sm:px-6">
+                      className="h-9 px-4 text-[13.5px] font-semibold transition-opacity disabled:opacity-60 sm:h-10 sm:px-5 sm:text-[14px]">
                       {following ? "Following" : "Follow"}
                     </Button>
                     <Button href={localePath(`/messages/?with=${encodeURIComponent(p.slug)}`)} variant="outline" aria-label="Message"
-                      className="h-10 w-10 px-0 text-[14px] sm:w-auto sm:px-5" title="Send an encrypted message">
+                      className="h-9 w-9 px-0 text-[13.5px] sm:h-10 sm:w-auto sm:px-5 sm:text-[14px]" title="Send an encrypted message">
                       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="sm:hidden">
                         <rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3.5 6.5 8.5 6.5 8.5-6.5" />
                       </svg>
@@ -570,7 +570,7 @@ export default function Profile() {
                      and this profile is the thing a member actually shares. Hiding the link from
                      signed-out visitors meant the one audience it exists for could not see it. */
                   <div className="flex min-w-0 flex-wrap justify-end gap-2">
-                    <Button href={loginHref} variant="primaryYin" className="h-10 px-5 text-[14px] sm:px-6">Follow</Button>
+                    <Button href={loginHref} variant="primaryYin" className="h-9 px-4 text-[13.5px] font-semibold sm:h-10 sm:px-5 sm:text-[14px]">Follow</Button>
                     {bookButton}
                   </div>
                 )}
@@ -580,26 +580,33 @@ export default function Profile() {
             {/* THE REAL NAME IS THE HEADING — full_name when there is one, the display name otherwise:
                 it is what the page title, description and Person schema say. NEVER TRUNCATED:
                 `wrap-anywhere` lets one long token break rather than overflow. */}
-            <div className="mt-3 min-w-0">
+            <div className="mt-3.5 min-w-0 sm:mt-4">
               {/* THE BLUE CHECK sits on the name's last line, X-style, and is a button: hover (mouse) or
                   tap/Enter opens what it means. Server-decided (Verify::has_badge) — see BlueCheck.tsx. */}
-              <h1 className="flex items-center gap-1.5 text-[24px] font-extrabold leading-tight tracking-tight sm:text-[28px]">
+              <h1 className="flex items-center gap-1.5 text-[22px] font-extrabold leading-[1.15] tracking-tight sm:text-[26px]">
                 <span className="min-w-0 wrap-anywhere">{p.fullName?.trim() || p.name}</span>
-                {p.verified && <BlueCheckButton size={22} via={p.verifiedVia} own={isOwn} className="translate-y-px" />}
+                {p.verified && <BlueCheckButton size={20} via={p.verifiedVia} own={isOwn} className="translate-y-px sm:scale-110" />}
               </h1>
-              {/* THE HANDLE — how you are addressed here and what /messages/?with= accepts. */}
-              <p className="mt-0.5 text-[15px] text-ink-3 wrap-anywhere">
-                <span className="break-all">@{p.slug}</span>
-                {p.fullName?.trim() && p.fullName.trim() !== p.name && p.name !== p.slug && (
-                  <span> · goes by {p.name}</span>
+              {/* THE HANDLE + SOCIALS (operator 2026-10-08: "relocate it to look aesthetically nice").
+                  On a phone the four marks + "+" sit under the @handle; from `sm` they share the
+                  handle's row, right-aligned — identity left, presence right. */}
+              <div className="mt-1 flex flex-col gap-2 sm:mt-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                <p className="min-w-0 text-[14.5px] leading-snug text-ink-3 wrap-anywhere sm:text-[15px]">
+                  <span className="break-all">@{p.slug}</span>
+                  {p.fullName?.trim() && p.fullName.trim() !== p.name && p.name !== p.slug && (
+                    <span> · goes by {p.name}</span>
+                  )}
+                </p>
+                {networks.length > 0 && (
+                  <SocialLinks socials={networks} name={p.fullName?.trim() || p.name} className="sm:ms-auto sm:shrink-0" />
                 )}
-              </p>
+              </div>
             </div>
 
             {/* THE BIO, straight under the handle as on X. Text, never HTML (the server strips tags);
                 pre-wrap keeps the member's line breaks, and emoji render as typed. `wrap-anywhere` so
                 a pasted URL or a long unbroken word wraps instead of widening the card on a phone. */}
-            {p.bio && <p className="mt-3 max-w-2xl whitespace-pre-wrap text-[15px] leading-normal text-ink wrap-anywhere">{p.bio}</p>}
+            {p.bio && <p className="mt-3 max-w-2xl whitespace-pre-wrap text-[15px] leading-relaxed text-ink wrap-anywhere sm:mt-3.5">{p.bio}</p>}
 
             {/* THE META ROW — small grey glyph + text, inline, wrapping whole items (X's row). Born and
                 the city live here now; the separate "About" card left with relationship status
@@ -607,7 +614,7 @@ export default function Profile() {
                 age (operator 2026-07-27, reaffirmed 2026-08-15). The website is the one accent: a link
                 showing the bare domain. Joined is the real ArtaQuest join date. */}
             {(p.category?.trim() || p.location?.trim() || website || fmtBirthday(p.birthday) || p.joined) ? (
-              <ul className="mt-3 flex list-none flex-wrap items-center gap-x-4 gap-y-1.5 text-[14.5px] text-ink-3" aria-label="About">
+              <ul className="mt-3 flex list-none flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[13.5px] text-ink-3 sm:mt-3.5 sm:gap-x-4 sm:text-[14px]" aria-label="About">
                 {p.category?.trim() ? <MetaItem icon={ICON_BRIEFCASE} label="Does"><span data-ay-skip="1">{p.category.trim()}</span></MetaItem> : null}
                 {p.location?.trim() ? <MetaItem icon={ICON_PIN} label="Lives in"><span data-ay-skip="1">{p.location.trim()}</span></MetaItem> : null}
                 {website ? (
@@ -621,12 +628,8 @@ export default function Profile() {
               </ul>
             ) : null}
 
-            {/* WHERE ELSE THEY ARE — one row of network marks, biggest network first, "+N" for the
-                rest (components/SocialLinks.tsx). The website is in the meta row above, not here. */}
-            {networks.length > 0 && <SocialLinks socials={networks} name={p.fullName?.trim() || p.name} />}
-
-            {/* The counts, the tier, the coins and last-seen moved up beside the portrait and the
-                buttons (operator 2026-10-08) — see THE ACTION ROW above. */}
+            {/* Social marks live on the handle row above (operator 2026-10-08). Counts / tier / coins
+                / last-seen sit beside the portrait and the action row. */}
 
             {/* YOUR OWN profile, and something is unsaid: one quiet link to the settings form. Shown to
                 NOBODY else — a visitor has no business seeing what this person declined to answer. */}
