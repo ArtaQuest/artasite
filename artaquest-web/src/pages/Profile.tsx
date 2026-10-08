@@ -16,7 +16,7 @@ import {
   currentUser, fmtBirthday, followUser, getFollows, getProfile, isLoggedIn, lastSeenLabel, localePath, relAgo,
   type FollowRow, type Profile as ProfileData,
 } from "../lib/wp";
-import { Coins } from "../lib/currency";
+import { Coins, CoinMark } from "../lib/currency";
 import { sendCoins, ARTA_HANDLE } from "../lib/api";
 import ArtaBotProfile from "./ArtaBotProfile";
 import { nameClass } from "../lib/fmt";
@@ -41,20 +41,21 @@ const listByAuthor = (author: string, cursor?: number) =>
  */
 function MetaItem({ icon, children, label }: { icon: React.ReactNode; children: React.ReactNode; label: string }) {
   return (
-    <li className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+    <li className="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap">
       <span aria-hidden className="shrink-0">{icon}</span>
       <span className="sr-only">{label}: </span>
-      <span className="min-w-0 wrap-anywhere">{children}</span>
+      <span className="min-w-0">{children}</span>
     </li>
   );
 }
 
-const META_SVG = { viewBox: "0 0 24 24", width: 18, height: 18, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
+const META_SVG = { viewBox: "0 0 24 24", width: 15, height: 15, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
 const ICON_BRIEFCASE = <svg {...META_SVG}><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8.5 7V5.5A1.5 1.5 0 0 1 10 4h4a1.5 1.5 0 0 1 1.5 1.5V7M3 12.5h18" /></svg>;
 const ICON_PIN = <svg {...META_SVG}><path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11z" /><circle cx="12" cy="10" r="2.6" /></svg>;
 const ICON_LINK = <svg {...META_SVG}><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1.1 1.1" /><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1.1-1.1" /></svg>;
 const ICON_BALLOON = <svg {...META_SVG}><path d="M12 3a6 6 0 0 0-6 6c0 3.7 2.9 7 6 7s6-3.3 6-7a6 6 0 0 0-6-6z" /><path d="m12 16-1 1.8h2zM12 17.8c0 1.6-1.6 1.9-1.6 3.2" /></svg>;
 const ICON_CALENDAR = <svg {...META_SVG}><rect x="3.5" y="5" width="17" height="15.5" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" /></svg>;
+const ICON_CLOCK = <svg {...META_SVG}><circle cx="12" cy="12" r="8.25" /><path d="M12 8v4.25l2.75 1.6" /></svg>;
 
 /** Header placeholder while the profile payload loads — holds the layout, no jumps. */
 function HeaderSkeleton() {
@@ -180,7 +181,7 @@ function FollowPanel({ slug, dir, count, onClose }: {
  * dropped response carries the same one and the server returns the original transfer instead of
  * sending twice. It is regenerated only once a send has succeeded.
  */
-function SendCoins({ slug, name, onSent }: { slug: string; name: string; onSent: (balance: number) => void }) {
+function SendCoins({ slug, name, onSent, compact }: { slug: string; name: string; onSent: (balance: number) => void; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
@@ -218,8 +219,17 @@ function SendCoins({ slug, name, onSent }: { slug: string; name: string; onSent:
   if (!open) {
     return (
       <Button type="button" variant="outline" onClick={() => { setOpen(true); setDone(false); setMsg(""); }}
-        className="h-10 px-5 text-[14px]" title={`Send coins to ${name}`}>
-        Send coins
+        aria-label={`Send coins to ${name}`}
+        className={compact
+          ? "h-9 w-9 px-0 text-[13.5px] sm:h-10 sm:w-auto sm:px-4 sm:text-[14px]"
+          : "h-9 px-3.5 text-[13.5px] font-semibold sm:h-10 sm:px-5 sm:text-[14px]"}
+        title={`Send coins to ${name}`}>
+        {compact ? (
+          <>
+            <span className="sm:hidden" aria-hidden><CoinMark size={18} /></span>
+            <span className="hidden sm:inline">Send coins</span>
+          </>
+        ) : "Send coins"}
       </Button>
     );
   }
@@ -450,171 +460,114 @@ export default function Profile() {
             )}
           </div>
 
-          <div className="px-4 pb-5 sm:px-6 sm:pb-6">
-            {/* The avatar STRADDLES the cover's edge — the pattern every profile uses, because it
-                anchors the eye and makes the portrait the largest thing on the page. The ring is the
-                card's own background, so the circle punches cleanly out of the gradient in both
-                themes.
-
-                `relative z-10` is LOAD-BEARING, not decoration. The cover above is
-                `position: relative`, and a positioned element paints in a LATER step than
-                non-positioned block content regardless of DOM order — so while this row was static,
-                the cover's white radial-gradient overlay painted straight over the avatar's top
-                40px. The portrait's upper half was visibly washed out, with a hard seam exactly at
-                the cover's bottom edge, which reads as a badly centred sigil rather than as an
-                overlay. Measured on prod: elementFromPoint at the avatar's centre-x, 18% down,
-                returned the cover's gradient div. Positioning this row puts it in the same paint
-                step, where later-in-DOM wins.
-
-                THIS ROW IS AVATAR + NAME, NOTHING ELSE (operator, four screenshots on 2026-08-18). It
-                began the day as avatar + name + the action buttons on one non-wrapping row, where the
-                name block was the only thing that could give — it gave until it was one character
-                wide ("r" over "@") while Send coins ran off the card. The buttons moved through
-                "wrap under the name", then "at the right", and finally to the STANDING line below,
-                where the member's chips and follow counts fill the space to their left ("forgot to fit
-                the rest of data"). What stays here: the name block is `min-w-0 grow shrink basis-0
-                sm:basis-auto` — its flex base size is the name on ONE line — and it wraps only when it
-                does not fit beside the avatar alone (then it takes a line under the avatar, whole,
-                thanks to `wrap-anywhere`); the avatar stays `shrink-0`; below `sm` the column layout is
-                unchanged. A name is never truncated. Measured at 390/700/1100/1440 through ArtaFocus. */}
-            {/* X-STYLE (operator 2026-10-08: "make it more like X"). The avatar straddles the cover's
-                edge with the member's standing (tier, coins, last seen) at the right of the same row;
-                under it the ACTION ROW — counts left, buttons right. Then, in reading order: the
-                name, the @handle, the bio (line breaks and emoji as written), the meta row (what they
-                do · where · website · born · joined) and the network marks.
-
-                `relative z-10` is LOAD-BEARING. The cover above is `position: relative`, and a
-                positioned element paints in a later step than non-positioned block content regardless
-                of DOM order — while this row was static the cover's white radial overlay painted over
-                the avatar's top 40px. Positioning the row puts it in the same paint step, where
-                later-in-DOM wins.
-
-                The avatar is `shrink-0`; the action row's buttons are `min-w-0` and wrap toward the
-                end, so four buttons for a signed-in visitor fold onto right-aligned lines instead of
-                running off the card (the 2026-08-18 overflow this row once had). Never the name in
-                these rows: it takes its own line below, whole, and is never truncated. */}
-            <div className="relative z-10 -mt-10 flex items-end justify-between gap-3 sm:-mt-14 md:-mt-16">
-              {/* priority: above the fold and normally this page's LCP element — lazy-loading it
-                  made the browser wait for layout before even starting the request. Carries the
-                  opt-in palm flip. No nationality flag since 2026-10-08. */}
+          <div className="px-4 pb-4 sm:px-6 sm:pb-5">
+            {/* X-LIKE HEADER (operator 2026-10-08, after PR #70: "look at how ugly it is").
+                Clear rows, left-aligned content, nothing floating in the top-right:
+                  1. Avatar straddling the cover + action group (Book FIRST, then Follow…) on the
+                     same baseline. Counts sit as a compact inline line under the buttons on phones,
+                     beside them from `sm` — never a squeezed stacked column.
+                  2. Name + badge, with tier and coins as small chips on the same line.
+                  3. @handle
+                  4. Four social marks + "+N", left-aligned
+                  5. Bio
+                  6. Meta (location · born · joined)
+                  7. Quiet "Active …" line
+                `relative z-10` on the avatar row is load-bearing (cover is positioned; without it the
+                radial overlay paints over the portrait). */}
+            <div className="relative z-10 -mt-9 flex items-end justify-between gap-3 sm:-mt-12 sm:gap-4">
               <Avatar priority src={p.avatar} name={p.name} palm={p.palm || undefined}
-                className="h-20 w-20 shrink-0 bg-space-2 text-[26px] ring-[3px] ring-space-2 sm:h-32 sm:w-32 sm:text-3xl sm:ring-4" />
-              {/* STANDING, beside the portrait: what this member has earned and when they were last
-                  around — quiet, right-aligned, wrapping inside the space the avatar leaves. */}
-              <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1.5 pb-0.5 text-[12px] text-ink-3 sm:gap-x-2.5 sm:pb-2.5 sm:text-[13px]">
-                {p.tier && <Pill className="px-2.5 py-0.5 text-[12px] font-semibold sm:text-[12.5px]">{p.tier}</Pill>}
-                {/* ONE currency on this page: ArtaCoin (operator 2026-08-15). The whole coin ledger is
-                    already published, so the balance is public in fact. */}
-                <span className="inline-flex items-center gap-1 rounded-pill bg-yin/15 px-2.5 py-0.5 font-semibold text-yin-ink"
+                className="h-[4.5rem] w-[4.5rem] shrink-0 bg-space-2 text-[24px] ring-[3px] ring-space-2 sm:h-28 sm:w-28 sm:text-[2rem] sm:ring-[4px]" />
+              {/* ACTIONS + COUNTS — right of the avatar, Book first (operator 2026-10-08). */}
+              <div className="flex min-w-0 flex-col items-end gap-1.5 pb-0.5 sm:flex-row sm:items-center sm:gap-3.5 sm:pb-1">
+                {/* COUNTS — always one horizontal line. Under the buttons on phones; beside them from sm. */}
+                <div className="order-2 flex flex-wrap items-center justify-end gap-x-1 text-[13px] leading-none text-ink-3 sm:order-1 sm:text-[14px]">
+                  <button type="button" onClick={() => setListDir((d) => (d === "following" ? null : "following"))}
+                    aria-expanded={listDir === "following"} title="Show the following list"
+                    className="whitespace-nowrap py-1 transition-colors hover:text-ink">
+                    <b className="font-bold text-ink tabular-nums">{(p.stats?.following ?? 0).toLocaleString()}</b> Following
+                  </button>
+                  <span aria-hidden className="px-0.5 text-ink-3/40">·</span>
+                  <button type="button" onClick={() => setListDir((d) => (d === "followers" ? null : "followers"))}
+                    aria-expanded={listDir === "followers"} title="Show the followers list"
+                    className="whitespace-nowrap py-1 transition-colors hover:text-ink">
+                    <b className="font-bold text-ink tabular-nums">{followers.toLocaleString()}</b> {followers === 1 ? "Follower" : "Followers"}
+                  </button>
+                </div>
+                <div className="order-1 flex flex-wrap items-center justify-end gap-2 sm:order-2">
+                  {isOwn ? (
+                    <>
+                      {bookButton}
+                      <a href={localePath("/user-account/?settings=1")}
+                        className="inline-flex h-9 items-center rounded-pill border border-line px-3.5 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yang hover:text-ink sm:h-10 sm:px-4 sm:text-[13.5px]">
+                        Edit profile
+                      </a>
+                    </>
+                  ) : isLoggedIn() ? (
+                    <>
+                      {bookButton}
+                      <Button type="button" onClick={toggleFollow} disabled={followBusy}
+                        variant={following ? "outline" : "primaryYin"}
+                        className="h-9 px-4 text-[13.5px] font-semibold transition-opacity disabled:opacity-60 sm:h-10 sm:px-5 sm:text-[14px]">
+                        {following ? "Following" : "Follow"}
+                      </Button>
+                      {/* Message + Send coins join this row from `sm` (room beside Follow). On phones
+                          they sit on the secondary row below so the avatar baseline stays clean. */}
+                      <span className="hidden sm:contents">
+                        <Button href={localePath(`/messages/?with=${encodeURIComponent(p.slug)}`)} variant="outline" aria-label="Message"
+                          className="h-10 px-4 text-[14px]" title="Send an encrypted message">Message</Button>
+                        <SendCoins slug={p.slug} name={p.fullName?.trim() || p.name} onSent={() => undefined} />
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      {bookButton}
+                      <Button href={loginHref} variant="primaryYin" className="h-9 px-4 text-[13.5px] font-semibold sm:h-10 sm:px-5 sm:text-[14px]">Follow</Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* SECONDARY ACTIONS — phones only, for a signed-in visitor. Keeps Message + Send coins
+                off the avatar baseline so they never orphan beside the portrait. */}
+            {!isOwn && isLoggedIn() ? (
+              <div className="mt-2 flex flex-wrap items-center justify-end gap-2 sm:hidden">
+                <Button href={localePath(`/messages/?with=${encodeURIComponent(p.slug)}`)} variant="outline" aria-label="Message"
+                  className="h-9 px-3.5 text-[13.5px] font-semibold" title="Send an encrypted message">Message</Button>
+                <SendCoins slug={p.slug} name={p.fullName?.trim() || p.name} onSent={() => undefined} />
+              </div>
+            ) : null}
+
+            {/* NAME + badge + standing chips — one clear identity line. */}
+            <div className="mt-3.5 min-w-0 sm:mt-4">
+              <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[21px] font-extrabold leading-[1.15] tracking-tight sm:text-[25px]">
+                <span className="min-w-0 wrap-anywhere">{p.fullName?.trim() || p.name}</span>
+                {p.verified && <BlueCheckButton size={19} via={p.verifiedVia} own={isOwn} className="translate-y-px sm:scale-105" />}
+                {p.tier && (
+                  <Pill className="ms-0.5 px-2 py-0.5 text-[11px] font-semibold normal-case tracking-normal sm:text-[11.5px]">{p.tier}</Pill>
+                )}
+                <span className="inline-flex items-center gap-1 rounded-pill bg-yin/12 px-2 py-0.5 text-[11px] font-semibold text-yin-ink sm:text-[11.5px]"
                   title="Coins in their wallet — every entry in the coin ledger is public">
                   <Coins n={p.coins ?? 0} />
                 </span>
-                {/* Last seen, to the DAY — the server never records finer. */}
-                {p.lastSeen ? <span className="whitespace-nowrap">{lastSeenLabel(p.lastSeen)}</span> : null}
-              </div>
-            </div>
-
-            {/* THE ACTION ROW (operator 2026-10-08: "follower and followings should be next to follow
-                button"): the counts on the left — X's style, the number bold in ink and the word in
-                grey, each opening its list below — and the buttons on the right, on ONE line under the
-                portrait at every width. Where a signed-in visitor's four buttons cannot share the line
-                with the counts, the buttons wrap onto a second right-aligned line; nothing overlaps. */}
-            <div className="mt-3.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 sm:mt-4">
-              {/* On a phone the two counts STACK (one short line each) so they share the line with
-                  Follow and the calendar button at 360px; from `sm` they sit side by side as on X. */}
-              <div className="flex shrink-0 flex-col items-start gap-y-1 text-[13px] leading-none text-ink-3 sm:flex-row sm:items-center sm:gap-x-4 sm:text-[14.5px] sm:leading-tight">
-                <button type="button" onClick={() => setListDir((d) => (d === "following" ? null : "following"))}
-                  aria-expanded={listDir === "following"} title="Show the following list"
-                  className="-my-1 whitespace-nowrap py-1 transition-colors hover:text-ink sm:-my-2 sm:py-2">
-                  <b className="font-bold text-ink tabular-nums">{(p.stats?.following ?? 0).toLocaleString()}</b> Following
-                </button>
-                <button type="button" onClick={() => setListDir((d) => (d === "followers" ? null : "followers"))}
-                  aria-expanded={listDir === "followers"} title="Show the followers list"
-                  className="-my-1 whitespace-nowrap py-1 transition-colors hover:text-ink sm:-my-2 sm:py-2">
-                  <b className="font-bold text-ink tabular-nums">{followers.toLocaleString()}</b> {followers === 1 ? "Follower" : "Followers"}
-                </button>
-              </div>
-              <div className="ms-auto min-w-0">
-                {isOwn ? (
-                  <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2">
-                    {bookButton}
-                    <a href={localePath("/user-account/?settings=1")} className="text-[13.5px] font-semibold text-ink-3 transition-colors hover:text-yang">
-                      Edit profile <span aria-hidden className="inline-block rtl:-scale-x-100">→</span>
-                    </a>
-                  </div>
-                ) : isLoggedIn() ? (
-                  /* Follow + Message. Until this existed the ONLY way to open a conversation was typing
-                     a member's exact @handle into the ArtaChat sidebar — this is the entry point the
-                     /messages/?with= deep link was always built for. */
-                  <div className="flex min-w-0 flex-wrap justify-end gap-2">
-                    <Button type="button" onClick={toggleFollow} disabled={followBusy}
-                      variant={following ? "outline" : "primaryYin"}
-                      className="h-9 px-4 text-[13.5px] font-semibold transition-opacity disabled:opacity-60 sm:h-10 sm:px-5 sm:text-[14px]">
-                      {following ? "Following" : "Follow"}
-                    </Button>
-                    <Button href={localePath(`/messages/?with=${encodeURIComponent(p.slug)}`)} variant="outline" aria-label="Message"
-                      className="h-9 w-9 px-0 text-[13.5px] sm:h-10 sm:w-auto sm:px-5 sm:text-[14px]" title="Send an encrypted message">
-                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="sm:hidden">
-                        <rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3.5 6.5 8.5 6.5 8.5-6.5" />
-                      </svg>
-                      <span className="hidden sm:inline">Message</span>
-                    </Button>
-                    {bookButton}
-                    <SendCoins slug={p.slug} name={p.fullName?.trim() || p.name} onSent={() => undefined} />
-                  </div>
-                ) : (
-                  /* SIGNED OUT — and a booking link belongs HERE most of all. Every other action on
-                     this page needs an account, so they were all correctly behind one, and "Book a
-                     time" got swept along with them. It should not have been: book/page and book/slots
-                     are deliberately public, the booking page is built to be readable by a stranger,
-                     and this profile is the thing a member actually shares. Hiding the link from
-                     signed-out visitors meant the one audience it exists for could not see it. */
-                  <div className="flex min-w-0 flex-wrap justify-end gap-2">
-                    <Button href={loginHref} variant="primaryYin" className="h-9 px-4 text-[13.5px] font-semibold sm:h-10 sm:px-5 sm:text-[14px]">Follow</Button>
-                    {bookButton}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* THE REAL NAME IS THE HEADING — full_name when there is one, the display name otherwise:
-                it is what the page title, description and Person schema say. NEVER TRUNCATED:
-                `wrap-anywhere` lets one long token break rather than overflow. */}
-            <div className="mt-3.5 min-w-0 sm:mt-4">
-              {/* THE BLUE CHECK sits on the name's last line, X-style, and is a button: hover (mouse) or
-                  tap/Enter opens what it means. Server-decided (Verify::has_badge) — see BlueCheck.tsx. */}
-              <h1 className="flex items-center gap-1.5 text-[22px] font-extrabold leading-[1.15] tracking-tight sm:text-[26px]">
-                <span className="min-w-0 wrap-anywhere">{p.fullName?.trim() || p.name}</span>
-                {p.verified && <BlueCheckButton size={20} via={p.verifiedVia} own={isOwn} className="translate-y-px sm:scale-110" />}
               </h1>
-              {/* THE HANDLE + SOCIALS (operator 2026-10-08: "relocate it to look aesthetically nice").
-                  On a phone the four marks + "+" sit under the @handle; from `sm` they share the
-                  handle's row, right-aligned — identity left, presence right. */}
-              <div className="mt-1 flex flex-col gap-2 sm:mt-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                <p className="min-w-0 text-[14.5px] leading-snug text-ink-3 wrap-anywhere sm:text-[15px]">
-                  <span className="break-all">@{p.slug}</span>
-                  {p.fullName?.trim() && p.fullName.trim() !== p.name && p.name !== p.slug && (
-                    <span> · goes by {p.name}</span>
-                  )}
-                </p>
-                {networks.length > 0 && (
-                  <SocialLinks socials={networks} name={p.fullName?.trim() || p.name} className="sm:ms-auto sm:shrink-0" />
+              <p className="mt-1 text-[14.5px] leading-snug text-ink-3 wrap-anywhere sm:text-[15px]">
+                <span className="break-all">@{p.slug}</span>
+                {p.fullName?.trim() && p.fullName.trim() !== p.name && p.name !== p.slug && (
+                  <span> · goes by {p.name}</span>
                 )}
-              </div>
+              </p>
             </div>
 
-            {/* THE BIO, straight under the handle as on X. Text, never HTML (the server strips tags);
-                pre-wrap keeps the member's line breaks, and emoji render as typed. `wrap-anywhere` so
-                a pasted URL or a long unbroken word wraps instead of widening the card on a phone. */}
-            {p.bio && <p className="mt-3 max-w-2xl whitespace-pre-wrap text-[15px] leading-relaxed text-ink wrap-anywhere sm:mt-3.5">{p.bio}</p>}
+            {/* SOCIALS — left-aligned under the handle, always four + "+N". */}
+            {networks.length > 0 && (
+              <SocialLinks socials={networks} name={p.fullName?.trim() || p.name} className="mt-2.5" />
+            )}
 
-            {/* THE META ROW — small grey glyph + text, inline, wrapping whole items (X's row). Born and
-                the city live here now; the separate "About" card left with relationship status
-                (operator 2026-10-08: "remove relationship status"). The DATE of birth, never a derived
-                age (operator 2026-07-27, reaffirmed 2026-08-15). The website is the one accent: a link
-                showing the bare domain. Joined is the real ArtaQuest join date. */}
+            {p.bio && <p className="mt-3 max-w-2xl whitespace-pre-wrap text-[15px] leading-relaxed text-ink wrap-anywhere">{p.bio}</p>}
+
             {(p.category?.trim() || p.location?.trim() || website || fmtBirthday(p.birthday) || p.joined) ? (
-              <ul className="mt-3 flex list-none flex-wrap items-center gap-x-3.5 gap-y-1.5 text-[13.5px] text-ink-3 sm:mt-3.5 sm:gap-x-4 sm:text-[14px]" aria-label="About">
+              <ul className="mt-3 flex list-none flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-3 sm:mt-3.5 sm:gap-x-3.5 sm:text-[13.5px]" aria-label="About">
                 {p.category?.trim() ? <MetaItem icon={ICON_BRIEFCASE} label="Does"><span data-ay-skip="1">{p.category.trim()}</span></MetaItem> : null}
                 {p.location?.trim() ? <MetaItem icon={ICON_PIN} label="Lives in"><span data-ay-skip="1">{p.location.trim()}</span></MetaItem> : null}
                 {website ? (
@@ -628,14 +581,17 @@ export default function Profile() {
               </ul>
             ) : null}
 
-            {/* Social marks live on the handle row above (operator 2026-10-08). Counts / tier / coins
-                / last-seen sit beside the portrait and the action row. */}
+            {/* LAST ACTIVE — quiet foot of the header (operator 2026-10-08: "last active time shown below"). */}
+            {p.lastSeen ? (
+              <p className="mt-3.5 flex items-center gap-1.5 border-t border-line/60 pt-3 text-[12.5px] leading-none text-ink-3 sm:mt-4 sm:pt-3.5 sm:text-[13px]">
+                <span className="inline-flex shrink-0 text-ink-3/80 [&_svg]:h-3.5 [&_svg]:w-3.5" aria-hidden>{ICON_CLOCK}</span>
+                <span>{lastSeenLabel(p.lastSeen)}</span>
+              </p>
+            ) : null}
 
-            {/* YOUR OWN profile, and something is unsaid: one quiet link to the settings form. Shown to
-                NOBODY else — a visitor has no business seeing what this person declined to answer. */}
             {isOwn && missingFacts.length > 0 ? (
               <a href={localePath("/user-account/?settings=1")}
-                className="group mt-4 flex min-w-0 items-start gap-2.5 rounded-card border border-dashed border-line px-3 py-2 transition-colors hover:border-yang">
+                className="group mt-3.5 flex min-w-0 items-start gap-2.5 rounded-card border border-dashed border-line px-3 py-2 transition-colors hover:border-yang">
                 <span aria-hidden className="mt-0.5 shrink-0 text-ink-3 transition-colors group-hover:text-yang">
                   <svg {...META_SVG} width={16} height={16}><path d="M12 5v14M5 12h14" /></svg>
                 </span>

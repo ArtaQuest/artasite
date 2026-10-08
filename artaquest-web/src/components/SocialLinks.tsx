@@ -17,10 +17,9 @@ export function SocialIcon({ k, size = 20, className }: { k: string; size?: numb
   return <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" aria-hidden className={className}><path d={d} /></svg>;
 }
 
-/* ALWAYS FOUR marks, then "+" for the rest (operator 2026-10-08: "just use Instagram, Facebook,
-   LinkedIn X and rest in the …", then corrected to "+"). No width measuring — every viewport shows
-   the member's first four in their saved (or default) order. 32px circle, 16px glyph, 6px gap, 38px
-   invisible hit via ::before. "+" matches the mark size; its accessible name carries the count. */
+/* ALWAYS FOUR marks, then "+N" for the rest (operator 2026-10-08: four icons + count after +).
+   No width measuring. 32px circle / 16px glyph; "+N" is a pill of the same height, wide enough for
+   the digits. */
 const SHOW = 4;
 const markCls = "relative grid h-8 w-8 shrink-0 place-items-center rounded-full border border-line bg-space-1 text-ink-2 transition-colors before:absolute before:-inset-[3px] before:rounded-full before:content-['']";
 const staticCls = markCls;
@@ -58,8 +57,11 @@ export function SocialLinks({ socials, name, className }: { socials: Social[]; n
               aria-haspopup="dialog" aria-expanded={open}
               aria-label={`More profiles (${rest.length})`}
               title={`${rest.length} more profiles`}
-              className={cx(cellCls, "text-[18px] font-semibold leading-none", open && "border-yang text-yang")}>
-              <span aria-hidden>+</span>
+              className={cx(
+                "relative inline-flex h-8 min-w-8 shrink-0 items-center justify-center rounded-full border border-line bg-space-1 px-2 text-[12px] font-bold tabular-nums leading-none tracking-tight text-ink-2 transition-colors before:absolute before:-inset-[3px] before:rounded-full before:content-[''] hover:border-yang hover:text-yang focus-visible:border-yang focus-visible:text-yang focus-visible:outline-none",
+                open && "border-yang text-yang",
+              )}>
+              <span aria-hidden>+{rest.length}</span>
             </button>
           </div>
         )}
@@ -87,8 +89,8 @@ function Mark({ s }: { s: Social }) {
 const wide = () => typeof window !== "undefined" && window.matchMedia("(min-width: 640px)").matches;
 
 /**
- * The rest, behind "+". A polished list: icon · network · handle, ranked. Header carries the count
- * ("27 more profiles"). Phone = bottom sheet; from `sm` = popover under "+". Escape / outside tap
+ * The rest, behind "+N". A polished list: icon · network · handle, ranked. Header carries the count
+ * ("27 more profiles"). Phone = bottom sheet; from `sm` = popover under "+N". Escape / outside tap
  * closes and focus returns to "+".
  */
 function MorePanel({ items, total, name, anchor, onClose }: {
