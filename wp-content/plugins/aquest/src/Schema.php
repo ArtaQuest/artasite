@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.82.0';
+	const VERSION = '1.83.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -2220,6 +2220,23 @@ final class Schema {
 				Auth::seed_socials( (int) $u->ID, [ 'website' => 'https://artaquest.com' ] );
 			}
 			update_option( 'aq_founder_xprofile_v1', '1', false );
+		}
+
+		// 1.83.0 — operator 2026-10-08, after seeing the X-style profile: "remove Education and extra
+		// link. also implement blue check and give it to /u/arash user". On /u/arash and the founder
+		// profile /u/artafather (the same person): clear the briefcase category and the website (the
+		// meta row then simply omits both — the fields stay in Account for everyone else), and GRANT
+		// the blue check (Verify::grant_badge — the operator route, badge only, no cash-out). Bio,
+		// city, birthday and the social handles are untouched. One shot, gated on its own option.
+		if ( get_option( 'aq_founder_bluecheck_v1' ) !== '1' && class_exists( '\\AQ\\Verify' ) && method_exists( '\\AQ\\Verify', 'grant_badge' ) && method_exists( '\\AQ\\Auth', 'clear_social' ) ) {
+			foreach ( [ 'arash', 'artafather' ] as $slug ) {
+				$u = get_user_by( 'slug', $slug );
+				if ( ! $u ) { continue; }
+				delete_user_meta( (int) $u->ID, 'aq_category' );
+				Auth::clear_social( (int) $u->ID, 'website' );
+				Verify::grant_badge( (int) $u->ID, true, 'operator directive 2026-10-08' );
+			}
+			update_option( 'aq_founder_bluecheck_v1', '1', false );
 		}
 
 		// 1.62.2 — SEASONS REFRAME (operator directive 2026-07-10): astrology leaves the platform

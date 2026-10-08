@@ -15,6 +15,9 @@ export type VerifyStatus = {
   full_name: string; birthday: string; has_identity: boolean;
   verified: boolean; verified_at: number; last_note: string;
   configured: boolean;
+  /** The blue check on screen (earned OR operator-granted) and whether an operator granted it. A
+   *  granted badge does not unlock cash-out — `verified` (the ID check) still does. */
+  badge?: boolean; badge_granted?: boolean;
 };
 export type VerifyResult = { ok?: boolean; verified?: boolean; reason?: string; error?: string; message?: string };
 

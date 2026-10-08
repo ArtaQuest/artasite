@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { listNotebooks, normalizeNbKind, type NbKind, type NotebookCard } from "../lib/api";
 import { NB_KIND_META, NbCard } from "../components/nbview";
-import { BlueCheck } from "../components/BlueCheck";
+import { BlueCheck, BlueCheckButton } from "../components/BlueCheck";
 import { Avatar, Button, EmptyState, HeartGlyph, Input, LoadMoreButton, Pill, StatusNote, cx } from "../components/ui";
 import {
   currentUser, fmtBirthday, followUser, getFollows, getProfile, isLoggedIn, lastSeenLabel, localePath, relAgo,
@@ -144,7 +144,7 @@ function FollowPanel({ slug, dir, count, onClose }: {
             <>
               <Avatar src={r.avatar} name={r.name} className="h-10 w-10 text-[15px]" />
               <span className="min-w-0 flex-1">
-                <span className={cx("block font-semibold text-ink", nameClass(r.name, 15))}>{r.name}</span>
+                <span className={cx("block font-semibold text-ink", nameClass(r.name, 15))}>{r.name}{r.verified && <BlueCheck size={15} className="ms-1" />}</span>
                 {r.at > 0 && <span className="block text-[12px] text-ink-3">Followed {relAgo(r.at)}</span>}
               </span>
             </>
@@ -254,9 +254,9 @@ export default function Profile() {
   const networks = (p?.socials ?? []).filter((x) => x.key !== "website");
   const missingFacts = !p ? [] : [
     p.bio?.trim() ? "" : "Bio",
-    p.category?.trim() ? "" : "What you do",
+    // "What you do" and the website are optional extras, never nudged for: a member who cleared
+    // them on purpose (the founder did, 2026-10-08) must not be asked to put them back.
     p.location?.trim() ? "" : "Where you live",
-    website ? "" : "Website",
     networks.length ? "" : "Social profiles",
   ].filter(Boolean);
   const [missing, setMissing] = useState(false);
@@ -546,9 +546,11 @@ export default function Profile() {
                 it is what the page title, description and Person schema say. NEVER TRUNCATED:
                 `wrap-anywhere` lets one long token break rather than overflow. */}
             <div className="mt-3 min-w-0">
-              <h1 className="flex items-center gap-2 text-[24px] font-extrabold leading-tight tracking-tight sm:text-[28px]">
+              {/* THE BLUE CHECK sits on the name's last line, X-style, and is a button: hover (mouse) or
+                  tap/Enter opens what it means. Server-decided (Verify::has_badge) — see BlueCheck.tsx. */}
+              <h1 className="flex items-center gap-1.5 text-[24px] font-extrabold leading-tight tracking-tight sm:text-[28px]">
                 <span className="min-w-0 wrap-anywhere">{p.fullName?.trim() || p.name}</span>
-                {p.verified && <BlueCheck size={20} className="shrink-0" />}
+                {p.verified && <BlueCheckButton size={22} via={p.verifiedVia} own={isOwn} className="translate-y-px" />}
               </h1>
               {/* THE HANDLE — how you are addressed here and what /messages/?with= accepts. */}
               <p className="mt-0.5 text-[15px] text-ink-3 wrap-anywhere">

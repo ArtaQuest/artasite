@@ -1,5 +1,6 @@
 import { type FormEvent, useMemo, useState } from "react";
 import { Avatar, Button, RichText, VoteControl, cx } from "../ui";
+import { BlueCheck } from "../BlueCheck";
 import { nameClass } from "../../lib/fmt";
 import { Composer } from "../Composer";
 import { VerifyApi } from "../../lib/verify";
@@ -165,8 +166,8 @@ function CommentNode(p: NodeProps) {
             <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px] text-ink-3">
               <Avatar src={c.avatar} name={c.author} country={c.country} className="h-6 w-6 text-[11px]" />
               {caps.showAuthorLink && c.authorSlug
-                ? <a href={`/u/${c.authorSlug}/`} data-ay-skip="1" className="font-semibold text-ink-2 hover:text-yang">{c.author}</a>
-                : <span data-ay-skip="1" className={cx("font-semibold", c.deleted ? "italic text-ink-3" : "text-ink-2")}>{c.author}</span>}
+                ? <a href={`/u/${c.authorSlug}/`} data-ay-skip="1" className="font-semibold text-ink-2 hover:text-yang">{c.author}{c.verified && <BlueCheck size={14} className="ms-1" />}</a>
+                : <span data-ay-skip="1" className={cx("font-semibold", c.deleted ? "italic text-ink-3" : "text-ink-2")}>{c.author}{c.verified && !c.deleted && <BlueCheck size={14} className="ms-1" />}</span>}
               {c.timeLabel && !c.deleted && <><span aria-hidden>·</span><span>{c.timeLabel}</span></>}
               {c.edited && !c.deleted && <span className="text-ink-3">· edited</span>}
               {c.bot && <span className="rounded-pill bg-yin/15 px-2 py-0.5 text-[11px] font-semibold text-yin-light">Arta</span>}

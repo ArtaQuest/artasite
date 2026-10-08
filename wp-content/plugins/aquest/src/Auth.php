@@ -272,7 +272,8 @@ final class Auth {
 			'languages'    => self::languages( $uid ),                            // I18n registry codes, the member's own order
 			'works'     => Notebook::published_count( $uid ),                     // published works — the dashboard's headline tile
 			'joined'    => Verify::joined_label( $u->user_registered ), // clamped to the platform launch (ticket #103)
-			'verified'     => Verify::is_verified( $uid ),   // blue check
+			'verified'     => Verify::is_verified( $uid ),   // the ID check passed (gates cash-out)
+			'badge'        => Verify::has_badge( $uid ),     // the blue check on screen — earned OR granted
 			'has_identity' => Verify::has_identity( $uid ),  // name + birthday set (gates posting)
 			'full_name'    => Verify::full_name( $uid ),
 			'birthday'     => Verify::birthday( $uid ),
@@ -694,6 +695,15 @@ final class Auth {
 		}
 		if ( $done ) { update_user_meta( (int) $uid, 'aq_links', wp_json_encode( $cur ) ); }
 		return $done;
+	}
+
+	/** Remove ONE stored link (server-side callers: a migration). True when something was removed. */
+	public static function clear_social( $uid, $key ) {
+		$cur = self::stored_links( $uid );
+		if ( ! isset( $cur[ $key ] ) ) { return false; }
+		unset( $cur[ $key ] );
+		update_user_meta( (int) $uid, 'aq_links', wp_json_encode( $cur ) );
+		return true;
 	}
 
 	/** One submitted value → the absolute https URL it will render as, or '' if it cannot be one.

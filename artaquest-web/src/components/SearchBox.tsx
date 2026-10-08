@@ -5,6 +5,7 @@ import { NB_KIND_META } from "./nbview";
 import { Avatar } from "./ui";
 import { ArtaAvatar } from "./arta";
 import { Link } from "react-router-dom";
+import { BlueCheck } from "./BlueCheck";
 import { nameClass } from "../lib/fmt";
 import { isLoggedIn } from "../lib/auth";
 
@@ -74,7 +75,7 @@ function Group({ label, hits, cursor, base }: { label: string; hits: SearchHit[]
                       type steps down. A post's TITLE still truncates — a title is a sentence whose
                       first line identifies it; half a name identifies nobody. A post's sub-line
                       carries the work's AUTHOR name ("Article · <author>"), so it wraps too. */}
-                  <span className={`block font-medium text-ink ${h.person ? nameClass(h.title) : "truncate text-[14px]"}`}>{h.title}</span>
+                  <span className={`block font-medium text-ink ${h.person ? nameClass(h.title) : "truncate text-[14px]"}`}>{h.title}{h.person?.verified && <BlueCheck size={15} className="ms-1" />}</span>
                   {h.sub && <span className={`block text-[12px] text-ink-3 ${h.person ? "break-all leading-tight" : "break-words leading-tight"}`}>{h.sub}</span>}
                 </span>
               </a>

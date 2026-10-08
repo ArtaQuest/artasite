@@ -3,6 +3,7 @@ import { ApiError, Courses, Economy, Learn, Social, type CourseCard, type FeedIt
 import { nameClass } from "../lib/fmt";
 import { currentUser, localePath, relAgo } from "../lib/wp";
 import { Avatar, Button, Card, Chip, FlagBadge, LoadMoreButton, SectionHeader, VoteControl, cx } from "./ui";
+import { BlueCheck } from "./BlueCheck";
 
 // One verb line per event type — plain English like all UI copy (the i18n mesh translates it).
 // Indexed by string so an event type this build doesn't know yet degrades to a generic line
@@ -104,8 +105,8 @@ function GroupRow({ g, voteBusy, voteErr, onVote }: {
   const single = items.length === 1;
   const profile = actor.slug ? localePath(`/u/${actor.slug}/`) : "";
   const name = profile
-    ? <a href={profile} data-ay-skip="1" className="font-semibold text-ink transition-colors hover:text-yang">{actor.name}</a>
-    : <span data-ay-skip="1" className="font-semibold text-ink">{actor.name}</span>;
+    ? <a href={profile} data-ay-skip="1" className="font-semibold text-ink transition-colors hover:text-yang">{actor.name}{actor.verified && <BlueCheck size={15} className="ms-1" />}</a>
+    : <span data-ay-skip="1" className="font-semibold text-ink">{actor.name}{actor.verified && <BlueCheck size={15} className="ms-1" />}</span>;
   const lineProps = (it: FeedItem) => ({
     it,
     busy: !!it.target && voteBusy === targetKey(it.target),

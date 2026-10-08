@@ -26,6 +26,7 @@ import { EmojiPicker } from "../components/EmojiPicker";
 
 import { PostThread } from "./NotebookPage";
 import { ConfirmDialog, Avatar, Button, cx, EmptyState, HeartGlyph } from "../components/ui";
+import { BlueCheck } from "../components/BlueCheck";
 import { RailPortal } from "../components/RightRail";
 import { ChallengesCard, HappeningCard, NewsCard, TodaysNewsCard, WhoToFollowCard } from "../components/RailCards";
 import { useRail } from "../lib/rail";
@@ -507,6 +508,7 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
               your own posts. The handle doubles as the profile link's visible address. */}
           <div className="flex items-center gap-1.5 text-sm">
             <Link to={`/u/${post.author.slug}`} className={`min-w-0 truncate font-bold text-ink hover:underline ${nameClass(post.author.name)}`}>{post.author.name}</Link>
+            {post.author.verified ? <BlueCheck size={16} className="-ms-0.5" /> : null}
             {bot ? <ArtaBadge /> : null}
             <Link to={`/u/${post.author.slug}`} tabIndex={-1} className="hidden min-w-0 shrink-[2] break-all text-ink-3 sm:block"><bdi dir="ltr" data-ay-skip="1">@{post.author.slug}</bdi></Link>
             <span className="text-ink-3">·</span>
@@ -562,6 +564,7 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
                 <p className="flex items-center gap-1.5 text-[13px]">
                   <Avatar name={post.repost.author.name} src={post.repost.author.avatar} className="h-5 w-5 text-[9px]" />
                   <span className="font-bold text-ink">{post.repost.author.name}</span>
+                  {post.repost.author.verified ? <BlueCheck size={14} className="-ms-0.5" /> : null}
                   <span className="text-ink-3">· {timeAgo(post.repost.created)}</span>
                 </p>
                 {post.repost.body ? <p className="mt-1 whitespace-pre-wrap text-[14px] leading-relaxed text-ink-2">{post.repost.body}</p> : null}

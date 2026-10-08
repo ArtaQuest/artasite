@@ -254,9 +254,10 @@ export function isLoggedIn(): boolean {
  * user_login on this platform is the local part of the member's email address, so the handle path
  * can publish a fragment of someone's address on a document that gets printed and shared.
  */
-export function currentUser(): { name: string; full_name?: string; avatar: string; slug?: string; country?: string; birthday?: string; nationality?: string; birth_min?: string; has_identity?: boolean; season?: number } | null {
+export function currentUser(): { name: string; full_name?: string; avatar: string; slug?: string; country?: string; birthday?: string; nationality?: string; birth_min?: string; has_identity?: boolean; season?: number; verified?: boolean } | null {
   if (typeof window === "undefined") return null;
-  return (window as unknown as { AQ_USER?: { name: string; full_name?: string; avatar: string; slug?: string; country?: string; birthday?: string; nationality?: string; birth_min?: string; has_identity?: boolean; season?: number } }).AQ_USER ?? null;
+  // `verified` is the blue check (Verify::has_badge), injected by the theme shell.
+  return (window as unknown as { AQ_USER?: { name: string; full_name?: string; avatar: string; slug?: string; country?: string; birthday?: string; nationality?: string; birth_min?: string; has_identity?: boolean; season?: number; verified?: boolean } }).AQ_USER ?? null;
 }
 export function googleClientId(): string {
   if (typeof window === "undefined") return "";
@@ -464,7 +465,7 @@ export async function getDiscussions(forum = "general", cursor: number | null = 
 export type ThreadComment = {
   id: string; author: string; votes: number; my_vote?: number; parent: string;
   body_html: string; body_md?: string; time: string; mine?: boolean; edited?: boolean; deleted?: boolean; lang?: string;
-  slug?: string; avatar?: string; country?: string;
+  slug?: string; avatar?: string; country?: string; verified?: boolean;
   replies?: number; // TOTAL direct replies (server reply_count) — drives "show N more replies"
 };
 export type ThreadData = {
@@ -477,13 +478,13 @@ export type ThreadData = {
 };
 type CommentR = {
   id: number; parent?: number; body: string; lang: string; author: string; score: number; at: number;
-  my_vote?: number; mine?: boolean; slug?: string; avatar?: string; country?: string; replies?: number; edited?: boolean; deleted?: boolean;
+  my_vote?: number; mine?: boolean; slug?: string; avatar?: string; country?: string; verified?: boolean; replies?: number; edited?: boolean; deleted?: boolean;
 };
 const mapComment = (c: CommentR): ThreadComment => ({
   id: String(c.id), author: c.author, votes: c.score, my_vote: c.my_vote ?? 0, mine: !!c.mine,
   parent: c.parent ? String(c.parent) : "", // threaded reply nesting (0 = root); persists across reloads
   body_html: renderRich(c.body), body_md: c.body, time: relAgo(c.at), lang: c.lang,
-  slug: c.slug, avatar: c.avatar, country: c.country, replies: c.replies ?? 0, edited: !!c.edited, deleted: !!c.deleted,
+  slug: c.slug, avatar: c.avatar, country: c.country, verified: !!c.verified, replies: c.replies ?? 0, edited: !!c.edited, deleted: !!c.deleted,
 });
 /** Thread + one page of its comment tree. Reddit-style read model: top-level comments are
  *  keyset-paginated by `sort`, each inlining its first replies; `next` pages more roots and
@@ -870,7 +871,7 @@ export async function postWatchProgress(lesson: number, at: number): Promise<{ o
 export type VoteDir = 1 | 0 | -1;
 export type SectionComment = {
   id: number; parent: number; body: string; votes: number; my_vote: VoteDir; replies: number;
-  mine: boolean; author: string; slug: string; avatar: string; country?: string; at: number;
+  mine: boolean; author: string; slug: string; avatar: string; country?: string; verified?: boolean; at: number;
   children?: SectionComment[]; more_replies?: number;
   flagged?: boolean; bot?: boolean; // ArtaMod: set aside from the competition / Arta's consoling reply
   appealed?: boolean; // the one ArtaMod appeal was used
@@ -1008,7 +1009,8 @@ export type Profile = {
   age?: number;
   birthday?: string;
   fullName?: string;
-  verified?: boolean; // the blue check (Verify::is_verified)
+  verified?: boolean; // the blue check (Verify::has_badge — earned by the ID check OR granted by an operator)
+  verifiedVia?: string; // 'id' | 'team' | '' — which, for the badge's explainer
   bot?: boolean; // Arta, the public assistant — the profile renders its own assistant variant
   season?: number; // the ONE season this member follows (1…12 cycle position; 0 = none on record)
   palm?: string; // opt-in palm "back photo" (ticket #94) → the avatar flips to it; '' if unset
@@ -1069,7 +1071,7 @@ type ProfileR = {
   /** Whole years, computed server-side (Verify::age) — an API convenience emitted BESIDE the exact
    *  `birthday` below, never instead of it. 0 = no valid date on record. */
   age?: number;
-  birthday?: string; full_name?: string; season?: number; verified?: boolean; bot?: boolean;
+  birthday?: string; full_name?: string; season?: number; verified?: boolean; verified_via?: string; bot?: boolean;
   links?: Partial<Record<ProfileLinkKey, string>>;
   socials?: Social[];
   last_seen?: number;
@@ -1127,7 +1129,7 @@ export async function getProfile(slug: string): Promise<Profile | null> {
     return {
       id: pr.id, name: pr.name, slug: pr.slug, avatar: pr.avatar, palm: pr.palm || "", banner: pr.banner || "", email: pr.email || "", bio: pr.bio || "", links: pr.links || undefined, socials: Array.isArray(pr.socials) ? pr.socials : [], lastSeen: pr.last_seen || 0,
       // Public identity facts the endpoint has always emitted but the SPA used to drop on the floor.
-      age: pr.age ?? 0, birthday: pr.birthday || "", fullName: pr.full_name || "", season: pr.season ?? 0, verified: !!pr.verified, bot: !!pr.bot,
+      age: pr.age ?? 0, birthday: pr.birthday || "", fullName: pr.full_name || "", season: pr.season ?? 0, verified: !!pr.verified, verifiedVia: pr.verified_via || "", bot: !!pr.bot,
       // No nationality since 2026-10-08 (operator: "I want the nationality removed") — the server no
       // longer emits it, and the profile no longer shows a flag.
       location: pr.location || "", category: pr.category || "", languages: pr.languages ?? [],

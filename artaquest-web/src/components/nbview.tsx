@@ -24,6 +24,7 @@ import { calmStop } from "../lib/theme";
 import { MarkdownLite } from "./reader";
 import { watchMath } from "../lib/math";
 import { Avatar, Chip, cx, HeartGlyph } from "./ui";
+import { BlueCheck } from "./BlueCheck";
 import { nameClass } from "../lib/fmt";
 import { LibraryMedia } from "./library";
 
@@ -544,7 +545,7 @@ export function NbCard({ nb, to, badge }: { nb: NotebookCard; to?: string; badge
           {nb.abstract ? <p className="line-clamp-2 text-xs leading-relaxed text-ink-3">{nb.abstract}</p> : null}
           <div className="mt-auto flex items-center gap-2 pt-1 text-xs text-ink-3">
             <Avatar name={nb.author.name} src={nb.author.avatar} className="h-[18px] w-[18px] text-[9px]" />
-            <span className={cx("min-w-0", nameClass(nb.author.name, 12))}>{nb.author.name}</span>
+            <span className={cx("min-w-0", nameClass(nb.author.name, 12))}>{nb.author.name}{nb.author.verified && <BlueCheck size={13} className="ms-1" />}</span>
             <span className="ml-auto inline-flex items-center gap-1"><HeartGlyph size={13} /> {nb.hearts}</span>
           </div>
         </div>

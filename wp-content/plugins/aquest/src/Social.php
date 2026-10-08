@@ -270,7 +270,7 @@ final class Social {
 			'name'     => $u ? $u->display_name : 'Quester',
 			'slug'     => $u ? $u->user_nicename : '',
 			'avatar'   => $u ? Verify::avatar_url( $uid, 48 ) : '',
-			'verified' => $u ? Verify::is_verified( $uid ) : false,
+			'verified' => $u ? Verify::has_badge( $uid ) : false,
 			'at'       => (int) $at,
 		];
 	}
@@ -324,7 +324,7 @@ final class Social {
 				'name'     => $m ? $m->display_name : 'Quester',
 				'slug'     => $m ? $m->user_nicename : '',
 				'avatar'   => $m ? Verify::avatar_url( $mid, 96 ) : '',
-				'verified' => $m ? Verify::is_verified( $mid ) : false,
+				'verified' => $m ? Verify::has_badge( $mid ) : false,
 				'at'       => (int) $r['created'],
 			];
 		}
@@ -394,7 +394,7 @@ final class Social {
 				'name'      => (string) $u->display_name,
 				'slug'      => (string) $u->user_nicename,
 				'avatar'    => Verify::avatar_url( $uid, 96 ),
-				'verified'  => Verify::is_verified( $uid ),
+				'verified'  => Verify::has_badge( $uid ),
 				'followers' => $followers[ $uid ] ?? 0,
 			];
 		}
@@ -429,7 +429,7 @@ final class Social {
 				'name'      => $m->display_name,
 				'slug'      => $m->user_nicename,
 				'avatar'    => Verify::avatar_url( $mid, 96 ),
-				'verified'  => Verify::is_verified( $mid ),
+				'verified'  => Verify::has_badge( $mid ),
 				'hearts'    => (int) $r['hearts'],
 				'works'     => (int) $r['works'],
 				'followers' => $followers[ $mid ] ?? 0,
@@ -621,6 +621,7 @@ final class Social {
 				'name'    => $u ? $u->display_name : 'Quester',
 				'slug'    => $u ? $u->user_nicename : '',
 				'avatar'  => Verify::avatar_url( $aid, 96 ),
+				'verified' => $u ? Verify::has_badge( $aid ) : false,
 			];
 		}
 		// The viewer's existing casts on the page's votable targets (one IN() per target type,
@@ -826,7 +827,8 @@ final class Social {
 			) ) ),
 			'last_seen'  => Auth::last_seen( $id ),            // UTC midnight of their last active day; 0 = never recorded
 			'joined'     => Verify::joined_label( $u->user_registered ), // clamped to the platform launch (ticket #103)
-			'verified'   => Verify::is_verified( $id ),         // the blue check
+			'verified'   => Verify::has_badge( $id ),           // the blue check — earned by the ID check OR granted by an operator
+			'verified_via' => Verify::badge_via( $id ),         // 'id' | 'team' | '' — for the badge's explainer
 			'bot'        => class_exists( '\\AQ\\Arta' ) && Arta::is_arta( $id ), // Arta: the assistant profile (no wallet, diary or DMs)
 			'full_name'  => Verify::full_name( $id ),           // public (radical transparency)
 			// PUBLIC, and the exact date. Operator 2026-08-15, reaffirming 2026-07-27 ("the DATE only —
@@ -1109,6 +1111,7 @@ final class Social {
 			'author'   => $u ? $u->display_name : 'Quester',
 			'slug'     => $u ? $u->user_nicename : '',
 			'avatar'   => Verify::avatar_url( (int) $t['author_id'], 48 ),
+			'verified' => $u ? Verify::has_badge( (int) $t['author_id'] ) : false, // the blue check beside the name
 			'mine'     => (int) $t['author_id'] === Rest::uid(), // strict authorship (drives the no-self-vote state)
 			'edited'   => ! empty( $t['edited'] ),
 			'comments' => (int) $t['comment_count'],
@@ -1127,6 +1130,7 @@ final class Social {
 			'author'  => $deleted ? '[deleted]' : ( $u ? $u->display_name : 'Quester' ),
 			'slug'    => $u ? $u->user_nicename : '',
 			'avatar'  => $deleted ? '' : Verify::avatar_url( (int) $c['author_id'], 48 ),
+			'verified' => ! $deleted && $u ? Verify::has_badge( (int) $c['author_id'] ) : false, // the blue check beside the name
 			'mine'    => ! $deleted && (int) $c['author_id'] === Rest::uid(), // strict authorship
 			'score'   => (int) $c['votes'],
 			'replies' => (int) ( $c['reply_count'] ?? 0 ),
