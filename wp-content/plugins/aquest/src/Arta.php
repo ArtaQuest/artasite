@@ -882,8 +882,17 @@ final class Arta {
 	 * every environment without a migration and cannot be replaced by an upload to the bot account.
 	 */
 	public static function avatar_url() {
+		static $v = null;
+		if ( $v === null ) {
+			// Cache-bust by CONTENT, not by a hand-kept number: the edge caches this file for years, keyed
+			// by query string, so a hand-bumped ?v= that anyone fetches before the deploy lands keeps the
+			// old picture forever. A hash of the bytes changes exactly when the picture does.
+			$file = ( defined( 'AQ_DIR' ) ? AQ_DIR : dirname( __DIR__ ) ) . '/assets/arta/arta-thinking.svg';
+			$h    = is_readable( $file ) ? @md5_file( $file ) : false;
+			$v    = $h ? substr( $h, 0, 10 ) : '2';
+		}
 		$base = defined( 'AQ_URL' ) ? AQ_URL : '';
-		return $base . '/assets/arta/arta-thinking.svg?v=2';
+		return $base . '/assets/arta/arta-thinking.svg?v=' . $v;
 	}
 
 	// ═════════════════════════════════════════════════════════════════════════════════════════════
