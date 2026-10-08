@@ -179,6 +179,13 @@ $aq_html_dir  = ( $aq_i18n && 'rtl' === $aq_i18n['dir'] ) ? 'rtl' : 'ltr';
 	// default: 3 at night, 4 by day) — this drives the precomputed contrast ramp in index.css so the
 	// whole UI follows the member's contrast setting universally + flash-free. Mirrors src/lib/contrast.ts. ?>
 	<script>(function(){var t=null;try{t=localStorage.getItem('aq_theme')}catch(e){}if(t!=='light'&&t!=='dark')t=<?php echo is_user_logged_in() ? "'dark'" : "'light'"; ?>;document.documentElement.setAttribute('data-theme',t);var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',t==='light'?'#f6f7f9':'#0d0d0f');var c=0;try{c=parseInt(localStorage.getItem('aq_contrast'),10)}catch(e){}if(!(c>=1&&c<=5)){try{if(matchMedia('(prefers-contrast:more)').matches)c=5;else if(matchMedia('(prefers-contrast:less)').matches)c=1;}catch(e){}}if(!(c>=1&&c<=5)){var h=new Date().getHours();c=(h<7||h>=21)?2:3;}document.documentElement.setAttribute('data-contrast',c);})()</script>
+	<?php // A DEPLOY REPLACES EVERY HASHED ASSET. HTML that predates it — a STALE edge copy during its
+	// revalidation window (observed 2026-10-08: x-ac STALE naming index-<old>.js, which answered 404),
+	// or a back/forward restore — names an entry or chunk that no longer exists, and the page is dead
+	// before any app code runs, so nothing in the bundle can recover it. Capture-phase, so it sees a
+	// failed <script>/<link> anywhere under app/assets/; reloads ONCE (per tab, per minute) with a
+	// throwaway ?aqv= so the edge cannot answer with the same stale copy. main.tsx strips the param. ?>
+	<script>(function(){var K='aq-asset-reload';window.addEventListener('error',function(e){var t=e.target,u=t&&(t.src||t.href)||'';if(!t||t===window||typeof u!=='string'||u.indexOf('/artaquest-theme/app/assets/')<0)return;try{var l=+sessionStorage.getItem(K)||0;if(Date.now()-l<60000)return;sessionStorage.setItem(K,String(Date.now()));}catch(x){return;}var q=new URLSearchParams(location.search);q.set('aqv',Date.now().toString(36));location.replace(location.pathname+'?'+q.toString()+location.hash);},true);})()</script>
 	<meta name="apple-mobile-web-app-capable" content="yes">
 	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 	<meta name="apple-mobile-web-app-title" content="ArtaQuest">

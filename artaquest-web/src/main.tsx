@@ -20,6 +20,15 @@ setTimeout(dismissBootScreen, 10000)
 // route it has not visited yet. Vite raises vite:preloadError for exactly that; reload once so the
 // fresh HTML names the fresh chunks. Guarded per URL for a minute, so a chunk that is genuinely
 // missing produces one reload and then the real error, never a loop.
+// The shell's stale-asset net (template-aq-app.php) reloads with a throwaway ?aqv= to get past a
+// stale edge copy; drop it before the router reads the URL, so it is never shared or bookmarked.
+if (new URLSearchParams(location.search).has('aqv')) {
+  const q = new URLSearchParams(location.search)
+  q.delete('aqv')
+  const s = q.toString()
+  history.replaceState(history.state, '', location.pathname + (s ? '?' + s : '') + location.hash)
+}
+
 window.addEventListener('vite:preloadError', (e) => {
   const key = 'aq-chunk-reload:' + location.pathname
   try {
