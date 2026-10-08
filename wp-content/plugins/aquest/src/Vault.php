@@ -79,6 +79,10 @@ final class Vault {
 		// answers 200 under `Authorization: Bearer <token>` on both kernels/push and datasets/list,
 		// and 401s under Basic. The legacy KAGGLE_USERNAME + KAGGLE_KEY pair was retired the same
 		// day; the token is push-scoped, so kernels/status and kernels/output stay 403.
+		// ArtaMail (the native macOS campaign sender) reads the Titan mailbox password at runtime via
+		// GET /wp-json/aq/v1/secret/titan — the ONLY secret served over HTTP, token-gated (see Vault::rest_titan).
+		'TITAN_PASSWORD'             => [ 'Titan mail password (arash@ / support@artaquest.org) — served to ArtaMail only, via GET /aq/v1/secret/titan', 180, true ],
+		'AQ_ARTAMAIL_TOKEN'          => [ 'Bearer token ArtaMail presents to GET /aq/v1/secret/titan (its ONLY route), constant-time compared — >=32 chars; this is NOT the Titan password', 180, true ],
 		'AQ_CASHOUT_FROZEN'          => [ 'OPS FLAG — freezes coin cash-outs while set', 0 ],
 		'AQ_ALLOW_PASSWORD_LOGIN'    => [ 'RECOVERY FLAG — re-enables password logins. Must stay UNSET (the DB is public).', 0 ],
 	];
@@ -201,6 +205,77 @@ final class Vault {
 			];
 		}
 		return $out;
+	}
+
+	// ── ArtaMail Titan secret endpoint ──────────────────────────────────────
+	//
+	// GET /wp-json/aq/v1/secret/titan — hands ArtaMail (and its live e2e test) the ONE Titan mailbox
+	// password and nothing else. There is deliberately no generic secret/{name} route. The secret stays
+	// write-only in wp-admin; this is the only way it leaves the server, and only to a holder of the
+	// dedicated token.
+
+	/** The ArtaMail token the caller presented: `X-AQ-ArtaMail: <t>` or `Authorization: Bearer <t>`. '' when absent. */
+	private static function presented_token() {
+		if ( isset( $_SERVER['HTTP_X_AQ_ARTAMAIL'] ) && $_SERVER['HTTP_X_AQ_ARTAMAIL'] !== '' ) {
+			return (string) $_SERVER['HTTP_X_AQ_ARTAMAIL'];
+		}
+		if ( isset( $_SERVER['HTTP_AUTHORIZATION'] ) && preg_match( '/^Bearer\\s+(\\S+)$/', (string) $_SERVER['HTTP_AUTHORIZATION'], $m ) ) {
+			return $m[1];
+		}
+		return '';
+	}
+
+	/**
+	 * Serve ONLY the Titan password, to a holder of AQ_ARTAMAIL_TOKEN. HTTPS required (plain HTTP
+	 * allowed only for local WP_DEBUG dev); response is Cache-Control: no-store; 10 requests/hour/IP;
+	 * every hit audited (timestamp via Watchdog, IP, result — never the value). 401 missing token,
+	 * 403 bad token / insecure, 404 when the secret is not configured, 429 when rate-limited.
+	 */
+	public static function rest_titan( $req ) {
+		$ip    = isset( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : '0';
+		$audit = function ( $result ) use ( $ip ) {
+			if ( class_exists( '\\AQ\\Watchdog' ) ) { Watchdog::note( "secret/titan {$result} ip={$ip}" ); }
+		};
+		$reply = function ( $body, $status ) {
+			$res = new \WP_REST_Response( $body, $status );
+			$res->header( 'Cache-Control', 'no-store' );
+			return $res;
+		};
+
+		// HTTPS only (allow plain HTTP solely for local WP_DEBUG development).
+		$https = is_ssl() || ( isset( $_SERVER['HTTP_X_FORWARDED_PROTO'] ) && strtolower( (string) $_SERVER['HTTP_X_FORWARDED_PROTO'] ) === 'https' );
+		if ( ! $https && ! ( defined( 'WP_DEBUG' ) && WP_DEBUG ) ) {
+			$audit( 'fail:insecure' );
+			return $reply( [ 'error' => 'https_required', 'message' => 'HTTPS is required.' ], 403 );
+		}
+
+		// Rate limit (per IP, fixed hourly window) — also caps brute-forcing the token.
+		if ( Rest::throttle( 'secret_titan', 10, HOUR_IN_SECONDS ) ) {
+			$audit( 'fail:rate' );
+			return $reply( [ 'error' => 'rate_limited', 'message' => 'Too many requests.' ], 429 );
+		}
+
+		// Dedicated token, constant-time compared. Missing -> 401, present-but-wrong -> 403.
+		$want = (string) Secrets::get( 'AQ_ARTAMAIL_TOKEN' );
+		$got  = self::presented_token();
+		if ( $got === '' ) {
+			$audit( 'fail:no-token' );
+			return $reply( [ 'error' => 'unauthorized', 'message' => 'Missing access token.' ], 401 );
+		}
+		if ( strlen( $want ) < 32 || ! hash_equals( $want, $got ) ) {
+			$audit( 'fail:bad-token' );
+			return $reply( [ 'error' => 'forbidden', 'message' => 'Invalid access token.' ], 403 );
+		}
+
+		// The secret itself — 404 when an operator has not set it yet.
+		$password = (string) Secrets::get( 'TITAN_PASSWORD' );
+		if ( $password === '' ) {
+			$audit( 'fail:unset' );
+			return $reply( [ 'error' => 'not_found', 'message' => 'Titan password is not configured.' ], 404 );
+		}
+
+		$audit( 'ok' );
+		return $reply( [ 'password' => $password ], 200 );
 	}
 
 	// ── wp-admin page (operators only) ──────────────────────────────────────
