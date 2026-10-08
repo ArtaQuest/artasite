@@ -260,7 +260,7 @@ export default function Profile() {
     getProfile(slug).then((d) => { if (d) setP(d); else setMissing(true); }).catch(() => setMissing(true));
   }, [slug]);
   // Dynamic-route title (RouteTitle skips /u/:slug so this owns it).
-  useEffect(() => { if (p?.name) document.title = `${p.name} – ArtaQuest`; }, [p?.name]);
+  useEffect(() => { const n = p?.fullName?.trim() || p?.name; if (n) document.title = `${n} – ArtaQuest`; }, [p?.fullName, p?.name]);
 
   // The member's published posts — newest first, keyset "Load more".
   const [items, setItems] = useState<NotebookCard[]>([]);

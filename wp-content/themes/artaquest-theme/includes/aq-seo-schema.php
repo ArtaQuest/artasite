@@ -34,6 +34,34 @@ function aq_seo_bcp47() {
 }
 
 /**
+ * Drop a leading /{locale}/ that AQ\I18n::filter_home_url puts back on a localised request.
+ *
+ * Profile pages have one original: the unprefixed English URL. Locale copies (/af/u/{slug}/)
+ * must not be their own canonical. Other routes are left alone — pass only a profile URL.
+ * No-op when the path has no registered locale prefix (the English page itself).
+ */
+function aq_unprefixed_url( $url ) {
+	$url = (string) $url;
+	if ( ! class_exists( '\\AQ\\I18n' ) ) {
+		return $url;
+	}
+	$p = wp_parse_url( $url );
+	if ( ! $p || empty( $p['host'] ) || empty( $p['path'] ) ) {
+		return $url;
+	}
+	if ( ! preg_match( '#^/([a-z]{2,3}(?:-[a-z]{2,4})?)(/.*)$#i', $p['path'], $m ) ) {
+		return $url;
+	}
+	if ( 'en' === strtolower( $m[1] ) || ! \AQ\I18n::is_locale( $m[1] ) ) {
+		return $url;
+	}
+	$origin = ( isset( $p['scheme'] ) ? $p['scheme'] : 'https' ) . '://' . $p['host'] . ( isset( $p['port'] ) ? ':' . $p['port'] : '' );
+	$query  = isset( $p['query'] ) ? '?' . $p['query'] : '';
+	$frag   = isset( $p['fragment'] ) ? '#' . $p['fragment'] : '';
+	return $origin . $m[2] . $query . $frag;
+}
+
+/**
  * THE official ArtaQuest accounts — one PHP source of truth, keyed by platform.
  *
  * WHY THIS EXISTS: the list used to be copy-pasted into the Organization node's `sameAs` AND into
@@ -402,11 +430,15 @@ add_action(
 				$u = get_user_by( 'slug', sanitize_title( $slug ) );
 			}
 			if ( $u ) {
-				$purl   = home_url( '/u/' . $u->user_nicename . '/' );
+				$purl   = aq_unprefixed_url( home_url( '/u/' . $u->user_nicename . '/' ) );
+				// Same name the <title> and the crawler h1 use (aq_profile_name): the real full name,
+				// not display_name, which is often only a handle ("Arash"). The handle stays as
+				// alternateName so a search for either string still lands here.
+				$pname  = function_exists( 'aq_profile_name' ) ? aq_profile_name( $u ) : (string) $u->display_name;
 				$person = array(
 					'@type' => 'Person',
 					'@id'   => $purl . '#person',
-					'name'  => $u->display_name,
+					'name'  => $pname,
 					'url'   => $purl,
 					// Verify::avatar_url, not get_avatar_url — the picture the page actually shows, and
 					// never a Gravatar URL, which is a hash of the member's email address. The
@@ -414,6 +446,9 @@ add_action(
 					// naming a real person should say which resolver it means.
 					'image' => class_exists( '\AQ\Verify' ) ? \AQ\Verify::avatar_url( $u->ID, 160 ) : '',
 				);
+				if ( $u->display_name && $u->display_name !== $pname ) {
+					$person['alternateName'] = (string) $u->display_name;
+				}
 				$bio = get_user_meta( $u->ID, 'description', true );
 				if ( $bio ) {
 					$person['description'] = wp_strip_all_tags( $bio );
@@ -447,7 +482,7 @@ add_action(
 				'mentions'    => array(
 					'@type' => 'Person',
 					'name'  => 'Arash Ashrafnejad',
-					'url'   => $home . 'u/arash/',
+					'url'   => $home . 'u/artafather/',
 					'jobTitle' => 'Founder',
 					'worksFor' => array( '@id' => $home . '#org' ),
 				),
@@ -581,9 +616,10 @@ add_action(
 				$bu = get_user_by( 'slug', sanitize_title( $bps ) );
 				if ( ! $bu ) { $bu = get_user_by( 'login', sanitize_title( $bps ) ); }
 				if ( $bu ) {
+					$bname  = function_exists( 'aq_profile_name' ) ? aq_profile_name( $bu ) : (string) $bu->display_name;
 					$crumbs = array(
 						array( 'ArtaQuest', $home ),
-						array( $bu->display_name, home_url( '/u/' . $bu->user_nicename . '/' ) ),
+						array( $bname, aq_unprefixed_url( home_url( '/u/' . $bu->user_nicename . '/' ) ) ),
 					);
 				}
 			}

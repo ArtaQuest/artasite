@@ -131,9 +131,9 @@ export default function About() {
                   its `ring-1 ring-yang/30` was a 1px line at 30% gold, which on the dark canvas is
                   invisible. Now a 2px gold BORDER with 2px of inset — measured, unlike `ring-*`, whose
                   computed box-shadow came back fully transparent here — and the whole circle is the
-                  same link as the name (both go to /u/arash/, so the pair is one target a reader can
+                  same link as the name (both go to /u/artafather/, so the pair is one target a reader can
                   hit either half of). */}
-              <a href={localePath("/u/arash/")} aria-label="Arash Ashrafnejad — profile"
+              <a href={localePath("/u/artafather/")} aria-label="Arash Ashrafnejad — profile"
                 className="block shrink-0 rounded-full border-2 border-yang/70 p-0.5 transition-colors hover:border-yang focus-visible:border-yang focus-visible:outline-none">
                 <img
                   src={founderAvatar}
@@ -148,7 +148,7 @@ export default function About() {
               <div>
                 <H2 id="founder">From the founder</H2>
                 <p className="text-[13px] text-ink-2">
-                  <a href={localePath("/u/arash/")} className="hover:text-yin-light hover:underline">Arash Ashrafnejad</a> · Founder, ArtaQuest Foundation
+                  <a href={localePath("/u/artafather/")} className="hover:text-yin-light hover:underline">Arash Ashrafnejad</a> · Founder, ArtaQuest Foundation
                 </p>
               </div>
             </div>
@@ -170,7 +170,7 @@ export default function About() {
                   so every 100px of width is 174px of scrolling before the essay starts. Measured at
                   390/900/1100/1280/1440 in the lab. */}
               <figure className="mx-auto mb-6 max-w-[220px] @lg:float-end @lg:mx-0 @lg:mb-3 @lg:ms-5 @lg:w-44 @lg:max-w-none @2xl:ms-6 @2xl:w-52">
-                <a href={localePath("/u/arash/")} className="block">
+                <a href={localePath("/u/artafather/")} className="block">
                   <img
                     src={founderPhoto}
                     width={540}
