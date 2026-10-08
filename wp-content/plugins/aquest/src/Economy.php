@@ -872,7 +872,7 @@ final class Economy {
 	public static function coin_balance( $uid ) {
 		return (int) Data::col( 'SELECT COALESCE(SUM(delta),0) FROM ' . Data::t( 'aq_coin_ledger' ) . ' WHERE user_id = %d', [ $uid ] );
 	}
-	/** Lifetime points = standing. Points are NEVER spent (ArtaBot is paid in COINS, not points), so
+	/** Lifetime points = standing. Points are NEVER spent (Arta is paid in COINS, not points), so
 	 *  this is purely additive and the rank ladder never falls. Served from the standing projection
 	 *  ('all' track = the user's grand total), kept in lockstep with the ledger by award_points. */
 	public static function points_balance( $uid ) {
@@ -884,7 +884,7 @@ final class Economy {
 		return self::points_balance( $uid );
 	}
 
-	// NOTE: ArtaBot is FREE + unlimited (2026-06-10) — the whole coin-metering apparatus that lived here
+	// NOTE: Arta is FREE + unlimited (2026-06-10) — the whole coin-metering apparatus that lived here
 	// (per-token pricing consts, free-token allowance, coin↔token rate, charge_artabot) was removed with
 	// its /artabot/rate route. History: git log -- src/Economy.php.
 	const SIGNUP_POINTS = 10; // one-time welcome POINTS on signup → starting group-tag slots (Extra::tag_allowance)

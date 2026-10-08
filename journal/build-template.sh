@@ -308,7 +308,7 @@ paper threads together cleanly.</p>
 </ul>
 
 <h2 id="review">9. How review works</h2>
-<p>Each round, the reviewer (ArtaScience — Claude at maximum effort, in a sandbox) compiles your LaTeX,
+<p>Each round, the reviewer (ArtaScience — an AI reviewer at maximum effort, in a sandbox) compiles your LaTeX,
 reads the manuscript, runs your code on your open data, and compares the outputs to your claims. It returns:</p>
 <table>
   <tr><th>Field</th><th>Meaning</th></tr>

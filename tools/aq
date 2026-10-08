@@ -19,7 +19,7 @@
 #   · working in the shared checkout — it carries other agents' uncommitted work, so `git add -A`
 #     or a branch switch absorbs or disturbs it. `start` gives you your own worktree.
 #   · pushing the wrong direction — a plain outbound merge would publish tools/ticket-agent/,
-#     CLAUDE.md and ~10,300 analysis files to a public repository. `ship` counts what would become
+#     the private agent-rules files and ~10,300 analysis files to a public repository. `ship` counts what would become
 #     public and refuses.
 #   · believing a green check — WordPress.com deploying is a different system from GitHub going
 #     green, and a cacheable endpoint can answer from the edge with a pre-deploy body. `ship` asks
@@ -173,7 +173,7 @@ cmd_ship() {
 
   # ── The outbound guard. artasite is PUBLIC and a SUBSET. ────────────────────────────────────
   # A branch made with `aq start` adds only its own files, so this list is tiny. A branch made from
-  # the monorepo would add ~12,000 — ArtaDev and its relays, CLAUDE.md, and every analysis output.
+  # the monorepo would add ~12,000 — ArtaDev and its relays, the private agent rules, and every analysis output.
   # .gitignore does not help: it governs UNTRACKED files, and a merge carries tracked content past it.
   say "What this would make public"
   local extra; extra=$(comm -23 <(git ls-tree -r HEAD --name-only | sort) <(git ls-tree -r artasite/main --name-only | sort))

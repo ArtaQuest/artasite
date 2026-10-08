@@ -698,13 +698,13 @@ final class Books {
 			'label'   => self::ACCOUNTS[ $l['account'] ][0] ?? $l['account'],
 			'debit'   => (int) $l['debit'],
 			'credit'  => (int) $l['credit'],
-			'memo'    => $l['memo'],
+			'memo'    => self::public_label( $l['memo'] ),
 		]; }
 		return array_map( fn( $r ) => [
 			'id'         => (int) $r['id'],
 			'ref'        => $r['ref'],
 			'date'       => $r['on_date'],
-			'memo'       => $r['memo'],
+			'memo'       => self::public_label( $r['memo'] ),
 			'source'     => $r['source'],
 			'invoice_id' => (int) $r['invoice_id'],
 			'lines'      => $by[ (int) $r['id'] ] ?? [],
@@ -736,9 +736,9 @@ final class Books {
 			$total += (int) $r['cad_cents'];
 			$items[] = [
 				'id'          => (int) $r['id'],
-				'vendor'      => $r['vendor'],
+				'vendor'      => self::public_label( $r['vendor'] ),
 				'number'      => $r['number'],
-				'description' => $r['description'],
+				'description' => self::public_label( $r['description'] ),
 				'issued'      => $r['issued'],
 				'paid'        => $r['paid'],
 				'period'      => [ 'start' => $r['period_start'], 'end' => $r['period_end'] ],
@@ -1811,7 +1811,7 @@ final class Books {
 		$reg_total = 0;
 		foreach ( $rows as $r ) {
 			$reg_total += (int) $r['cad_cents'];
-			$pdf->row( $r['paid'] . '   ' . $r['vendor'] . ' — ' . $r['description'], $m( (int) $r['cad_cents'] ), false,
+			$pdf->row( $r['paid'] . '   ' . self::public_label( $r['vendor'] . ' — ' . $r['description'] ), $m( (int) $r['cad_cents'] ), false,
 				'Invoice ' . $r['number'] . ( $r['pay_method'] ? ' · paid with ' . $r['pay_method'] : '' ) );
 			foreach ( (array) ( $docs[ (int) $r['id'] ] ?? [] ) as $d ) {
 				$pdf->para( ucfirst( (string) $d['kind'] ) . ': ' . $d['name'] . '  sha256 ' . substr( (string) $d['sha256'], 0, 32 ) . '...', 7, 0.5, 16 );
@@ -2181,8 +2181,9 @@ final class Books {
 	const DIRECTOR_LOGIN = 'artayab';
 
 	/**
-	 * Every cost the Foundation has incurred to date: three Anthropic Claude Max 20x subscriptions,
-	 * each invoiced in CAD and each paid personally by a director.
+	 * Every cost the Foundation has incurred to date: three AI compute subscriptions, each invoiced in
+	 * CAD and each paid personally by a director. The vendor strings below are the invoices' own words
+	 * (the ledger records what was billed); public pages show them through public_label().
 	 *
 	 * The rate basis is PINNED rather than fetched. A migration that depends on a live HTTP call is
 	 * a migration that behaves differently depending on the weather, and these are historical facts
@@ -2228,13 +2229,28 @@ final class Books {
 		],
 	];
 
+	/**
+	 * How a supplier's own wording is SHOWN on public pages (/finances, the annual PDF). The stored
+	 * rows are untouched — they are the books, append-only, and amounts never change — this only
+	 * chooses the label a reader sees, so the platform does not advertise a vendor brand. Keyed by
+	 * the exact strings the founding invoices carry.
+	 */
+	const PUBLIC_LABELS = [
+		'Anthropic, PBC'        => 'AI compute provider',
+		'Claude Max plan - 20x' => 'AI compute subscription (monthly)',
+	];
+
+	public static function public_label( $text ) {
+		return strtr( (string) $text, self::PUBLIC_LABELS );
+	}
+
 	/** The tax position every one of these invoices carries, recorded once rather than three times. */
 	const FOUNDING_TAX_NOTE = 'Invoiced at 0% on a reverse-charge basis against CA BN ' . self::BN . '. The Foundation is NOT registered under the normal GST/HST regime, so 5% should have been charged. Who carries the uncharged tax is an open question — see the note.';
 
 	/**
 	 * GST self-assessed on the founding costs.
 	 *
-	 * Anthropic is registered under CRA's simplified regime for non-resident digital suppliers and
+	 * The supplier is registered under CRA's simplified regime for non-resident digital suppliers and
 	 * charged 0% because a Canadian business number was supplied. That relief is for a recipient who
 	 * gives a GST/HST REGISTRATION number, and a plain BN with no RT programme account is not one —
 	 * the Foundation is not a registrant (operator, 2026-08-12). So the tax was not extinguished, it

@@ -233,7 +233,7 @@ class Mailer {
 			'label'    => 'Major change needs approval (autopilot)',
 			'audience' => 'operator',
 			'subject'  => 'ArtaQuest: approve a major change? (ticket #{{id}})',
-			'body'     => "ArtaBot’s autonomous developer wants to ship a fix for a {{kind}} ticket, but judged it needs a MAJOR architectural change — so it’s holding for your OK.\n\nTicket #{{id}}: {{title}}\n\nProposed approach:\n{{plan}}\n\n▶ Approve (it will build + deploy this automatically):\n{{approve_url}}\n\n✕ Decline (it will stop and leave this for a human):\n{{decline_url}}\n\nFull thread: {{url}}",
+			'body'     => "Arta’s autonomous developer wants to ship a fix for a {{kind}} ticket, but judged it needs a MAJOR architectural change — so it’s holding for your OK.\n\nTicket #{{id}}: {{title}}\n\nProposed approach:\n{{plan}}\n\n▶ Approve (it will build + deploy this automatically):\n{{approve_url}}\n\n✕ Decline (it will stop and leave this for a human):\n{{decline_url}}\n\nFull thread: {{url}}",
 			'vars'     => [ 'id', 'title', 'kind', 'plan', 'approve_url', 'decline_url', 'url' ],
 			'sample'   => [ 'id' => '42', 'title' => 'Example ticket', 'kind' => 'feature', 'plan' => 'A sample plan.', 'approve_url' => '/', 'decline_url' => '/', 'url' => '/issues/?ticket=42' ],
 		],
@@ -355,7 +355,7 @@ class Mailer {
 			'label'    => 'Your contribution is live',
 			'audience' => 'member',
 			'subject'  => 'Your ArtaQuest contribution is live',
-			'body'     => "Good news — ArtaBot has shipped a fix for the ticket you raised:\n\n“{{title}}”\n\nIt’s live on ArtaQuest now. Take a look and, if you’re happy, mark it resolved.\n\nThank you for making ArtaQuest better.",
+			'body'     => "Good news — Arta has shipped a fix for the ticket you raised:\n\n“{{title}}”\n\nIt’s live on ArtaQuest now. Take a look and, if you’re happy, mark it resolved.\n\nThank you for making ArtaQuest better.",
 			'cta'      => [ 'Review your ticket', '{{url}}' ],
 			'vars'     => [ 'title', 'url' ],
 			'sample'   => [ 'title' => 'Example ticket', 'url' => '/issues/?ticket=42' ],
@@ -443,10 +443,81 @@ class Mailer {
 		// bounces at the relay and lands in the operator's inbox as "Undelivered Mail Returned to
 		// Sender" — five of them per test run. Answered as sent, so nothing upstream retries.
 		if ( self::unroutable( $to ) ) { return true; }
+		// Azure Communication Services first when it is configured (built for transactional volume —
+		// 10k sign-ups a day is a sign-in code each); the SMTP/host relay below is the fallback, so a
+		// provider outage degrades to the old path instead of locking members out.
+		if ( self::acs_configured() && self::acs_send( $to, $subject, $html ) ) { return true; }
 		return wp_mail( $to, $subject, $html, [
 			'Content-Type: text/html; charset=UTF-8',
 			'From: ' . self::FROM_NAME . ' <' . self::FROM_EMAIL . '>',
 		] );
+	}
+
+	// ── Azure Communication Services Email (REST, HMAC-signed — no SDK) ─────────────────────
+
+	/** [endpoint, access key] from AQ_ACS_EMAIL_CONNECTION ("endpoint=https://….communication.azure.com/;accesskey=…"). */
+	public static function acs_parse( $conn ) {
+		$ep = ''; $key = '';
+		foreach ( explode( ';', (string) $conn ) as $part ) {
+			$kv = explode( '=', $part, 2 );
+			if ( count( $kv ) !== 2 ) { continue; }
+			$k = strtolower( trim( $kv[0] ) );
+			if ( $k === 'endpoint' )  { $ep = rtrim( trim( $kv[1] ), '/' ); }
+			if ( $k === 'accesskey' ) { $key = trim( $kv[1] ); }
+		}
+		return ( stripos( $ep, 'https://' ) === 0 && $key !== '' ) ? [ $ep, $key ] : null;
+	}
+
+	public static function acs_configured() {
+		return self::acs_parse( Secrets::get( 'AQ_ACS_EMAIL_CONNECTION' ) ) !== null && is_email( (string) Secrets::get( 'AQ_ACS_EMAIL_SENDER' ) );
+	}
+
+	/**
+	 * The request headers for an ACS call, per the documented HMAC-SHA256 scheme:
+	 * string-to-sign = "VERB\npath?query\ndate;host;content-hash", keyed with the base64-decoded key.
+	 * Pure (date passed in) so tools/test-arta.php can check it.
+	 */
+	public static function acs_headers( $method, $path_query, $host, $body, $key_b64, $date ) {
+		$hash = base64_encode( hash( 'sha256', (string) $body, true ) );
+		$sts  = strtoupper( $method ) . "\n" . $path_query . "\n" . $date . ';' . $host . ';' . $hash;
+		$sig  = base64_encode( hash_hmac( 'sha256', $sts, (string) base64_decode( (string) $key_b64 ), true ) );
+		return [
+			'Content-Type'        => 'application/json',
+			'x-ms-date'           => $date,
+			'x-ms-content-sha256' => $hash,
+			'Authorization'       => 'HMAC-SHA256 SignedHeaders=x-ms-date;host;x-ms-content-sha256&Signature=' . $sig,
+		];
+	}
+
+	/** Send one message through ACS. True only on 202 Accepted; anything else falls back to SMTP. */
+	public static function acs_send( $to, $subject, $html ) {
+		$cfg = self::acs_parse( Secrets::get( 'AQ_ACS_EMAIL_CONNECTION' ) );
+		if ( ! $cfg ) { return false; }
+		[ $ep, $key ] = $cfg;
+		$host = (string) wp_parse_url( $ep, PHP_URL_HOST );
+		$pq   = '/emails:send?api-version=2023-03-31';
+		$body = wp_json_encode( [
+			'senderAddress' => (string) Secrets::get( 'AQ_ACS_EMAIL_SENDER' ),
+			'recipients'    => [ 'to' => [ [ 'address' => (string) $to ] ] ],
+			'content'       => [
+				'subject'   => (string) $subject,
+				'html'      => (string) $html,
+				'plainText' => trim( html_entity_decode( wp_strip_all_tags( preg_replace( '#<(br|/p|/tr|/h[1-6])\b[^>]*>#i', "\n", (string) $html ) ), ENT_QUOTES, 'UTF-8' ) ),
+			],
+			'replyTo'       => [ [ 'address' => self::FROM_EMAIL, 'displayName' => self::FROM_NAME ] ],
+			'userEngagementTrackingDisabled' => true,
+		] );
+		$res = wp_remote_post( $ep . $pq, [
+			'timeout' => 8, // bounded — a slow provider must never hang a sign-in
+			'headers' => self::acs_headers( 'POST', $pq, $host, $body, $key, gmdate( 'D, d M Y H:i:s' ) . ' GMT' ),
+			'body'    => $body,
+		] );
+		$code = is_wp_error( $res ) ? 0 : (int) wp_remote_retrieve_response_code( $res );
+		if ( $code !== 202 ) {
+			error_log( 'AQ Mailer: ACS send failed (' . ( is_wp_error( $res ) ? $res->get_error_message() : 'HTTP ' . $code ) . ') — falling back to SMTP' );
+			return false;
+		}
+		return true;
 	}
 
 	/** True for an address whose domain is reserved for documentation and testing. */
@@ -626,7 +697,8 @@ class Mailer {
 		echo '<div class="wrap aq-mail">' . self::styles();
 		echo '<div class="aq-hero"><div class="aq-mark">A</div><div><div class="aq-title">ArtaQuest Emails</div>'
 			. '<div class="aq-tag">Every email the platform sends — one sender, one template, editable wording</div></div>'
-			. '<div class="aq-health ' . ( $smtp ? 'ok' : 'warn' ) . '">' . ( $smtp ? '✓ SMTP as ' . esc_html( self::FROM_EMAIL ) : '⚠ host relay (no SMTP creds)' ) . '</div></div>';
+			. '<div class="aq-health ' . ( $smtp || self::acs_configured() ? 'ok' : 'warn' ) . '">'
+			. ( self::acs_configured() ? '✓ Azure Communication Services (SMTP fallback ' . ( $smtp ? 'on' : 'off' ) . ')' : ( $smtp ? '✓ SMTP as ' . esc_html( self::FROM_EMAIL ) : '⚠ host relay (no SMTP creds)' ) ) . '</div></div>';
 		if ( ! empty( $_GET['aq_msg'] ) ) {
 			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( (string) wp_unslash( $_GET['aq_msg'] ) ) . '</p></div>';
 		}

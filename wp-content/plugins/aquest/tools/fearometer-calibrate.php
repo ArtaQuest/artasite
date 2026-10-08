@@ -3,7 +3,7 @@
  * Fearometer calibration harness (corpus-driven).
  *
  * Loads a labelled corpus from tools/fearometer-corpus.json and scores each case through
- * AQ\Fearometer::score() against the live Claude API, emitting one machine-parseable ROW line per
+ * AQ\Fearometer::score() against the live model relay, emitting one machine-parseable ROW line per
  * case plus a SLICE summary, so calibration can be aggregated across many runs and dev cycles.
  *
  * Corpus row shape: {"category":..,"lang":..,"text":..,"flag":bool,"note":..}  (flag = gold label)

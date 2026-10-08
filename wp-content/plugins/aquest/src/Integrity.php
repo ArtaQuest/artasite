@@ -303,7 +303,7 @@ final class Integrity {
 	/**
 	 * Run Economy::verify_projections() and Books::verify() on the hourly tick and page on a failure.
 	 *
-	 * Both functions are held up — in code comments, in CLAUDE.md and on /finances itself — as the
+	 * Both functions are held up — in code comments, in the repo's agent rules and on /finances itself — as the
 	 * proof that the counters cannot drift from the ledgers and that the published statements cannot
 	 * drift from the lines. Neither had a production caller. verify_projections() appeared exactly
 	 * twice in the tree: its own definition and tools/verify-projections.php, a developer CLI script.

@@ -131,10 +131,10 @@ function PlayerBar({ p, score, you, pending, clock, running, showClock }: {
 }) {
   return (
     <div className={cx("flex items-center gap-3 rounded-card border px-3.5 py-2.5", running ? "border-yang/40 bg-yang/[0.04]" : "border-line bg-veil/[0.04]")}>
-      <Avatar name={p ? p.name : "ArtaBot"} />
+      <Avatar name={p ? p.name : "Arta"} />
       <div className="min-w-0 flex-1">
-        <p className={cx("font-bold", nameClass(p ? p.name : "ArtaBot", 15))}>
-          {p && p.slug ? <a className="hover:underline" href={`/u/${p.slug}`}>{p.name}</a> : (p ? p.name : "ArtaBot")}
+        <p className={cx("font-bold", nameClass(p ? p.name : "Arta", 15))}>
+          {p && p.slug ? <a className="hover:underline" href={`/u/${p.slug}`}>{p.name}</a> : (p ? p.name : "Arta")}
           {you && <span className="ms-2 rounded-pill bg-yin/15 px-1.5 py-0.5 text-[10.5px] font-semibold text-yin-light">you</span>}
         </p>
         <p className="mt-0.5 text-[12px] text-ink-3">{p ? `${p.wins}W · ${p.losses}L · ${p.draws}D` : "practice partner"}{pending && <span className="ms-2 text-yang">✦ sealed a throw</span>}</p>
@@ -425,7 +425,7 @@ function MatchBoard({ match, onExit, onRematch }: { match: RpsMatch; onExit: () 
           <Pill>◍ {gameTitle(m.game)}</Pill>
           <Pill>{m.rated ? "Rated" : "Practice"}</Pill>
           <Pill>Round {roundNo}/{m.rounds_total}</Pill>
-          {m.mode !== "open" && <Pill>{m.mode === "bot-sharp" ? "ArtaBot · sharp" : "ArtaBot · chill"}</Pill>}
+          {m.mode !== "open" && <Pill>{m.mode === "bot-sharp" ? "Arta · sharp" : "Arta · chill"}</Pill>}
         </div>
 
         <PlayerBar p={opponent} score={m.score[opIdx]} you={false} pending={theyMoved}
@@ -718,7 +718,7 @@ function GameHub({ game, embedded }: { game: GameDef; embedded?: boolean }) {
               <div className="flex flex-wrap gap-2">
                 {live.map((m) => (
                   <Button key={m.id} variant="outline" onClick={() => setMatch({ ...m, chat: [] })}>
-                    ◍ {gameTitle(m.game)} · {m.status === "open" ? "Waiting…" : `vs ${(m.you === 2 ? m.p1 : m.p2)?.name ?? "ArtaBot"} · ${scoreLine(m.score[0], m.score[1])}`}
+                    ◍ {gameTitle(m.game)} · {m.status === "open" ? "Waiting…" : `vs ${(m.you === 2 ? m.p1 : m.p2)?.name ?? "Arta"} · ${scoreLine(m.score[0], m.score[1])}`}
                   </Button>
                 ))}
               </div>
@@ -848,7 +848,7 @@ function GameHub({ game, embedded }: { game: GameDef; embedded?: boolean }) {
             </div>
             {tools.length < 12 && <p className="mt-2 text-[12px] text-ink-3">Faded laws belong to tools outside {game.title} — you meet them on the bigger boards.</p>}
           </Card>
-          <p>ArtaBot <i>chill</i> throws its remaining tools at random — unbeatable in expectation. ArtaBot <i>sharp</i> hunts patterns in what you have left and punishes them.</p>
+          <p>Arta <i>chill</i> throws its remaining tools at random — unbeatable in expectation. Arta <i>sharp</i> hunts patterns in what you have left and punishes them.</p>
           <p>The printed 145-card edition — twelve decks, the Twelve Laws on every card — is in the <a className="font-semibold text-yin-light hover:underline" href={localePath("/shop/")}>Shop</a>.</p>
         </div>
       )}

@@ -4,7 +4,7 @@ import { currentUser, googleClientId, googleSignIn, isLoggedIn, requestLoginCode
 import { currentTheme, type Theme } from "../lib/theme";
 import { arta } from "../generated/arta/rig/arta";
 
-// Passwordless sign-in — the Claude model. Enter your email, get a one-time 6-digit
+// Passwordless sign-in. Enter your email, get a one-time 6-digit
 // code, you're in (the account is created on first use). Or "Continue with Google".
 // There is no password field anywhere: nothing to remember, set, reset, or leak.
 

@@ -114,7 +114,7 @@ export default function Landing() {
         ))}
       </section>
 
-      {/* ArtaBot is a real reason to sign up, so it stays — but as one line, not the full-height
+      {/* @arta is a real reason to sign up, so it stays — but as one line, not the full-height
           section it was. The widget is members-only (App.tsx gates the launcher), which is why a
           visitor sees this instead of the chat. */}
       {/* Wrapping, not `sm:flex-row`: the row holds a 17px heading, a line of prose and a button, and
@@ -122,8 +122,8 @@ export default function Landing() {
           button drops under it and both centre themselves. */}
       <section className="flex flex-wrap items-center justify-center gap-3 rounded-card border border-line bg-space-2 px-5 py-6 text-center sm:justify-between sm:text-start">
         <div className="min-w-0 flex-[1_1_20rem]">
-          <h2 className="text-[17px] font-extrabold text-yang-ink">Chat with a state-of-the-art AI, free</h2>
-          <p className="mt-1 text-[14px] text-ink-2">ArtaBot runs on Claude Opus 5. No card, no limit.</p>
+          <h2 className="text-[17px] font-extrabold text-yang-ink">Ask @arta in public, free</h2>
+          <p className="mt-1 text-[14px] text-ink-2">Tag @arta on a post or comment and Arta answers in the thread. No card needed.</p>
         </div>
         <Button href={join} size="lg">Sign up free</Button>
       </section>

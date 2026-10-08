@@ -217,7 +217,7 @@ $cleanup = function () use ( $wpdb, $LO, $HI, $B_SLICE ) {
 
 	// Rate-limit windows, so the harness is re-runnable back to back (widen allows 10/hour).
 	for ( $u = $LO; $u <= $LO + 40; $u++ ) {
-		delete_transient( 'aq_rl_' . md5( 'credits_widen|' . $u ) );
+		delete_transient( 'aq_rl_' . md5( 'credits_widen|' . $u . '|' . (int) floor( time() / 3600 ) ) ); // Rest::throttle's fixed-window key
 	}
 	\AQ\Economy::release_lock( 'crdbucket_' . $B_SLICE );
 };

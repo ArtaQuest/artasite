@@ -85,9 +85,8 @@ function Group({ label, hits, cursor, base }: { label: string; hits: SearchHit[]
 }
 
 export function SearchBox({ autoFocus = false, compact = false }: { autoFocus?: boolean; compact?: boolean } = {}) {
-  // ArtaBot rides in the field itself; a signed-out visitor has no assistant, so no button either.
+  // Ask @arta rides in the field itself; a signed-out visitor has no button either.
   const ask = isLoggedIn();
-  const askArtaBot = () => window.dispatchEvent(new Event("aq:artabot"));
   const [q, setQ] = useState("");
   const [res, setRes] = useState<SearchResults>(EMPTY);
   const [open, setOpen] = useState(false);
@@ -231,19 +230,14 @@ export function SearchBox({ autoFocus = false, compact = false }: { autoFocus?: 
               <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
             </button>
           ) : null}
-          {/* ASK — ArtaBot, in the search field's own end corner (operator 2026-08-16), the way X
-              puts Grok in its search. Search and asking are the same impulse a beat apart: you type
-              what you want, and either the platform has it or you ask for help finding it. It fires
-              the same "aq:artabot" event as the phone's centre tab, so the panel keeps one owner.
-              Members only — the assistant is, and its routes are 'user'-auth regardless of the UI.
-              `-me-2` pulls it into the field's padding so the pill sits ON the corner rather than
-              floating a gap inside it. */}
+          {/* ASK — @arta, in the search field's own end corner (operator 2026-08-16), the way X puts
+              its assistant in search. Opens the feed composer with "@arta " ready. Members only. */}
           {ask ? (
-            <button type="button" onClick={askArtaBot} title="Ask ArtaBot"
+            <a href="/works/?compose=%40arta%20" title="Ask @arta"
               className="-me-2.5 flex h-8 shrink-0 items-center gap-1.5 rounded-pill border border-line bg-space-1 px-2.5 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yang/60 hover:text-ink">
               <LogoMark className="h-4 w-4" />
               Ask
-            </button>
+            </a>
           ) : null}
         </div>
       </form>

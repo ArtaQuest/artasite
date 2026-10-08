@@ -8,7 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *
  * Journal of Seasonality replaces human peer review with an end-to-end AI process. Every submission
  * MUST ship open DATA and open CODE; nothing is reviewed on description alone. A submission enters
- * a queue that the ArtaScience relay (the operator's laptop running headless `claude -p` at
+ * a queue that the ArtaScience relay (the operator's laptop running the headless model CLI at
  * `--effort max`, tools enabled, in a throwaway sandbox) drains: it clones the code, fetches the
  * data, ACTUALLY RUNS it, and checks whether the results reproduce the manuscript's claims. It then
  * returns a structured verdict — reproduced (yes/no), a score, and a detailed report — and either
@@ -176,7 +176,7 @@ final class Science {
 	}
 
 	/**
-	 * ONE-TIME relaunch purge (2026-07-02). The journals relaunched with Claude Fable 5 as the reviewer;
+	 * ONE-TIME relaunch purge (2026-07-02). The journals relaunched with a new model as the reviewer;
 	 * every submission from before the relaunch — with its review rounds, discussion thread, and archived
 	 * PDF — is removed so the public record starts clean. External artefacts already minted for old
 	 * accepted papers (Zenodo DOIs, gists) are permanent by design and stay where they are. Bounded by a
@@ -583,7 +583,7 @@ final class Science {
 				'score'      => (int) $r['score'],
 				'scores'     => ( $sc = json_decode( (string) ( $r['scores'] ?? '' ), true ) ) && is_array( $sc ) ? $sc : null,
 				'report'     => (string) $r['report'],
-				'model'      => (string) ( $r['model'] ?? '' ),
+				'model'      => Artaai::public_model( $r['model'] ?? '' ),
 				'effort'     => (string) ( $r['effort'] ?? '' ),
 				'runtime_s'  => (int) ( $r['runtime_s'] ?? 0 ),
 				'created'    => (int) $r['created'],

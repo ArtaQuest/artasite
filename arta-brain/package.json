@@ -1,0 +1,25 @@
+{
+  "name": "arta-brain",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Arta's brain: pulls public @arta mentions from ArtaQuest, answers them on the operator's flat-rate chat subscription, files bug reports as GitHub issues.",
+  "main": "dist/src/main.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/test/",
+    "start": "node dist/src/main.js run",
+    "check": "node dist/src/main.js check",
+    "smoke": "npm run build && node --test dist/smoke/"
+  },
+  "dependencies": {
+    "playwright": "~1.64.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "~5.6.3"
+  }
+}

@@ -178,6 +178,7 @@ final class Social {
 		] );
 		if ( $parent ) { Data::bump( 'aq_comments', [ 'id' => $parent ], 'reply_count', 1 ); } // pages "show N more replies"
 		Data::bump( 'aq_threads', [ 'id' => $tid ], 'comment_count', 1 );
+		if ( $id && ! $flagged ) { Arta::record( 'comment', (int) $id, $uid, wp_strip_all_tags( $body ), 'thread', $tid, '/works/' ); }
 		// Return the full card (not just the id) so the client appends the REAL row — server-shaped
 		// author/avatar/timestamps — instead of fabricating one that drifts from the next reload.
 		$row = Data::one( 'SELECT * FROM ' . Data::t( 'aq_comments' ) . ' WHERE id = %d', [ $id ] );
@@ -301,7 +302,7 @@ final class Social {
 	 * list that cosmetic edge beats a composite cursor (the same stance as ::feed's cursor).
 	 */
 	public static function follows( $req ) {
-		$slug = sanitize_title( (string) Rest::p( $req, 'slug', '' ) );
+		$slug = Arta::resolve_alias( sanitize_title( (string) Rest::p( $req, 'slug', '' ) ) ); // @artabot → @arta
 		$u    = $slug ? get_user_by( 'slug', $slug ) : null;
 		if ( ! $u ) { return Rest::err( 'not_found', 'Profile not found', 404 ); }
 		// followers = rows pointing AT the member (show who cast the follow);
@@ -665,7 +666,7 @@ final class Social {
 	 *  whole DB is public (see Extra::db / /data/), so this mirrors it — identity, email, standing, and
 	 *  the wallet (coin) balance are all public. Nothing here is hidden that the data explorer shows. */
 	public static function profile( $req ) {
-		$slug = sanitize_title( (string) Rest::p( $req, 'slug', '' ) );
+		$slug = Arta::resolve_alias( sanitize_title( (string) Rest::p( $req, 'slug', '' ) ) ); // @artabot → @arta
 		$u    = $slug ? get_user_by( 'slug', $slug ) : null;
 		if ( ! $u ) { return Rest::err( 'not_found', 'Profile not found', 404 ); }
 		$id     = (int) $u->ID;

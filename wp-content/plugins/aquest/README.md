@@ -33,8 +33,9 @@ LMS bundle + WooCommerce.
 | `src/Notify.php` | per-user notification centre |
 | `src/Meetings.php` | ArtaMeet — scheduled meetings; the E2EE room is bound at T-15m and released after |
 | `src/Calendar.php` | ArtaCalendar — one dated view over meetings, claimed grant deadlines and entered challenges; owns no data |
-| `src/Tickets.php` | Claude-triaged contribution tickets (bug/feature/content/suggestion) |
-| `src/Assistant.php` | ArtaBot — AI assistant (Claude), coin-metered |
+| `src/Tickets.php` | AI-triaged contribution tickets (bug/feature/content/suggestion) |
+| `src/Assistant.php` | ticket triage on the operator relay (the old paid private chat is retired) |
+| `src/Arta.php` | @arta — public mentions queue in `aq_mentions`; the brain (`arta-brain/`) pulls them → public replies + GitHub bug issues |
 
 ## Payments & payouts (Stripe)
 

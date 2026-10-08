@@ -183,7 +183,7 @@ final class Translate {
 		) );
 		if ( ! $got ) { return [ 'job' => null ]; } // another poller won the whole batch
 		// Re-select ONLY the rows THIS claim stamped: with two overlapping pollers, $rows may include
-		// rows the other worker owns — serving them here would duplicate a full HF+Claude pipeline run.
+		// rows the other worker owns — serving them here would duplicate a full HF+LLM pipeline run.
 		$rows = Data::all(
 			"SELECT id, source_hash, source_text, translated_text FROM {$t}
 			 WHERE id IN ($place) AND status = 'auto' AND claimed_at = %d ORDER BY priority DESC, demand DESC, id DESC",

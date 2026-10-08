@@ -103,7 +103,7 @@ export function SectionBoardView({ lessonId, onEngagementChange, onTotalChange }
 
   // Posting appends the server's OWN card in place (no full-board refetch — the old reload lost
   // scroll position + loaded pages). New roots go on top, Reddit-style. The one exception: a
-  // fear-flagged comment triggers ArtaBot's consoling reply server-side, so refetch to show it.
+  // fear-flagged comment triggers Arta's consoling reply server-side, so refetch to show it.
   function applyPosted(card: SectionComment | null | undefined, parentId: number, flagged?: boolean) {
     if (!card || flagged) { void load(sort); return; }
     setThread((prev) => {

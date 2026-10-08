@@ -11,7 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *   1. a RE-AUTH code emailed to the member's address (proves possession of the actual auth factor), and
  *   2. a TYPED confirmation phrase ("DELETE").
  * Both are required by delete_confirm(); the code is single-use, hashed in a short-lived transient, and
- * rate-limited. Operator (manage_options) and the ArtaBot bot account can't be deleted through it.
+ * rate-limited. Operator (manage_options) and the Arta bot account can't be deleted through it.
  *
  * WHAT A PURGE REMOVES vs KEEPS — the whole DB is PUBLIC (radical transparency), so "purge" means erase
  * every piece of the member's identity, content and personal state, while honouring the two invariants
@@ -27,7 +27,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *       with the denormalized board counters kept exact;
  *     • enrolments (+ each course's learner count decremented), lesson progress, reviews (+ the course
  *       rating recomputed from the survivors), bursary grants, the social graph (both directions),
- *       contribution tickets + their messages, the ArtaBot conversation, issue reports, grant claims,
+ *       contribution tickets + their messages, the Arta conversation, issue reports, grant claims,
  *       peer endorsements (given + received), notifications, the per-season competition standing
  *       (aq_quester) and frozen past-season podium rows (aq_season_results).
  *
@@ -204,7 +204,7 @@ final class Account {
 		return $count;
 	}
 
-	/** Why this account may NOT be self-deleted (operator + the ArtaBot system user), or null. */
+	/** Why this account may NOT be self-deleted (operator + the Arta system user), or null. */
 	private static function undeletable( $uid ) {
 		if ( user_can( (int) $uid, 'manage_options' ) ) {
 			return Rest::err( 'forbidden', 'Operator accounts can’t be deleted here.', 403 );
@@ -331,7 +331,7 @@ final class Account {
 		}
 
 		// 6. The rest of the member's own rows: bursary grants, the follow graph (both directions),
-		//    contribution tickets + their message threads, the ArtaBot conversation, issue reports, grant
+		//    contribution tickets + their message threads, the Arta conversation, issue reports, grant
 		//    claims, peer endorsements (given + received), and notifications.
 		$wpdb->delete( Data::t( 'aq_bursary' ), [ 'user_id' => $uid ] );
 		$wpdb->delete( Data::t( 'aq_follows' ), [ 'follower_id' => $uid ] );
@@ -517,8 +517,8 @@ final class Account {
 		'aq_order_items'   => 'shop order lines',
 		'aq_order_ship'    => 'shop shipments',
 		'aq_fulfilment'    => 'payment fulfilment records',
-		'aq_credit_grants' => 'ArtaBot credit ledger',
-		'aq_credit_gifts'  => 'ArtaBot credit ledger',
+		'aq_credit_grants' => 'Arta credit ledger',
+		'aq_credit_gifts'  => 'Arta credit ledger',
 		'aq_nb_challenges' => 'founded challenges holding others\' fees are anonymised in purge_feed',
 		'aq_challenge_results' => 'settled prize records (ledger-adjacent)',
 		'aq_courses'       => 'retired platform: other learners\' courses stay, author orphaned',

@@ -169,7 +169,7 @@ function CommentNode(p: NodeProps) {
                 : <span data-ay-skip="1" className={cx("font-semibold", c.deleted ? "italic text-ink-3" : "text-ink-2")}>{c.author}</span>}
               {c.timeLabel && !c.deleted && <><span aria-hidden>·</span><span>{c.timeLabel}</span></>}
               {c.edited && !c.deleted && <span className="text-ink-3">· edited</span>}
-              {c.bot && <span className="rounded-pill bg-yin/15 px-2 py-0.5 text-[11px] font-semibold text-yin-light">ArtaBot</span>}
+              {c.bot && <span className="rounded-pill bg-yin/15 px-2 py-0.5 text-[11px] font-semibold text-yin-light">Arta</span>}
               {!!c.anchor && c.anchor > 0 && (
                 <span title="This reply references a moment in the video" className="rounded-pill bg-yang/15 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-yang">
                   ▶ {Math.floor(c.anchor / 60)}:{String(c.anchor % 60).padStart(2, "0")}

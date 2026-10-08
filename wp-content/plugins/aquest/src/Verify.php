@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *      the one their account already has — Google's, for a Google sign-in — and a full legal name
  *      is optional, stated on the Account page, and needed only for the blue check.
  *   2. THE BLUE CHECK (optional): four photos — profile picture, government ID front and back, and a
- *      selfie — go to Claude, which decides whether the ID is genuine, whether the NAME (given name
+ *      selfie — go to the model, which decides whether the ID is genuine, whether the NAME (given name
  *      and surname) and the DATE OF BIRTH on it match what the member stated, and whether the same
  *      face appears across the ID, the selfie and the profile photo.
  *
@@ -38,7 +38,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Verify {
 
-	const MODEL      = 'claude-opus-5'; // the relay (subscription) vision model; the paid API was removed
+	const MODEL      = ''; // empty = the relay's configured vision model; no model is named on the platform
 	const MAXTOK     = 1024;
 	const MIN_CONF   = 0.7;                 // overall confidence required to grant the check
 	const MAX_BYTES  = 5 * 1024 * 1024;     // per-image cap (decoded)
@@ -216,7 +216,7 @@ final class Verify {
 	// ── verify (blue check) ─────────────────────────────────────────────────────
 	/**
 	 * POST /verify/identity {profile_pic, id_front, id_back, selfie} (all base64 data URLs).
-	 * Uses the member's already-set full name + date of birth as the claim, asks Claude
+	 * Uses the member's already-set full name + date of birth as the claim, asks the model
 	 * to confirm the ID, grants the check on success, and ALWAYS discards the ID + selfie images.
 	 * Free — no coin cost (ticket #109; the 1-coin-per-attempt fee was removed).
 	 */
@@ -236,13 +236,13 @@ final class Verify {
 			if ( $img === null ) { return Rest::err( 'bad_image', 'Please attach a clear JPG/PNG/WebP for the ' . $label . ' (under 5 MB).' ); }
 		}
 
-		$verdict = self::run_claude( self::full_name( $uid ), self::birthday( $uid ), $profile, $front, $back, $selfie );
+		$verdict = self::run_vision( self::full_name( $uid ), self::birthday( $uid ), $profile, $front, $back, $selfie );
 		// Free the image bytes the moment the check is done — defence-in-depth on top of never persisting.
 		$profile_bytes = $profile['bytes']; $profile_mime = $profile['mime'];
 		unset( $front, $back, $selfie, $profile );
 
 		if ( $verdict === null ) {
-			// Upstream failure (couldn't reach Claude / unparseable) — not the member's fault; just retry.
+			// Upstream failure (couldn't reach the model / unparseable) — not the member's fault; just retry.
 			return Rest::err( 'upstream', 'The verification service hit a snag — please try again.', 502 );
 		}
 
@@ -275,10 +275,10 @@ final class Verify {
 		];
 	}
 
-	// ── Claude vision verdict ───────────────────────────────────────────────────
-	/** Ask Claude whether the ID + selfie + profile photo bear out the claimed name and date of birth,
+	// ── vision model verdict ───────────────────────────────────────────────────
+	/** Ask the model whether the ID + selfie + profile photo bear out the claimed name and date of birth,
 	 *  checked against ANY government photo ID. Returns the verdict, or null upstream. */
-	private static function run_claude( $name, $birthday, $profile, $front, $back, $selfie ) {
+	private static function run_vision( $name, $birthday, $profile, $front, $back, $selfie ) {
 		// Test seam: the harness can force a verdict (or an upstream failure via the string 'fail')
 		// to exercise the success/failure handling without fabricating a real government ID.
 		$mock = apply_filters( 'aq_verify_verdict', null, $name, $birthday, '' );
@@ -310,7 +310,7 @@ final class Verify {
 			[ 'type' => 'text', 'text' => 'GOVERNMENT ID BACK:' ],     self::block( $back ),
 			[ 'type' => 'text', 'text' => 'SELFIE:' ],                 self::block( $selfie ),
 		];
-		// SUBSCRIPTION-ONLY (operator rule 2026-06-13): the verdict runs on the Claude Max subscription
+		// SUBSCRIPTION-ONLY (operator rule 2026-06-13): the verdict runs on the model subscription
 		// via the relay (the paid API was removed). The relay pulls the four ID images out of the
 		// transcript, AES-encrypts them with the worker token (never readable in the public DB), and the
 		// laptop daemon decrypts them to a private temp dir, Reads each, and replies — the ID + selfie

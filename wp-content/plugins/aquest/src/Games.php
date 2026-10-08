@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * game carries NO astrology; tools, laws and wheel distances are the whole vocabulary.)
  *
  * Chess.com-style: live matches (simultaneous-reveal rounds), a lobby for open rated challenges,
- * practice vs ArtaBot (the paper's "chill" random / "sharp" predicting bot), Elo ratings with a
+ * practice vs Arta (the paper's "chill" random / "sharp" predicting bot), Elo ratings with a
  * public leaderboard, per-match realtime chat (short-poll), resign + idle-claim.
  *
  * PUBLIC-DATABASE SAFETY: the whole DB is public (/data), so a pending move can never be stored
@@ -188,7 +188,7 @@ final class Games {
 	// ── helpers ───────────────────────────────────────────────────────────────
 
 	private static function name_of( $uid ) {
-		if ( ! $uid ) { return 'ArtaBot'; }
+		if ( ! $uid ) { return 'Arta'; }
 		$u = get_userdata( (int) $uid );
 		return $u ? $u->display_name : 'Member #' . (int) $uid;
 	}
@@ -213,7 +213,7 @@ final class Games {
 		return is_array( $j ) ? $j : [];
 	}
 
-	// ── ArtaBot (chill = uniform over remaining; sharp = predict-and-punish) ─
+	// ── Arta (chill = uniform over remaining; sharp = predict-and-punish) ─
 
 	private static function bot_move( $rounds, $sharp, $ring = 'wheel' ) {
 		$arena = self::arena_tools( $ring );

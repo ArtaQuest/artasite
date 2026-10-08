@@ -1,0 +1,20 @@
+# Lines allowed to name an AI vendor or model, each with the reason. Everything else in the
+# repository fails tools/vendor-names-gate.sh (run by tools/preflight.sh on every branch and on
+# main before deploy). Format: <path><TAB><extended regex the LINE must match>. Keep it short:
+# every entry is a place the platform names a vendor on purpose.
+#
+# robots.txt allow-list of AI crawlers by their real user-agent strings (renaming them would stop
+# matching the crawlers the platform deliberately welcomes).
+wp-content/themes/artaquest-theme/includes/aq-app.php	\$bots += array\(
+# A city in Mozambique (the cities gazetteer), not a vendor.
+wp-content/plugins/aquest/data/cities.tsv	^Xai-Xai	
+# The Foundation's founding invoices as billed (the books record what the supplier wrote; public
+# pages show them through Books::public_label, which maps these exact strings to neutral labels).
+wp-content/plugins/aquest/src/Books.php	('vendor' => '[A-Za-z]+, PBC',|'description' => '[A-Za-z]+ Max plan - 20x',|^[[:space:]]+'[A-Za-z]+(, PBC| Max plan - 20x)' +=> )
+# Outbound guard: refuses to publish the private monorepo's agent-rules files by their real names.
+tools/aq	grep -E '\^\(tools/ticket-agent/
+.gitignore	^\.[a-z]+/$
+# This gate and its list necessarily spell the names they look for.
+tools/vendor-names-gate.sh	.
+tools/vendor-names-allow.txt	.
+arta-brain/test/brain.test.ts	assert\.doesNotMatch\(p, /

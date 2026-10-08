@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *
  * Mirrors AQ\Library / AQ\Music exactly (brief + optional inspiration → original work; queued→processing→
  * review→live; publish charges ArtaCoins by the requested length; worker relay generates the artifact).
- * Generation runs LOCALLY in the motion relay daemon — Claude writes the Manim script (it is just code),
+ * Generation runs LOCALLY in the motion relay daemon — the model writes the Manim script (it is just code),
  * `manim` renders it to mp4 on the operator's machine — so no third-party API key is needed.
  *
  * Two tables (self-install — the Library/Music pattern, isolated from Schema::VERSION):

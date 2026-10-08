@@ -139,9 +139,9 @@ final class Learn {
 		// it as a chapter chip. Clamped to a sane range; 0 = unanchored.
 		$anchor = max( 0, min( 86400, Rest::pint( $req, 'anchor', 0 ) ) );
 		// ARTAMOD — every competition comment is QUEUED for moderation (modq=1) rather than screened
-		// inline. Moderation runs on the Claude Max SUBSCRIPTION only (the paid API was removed,
+		// inline. Moderation runs on the model SUBSCRIPTION only (the paid API was removed,
 		// 2026-06-13): the aq_moderate cron hands the queue to the relay (Fearometer::process_queue),
-		// which flags hate/fear comments + leaves ArtaBot's consoling reply. Fail-open by design — a
+		// which flags hate/fear comments + leaves Arta's consoling reply. Fail-open by design — a
 		// just-posted comment is visible immediately and simply un-moderated until the relay processes
 		// it; if the relay is offline the comment just stays queued (never blocks a member, no API).
 		$id = Data::insert( 'aq_comments', [
@@ -149,6 +149,7 @@ final class Learn {
 			'body' => $body, 'lang' => 'en', 'votes' => 0, 'reply_count' => 0, 'anchor' => $anchor, 'modq' => 1, 'created' => Data::now(),
 		] );
 		if ( $parent ) { Data::bump( 'aq_comments', [ 'id' => $parent ], 'reply_count', 1 ); } // denorm for "N more replies"
+		if ( $id ) { Arta::record( 'comment', (int) $id, $uid, wp_strip_all_tags( $body ), 'section', $lid ); }
 		Data::bump( 'aq_lessons', [ 'id' => $lid ], 'comment_count', 1 ); // denorm section total (board header reads this, not COUNT(*))
 		YouTube::recompute_course_trend( $cid ); // comment-based trending: this section's discussion just moved the course's avg
 		if ( $first ) { Economy::award_points( $uid, 1, 'learn', 'sc' . $lid ); } // engagement point, once per section
@@ -170,9 +171,9 @@ final class Learn {
 
 	/** ONE section-comment row shape — shared by the board read and post_comment's returned card. */
 	/**
-	 * Seed a section board with ONE ArtaBot starter — idempotent (skips a board that already has an
-	 * ArtaBot root comment). When a top YouTube comment is supplied ($tc from YouTube::top_comment) the
-	 * seed REFERENCES it: ArtaBot frames it as a conversation-starter EXAMPLE ("feel free to ignore it")
+	 * Seed a section board with ONE Arta starter — idempotent (skips a board that already has an
+	 * Arta root comment). When a top YouTube comment is supplied ($tc from YouTube::top_comment) the
+	 * seed REFERENCES it: Arta frames it as a conversation-starter EXAMPLE ("feel free to ignore it")
 	 * and the original commenter is credited via the `ref` block (their profile name + picture + live
 	 * thumbs-up), rendered as a "from YouTube" card on the board. No top comment (comments off / API
 	 * unavailable / the channel's own) → a generic starter question. No points; competition untouched.
@@ -180,7 +181,7 @@ final class Learn {
 	public static function seed_board( $lid, $cid, $tc = null ) {
 		$bot = Assistant::bot_user_id();
 		if ( ! $bot ) { return false; }
-		// idempotent: one ArtaBot starter per board (root-level). A member-only board (no bot root) re-seeds.
+		// idempotent: one Arta starter per board (root-level). A member-only board (no bot root) re-seeds.
 		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_comments' ) . " WHERE context_type = 'section' AND context_id = %d AND author_id = %d AND parent_id = 0 LIMIT 1", [ $lid, $bot ] ) ) { return false; }
 		$ref = null;
 		if ( is_array( $tc ) && trim( (string) ( $tc['text'] ?? '' ) ) !== '' ) {
@@ -215,7 +216,7 @@ final class Learn {
 
 	/**
 	 * Bulk discussion seeder (cron aq_seed_boards + the one-time backfill): seed up to $limit section
-	 * boards that have a video but no ArtaBot starter yet, each with the video's top YouTube comment.
+	 * boards that have a video but no Arta starter yet, each with the video's top YouTube comment.
 	 * top_comment is cached per DISTINCT video so a video reused across sections costs one API call.
 	 * Returns the number of boards seeded this run (0 when the queue is drained).
 	 */
@@ -251,13 +252,13 @@ final class Learn {
 			'flagged' => ! empty( $r['flagged'] ),                // ArtaMod: set aside from the competition
 			'appealed' => ! empty( $r['appealed'] ),              // the one ArtaMod appeal was used
 			'anchor'  => (int) ( $r['anchor'] ?? 0 ),             // seconds into the video (0 = unanchored)
-			'bot'     => (int) $r['author_id'] === Assistant::bot_user_id(), // ArtaBot's own reply
+			'bot'     => (int) $r['author_id'] === Assistant::bot_user_id(), // Arta's own reply
 			'mine'    => (int) $r['author_id'] === $uid,
 			'author'  => $u ? $u->display_name : 'Quester',
 			'slug'    => $u ? $u->user_nicename : '',
 			'avatar'  => Verify::avatar_url( (int) $r['author_id'], 48 ),
 			'at'      => (int) $r['created'],
-			// A referenced YouTube top comment on an ArtaBot seed (author name + pic + live likes) →
+			// A referenced YouTube top comment on an Arta seed (author name + pic + live likes) →
 			// the board renders a "from YouTube" card. null on every ordinary comment.
 			'ref'     => ( ! empty( $r['ref'] ) && is_array( $j = json_decode( (string) $r['ref'], true ) ) ) ? $j : null,
 		];
@@ -279,7 +280,7 @@ final class Learn {
 		if ( ! $l ) { return Rest::err( 'not_found', 'Video not found', 404 ); }
 		// Boards are seeded PROACTIVELY in the background (the aq_seed_boards cron → Learn::seed_pending),
 		// so the read path never makes a YouTube API call. A board references the video's top YouTube
-		// comment as a conversation-starter example (clearly ArtaBot's — shape_comment marks bot:true;
+		// comment as a conversation-starter example (clearly Arta's — shape_comment marks bot:true;
 		// the podium excludes the bot user, so a seed never interferes with the competition).
 
 		// my_vote lookup for the comments we'll return (one indexed scan over this section's votes).

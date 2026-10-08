@@ -1,7 +1,6 @@
 import { Component, lazy, Suspense, useEffect, useRef, type ReactNode } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
-import { ArtaBot } from "./components/ArtaBot";
 import { ArtaTTS } from "./components/ArtaTTS";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { I18nGate } from "./components/I18nGate";
@@ -562,11 +561,7 @@ export default function App() {
         </RouteBoundary>
         </PlayerProvider>
       </AppShell>
-      {/* ArtaBot is for REGISTERED members only (operator 2026-07-25) — so the launcher never appears
-          for a signed-out visitor, which is what keeps it off the landing page. The landing page
-          advertises it instead (see Landing), as a reason to sign up. The backend enforces the same
-          rule independently: the artabot routes are 'user'-auth, so hiding the UI is not the guard. */}
-      {isLoggedIn() && <ArtaBot />}
+      {/* No private assistant panel: members reach Arta by tagging @arta in public. */}
       <ArtaTTS />
       <OfflineBanner />
       </I18nGate>

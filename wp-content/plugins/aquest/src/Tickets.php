@@ -5,9 +5,9 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 /**
  * Contributions — the evolution of the old one-shot bug form into a conversational,
- * Claude-triaged ticket system.
+ * AI-triaged ticket system.
  *
- * A member opens a ticket of one KIND (bug | feature | content | suggestion). Claude triages it
+ * A member opens a ticket of one KIND (bug | feature | content | suggestion). the model triages it
  * in a back-and-forth (Assistant::triage / Assistant::reply → aq_ticket_messages) and, when the
  * request is concrete enough, flips it to 'queued' for the autonomous worker (tools/ticket-agent/),
  * which ships a fix and reports progress here via the agent_* endpoints.
@@ -46,7 +46,7 @@ final class Tickets {
 
 	/** The idempotency key for a member's contribution — what makes a re-submit collapse onto the one
 	 *  ticket instead of opening a duplicate. It hashes the FULL content (kind + title + body, with
-	 *  whitespace/case normalized), NOT the title alone: ArtaBot auto-generates short titles from a chat,
+	 *  whitespace/case normalized), NOT the title alone: Arta auto-generates short titles from a chat,
 	 *  so a title-only key mistook two genuinely DIFFERENT reports for duplicates and silently dropped the
 	 *  second (issue #36 — "new issues incorrectly flagged as duplicates"). Now only a true re-submit of
 	 *  the same report collapses; a new issue that merely shares a title opens fresh. Per-user (uid baked
@@ -96,7 +96,7 @@ final class Tickets {
 			'id'         => (int) $t['id'],
 			'user_id'    => $uid,
 			// Contributions are a PUBLIC board (like the discussion boards), so every row carries its
-			// author's display name for attribution — "Visitor" for an ownerless, ArtaBot-filed uid-0
+			// author's display name for attribution — "Visitor" for an ownerless, Arta-filed uid-0
 			// ticket. 'mine' matches the server's reply/resolve permission EXACTLY (owner-only, no admin
 			// override) so the UI never offers an action that would 403; public viewers always get
 			// mine=false. The $uid > 0 guard keeps an ownerless ticket from reading as "mine" to every
@@ -167,7 +167,7 @@ final class Tickets {
 		// A screenshot helps a visual report enormously, but it is NEVER required: on phones taking or
 		// attaching one is often impossible (e.g. Android blocks captures in incognito/work profiles),
 		// and a hard gate here was literally blocking members from reporting bugs at all. The form
-		// encourages one; ArtaBot asks for it in triage when it would genuinely help.
+		// encourages one; Arta asks for it in triage when it would genuinely help.
 		$hash = self::dedup_hash( $uid, $kind, $title, $body );
 		if ( Data::col( 'SELECT 1 FROM ' . Data::t( 'aq_tickets' ) . ' WHERE hash = %s', [ $hash ] ) ) {
 			return Rest::err( 'dupe', 'You already opened this one' );
@@ -183,32 +183,23 @@ final class Tickets {
 			'hash'      => $hash,
 			'created'   => Data::now(),
 		] );
-		// Seed the conversation with the member's opening message, then let Claude triage.
+		// Seed the conversation with the member's opening message, then let the model triage.
 		self::add_message( $id, 'user', $title . "\n\n" . $body );
 		Assistant::triage( $id );
 		return [ 'ok' => true, 'id' => $id ];
 	}
 
-	/** Open a contribution on a member's — or, with $uid = 0, a signed-out visitor's — behalf, straight
-	 *  from an ArtaBot chat — no REST wrapper, throttle, or screenshot gate (the chat itself is the
-	 *  context, so a bug needn't carry a shot; the anon path adds its own per-IP cap in the caller).
-	 *  Bypassing triage also saves a whole Claude round-trip: ArtaBot has already classified it, so we
-	 *  open it pre-triaged and (when concrete) queue it straight to the autonomous worker. Idempotent by
-	 *  the same (content,user) hash as create(): a true re-submit just returns the existing ticket, but a
-	 *  genuinely new report that merely shares a title opens fresh (issue #36), never collapsed as a dupe.
-	 *  All anonymous filings share the uid-0 hash bucket, so two visitors reporting the identical thing
-	 *  converge on one ticket (with its link) — by design.
-	 *  $screenshot (optional) is the URL of an image the member shared in the chat that produced this
-	 *  contribution, already saved to our uploads dir — it lands in the screenshot column so the original
-	 *  shows on the detail page, exactly like a form-filed shot (#120).
-	 *  $chat_prompt (optional) is the member's ORIGINAL chat words that triggered this filing. ArtaBot
-	 *  files a cleaned-up title/body, so the raw message is otherwise lost — we preserve it on the
-	 *  opened-from-chat note's meta (no schema change) to show alongside the screenshot for the full
-	 *  context behind the report on the detail page (#121).
-	 *  Returns [ 'id', 'kind', 'status', 'new' ], or null if the request is too thin to act on. */
-	public static function open_from_chat( $uid, $kind, $title, $body, $where = '', $queue = true, $screenshot = '', $chat_prompt = '' ) {
-		$uid = max( 0, (int) $uid ); // 0 = a signed-out visitor: the ticket is ownerless (author "Visitor")
-		$kind  = isset( self::KINDS[ $kind ] ) ? $kind : 'suggestion';
+	/**
+	 * Mirror a bug that @arta filed on GitHub into /issues, so the public contribution board, its
+	 * Sentinel points and the member's own list keep working. The GitHub issue is the record of
+	 * work; this row is the member's receipt, carrying the link (system message meta.github_issue —
+	 * no schema change). Idempotent on the same (member, content) hash as create(): a retried reply
+	 * returns the existing ticket. Not queued for the autonomous developer — the team picks bugs up
+	 * from GitHub. Returns [ 'id', 'kind', 'status', 'new' ], or null if the report is too thin.
+	 */
+	public static function open_from_arta( $uid, $title, $body, $where, $issue_url ) {
+		$uid   = max( 0, (int) $uid );
+		$kind  = 'bug';
 		$title = sanitize_text_field( (string) $title );
 		$body  = sanitize_textarea_field( (string) $body );
 		if ( mb_strlen( $title ) < 4 || mb_strlen( $body ) < 10 ) { return null; }
@@ -217,29 +208,23 @@ final class Tickets {
 		if ( $existing ) {
 			return [ 'id' => (int) $existing['id'], 'kind' => $existing['kind'], 'status' => $existing['status'], 'new' => false ];
 		}
-		$status = $queue ? 'queued' : 'open';
 		$id = Data::insert( 'aq_tickets', [
-			'user_id'    => $uid,
-			'kind'       => $kind,
-			'title'      => $title,
-			'body'       => $body,
-			'screenshot' => esc_url_raw( (string) $screenshot ),
-			'where_url'  => esc_url_raw( (string) $where ),
-			'status'     => $status,
-			'hash'       => $hash,
-			'created'    => Data::now(),
+			'user_id'   => $uid,
+			'kind'      => $kind,
+			'title'     => $title,
+			'body'      => $body,
+			'where_url' => esc_url_raw( (string) $where ),
+			'pr_url'    => '',
+			'status'    => 'open',
+			'hash'      => $hash,
+			'created'   => Data::now(),
 		] );
+		if ( ! $id ) { return null; }
 		self::add_message( $id, 'user', $title . "\n\n" . $body );
-		// Preserve the member's original chat words on the opened-from-chat note's meta (#121), so the
-		// detail page can show the raw message behind ArtaBot's cleaned-up title/body. Skipped when it is
-		// just the image-only placeholder or merely repeats the body — there'd be no extra context to show.
-		$prompt = sanitize_textarea_field( (string) $chat_prompt );
-		if ( $prompt === '[shared a screenshot]' || trim( $prompt ) === trim( $body ) ) { $prompt = ''; }
 		self::add_message( $id, 'system',
-			'Opened by ' . Assistant::NAME . ' from a chat with ' . ( $uid ? 'the member' : 'a visitor' )
-			. ( $queue ? ', and queued for the autonomous developer.' : '.' ),
-			$prompt !== '' ? [ 'chat_prompt' => $prompt ] : null );
-		return [ 'id' => (int) $id, 'kind' => $kind, 'status' => $status, 'new' => true ];
+			'Filed by ' . Assistant::NAME . ' from a public mention, as GitHub issue ' . esc_url_raw( (string) $issue_url ) . '.',
+			[ 'github_issue' => esc_url_raw( (string) $issue_url ), 'source' => 'arta' ] );
+		return [ 'id' => (int) $id, 'kind' => $kind, 'status' => 'open', 'new' => true ];
 	}
 
 	/** POST tickets/upload {image} — store a screenshot (base64 data URL) and return its URL.
@@ -253,7 +238,7 @@ final class Tickets {
 
 	/** Decode + store a base64 image data URL (PNG/JPEG/WebP/GIF, ≤6 MB) in the public uploads dir and
 	 *  return its URL — or '' if it isn't a supported, in-bounds image (fail-open, never throws). Shared by
-	 *  the upload endpoint and ArtaBot's chat-filing path (#120) so both store through ONE vetted route
+	 *  the upload endpoint and Arta's chat-filing path (#120) so both store through ONE vetted route
 	 *  (same format allow-list + size cap), and a stored URL always resolves back to a real uploads file. */
 	public static function save_data_url_image( $data_url, $uid = 0 ) {
 		if ( ! preg_match( '#^data:image/(png|jpe?g|webp|gif);base64,(.+)$#s', (string) $data_url, $m ) ) { return ''; }
@@ -299,7 +284,7 @@ final class Tickets {
 		];
 	}
 
-	/** POST tickets/(id)/message {body,image?} — owner adds a turn (text and/or a screenshot); Claude replies. */
+	/** POST tickets/(id)/message {body,image?} — owner adds a turn (text and/or a screenshot); the model replies. */
 	public static function post_message( $req ) {
 		if ( Rest::throttle( 'ticket', 20, 3600 ) ) { return Rest::err( 'rate_limited', 'Slow down', 429 ); }
 		$t = self::row( Rest::pint( $req, 'id', 0 ) );
@@ -318,7 +303,7 @@ final class Tickets {
 		}
 		if ( mb_strlen( $body ) < 1 ) {
 			if ( $img === '' ) { return Rest::err( 'bad_input', 'Say something' ); }
-			$body = '[shared a screenshot]'; // the same placeholder the ArtaBot chat stores for an image-only turn
+			$body = '[shared a screenshot]'; // the same placeholder the Arta chat stores for an image-only turn
 		}
 		self::add_message( (int) $t['id'], 'user', $body, $img === '' ? null : [ 'image' => $img ] );
 		$reply = Assistant::reply( (int) $t['id'], $img );
@@ -530,7 +515,7 @@ final class Tickets {
 		self::add_message( $id, 'system', 'The maintainer declined the proposed architectural change — this is left for a human to take on.' );
 		if ( (int) $t['user_id'] ) {
 			Notify::push( (int) $t['user_id'], 'ticket', 'Your contribution needs a human',
-				'This one needs a bigger change than ArtaBot ships automatically — a maintainer will take it from here.',
+				'This one needs a bigger change than Arta ships automatically — a maintainer will take it from here.',
 				'/issues/?ticket=' . $id, 'tdec' . $id );
 		}
 		return self::approve_page( 'Declined', 'Ticket #' . $id . ' was left for a human maintainer.' );
@@ -591,7 +576,7 @@ final class Tickets {
 		$title = self::shorten( $t['title'], 60 );
 		$url   = '/issues/?ticket=' . (int) $t['id'];
 		Notify::push( $uid, 'ticket_shipped', 'Your contribution is live',
-			'ArtaBot shipped a fix for “' . $title . '”. Take a look and, if it’s good, mark it resolved.',
+			'Arta shipped a fix for “' . $title . '”. Take a look and, if it’s good, mark it resolved.',
 			$url, 'tship' . (int) $t['id'] );
 		$u = get_userdata( $uid );
 		if ( $u && is_email( $u->user_email ) ) {

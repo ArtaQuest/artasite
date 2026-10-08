@@ -57,7 +57,7 @@ const AQ = "/aq/v1";
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
 
 /**
- * Render a discussion / ArtaBot body (raw markdown + LaTeX) to safe HTML — the client-side
+ * Render a discussion / Arta body (raw markdown + LaTeX) to safe HTML — the client-side
  * equivalent of the old server md renderer. XSS-safe: every run of text is HTML-escaped before any
  * tag is emitted, so nothing the author (or the model) writes can inject markup. Math `$…$` / `$$…$$`
  * becomes `.aq-math[data-tex]` nodes that RichText's renderMathIn() typesets with KaTeX; currency-safe
@@ -102,7 +102,7 @@ export function renderRich(raw: string): string {
 
 /** Media embeds are allowed ONLY from our own uploads.
  *
- *  ArtaBot returns charts and animations it produced as `![alt](url)`, and those must render as
+ *  Arta returns charts and animations it produced as `![alt](url)`, and those must render as
  *  pictures rather than as the literal `!` and a link they were showing before. But inlineMd runs over
  *  every member-authored string on the platform, and an unrestricted image rule would let anyone embed
  *  a remote URL in a post — which loads on every reader's device and hands a third party their IP and
@@ -130,7 +130,7 @@ function inlineMd(t: string): string {
       OUR_MEDIA.test(url)
         ? `<audio src="${url}" controls preload="metadata" class="aq-md-audio"></audio>`
         : `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`)
-    // INTERACTIVE. A self-contained page ArtaBot built, embedded live so it can be explored rather
+    // INTERACTIVE. A self-contained page Arta built, embedded live so it can be explored rather
     // than described. `sandbox` WITHOUT allow-same-origin is the whole safety argument: the frame gets
     // an opaque origin, so its scripts run but cannot read a cookie, a token or the DOM around them —
     // and it is still only ever loaded from our own uploads, never a URL somebody pasted.
@@ -871,7 +871,7 @@ export type SectionComment = {
   id: number; parent: number; body: string; votes: number; my_vote: VoteDir; replies: number;
   mine: boolean; author: string; slug: string; avatar: string; country?: string; at: number;
   children?: SectionComment[]; more_replies?: number;
-  flagged?: boolean; bot?: boolean; // ArtaMod: set aside from the competition / ArtaBot's consoling reply
+  flagged?: boolean; bot?: boolean; // ArtaMod: set aside from the competition / Arta's consoling reply
   appealed?: boolean; // the one ArtaMod appeal was used
   anchor?: number;    // seconds into the section video the reply references (0/absent = unanchored)
   ref?: { author: string; avatar: string; likes: number; text: string; url: string } | null; // seed → top YouTube comment

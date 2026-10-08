@@ -288,7 +288,7 @@ This site includes WordPress development skills that provide detailed guidance:
 - **wp-rest-api** — REST API endpoints, controllers, schema, authentication
 - **wp-wpcli-and-ops** — WP-CLI operations, search-replace, cron, automation
 
-These skills are in `.claude/skills/` (or `.agents/skills/`). Reference them for detailed procedures on specific WordPress development tasks.
+These skills are in `.agents/skills/`. Reference them for detailed procedures on specific WordPress development tasks.
 
 > **Note:** Remote skills reference `wp` commands directly. In Studio, always prefix with `studio` (e.g., `studio wp plugin list`).
 

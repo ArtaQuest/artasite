@@ -4,11 +4,11 @@ namespace AQ;
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 /**
- * Subscription relay — routes ArtaBot's Claude calls through the operator's laptop when it is
- * awake, so chat turns run on the Claude Max SUBSCRIPTION (headless `claude -p`) instead of
+ * Subscription relay — routes model calls through the operator's laptop when it is
+ * awake, so chat turns run on the model SUBSCRIPTION (the headless model CLI) instead of
  * billing API credits. When the laptop is asleep/offline/usage-limited, Assistant::chat falls
- * back to the direct Anthropic API exactly as before — the relay is a cost optimisation, never
- * a dependency (fail-open, like everything around ArtaBot).
+ * back to the direct model API exactly as before — the relay is a cost optimisation, never
+ * a dependency (fail-open, like everything around Arta).
  *
  * Shape (the laptop cannot accept inbound connections, so it POLLS):
  *   1. The laptop daemon (tools/ticket-agent/artabot-relay.mjs) long-polls POST /relay/poll
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *      usage-limited), it enqueues a job row and waits briefly for the result; otherwise it
  *      returns null immediately and the caller uses the API.
  *   3. The daemon claims the job (atomic UPDATE … WHERE status='pending'), runs headless
- *      `claude -p` on the subscription, and POSTs /relay/complete with the text + usage.
+ *      the model CLI on the subscription, and POSTs /relay/complete with the text + usage.
  *      A reported usage limit parks the relay (a transient until the window resets) so prod
  *      stops waiting on a closed door.
  *
@@ -130,16 +130,16 @@ final class Relay {
 	}
 
 	/**
-	 * Can ArtaBot answer right now?
+	 * Can Arta answer right now?
 	 *
 	 * This used to mean "a poll arrived in the last 90 seconds", and that single sentence is what
-	 * pinned ArtaBot to an always-on machine: something had to be awake to poll, so idle cost the same
+	 * pinned Arta to an always-on machine: something had to be awake to poll, so idle cost the same
 	 * as busy. Under push there is nothing to be awake — the endpoint scales from zero on the request —
 	 * so availability is "we know where to push", plus the usage park, which is still real.
 	 *
 	 * A configured endpoint that happens to be down therefore reads as available. That is deliberate:
 	 * the failure then surfaces as one turn that could not be delivered, which the member sees and can
-	 * retry, rather than as ArtaBot silently declaring itself offline platform-wide.
+	 * retry, rather than as Arta silently declaring itself offline platform-wide.
 	 */
 	public static function available() {
 		if ( get_transient( 'aq_relay_limited' ) ) { return false; }
@@ -219,7 +219,7 @@ final class Relay {
 				// rather than become an unsandboxed shell. See artabot-relay.mjs toolsFor().
 				'tools'      => $tools ?: null,
 				// WHOSE machine to run it on. The worker gives a tool turn the member's OWN unix account
-				// and persistent home, so what ArtaBot builds is waiting for them when they
+				// and persistent home, so what Arta builds is waiting for them when they
 				// `ssh <handle>@shell.artaquest.com`. Just the name: the worker owns provisioning and
 				// decides whether that account exists there, falling back to its throwaway sandbox if not.
 				'shell'      => $tools && $shell_user ? $shell_user : null,
@@ -306,7 +306,7 @@ final class Relay {
 	 *
 	 * This is what lets a FULLY POWERED tool container exist. That container gives the member a root
 	 * shell, so anything in its environment is theirs to read — it must never hold the shared worker
-	 * secret or the Claude subscription token. It holds these instead: one names a single job and
+	 * secret or the model subscription token. It holds these instead: one names a single job and
 	 * expires; the other is exchanged at the broker for the real credential, on a machine the member
 	 * has no shell on. Stolen, either is worth this one turn, which the member already had.
 	 */
@@ -391,7 +391,7 @@ final class Relay {
 		// database — but the worker that now answers holds no key and must not. So the ciphertext stays
 		// in the row and the bytes travel inline over TLS instead, decrypted here at the last moment.
 		// Without this the new push worker silently dropped every attachment: the member shared a
-		// screenshot, and ArtaBot answered as though they had said nothing.
+		// screenshot, and Arta answered as though they had said nothing.
 		if ( ! empty( $payload['images'] ) && is_array( $payload['images'] ) ) {
 			$plain = [];
 			foreach ( $payload['images'] as $im ) {
@@ -459,14 +459,14 @@ final class Relay {
 		return $out === false ? null : $out;
 	}
 
-	/** Flatten the alternating transcript into one prompt for headless `claude -p`. */
+	/** Flatten the alternating transcript into one prompt for the headless model CLI. */
 	private static function render_prompt( $messages ) {
-		$lines = [ 'This is the conversation so far between a member and you (ArtaBot):', '' ];
+		$lines = [ 'This is the conversation so far between a member and you (Arta):', '' ];
 		foreach ( $messages as $m ) {
-			$lines[] = ( $m['role'] === 'assistant' ? 'ArtaBot: ' : 'Member: ' ) . $m['content'];
+			$lines[] = ( $m['role'] === 'assistant' ? 'Arta: ' : 'Member: ' ) . $m['content'];
 			$lines[] = '';
 		}
-		$lines[] = "Reply to the member's LAST message now, as ArtaBot, following every rule in your system prompt. Output ONLY the reply itself.";
+		$lines[] = "Reply to the member's LAST message now, as Arta, following every rule in your system prompt. Output ONLY the reply itself.";
 		return implode( "\n", $lines );
 	}
 
@@ -547,13 +547,9 @@ final class Relay {
 		$row  = Data::one( 'SELECT payload FROM ' . Data::t( 'aq_relay_jobs' ) . ' WHERE id = %d', [ $id ] );
 		$pay  = $row ? Data::dec( $row['payload'] ) : null;
 		$dlv  = is_array( $pay ) ? ( $pay['deliver'] ?? null ) : null;
-		if ( is_array( $dlv ) && ( $dlv['kind'] ?? '' ) === 'artabot' ) {
-			// The worker measured what this cost — wall-clock and the run's own reported spend. Prod
-			// cannot see either from here, and billing happens only once the turn has actually replied,
-			// so the numbers travel with the answer.
-			$metered = Rest::p( $req, 'metered', [] );
-			$media   = Rest::p( $req, 'media', [] );
-			Assistant::deliver( $dlv, $ok ? trim( $text ) : '', is_array( $usage ) ? $usage : [], is_array( $metered ) ? $metered : [], is_array( $media ) ? $media : [] );
+		if ( is_array( $dlv ) ) {
+			// The only domain that ever asked for async delivery was the retired paid chat. A late answer
+			// for one of its jobs has nowhere to go and is never billed; the row is simply cleared.
 			global $wpdb;
 			$wpdb->delete( Data::t( 'aq_relay_jobs' ), [ 'id' => $id ] );
 		}
@@ -613,7 +609,7 @@ final class Relay {
 	 * any of it produced. This keeps the whole sequence.
 	 *
 	 * Merged by ID rather than appended, because a step is written twice by design: once the instant
-	 * Claude commits to a tool (name only, no arguments yet) and again when its result lands. Appending
+	 * the model commits to a tool (name only, no arguments yet) and again when its result lands. Appending
 	 * would show every call twice, the second time contradicting the first.
 	 *
 	 * Everything here is WORKER-SUPPLIED TEXT that ends up rendered in a chat bubble, so every field is

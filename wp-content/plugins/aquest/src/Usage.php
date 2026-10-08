@@ -23,7 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * Measured on 2026-08-08, all of it checkable and none of it invented:
  *   • AI — the run reports its own consumption. The relay's ledger measured 73 real turns at
  *     3,586,894 tokens for $6.365 of API-equivalent value, i.e. ~$0.0872 a turn. The subscription is
- *     a flat $200/month (Claude Max 20×), so that plan breaks even at ~2,290 turns/month (~76/day)
+ *     a flat $200/month (a flat-rate model plan), so that plan breaks even at ~2,290 turns/month (~76/day)
  *     against current demand of ~69/day: metering at API-equivalent recovers close to exactly what
  *     the plan costs, which is why it is the honest meter to bill on rather than a markup.
  *   • Compute — Azure Container Apps consumption, from the live retail price API for swedencentral:
@@ -359,7 +359,7 @@ final class Usage {
 		$t     = Data::t( 'aq_usage' );
 		$rows  = $wpdb->get_results( $wpdb->prepare(
 			"SELECT user_id, COUNT(*) items, SUM(total_usd) usd, SUM(coins) coins
-			 FROM {$t} WHERE ended >= %d AND ended < %d GROUP BY user_id", $from, $to ), ARRAY_A );
+			 FROM {$t} WHERE ended >= %d AND ended < %d AND kind IN ('" . implode( "','", self::BILLABLE_KINDS ) . "') GROUP BY user_id", $from, $to ), ARRAY_A );
 		foreach ( $rows as $r ) {
 			$uid = (int) $r['user_id'];
 			$existing = Data::one( 'SELECT id, sent FROM ' . Data::t( 'aq_invoices' ) . ' WHERE user_id = %d AND day = %s', [ $uid, $day ] );
@@ -390,9 +390,27 @@ final class Usage {
 		return max( 0.0, round( self::accrued( $uid ) - self::settled( $uid ), 4 ) );
 	}
 
-	/** Everything this member's work has cost, all time, at full precision. */
+	/** The only metered work still billed: member terminal sessions (src/Shell.php). The paid chat
+	 *  assistant was retired on 2026-10-08 and nothing it metered is ever charged again. */
+	const BILLABLE_KINDS = [ 'shell' ];
+
+	/**
+	 * What may be charged, as a running total comparable with settled().
+	 *
+	 * NO MORE ASSISTANT CHARGES. Rows of any other kind (the retired chat) stay in the table untouched
+	 * — they are the public record of what happened — but they no longer add to what is owed. Coins
+	 * already settled are attributed to those retired rows FIRST, which is the member-favourable
+	 * reading: any unsettled assistant balance is forgiven, and only terminal time that has not
+	 * already been paid for can be charged. Nothing is refunded or rewritten; the ledger is unchanged.
+	 */
 	public static function accrued( $uid ) {
-		return (float) Data::col( 'SELECT COALESCE(SUM(coins),0) FROM ' . Data::t( 'aq_usage' ) . ' WHERE user_id = %d', [ (int) $uid ] );
+		$t       = Data::t( 'aq_usage' );
+		$in      = "'" . implode( "','", self::BILLABLE_KINDS ) . "'";
+		$billable = (float) Data::col( "SELECT COALESCE(SUM(coins),0) FROM $t WHERE user_id = %d AND kind IN ($in)", [ (int) $uid ] );
+		$retired  = (float) Data::col( "SELECT COALESCE(SUM(coins),0) FROM $t WHERE user_id = %d AND kind NOT IN ($in)", [ (int) $uid ] );
+		$settled  = self::settled( $uid );
+		$billable_paid = max( 0.0, $settled - $retired );
+		return $settled + max( 0.0, $billable - $billable_paid );
 	}
 
 	/** Everything they have actually been charged. Seeded from the LEDGER the first time, so a member
@@ -471,7 +489,7 @@ final class Usage {
 		foreach ( $lines as $l ) {
 			$tier = self::TIERS[ self::tier( $l['tier'] ) ]['label'] ?? $l['tier'];
 			$what = trim( (string) $l['note'] );
-			if ( $what === '' ) { $what = $l['kind'] === 'shell' ? 'Terminal session' : 'A message to ArtaBot'; }
+			if ( $what === '' ) { $what = $l['kind'] === 'shell' ? 'Terminal session' : 'Earlier assistant session'; }
 			// Cut on a WORD, and only when there is something to cut — a statement that ends every line
 			// mid-syllable reads as broken software, which is exactly how the first version read.
 			if ( mb_strlen( $what ) > 64 ) { $what = rtrim( mb_substr( $what, 0, 61 ), " ,.;:" ) . '…'; }
@@ -495,7 +513,7 @@ final class Usage {
 		if ( ! $inv ) { return; }
 		$lines = Data::all(
 			'SELECT session_id, kind, tier, secs, tokens, total_usd, coins, note FROM ' . Data::t( 'aq_usage' )
-			. ' WHERE user_id = %d AND ended >= %d AND ended < %d ORDER BY id ASC LIMIT 200',
+			. " WHERE user_id = %d AND ended >= %d AND ended < %d AND kind IN ('" . implode( "','", self::BILLABLE_KINDS ) . "') ORDER BY id ASC LIMIT 200",
 			[ $uid, strtotime( $day . ' 00:00:00 UTC' ), strtotime( $day . ' 00:00:00 UTC' ) + DAY_IN_SECONDS ] );
 		$sent = Mailer::send( 'usage_invoice', $u->user_email, [
 			// The real-name helper lives in the theme, and the plugin may not assume the theme is loaded

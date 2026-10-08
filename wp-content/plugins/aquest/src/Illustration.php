@@ -8,7 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * words, for anything: an artwork, a book cover, a plate inside a book — and the studio paints it with
  * STATE-OF-THE-ART open image models on FREE HuggingFace ZeroGPU Spaces (FLUX.2-dev / Qwen-Image /
  * Z-Image-Turbo, via the illustration relay). Unlike the one-shot studios, every illustration is then
- * ADVERSARIALLY IMPROVED (the ArtaScience pattern): a Claude vision critic scores each render against the
+ * ADVERSARIALLY IMPROVED (the ArtaScience pattern): a vision model critic scores each render against the
  * brief and directs an instruction-edit round (Qwen-Image-Edit / FLUX.2 image-conditioned) or a
  * re-generation, until it passes or the rounds cap out. EVERY round — image, critique, score — is kept
  * and shown publicly on the illustration page, so the improvement loop is transparent.
@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * Pipeline (same poll/complete shape as Film — the laptop POLLS):
  *   1. POST illustrations (brief) → a 'draft' project; ?generate=1 → art_state 'queued'.
  *   2. The illustration relay long-polls relay/illust/poll (X-AQ-Worker), claims the oldest queued
- *      project, paints round 1 with a SOTA free model, then loops: Claude-vision critique → targeted
+ *      project, paints round 1 with a SOTA free model, then loops: vision-model critique → targeted
  *      edit/regenerate, POSTing every round to relay/illust/round; finally relay/illust/complete → 'review'.
  *   3. The author reviews and POSTs .../publish → status 'published', art_state 'live'; coins charged
  *      once, points awarded; a published cover also becomes its book's thumbnail.

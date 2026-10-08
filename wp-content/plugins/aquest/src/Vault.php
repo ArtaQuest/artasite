@@ -36,8 +36,15 @@ final class Vault {
 	 * optional reads "optional", never an alarming "missing", and never counts as needing attention.
 	 */
 	const REGISTRY = [
-		// (ANTHROPIC_API_KEY removed 2026-06-13 — ArtaBot, ArtaMod, and ID verification run on the Claude
-		//  Max SUBSCRIPTION via the laptop relay only; the paid API is no longer used anywhere.)
+		// (The old paid model-API key was removed 2026-06-13 — ArtaMod and ID verification run on the
+		//  operator's model relay only; no per-call model API key is held here.)
+		// @arta, the public assistant (src/Arta.php). The brain (arta-brain/) pulls mentions from the site
+		// with this token. Optional: unset = mentions are recorded and wait; nothing answers them.
+		'AQ_ARTA_REPLY_TOKEN'        => [ 'Token the Arta brain presents (X-Arta-Token) to claim mentions and post replies as @arta — ≥32 chars, same value as the brain setting ARTA_REPLY_TOKEN', 180, true ],
+		// Transactional email at sign-up scale. When both are set, Mailer sends through Azure
+		// Communication Services and falls back to SMTP only if ACS refuses.
+		'AQ_ACS_EMAIL_CONNECTION'    => [ 'Azure Communication Services connection string (endpoint=…;accesskey=…) — primary sender for all platform email', 180, true ],
+		'AQ_ACS_EMAIL_SENDER'        => [ 'ACS verified sender address, e.g. DoNotReply@mail.artaquest.org (a custom domain verified in ACS)', 0, true ],
 		'STRIPE_SECRET_KEY'          => [ 'Stripe LIVE secret key — coin purchases, donations, cash-outs', 180 ],
 		'STRIPE_PUBLISHABLE_KEY'     => [ 'Stripe publishable key (public-side; rotates with the secret)', 180 ],
 		'STRIPE_WEBHOOK_SECRET'      => [ 'Stripe webhook signing secret (whsec_…)', 180 ],

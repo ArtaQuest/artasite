@@ -145,9 +145,9 @@ function RecordCost({ onSaved }: { onSaved: () => void }) {
           Each field asks for 14rem, so the form is two tracks at 1440 (~299px) and 1280 (~241px) and
           one from 1100 down (~338px) — and a native control is never handed less than that. */}
       <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
-        <Field label="Vendor" required><Input value={f.vendor} onChange={set("vendor")} placeholder="Anthropic, PBC" /></Field>
+        <Field label="Vendor" required><Input value={f.vendor} onChange={set("vendor")} placeholder="Vendor name" /></Field>
         <Field label="Invoice number" required><Input value={f.number} onChange={set("number")} placeholder="6LNWF16Y-0009" /></Field>
-        <Field label="Description"><Input value={f.description} onChange={set("description")} placeholder="Claude Max plan - 20x" /></Field>
+        <Field label="Description"><Input value={f.description} onChange={set("description")} placeholder="What was bought" /></Field>
         <Field label="Expense account">
           <Select value={f.account} onChange={(v) => setF((p) => ({ ...p, account: v }))}
             options={[

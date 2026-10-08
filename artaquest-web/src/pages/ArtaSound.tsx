@@ -18,7 +18,7 @@ const RELAY = "tools/ticket-agent/music-relay.mjs";
 // ── Lifecycle, grounded in music-relay.mjs + Music.php. ─────────────────────────────────────────────
 const LIFECYCLE: { n: string; title: string; body: string }[] = [
   { n: "1", title: "Brief", body: "A member describes the music they want — or pastes their own manuscript for an audiobook — and the project joins the public queue. Drafting is free; you pay only when you publish." },
-  { n: "2", title: "Compose", body: "Claude writes an original song for the brief: a full lyric sheet, style tags for the vocal model, and a complete arrangement. On later rounds this becomes a targeted revision of its own work — keeping what the critic praised, rewriting what fell short." },
+  { n: "2", title: "Compose", body: "The composer model writes an original song for the brief: a full lyric sheet, style tags for the vocal model, and a complete arrangement. On later rounds this becomes a targeted revision of its own work — keeping what the critic praised, rewriting what fell short." },
   { n: "3", title: "Render", body: "The composition is performed by open models, sung vocals first: ACE-Step on a free GPU Space, then the studio's own arrangement renderer, MusicGen, and a parametric composer as fallbacks. Every render is free; the queue works in small chunks so long jobs finish steadily." },
   { n: "4", title: "Measure & critique", body: "The recording is measured — duration, clipping, silence, dynamics, and a ten-slice energy arc that makes song structure visible — then an adversarial critic scores the take against the brief and the measurements, and files a public verdict." },
   { n: "5", title: "Rounds, then review", body: "A 'revise' sends the studio back to recompose against the critique — up to four rounds, each take judged against the best one before it. The strongest recording goes to the author to hear, and only the author publishes. Every round stays public: its recording, its measurements, its report." },
@@ -35,7 +35,7 @@ const MEASURES: { name: string; what: string }[] = [
 // ── The engine chain, grounded in renderTake() — SOTA first, free always. ───────────────────────────
 const ENGINES: { name: string; role: string }[] = [
   { name: "ACE-Step", role: "Real sung vocals — a state-of-the-art open lyrics-to-song model, run on a free community GPU Space. The studio holds out for it through quota waits before considering anything else." },
-  { name: "artascore", role: "The studio's own renderer: it performs Claude's full arrangement (chords, lead melody, bass, drums) locally for free — so a real, original tune always exists even with no GPU available." },
+  { name: "artascore", role: "The studio's own renderer: it performs the composer's full arrangement (chords, lead melody, bass, drums) locally for free — so a real, original tune always exists even with no GPU available." },
   { name: "MusicGen", role: "A neural instrumental model, used when a piece suits it and the stack is available; supports melody-conditioning from a member's private inspiration audio." },
   { name: "artacompose", role: "A parametric composer — the universal fallback that never fails, so no member's project can strand." },
   { name: "Edge neural voices", role: "For audiobooks: ~322 free neural voices across ~142 languages narrate the member's own manuscript sentence by sentence, with exact per-sentence timings." },
@@ -188,7 +188,7 @@ export default function ArtaSound() {
       <div className="mt-12">
         <SectionTitle kicker="Free, state of the art">The performers</SectionTitle>
         <p className="text-[14px] leading-relaxed text-ink-2">
-          Composition and critique run on the operator's Claude subscription; the audio itself is performed by open
+          Composition and critique run on the operator's flat-rate model subscription; the audio itself is performed by open
           models on free hardware, best first — so the studio costs members nothing to use, and drafting is always free.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -205,7 +205,7 @@ export default function ArtaSound() {
       <div className="mt-12">
         <SectionTitle kicker="Verbatim">The exact prompts, annotated</SectionTitle>
         <p className="text-[14px] leading-relaxed text-ink-2">
-          Both stages run as <code className="rounded bg-space-1 px-1 py-0.5 font-mono text-[12.5px]">claude -p &lt;task&gt; --append-system-prompt &lt;system&gt;</code>.
+          Both stages run headless on the relay with a task prompt and an appended system prompt.
           Below is every block of both prompts, verbatim. Placeholder tokens like{" "}
           <code className="rounded bg-space-1 px-1 py-0.5 font-mono text-[12.5px]">&lt;title&gt;</code>,{" "}
           <code className="rounded bg-space-1 px-1 py-0.5 font-mono text-[12.5px]">&lt;the member's brief&gt;</code> and{" "}

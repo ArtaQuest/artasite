@@ -232,7 +232,7 @@ final class Competitions {
 					'verified'  => (bool) $v['verified'],
 					'score'     => round( (float) $v['score'], 2 ), // chant rounds carry seconds (decimals matter)
 					'report'    => (string) $v['report'],
-					'model'     => (string) $v['model'],
+					'model'     => Artaai::public_model( $v['model'] ),
 					'effort'    => (string) $v['effort'],
 					'runtime_s' => (int) $v['runtime_s'],
 					'created'   => $v['created'] ? (int) strtotime( $v['created'] . ' UTC' ) : 0,
@@ -1693,7 +1693,7 @@ final class Competitions {
 		return $admins ? (int) $admins[0] : 0;
 	}
 
-	/** Find-or-create the official discussion thread for a competition (author = ArtaBot, so the
+	/** Find-or-create the official discussion thread for a competition (author = Arta, so the
 	 *  competition host stays a competitor, not the moderator). Returns the thread id, or 0. */
 	private static function ensure_thread( $slug, $def ) {
 		$title = (string) $def['title'] . ' — official discussion';
@@ -1905,7 +1905,7 @@ final class Competitions {
 			}
 			$names[] = self::name_of( $uid ) . ' (+' . $coins . "\xe2\x82\xb3)";  // named even when already paid
 		}
-		// Announce the podium on the official discussion thread (ArtaBot), once.
+		// Announce the podium on the official discussion thread (Arta), once.
 		$tid = (int) ( $c['thread_id'] ?? 0 );
 		$bot_uid = $bot ?: $owner;
 		if ( $tid && $bot_uid && $names ) {

@@ -6,7 +6,7 @@
 // annotations are authored for the public transparency page and may be edited. If the reviewer
 // prompt changes, re-dump and regenerate this file.
 
-export const REVIEWER_MODEL = "Claude Opus 5 (claude-opus-5) via `claude -p`";
+export const REVIEWER_MODEL = "ArtaAI (headless, on the operator relay)";
 export const REVIEWER_EFFORT = "max";
 
 export type PromptBlock = {

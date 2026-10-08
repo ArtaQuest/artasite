@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *
  * Every comment on every commentable surface (SURFACES) is QUEUED on post and scored here. A comment
  * that scores at/over LIMIT is flagged: its upvotes are excluded from the course competition
- * (Economy::podium) and, on the section board, ArtaBot leaves a consoling reply
+ * (Economy::podium) and, on the section board, Arta leaves a consoling reply
  * (Assistant::console_fear). Nothing is deleted, no coin is charged — moderation is platform-borne
  * and best-effort.
  *
@@ -26,8 +26,8 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * verdict is computed against a few-shot anchor set baked into the prompt so the score means the
  * same thing every time.
  *
- * Verdict via the Claude Max SUBSCRIPTION only: comments are QUEUED on post (aq_comments.modq=1) and
- * scored asynchronously through the relay (process_queue → Relay::ask), in batches. The paid Anthropic
+ * Verdict via the model SUBSCRIPTION only: comments are QUEUED on post (aq_comments.modq=1) and
+ * scored asynchronously through the relay (process_queue → Relay::ask), in batches. The paid model
  * API was removed (2026-06-13) — if the relay is offline, comments just stay queued (visible,
  * un-moderated; fail-open). A test seam (`aq_fearometer_verdict` filter) forces a score without a relay.
  *
@@ -38,7 +38,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Fearometer {
 
-	const MODEL    = 'claude-opus-5'; // the relay (subscription) model — flat-rate, so batch moderation is free
+	const MODEL    = ''; // empty = the relay's configured model — flat-rate, so batch moderation is free
 	const MAXTOK   = 320;
 	const LIMIT    = 70;   // score 0-100; at/over this a comment is "over the line" → flagged
 	const MAX_CHARS = 8000; // cap the text sent to the model (a comment is short; guards a pasted wall)
@@ -273,9 +273,9 @@ final class Fearometer {
 					'queued' => $q, 'appeals' => $ap, 'appeals_granted' => $apg, 'most_flagged_courses' => $rows ];
 			} )(),
 			// Accurate on EVERY screened surface: the flag and the "set aside" mark apply everywhere,
-			// ArtaBot's consoling reply only where a competition board exists to reply on (see
+			// Arta's consoling reply only where a competition board exists to reply on (see
 			// apply_verdict) — so the sentence no longer promises a note the feed cannot leave.
-			'consequence' => 'A flagged comment is never deleted and no coin is charged. It is marked "set aside" where it stands and its upvotes stop counting toward any competition (we demonetise, we do not remove); on a competition board ArtaBot also leaves a kind note. You can reword and post again.',
+			'consequence' => 'A flagged comment is never deleted and no coin is charged. It is marked "set aside" where it stands and its upvotes stop counting toward any competition (we demonetise, we do not remove); on a competition board Arta also leaves a kind note. You can reword and post again.',
 			'promise'     => 'We support free speech and never censor: your words are never deleted and you are never banned for crossing the line. We know we can be wrong, so the most we ever do is take a reply out of the prize competition when we sense it could cause harm. We are open to criticism and we encourage you to challenge any moderation flag — a real person reviews every challenge.',
 		];
 	}
@@ -352,11 +352,11 @@ final class Fearometer {
 	// ── Moderation queue (subscription-only, no API) ─────────────────────────────
 	/**
 	 * Drain the moderation queue: comments on every screened surface (SURFACES) are posted with
-	 * aq_comments.modq = 1 and scored HERE, asynchronously, on the Claude Max SUBSCRIPTION via the
+	 * aq_comments.modq = 1 and scored HERE, asynchronously, on the model SUBSCRIPTION via the
 	 * relay (the paid API was removed, 2026-06-13). Runs on the aq_moderate cron. Each pass handles
 	 * up to QUEUE_RUNS batches of QUEUE_BATCH comments; a batch is scored in ONE relay job (a JSON
 	 * object of id→verdict). A verdict at/over LIMIT flags the comment (its upvotes leave the
-	 * competition — Economy::podium filters flagged=0) and, on the section board, ArtaBot leaves a
+	 * competition — Economy::podium filters flagged=0) and, on the section board, Arta leaves a
 	 * consoling reply. If the relay is unavailable the queue is simply left for the next tick —
 	 * comments stay visible, just un-moderated (fail-open, no API).
 	 * Returns the number of comments resolved (modq cleared) this pass.
@@ -420,7 +420,7 @@ final class Fearometer {
 		// The queue now covers the feed and the discussion boards as well as the section board, and
 		// NEITHER of those has a course: course_id is 0 and context_id is a thread / notebook id,
 		// not a lesson. Assistant::console_fear writes its reply as a SECTION comment against that
-		// id and bumps aq_lessons.comment_count — so on those surfaces it would file ArtaBot's note
+		// id and bumps aq_lessons.comment_count — so on those surfaces it would file Arta's note
 		// where the member will never see it AND increment an unrelated lesson's counter. Console
 		// only where the bot can actually reply. The FLAG itself is what sets the comment aside, and
 		// that has already been written above for every surface. quester_touch is per-course too and

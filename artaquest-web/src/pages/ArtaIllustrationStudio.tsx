@@ -237,7 +237,7 @@ export default function ArtaIllustrationStudio() {
       <div className="mt-12">
         <SectionTitle kicker="Verbatim">The exact prompts, annotated</SectionTitle>
         <p className="text-[14px] leading-relaxed text-ink-2">
-          Both turns run as <code className="rounded bg-space-1 px-1 py-0.5 font-mono text-[12.5px]">claude -p &lt;task&gt; --append-system-prompt &lt;system&gt; --effort high</code> with
+          Both turns run headless at high effort, with a task prompt and an appended system prompt, with
           tools locked down (the director: none; the critic: Read confined to its scratch directory). Placeholder tokens like{" "}
           <code className="rounded bg-space-1 px-1 py-0.5 font-mono text-[12.5px]">&lt;the member's brief&gt;</code> and{" "}
           <code className="rounded bg-space-1 px-1 py-0.5 font-mono text-[12.5px]">&lt;round&gt;</code> are where runtime values are interpolated per piece;
