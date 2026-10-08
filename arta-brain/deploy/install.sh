@@ -19,7 +19,8 @@ ENV_DIR="$HOME/.config/arta-brain"
 ENV_FILE="$ENV_DIR/env"
 STATE_DIR="$HOME/.local/state/arta-brain"
 BEAT="$STATE_DIR/beat"
-DISPLAY_NUM=":99"
+# :99 is taken on artabot by the older artabot-xvfb.service; sign-in uses its own display.
+DISPLAY_NUM="${ARTA_LOGIN_DISPLAY:-:98}"
 
 need_node() {
   if command -v node >/dev/null && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ]; then return; fi
@@ -39,7 +40,9 @@ ask_secret() { # name prompt — only when empty in the env file; the value is n
   local name="$1" prompt="$2" cur
   cur="$(grep -E "^$name=" "$ENV_FILE" | cut -d= -f2- || true)"
   [ -n "$cur" ] && return
-  read -r -s -p "$prompt: " val; echo
+  local val=""
+  # No terminal (a scripted install): leave it empty instead of letting `set -e` abort on EOF.
+  if [ -t 0 ]; then read -r -s -p "$prompt: " val || true; echo; fi
   [ -z "$val" ] && { echo "  (left empty — set $name in $ENV_FILE later)"; return; }
   python3 - "$ENV_FILE" "$name" "$val" <<'PY'
 import sys
@@ -57,8 +60,10 @@ settings() {
   ask_secret ARTA_REPLY_TOKEN "ARTA_REPLY_TOKEN (same as the site's AQ_ARTA_REPLY_TOKEN)"
   ask_secret GITHUB_ISSUES_TOKEN "GITHUB_ISSUES_TOKEN (fine-grained, Issues RW on ArtaQuest/artasite)"
   if ! grep -qE '^ARTA_CHAT_URL=https://' "$ENV_FILE"; then
-    read -r -p "ARTA_CHAT_URL (the chat page to answer on): " url
-    [ -n "$url" ] && sed -i "s|^ARTA_CHAT_URL=.*|ARTA_CHAT_URL=$url|" "$ENV_FILE"
+    local url=""
+    if [ -t 0 ]; then read -r -p "ARTA_CHAT_URL (the chat page to answer on): " url || true; fi
+    # An `if`, not `&&`: a false test as the last command would fail settings() under `set -e`.
+    if [ -n "$url" ]; then sed -i "s|^ARTA_CHAT_URL=.*|ARTA_CHAT_URL=$url|" "$ENV_FILE"; fi
   fi
 }
 
