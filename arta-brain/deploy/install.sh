@@ -134,6 +134,7 @@ EOF2
 case "${1:-}" in
   install)
     need_node
+    sudo apt-get update -qq   # a VM resumed after weeks deallocated has a stale package index (404s)
     sudo apt-get install -y xvfb x11vnc novnc websockify >/dev/null
     build
     settings
