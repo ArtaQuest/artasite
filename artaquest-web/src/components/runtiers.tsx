@@ -41,9 +41,9 @@ function openInColab(id: number, slug: string) {
   window.open("https://colab.research.google.com/#create=true", "_blank", "noopener,noreferrer");
 }
 
-type Props = { id: number; slug: string; kaggleUrl?: string; colabUrl?: string; kaggleImportUrl?: string; ipynb?: string; className?: string };
+type Props = { id: number; slug: string; kaggleUrl?: string; colabUrl?: string; kaggleImportUrl?: string; kaggleInputs?: number; ipynb?: string; className?: string };
 
-export function RunTiers({ id, slug, kaggleUrl, colabUrl, kaggleImportUrl, ipynb, className }: Props) {
+export function RunTiers({ id, slug, kaggleUrl, colabUrl, kaggleImportUrl, kaggleInputs, ipynb, className }: Props) {
   // What this work needs that a browser tab cannot give it — said before the click, not after.
   const [blockers, setBlockers] = useState<string[]>([]);
   useEffect(() => {
@@ -56,6 +56,11 @@ export function RunTiers({ id, slug, kaggleUrl, colabUrl, kaggleImportUrl, ipynb
   // if one is ever served again: that route is the OAuth prompt this card exists to avoid.
   const colab = (colabUrl || "").startsWith("https://colab.research.google.com/github/") ? colabUrl! : "";
   const kgImport = (kaggleImportUrl || "").startsWith("https://www.kaggle.com/kernels/welcome?src=") ? kaggleImportUrl! : "";
+  // Fewest steps to a runnable copy. Kaggle's import form drops the visitor straight into an editor
+  // holding the exact published bytes (verified signed out, 2026-10-08) — but it attaches NO inputs,
+  // so it is only the primary route for a kernel that reads none. Anything with inputs goes to the
+  // kernel page, whose Copy & Edit brings them along; the import is not offered there at all.
+  const kgDirect = kgImport !== "" && kaggleInputs === 0;
 
   const rung = "flex flex-wrap items-baseline gap-x-2 gap-y-1";
   const num = "grid h-5 w-5 shrink-0 place-items-center rounded-full border border-line text-[11px] font-bold text-ink-3";
@@ -120,7 +125,11 @@ export function RunTiers({ id, slug, kaggleUrl, colabUrl, kaggleImportUrl, ipynb
           <span aria-hidden className={num}>3</span>
           <div className="min-w-0">
             <p className={rung}>
-              {kaggle !== "" ? (
+              {kgDirect ? (
+                <a className={act} href={kgImport} target="_blank" rel="noopener noreferrer">
+                  Run it on Kaggle
+                </a>
+              ) : kaggle !== "" ? (
                 <a className={act} href={kaggle} target="_blank" rel="noopener noreferrer">
                   Run it on Kaggle
                 </a>
@@ -129,16 +138,26 @@ export function RunTiers({ id, slug, kaggleUrl, colabUrl, kaggleImportUrl, ipynb
               )}
             </p>
             <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-3">
-              The one that counts. Copy &amp; Edit, then Run All, from the same public inputs — this
-              is the tier the reproducibility checklist reads, so it is the only run a stranger can
-              check for themselves.
-              {kgImport !== "" && (
+              {kgDirect ? (
                 <>
-                  {" "}Or{" "}
-                  <a className="font-semibold text-yin-ink hover:underline" href={kgImport} target="_blank" rel="noopener noreferrer">
-                    import this exact published copy
-                  </a>{" "}
-                  as a new Kaggle notebook.
+                  The one that counts. Opens this exact notebook in a Kaggle editor — sign in, then
+                  Run All. It reads no inputs, so this is the same run the reproducibility checklist
+                  read.
+                  {kaggle !== "" && (
+                    <>
+                      {" "}Or{" "}
+                      <a className="font-semibold text-yin-ink hover:underline" href={kaggle} target="_blank" rel="noopener noreferrer">
+                        Copy &amp; Edit the original
+                      </a>
+                      .
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  The one that counts. Copy &amp; Edit, then Run All, from the same public inputs — this
+                  is the tier the reproducibility checklist reads, so it is the only run a stranger can
+                  check for themselves.
                 </>
               )}
             </p>
