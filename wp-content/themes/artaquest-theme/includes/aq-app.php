@@ -1104,6 +1104,16 @@ function aq_app_head_meta() {
 		global $wp;
 		$url = home_url( user_trailingslashit( $wp->request ) );
 	}
+	// Profiles only: English /u/{slug}/ is the original. home_url() re-adds the active
+	// locale, so a copy such as /af/u/artafather/ would otherwise canonicalise to itself
+	// and Google indexes the language URL instead of https://artaquest.com/u/{slug}/.
+	// Stripping here also makes og:url and the hreflang x-default (already the unprefixed
+	// path) name that same English URL. The English page has no prefix, so it stays
+	// self-canonical. Alternates for every locale are still emitted below. Other routes
+	// keep a self-referencing canonical.
+	if ( $puser && function_exists( 'aq_unprefixed_url' ) ) {
+		$url = aq_unprefixed_url( $url );
+	}
 
 	// og:image: prefer a content-specific card so social/Discover thumbnails actually depict the page —
 	// the notebook's thumb or the profile avatar — falling back to the dedicated 1200×630 brand card.
@@ -1146,10 +1156,10 @@ function aq_app_head_meta() {
 	if ( ! aq_app_is_genuine_404() ) {
 		$tags[] = sprintf( '<link rel="canonical" href="%s" />', esc_url( $url ) );
 		// hreflang for the ~133-locale mesh: every page exists in every language (translated on first
-		// visit), so we declare the full set + x-default. This tells Google to serve the right
-		// localised URL to each searcher and stops the locale variants being read as duplicates.
-		// Each locale's canonical is self-referencing (its prefixed URL), so the reciprocal hreflang
-		// set + self-canonical stay coherent.
+		// visit), so we declare the full set + x-default (the unprefixed English URL). Non-profile
+		// pages stay self-canonical on their prefixed URL. Profile pages do not: $url above is the
+		// English /u/{slug}/, so a locale copy's canonical and x-default both name that original
+		// while the alternates still list every language.
 		foreach ( aq_app_hreflang_links( $url ) as $hl ) {
 			$tags[] = $hl;
 		}
@@ -1172,7 +1182,7 @@ function aq_app_head_meta() {
 		$tags[] = sprintf( '<meta name="twitter:description" content="%s" />', esc_attr( $desc ) );
 	}
 	if ( $image !== '' ) {
-		$alt = $nb ? (string) $nb->title : ( $puser ? $puser->display_name : 'The ArtaQuest logo on a dark background' );
+		$alt = $nb ? (string) $nb->title : ( $puser ? aq_profile_name( $puser ) : 'The ArtaQuest logo on a dark background' );
 		$tags[] = sprintf( '<meta property="og:image" content="%s" />', esc_url( $image ) );
 		if ( $image_w > 0 && $image_h > 0 ) { // only declare dims we actually know (else let scrapers fetch)
 			$tags[] = sprintf( '<meta property="og:image:width" content="%d" />', (int) $image_w );
@@ -1279,7 +1289,7 @@ function aq_app_head_meta() {
 		$person  = array(
 			'@type' => 'Person',
 			'name'  => $pname,
-			'url'   => home_url( '/u/' . $puser->user_nicename . '/' ),
+			'url'   => aq_unprefixed_url( home_url( '/u/' . $puser->user_nicename . '/' ) ),
 		);
 		if ( $puser->display_name && $puser->display_name !== $pname ) {
 			$person['alternateName'] = (string) $puser->display_name;
