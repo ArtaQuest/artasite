@@ -3,7 +3,7 @@
  * Plugin Name: ArtaQuest
  * Description: The entire ArtaQuest platform — LMS, economy, social, i18n, funds — in one
  *              lean, dependency-free plugin. Replaces MasterStudy LMS + WooCommerce.
- * Version:     1.23.1
+ * Version:     1.23.2
  * Author:      ArtaQuest Foundation
  * License:     GNU AGPLv3
  * License URI: https://www.gnu.org/licenses/agpl-3.0.html
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 // disagree will send the next person chasing a production divergence that is not there: the
 // header is what get_plugin_data() reads, AQ_VERSION is what /version reports and what the
 // integrity sweep keys on. Bump them together, always.
-define( 'AQ_VERSION', '1.23.1' );
+define( 'AQ_VERSION', '1.23.2' );
 define( 'AQ_DIR', __DIR__ );
 define( 'AQ_URL', plugins_url( '', __FILE__ ) );
 
@@ -419,6 +419,17 @@ add_action( 'admin_init', [ 'AQ\\Vault', 'handle_actions' ] );
 /** ArtaAI — the operator's platform-wide AI monitor + control surface (wp-admin read-out; the full
  *  interactive controls live in the SPA at Studio › ArtaAI). See src/Artaai.php. */
 add_action( 'admin_menu', [ 'AQ\\Artaai', 'admin_menu' ] );
+
+/** The OPERATOR-granted blue check (see Verify::has_badge): a checkbox on wp-admin → Users → Edit,
+ *  shown to and saved for administrators only (manage_options + its own nonce), and
+ *  `wp aq badge <grant|revoke|status> <user>` from WP-CLI. Nothing a member can reach writes it. */
+add_action( 'show_user_profile', [ 'AQ\\Verify', 'badge_field' ] );
+add_action( 'edit_user_profile', [ 'AQ\\Verify', 'badge_field' ] );
+add_action( 'personal_options_update', [ 'AQ\\Verify', 'badge_save' ] );
+add_action( 'edit_user_profile_update', [ 'AQ\\Verify', 'badge_save' ] );
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+	WP_CLI::add_command( 'aq badge', [ 'AQ\\Verify', 'cli_badge' ] );
+}
 
 /** Filesystem + economic-invariant integrity monitor (see Integrity.php) — runs on the same hourly
  *  sweep as the Watchdog: webshell scan of uploads, drop-in / mu-plugin / code-manifest baselines,

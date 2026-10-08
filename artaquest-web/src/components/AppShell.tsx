@@ -16,6 +16,7 @@ import { cartCount, onCartChange } from "../lib/cart";
 import { CHECKOUT_LIVE } from "../lib/wp";
 import { Avatar, Button, IconButton, Logo } from "./ui";
 import { ArtaAvatar } from "./arta";
+import { BlueCheck } from "./BlueCheck";
 
 const w = (typeof window !== "undefined" ? (window as unknown as Record<string, string>) : {}) || {};
 
@@ -348,7 +349,7 @@ function CreateMenu({ onNavigate }: { onNavigate: () => void }) {
  * stopPropagation + preventDefault on the trigger, which is why the dots are not simply an <a>.
  */
 function AccountRow({ me, labelShow, onNavigate }: {
-  me: { name: string; slug?: string; avatar: string };
+  me: { name: string; slug?: string; avatar: string; verified?: boolean };
   labelShow: string;
   onNavigate: () => void;
 }) {
@@ -384,7 +385,7 @@ function AccountRow({ me, labelShow, onNavigate }: {
         </span>
         {/* A NAME IS NEVER SHORTENED — nameClass wraps and steps the type down (lib/fmt). */}
         <span className={`min-w-0 flex-1 pe-1 transition-opacity duration-200 ${labelShow}`}>
-          <span className={`block font-bold text-ink ${nameClass(me.name)}`}>{me.name}</span>
+          <span className={`block font-bold text-ink ${nameClass(me.name)}`}>{me.name}{me.verified && <BlueCheck size={15} className="ms-1" />}</span>
           <span className={`block break-all leading-tight text-ink-2 ${nameSize(me.slug || "", 13)}`} data-ay-skip="1">@{me.slug}</span>
         </span>
         <button type="button" aria-haspopup="menu" aria-expanded={open} aria-label="Account options"

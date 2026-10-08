@@ -1283,7 +1283,7 @@ function IdentityVerification() {
     <section className="flex flex-col gap-4">
       <div>
         <h2 className="flex items-center gap-2 text-[20px] font-bold tracking-tight">
-          Identity {st?.verified && <BlueCheck size={18} />}
+          Identity {(st?.verified || st?.badge) && <BlueCheck size={18} />}
         </h2>
         <p className="mt-1 text-[13px] text-ink-3">Your date of birth is required to post. Your full legal name is optional — it is needed only for the blue check, which confirms both against a government ID and is required to cash out. Both are public.</p>
       </div>
@@ -1315,6 +1315,14 @@ function IdentityVerification() {
 
       {/* Blue check verification */}
       <Card as="div" className="flex flex-col gap-3 p-5">
+        {/* An operator-granted badge (Verify::grant_badge) shows on the profile already; say so, and
+            say plainly that the ID check below is still what unlocks cash-out. */}
+        {!st?.verified && st?.badge_granted && (
+          <p className="flex items-start gap-2 text-[14px] text-ink-2">
+            <BlueCheck size={18} className="mt-0.5" />
+            <span><span className="font-semibold text-ink">Your blue check was granted by the ArtaQuest team.</span> Verifying your ID below is still needed to cash out.</span>
+          </p>
+        )}
         {st?.verified ? (
           <div className="flex items-center gap-2 text-[15px] font-semibold text-yin-light">
             <BlueCheck size={18} /> Verified{st.verified_at ? ` · ${new Date(st.verified_at * 1000).toLocaleDateString()}` : ""}

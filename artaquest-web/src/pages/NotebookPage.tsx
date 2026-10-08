@@ -27,6 +27,7 @@ import { fmtBytes } from "../lib/bytes";
 import { labRunUrl } from "../lib/pykernel";
 import { watchMath } from "../lib/math";
 import { ConfirmDialog, Avatar, Button, Chip, EmptyState, HeartGlyph, SectionHeader, Textarea, cx } from "../components/ui";
+import { BlueCheck } from "../components/BlueCheck";
 import { Checklist } from "../components/checklist";
 import { isLoggedIn } from "../lib/auth";
 import { uiLocale, currentUser } from "../lib/wp";
@@ -207,7 +208,7 @@ function CommentRow({ c, nbId, mine, onReply, onDeleted, depth }: { c: NbComment
       </Link>
       <div className="min-w-0 flex-1">
         <p className="flex items-baseline gap-2 text-[13px]">
-          <Link to={`/u/${c.author.slug}`} className="font-bold text-ink hover:underline">{c.author.name}</Link>
+          <Link to={`/u/${c.author.slug}`} className="font-bold text-ink hover:underline">{c.author.name}{c.author.verified && <BlueCheck size={15} className="ms-1" />}</Link>
           <span className="text-ink-3">{timeAgo(c.created)}</span>
         </p>
         {editing ? (
@@ -436,6 +437,7 @@ export default function NotebookPage() {
           <Link to={`/u/${nb.author.slug}`} className="inline-flex items-center gap-2 text-sm text-ink-2 hover:text-ink">
             <Avatar name={nb.author.name} src={nb.author.avatar} className="h-6 w-6 text-[10px]" />
             {nb.author.name}
+            {nb.author.verified && <BlueCheck size={15} className="-ms-1" />}
           </Link>
           {credited ? <span className="text-[12px] text-ink-3">submitted this</span> : null}
           <button

@@ -69,6 +69,96 @@ final class Verify {
 	}
 	public static function is_verified( $uid ) { return (int) get_user_meta( (int) $uid, 'aq_verified', true ) > 0; }
 
+	// ── the badge on screen: earned OR granted (2026-10-08) ───────────────────────
+	/**
+	 * THE BLUE CHECK HAS TWO ROUTES TO IT, and one badge on screen:
+	 *   • EARNED — `aq_verified` (a timestamp), written only by verify_identity() once the ID + selfie
+	 *     check passes. It is also the identity fact cash-out is gated on (Economy), and editing the
+	 *     verified name or date of birth clears it. is_verified() above answers for it, and ONLY it.
+	 *   • GRANTED — `aq_badge_granted` (a timestamp), written only by an OPERATOR: the checkbox on the
+	 *     wp-admin user screen (manage_options + its own nonce, see badge_field/badge_save) or
+	 *     `wp aq badge grant <user>` (see cli_badge). No REST route, no Account field and no
+	 *     profile_update key writes it, and no user meta is registered with show_in_rest, so the core
+	 *     /wp/v2/users endpoint cannot either — a member has no way to set it on themselves. It
+	 *     confers the BADGE only: never cash-out, which stays on the ID check.
+	 * Operator 2026-10-08: "implement blue check and give it to /u/arash user". Every PUBLIC surface
+	 * (profile, author cards, comments, lists, search, the user menu) asks has_badge(); anything that
+	 * needs the ID-backed fact keeps asking is_verified().
+	 */
+	const BADGE_META = 'aq_badge_granted';
+	/** @var array<int,bool> per-request memo — a feed page asks about the same few authors many times */
+	private static $badge = [];
+	public static function is_granted( $uid ) { return (int) get_user_meta( (int) $uid, self::BADGE_META, true ) > 0; }
+	public static function has_badge( $uid ) {
+		$uid = (int) $uid;
+		if ( $uid <= 0 ) { return false; }
+		if ( isset( self::$badge[ $uid ] ) ) { return self::$badge[ $uid ]; }
+		$on = self::is_verified( $uid ) || self::is_granted( $uid );
+		if ( count( self::$badge ) < 1000 ) { self::$badge[ $uid ] = $on; }
+		return $on;
+	}
+	/** How the badge was reached, for the explainer: 'id' (earned), 'team' (granted) or ''. */
+	public static function badge_via( $uid ) {
+		return self::is_verified( $uid ) ? 'id' : ( self::is_granted( $uid ) ? 'team' : '' );
+	}
+	/** Grant or revoke the OPERATOR badge. Server-side callers only (wp-admin, WP-CLI, a migration) —
+	 *  there is deliberately no REST route to this. Returns the new state. */
+	public static function grant_badge( $uid, $on, $by = '' ) {
+		$uid = (int) $uid;
+		if ( $uid <= 0 || ! get_userdata( $uid ) ) { return false; }
+		$was = self::is_granted( $uid );
+		if ( $on && ! $was ) { update_user_meta( $uid, self::BADGE_META, time() ); }
+		if ( ! $on && $was ) { delete_user_meta( $uid, self::BADGE_META ); }
+		unset( self::$badge[ $uid ] );
+		if ( $on !== $was && class_exists( '\\AQ\\Watchdog' ) && method_exists( '\\AQ\\Watchdog', 'note' ) ) {
+			$u = get_userdata( $uid );
+			Watchdog::note( sprintf( 'Blue check %s for @%s%s', $on ? 'granted' : 'revoked', $u->user_nicename, $by !== '' ? ' by ' . $by : '' ) );
+		}
+		return (bool) $on;
+	}
+
+	/** wp-admin → Users → Edit: the operator's checkbox. Rendered for administrators only — a member
+	 *  opening their own wp-admin profile sees nothing here, and badge_save refuses them regardless. */
+	public static function badge_field( $user ) {
+		if ( ! current_user_can( 'manage_options' ) || ! ( $user instanceof \WP_User ) ) { return; }
+		$uid = (int) $user->ID;
+		$ts  = (int) get_user_meta( $uid, self::BADGE_META, true );
+		echo '<h2>ArtaQuest blue check</h2><table class="form-table" role="presentation"><tr><th scope="row">Verified account</th><td>';
+		wp_nonce_field( 'aq_badge_' . $uid, 'aq_badge_nonce' );
+		echo '<input type="hidden" name="aq_badge_present" value="1" />';
+		echo '<label><input type="checkbox" name="aq_badge" value="1" ' . checked( $ts > 0, true, false ) . ' /> Grant the blue check</label>';
+		echo '<p class="description">';
+		echo self::is_verified( $uid ) ? 'This member has also earned the check through the ID verification (that one unlocks cash-out and is not changed here).' : 'Shows the blue check on this member\'s profile and name everywhere. It does not unlock cash-out — only the ID verification does.';
+		if ( $ts > 0 ) { echo ' Granted ' . esc_html( gmdate( 'Y-m-d', $ts ) ) . '.'; }
+		echo '</p></td></tr></table>';
+	}
+	/** Saves the checkbox above. Capability AND our own nonce, and only when the field was rendered
+	 *  (so a form without it never clears a grant). */
+	public static function badge_save( $uid ) {
+		$uid = (int) $uid;
+		if ( empty( $_POST['aq_badge_present'] ) || ! current_user_can( 'manage_options' ) ) { return; }
+		if ( ! wp_verify_nonce( (string) ( $_POST['aq_badge_nonce'] ?? '' ), 'aq_badge_' . $uid ) ) { return; }
+		self::grant_badge( $uid, ! empty( $_POST['aq_badge'] ), wp_get_current_user()->user_login );
+	}
+
+	/**
+	 * `wp aq badge <grant|revoke|status> <user>` — the same grant from the command line. <user> is a
+	 * profile slug, login, email or numeric id. WP-CLI runs with server access, which is the gate.
+	 */
+	public static function cli_badge( $args ) {
+		$sub = (string) ( $args[0] ?? '' );
+		$who = (string) ( $args[1] ?? '' );
+		if ( ! in_array( $sub, [ 'grant', 'revoke', 'status' ], true ) || $who === '' ) {
+			\WP_CLI::error( 'Usage: wp aq badge <grant|revoke|status> <slug|login|email|id>' );
+		}
+		$u = ctype_digit( $who ) ? get_userdata( (int) $who ) : ( get_user_by( 'slug', $who ) ?: ( get_user_by( 'login', $who ) ?: get_user_by( 'email', $who ) ) );
+		if ( ! $u ) { \WP_CLI::error( "No member '{$who}'." ); }
+		$uid = (int) $u->ID;
+		if ( $sub !== 'status' ) { self::grant_badge( $uid, $sub === 'grant', 'wp-cli' ); }
+		\WP_CLI::success( sprintf( '@%s — badge %s (granted: %s, ID-verified: %s)', $u->user_nicename,
+			self::has_badge( $uid ) ? 'ON' : 'off', self::is_granted( $uid ) ? 'yes' : 'no', self::is_verified( $uid ) ? 'yes' : 'no' ) );
+	}
+
 	/** True for any officially assigned ISO 3166-1 alpha-2 code (case-insensitive input). */
 	public static function valid_country( $c ) {
 		$c = strtoupper( trim( (string) $c ) );
@@ -140,8 +230,10 @@ final class Verify {
 			'full_name'    => self::full_name( $uid ),
 			'birthday'     => self::birthday( $uid ),
 			'has_identity' => self::has_identity( $uid ),
-			'verified'     => $ts > 0,
+			'verified'     => $ts > 0,                    // the ID check passed (unlocks cash-out)
 			'verified_at'  => $ts,
+			'badge'        => self::has_badge( $uid ),    // the blue check on screen — earned OR granted
+			'badge_granted'=> self::is_granted( $uid ),   // granted by an operator (badge only)
 			'last_note'    => (string) get_user_meta( $uid, 'aq_verify_note', true ),
 			'configured'   => Relay::available(),
 		];

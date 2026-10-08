@@ -641,7 +641,7 @@ export type FeedTarget = {
  *  `target` is the votable post/reply behind the event (null for enrolments). */
 export type FeedItem = {
   type: "thread" | "reply" | "upvote" | "upvote_thread" | "enroll";
-  actor: { name: string; slug: string; avatar: string; country?: string };
+  actor: { name: string; slug: string; avatar: string; country?: string; verified?: boolean };
   title: string;
   context: string;
   excerpt: string;
@@ -721,7 +721,7 @@ export type SearchNotebook = {
   /** Who WROTE the notebook, as Kaggle reports it — the work is credited to them; `author` below
    *  is the member who brought it here, and on a re-published work the two differ. */
   kaggle: { owner: string; author: string; url: string };
-  author: { id: number; name: string; slug: string; avatar: string };
+  author: { id: number; name: string; slug: string; avatar: string; verified?: boolean };
   published_at: number;
 };
 /** The retired platform's shape. The server still returns a `courses` key and it is ALWAYS empty
@@ -1712,7 +1712,8 @@ export type NotebookCard = {
   thumb: string; assets: NbAsset[]; hearts: number; comments: number; views: number; score: number; status: "draft" | "pending" | "published" | "removed";
   /** Colab's anonymous /github/ route on the public mirror (ArtaQuest/artabooks); '' until mirrored. */
   doi_link: string; colab_url: string; kaggle_url?: string; size_bytes: number;
-  author: { id: number; name: string; slug: string; avatar: string; bot?: boolean };
+  /** `verified` = the blue check (Verify::has_badge), shipped by Notebook::author_card. */
+  author: { id: number; name: string; slug: string; avatar: string; bot?: boolean; verified?: boolean };
   /** WHO WROTE THE NOTEBOOK, as Kaggle reports it. `author` above is the ArtaQuest member who
    *  SUBMITTED it — any member may submit any public kernel, so on a re-published work the two
    *  differ and both must be shown. On a self-submitted work they simply agree. */
@@ -1961,7 +1962,7 @@ export type LibraryItem = {
   uses: number;
   work?: {
     id: number; title: string; slug: string; doi: string; kernel: string;
-    author: { id: number; name: string; slug: string; avatar: string };
+    author: { id: number; name: string; slug: string; avatar: string; verified?: boolean };
   };
 };
 
