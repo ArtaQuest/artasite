@@ -23,6 +23,7 @@ import { listItems, saveFromUrl } from "../lib/media-store";
 import { nameClass } from "../lib/fmt";
 import { useMotionOff } from "../lib/theme";
 import AudioPlayer from "./audio-player";
+import { BlueCheck } from "./BlueCheck";
 import { ConfirmDialog,
   Avatar, Button, Card, Chip, EmptyState, IconButton, LoadMoreButton,
   SearchPill, SkeletonGrid, StatusNote, cx,
@@ -890,7 +891,7 @@ function Provenance({ work, links, compact }: {
 }) {
   const dot = <span aria-hidden className="text-ink-3">·</span>;
   const title = <span data-ay-skip="1">{work.title}</span>;
-  const name = <span data-ay-skip="1" className={cx("min-w-0", nameClass(work.author.name, 12))}>{work.author.name}</span>;
+  const name = <span data-ay-skip="1" className={cx("min-w-0", nameClass(work.author.name, 12))}>{work.author.name}{work.author.verified && <BlueCheck size={12} className="ms-0.5" />}</span>;
   return (
     /* Measured on /library: each of these four links was 17px tall, and on a phone they sit a
        couple of millimetres apart separated by a dot — four crowded targets in one line. The

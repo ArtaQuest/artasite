@@ -940,6 +940,8 @@ final class Notebook {
 			'name'   => $u ? (string) $u->display_name : 'Member',
 			'slug'   => $u ? (string) $u->user_nicename : '',
 			'avatar' => class_exists( '\\AQ\\Verify' ) ? (string) Verify::avatar_url( $uid ) : '',
+			// The blue check beside the name on every card, post and comment built from this one shaper.
+			'verified' => $u && class_exists( '\\AQ\\Verify' ) && method_exists( '\\AQ\\Verify', 'has_badge' ) ? Verify::has_badge( $uid ) : false,
 		];
 		if ( Arta::is_arta( $uid ) ) { $c['bot'] = true; } // the UI badges Arta's replies as automated
 		if ( count( self::$cards ) < 500 ) { self::$cards[ $uid ] = $c; }
