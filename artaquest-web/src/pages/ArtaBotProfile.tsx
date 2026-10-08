@@ -202,7 +202,7 @@ export default function ArtaBotProfile({ p, following, followers, followBusy, on
 
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[14.5px] text-ink-3">
             <StatusChip st={st} failed={failed} />
-            {st && st.replied_24h > 0 ? <span><b className="font-bold tabular-nums text-ink">{st.replied_24h.toLocaleString()}</b> answers in the last day</span> : null}
+            {st && st.replied_24h > 0 ? <span><b className="font-bold tabular-nums text-ink">{st.replied_24h.toLocaleString()}</b> {st.replied_24h === 1 ? "answer" : "answers"} in the last day</span> : null}
             <span><b className="font-bold tabular-nums text-ink">{followers.toLocaleString()}</b> {followers === 1 ? "Follower" : "Followers"}</span>
             {p.joined ? <span className="whitespace-nowrap">Here since {p.joined}</span> : null}
           </div>
