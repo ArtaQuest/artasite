@@ -25,11 +25,14 @@ async function run() {
   mkdirSync(cfg.stateDir, { recursive: true });
   const engine = new BrowserEngine(cfg, log);
   const pacer = new Pacer({ minGapSec: cfg.minGapSec, perHour: cfg.perHour, perDay: cfg.perDay }, join(cfg.stateDir, "pacer.json"));
-  const daemon = new Daemon({ cfg, wp: new WpClient(cfg), engine, gh: cfg.githubToken ? new GitHub(cfg.githubToken, cfg.githubRepo) : null, log }, pacer);
+  const daemon = new Daemon({ cfg, wp: new WpClient(cfg), engine, gh: cfg.githubToken ? new GitHub(cfg.githubToken, cfg.githubRepo) : null, log }, pacer, Date.now, join(cfg.stateDir, "dry-run.json"));
   let stop = false;
-  const quit = () => { stop = true; };
-  process.on("SIGTERM", quit);
-  process.on("SIGINT", quit);
+  // Say which signal stopped us: launchd/systemd restart the daemon after any exit (KeepAlive), so an
+  // unexplained "stopped … up" pair in the log is otherwise impossible to attribute.
+  const quit = (sig: string) => () => { if (!stop) log(`stopping on ${sig} (parent pid ${process.ppid})`); stop = true; };
+  process.on("SIGTERM", quit("SIGTERM"));
+  process.on("SIGINT", quit("SIGINT"));
+  process.on("SIGHUP", quit("SIGHUP"));
   log(`Arta brain up — ${cfg.wpBase}; pace ≥${cfg.minGapSec}s apart, ≤${cfg.perHour}/h, ≤${cfg.perDay}/day${cfg.dryRun ? " (DRY RUN)" : ""}`);
   while (!stop) {
     const ms = await daemon.tick().catch((e) => { log(`tick error: ${(e as Error).message}`); return 30_000; });
