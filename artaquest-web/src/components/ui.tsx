@@ -296,7 +296,7 @@ function FlipAvatar({ src, name, country, alt, className, palm, priority }: { sr
       <button
         type="button" aria-label={label} aria-pressed={flipped} title={label}
         onClick={(e) => { e.stopPropagation(); e.preventDefault(); setFlipped((v) => !v); }}
-        className={cx("relative block rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-light", className)}
+        className={cx("group relative block rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-light", className)}
         style={{ transformStyle: "preserve-3d", transition: "transform 0.5s", transform: flipped ? "rotateY(180deg)" : undefined }}
       >
         {/* Front — the normal avatar + nationality flag */}
@@ -312,11 +312,13 @@ function FlipAvatar({ src, name, country, alt, className, palm, priority }: { sr
             ? <img src={palm} alt={who ? `${who}’s palm` : "Palm verification photo"} loading="lazy" decoding="async" onError={() => setPalmFailed(true)} className="h-full w-full rounded-full object-cover" />
             : <span aria-hidden className="text-xl text-ink-2">✋</span>}
         </span>
-        {/* A small corner hint that the picture flips — front face only, BOTTOM-LEFT (operator
-            2026-08-18, "put this to the bottom left"): the flag owns the bottom-right corner, and the
-            top-right sat on the cover gradient where a grey disc read as a stray control. */}
-        <span aria-hidden className="pointer-events-none absolute -bottom-[6%] -left-[6%] grid aspect-square w-[34%] min-w-3.5 max-w-5 place-items-center rounded-full border border-line bg-space-2/95 text-ink-2" style={hidden3d}>
-          <svg viewBox="0 0 24 24" className="h-[58%] w-[58%]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden focusable="false">
+        {/* Flip hint — sits ON the avatar edge (bottom-left), not floating outside it. Quiet by
+            default; full opacity on hover/focus so it does not read as a stray orphaned control
+            (operator 2026-10-08 on /u/artafather). Front face only; flag keeps bottom-right. */}
+        <span aria-hidden
+          className="pointer-events-none absolute bottom-0.5 left-0.5 grid h-5 w-5 place-items-center rounded-full border border-line bg-space-2/95 text-ink-2 opacity-70 shadow-sm transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-visible:opacity-100"
+          style={hidden3d}>
+          <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden focusable="false">
             <path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M21 3v5h-5" />
           </svg>
         </span>

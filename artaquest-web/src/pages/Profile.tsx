@@ -16,7 +16,7 @@ import {
   currentUser, fmtBirthday, followUser, getFollows, getProfile, isLoggedIn, lastSeenLabel, localePath, relAgo,
   type FollowRow, type Profile as ProfileData,
 } from "../lib/wp";
-import { Coins, CoinMark } from "../lib/currency";
+import { CoinMark } from "../lib/currency";
 import { sendCoins, ARTA_HANDLE } from "../lib/api";
 import ArtaBotProfile from "./ArtaBotProfile";
 import { nameClass } from "../lib/fmt";
@@ -345,7 +345,7 @@ export default function Profile() {
 
   if (missing) {
     return (
-      <main className="mx-auto w-full max-w-5xl px-4 py-10">
+      <main className="mx-auto w-full max-w-5xl py-10">
         <EmptyState title="No public profile" body={`There is no member at “${slug}”. They may have changed their handle or deleted their account.`} />
       </main>
     );
@@ -407,7 +407,7 @@ export default function Profile() {
   const kinds = (Object.keys(kindCounts) as NbKind[]).sort((a, b) => (kindCounts[b] ?? 0) - (kindCounts[a] ?? 0));
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6">
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 py-6">
       {/* ── Identity header ── */}
       {!p ? <HeaderSkeleton /> : (
         <header className="overflow-hidden rounded-card border border-line bg-space-2 shadow-[0_1px_0_rgba(255,255,255,0.03)_inset]">
@@ -429,7 +429,7 @@ export default function Profile() {
               centre-crops anything that is not 3:1 rather than letterboxing it. The container is no
               longer aria-hidden as a whole: the picture is decorative (alt="") and the two gradient
               layers are hidden, but the owner's controls on it must reach assistive tech. */}
-          <div className={p.banner ? "relative aspect-[3/1] max-h-60 w-full" : "relative h-[4.75rem] w-full sm:h-32"}>
+          <div className={p.banner ? "relative aspect-[3/1] max-h-60 w-full" : "relative h-16 w-full sm:h-28"}>
             {p.banner ? (
               <img src={p.banner} alt="" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
             ) : (
@@ -462,29 +462,28 @@ export default function Profile() {
             )}
           </div>
 
-          <div className="px-4 pb-4 sm:px-6 sm:pb-5">
+          <div className="px-3 pb-3.5 sm:px-6 sm:pb-4">
             {/* X-LIKE HEADER (operator 2026-10-08, after PR #70: "look at how ugly it is").
                 Clear rows, left-aligned content, nothing floating in the top-right:
                   1. Avatar straddling the cover. Action group (Book FIRST, then Follow) sits fully
                      on the card below the cover on phones; from `sm` it shares the avatar baseline.
                      Counts under the buttons on phones, beside them from `sm`.
-                  2. Name + badge, with tier and coins as small chips on the same line.
+                  2. Name + badge (no tier/coins — operator 2026-10-08)
                   3. @handle
                   4. Four social marks + "+N", left-aligned
-                  5. Bio
-                  6. Meta (location · born · joined)
-                  7. Quiet "Active …" line
+                  5. Bio (compact type so two lines fit)
+                  6. Meta (location · born · joined · Active)
                 `relative z-10` on the avatar row is load-bearing (cover is positioned; without it the
                 radial overlay paints over the portrait). */}
             {/* Avatar overlaps the cover; on phones the action cluster is pushed CLEAR of the
                 gradient (mt ≈ overhang) so Book/Follow never straddle the cover edge (operator
                 2026-10-08 defect on live mobile). From `sm` they sit on the avatar baseline again. */}
-            <div className="relative z-10 -mt-9 flex items-start justify-between gap-3 sm:-mt-12 sm:gap-4">
+            <div className="relative z-10 -mt-8 flex items-start justify-between gap-3 sm:-mt-11 sm:gap-4">
               <Avatar priority src={p.avatar} name={p.name} palm={p.palm || undefined}
-                className="h-[4.5rem] w-[4.5rem] shrink-0 bg-space-2 text-[24px] ring-[3px] ring-space-2 sm:h-28 sm:w-28 sm:text-[2rem] sm:ring-[4px]" />
+                className="h-16 w-16 shrink-0 bg-space-2 text-[22px] ring-[3px] ring-space-2 sm:h-[6.5rem] sm:w-[6.5rem] sm:text-[1.75rem] sm:ring-[3px]" />
               {/* ACTIONS + COUNTS — Book first. mt clears the cover overhang on EVERY breakpoint so a
                   wrapping action row can never climb back into the gradient (1024 defect). */}
-              <div className="mt-[2.75rem] flex min-w-0 flex-col items-end gap-1.5 sm:mt-14 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-x-3.5 sm:gap-y-2">
+              <div className="mt-10 flex min-w-0 flex-col items-end gap-1 sm:mt-[3.25rem] sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-x-3 sm:gap-y-1.5">
                 {/* COUNTS — always one horizontal line. Under the buttons on phones; beside them from sm. */}
                 <div className="order-2 flex flex-wrap items-center justify-end gap-x-1 text-[13px] leading-none text-ink-3 sm:order-1 sm:text-[14px]">
                   <button type="button" onClick={() => setListDir((d) => (d === "following" ? null : "following"))}
@@ -537,27 +536,20 @@ export default function Profile() {
             {/* SECONDARY ACTIONS — phones only, for a signed-in visitor. Keeps Message + Send coins
                 off the avatar baseline so they never orphan beside the portrait. */}
             {!isOwn && isLoggedIn() ? (
-              <div className="mt-2 flex flex-wrap items-center justify-end gap-2 sm:hidden">
+              <div className="mt-1.5 flex flex-wrap items-center justify-end gap-2 sm:hidden">
                 <Button href={localePath(`/messages/?with=${encodeURIComponent(p.slug)}`)} variant="outline" aria-label="Message"
                   className="h-9 bg-space-2 px-3.5 text-[13.5px] font-semibold" title="Send an encrypted message">Message</Button>
                 <SendCoins slug={p.slug} name={p.fullName?.trim() || p.name} onSent={() => undefined} />
               </div>
             ) : null}
 
-            {/* NAME + badge + standing chips — one clear identity line. */}
-            <div className="mt-3.5 min-w-0 sm:mt-4">
-              <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[21px] font-extrabold leading-[1.15] tracking-tight sm:text-[25px]">
+            {/* NAME + badge — tier/coins dropped (operator 2026-10-08: "drop the Quester and coins"). */}
+            <div className="mt-2.5 min-w-0 sm:mt-3">
+              <h1 className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[20px] font-extrabold leading-[1.15] tracking-tight sm:text-[24px]">
                 <span className="min-w-0 wrap-anywhere">{p.fullName?.trim() || p.name}</span>
-                {p.verified && <BlueCheckButton size={19} via={p.verifiedVia} own={isOwn} className="translate-y-px sm:scale-105" />}
-                {p.tier && (
-                  <Pill className="ms-0.5 px-2 py-0.5 text-[11px] font-semibold normal-case tracking-normal sm:text-[11.5px]">{p.tier}</Pill>
-                )}
-                <span className="inline-flex items-center gap-1 rounded-pill bg-yin/12 px-2 py-0.5 text-[11px] font-semibold text-yin-ink sm:text-[11.5px]"
-                  title="Coins in their wallet — every entry in the coin ledger is public">
-                  <Coins n={p.coins ?? 0} />
-                </span>
+                {p.verified && <BlueCheckButton size={18} via={p.verifiedVia} own={isOwn} className="translate-y-px sm:scale-105" />}
               </h1>
-              <p className="mt-1 text-[14.5px] leading-snug text-ink-3 wrap-anywhere sm:text-[15px]">
+              <p className="mt-0.5 text-[14px] leading-snug text-ink-3 wrap-anywhere sm:text-[14.5px]">
                 <span className="break-all">@{p.slug}</span>
                 {p.fullName?.trim() && p.fullName.trim() !== p.name && p.name !== p.slug && (
                   <span> · goes by {p.name}</span>
@@ -567,13 +559,13 @@ export default function Profile() {
 
             {/* SOCIALS — left-aligned under the handle, always four + "+N". */}
             {networks.length > 0 && (
-              <SocialLinks socials={networks} name={p.fullName?.trim() || p.name} className="mt-2.5" />
+              <SocialLinks socials={networks} name={p.fullName?.trim() || p.name} className="mt-2" />
             )}
 
-            {p.bio && <p className="mt-3 max-w-2xl whitespace-pre-wrap text-[15px] leading-relaxed text-ink wrap-anywhere">{p.bio}</p>}
+            {p.bio && <p className="mt-2.5 max-w-2xl whitespace-pre-wrap text-[14px] leading-snug text-ink wrap-anywhere sm:mt-3 sm:text-[15px] sm:leading-[1.45]">{p.bio}</p>}
 
-            {(p.category?.trim() || p.location?.trim() || website || fmtBirthday(p.birthday) || p.joined) ? (
-              <ul className="mt-3 flex list-none flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-3 sm:mt-3.5 sm:gap-x-3.5 sm:text-[13.5px]" aria-label="About">
+            {(p.category?.trim() || p.location?.trim() || website || fmtBirthday(p.birthday) || p.joined || p.lastSeen) ? (
+              <ul className="mt-2.5 flex list-none flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-3 sm:mt-3 sm:gap-x-3.5 sm:text-[13.5px]" aria-label="About">
                 {p.category?.trim() ? <MetaItem icon={ICON_BRIEFCASE} label="Does"><span data-ay-skip="1">{p.category.trim()}</span></MetaItem> : null}
                 {p.location?.trim() ? <MetaItem icon={ICON_PIN} label="Lives in"><span data-ay-skip="1">{p.location.trim()}</span></MetaItem> : null}
                 {website ? (
@@ -584,15 +576,8 @@ export default function Profile() {
                 ) : null}
                 {fmtBirthday(p.birthday) ? <MetaItem icon={ICON_BALLOON} label="Birthday"><span className="whitespace-nowrap">Born {fmtBirthday(p.birthday)}</span></MetaItem> : null}
                 {p.joined ? <MetaItem icon={ICON_CALENDAR} label="Joined"><span className="whitespace-nowrap">Joined {p.joined}</span></MetaItem> : null}
+                {p.lastSeen ? <MetaItem icon={ICON_CLOCK} label="Last active"><span className="whitespace-nowrap">{lastSeenLabel(p.lastSeen)}</span></MetaItem> : null}
               </ul>
-            ) : null}
-
-            {/* LAST ACTIVE — quiet foot of the header (operator 2026-10-08: "last active time shown below"). */}
-            {p.lastSeen ? (
-              <p className="mt-3.5 flex items-center gap-1.5 border-t border-line/60 pt-3 text-[12.5px] leading-none text-ink-3 sm:mt-4 sm:pt-3.5 sm:text-[13px]">
-                <span className="inline-flex shrink-0 text-ink-3/80 [&_svg]:h-3.5 [&_svg]:w-3.5" aria-hidden>{ICON_CLOCK}</span>
-                <span>{lastSeenLabel(p.lastSeen)}</span>
-              </p>
             ) : null}
 
             {isOwn && missingFacts.length > 0 ? (
