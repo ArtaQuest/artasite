@@ -37,7 +37,12 @@ window.addEventListener('vite:preloadError', (e) => {
     sessionStorage.setItem(key, String(Date.now()))
   } catch { return }   // no storage → no loop guard → do not risk a reload loop
   e.preventDefault()
-  location.reload()
+  // NOT location.reload(): that asks the edge for the same URL, and the edge answers with the same
+  // STALE copy that caused this (observed: reload → identical old entry → the guard stops → dead
+  // route). A throwaway ?aqv= is a cache miss, so it reaches the origin and the current HTML.
+  const q = new URLSearchParams(location.search)
+  q.set('aqv', Date.now().toString(36))
+  location.replace(location.pathname + '?' + q.toString() + location.hash)
 })
 
 // Point every on-device model download at Kaggle (artafather) BEFORE anything can import a model
