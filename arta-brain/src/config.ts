@@ -48,6 +48,7 @@ export type Config = {
   sel: {
     input: string; send: string; answer: string; newChat: string; signedOut: string; limitText: string;
     mode: string; modeItem: string; attach: string; file: string; busy: string; uploading: string;
+    outImage: string; // allow-list: only images the chat GENERATED (never source favicons, cards, avatars, icons)
   };
 };
 
@@ -99,6 +100,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       attach: env.ARTA_SEL_ATTACH || "",
       file: env.ARTA_SEL_FILE || 'input[type="file"]',
       busy: env.ARTA_SEL_BUSY || 'button[aria-label*="stop" i]',
+      outImage: env.ARTA_SEL_OUT_IMAGE || 'img[alt="Generated image" i], img[src*="/generated/"]',
       uploading: env.ARTA_SEL_UPLOADING || '[role="progressbar"], [aria-busy="true"]',
       signedOut: env.ARTA_SEL_SIGNED_OUT || 'a[href*="login"], a[href*="signin"], a[href*="sign-in"]',
       // Also a mode's own allowance ("you've reached your <mode> limit"): it pauses Arta like any limit.

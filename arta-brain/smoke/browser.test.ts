@@ -86,10 +86,22 @@ else {
     function go() { const t2 = setInterval(() => { i += 8; a.textContent = full.slice(0, i); if (i >= full.length) { clearInterval(t2); finish(); } }, 120); }
     function finish() {
       if (qq.includes("draw")) {
-        const cv = document.createElement("canvas"); cv.width = 128; cv.height = 128;
-        const g = cv.getContext("2d"); g.fillStyle = "#1e90ff"; g.fillRect(0, 0, 128, 128);
-        const img = document.createElement("img"); img.alt = "square"; img.src = cv.toDataURL("image/png"); a.appendChild(img);
-        const icon = document.createElement("img"); icon.src = cv.toDataURL("image/png"); icon.width = 16; icon.height = 16; a.appendChild(icon);
+        // Shaped like the live page: the generated picture in an image group (alt "Generated image")…
+        const cv = document.createElement("canvas"); cv.width = 320; cv.height = 320;
+        const g = cv.getContext("2d"); g.fillStyle = "#1e90ff"; g.fillRect(0, 0, 320, 320);
+        const wrap = document.createElement("div"); wrap.className = "relative group/image";
+        const img = document.createElement("img"); img.alt = "Generated image"; img.src = cv.toDataURL("image/png"); img.width = 200; img.height = 200;
+        wrap.appendChild(img); a.appendChild(wrap);
+        // …and the furniture that must never be attached: big favicons drawn at 16 px in a "3 sources" button,
+        // a source card picture inside a link, an inline illustration that was not generated, a tiny emoji.
+        const fav = document.createElement("canvas"); fav.width = 192; fav.height = 192; fav.getContext("2d").fillRect(0, 0, 192, 192);
+        const src = document.createElement("div"); src.setAttribute("role", "button"); src.setAttribute("aria-label", "3 sources");
+        for (let k = 0; k < 3; k++) { const f = document.createElement("img"); f.setAttribute("role", "presentation"); f.src = fav.toDataURL("image/png"); f.width = 16; f.height = 16; src.appendChild(f); }
+        a.appendChild(src);
+        const card = document.createElement("a"); card.href = "https://example.org/";
+        const ci = document.createElement("img"); ci.alt = "Generated image"; ci.src = cv.toDataURL("image/png"); ci.width = 200; ci.height = 200; card.appendChild(ci); a.appendChild(card);
+        const ill = document.createElement("img"); ill.alt = "weather"; ill.src = cv.toDataURL("image/png"); ill.width = 200; ill.height = 200; a.appendChild(ill);
+        const icon = document.createElement("img"); icon.alt = "Generated image"; icon.src = fav.toDataURL("image/png"); icon.width = 16; icon.height = 16; a.appendChild(icon);
       }
       stop.remove();
     }
@@ -131,7 +143,9 @@ test("BrowserEngine against a stand-in chat page", async () => {
     assert.equal(j2.context, 0, "each mention is asked in a new conversation");
     assert.equal(j2.mode, "Expert");
     assert.deepEqual(j2.files, [], "no attachment carries over");
-    assert.equal(a2.files.length, 1, "one generated image collected, the icon ignored");
+    assert.equal(a2.files.length, 1, "only the generated picture — no favicons, source cards, other pictures or icons");
+    assert.equal(a2.files[0].name, "generated-1.png");
+    assert.ok(logs.some((l) => /page furniture/.test(l)), "the ignored pictures are logged");
     assert.equal(sniffMime(a2.files[0].bytes), "image/png");
     assert.equal(logs.filter((l) => /Heavy is not offered/.test(l)).length, 1, "an unavailable mode is not retried");
     // 3) calibrate: top mode + tiny PNG + "What color is this square?"
