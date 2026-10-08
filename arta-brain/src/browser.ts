@@ -265,27 +265,39 @@ export class BrowserEngine implements Engine {
   }
 
   /**
-   * Files the answer produced: its images (generated pictures, not icons) and its download links,
-   * fetched through the signed-in page itself. Only the types the site accepts, within the caps.
+   * Files the answer produced — and only those: pictures the chat GENERATED (an allow-list selector,
+   * `sel.outImage`) and files it offers for download. Everything else in an answer is page furniture and
+   * never leaves: source favicons and cards, citations, avatars, UI icons, emoji. Measured on the live page:
+   * a web-search answer carries 180–256 px favicons drawn at 16 px inside a "N sources" button, while a
+   * generated picture is ~784×1168 drawn at ~336×500 with alt "Generated image" and a /generated/ URL.
+   * Fetched through the signed-in page itself; only types the site accepts, within the caps.
    */
   private async produced(p: Page, before: number): Promise<OutFile[]> {
     if (!this.cfg.outFilesMax) return [];
     const answers = p.locator(this.cfg.sel.answer);
     const n = await answers.count();
     if (n <= before) return [];
-    const found = await answers.nth(n - 1).evaluate((el) => {
-      const out: { url: string; name: string }[] = [];
-      for (const img of Array.from(el.querySelectorAll("img"))) {
-        if (img.naturalWidth >= 96 && img.naturalHeight >= 96) out.push({ url: img.currentSrc || img.src, name: img.alt || "image" });
+    const found = await answers.nth(n - 1).evaluate((el, sel) => {
+      const furniture = 'a, button, [role="button"], [role="presentation"], cite, sup, [aria-label*="source" i], [class*="source" i], [class*="citation" i], [class*="favicon" i], [class*="avatar" i], [class*="emoji" i]';
+      // Only ancestors INSIDE the answer count — the page around it is none of our business.
+      const within = (x: Element, q: string) => { for (let e: Element | null = x; e && e !== el.parentElement; e = e.parentElement) if (e.matches(q)) return true; return false; };
+      const out: { url: string; name: string; why: string }[] = [];
+      let skipped = 0;
+      for (const img of Array.from(el.querySelectorAll<HTMLImageElement>(sel))) {
+        const r = img.getBoundingClientRect();
+        if (within(img, furniture) || img.naturalWidth < 256 || img.naturalHeight < 256 || r.width < 128 || r.height < 128) { skipped++; continue; }
+        out.push({ url: img.currentSrc || img.src, name: (img.alt || "image").replace(/^generated image$/i, "generated"), why: "generated" });
       }
-      for (const a of Array.from(el.querySelectorAll("a[download], a[href^='blob:']"))) {
-        out.push({ url: (a as HTMLAnchorElement).href, name: a.getAttribute("download") || (a.textContent || "file").trim() });
+      for (const a of Array.from(el.querySelectorAll<HTMLAnchorElement>("a[download], a[href^='blob:']"))) {
+        if (within(a, 'cite, sup, [aria-label*="source" i], [class*="source" i], [class*="citation" i]')) { skipped++; continue; }
+        out.push({ url: a.href, name: a.getAttribute("download") || (a.textContent || "file").trim(), why: "download" });
       }
-      return out;
-    }).catch(() => [] as { url: string; name: string }[]);
+      return { out, skipped, ignored: el.querySelectorAll("img").length - out.filter((o) => o.why === "generated").length };
+    }, this.cfg.sel.outImage).catch(() => ({ out: [] as { url: string; name: string; why: string }[], skipped: 0, ignored: 0 }));
+    if (found.ignored) this.log(`answer: ${found.ignored} picture(s) that are page furniture (sources, icons) not attached`);
     const files: OutFile[] = [];
     const seen = new Set<string>();
-    for (const f of found) {
+    for (const f of found.out) {
       if (files.length >= this.cfg.outFilesMax || seen.has(f.url)) continue;
       seen.add(f.url);
       try {

@@ -216,6 +216,28 @@ test("daemon: a mention that keeps failing is given up after 3 attempts, then sk
   assert.deepEqual(statuses, ["queued", "queued", "failed"]);
 });
 
+test("daemon: a dry-run answer is remembered across a restart; the live run then answers it once", async () => {
+  const file = `/tmp/arta-dry-${process.pid}.json`;
+  require("node:fs").rmSync(file, { force: true });
+  let now = 1_800_000_000_000;
+  const lim = { minGapSec: 45, perHour: 30, perDay: 300 };
+  const net = fakeNet({ pending: [mention({ id: 31 })] });
+  const d1 = new Daemon(deps(net, { dryRun: true }), new Pacer(lim), () => now, file);
+  await d1.tick();
+  assert.equal(net.prompts.length, 1);
+  now += 120_000; await d1.tick();
+  assert.equal(net.prompts.length, 1, "not asked again by the same process");
+  const d2 = new Daemon(deps(net, { dryRun: true }), new Pacer(lim), () => now, file); // the agent restarted
+  now += 120_000; await d2.tick();
+  assert.equal(net.prompts.length, 1, "not asked again after a restart");
+  assert.equal(net.calls.filter((c) => c.url.endsWith("/arta/reply")).length, 0);
+  const live = new Daemon(deps(net), new Pacer(lim), () => now, file); // ARTA_DRY_RUN=0
+  now += 120_000; await live.tick();
+  assert.equal(net.prompts.length, 2, "the live run answers it");
+  assert.equal(net.calls.filter((c) => c.url.endsWith("/arta/reply")).length, 1);
+  require("node:fs").rmSync(file, { force: true });
+});
+
 test("browser launch: Playwright Chromium on Linux; installed Chrome with the real Keychain on a Mac", () => {
   const linux = launchOptions(loadConfig({ HOME: "/h" }), true, "linux");
   assert.equal(linux.channel, undefined);

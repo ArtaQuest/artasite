@@ -120,11 +120,20 @@ gone (`ARTA_SEL_BUSY`).
   until the uploads finish, sends, and deletes the copies. Whatever could not be attached is named in
   the prompt.
 - **Out.** When the answer does not fit the reply limit (or the model wrote a longer `details`), the reply
-  is trimmed and the complete answer is attached as `answer.md`. Images the answer generated (and file
-  links in it) are fetched through the signed-in page and attached. `arta/reply` takes them as
+  is trimmed and the complete answer is attached as `answer.md`. Pictures the chat **generated** (allow-list
+  `ARTA_SEL_OUT_IMAGE`, at least 256 px and drawn at ≥128 px, not inside a link, button or the sources
+  strip) and files it offers for download are fetched through the signed-in page and attached. Source
+  favicons and cards, citations, avatars, icons and emoji never are. `arta/reply` takes them as
   multipart `files[]`; the site sniffs every file from its bytes (never the name), allows only the types
   above, caps 4 files / 10 MB each / 25 MB per reply, stores them content-addressed in the existing media
   store and shows them on the reply like any post attachment (on comments, as links under the text).
+
+## Dry run
+
+`ARTA_DRY_RUN=1` composes each answer and logs it, writes nothing to the site, and leaves the mention
+queued for the live run. Mentions already answered in dry run are remembered in `state/dry-run.json`, so
+a restart does not ask the chat again; switching to `ARTA_DRY_RUN=0` answers them for real, once. The log
+records which signal stopped the daemon (launchd restarts it after any exit).
 
 ## Every mention gets a new conversation
 

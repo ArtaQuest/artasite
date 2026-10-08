@@ -11,7 +11,8 @@
 #                                then QUIT that Chrome (⌘Q) — the command returns and the sign-in is saved
 #   arta-brain.sh check          settings (names only), site + token, sign-in state; sends no prompt
 #   arta-brain.sh calibrate      one harmless prompt; prints ARTA_SEL_ANSWER candidates
-#   arta-brain.sh install-agent  write ~/Library/LaunchAgents/com.artaquest.arta-brain.plist (NOT loaded; disabled)
+#   arta-brain.sh install-agent  write ~/Library/LaunchAgents/com.artaquest.arta-brain.plist (NOT loaded; disabled);
+#                                the agent runs under `caffeinate -i -s`, so the Mac stays awake while Arta runs
 #   arta-brain.sh start|stop     enable + load the agent (KeepAlive) | unload + disable it
 #   arta-brain.sh restart|status|logs
 #   arta-brain.sh run            what launchd runs (foreground daemon)
@@ -82,6 +83,9 @@ case "${1:-}" in
   <key>Label</key><string>$LABEL</string>
   <key>ProgramArguments</key>
   <array>
+    <string>/usr/bin/caffeinate</string>
+    <string>-i</string>
+    <string>-s</string>
     <string>/bin/bash</string>
     <string>$APP/deploy/macos/arta-brain.sh</string>
     <string>run</string>
