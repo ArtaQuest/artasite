@@ -731,6 +731,12 @@ final class Rest {
 		[ 'PUT',    'task-sync/(?P<name>[a-z0-9_.]+)',   'TaskSync::put',    'user' ],
 		[ 'POST',   'task-sync/(?P<name>[a-z0-9_.]+)',   'TaskSync::put',    'user' ],
 		[ 'DELETE', 'task-sync/(?P<name>[a-z0-9_.]+)',   'TaskSync::remove', 'user' ],
+		// ── ArtaMail Titan secret (src/Vault.php) ────────────────────────────
+		// The ONE operational secret served over HTTP: the Titan mailbox password, to ArtaMail and its
+		// live e2e only. 'public' here so the handler runs for every caller and can AUDIT failed attempts;
+		// it then enforces the dedicated AQ_ARTAMAIL_TOKEN, HTTPS, Cache-Control: no-store, a 10/hour/IP
+		// rate limit and the 404-when-unset. There is deliberately NO generic secret/{name} route.
+		[ 'GET',    'secret/titan',                      'Vault::rest_titan', 'public' ],
 		// Arash acceptance research (public /data tables; sync token can read plot series).
 		[ 'GET',    'arash/acceptance',                  'ArashAcceptance::acceptance',  'user' ],
 		[ 'GET',    'arash/acceptance/plot-data',         'ArashAcceptance::plot_data',   'user' ],
