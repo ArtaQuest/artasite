@@ -1,34 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400" role="img" aria-label="Arta, thinking">
   <title>Arta, thinking</title>
+  <desc>Official think pose from ArtaQuest/artalife (src/rig/arta.ts think): weight on one leg, a hand up near the head. Upper-body crop. Faceless. Proportions spine 70 · neck 24 · head r20 · upper/fore arm 34/32. Colour #E8B923. Stroke 7 matching the live companion (src/render/Arta.tsx). No thought bubble — artalife says the pose with its posture.</desc>
   <defs>
-    <radialGradient id="bg" cx="38%" cy="30%" r="80%">
-      <stop offset="0" stop-color="#1f2a5c"/>
-      <stop offset="0.55" stop-color="#141833"/>
-      <stop offset="1" stop-color="#0d0d0f"/>
+    <radialGradient id="bg" cx="40%" cy="32%" r="78%">
+      <stop offset="0" stop-color="#1a2448"/>
+      <stop offset="0.55" stop-color="#12162c"/>
+      <stop offset="1" stop-color="#0a0a0c"/>
     </radialGradient>
-    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#e8b923"/>
-      <stop offset="1" stop-color="#4a72ff"/>
-    </linearGradient>
     <clipPath id="disc"><circle cx="200" cy="200" r="200"/></clipPath>
   </defs>
   <circle cx="200" cy="200" r="200" fill="url(#bg)"/>
-  <g clip-path="url(#disc)" fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <!-- the thought: blue, because anything Arta makes or wields is blue -->
-    <circle cx="255" cy="114" r="6.5" fill="#4a72ff"/>
-    <path transform="translate(263 60) scale(0.86)" d="M5 30 a14 14 0 0 1 10 -22 a17 17 0 0 1 30 -6 a15 15 0 0 1 24 12 a13 13 0 0 1 -4 24 a15 15 0 0 1 -24 8 a17 17 0 0 1 -28 -2 a12 12 0 0 1 -8 -14 z" fill="#0f1430" stroke="#4a72ff" stroke-width="9"/>
-    <!-- the spark inside it: gold, the why -->
-    <path transform="translate(294 77) scale(0.95)" d="M0 -15 L3.6 -3.6 L15 0 L3.6 3.6 L0 15 L-3.6 3.6 L-15 0 L-3.6 -3.6 Z" fill="#e8b923"/>
-    <!-- Arta, upper body and close up: the companion's own figure, gold, faceless (on purpose).
-         The thinker: torso straight down from the head; upper arm out to the elbow, forearm angled up,
-         and a small fist at the chin. The other arm hangs at the side. -->
-    <g stroke="#e8b923" stroke-width="22">
-      <path d="M180 256 L198 430"/>
-      <path d="M186 298 L262 352 L254 440"/>
-      <path d="M186 298 L82 326 L113 247"/>
-    </g>
-    <circle cx="113" cy="244" r="20" fill="#e8b923"/>
-    <circle cx="176" cy="168" r="74" stroke="#e8b923" stroke-width="22"/>
+  <g clip-path="url(#disc)" fill="none" stroke="#E8B923" stroke-width="22.95"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path d="M227.8 454.5L203.9 226.3"/>
+    <path d="M203.9 226.3L245.5 329.6L310.1 412.2"/>
+    <path d="M203.9 226.3L120.9 151.6L128.1 47.0"/>
+    <path d="M227.8 454.5L242.2 512.2"/>
+    <path d="M227.8 454.5L207.5 510.6"/>
+    <circle cx="206.6" cy="147.5" r="65.6"/>
   </g>
-  <circle cx="200" cy="200" r="196" fill="none" stroke="url(#rim)" stroke-opacity="0.55" stroke-width="8"/>
 </svg>
