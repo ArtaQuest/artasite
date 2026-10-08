@@ -883,7 +883,7 @@ final class Arta {
 	 */
 	public static function avatar_url() {
 		$base = defined( 'AQ_URL' ) ? AQ_URL : '';
-		return $base . '/assets/arta/arta-thinking.svg?v=1';
+		return $base . '/assets/arta/arta-thinking.svg?v=2';
 	}
 
 	// ═════════════════════════════════════════════════════════════════════════════════════════════

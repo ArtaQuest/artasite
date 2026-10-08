@@ -13,23 +13,18 @@
     <clipPath id="disc"><circle cx="200" cy="200" r="200"/></clipPath>
   </defs>
   <circle cx="200" cy="200" r="200" fill="url(#bg)"/>
-  <g clip-path="url(#disc)">
-    <g transform="translate(-231.68 -64.12) scale(1.42)" fill="none" stroke-linecap="round" stroke-linejoin="round">
-      <!-- the thought: blue, because anything Arta makes or wields is blue -->
-      <g stroke="#4a72ff" stroke-width="7.1">
-        <circle cx="313" cy="126" r="3.8" fill="#4a72ff" stroke="none"/>
-        <circle cx="322" cy="112" r="5.4" fill="#4a72ff" stroke="none"/>
-        <path transform="translate(327 66) scale(0.74)" d="M5 30 a14 14 0 0 1 10 -22 a17 17 0 0 1 30 -6 a15 15 0 0 1 24 12 a13 13 0 0 1 -4 24 a15 15 0 0 1 -24 8 a17 17 0 0 1 -28 -2 a12 12 0 0 1 -8 -14 z" fill="#0f1430"/>
-      </g>
-      <!-- the spark inside it: gold, the why -->
-      <path transform="translate(353 84) scale(0.78)" d="M0 -15 L3.6 -3.6 L15 0 L3.6 3.6 L0 15 L-3.6 3.6 L-15 0 L-3.6 -3.6 Z" fill="#e8b923"/>
-      <!-- Arta: the companion's own figure, gold, faceless -->
-      <g stroke="#e8b923" stroke-width="11.5">
-        <path d="M300.0 237.7 L282.2 286.5 L242.4 320.0"/><path d="M300.0 237.7 L312.6 288.1 L316.2 340.0"/>
-        <path d="M300.0 237.7 L292.7 168.1"/>
-        <path d="M292.7 168.1 L321.5 186.5 L306.5 214.5"/><path d="M292.7 168.1 L264.6 187.0 L280.5 161.0"/>
-        <circle cx="293.5" cy="144.1" r="20"/>
-      </g>
+  <g clip-path="url(#disc)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- the thought: blue, because anything Arta makes or wields is blue -->
+    <circle cx="255" cy="114" r="6.5" fill="#4a72ff"/>
+    <path transform="translate(263 60) scale(0.86)" d="M5 30 a14 14 0 0 1 10 -22 a17 17 0 0 1 30 -6 a15 15 0 0 1 24 12 a13 13 0 0 1 -4 24 a15 15 0 0 1 -24 8 a17 17 0 0 1 -28 -2 a12 12 0 0 1 -8 -14 z" fill="#0f1430" stroke="#4a72ff" stroke-width="9"/>
+    <!-- the spark inside it: gold, the why -->
+    <path transform="translate(294 77) scale(0.95)" d="M0 -15 L3.6 -3.6 L15 0 L3.6 3.6 L0 15 L-3.6 3.6 L-15 0 L-3.6 -3.6 Z" fill="#e8b923"/>
+    <!-- Arta, upper body and close up: the companion's own figure, gold, faceless (on purpose); fingertip to the chin -->
+    <g stroke="#e8b923" stroke-width="22">
+      <path d="M183 256 L202 430"/>
+      <path d="M189 300 L278 354 L262 440"/>
+      <path d="M189 300 L100 352 L137 248"/>
+      <circle cx="176" cy="168" r="74"/>
     </g>
   </g>
   <circle cx="200" cy="200" r="196" fill="none" stroke="url(#rim)" stroke-opacity="0.55" stroke-width="8"/>
