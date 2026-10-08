@@ -809,7 +809,11 @@ final class Social {
 			// (object) so an EMPTY set encodes as {} and not []: PHP's empty array is a JSON array, and
 			// a consumer typed against a keyed object would be handed a list on exactly the members who
 			// have set nothing — which is most of them.
-			'links'      => (object) Auth::links( $id ),        // where else this member is, key => https URL
+			'links'      => (object) Auth::links( $id ),        // where else this member is, key => https URL of a profile
+			// Every handle they have set, in profile order: [{key, label, handle, url, profile}]. `url`
+			// is '' for an ID with no web address (WeChat, a Discord username) — the page offers it to
+			// copy. This is what the profile renders; `links` above stays for API consumers and SEO.
+			'socials'    => Auth::socials( $id ),
 			'relationship' => Auth::relationship( $id ),       // '' = not saying; the profile then renders nothing
 			'location'     => Auth::location( $id ),           // what the MEMBER typed; never inferred from an IP
 			// RESOLVED here, not in the browser: the page must not depend on window.AQ_I18N being
@@ -830,13 +834,11 @@ final class Social {
 			// exact date of birth is the identity-verification triplet a bank asks for) was raised,
 			// heard, and decided.
 			'birthday'   => Verify::birthday( $id ),
-			// The STATED nationality (ISO 3166-1 alpha-2, '' until stated) — public like the date beside
-			// it, and what the profile shows as the country's flag (operator 2026-08-18). `country` is
-			// the same value under the name every user-card payload and <Avatar country=…> already
-			// use for the flag; `nationality` is the labelled fact. Neither implies the blue check —
-			// `verified` below is that.
-			'nationality' => Verify::claimed_country( $id ),
-			'country'     => Verify::claimed_country( $id ),
+			// NO nationality, and so no `country` flag (operator 2026-10-08: "I want the nationality
+			// removed"). It is no longer asked for anywhere, so it is no longer shown: a flag the member
+			// can no longer edit would be a fact the site keeps publishing on their behalf. Values
+			// stated before today stay in aq_nationality — ArtaCredits still matches on them — they are
+			// simply not emitted here.
 			// Still emitted, now ALONGSIDE the date rather than instead of it: the Developer API is a
 			// real consumer surface and an age saves every client reimplementing the leap-year
 			// arithmetic. The profile page renders the date, never this.

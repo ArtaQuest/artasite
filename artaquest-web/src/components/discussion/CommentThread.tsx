@@ -3,60 +3,39 @@ import { Avatar, Button, RichText, VoteControl, cx } from "../ui";
 import { nameClass } from "../../lib/fmt";
 import { Composer } from "../Composer";
 import { VerifyApi } from "../../lib/verify";
-import { ipCountry } from "../../lib/geo";
-import { countryOptions, flagEmoji } from "../../lib/flags";
+import { DobWheel } from "../DobWheel";
 import type { BoardCapabilities, BoardComment, BoardWriteState } from "./types";
 
-/* Inline identity prompt: posting requires a real name + date of birth + nationality (server gate).
-   Collect it RIGHT HERE so an enrolled member never types a reply only to be rejected — then the
-   board refetches and the composer appears. Nationality came back on 2026-08-18 (operator; it had
-   gone on 08-11): without it here the prompt would post a request the server refuses, and the
-   member would read "choose a nationality" beside a form that never asked for one. */
+/* Inline identity prompt: posting requires a date of birth (server gate, Rest::birthday_gate). Collect
+   it RIGHT HERE so an enrolled member never types a reply only to be rejected — then the board
+   refetches and the composer appears. Since 2026-10-08 it asks for the date ONLY, exactly like the
+   sign-up step (operator: sign-up "with just date of birth"; nationality removed from the platform):
+   the name a reply is signed with is the one the account already has. */
 function IdentityPrompt() {
-  const [name, setName] = useState("");
   const [bday, setBday] = useState("");
-  // Seeded from the visitor's country as the edge saw it (ipCountry(), '' when unknown) — a
-  // suggestion they can change; nothing is stored until Save. `guessed` keeps the hint under the
-  // field until they touch it, as the sign-up gate does — a wrong prefilled nationality would
-  // otherwise be saved by someone who did not notice it.
-  const [nat, setNat] = useState(() => ipCountry());
-  const [guessed, setGuessed] = useState(() => ipCountry() !== "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  // Every country, localised + sorted for the active language; only this prompt needs the list.
-  const countries = useMemo(() => countryOptions(), []);
+  const year = new Date().getFullYear();
   async function save() {
-    if (!name.trim() || !bday || !nat || busy) return;
+    if (!bday || busy) return;
     setBusy(true); setErr("");
     try {
-      const r = await VerifyApi.setIdentity(name.trim(), bday, nat);
+      const r = await VerifyApi.setIdentity("", bday);
       if (r?.ok) window.location.reload();
-      else setErr(r?.message || r?.error || "Couldn't save — check your details.");
+      else setErr(r?.message || r?.error || "Couldn't save — check the date.");
     } catch { setErr("Couldn't save — please try again."); }
     finally { setBusy(false); }
   }
-  const f = "h-10 w-full rounded-field border border-line bg-space-1 px-3 text-[14px] text-ink outline-none focus:border-yin-light";
   return (
     <div data-goal="needs-identity" className="rounded-card border border-yin/30 bg-yin/5 px-4 py-3.5">
-      <p className="text-[14px] font-semibold text-ink">Add your name to post</p>
-      <p className="mt-0.5 text-[13px] text-ink-2">Replies are public and signed with your real name and age. It takes a few seconds — and you keep your place here.</p>
-      {/* Two rows on sm+ (name + date, then nationality + the button), each stacking on a phone —
-          three inputs and a button on one row left every field too narrow to read. */}
-      <div className="mt-3 flex flex-col gap-2">
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" maxLength={80} className={f} />
-          <input value={bday} onChange={(e) => setBday(e.target.value)} type="date" aria-label="Date of birth" className={f} />
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <select value={nat} onChange={(e) => { setNat(e.target.value); setGuessed(false); }} aria-label="Nationality" className={f}>
-            <option value="">Choose your nationality…</option>
-            {countries.map((c) => <option key={c.code} value={c.code}>{`${flagEmoji(c.code)} ${c.name}`}</option>)}
-          </select>
-          <Button onClick={save} disabled={busy || !name.trim() || !bday || !nat} className="h-10 shrink-0 px-5 text-[14px] disabled:opacity-50">{busy ? "Saving…" : "Save & post"}</Button>
-        </div>
-        {guessed && <span className="text-[12px] text-ink-3">Nationality guessed from your connection — change it if it is wrong.</span>}
+      <p className="text-[14px] font-semibold text-ink">Add your date of birth to post</p>
+      <p className="mt-0.5 text-[13px] text-ink-2">It takes a few seconds — and you keep your place here.</p>
+      {/* The wheels and the button share a row from sm up and stack on a phone. */}
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="min-w-0 flex-1"><DobWheel value={bday} onChange={setBday} minYear={year - 120} maxYear={year - 13} /></div>
+        <Button onClick={save} disabled={busy || !bday} className="h-11 shrink-0 px-5 text-[14px] disabled:opacity-50">{busy ? "Saving…" : "Save & post"}</Button>
       </div>
-      {err && <p className="mt-1.5 text-[12px] text-yin-light">{err}</p>}
+      {err && <p role="alert" className="mt-1.5 text-[12px] text-rose-300">{err}</p>}
     </div>
   );
 }

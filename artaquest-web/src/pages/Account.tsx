@@ -1,11 +1,11 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { DobWheel } from "../components/DobWheel";
-import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, LANGS_MAX, postProfileUpdate, PROFILE_LINKS, RELATIONSHIPS, type CourseCard, type Dashboard, type UsernameCheck } from "../lib/wp";
+import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, LANGS_MAX, postProfileUpdate, RELATIONSHIPS, type CourseCard, type Dashboard, type Social, type UsernameCheck } from "../lib/wp";
+import { SOCIAL_FIELDS } from "../lib/socials";
+import { SocialIcon } from "../components/SocialLinks";
 import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, KaggleIds, Passkeys, ShellAccount, UsageApi, myParticipation, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type KaggleIdItem, type SessionItem, type ShellInfo, type ShellKey, type UsageInfo, type BursaryResult, type BursaryStatus, type ShareKit , type Footprint } from "../lib/api";
 import { signOut } from "../lib/auth";
 import { VerifyApi, fileToImage, type VerifyStatus } from "../lib/verify";
-import { ipCountry } from "../lib/geo";
-import { countryOptions, flagEmoji, countryName } from "../lib/flags";
 import { BlueCheck } from "../components/BlueCheck";
 import { Avatar, Button, Card, CertBadge, Chip, ErrorNote, Field, Input, Pill, Select, SignInGate, StatusNote, Textarea } from "../components/ui";
 import { availableLangs } from "../lib/i18n";
@@ -34,9 +34,18 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
   const [name, setName] = useState(user.name);
   const [bio, setBio] = useState(user.bio || "");
   // Held as its own state per network, so a member editing one field cannot disturb another and a
-  // rejected value stays on screen to be corrected rather than being thrown away.
-  const [links, setLinks] = useState<Record<string, string>>(() =>
-    Object.fromEntries(PROFILE_LINKS.map(([k]) => [k, (user.links as Record<string, string> | undefined)?.[k] ?? ""])));
+  // rejected value stays on screen to be corrected rather than being thrown away. Seeded from the
+  // HANDLES the server returns (`socials`), not from URLs: the form shows "artafather", the server
+  // builds the address.
+  const savedSocials = (list?: Social[]) => {
+    const by = Object.fromEntries((list ?? []).map((x) => [x.key, x.handle]));
+    return Object.fromEntries(SOCIAL_FIELDS.map((f) => [f.key, by[f.key] ?? ""]));
+  };
+  const [initialLinks, setInitialLinks] = useState<Record<string, string>>(() => savedSocials(user.socials));
+  const [links, setLinks] = useState<Record<string, string>>(() => savedSocials(user.socials));
+  // The networks list folds: the ones already filled in, plus the first few, until the member asks
+  // for all of them — thirty-four inputs at once is a form to endure, on a phone most of all.
+  const [allNets, setAllNets] = useState(false);
   const [relationship, setRelationship] = useState(user.relationship || "");
   const [location, setLocation] = useState(user.location || "");
   const [langs, setLangs] = useState<string[]>(() => user.languages ?? []);
@@ -45,7 +54,7 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const usernameChanged = username !== (user.slug || "") && username !== "";
-  const linksDirty = PROFILE_LINKS.some(([k]) => (links[k] || "") !== ((user.links as Record<string, string> | undefined)?.[k] ?? ""));
+  const linksDirty = SOCIAL_FIELDS.some(({ key: k }) => (links[k] || "").trim() !== (initialLinks[k] || ""));
   const dirty = name.trim() !== user.name || bio !== (user.bio || "") || usernameChanged || linksDirty
     || relationship !== (user.relationship || "") || location !== (user.location || "")
     || langs.join(",") !== (user.languages ?? []).join(",");
@@ -67,7 +76,9 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
     try {
       const r = await postProfileUpdate(name.trim(), bio, usernameChanged ? username : undefined, links, relationship, location.trim(), langs);
       if (!r.ok) { setMsg(r.message || "Could not save — try again"); return; }
-      if (r.links) setLinks(Object.fromEntries(PROFILE_LINKS.map(([k]) => [k, (r.links as Record<string, string>)[k] ?? ""])));
+      // Adopt the NORMALISED handles: a pasted URL comes back as the handle it names, "artafather"
+      // on Bluesky comes back as artafather.bsky.social — the form shows what the profile will show.
+      if (r.socials) { const n = savedSocials(r.socials); setLinks(n); setInitialLinks(n); }
       // Adopt what was STORED, not what was typed: the server trims and caps the location, so a
       // 70-character entry must come back as the 60 the profile will actually show.
       if (r.relationship !== undefined) setRelationship(r.relationship);
@@ -114,8 +125,11 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
           )}
         </Field>
         <Field label="Bio">
-          <Textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={4} maxLength={600} placeholder="Tell the community what you are exploring." className="resize-y bg-space-1 px-3.5" />
-          <span className="self-end text-[12px] font-normal text-ink-3">{bio.length}/600</span>
+          <Textarea value={bio} onChange={(e) => setBio(e.target.value.slice(0, 600))} rows={4} maxLength={600} placeholder="Tell the community what you are exploring." className="resize-y bg-space-1 px-3.5 text-[16px] sm:text-[15px]" />
+          <span className="flex justify-between gap-3 text-[12px] font-normal text-ink-3">
+            <span>Shown at the top of your profile.</span>
+            <span className={`tabular-nums ${bio.length >= 560 ? "text-yang-ink" : ""}`}>{bio.length}/600</span>
+          </span>
         </Field>
         {/* ABOUT YOU — both optional, both PUBLIC, and the label says so rather than leaving a member
             to find out from their own profile. This database is published in full, so there is no
@@ -195,29 +209,51 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
           </div>
         </div>
 
-        {/* WHERE ELSE YOU ARE. Two fields per row on anything wider than a phone: seven stacked
-            inputs reads as a form to endure, and none of them is required. A bare handle is enough —
-            the server turns it into the real address and hands it back, which is why the value can
-            change under the cursor after a save. Since 2026-08-18 these are NOT shown on the profile
-            page (operator: "remove all the social links"); they still feed the Person schema's sameAs,
-            which is what the hint now says. */}
-        <Field label="Where else you are">
-          <span className="text-[12.5px] font-normal text-ink-3">
-            Optional. Paste the address, or just your handle. These are not shown on your profile; they tell
-            search engines that this page and your other accounts are the same person.
+        {/* SOCIAL PROFILES (operator 2026-10-08: the profile carries them again — every network is a
+            round mark under the bio). Deliberately NOT inside <Field>: Field renders a <label>, and the
+            "show all" control below is a button.
+
+            ONE ROW PER NETWORK: its mark and name on the left, the input on the right, so a filled-in
+            row still says which network it is (a placeholder-as-label vanishes the moment you type).
+            Two rows across from `sm`, one on a phone. A bare handle is enough — the server checks it
+            against that network's own rule, turns it into the address, and hands the canonical handle
+            back, which is why a value can change under the cursor after a save. */}
+        <div className="flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2">
+          <span className="flex items-baseline justify-between gap-3">
+            <span>Social profiles <span className="font-normal text-ink-3">(optional)</span></span>
+            <span className="text-[12px] font-normal tabular-nums text-ink-3">{SOCIAL_FIELDS.filter((f) => (links[f.key] || "").trim()).length} added</span>
           </span>
-          <div className="mt-1 grid gap-2 sm:grid-cols-2">
-            {PROFILE_LINKS.map(([k, label]) => (
-              <label key={k} className="flex flex-col gap-1">
-                <span className="text-[12.5px] font-normal text-ink-3">{label}</span>
-                <Input value={links[k] || ""} inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false}
-                  onChange={(e) => setLinks((l) => ({ ...l, [k]: e.target.value }))}
-                  placeholder={k === "website" || k === "mastodon" ? "https://…" : "your handle"}
-                  className="bg-space-1 px-3.5" />
-              </label>
-            ))}
+          <span className="text-[12.5px] font-normal text-ink-3">
+            Public — shown on your profile as icons. Type just your handle, or paste the address of your profile.
+          </span>
+          <div className="mt-1 grid gap-x-4 gap-y-2 sm:grid-cols-2">
+            {SOCIAL_FIELDS.map((f, i) => {
+              const filled = !!(links[f.key] || "").trim() || !!initialLinks[f.key];
+              if (!allNets && !filled && i >= 9) return null;
+              return (
+                <label key={f.key} className="flex min-w-0 items-center gap-2 sm:gap-2.5">
+                  {/* A narrower label column on a phone, so a long handle (name.bsky.social) still
+                      shows whole in the field beside it. */}
+                  <span className="flex w-[6.5rem] shrink-0 items-center gap-1.5 text-[12.5px] font-medium text-ink-2 sm:w-[7.25rem] sm:gap-2 sm:text-[13px]">
+                    <SocialIcon k={f.key} size={18} className="shrink-0 text-ink-3" />
+                    <span className="truncate">{f.label}</span>
+                  </span>
+                  <Input value={links[f.key] || ""} onChange={(e) => setLinks((l) => ({ ...l, [f.key]: e.target.value }))}
+                    inputMode={f.key === "website" ? "url" : "text"} autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                    autoComplete="off" enterKeyHint="next" maxLength={300} aria-label={`${f.label} handle`}
+                    placeholder={f.placeholder} className="h-11 min-w-0 flex-1 bg-space-1 px-2.5 text-[16px] sm:px-3 sm:text-[14px]" />
+                </label>
+              );
+            })}
           </div>
-        </Field>
+          {!allNets && SOCIAL_FIELDS.some((f, i) => i >= 9 && !(links[f.key] || "").trim() && !initialLinks[f.key]) && (
+            <button type="button" onClick={() => setAllNets(true)}
+              className="mt-1 inline-flex min-h-11 items-center gap-1.5 self-start rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yang hover:text-ink">
+              Show all {SOCIAL_FIELDS.length} networks
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="m6 9 6 6 6-6" /></svg>
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           <Button type="button" onClick={save} disabled={!dirty || !name.trim() || saving || (usernameChanged && !!check && !check.available)} className="h-10 px-6 text-[14px] disabled:opacity-40">
             {saving ? "Saving…" : "Save changes"}
@@ -1197,26 +1233,11 @@ function IdentityVerification() {
   const [imgs, setImgs] = useState<{ profile_pic?: string; id_front?: string; id_back?: string; selfie?: string }>({});
   const [busy, setBusy] = useState(false);
   const [vmsg, setVmsg] = useState<{ ok: boolean; text: string } | null>(null);
-  // Nationality (ISO 3166-1 alpha-2). Removed on 2026-08-11; brought back on 2026-08-18 by operator
-  // order — the same order that retired gender, which sat in this form until then. The picker
-  // offers every country, localised + sorted for the active language (no allow-list — see
-  // lib/flags.ts), built once: the language is boot config and cannot change under a mounted page.
-  const [nat, setNat] = useState("");
-  // True while the picker shows a value that came from the visitor's connection and the member has
-  // not touched it — the same hint the sign-up gate shows, for the same reason: this field saves
-  // with the name and the date under one Save button, so a member correcting a typo in their name
-  // would otherwise publish a nationality they never chose.
-  const [guessed, setGuessed] = useState(false);
-  const countries = useMemo(() => countryOptions(), []);
+  // No nationality here since 2026-10-08 (operator: "I want the nationality removed") — it is not
+  // asked anywhere on the platform, and the blue check no longer reads it.
   const load = () => VerifyApi.status().then((s) => {
     if (s && !("error" in s && (s as { error?: string }).error)) {
       setSt(s); setName(s.full_name || ""); setBday(s.birthday || "");
-      // A member with no nationality on record sees their IP country PRE-SELECTED — a suggestion,
-      // never a fact: nothing is stored until they press Save, and ipCountry() is '' when the
-      // visitor's country is unknown (it never guesses), which leaves the picker on "Choose…".
-      const guess = s.nationality ? "" : ipCountry();
-      setNat(s.nationality || guess);
-      setGuessed(guess !== "");
     }
   });
   useEffect(() => { load(); }, []);
@@ -1224,11 +1245,10 @@ function IdentityVerification() {
   async function saveIdentity() {
     // Check here as well as on the server. The server is the rule (Rest::birthday_gate), but a
     // member who submits an empty date should be told which field, not handed a generic refusal.
-    if (!name.trim()) { setIdMsg("Add your full legal name — it is required."); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(bday)) { setIdMsg("Add your date of birth — every member states one."); return; }
-    if (!nat) { setIdMsg("Choose your nationality — it shows as a flag on your profile."); return; }
+    if (name.trim() && name.trim().length < 2) { setIdMsg("Your full name needs at least two letters — or leave it empty."); return; }
     setIdSaving(true); setIdMsg("");
-    const r = await VerifyApi.setIdentity(name.trim(), bday, nat);
+    const r = await VerifyApi.setIdentity(name.trim(), bday);
     setIdSaving(false);
     if (r.ok) { setIdMsg("Saved"); load(); } else { setIdMsg(r.message || "Couldn't save — check your details."); }
   }
@@ -1254,44 +1274,25 @@ function IdentityVerification() {
         <h2 className="flex items-center gap-2 text-[20px] font-bold tracking-tight">
           Identity {st?.verified && <BlueCheck size={18} />}
         </h2>
-        <p className="mt-1 text-[13px] text-ink-3">Your real name and date of birth are required to post; your nationality shows as your country's flag on your profile. All three are public. The blue check confirms them against a government ID — it's required to cash out.</p>
+        <p className="mt-1 text-[13px] text-ink-3">Your date of birth is required to post. Your full legal name is optional — it is needed only for the blue check, which confirms both against a government ID and is required to cash out. Both are public.</p>
       </div>
 
-      {/* Name + date of birth (gate posting) + nationality (the profile flag; all three are what the
-          blue check reads off the government ID). Gender sat here until 2026-08-18 and is gone from
-          the platform — nationality replaced it as the axis a donor's ArtaCredit can be aimed at. */}
+      {/* Date of birth (gates posting) + the full legal name (read by the blue check). Nationality sat
+          here from 2026-08-18 to 2026-10-08 and is gone from the platform; gender went before it. */}
       <Card as="div" className="flex flex-col gap-3 p-5">
         {/* The date-of-birth wheel is three selects side by side and cannot go under ~17rem; two
             fixed tracks gave it 179px at 1100. auto-fit keeps the pair on one line only where both
             halves fit. */}
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,17rem),1fr))] gap-3">
-          <Field label="Full legal name" required>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="As written on your ID" required />
-          </Field>
-          {/* MANDATORY, and the form now says so. Rest::birthday_gate refuses EVERY mutation from an
-              account with no exact date of birth, so a member who leaves this blank cannot post,
-              heart, comment or publish — they simply meet a 403 later instead of a label now.
-              "Birthday" also undersold it: this is a date of birth, and it is public. */}
+          {/* MANDATORY, and the form says so. Rest::birthday_gate refuses EVERY mutation from an
+              account with no exact date of birth. */}
           <Field label="Date of birth" required hint="Public on your profile, and required before you can post.">
             {/* Same three wheels as sign-up — one control for one fact, everywhere it is asked for. */}
             <DobWheel value={bday} onChange={setBday} minYear={new Date().getFullYear() - 120}
               maxYear={new Date().getFullYear() - 13} invalid={bday !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(bday)} />
           </Field>
-          {/* NATIONALITY — required, like the name and the date of birth (operator 2026-08-18,
-              reversing the 2026-08-11 removal). It is the flag on the public profile, one of the
-              two axes a donor's ArtaCredit can be aimed at (with an age band — gender is gone),
-              and the third fact the blue check reads off the government ID. It saves with the
-              name and date of birth on Save — never on change — so an IP-suggested default is
-              only ever stored once the member has confirmed it. */}
-          <Field label="Nationality" required hint="Public on your profile as your country's flag, and checked against your ID by the blue check.">
-            <select value={nat} onChange={(e) => { setNat(e.target.value); setGuessed(false); }} aria-label="Nationality"
-              className="h-11 w-full rounded-field border border-line bg-space-1 px-3.5 text-[15px] text-ink outline-none focus:border-yin-light">
-              <option value="">Choose your nationality…</option>
-              {countries.map(({ code, name: cn }) => (
-                <option key={code} value={code}>{`${flagEmoji(code)} ${cn}`}</option>
-              ))}
-            </select>
-            {guessed && <span className="mt-1 block text-[12px] text-ink-3">Guessed from your connection — change it if it is wrong.</span>}
+          <Field label="Full legal name" hint="Optional — needed only for the blue check. Leave it empty and you appear under your display name.">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="As written on your ID" autoComplete="name" maxLength={80} />
           </Field>
         </div>
         <div className="flex items-center gap-3">
@@ -1306,20 +1307,15 @@ function IdentityVerification() {
         {st?.verified ? (
           <div className="flex items-center gap-2 text-[15px] font-semibold text-yin-light">
             <BlueCheck size={18} /> Verified{st.verified_at ? ` · ${new Date(st.verified_at * 1000).toLocaleDateString()}` : ""}
-            {/* The flag beside the check — the nationality on record, which every check granted since
-                2026-08-18 canonicalised to the ID. */}
-            {flagEmoji(st.nationality) && (
-              <span role="img" aria-label={countryName(st.nationality)} title={`${countryName(st.nationality)} — shown on your profile`} className="text-[17px] leading-none">{flagEmoji(st.nationality)}</span>
-            )}
           </div>
         ) : !st?.configured ? (
           <p className="text-[14px] text-ink-3">Identity verification is temporarily unavailable. Please check back soon.</p>
-        ) : !st?.has_identity || !st?.nationality ? (
-          <p className="text-[14px] text-ink-3">Save your full name, date of birth and nationality above first, then verify your ID.</p>
+        ) : !st?.has_identity || !st?.full_name ? (
+          <p className="text-[14px] text-ink-3">Save your full legal name and date of birth above first, then verify your ID.</p>
         ) : (
           <>
             <h3 className="text-[16px] font-bold">Get the blue check</h3>
-            <p className="text-[13px] text-ink-3">Verifying is free. Add a clear photo of your face (it becomes your profile picture), the front and back of a government photo ID from any country — a passport or national ID card, which establish nationality; a driver licence or residence permit can confirm your name and date of birth but not your nationality — and a selfie. An AI vision check confirms the ID is genuine and that the name (given name and surname), date of birth and nationality on it are yours, and that the same face appears on the ID, the selfie and your photo. Every nationality is accepted — the check is only that what you stated matches your ID. Your ID and selfie are used only for this check and are never stored.</p>
+            <p className="text-[13px] text-ink-3">Verifying is free. Add a clear photo of your face (it becomes your profile picture), the front and back of a government photo ID from any country — a passport, national ID card, driver licence or residence permit — and a selfie. An AI vision check confirms the ID is genuine and that the name (given name and surname) and date of birth on it are yours, and that the same face appears on the ID, the selfie and your photo. Your ID and selfie are used only for this check and are never stored.</p>
             {/* A 59px preview of a passport at 1100 was not a preview. 8rem minimum. */}
             <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-3">
               <PhotoTile label="Profile photo" hint="your face" value={imgs.profile_pic} onPick={(f) => pick("profile_pic", f)} />

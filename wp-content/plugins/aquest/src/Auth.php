@@ -264,6 +264,7 @@ final class Auth {
 			'completed' => Learn::completed_count( $uid ), // courses completed (cert threshold) for the profile stat
 			'bio'       => (string) get_user_meta( $uid, 'description', true ), // so the saved bio loads back (was never read)
 			'links'     => (object) self::links( $uid ),                          // (object): an empty set is {} not [] — see Social::profile
+			'socials'   => self::socials( $uid ),                                 // every handle, in profile order — what the settings form edits
 			'relationship' => self::relationship( $uid ),                         // '' = not saying; the settings form prefills from this
 			'location'     => self::location( $uid ),                             // self-declared only — never inferred, see Auth::location
 			'languages'    => self::languages( $uid ),                            // I18n registry codes, the member's own order
@@ -273,7 +274,6 @@ final class Auth {
 			'has_identity' => Verify::has_identity( $uid ),  // name + birthday set (gates posting)
 			'full_name'    => Verify::full_name( $uid ),
 			'birthday'     => Verify::birthday( $uid ),
-			'nationality'  => Verify::claimed_country( $uid ), // the stated claim (ISO 3166-1 alpha-2) → the profile flag; '' until stated
 			'palm'         => Verify::palm_url( $uid ),      // opt-in palm "back photo" → the avatar flips to it (ticket #94)
 			'banner'       => Verify::banner_url( $uid ),    // the profile banner; '' when unset
 		] ];
@@ -286,32 +286,79 @@ final class Auth {
 	 *  passwordless (email code / Google), so the login is an inert internal identifier and rewriting
 	 *  it would only risk the wp-admin operator path. */
 	/**
-	 * The places a member can say they also are, and how to recognise one.
+	 * The places a member can say they also are — the profile's social handles.
 	 *
-	 *   key => [ label, host (or '' for any), handle → URL template ]
+	 *   key => [ label, host(s) a pasted URL must land on, bare-handle rule, URL path → handle ]
+	 *
+	 * ORDER IS THE PROFILE'S ORDER. The website first, then the networks in the order the operator
+	 * listed them (2026-10-08), then the two research identifiers that predate them.
+	 *
+	 * WHAT IS STORED IS THE HANDLE, NOT THE URL (since 2026-10-08). The member types "artafather" or
+	 * pastes https://www.instagram.com/artafather/ and either way `artafather` is what lands in
+	 * aq_links; the address is built from it on READ (social_url). That keeps one canonical value per
+	 * network, lets the settings form show a handle rather than a wall of URLs, and lets an address
+	 * pattern change (twitter.com → x.com, threads.net → threads.com) without rewriting anyone's row.
+	 * Values written before that are absolute URLs and still resolve: a stored https:// value is used
+	 * as-is (it was host-checked when it was saved).
 	 *
 	 * HOST-LOCKED ON PURPOSE. A free-text URL on a public profile is a spam surface: it costs nothing
 	 * to create an account and drop a link, and this one would be rendered on an indexable page. A
-	 * value is accepted only if it lands on that network's own host, so the field cannot be pointed
-	 * anywhere else. The two that cannot be locked — a personal site and Mastodon, which is federated
-	 * and has no single host — take any https URL, and every rendered link carries rel="nofollow ugc"
-	 * so there is no ranking to farm.
+	 * pasted URL is accepted only if it lands on that network's own host, so the field cannot be
+	 * pointed anywhere else, and a bare handle must fit that network's own handle rule before it is
+	 * put into an address. The exceptions are deliberate and few: a personal website (any https host)
+	 * and Mastodon, which is federated — written `user@instance`, or as the profile URL on any
+	 * instance. Every rendered link carries rel="nofollow ugc", so there is no ranking to farm.
 	 *
-	 * A member may type either a bare handle or a full URL; normalise_link() accepts both, because
-	 * telling somebody their perfectly good profile URL is invalid is a worse experience than
-	 * accepting it.
+	 * TWO HAVE NO PUBLIC PROFILE PAGE. WeChat and Discord IDs are not addressable on the web (Discord
+	 * only by a numeric user id), so they are stored as the ID and the profile offers it to COPY.
+	 * Bilibili's space URL needs the numeric UID; a nickname resolves to Bilibili's own user search
+	 * instead, which is useful to a visitor but is not a profile — so it is never claimed as one in
+	 * the Person schema's sameAs (see links()).
+	 *
+	 * A member may type a bare handle, an @handle, or paste the full URL — refusing somebody's
+	 * perfectly good profile address is a worse experience than reading the handle out of it.
 	 */
 	const LINKS = array(
-		'website'  => array( 'Website',        '',                    '%s' ),
-		'github'   => array( 'GitHub',         'github.com',          'https://github.com/%s' ),
-		'scholar'  => array( 'Google Scholar', 'scholar.google.com',  'https://scholar.google.com/citations?user=%s' ),
-		'orcid'    => array( 'ORCID',          'orcid.org',           'https://orcid.org/%s' ),
-		'linkedin' => array( 'LinkedIn',       'linkedin.com',        'https://www.linkedin.com/in/%s' ),
+		'website'     => array( 'Website',        '',                        '',                                                  '' ),
+		'linkedin'    => array( 'LinkedIn',       'linkedin.com',            '/^[A-Za-z0-9_-]{2,100}$/',                         '~^/in/([^/?#]+)/?$~' ),
+		'instagram'   => array( 'Instagram',      'instagram.com',           '/^[A-Za-z0-9._]{1,30}$/',                          '~^/([^/?#]+)/?$~' ),
+		'facebook'    => array( 'Facebook',       'facebook.com|fb.com',     '/^[A-Za-z0-9.]{1,50}$/',                           '~^/([^/?#]+)/?$~' ),
+		'threads'     => array( 'Threads',        'threads.com|threads.net', '/^[A-Za-z0-9._]{1,30}$/',                          '~^/@([^/?#]+)/?$~' ),
+		'bluesky'     => array( 'Bluesky',        'bsky.app',                '/^[A-Za-z0-9]([A-Za-z0-9-]{0,62})(\.[A-Za-z0-9]([A-Za-z0-9-]{0,62}))*$/', '~^/profile/([^/?#]+)/?$~' ),
+		'tiktok'      => array( 'TikTok',         'tiktok.com',              '/^[A-Za-z0-9._]{2,24}$/',                          '~^/@([^/?#]+)/?$~' ),
+		'pinterest'   => array( 'Pinterest',      'pinterest.com',           '/^[A-Za-z0-9_]{3,30}$/',                           '~^/([^/?#]+)/?$~' ),
+		'reddit'      => array( 'Reddit',         'reddit.com',              '/^[A-Za-z0-9_-]{3,20}$/',                          '~^/(?:user|u)/([^/?#]+)/?$~' ),
+		'snapchat'    => array( 'Snapchat',       'snapchat.com',            '/^[A-Za-z][A-Za-z0-9._-]{2,14}$/',                 '~^/add/([^/?#]+)/?$~' ),
+		'quora'       => array( 'Quora',          'quora.com',               '/^[A-Za-z0-9-]{1,100}$/',                          '~^/profile/([^/?#]+)/?$~' ),
+		'youtube'     => array( 'YouTube',        'youtube.com',             '/^(?:[A-Za-z0-9._-]{3,30}|UC[A-Za-z0-9_-]{22})$/', '~^/(?:@|channel/)([^/?#]+)/?$~' ),
+		'vk'          => array( 'VK',             'vk.com|vk.ru',            '/^[A-Za-z0-9._]{1,32}$/',                          '~^/([^/?#]+)/?$~' ),
 		// twitter.com is accepted too: it is the same service under its old name, and people paste
 		// the URL they have. Refusing it would be correct and useless.
-		'x'        => array( 'X',              'x.com|twitter.com',   'https://x.com/%s' ),
-		'mastodon' => array( 'Mastodon',       '',                    '%s' ),
+		'x'           => array( 'X',              'x.com|twitter.com',       '/^[A-Za-z0-9_]{1,15}$/',                           '~^/([^/?#]+)/?$~' ),
+		'telegram'    => array( 'Telegram',       't.me|telegram.me',        '/^[A-Za-z0-9_]{5,32}$/',                           '~^/([^/?#]+)/?$~' ),
+		'wechat'      => array( 'WeChat',         '',                        '/^[A-Za-z0-9_-]{2,32}$/',                          '' ),
+		'discord'     => array( 'Discord',        'discord.com',             '/^(?:[A-Za-z0-9_.]{2,32}(?:#[0-9]{4})?|[0-9]{17,20})$/', '~^/users/([0-9]{17,20})/?$~' ),
+		'twitch'      => array( 'Twitch',         'twitch.tv',               '/^[A-Za-z0-9_]{3,25}$/',                           '~^/([^/?#]+)/?$~' ),
+		'github'      => array( 'GitHub',         'github.com',              '/^[A-Za-z0-9-]{1,39}$/',                           '~^/([^/?#]+)/?$~' ),
+		'strava'      => array( 'Strava',         'strava.com',              '/^[A-Za-z0-9_-]{1,64}$/',                          '~^/athletes/([^/?#]+)/?$~' ),
+		'letterboxd'  => array( 'Letterboxd',     'letterboxd.com',          '/^[A-Za-z0-9_]{2,15}$/',                           '~^/([^/?#]+)/?$~' ),
+		'goodreads'   => array( 'Goodreads',      'goodreads.com',           '/^[A-Za-z0-9_-]{1,64}$/',                          '~^/(?:user/show/)?([^/?#]+)/?$~' ),
+		'soundcloud'  => array( 'SoundCloud',     'soundcloud.com',          '/^[A-Za-z0-9_-]{2,64}$/',                          '~^/([^/?#]+)/?$~' ),
+		'spotify'     => array( 'Spotify',        'spotify.com',             '/^[A-Za-z0-9._-]{1,64}$/',                         '~^/user/([^/?#]+)/?$~' ),
+		'kaggle'      => array( 'Kaggle',         'kaggle.com',              '/^[A-Za-z0-9_-]{1,64}$/',                          '~^/([^/?#]+)/?$~' ),
+		'huggingface' => array( 'Hugging Face',   'huggingface.co|hf.co',    '/^[A-Za-z0-9._-]{1,96}$/',                         '~^/([^/?#]+)/?$~' ),
+		'medium'      => array( 'Medium',         'medium.com',              '/^[A-Za-z0-9._]{1,30}$/',                          '~^/@([^/?#]+)/?$~' ),
+		'tumblr'      => array( 'Tumblr',         'tumblr.com',              '/^[A-Za-z0-9-]{1,32}$/',                           '~^/([^/?#]+)/?$~' ),
+		'rumble'      => array( 'Rumble',         'rumble.com',              '/^[A-Za-z0-9_-]{1,64}$/',                          '~^/(?:user|c)/([^/?#]+)/?$~' ),
+		'mastodon'    => array( 'Mastodon',       '',                        '/^@?[A-Za-z0-9_]{1,30}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/', '~^/@([A-Za-z0-9_]{1,30})/?$~' ),
+		'bilibili'    => array( 'Bilibili',       'bilibili.com',            '/^[\p{L}\p{N}_-]{1,32}$/u',                        '~^/([0-9]{1,20})/?$~' ),
+		'weibo'       => array( 'Weibo',          'weibo.com|weibo.cn',      '/^[\p{L}\p{N}_-]{1,30}$/u',                        '~^/(?:u/|n/)?([^/?#]+)/?$~' ),
+		'scholar'     => array( 'Google Scholar', 'scholar.google.com',      '/^[A-Za-z0-9_-]{6,20}$/',                          '' ),
+		'orcid'       => array( 'ORCID',          'orcid.org',               '/^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/',                 '~^/(\d{4}-\d{4}-\d{4}-\d{3}[\dX])/?$~' ),
 	);
+
+	/** The longest bio a member may write, in CHARACTERS. Matches the counter in the settings form. */
+	const BIO_MAX = 600;
 
 	/**
 	 * Note that somebody was here today. TO THE DAY, deliberately.
@@ -418,6 +465,19 @@ final class Auth {
 	}
 
 	public static function links( $uid ) {
+		// key => absolute https URL of a PROFILE — what the Person schema's sameAs and the no-JS
+		// "elsewhere" list publish as "this is the same person". An ID with no page (WeChat, a
+		// Discord username) and a nickname that only resolves to a site search (Bilibili) are left
+		// out: a search results page is not an identity claim.
+		$out = array();
+		foreach ( self::socials( $uid ) as $s ) {
+			if ( '' !== $s['url'] && $s['profile'] ) { $out[ $s['key'] ] = $s['url']; }
+		}
+		return $out;
+	}
+
+	/** The raw stored map, key => handle-or-URL, unknown keys dropped. */
+	private static function stored_links( $uid ) {
 		$raw = get_user_meta( (int) $uid, 'aq_links', true );
 		$raw = is_array( $raw ) ? $raw : (array) json_decode( (string) $raw, true );
 		$out = array();
@@ -429,13 +489,124 @@ final class Auth {
 	}
 
 	/**
-	 * One submitted value → an absolute https URL on the expected host, or '' if it cannot be one.
-	 * Accepts a bare handle ("arash"), an @handle, or a full URL.
+	 * Every handle a member has set, in profile order:
+	 *   [ { key, label, handle, url, profile } ]
+	 * `handle` is what the settings form shows and the profile prints (a URL only when one was saved
+	 * that is not reducible to a handle); `url` is '' for an ID with no web address (WeChat, a
+	 * Discord username) — the profile offers those to copy; `profile` is false for an address that
+	 * is a search rather than a profile page.
 	 */
-	private static function normalise_link( $key, $val ) {
+	public static function socials( $uid ) {
+		$out = array();
+		foreach ( self::stored_links( $uid ) as $k => $v ) {
+			$url = self::social_url( $k, $v );
+			$out[] = array(
+				'key'     => $k,
+				'label'   => self::LINKS[ $k ][0],
+				'handle'  => 0 === strpos( $v, 'https://' ) ? ( self::handle_from_url( $k, $v ) ?: $v ) : $v,
+				'url'     => $url,
+				'profile' => '' !== $url && ! ( 'bilibili' === $k && ! ctype_digit( $v ) && 0 !== strpos( $v, 'https://' ) ),
+			);
+		}
+		return $out;
+	}
+
+	/** A network's display label ('' for an unknown key) — for renderers outside the plugin. */
+	public static function link_label( $key ) {
+		return isset( self::LINKS[ $key ] ) ? self::LINKS[ $key ][0] : '';
+	}
+
+	/**
+	 * A stored value → the address a visitor is sent to, or '' when the network has none.
+	 * A stored absolute URL (saved before handles, or a pasted address that is not reducible to one)
+	 * is returned as-is — it was host-checked when it was saved.
+	 */
+	public static function social_url( $key, $v ) {
+		$v = trim( (string) $v );
+		if ( '' === $v || ! isset( self::LINKS[ $key ] ) ) { return ''; }
+		if ( 0 === strpos( $v, 'https://' ) ) { return esc_url_raw( $v ); }
+		$e   = rawurlencode( $v );
+		$num = ctype_digit( $v );
+		switch ( $key ) {
+			case 'linkedin':    $u = 'https://www.linkedin.com/in/' . $e . '/'; break;
+			case 'instagram':   $u = 'https://www.instagram.com/' . $e . '/'; break;
+			case 'facebook':    $u = $num ? 'https://www.facebook.com/profile.php?id=' . $e : 'https://www.facebook.com/' . $e; break;
+			case 'threads':     $u = 'https://www.threads.com/@' . $e; break;
+			case 'bluesky':     $u = 'https://bsky.app/profile/' . $e; break;
+			case 'tiktok':      $u = 'https://www.tiktok.com/@' . $e; break;
+			case 'pinterest':   $u = 'https://www.pinterest.com/' . $e . '/'; break;
+			case 'reddit':      $u = 'https://www.reddit.com/user/' . $e . '/'; break;
+			case 'snapchat':    $u = 'https://www.snapchat.com/add/' . $e; break;
+			case 'quora':       $u = 'https://www.quora.com/profile/' . $e; break;
+			case 'youtube':     $u = preg_match( '/^UC[A-Za-z0-9_-]{22}$/', $v ) ? 'https://www.youtube.com/channel/' . $e : 'https://www.youtube.com/@' . $e; break;
+			case 'vk':          $u = $num ? 'https://vk.com/id' . $e : 'https://vk.com/' . $e; break;
+			case 'x':           $u = 'https://x.com/' . $e; break;
+			case 'telegram':    $u = 'https://t.me/' . $e; break;
+			case 'wechat':      $u = ''; break; // no public profile address exists — the profile offers the ID to copy
+			case 'discord':     $u = preg_match( '/^[0-9]{17,20}$/', $v ) ? 'https://discord.com/users/' . $e : ''; break;
+			case 'twitch':      $u = 'https://www.twitch.tv/' . $e; break;
+			case 'github':      $u = 'https://github.com/' . $e; break;
+			case 'strava':      $u = 'https://www.strava.com/athletes/' . $e; break; // numeric id or the member's vanity name
+			case 'letterboxd':  $u = 'https://letterboxd.com/' . $e . '/'; break;
+			case 'goodreads':   $u = $num ? 'https://www.goodreads.com/user/show/' . $e : 'https://www.goodreads.com/' . $e; break;
+			case 'soundcloud':  $u = 'https://soundcloud.com/' . $e; break;
+			case 'spotify':     $u = 'https://open.spotify.com/user/' . $e; break;
+			case 'kaggle':      $u = 'https://www.kaggle.com/' . $e; break;
+			case 'huggingface': $u = 'https://huggingface.co/' . $e; break;
+			case 'medium':      $u = 'https://medium.com/@' . $e; break;
+			case 'tumblr':      $u = 'https://www.tumblr.com/' . $e; break;
+			case 'rumble':      $u = 'https://rumble.com/user/' . $e; break;
+			case 'mastodon':
+				// user@instance → https://instance/@user — the address every Mastodon server answers.
+				if ( ! preg_match( '/^@?([A-Za-z0-9_]{1,30})@([A-Za-z0-9.-]+)$/', $v, $m ) ) { return ''; }
+				$u = 'https://' . strtolower( $m[2] ) . '/@' . $m[1];
+				break;
+			// The space page needs the numeric UID; a nickname goes to Bilibili's own user search.
+			case 'bilibili':    $u = $num ? 'https://space.bilibili.com/' . $e : 'https://search.bilibili.com/upuser?keyword=' . $e; break;
+			case 'weibo':       $u = $num ? 'https://weibo.com/u/' . $e : 'https://weibo.com/n/' . $e; break;
+			case 'scholar':     $u = 'https://scholar.google.com/citations?user=' . $e; break;
+			case 'orcid':       $u = 'https://orcid.org/' . $e; break;
+			default:            $u = ''; // website: only ever stored as a URL, handled above
+		}
+		return '' === $u ? '' : esc_url_raw( $u );
+	}
+
+	/** The handle a profile URL on a network's own host names, or '' when it is not that shape. */
+	private static function handle_from_url( $key, $url ) {
+		if ( 'scholar' === $key ) { // the profile id rides in the query string: /citations?user=<id>
+			parse_str( (string) wp_parse_url( $url, PHP_URL_QUERY ), $q );
+			$h = isset( $q['user'] ) ? (string) $q['user'] : '';
+			return self::valid_handle( $key, $h ) ? $h : '';
+		}
+		$rx = self::LINKS[ $key ][3] ?? '';
+		if ( '' === $rx ) { return ''; }
+		$path = (string) wp_parse_url( $url, PHP_URL_PATH );
+		if ( ! preg_match( $rx, $path, $m ) ) { return ''; }
+		$h = rawurldecode( $m[1] );
+		if ( 'mastodon' === $key ) {
+			$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+			return $host ? $h . '@' . $host : '';
+		}
+		return self::valid_handle( $key, $h ) ? $h : '';
+	}
+
+	/** Does a bare handle fit this network's own rule? */
+	private static function valid_handle( $key, $h ) {
+		$rule = self::LINKS[ $key ][2] ?? '';
+		return '' !== $rule && '' !== $h && (bool) preg_match( $rule, $h );
+	}
+
+	/**
+	 * One submitted value → the canonical value to STORE (a handle, or an https URL when the network
+	 * allows one that is not reducible to a handle), or '' if it cannot be one. Accepts a bare
+	 * handle ("arash"), an @handle, `u/handle` for Reddit, `user@instance` for Mastodon, or a full
+	 * URL on the network's own host.
+	 */
+	private static function normalise_social( $key, $val ) {
 		$val = trim( (string) $val );
 		if ( '' === $val || ! isset( self::LINKS[ $key ] ) ) { return ''; }
-		list( , $host, $tpl ) = self::LINKS[ $key ];
+		if ( strlen( $val ) > 300 ) { return ''; }
+		$host = self::LINKS[ $key ][1];
 
 		if ( preg_match( '#^https?://#i', $val ) ) {
 			$url = esc_url_raw( $val );
@@ -453,15 +624,59 @@ final class Auth {
 					if ( $h === $cand || substr( $h, -( strlen( $cand ) + 1 ) ) === '.' . $cand ) { $okhost = true; break; }
 				}
 				if ( ! $okhost ) { return ''; }
+				// Bilibili's profile pages live on space.bilibili.com only.
+				if ( 'bilibili' === $key && 'space.bilibili.com' !== $h ) { return ''; }
+			} elseif ( 'website' !== $key && 'mastodon' !== $key ) {
+				return ''; // an ID-only network (WeChat) has no address to paste
 			}
+			// Reduce a profile URL to its handle whenever it is exactly that shape — one canonical
+			// value per network, whichever way the member typed it.
+			$handle = self::handle_from_url( $key, $url );
+			if ( '' !== $handle ) { return 'bluesky' === $key || 'mastodon' === $key ? strtolower( $handle ) : $handle; }
+			// Discord: only the /users/<id> address is a profile; anything else on the host is not.
+			if ( 'discord' === $key ) { return ''; }
 			return $url;
 		}
 
 		// A bare handle. Anything that is not plausibly one is refused rather than pasted into a URL.
-		$handle = ltrim( $val, '@' );
-		if ( ! preg_match( '/^[A-Za-z0-9._-]{1,64}$/', $handle ) ) { return ''; }
-		if ( '' === $host ) { return ''; } // website/mastodon need a real URL — a handle says nothing
-		return esc_url_raw( sprintf( $tpl, rawurlencode( $handle ) ) );
+		if ( 'website' === $key ) { return ''; } // a site needs a real URL — a handle says nothing
+		$handle = $val;
+		if ( 'reddit' === $key ) { $handle = preg_replace( '#^/?u/#i', '', $handle ); }
+		if ( 'mastodon' === $key ) {
+			$handle = ltrim( $handle, '@' );
+			if ( ! self::valid_handle( $key, $handle ) ) { return ''; }
+			list( $user, $inst ) = explode( '@', $handle, 2 );
+			return $user . '@' . strtolower( $inst );
+		}
+		$handle = ltrim( $handle, '@' );
+		if ( 'bluesky' === $key ) {
+			$handle = strtolower( $handle );
+			// A bare Bluesky name is on the default host — "artafather" means artafather.bsky.social.
+			if ( false === strpos( $handle, '.' ) ) { $handle .= '.bsky.social'; }
+		}
+		return self::valid_handle( $key, $handle ) ? $handle : '';
+	}
+
+	/**
+	 * Set some of a member's handles directly, validated exactly as the settings form validates them.
+	 * Keys absent from $map are left alone; a value that does not validate is skipped, never stored.
+	 * For one-shot operator seeds (Schema::migrate) — not a route. Returns the keys written.
+	 */
+	public static function seed_socials( $uid, array $map ) {
+		$cur  = self::stored_links( $uid );
+		$done = array();
+		foreach ( $map as $k => $v ) {
+			$n = self::normalise_social( (string) $k, (string) $v );
+			if ( '' !== $n ) { $cur[ $k ] = $n; $done[] = (string) $k; }
+		}
+		if ( $done ) { update_user_meta( (int) $uid, 'aq_links', wp_json_encode( $cur ) ); }
+		return $done;
+	}
+
+	/** One submitted value → the absolute https URL it will render as, or '' if it cannot be one.
+	 *  Kept for tools/verify-links.php, which asserts every accepted value comes back https. */
+	private static function normalise_link( $key, $val ) {
+		return self::social_url( $key, self::normalise_social( $key, $val ) );
 	}
 
 	public static function profile_update( $req ) {
@@ -469,8 +684,13 @@ final class Auth {
 		if ( ! $uid ) { return Rest::err( 'auth', 'Please sign in.', 401 ); }
 		$name = sanitize_text_field( (string) Rest::p( $req, 'name', '' ) );
 		$bio  = sanitize_textarea_field( (string) Rest::p( $req, 'bio', '' ) );
+		// Capped by CHARACTERS on the server too — the form's counter is a courtesy, not the rule, and
+		// the bio renders in full on a public page and in the Person schema. sanitize_textarea_field
+		// has already stripped every tag; the profile prints it as text, never as HTML.
+		$bio  = trim( function_exists( 'mb_substr' ) ? mb_substr( $bio, 0, self::BIO_MAX ) : substr( $bio, 0, self::BIO_MAX ) );
 
-		// Links, when the client sends them. ABSENT means "unchanged" and an EMPTY OBJECT means
+		// Social handles (`socials`, since 2026-10-08) or the older `links` — same map, key => what the
+		// member typed. Links, when the client sends them. ABSENT means "unchanged" and an EMPTY OBJECT means
 		// "clear them" — a form that only edits the bio must not silently wipe somebody's links
 		// because it did not know about the field.
 		//
@@ -479,7 +699,8 @@ final class Auth {
 		// itself: the member got an error and their name changed anyway. Same reason the username is
 		// settled first — a save either happens or it does not.
 		$links_clean = null;
-		$links_in    = Rest::p( $req, 'links', null );
+		$links_in    = Rest::p( $req, 'socials', null );
+		if ( null === $links_in ) { $links_in = Rest::p( $req, 'links', null ); }
 		if ( null !== $links_in ) {
 			$links_in    = is_array( $links_in ) ? $links_in : (array) json_decode( (string) $links_in, true );
 			$links_clean = array();
@@ -487,16 +708,16 @@ final class Auth {
 			foreach ( self::LINKS as $k => $meta ) {
 				$raw = isset( $links_in[ $k ] ) ? trim( (string) $links_in[ $k ] ) : '';
 				if ( '' === $raw ) { continue; }
-				$url = self::normalise_link( $k, $raw );
+				$val = self::normalise_social( $k, $raw );
 				// Name the one that failed. "Could not save" for a whole form because one field was
 				// wrong is the kind of error people give up on.
-				if ( '' === $url ) { $bad[] = $meta[0]; continue; }
-				$links_clean[ $k ] = $url;
+				if ( '' === $val ) { $bad[] = $meta[0]; continue; }
+				$links_clean[ $k ] = $val;
 			}
 			if ( $bad ) {
 				return Rest::err( 'bad_link', count( $bad ) === 1
-					? sprintf( 'That %s link does not look right — paste the address of your profile there, or just your handle.', $bad[0] )
-					: sprintf( 'These do not look right: %s. Paste the address of each profile, or just the handle.', implode( ', ', $bad ) ) );
+					? sprintf( 'That %s handle does not look right — type just your handle, or paste the address of your profile there.', $bad[0] )
+					: sprintf( 'These do not look right: %s. Type just the handle, or paste the address of each profile.', implode( ', ', $bad ) ) );
 			}
 		}
 
@@ -573,7 +794,7 @@ final class Auth {
 		// handle simultaneously, WP suffixes the loser (-2) — the client must learn what it actually got.
 		// `links` comes back NORMALISED — a member who typed a bare handle sees the real URL that was
 		// stored, so the form shows what the profile will show rather than what they typed.
-		return array( 'ok' => true, 'name' => $u ? $u->display_name : $name, 'bio' => $bio, 'slug' => $u ? $u->user_nicename : '', 'links' => (object) self::links( $uid ), 'relationship' => self::relationship( $uid ), 'location' => self::location( $uid ), 'languages' => self::languages( $uid ) );
+		return array( 'ok' => true, 'name' => $u ? $u->display_name : $name, 'bio' => $bio, 'slug' => $u ? $u->user_nicename : '', 'links' => (object) self::links( $uid ), 'socials' => self::socials( $uid ), 'relationship' => self::relationship( $uid ), 'location' => self::location( $uid ), 'languages' => self::languages( $uid ) );
 	}
 
 	/** GET /username/check?u= — live availability for the settings form. Public: every username is

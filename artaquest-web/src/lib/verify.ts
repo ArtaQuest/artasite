@@ -13,10 +13,6 @@ const NONCE =
 
 export type VerifyStatus = {
   full_name: string; birthday: string; has_identity: boolean;
-  /** The member's stated nationality (ISO 3166-1 alpha-2), '' until stated. Asked at sign-up
-   *  (defaulted from the visitor's country), shown as a flag on the public profile, and checked
-   *  against the ID by the blue check (operator 2026-08-18). */
-  nationality: string;
   verified: boolean; verified_at: number; last_note: string;
   configured: boolean;
 };
@@ -53,13 +49,12 @@ export async function profileVerification(slug: string): Promise<{ verified: boo
 
 export const VerifyApi = {
   status: () => req<VerifyStatus>("/verify/status", "GET"),
-  // Name + date of birth + nationality (ISO 3166-1 alpha-2). Nationality came back on 2026-08-18
-  // (operator; it had gone on 08-11): the server REQUIRES a valid code until the account has one on
-  // record, and thereafter an omitted/empty value leaves the stored claim untouched — so a form that
-  // only edits the name still works, and a first-time member is never let through without one.
-  setIdentity: (full_name: string, birthday: string, nationality?: string) =>
-    req<{ ok?: boolean; error?: string; message?: string; full_name?: string; birthday?: string; nationality?: string }>(
-      "/identity", "POST", nationality ? { full_name, birthday, nationality } : { full_name, birthday }),
+  // The date of birth — the whole sign-up step since 2026-10-08 — and, optionally, the full legal
+  // name the blue check reads. An empty name leaves the one on record untouched, so sign-up sends
+  // the date alone. Nationality is no longer asked for or accepted (operator 2026-10-08).
+  setIdentity: (full_name: string, birthday: string) =>
+    req<{ ok?: boolean; error?: string; message?: string; full_name?: string; birthday?: string; has_identity?: boolean }>(
+      "/identity", "POST", full_name ? { full_name, birthday } : { birthday }),
   // Save the "fine-tune" birth time (minutes past local midnight) that positions the member's long-term goal.
   setBirthTime: (min: number) => req<{ ok?: boolean; min?: number }>("/identity/birthtime", "POST", { min }),
   verify: (imgs: { profile_pic: string; id_front: string; id_back: string; selfie: string }) =>
