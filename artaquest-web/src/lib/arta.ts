@@ -6,8 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import artaAvatarUrl from "../assets/arta-thinking.svg";
 import { artaWatch, ARTA_HANDLE, type ArtaWatch, type ArtaMentionState, type LibraryItem } from "./api";
 
-/** The mascot in its thinking pose. Same file the server hands out as Arta's avatar
- *  (wp-content/plugins/aquest/assets/arta/arta-thinking.svg) — keep the two identical. */
+/** Arta's avatar: upper-body crop of artalife's official think() pose. Same file the server
+ *  hands out (wp-content/plugins/aquest/assets/arta/arta-thinking.svg) — keep the two identical. */
 export const ARTA_AVATAR = artaAvatarUrl;
 
 export function isArta(a: { slug?: string; bot?: boolean } | null | undefined): boolean {

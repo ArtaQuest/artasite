@@ -877,9 +877,10 @@ final class Arta {
 	}
 
 	/**
-	 * Arta's picture: the mascot in its thinking pose (assets/arta/), the same figure the site's
-	 * companion draws. A code-level override (Verify::own_picture asks here first), so it holds in
-	 * every environment without a migration and cannot be replaced by an upload to the bot account.
+	 * Arta's picture: upper-body crop of artalife's official think() pose (assets/arta/). Same
+	 * skeleton/colour/stroke as the companion the footer draws. A code-level override
+	 * (Verify::own_picture asks here first), so it holds in every environment without a migration
+	 * and cannot be replaced by an upload to the bot account.
 	 */
 	public static function avatar_url() {
 		static $v = null;
