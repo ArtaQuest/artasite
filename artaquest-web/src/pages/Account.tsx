@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { DobWheel } from "../components/DobWheel";
-import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, LANGS_MAX, postProfileUpdate, RELATIONSHIPS, type CourseCard, type Dashboard, type Social, type UsernameCheck } from "../lib/wp";
-import { SOCIAL_FIELDS } from "../lib/socials";
+import { checkUsername, getDashboard, getCourseCards, isLoggedIn, localePath, LANGS_MAX, postProfileUpdate, CATEGORY_MAX, type CourseCard, type Dashboard, type Social, type UsernameCheck } from "../lib/wp";
+import { SOCIAL_FIELDS, WEBSITE_FIELD } from "../lib/socials";
 import { SocialIcon } from "../components/SocialLinks";
 import { Sessions, Funds, BURSARY_GROUPS, Account as AccountApi, ApiError, ApiTokens, KaggleIds, Passkeys, ShellAccount, UsageApi, myParticipation, type PasskeyItem, type ApiTokenItem, type ApiTokenScope, type KaggleIdItem, type SessionItem, type ShellInfo, type ShellKey, type UsageInfo, type BursaryResult, type BursaryStatus, type ShareKit , type Footprint } from "../lib/api";
 import { signOut } from "../lib/auth";
@@ -39,14 +39,14 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
   // builds the address.
   const savedSocials = (list?: Social[]) => {
     const by = Object.fromEntries((list ?? []).map((x) => [x.key, x.handle]));
-    return Object.fromEntries(SOCIAL_FIELDS.map((f) => [f.key, by[f.key] ?? ""]));
+    return Object.fromEntries([WEBSITE_FIELD, ...SOCIAL_FIELDS].map((f) => [f.key, by[f.key] ?? ""]));
   };
   const [initialLinks, setInitialLinks] = useState<Record<string, string>>(() => savedSocials(user.socials));
   const [links, setLinks] = useState<Record<string, string>>(() => savedSocials(user.socials));
   // The networks list folds: the ones already filled in, plus the first few, until the member asks
   // for all of them — thirty-four inputs at once is a form to endure, on a phone most of all.
   const [allNets, setAllNets] = useState(false);
-  const [relationship, setRelationship] = useState(user.relationship || "");
+  const [category, setCategory] = useState(user.category || "");
   const [location, setLocation] = useState(user.location || "");
   const [langs, setLangs] = useState<string[]>(() => user.languages ?? []);
   const [username, setUsername] = useState(user.slug || "");
@@ -54,9 +54,9 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const usernameChanged = username !== (user.slug || "") && username !== "";
-  const linksDirty = SOCIAL_FIELDS.some(({ key: k }) => (links[k] || "").trim() !== (initialLinks[k] || ""));
+  const linksDirty = [WEBSITE_FIELD, ...SOCIAL_FIELDS].some(({ key: k }) => (links[k] || "").trim() !== (initialLinks[k] || ""));
   const dirty = name.trim() !== user.name || bio !== (user.bio || "") || usernameChanged || linksDirty
-    || relationship !== (user.relationship || "") || location !== (user.location || "")
+    || category !== (user.category || "") || location !== (user.location || "")
     || langs.join(",") !== (user.languages ?? []).join(",");
 
   // Debounced live availability check — only while the handle differs from the current one.
@@ -74,14 +74,14 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
     setSaving(true);
     setMsg("");
     try {
-      const r = await postProfileUpdate(name.trim(), bio, usernameChanged ? username : undefined, links, relationship, location.trim(), langs);
+      const r = await postProfileUpdate(name.trim(), bio, usernameChanged ? username : undefined, links, category.trim(), location.trim(), langs);
       if (!r.ok) { setMsg(r.message || "Could not save — try again"); return; }
       // Adopt the NORMALISED handles: a pasted URL comes back as the handle it names, "artafather"
       // on Bluesky comes back as artafather.bsky.social — the form shows what the profile will show.
       if (r.socials) { const n = savedSocials(r.socials); setLinks(n); setInitialLinks(n); }
       // Adopt what was STORED, not what was typed: the server trims and caps the location, so a
       // 70-character entry must come back as the 60 the profile will actually show.
-      if (r.relationship !== undefined) setRelationship(r.relationship);
+      if (r.category !== undefined) setCategory(r.category);
       if (r.location !== undefined) setLocation(r.location);
       if (r.languages !== undefined) setLangs(r.languages);
       // Adopt what the server actually stored (a simultaneous claim can suffix the handle).
@@ -127,24 +127,25 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
         <Field label="Bio">
           <Textarea value={bio} onChange={(e) => setBio(e.target.value.slice(0, 600))} rows={4} maxLength={600} placeholder="Tell the community what you are exploring." className="resize-y bg-space-1 px-3.5 text-[16px] sm:text-[15px]" />
           <span className="flex justify-between gap-3 text-[12px] font-normal text-ink-3">
-            <span>Shown at the top of your profile.</span>
+            <span>Shown under your name. Line breaks and emoji are kept.</span>
             <span className={`tabular-nums ${bio.length >= 560 ? "text-yang-ink" : ""}`}>{bio.length}/600</span>
           </span>
         </Field>
-        {/* ABOUT YOU — both optional, both PUBLIC, and the label says so rather than leaving a member
-            to find out from their own profile. This database is published in full, so there is no
-            such thing as a quiet field here; the honest thing is to be plain at the point of entry.
-            Leave either blank and the profile simply does not mention it. */}
+        {/* ABOUT YOU — the profile's meta row, X-style (operator 2026-10-08): what you do, where you
+            live, your website. All optional, all PUBLIC, and the label says so rather than leaving a
+            member to find out from their own profile — this database is published in full, so there
+            is no such thing as a quiet field here. Leave one blank and the profile does not mention
+            it. Relationship status was retired the same day ("remove relationship status"). */}
         <Field label="About you">
           <span className="text-[12.5px] font-normal text-ink-3">
-            Optional, and public — both appear on your profile. Leave them blank to say nothing.
+            Optional, and public — shown in a line under your bio. Leave any blank to say nothing.
           </span>
           <div className="mt-1 grid gap-2 sm:grid-cols-2">
             <label className="flex flex-col gap-1">
-              <span className="text-[12.5px] font-normal text-ink-3">Relationship status</span>
-              <Select value={relationship} onChange={setRelationship} label="Relationship status"
-                className="bg-space-1"
-                options={[{ value: "", label: "Prefer not to say" }, ...RELATIONSHIPS.map(([k, label]) => ({ value: k, label }))]} />
+              <span className="text-[12.5px] font-normal text-ink-3">What you do</span>
+              <Input value={category} onChange={(e) => setCategory(e.target.value.slice(0, CATEGORY_MAX))} maxLength={CATEGORY_MAX}
+                placeholder="e.g. Education, Software engineer" enterKeyHint="next"
+                className="h-11 bg-space-1 px-3.5 text-[16px] sm:text-[14px]" />
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-[12.5px] font-normal text-ink-3">Where you live</span>
@@ -156,6 +157,16 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
                 onPick={(c) => setLocation(cityLabel(c))}
                 onClear={() => setLocation("")}
                 placeholder="Start typing your city…" />
+            </label>
+            {/* The website lives here, beside the city, because that is where the profile shows it —
+                not among the network marks. Stored with the handles (aq_links.website); any https
+                address is accepted, and the profile shows it as the bare domain. */}
+            <label className="flex flex-col gap-1 sm:col-span-2">
+              <span className="text-[12.5px] font-normal text-ink-3">Website</span>
+              <Input value={links.website || ""} onChange={(e) => setLinks((l) => ({ ...l, website: e.target.value }))}
+                type="url" inputMode="url" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="url"
+                maxLength={300} placeholder={WEBSITE_FIELD.placeholder}
+                className="h-11 bg-space-1 px-3.5 text-[16px] sm:text-[14px]" />
             </label>
           </div>
         </Field>
@@ -224,7 +235,7 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
             <span className="text-[12px] font-normal tabular-nums text-ink-3">{SOCIAL_FIELDS.filter((f) => (links[f.key] || "").trim()).length} added</span>
           </span>
           <span className="text-[12.5px] font-normal text-ink-3">
-            Public — shown on your profile as icons. Type just your handle, or paste the address of your profile.
+            Public — shown on your profile as icons, biggest network first. Type just your handle, or paste the address of your profile.
           </span>
           <div className="mt-1 grid gap-x-4 gap-y-2 sm:grid-cols-2">
             {SOCIAL_FIELDS.map((f, i) => {
@@ -239,7 +250,7 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
                     <span className="truncate">{f.label}</span>
                   </span>
                   <Input value={links[f.key] || ""} onChange={(e) => setLinks((l) => ({ ...l, [f.key]: e.target.value }))}
-                    inputMode={f.key === "website" ? "url" : "text"} autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                    inputMode="text" autoCapitalize="none" autoCorrect="off" spellCheck={false}
                     autoComplete="off" enterKeyHint="next" maxLength={300} aria-label={`${f.label} handle`}
                     placeholder={f.placeholder} className="h-11 min-w-0 flex-1 bg-space-1 px-2.5 text-[16px] sm:px-3 sm:text-[14px]" />
                 </label>
@@ -249,7 +260,7 @@ function SettingsForm({ user, onSaved }: { user: Dashboard["user"]; onSaved: (na
           {!allNets && SOCIAL_FIELDS.some((f, i) => i >= 9 && !(links[f.key] || "").trim() && !initialLinks[f.key]) && (
             <button type="button" onClick={() => setAllNets(true)}
               className="mt-1 inline-flex min-h-11 items-center gap-1.5 self-start rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yang hover:text-ink">
-              Show all {SOCIAL_FIELDS.length} networks
+              Show all {SOCIAL_FIELDS.length}
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="m6 9 6 6 6-6" /></svg>
             </button>
           )}

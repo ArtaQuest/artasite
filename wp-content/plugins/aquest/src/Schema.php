@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.81.0';
+	const VERSION = '1.82.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -2199,6 +2199,27 @@ final class Schema {
 				if ( $u ) { Auth::seed_socials( (int) $u->ID, $map ); }
 			}
 			update_option( 'aq_founder_socials_v1', '1', false );
+		}
+
+		// 1.82.0 — THE FOUNDER'S X-STYLE HEADER (operator 2026-10-08, from a screenshot of his X
+		// profile): the bio, the briefcase category, the city and the website on /u/arash and on the
+		// founder profile /u/artafather (the same person). The bio is the two lines exactly, emoji and
+		// line break included. The city replaces "Tehran, Iran" with "Montreal, Canada" — Montreal as the X profile says
+		// it, written "City, Country" the way the settings form's city picker stores every location.
+		// The website goes through the same validator as the settings form; the other handles are
+		// untouched. Joined stays the real ArtaQuest join date and the birthday is already set. One
+		// shot, gated on its own option, so a later edit is never overwritten.
+		if ( get_option( 'aq_founder_xprofile_v1' ) !== '1' && class_exists( '\\AQ\\Auth' ) && method_exists( '\\AQ\\Auth', 'seed_socials' ) ) {
+			$bio = "Nerd-in-Chief at ArtaQuest Foundation \u{1F913}\nBuilding social media for arts and sciences";
+			foreach ( [ 'arash', 'artafather' ] as $slug ) {
+				$u = get_user_by( 'slug', $slug );
+				if ( ! $u ) { continue; }
+				update_user_meta( (int) $u->ID, 'description', $bio );
+				update_user_meta( (int) $u->ID, 'aq_category', 'Education' );
+				update_user_meta( (int) $u->ID, 'aq_location', 'Montreal, Canada' );
+				Auth::seed_socials( (int) $u->ID, [ 'website' => 'https://artaquest.com' ] );
+			}
+			update_option( 'aq_founder_xprofile_v1', '1', false );
 		}
 
 		// 1.62.2 — SEASONS REFRAME (operator directive 2026-07-10): astrology leaves the platform

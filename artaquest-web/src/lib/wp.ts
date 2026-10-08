@@ -8,7 +8,7 @@ import { aqCountryId } from "./geo";
 import type { TypologyTag, Selections } from "./typology-meta";
 import { aqFetch } from "./offline/fetch";
 import { ApiError } from "./api";
-import { SOCIAL_FIELDS, type Social } from "./socials";
+import { SOCIAL_FIELDS, WEBSITE_FIELD, type Social } from "./socials";
 
 const BASE = "/wp-json";
 const NONCE =
@@ -350,7 +350,7 @@ export type TrackPoints = {
 const ZERO_TRACKS: TrackPoints = { learn: 0, donate: 0, volunteer: 0, outreach: 0 };
 export type EnrolledCourse = { id?: number; value: string; url: string; resume?: string; image?: string; lessons?: number; pct?: number; cert?: boolean };
 export type Dashboard = {
-  user: { name: string; avatar: string; slug?: string; bio?: string; country?: string; palm?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; relationship?: string; location?: string; languages?: string[] };
+  user: { name: string; avatar: string; slug?: string; bio?: string; country?: string; palm?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; location?: string; category?: string; languages?: string[] };
   coins: number; points: number;
   tier: { label?: string; next: string | null; pct: number; remaining: number };
   stats: Stat[]; courses: EnrolledCourse[];
@@ -361,12 +361,12 @@ export async function getDashboard(): Promise<Dashboard | null> {
   try {
     const [d, me] = await Promise.all([
       get<{ courses: EnrolledCourse[]; points: number; coins: number }>(`${AQ}/dashboard`),
-      get<{ user: ({ name: string; slug: string; avatar: string; country?: string; palm?: string; tier: string; bio?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; relationship?: string; location?: string; languages?: string[]; completed?: number; works?: number; progress?: { label: string; next: string | null; pct: number; remaining: number } }) | null }>(`${AQ}/me`),
+      get<{ user: ({ name: string; slug: string; avatar: string; country?: string; palm?: string; tier: string; bio?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; location?: string; category?: string; languages?: string[]; completed?: number; works?: number; progress?: { label: string; next: string | null; pct: number; remaining: number } }) | null }>(`${AQ}/me`),
     ]);
     const u = me.user;
     const courses = d.courses || [];
     return {
-      user: { name: u?.name || "Quester", avatar: u?.avatar || "", slug: u?.slug, bio: u?.bio || "", country: u?.country || "", palm: u?.palm || "", links: u?.links, socials: Array.isArray(u?.socials) ? u.socials : [], relationship: u?.relationship || "", location: u?.location || "", languages: u?.languages ?? [] },
+      user: { name: u?.name || "Quester", avatar: u?.avatar || "", slug: u?.slug, bio: u?.bio || "", country: u?.country || "", palm: u?.palm || "", links: u?.links, socials: Array.isArray(u?.socials) ? u.socials : [], location: u?.location || "", category: u?.category || "", languages: u?.languages ?? [] },
       coins: d.coins, points: d.points,
       // Real rank-ring progress, computed server-side (Economy::tier_progress) — was hardcoded next:null/pct:0.
       tier: u?.progress ?? { label: u?.tier || "Quester", next: null, pct: 0, remaining: 0 },
@@ -397,10 +397,11 @@ export async function postProfileUpdate(
   /** key → what the member typed (a handle or a profile URL), sent as `socials`. */
   links?: Partial<Record<ProfileLinkKey, string>>,
   // Both follow the links contract: `undefined` means LEAVE IT ALONE, "" means stop saying.
-  relationship?: string,
+  // (Relationship status was retired 2026-10-08; the server ignores it.)
+  category?: string,
   location?: string,
   languages?: string[],
-): Promise<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; relationship?: string; location?: string; languages?: string[]; message?: string }> {
+): Promise<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; category?: string; location?: string; languages?: string[]; message?: string }> {
   try {
     const body: Record<string, unknown> = { name, bio };
     if (username) body.username = username; // only sent when the member actually changed their handle
@@ -408,11 +409,11 @@ export async function postProfileUpdate(
     // not wipe them, so this is only sent when the caller actually has a value to state.
     // Sent as `socials` (the handle map, 2026-10-08); the server still reads `links` from older shells.
     if (links) body.socials = links;
-    if (relationship !== undefined) body.relationship = relationship;
+    if (category !== undefined) body.category = category;
     if (location !== undefined) body.location = location;
     if (languages !== undefined) body.languages = languages;
-    const r = await post<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; relationship?: string; location?: string; languages?: string[] }>(`${AQ}/profile-update`, body);
-    return { ok: !!r.ok, name: r.name ?? name, bio: r.bio ?? bio, slug: r.slug, links: r.links, socials: r.socials, relationship: r.relationship, location: r.location, languages: r.languages };
+    const r = await post<{ ok: boolean; name: string; bio: string; slug?: string; links?: Partial<Record<ProfileLinkKey, string>>; socials?: Social[]; category?: string; location?: string; languages?: string[] }>(`${AQ}/profile-update`, body);
+    return { ok: !!r.ok, name: r.name ?? name, bio: r.bio ?? bio, slug: r.slug, links: r.links, socials: r.socials, category: r.category, location: r.location, languages: r.languages };
   } catch (e) {
     // Surface the server's reason (taken / reserved / invalid / rate-limited) so the form can show it.
     return { ok: false, name, bio, message: e instanceof Error ? e.message : undefined };
@@ -969,22 +970,13 @@ export type { Social };
 /** The networks a member may list, in the order a profile shows them. Mirrors AQ\Auth::LINKS —
  *  add a key there first; anything unknown is dropped by the server rather than stored. The full
  *  registry (labels, placeholders, which have no public page) lives in lib/socials.ts. */
-export const PROFILE_LINKS = SOCIAL_FIELDS.map((f) => [f.key, f.label] as const);
+export const PROFILE_LINKS = [WEBSITE_FIELD, ...SOCIAL_FIELDS].map((f) => [f.key, f.label] as const);
 export type ProfileLinkKey = string;
 
-/** Relationship options, in the order the picker lists them. MIRRORS `AQ\Auth::RELATIONSHIPS` —
- *  the server refuses any key not in its own copy, so the two lists must not drift. The empty key
- *  is deliberately absent: "not saying" is the ABSENCE of a value, not an option with a label. */
-export const RELATIONSHIPS = [
-  ["single", "Single"], ["relationship", "In a relationship"], ["engaged", "Engaged"],
-  ["married", "Married"], ["partnership", "In a civil partnership"], ["open", "In an open relationship"],
-  ["complicated", "It\u2019s complicated"], ["separated", "Separated"], ["divorced", "Divorced"],
-  ["widowed", "Widowed"],
-] as const;
-export type RelationshipKey = (typeof RELATIONSHIPS)[number][0];
-/** '' for anything unknown, so a junk value stored by hand renders as nothing rather than as text. */
-export const relationshipLabel = (k?: string): string =>
-  RELATIONSHIPS.find(([key]) => key === k)?.[1] ?? "";
+/** No relationship status since 2026-10-08 (operator: "remove relationship status"): no longer
+ *  asked, sent or shown. The server keeps what was stored and emits none of it. */
+/** Matches AQ\Auth::CATEGORY_MAX — what they do, in a word or two (the profile's briefcase item). */
+export const CATEGORY_MAX = 40;
 /** Matches AQ\Auth::LOCATION_MAX — a city, not an address. */
 export const LOCATION_MAX = 60;
 /** Matches AQ\Auth::LANGS_MAX — how many languages a member may claim. */
@@ -1021,10 +1013,10 @@ export type Profile = {
   palm?: string; // opt-in palm "back photo" (ticket #94) → the avatar flips to it; '' if unset
   banner?: string; // the picture behind the profile header (member-set, 2026-08-18); '' → the gold→blue band
   nationality?: string; // the same stated claim as `country`, for the labelled "Nationality" fact; '' if unset (shown unverified, like the birthday — the blue check is the verification signal)
-  /** Self-declared, both. `relationship` is a RELATIONSHIPS key ('' = not saying); `location` is
-   *  whatever the member typed and is NEVER inferred from an IP address (see AQ\Auth::location). */
-  relationship?: string;
+  /** Self-declared, both. `location` is whatever the member typed and is NEVER inferred from an IP
+   *  address (see AQ\Auth::location); `category` is what they do ("Education"), the briefcase item. */
   location?: string;
+  category?: string;
   /** Languages the member says they speak, RESOLVED SERVER-SIDE (AQ\I18n::language_meta) so the
    *  page never depends on window.AQ_I18N to name one. Member's own order; we collect no fluency,
    *  so the order implies nothing. */
@@ -1080,10 +1072,10 @@ type ProfileR = {
   links?: Partial<Record<ProfileLinkKey, string>>;
   socials?: Social[];
   last_seen?: number;
-  // Self-declared, both. Added to the endpoint 2026-08-10; they must be listed HERE and mapped in
-  // getProfile below, or the SPA silently drops them exactly as it once dropped the birthday.
-  relationship?: string;
+  // Self-declared. They must be listed HERE and mapped in getProfile below, or the SPA silently
+  // drops them exactly as it once dropped the birthday.
   location?: string;
+  category?: string;
   languages?: ProfileLang[];
   coins?: number; joined?: string; bio?: string; completed?: number; breakdown?: TrackPoints;
   typologies?: TypologyTag[]; endorsements?: Record<string, number>; stats?: ProfileStats; is_following?: boolean;
@@ -1137,7 +1129,7 @@ export async function getProfile(slug: string): Promise<Profile | null> {
       age: pr.age ?? 0, birthday: pr.birthday || "", fullName: pr.full_name || "", season: pr.season ?? 0, verified: !!pr.verified,
       // No nationality since 2026-10-08 (operator: "I want the nationality removed") — the server no
       // longer emits it, and the profile no longer shows a flag.
-      relationship: pr.relationship || "", location: pr.location || "", languages: pr.languages ?? [],
+      location: pr.location || "", category: pr.category || "", languages: pr.languages ?? [],
       coins: pr.coins ?? 0, points: pr.points, completed: pr.completed ?? 0,
       breakdown: { ...ZERO_TRACKS, ...pr.breakdown, total: pr.points },
       tier: pr.tier, joined: pr.joined || "",

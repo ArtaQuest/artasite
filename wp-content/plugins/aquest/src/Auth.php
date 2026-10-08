@@ -265,8 +265,10 @@ final class Auth {
 			'bio'       => (string) get_user_meta( $uid, 'description', true ), // so the saved bio loads back (was never read)
 			'links'     => (object) self::links( $uid ),                          // (object): an empty set is {} not [] — see Social::profile
 			'socials'   => self::socials( $uid ),                                 // every handle, in profile order — what the settings form edits
-			'relationship' => self::relationship( $uid ),                         // '' = not saying; the settings form prefills from this
+			// No relationship status since 2026-10-08 (operator: "remove relationship status") — the
+			// stored value is kept, nothing reads it out any more.
 			'location'     => self::location( $uid ),                             // self-declared only — never inferred, see Auth::location
+			'category'     => self::category( $uid ),                             // the briefcase item: what they do, in their words
 			'languages'    => self::languages( $uid ),                            // I18n registry codes, the member's own order
 			'works'     => Notebook::published_count( $uid ),                     // published works — the dashboard's headline tile
 			'joined'    => Verify::joined_label( $u->user_registered ), // clamped to the platform launch (ticket #103)
@@ -290,8 +292,10 @@ final class Auth {
 	 *
 	 *   key => [ label, host(s) a pasted URL must land on, bare-handle rule, URL path → handle ]
 	 *
-	 * ORDER IS THE PROFILE'S ORDER. The website first, then the networks in the order the operator
-	 * listed them (2026-10-08), then the two research identifiers that predate them.
+	 * ORDER IS THE PROFILE'S ORDER. The website first (the profile shows it in the meta row, not
+	 * among the marks), then the 31 networks ranked by how many accounts each has — the biggest
+	 * first, so the ones a visitor is most likely to use are the ones visible before "+N" (operator
+	 * 2026-10-08) — then the two research identifiers that predate them.
 	 *
 	 * WHAT IS STORED IS THE HANDLE, NOT THE URL (since 2026-10-08). The member types "artafather" or
 	 * pastes https://www.instagram.com/artafather/ and either way `artafather` is what lands in
@@ -310,7 +314,8 @@ final class Auth {
 	 * instance. Every rendered link carries rel="nofollow ugc", so there is no ranking to farm.
 	 *
 	 * TWO HAVE NO PUBLIC PROFILE PAGE. WeChat and Discord IDs are not addressable on the web (Discord
-	 * only by a numeric user id), so they are stored as the ID and the profile offers it to COPY.
+	 * only by a numeric user id, which IS linked), so they are stored as the ID and the profile shows
+	 * it as plain text — no copy button (operator 2026-10-08: "remove copy ID").
 	 * Bilibili's space URL needs the numeric UID; a nickname resolves to Bilibili's own user search
 	 * instead, which is useful to a visitor but is not a profile — so it is never claimed as one in
 	 * the Person schema's sameAs (see links()).
@@ -320,39 +325,42 @@ final class Auth {
 	 */
 	const LINKS = array(
 		'website'     => array( 'Website',        '',                        '',                                                  '' ),
-		'linkedin'    => array( 'LinkedIn',       'linkedin.com',            '/^[A-Za-z0-9_-]{2,100}$/',                         '~^/in/([^/?#]+)/?$~' ),
-		'instagram'   => array( 'Instagram',      'instagram.com',           '/^[A-Za-z0-9._]{1,30}$/',                          '~^/([^/?#]+)/?$~' ),
+		// The 31 networks, LARGEST FIRST by published accounts/users (operator 2026-10-08: "rank them
+		// based on registered accounts in each"; figures and sources in the PR and the deliverables).
 		'facebook'    => array( 'Facebook',       'facebook.com|fb.com',     '/^[A-Za-z0-9.]{1,50}$/',                           '~^/([^/?#]+)/?$~' ),
-		'threads'     => array( 'Threads',        'threads.com|threads.net', '/^[A-Za-z0-9._]{1,30}$/',                          '~^/@([^/?#]+)/?$~' ),
-		'bluesky'     => array( 'Bluesky',        'bsky.app',                '/^[A-Za-z0-9]([A-Za-z0-9-]{0,62})(\.[A-Za-z0-9]([A-Za-z0-9-]{0,62}))*$/', '~^/profile/([^/?#]+)/?$~' ),
-		'tiktok'      => array( 'TikTok',         'tiktok.com',              '/^[A-Za-z0-9._]{2,24}$/',                          '~^/@([^/?#]+)/?$~' ),
-		'pinterest'   => array( 'Pinterest',      'pinterest.com',           '/^[A-Za-z0-9_]{3,30}$/',                           '~^/([^/?#]+)/?$~' ),
-		'reddit'      => array( 'Reddit',         'reddit.com',              '/^[A-Za-z0-9_-]{3,20}$/',                          '~^/(?:user|u)/([^/?#]+)/?$~' ),
-		'snapchat'    => array( 'Snapchat',       'snapchat.com',            '/^[A-Za-z][A-Za-z0-9._-]{2,14}$/',                 '~^/add/([^/?#]+)/?$~' ),
-		'quora'       => array( 'Quora',          'quora.com',               '/^[A-Za-z0-9-]{1,100}$/',                          '~^/profile/([^/?#]+)/?$~' ),
+		'instagram'   => array( 'Instagram',      'instagram.com',           '/^[A-Za-z0-9._]{1,30}$/',                          '~^/([^/?#]+)/?$~' ),
 		'youtube'     => array( 'YouTube',        'youtube.com',             '/^(?:[A-Za-z0-9._-]{3,30}|UC[A-Za-z0-9_-]{22})$/', '~^/(?:@|channel/)([^/?#]+)/?$~' ),
-		'vk'          => array( 'VK',             'vk.com|vk.ru',            '/^[A-Za-z0-9._]{1,32}$/',                          '~^/([^/?#]+)/?$~' ),
+		'tiktok'      => array( 'TikTok',         'tiktok.com',              '/^[A-Za-z0-9._]{2,24}$/',                          '~^/@([^/?#]+)/?$~' ),
+		'wechat'      => array( 'WeChat',         '',                        '/^[A-Za-z0-9_-]{2,32}$/',                          '' ),
+		'linkedin'    => array( 'LinkedIn',       'linkedin.com',            '/^[A-Za-z0-9_-]{2,100}$/',                         '~^/in/([^/?#]+)/?$~' ),
+		'telegram'    => array( 'Telegram',       't.me|telegram.me',        '/^[A-Za-z0-9_]{5,32}$/',                           '~^/([^/?#]+)/?$~' ),
+		'snapchat'    => array( 'Snapchat',       'snapchat.com',            '/^[A-Za-z][A-Za-z0-9._-]{2,14}$/',                 '~^/add/([^/?#]+)/?$~' ),
+		'spotify'     => array( 'Spotify',        'spotify.com',             '/^[A-Za-z0-9._-]{1,64}$/',                         '~^/user/([^/?#]+)/?$~' ),
+		'pinterest'   => array( 'Pinterest',      'pinterest.com',           '/^[A-Za-z0-9_]{3,30}$/',                           '~^/([^/?#]+)/?$~' ),
+		'weibo'       => array( 'Weibo',          'weibo.com|weibo.cn',      '/^[\p{L}\p{N}_-]{1,30}$/u',                        '~^/(?:u/|n/)?([^/?#]+)/?$~' ),
 		// twitter.com is accepted too: it is the same service under its old name, and people paste
 		// the URL they have. Refusing it would be correct and useless.
 		'x'           => array( 'X',              'x.com|twitter.com',       '/^[A-Za-z0-9_]{1,15}$/',                           '~^/([^/?#]+)/?$~' ),
-		'telegram'    => array( 'Telegram',       't.me|telegram.me',        '/^[A-Za-z0-9_]{5,32}$/',                           '~^/([^/?#]+)/?$~' ),
-		'wechat'      => array( 'WeChat',         '',                        '/^[A-Za-z0-9_-]{2,32}$/',                          '' ),
+		'reddit'      => array( 'Reddit',         'reddit.com',              '/^[A-Za-z0-9_-]{3,20}$/',                          '~^/(?:user|u)/([^/?#]+)/?$~' ),
+		'threads'     => array( 'Threads',        'threads.com|threads.net', '/^[A-Za-z0-9._]{1,30}$/',                          '~^/@([^/?#]+)/?$~' ),
+		'tumblr'      => array( 'Tumblr',         'tumblr.com',              '/^[A-Za-z0-9-]{1,32}$/',                           '~^/([^/?#]+)/?$~' ),
+		'quora'       => array( 'Quora',          'quora.com',               '/^[A-Za-z0-9-]{1,100}$/',                          '~^/profile/([^/?#]+)/?$~' ),
+		'bilibili'    => array( 'Bilibili',       'bilibili.com',            '/^[\p{L}\p{N}_-]{1,32}$/u',                        '~^/([0-9]{1,20})/?$~' ),
 		'discord'     => array( 'Discord',        'discord.com',             '/^(?:[A-Za-z0-9_.]{2,32}(?:#[0-9]{4})?|[0-9]{17,20})$/', '~^/users/([0-9]{17,20})/?$~' ),
-		'twitch'      => array( 'Twitch',         'twitch.tv',               '/^[A-Za-z0-9_]{3,25}$/',                           '~^/([^/?#]+)/?$~' ),
 		'github'      => array( 'GitHub',         'github.com',              '/^[A-Za-z0-9-]{1,39}$/',                           '~^/([^/?#]+)/?$~' ),
 		'strava'      => array( 'Strava',         'strava.com',              '/^[A-Za-z0-9_-]{1,64}$/',                          '~^/athletes/([^/?#]+)/?$~' ),
-		'letterboxd'  => array( 'Letterboxd',     'letterboxd.com',          '/^[A-Za-z0-9_]{2,15}$/',                           '~^/([^/?#]+)/?$~' ),
 		'goodreads'   => array( 'Goodreads',      'goodreads.com',           '/^[A-Za-z0-9_-]{1,64}$/',                          '~^/(?:user/show/)?([^/?#]+)/?$~' ),
-		'soundcloud'  => array( 'SoundCloud',     'soundcloud.com',          '/^[A-Za-z0-9_-]{2,64}$/',                          '~^/([^/?#]+)/?$~' ),
-		'spotify'     => array( 'Spotify',        'spotify.com',             '/^[A-Za-z0-9._-]{1,64}$/',                         '~^/user/([^/?#]+)/?$~' ),
-		'kaggle'      => array( 'Kaggle',         'kaggle.com',              '/^[A-Za-z0-9_-]{1,64}$/',                          '~^/([^/?#]+)/?$~' ),
-		'huggingface' => array( 'Hugging Face',   'huggingface.co|hf.co',    '/^[A-Za-z0-9._-]{1,96}$/',                         '~^/([^/?#]+)/?$~' ),
+		'twitch'      => array( 'Twitch',         'twitch.tv',               '/^[A-Za-z0-9_]{3,25}$/',                           '~^/([^/?#]+)/?$~' ),
 		'medium'      => array( 'Medium',         'medium.com',              '/^[A-Za-z0-9._]{1,30}$/',                          '~^/@([^/?#]+)/?$~' ),
-		'tumblr'      => array( 'Tumblr',         'tumblr.com',              '/^[A-Za-z0-9-]{1,32}$/',                           '~^/([^/?#]+)/?$~' ),
+		'vk'          => array( 'VK',             'vk.com|vk.ru',            '/^[A-Za-z0-9._]{1,32}$/',                          '~^/([^/?#]+)/?$~' ),
 		'rumble'      => array( 'Rumble',         'rumble.com',              '/^[A-Za-z0-9_-]{1,64}$/',                          '~^/(?:user|c)/([^/?#]+)/?$~' ),
+		'bluesky'     => array( 'Bluesky',        'bsky.app',                '/^[A-Za-z0-9]([A-Za-z0-9-]{0,62})(\.[A-Za-z0-9]([A-Za-z0-9-]{0,62}))*$/', '~^/profile/([^/?#]+)/?$~' ),
+		'soundcloud'  => array( 'SoundCloud',     'soundcloud.com',          '/^[A-Za-z0-9_-]{2,64}$/',                          '~^/([^/?#]+)/?$~' ),
+		'kaggle'      => array( 'Kaggle',         'kaggle.com',              '/^[A-Za-z0-9_-]{1,64}$/',                          '~^/([^/?#]+)/?$~' ),
+		'letterboxd'  => array( 'Letterboxd',     'letterboxd.com',          '/^[A-Za-z0-9_]{2,15}$/',                           '~^/([^/?#]+)/?$~' ),
+		'huggingface' => array( 'Hugging Face',   'huggingface.co|hf.co',    '/^[A-Za-z0-9._-]{1,96}$/',                         '~^/([^/?#]+)/?$~' ),
 		'mastodon'    => array( 'Mastodon',       '',                        '/^@?[A-Za-z0-9_]{1,30}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/', '~^/@([A-Za-z0-9_]{1,30})/?$~' ),
-		'bilibili'    => array( 'Bilibili',       'bilibili.com',            '/^[\p{L}\p{N}_-]{1,32}$/u',                        '~^/([0-9]{1,20})/?$~' ),
-		'weibo'       => array( 'Weibo',          'weibo.com|weibo.cn',      '/^[\p{L}\p{N}_-]{1,30}$/u',                        '~^/(?:u/|n/)?([^/?#]+)/?$~' ),
+		// Research identifiers — not social networks, so after the ranked list.
 		'scholar'     => array( 'Google Scholar', 'scholar.google.com',      '/^[A-Za-z0-9_-]{6,20}$/',                          '' ),
 		'orcid'       => array( 'ORCID',          'orcid.org',               '/^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/',                 '~^/(\d{4}-\d{4}-\d{4}-\d{3}[\dX])/?$~' ),
 	);
@@ -404,6 +412,10 @@ final class Auth {
 	 * fixed strings), and a field nobody can filter or reason about later. A key set is none of them.
 	 * The empty key is the default and means NOT SAYING — it renders nothing at all, because the
 	 * absence of a stated status is not "Single".
+	 *
+	 * RETIRED 2026-10-08 (operator: "remove relationship status"): no longer asked, accepted or
+	 * emitted. The vocabulary and relationship() stay so the stored answers remain readable to the
+	 * operator; nothing on the site renders them.
 	 */
 	const RELATIONSHIPS = array(
 		'single'       => 'Single',
@@ -462,6 +474,17 @@ final class Auth {
 
 	public static function location( $uid ) {
 		return (string) get_user_meta( (int) $uid, 'aq_location', true );
+	}
+
+	/**
+	 * What the member does, in a word or two ("Education", "Software engineer") — the briefcase item
+	 * of the profile's meta row, the way X shows a profile category (operator 2026-10-08). Free text,
+	 * one line, CATEGORY_MAX characters, tags stripped; self-declared like the location.
+	 */
+	const CATEGORY_MAX = 40;
+
+	public static function category( $uid ) {
+		return (string) get_user_meta( (int) $uid, 'aq_category', true );
 	}
 
 	public static function links( $uid ) {
@@ -743,17 +766,16 @@ final class Auth {
 
 		if ( null !== $links_clean ) { update_user_meta( $uid, 'aq_links', wp_json_encode( $links_clean ) ); }
 
-		// Relationship + location. OMITTED means "leave it alone" (same contract as links above), so a
+		// Category + location. OMITTED means "leave it alone" (same contract as links above), so a
 		// form that only edits the bio cannot silently blank either one. An empty STRING is a real
-		// instruction: stop saying. An unknown relationship key is refused rather than stored, because
-		// the profile renders from the vocabulary and would otherwise show nothing with no explanation.
-		$rel_in = Rest::p( $req, 'relationship', null );
-		if ( null !== $rel_in ) {
-			$rel = strtolower( trim( (string) $rel_in ) );
-			if ( '' !== $rel && ! isset( self::RELATIONSHIPS[ $rel ] ) ) {
-				return Rest::err( 'bad_relationship', 'That is not one of the relationship options.' );
-			}
-			update_user_meta( $uid, 'aq_relationship', $rel );
+		// instruction: stop saying. RELATIONSHIP STATUS is no longer accepted (operator 2026-10-08,
+		// "remove relationship status"): a `relationship` field is ignored, and what was stored stays
+		// stored — retiring a question is not a reason to delete somebody's answer.
+		$cat_in = Rest::p( $req, 'category', null );
+		if ( null !== $cat_in ) {
+			$cat = sanitize_text_field( (string) $cat_in );
+			$cat = function_exists( 'mb_substr' ) ? mb_substr( $cat, 0, self::CATEGORY_MAX ) : substr( $cat, 0, self::CATEGORY_MAX );
+			update_user_meta( $uid, 'aq_category', trim( $cat ) );
 		}
 		$langs_in = Rest::p( $req, 'languages', null );
 		if ( null !== $langs_in ) {
@@ -794,7 +816,7 @@ final class Auth {
 		// handle simultaneously, WP suffixes the loser (-2) — the client must learn what it actually got.
 		// `links` comes back NORMALISED — a member who typed a bare handle sees the real URL that was
 		// stored, so the form shows what the profile will show rather than what they typed.
-		return array( 'ok' => true, 'name' => $u ? $u->display_name : $name, 'bio' => $bio, 'slug' => $u ? $u->user_nicename : '', 'links' => (object) self::links( $uid ), 'socials' => self::socials( $uid ), 'relationship' => self::relationship( $uid ), 'location' => self::location( $uid ), 'languages' => self::languages( $uid ) );
+		return array( 'ok' => true, 'name' => $u ? $u->display_name : $name, 'bio' => $bio, 'slug' => $u ? $u->user_nicename : '', 'links' => (object) self::links( $uid ), 'socials' => self::socials( $uid ), 'location' => self::location( $uid ), 'category' => self::category( $uid ), 'languages' => self::languages( $uid ) );
 	}
 
 	/** GET /username/check?u= — live availability for the settings form. Public: every username is
