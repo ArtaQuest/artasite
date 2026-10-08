@@ -31,6 +31,7 @@ import { BlueCheck } from "../components/BlueCheck";
 import { Checklist } from "../components/checklist";
 import { isLoggedIn } from "../lib/auth";
 import { uiLocale, currentUser } from "../lib/wp";
+import { MentionText } from "../components/arta";
 
 
 
@@ -228,7 +229,7 @@ function CommentRow({ c, nbId, mine, onReply, onDeleted, depth }: { c: NbComment
             {writeErr ? <p role="status" className="mt-1 text-[12px] text-yang">{writeErr}</p> : null}
           </div>
         ) : (
-          <p className={cx("mt-0.5 whitespace-pre-wrap text-[14px] leading-relaxed", c.flagged ? "text-ink-3 italic" : "text-ink-2")}>{body}</p>
+          <p className={cx("mt-0.5 whitespace-pre-wrap text-[14px] leading-relaxed", c.flagged ? "text-ink-3 italic" : "text-ink-2")}><MentionText text={body} /></p>
         )}
         <div className="mt-1 flex items-center gap-4 text-[12px] text-ink-3">
           <button type="button" onClick={heart} aria-pressed={hearted} className={cx("inline-flex items-center gap-1 transition-colors", hearted ? "text-yang" : "hover:text-yang")}>

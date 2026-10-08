@@ -159,7 +159,7 @@ function aq_seo_forum_author( $display_name, $nicename ) {
  * @return array|null Comment node, or null when there is no text to show.
  */
 function aq_seo_forum_comment( $r, $replies = array() ) {
-	$text = trim( wp_strip_all_tags( isset( $r->body ) ? (string) $r->body : '' ) );
+	$text = aq_display_mentions( trim( wp_strip_all_tags( isset( $r->body ) ? (string) $r->body : '' ) ) );
 	if ( '' === $text ) {
 		return null;
 	}
@@ -639,3 +639,13 @@ add_action(
 	},
 	5
 );
+
+/**
+ * Display copy for member text: an @arta mention reads as "Arta" (link-card descriptions, structured
+ * data). The stored text keeps "@arta". Falls through untouched when the plugin isn't loaded.
+ */
+if ( ! function_exists( 'aq_display_mentions' ) ) {
+	function aq_display_mentions( $text ) {
+		return class_exists( '\\AQ\\Arta' ) ? \AQ\Arta::display_mentions( (string) $text ) : (string) $text;
+	}
+}

@@ -36,6 +36,7 @@ import { isLoggedIn } from "../lib/auth";
 // rewrites clicks on real <a> elements), so a signed-out reader on /fa/ was dropped on the English
 // login and lost their language mid-flow.
 import { currentUser, localePath } from "../lib/wp";
+import { displayMentions } from "../lib/mentions";
 
 // ── little helpers ───────────────────────────────────────────────────────────
 
@@ -567,7 +568,7 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
                   {post.repost.author.verified ? <BlueCheck size={14} className="-ms-0.5" /> : null}
                   <span className="text-ink-3">· {timeAgo(post.repost.created)}</span>
                 </p>
-                {post.repost.body ? <p className="mt-1 whitespace-pre-wrap text-[14px] leading-relaxed text-ink-2">{post.repost.body}</p> : null}
+                {post.repost.body ? <p className="mt-1 whitespace-pre-wrap text-[14px] leading-relaxed text-ink-2 [overflow-wrap:anywhere]"><MentionText text={post.repost.body} /></p> : null}
                 <PostMedia items={mediaOf(post.repost)} />
                 {post.repost.nb ? <NbBlock nb={post.repost.nb} compact /> : null}
               </div>
@@ -783,7 +784,7 @@ function Composer({ onPosted, initialText = "" }: { onPosted: (p: FeedPostT) => 
             className="block w-full resize-none bg-transparent pt-1.5 text-[17px] leading-snug text-ink outline-none placeholder:text-ink-2" />
           {quote ? (
             <div className="mb-2 rounded-xl border border-line bg-space-2/60 px-3 py-2 text-[13px] text-ink-3">
-              Quoting <span className="font-semibold text-ink-2">{quote.author.name}</span>: {quote.body || quote.nb?.title}
+              Quoting <span className="font-semibold text-ink-2">{quote.author.name}</span>: {displayMentions(quote.body) || quote.nb?.title}
               <button type="button" onClick={() => setQuote(null)} className="ms-2 text-yin-ink hover:underline">remove</button>
             </div>
           ) : null}
@@ -1082,7 +1083,7 @@ export default function Feed({ initialKind, embedded = false }: { initialKind?: 
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
                 </span>
                 <p className="text-[14px] font-semibold text-ink">You're all caught up</p>
-                {isLoggedIn() ? <p className="text-[13px] text-ink-3">Got a question? <Link to="/works/?compose=%40arta%20" className="font-semibold text-yang-ink hover:underline">Ask @arta in public</Link></p> : null}
+                {isLoggedIn() ? <p className="text-[13px] text-ink-3">Got a question? <Link to="/works/?compose=%40arta%20" className="font-semibold text-yang-ink hover:underline">Ask Arta in public</Link></p> : null}
               </div>
             )}
           </>

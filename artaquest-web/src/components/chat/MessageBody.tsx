@@ -2,6 +2,7 @@ import { useState } from "react";
 import { escHtml, hlJS, hlPython } from "../../lib/highlight";
 import ChatPlot from "./ChatPlot";
 import { parsePlot } from "./plot";
+import { displayMentions } from "../../lib/mentions";
 
 /**
  * A message, rendered for people who write about science.
@@ -99,7 +100,7 @@ function Prose({ text }: { text: string }) {
       // Split on every dollar so each one lands in its own element.
       const bits = t.split("$");
       bits.forEach((b, i) => {
-        if (b) out.push(b);
+        if (b) out.push(displayMentions(b));
         if (i < bits.length - 1) out.push(<span key={`d${key++}`}>$</span>);
       });
     };

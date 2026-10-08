@@ -4,6 +4,7 @@ import { nameClass } from "../lib/fmt";
 import { currentUser, localePath, relAgo } from "../lib/wp";
 import { Avatar, Button, Card, Chip, FlagBadge, LoadMoreButton, SectionHeader, VoteControl, cx } from "./ui";
 import { BlueCheck } from "./BlueCheck";
+import { displayMentions } from "../lib/mentions";
 
 // One verb line per event type — plain English like all UI copy (the i18n mesh translates it).
 // Indexed by string so an event type this build doesn't know yet degrades to a generic line
@@ -84,7 +85,7 @@ function EventLine({ it, lead, busy, err, onVote }: {
         <span className="shrink-0 text-[12px] text-ink-3">{relAgo(it.at)}</span>
       </div>
       {it.excerpt && (
-        <p className="mt-1.5 line-clamp-3 border-s-2 border-line bg-veil/5 py-1 ps-3 pe-2 text-[13px] leading-relaxed text-ink-2">{it.excerpt}</p>
+        <p className="mt-1.5 line-clamp-3 border-s-2 border-line bg-veil/5 py-1 ps-3 pe-2 text-[13px] leading-relaxed text-ink-2">{displayMentions(it.excerpt)}</p>
       )}
       {it.target && (
         <div className="mt-1.5">

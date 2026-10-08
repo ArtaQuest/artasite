@@ -191,7 +191,7 @@ export default function ArtaBotProfile({ p, following, followers, followBusy, on
             <Link to={gate(ask)}
               className="inline-flex h-11 items-center gap-2 rounded-pill bg-yang pe-5 ps-1.5 text-[15px] font-bold text-on-accent shadow-sm transition-colors hover:bg-yang-light">
               <ArtaAvatar className="h-8 w-8 ring-2 ring-on-accent/20" />
-              Ask @arta in public
+              Ask Arta in public
             </Link>
             <Link to={gate(bug)}
               className="inline-flex h-11 items-center gap-1.5 rounded-pill border border-line px-4 text-[14px] font-semibold text-ink-2 transition-colors hover:border-yin-ink hover:text-ink">
@@ -237,7 +237,7 @@ export default function ArtaBotProfile({ p, following, followers, followBusy, on
             icon={<ArtaAvatar className="h-12 w-12" />}
             title="No answers yet"
             body="Arta's public answers show up here. Ask the first question — it replies in your thread."
-            action={<Link to={gate(ask)} className="inline-flex h-10 items-center rounded-pill bg-yang px-5 text-[14px] font-bold text-on-accent hover:bg-yang-light">Ask @arta in public</Link>}
+            action={<Link to={gate(ask)} className="inline-flex h-10 items-center rounded-pill bg-yang px-5 text-[14px] font-bold text-on-accent hover:bg-yang-light">Ask Arta in public</Link>}
           />
         )}
       </section>
