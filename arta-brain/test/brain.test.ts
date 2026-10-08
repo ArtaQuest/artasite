@@ -9,6 +9,8 @@ import { parseDecision, promptText, systemPrompt } from "../src/prompt";
 import { clip, redact, similarity } from "../src/text";
 import { handleMention } from "../src/worker";
 import { WpClient } from "../src/wp";
+import { launchOptions } from "../src/browser";
+import { loadConfig } from "../src/config";
 import { cfg, fakeNet, mention } from "./fakes";
 
 const deps = (net: ReturnType<typeof fakeNet>, over = {}) => {
@@ -208,4 +210,17 @@ test("daemon: a mention that keeps failing is given up after 3 attempts, then sk
   assert.equal(net.prompts.length, 3);
   const statuses = net.calls.filter((c) => c.url.endsWith("/status")).map((c) => (c.body as { status: string }).status);
   assert.deepEqual(statuses, ["queued", "queued", "failed"]);
+});
+
+test("browser launch: Playwright Chromium on Linux; installed Chrome with the real Keychain on a Mac", () => {
+  const linux = launchOptions(loadConfig({ HOME: "/h" }), true, "linux");
+  assert.equal(linux.channel, undefined);
+  assert.equal(linux.ignoreDefaultArgs, undefined);
+  assert.deepEqual(linux.args, ["--disable-dev-shm-usage"]);
+  const mac = launchOptions(loadConfig({ HOME: "/h", ARTA_BROWSER_CHANNEL: "chrome", ARTA_HEADLESS: "0" }), false, "darwin");
+  assert.equal(mac.channel, "chrome");
+  assert.equal(mac.headless, false);
+  assert.deepEqual(mac.ignoreDefaultArgs, ["--use-mock-keychain"], "keeps the sign-in made in plain Chrome readable");
+  assert.equal(loadConfig({ ARTA_SEL_NEW_CHAT: "#new" }).sel.newChat, "#new");
+  assert.equal(loadConfig({ ARTA_PROFILE_DIR: "/x/chrome-profile" }).profileDir, "/x/chrome-profile");
 });

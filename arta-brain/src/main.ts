@@ -67,7 +67,7 @@ async function calibrate() {
 }
 
 async function login() {
-  if (!process.env.DISPLAY) { console.log("✗ DISPLAY is not set — run this through deploy/install.sh login"); process.exitCode = 1; return; }
+  if (process.platform === "linux" && !process.env.DISPLAY) { console.log("✗ DISPLAY is not set — run this through deploy/install.sh login"); process.exitCode = 1; return; }
   const engine = new BrowserEngine({ ...cfg, headless: false }, log);
   await engine.openForLogin();
   const rl = createInterface({ input: process.stdin, output: process.stdout });
