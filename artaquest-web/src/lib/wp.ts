@@ -1164,7 +1164,13 @@ export async function getProfile(slug: string): Promise<Profile | null> {
       illustrations: pr.illustrations ?? [],
       illustrationsTotal: pr.illustrations_total ?? 0,
     };
-  } catch { return null; }
+  } catch (e) {
+    // ONLY a 404 means "no such member". A network failure, a 403/429/5xx or a renderer that skipped
+    // the call used to land here too and the page then said "There is no member at …" — which
+    // Google reads as a soft 404 on a profile that exists. Everything else is rethrown.
+    if (e instanceof Error && /→ 404$/.test(e.message)) return null;
+    throw e;
+  }
 }
 
 // ── Rankings ──────────────────────────────────────────────────────────────────

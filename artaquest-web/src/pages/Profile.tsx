@@ -270,9 +270,19 @@ export default function Profile() {
     networks.length ? "" : "Social profiles",
   ].filter(Boolean);
   const [missing, setMissing] = useState(false);
+  // The profile call FAILED (network, throttle, 5xx), as opposed to the member not existing: the page
+  // then keeps the server-rendered copy of the profile rather than claiming the member is gone.
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
-    setP(null); setMissing(false);
-    getProfile(slug).then((d) => { if (d) setP(d); else setMissing(true); }).catch(() => setMissing(true));
+    let live = true;
+    setP(null); setMissing(false); setFailed(false);
+    const attempt = (n: number) => {
+      getProfile(slug)
+        .then((d) => { if (!live) return; if (d) setP(d); else setMissing(true); })
+        .catch(() => { if (!live) return; if (n < 2) setTimeout(() => attempt(n + 1), 800 * (n + 1)); else setFailed(true); });
+    };
+    attempt(0);
+    return () => { live = false; };
   }, [slug]);
   // Dynamic-route title (RouteTitle skips /u/:slug so this owns it).
   useEffect(() => { const n = p?.fullName?.trim() || p?.name; if (n) document.title = `${n} – ArtaQuest`; }, [p?.fullName, p?.name]);
@@ -342,6 +352,17 @@ export default function Profile() {
       setBannerBusy(false);
     }
   };
+
+  if (failed && !p) {
+    const ssr = typeof window !== "undefined" ? (window as unknown as { AQ_SSR_HTML?: string }).AQ_SSR_HTML || "" : "";
+    return (
+      <main className="mx-auto w-full max-w-5xl py-10">
+        {/* Our own server-escaped markup (aq_app_seo_html), captured before React mounted. */}
+        {ssr ? <div className="aq-ssr-fallback space-y-3 text-ink-2" dangerouslySetInnerHTML={{ __html: ssr }} /> : null}
+        <StatusNote className="py-6">This profile couldn't be loaded just now — please refresh.</StatusNote>
+      </main>
+    );
+  }
 
   if (missing) {
     return (

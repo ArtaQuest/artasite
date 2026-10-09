@@ -22,6 +22,8 @@ setTimeout(dismissBootScreen, 10000)
 // missing produces one reload and then the real error, never a loop.
 // The shell's stale-asset net (template-aq-app.php) reloads with a throwaway ?aqv= to get past a
 // stale edge copy; drop it before the router reads the URL, so it is never shared or bookmarked.
+const IS_CRAWLER = /bot|crawl|spider|slurp|Google-InspectionTool|Chrome-Lighthouse/i.test(navigator.userAgent)
+
 if (new URLSearchParams(location.search).has('aqv')) {
   const q = new URLSearchParams(location.search)
   q.delete('aqv')
@@ -30,6 +32,9 @@ if (new URLSearchParams(location.search).has('aqv')) {
 }
 
 window.addEventListener('vite:preloadError', (e) => {
+  // Not for a crawler: navigating Google's renderer to ?aqv= mid-render abandons the URL it is testing
+  // (the shell's net in template-aq-app.php skips crawlers for the same reason).
+  if (IS_CRAWLER) return
   const key = 'aq-chunk-reload:' + location.pathname
   try {
     const last = Number(sessionStorage.getItem(key) || 0)
@@ -59,6 +64,10 @@ applyContrast()
 // prints <div id="aq-app-root">), or the dev index.html #root during `npm run dev`.
 const mount = document.getElementById('aq-app-root') ?? document.getElementById('root')
 if (mount) {
+  // Keep the server-rendered crawler copy (aq_app_seo_html) before React replaces it, so a page whose
+  // data call fails can still show real content instead of an empty or "not found" state.
+  ;(window as unknown as { AQ_SSR_HTML?: string; AQ_SSR_PATH?: string }).AQ_SSR_HTML = mount.innerHTML
+  ;(window as unknown as { AQ_SSR_PATH?: string }).AQ_SSR_PATH = location.pathname
   createRoot(mount).render(
     <StrictMode>
       <App />
