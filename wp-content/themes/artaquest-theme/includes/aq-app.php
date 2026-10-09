@@ -598,7 +598,16 @@ function aq_app_seo_html() {
 			if ( $u->display_name && $u->display_name !== $name ) {
 				$html .= '<p>' . esc_html( sprintf( '%s goes by %s on %s.', $name, $u->display_name, get_bloginfo( 'name' ) ) ) . '</p>';
 			}
-			if ( $bio ) { $html .= '<p>' . esc_html( $bio ) . '</p>'; }
+			if ( $bio ) {
+				$html .= '<p>' . esc_html( $bio ) . '</p>';
+			} elseif ( function_exists( 'aq_is_founder' ) && aq_is_founder( $u ) ) {
+				// The founder's profile had no sentence ABOUT him — only his name and a list of works —
+				// so nothing on the page said who Arash Ashrafnejad is. One factual line, the same
+				// facts the About page tells in full, with a link to it. Superseded by his own bio the
+				// moment he writes one.
+				$html .= '<p>' . esc_html( sprintf( '%s is the founder of %s, the not-for-profit notebook feed run by the ArtaQuest Foundation.', $name, get_bloginfo( 'name' ) ) )
+					. ' <a href="' . esc_url( home_url( '/about/' ) ) . '">' . esc_html( sprintf( 'Why %s built it', $name ) ) . '</a></p>';
+			}
 			// THEIR WORK, as crawlable links. A profile whose whole server-rendered body is a name is
 			// thin content: nothing to rank on beyond the name itself, and no path from here to
 			// anything else. Listing what they brought here gives the page substance and gives a
@@ -839,6 +848,12 @@ function aq_app_seo_html() {
 		// crawlers index the localised body on /xx/ pages instead of English. Prime in one query.
 		aq_seo_tr( null, array_merge( array( $seo[0] ), $seo[1] ) );
 		$html = '<h1>' . esc_html( aq_seo_tr( $seo[0] ) ) . '</h1>';
+		// The About page's React copy opens with the founder card — his name linking his profile.
+		// The crawler layer named him three times and linked him nowhere, so the page that tells his
+		// story passed nothing to the page that should rank for his name. Same byline as About.tsx.
+		if ( 'about' === $slug ) {
+			$html .= '<p><a href="' . esc_url( aq_unprefixed_url( home_url( '/u/artafather/' ) ) ) . '">Arash Ashrafnejad</a> · Founder, ArtaQuest Foundation</p>';
+		}
 		foreach ( $seo[1] as $para ) {
 			$html .= '<p>' . esc_html( aq_seo_tr( $para ) ) . '</p>';
 		}
@@ -1291,6 +1306,16 @@ function aq_app_head_meta() {
 			'name'  => $pname,
 			'url'   => aq_unprefixed_url( home_url( '/u/' . $puser->user_nicename . '/' ) ),
 		);
+		// The SAME @id the head graph gives this person (aq-seo-schema.php), so the two ProfilePage
+		// blocks on a profile describe one entity, not two. The founder's profile is the sitewide
+		// #founder Person, so it also carries his role at the Foundation.
+		if ( function_exists( 'aq_is_founder' ) && aq_is_founder( $puser ) ) {
+			$person['@id']      = home_url( '/' ) . '#founder';
+			$person['jobTitle'] = 'Founder';
+			$person['worksFor'] = array( '@id' => home_url( '/' ) . '#org' );
+		} else {
+			$person['@id'] = $person['url'] . '#person';
+		}
 		if ( $puser->display_name && $puser->display_name !== $pname ) {
 			$person['alternateName'] = (string) $puser->display_name;
 		}

@@ -81,6 +81,25 @@ function aq_unprefixed_url( $url ) {
  *
  * @return array<string,string> platform key => profile URL (empty entries filtered out).
  */
+/** The founder's account — the one member the sitewide #founder Person node describes. */
+function aq_is_founder( $u ) {
+	return ( $u instanceof WP_User ) && 'artafather' === (string) $u->user_nicename;
+}
+
+/**
+ * The founder's own profiles elsewhere (GitHub, Scholar, LinkedIn, X…), exactly as his /u/artafather/
+ * profile lists them — host-locked at save time by AQ\Auth::LINKS, so nothing arbitrary reaches the
+ * schema. Empty when the plugin or the account is absent.
+ *
+ * @return string[]
+ */
+function aq_founder_same_as() {
+	if ( ! class_exists( '\\AQ\\Auth' ) || ! method_exists( '\\AQ\\Auth', 'links' ) ) { return array(); }
+	$u = get_user_by( 'slug', 'artafather' );
+	if ( ! $u ) { return array(); }
+	return array_values( array_filter( array_map( 'strval', (array) \AQ\Auth::links( (int) $u->ID ) ) ) );
+}
+
 function aq_social_profiles() {
 	// Prefer the first four of /u/artafather's ordered socials (operator 2026-10-08: "also show
 	// the same four for the artasite footer (for artafather)"). Falls back to the hard-coded
@@ -383,14 +402,25 @@ add_action(
 		$org['logo'] = get_theme_file_uri( 'assets/brand/social-avatar-1024.png' );
 		$nodes[] = $org;
 		// The founder as a first-class entity (knowledge-graph), bidirectionally linked to the org.
-		$nodes[] = array(
+		// `url` is his PROFILE, not /about/: every page on the site carries this node, so it is the
+		// one sitewide statement of which URL is "Arash Ashrafnejad" — and a search for his name
+		// should land on the page that is about him (the About page is about the Foundation and
+		// links to the profile anyway). `sameAs` is the same set of accounts his profile lists and
+		// its own Person node claims, so the sitewide entity and the profile entity resolve to one
+		// person rather than two nodes that merely share a string.
+		$founder_node = array(
 			'@type'    => 'Person',
 			'@id'      => $home . '#founder',
 			'name'     => 'Arash Ashrafnejad',
 			'jobTitle' => 'Founder',
 			'worksFor' => array( '@id' => $home . '#org' ),
-			'url'      => $home . 'about/',
+			'url'      => aq_unprefixed_url( home_url( '/u/artafather/' ) ),
 		);
+		$founder_links = aq_founder_same_as();
+		if ( $founder_links ) {
+			$founder_node['sameAs'] = $founder_links;
+		}
+		$nodes[] = $founder_node;
 		$nodes[] = array(
 			'@type'            => 'WebSite',
 			'@id'              => $home . '#website',
@@ -436,6 +466,13 @@ add_action(
 				$bio = get_user_meta( $u->ID, 'description', true );
 				if ( $bio ) {
 					$person['description'] = wp_strip_all_tags( $bio );
+				}
+				// The founder's profile IS the sitewide #founder entity: same @id, so the graph
+				// merges them into one Person instead of describing him twice.
+				if ( aq_is_founder( $u ) ) {
+					$person['@id']      = $home . '#founder';
+					$person['jobTitle'] = 'Founder';
+					$person['worksFor'] = array( '@id' => $home . '#org' );
 				}
 				$nodes[] = array(
 					'@type'      => 'ProfilePage',
