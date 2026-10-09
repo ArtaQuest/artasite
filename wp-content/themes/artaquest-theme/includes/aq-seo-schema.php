@@ -97,7 +97,17 @@ function aq_founder_same_as() {
 	if ( ! class_exists( '\\AQ\\Auth' ) || ! method_exists( '\\AQ\\Auth', 'links' ) ) { return array(); }
 	$u = get_user_by( 'slug', 'artafather' );
 	if ( ! $u ) { return array(); }
-	return array_values( array_filter( array_map( 'strval', (array) \AQ\Auth::links( (int) $u->ID ) ) ) );
+	// ONLY the accounts verified to be him (checked 2026-10-09: GitHub artafather is named
+	// "Arash Ashrafnejad", the Scholar id, LinkedIn, X and Kaggle). This node is on EVERY page, and
+	// his profile also lists handles that 404 (Snapchat, Spotify, Tumblr, Hugging Face, Mastodon,
+	// Rumble…). A dead sameAs weakens the entity rather than describing it — see aq_social_profiles().
+	$verified = array( 'github', 'scholar', 'linkedin', 'x', 'kaggle' );
+	$links    = (array) \AQ\Auth::links( (int) $u->ID );
+	$out      = array();
+	foreach ( $verified as $k ) {
+		if ( ! empty( $links[ $k ] ) ) { $out[] = (string) $links[ $k ]; }
+	}
+	return $out;
 }
 
 function aq_social_profiles() {
