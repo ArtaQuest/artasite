@@ -185,7 +185,11 @@ $aq_html_dir  = ( $aq_i18n && 'rtl' === $aq_i18n['dir'] ) ? 'rtl' : 'ltr';
 	// before any app code runs, so nothing in the bundle can recover it. Capture-phase, so it sees a
 	// failed <script>/<link> anywhere under app/assets/; reloads ONCE (per tab, per minute) with a
 	// throwaway ?aqv= so the edge cannot answer with the same stale copy. main.tsx strips the param. ?>
-	<script>(function(){var K='aq-asset-reload';window.addEventListener('error',function(e){var t=e.target,u=t&&(t.src||t.href)||'';if(!t||t===window||typeof u!=='string'||u.indexOf('/artaquest-theme/app/assets/')<0)return;try{var l=+sessionStorage.getItem(K)||0;if(Date.now()-l<60000)return;sessionStorage.setItem(K,String(Date.now()));}catch(x){return;}var q=new URLSearchParams(location.search);q.set('aqv',Date.now().toString(36));location.replace(location.pathname+'?'+q.toString()+location.hash);},true);})()</script>
+	<?php // NEVER FOR A CRAWLER. Google's renderer routinely skips or fails a subresource (Search
+	// Console's "Other error"), and this net then navigated the render to /?aqv=… mid-render, so the
+	// URL under test never finished rendering: /u/artafather/ went from a passing live test to "Soft
+	// 404" the day this net shipped (theme 1.8.192). A crawler has no stale tab to rescue anyway. ?>
+	<script>(function(){if(/bot|crawl|spider|slurp|Google-InspectionTool|Chrome-Lighthouse/i.test(navigator.userAgent))return;var K='aq-asset-reload';window.addEventListener('error',function(e){var t=e.target,u=t&&(t.src||t.href)||'';if(!t||t===window||typeof u!=='string'||u.indexOf('/artaquest-theme/app/assets/')<0)return;try{var l=+sessionStorage.getItem(K)||0;if(Date.now()-l<60000)return;sessionStorage.setItem(K,String(Date.now()));}catch(x){return;}var q=new URLSearchParams(location.search);q.set('aqv',Date.now().toString(36));location.replace(location.pathname+'?'+q.toString()+location.hash);},true);})()</script>
 	<meta name="apple-mobile-web-app-capable" content="yes">
 	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 	<meta name="apple-mobile-web-app-title" content="ArtaQuest">

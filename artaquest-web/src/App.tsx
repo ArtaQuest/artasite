@@ -268,7 +268,13 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { failed: bo
   componentDidCatch() { dismissBootScreen(); }
   render() {
     if (!this.state.failed) return this.props.children;
+    // On the page the server rendered (no client navigation yet), keep its crawler copy on screen so a
+    // renderer that skipped a chunk still reads the page's real content, not only this notice.
+    const w = window as unknown as { AQ_SSR_HTML?: string; AQ_SSR_PATH?: string };
+    const ssr = w.AQ_SSR_HTML && w.AQ_SSR_PATH === window.location.pathname ? w.AQ_SSR_HTML : "";
     return (
+      <>
+      {ssr ? <div className="aq-ssr-fallback mx-auto max-w-5xl space-y-3 px-6 pt-10 text-ink-2" dangerouslySetInnerHTML={{ __html: ssr }} /> : null}
       <div role="alert" className="mx-auto max-w-md px-6 py-20 text-center">
         <p className="text-[17px] font-semibold text-ink">This page isn’t available offline yet</p>
         <p className="mt-2 text-[14px] leading-relaxed text-ink-3">
@@ -282,6 +288,7 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { failed: bo
           <a href={localePath("/offline/")} className="rounded-pill border border-line px-5 py-2 text-[14px] font-semibold text-ink hover:border-yin-light">Offline downloads</a>
         </div>
       </div>
+      </>
     );
   }
 }
