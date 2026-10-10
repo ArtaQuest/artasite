@@ -49,20 +49,12 @@ export async function handleMention(id: number, d: Deps, attempt = 1, maxAttempt
 }
 
 /**
- * The files that go out with the reply: when the answer does not fit (or the model wrote a longer
- * "details"), the complete answer as answer.md FIRST, then whatever the chat produced (images, files),
- * within the count and size caps. The site checks every file again.
+ * The files that go out with the reply: never text — only images (the found photo first), within the
+ * count and size caps. The text is clipped to the post length. The site checks every file again.
  */
-export function outgoing(said: string, details: string | undefined, max: number, produced: OutFile[], cfg: Config): { text: string; files: OutFile[] } {
-  const files: OutFile[] = [];
-  let text = said;
-  if (said.length > max || details) {
-    const full = details ? `${said.trim()}\n\n${details.trim()}\n` : `${said.trim()}\n`;
-    files.push({ name: "answer.md", mime: "text/markdown", bytes: new TextEncoder().encode(full) });
-    text = clip(said, max);
-  }
-  for (const f of produced) if (f.bytes.byteLength > 0 && f.bytes.byteLength <= cfg.outFileBytes) files.push(f);
-  return { text, files: files.filter((f) => f.bytes.byteLength <= cfg.outFileBytes).slice(0, cfg.outFilesMax) };
+export function outgoing(said: string, max: number, produced: OutFile[], cfg: Config): { text: string; files: OutFile[] } {
+  const files = produced.filter((f) => f.mime.startsWith("image/") && f.bytes.byteLength > 0 && f.bytes.byteLength <= cfg.outFileBytes);
+  return { text: clip(said, max), files: files.slice(0, cfg.outFilesMax) };
 }
 
 async function answer(m: Mention, d: Deps): Promise<Outcome> {
@@ -84,7 +76,7 @@ async function answer(m: Mention, d: Deps): Promise<Outcome> {
   if (!said) throw new Error("empty answer");
   if (dec.kind === "answer") said = await enrich(said, dec, m, max, got, d);
 
-  const out = dec.kind === "declined" ? { text: clip(said, max), files: [] as OutFile[] } : outgoing(said, dec.details, max, got.files, d.cfg);
+  const out = dec.kind === "declined" ? { text: clip(said, max), files: [] as OutFile[] } : outgoing(said, max, got.files, d.cfg);
 
   if (d.cfg.dryRun) {
     const fl = out.files.map((f) => `${f.name} (${f.mime}, ${f.bytes.byteLength} B)`).join(", ");

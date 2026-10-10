@@ -17,8 +17,8 @@ import {
   type Challenge, type FeedPostT, type LibraryItem,
   type NbKind, type NotebookCard,
   normalizeNbKind } from "../lib/api";
-import { isArta, isArtaFile, isArtaPhoto, mentionsArta, splitPhotoCredit, pillState, useArtaWatch } from "../lib/arta";
-import { ArtaAvatar, ArtaBadge, ArtaFiles, ArtaHint, ArtaMarkdown, ArtaStatusPill, MentionText, MentionTextarea } from "../components/arta";
+import { isArta, isArtaFile, mentionsArta, pillState, useArtaWatch } from "../lib/arta";
+import { ArtaAvatar, ArtaBadge, ArtaHint, ArtaMarkdown, ArtaStatusPill, MentionText, MentionTextarea } from "../components/arta";
 import { assetItem, NB_KIND_META, teaserSrc, TeaserVideo, useAqTheme, useCalmFlag } from "../components/nbview";
 import { AutoLoopVideo, FeedPlayer, LibraryMedia, LibraryPicker } from "../components/library";
 import { SharePanel } from "../components/SharePanel";
@@ -180,7 +180,7 @@ function mediaOf(p: FeedPostT | null | undefined): LibraryItem[] {
 
 /** 1–4 attachments under a post body, then one quiet provenance line each. Calm on purpose: no
  *  prices, no "use this", no counts — just the work, its author, and a way back to both. */
-function PostMedia({ items }: { items: LibraryItem[] }) {
+export function PostMedia({ items }: { items: LibraryItem[] }) {
   if (!items.length) return null;
   const one = items.length === 1;
   return (
@@ -438,9 +438,6 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
   const me = currentUser();
   const own = !!me?.slug && me.slug === post.author.slug;
   const [body, setBody] = useState(post.body);
-  // Arta's photo credit is drawn as the photo's caption — only when a photo is actually attached, so
-  // a credit never disappears from a reply whose photo the site dropped.
-  const artaBody = bot && mediaOf(post).some((m) => isArtaFile(m) && isArtaPhoto(m)) ? splitPhotoCredit(body) : { text: body, credit: null };
   const [editing, setEditing] = useState(false);
   // The post's own confirmation, in our surface rather than the browser's (ui.tsx ConfirmDialog).
   // No typed word here: a post is one sentence and deleting it is not a DOI-bearing act — the guard
@@ -492,10 +489,8 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
   };
   return (
     <article onDoubleClick={doubleTap}
-      className={cx("relative transition-colors", nested ? "px-3.5 py-3" : "px-4 py-4",
-        bot ? "bg-gradient-to-br from-yang/[0.07] via-transparent to-yin/[0.05] hover:from-yang/[0.10]" : "hover:bg-space-2/40")}>
-      {/* Arta's replies carry a hairline of the brand pair down their leading edge — distinct, not loud. */}
-      {bot ? <span aria-hidden className="pointer-events-none absolute inset-y-3 start-0 w-[3px] rounded-e-full bg-gradient-to-b from-yang to-yin opacity-80" /> : null}
+      className={cx("relative transition-colors hover:bg-space-2/40", nested ? "px-3.5 py-3" : "px-4 py-4")}>
+      {/* Arta's replies use the same card as everyone's; only the ASSISTANT label marks them. */}
       {burst ? (
         <span aria-hidden className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
           <span className="animate-ping text-5xl">❤️</span>
@@ -504,7 +499,7 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
       <div className={cx("flex", nested ? "gap-2.5 sm:gap-3" : "gap-3")}>
         <Link to={`/u/${post.author.slug}`} className="shrink-0 self-start" aria-label={post.author.name} tabIndex={-1}>
           {bot
-            ? <ArtaAvatar className={cx(nested ? "h-8 w-8 sm:h-9 sm:w-9" : "h-10 w-10", "ring-1 ring-yang/40")} />
+            ? <ArtaAvatar className={nested ? "h-8 w-8 sm:h-9 sm:w-9" : "h-10 w-10"} />
             : <Avatar name={post.author.name} src={post.author.avatar} className={nested ? "h-8 w-8 sm:h-9 sm:w-9" : "h-10 w-10"} />}
         </Link>
         <div className="min-w-0 flex-1" ref={bodyRef}>
@@ -513,7 +508,7 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
           <div className="flex items-center gap-1.5 text-sm">
             <Link to={`/u/${post.author.slug}`} className={`min-w-0 truncate font-bold text-ink hover:underline ${nameClass(post.author.name)}`}>{post.author.name}</Link>
             {post.author.verified ? <BlueCheck size={16} className="-ms-0.5" /> : null}
-            {bot ? <ArtaBadge /> : null}
+            {bot ? <ArtaBadge seal={false} /> : null}
             <Link to={`/u/${post.author.slug}`} tabIndex={-1} className="hidden min-w-0 shrink-[2] break-all text-ink-3 sm:block"><bdi dir="ltr" data-ay-skip="1">@{post.author.slug}</bdi></Link>
             <span className="text-ink-3">·</span>
             <time className="shrink-0 text-ink-3" dateTime={new Date(post.created * 1000).toISOString()}>{timeAgo(post.created)}</time>
@@ -555,14 +550,14 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
                 </div>
               </div>
             ) : body ? (
-              bot ? <ArtaMarkdown text={artaBody.text} className="mt-0.5" />
+              bot ? <ArtaMarkdown text={body} className="mt-0.5" />
                 : <p className="mt-0.5 whitespace-pre-wrap text-[15px] leading-relaxed text-ink [overflow-wrap:anywhere]"><MentionText text={body} /></p>
             ) : null}
             {writeErr ? (
               <p role="status" className="mt-1 text-[12.5px] text-yang" onClick={(e) => e.stopPropagation()}>{writeErr}</p>
             ) : null}
-            <PostMedia items={bot ? mediaOf(post).filter((m) => !isArtaFile(m)) : mediaOf(post)} />
-            {bot ? <ArtaFiles items={mediaOf(post).filter(isArtaFile)} credit={artaBody.credit} /> : null}
+            {/* Arta's photo renders exactly like any member's image; text files never show on its replies. */}
+            <PostMedia items={bot ? mediaOf(post).filter((m) => !isArtaFile(m) || m.class === "image" || m.mime.startsWith("image/")) : mediaOf(post)} />
             {post.repost ? (
               <div className="mt-2 rounded-2xl border border-line bg-space-2/40 px-3 py-2.5">
                 <p className="flex items-center gap-1.5 text-[13px]">

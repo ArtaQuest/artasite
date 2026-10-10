@@ -22,6 +22,6 @@ export type BugFields = { title: string; summary: string; steps?: string; expect
 export type Photo = { url: string; page: string; grayscale: boolean; credit: string };
 /** One Ekşi Sözlük "legend", kept only with a verbatim quote and its source page. */
 export type Lore = { claim: string; quote: string; source: string };
-export type Decision = { kind: Kind; reply: string; details?: string; bug?: BugFields; image?: Photo; lore?: Lore[] };
+export type Decision = { kind: Kind; reply: string; bug?: BugFields; image?: Photo; lore?: Lore[] };
 /** A file going OUT with Arta's reply (a generated image, the full text of a long answer). */
 export type OutFile = { name: string; mime: string; bytes: Uint8Array };

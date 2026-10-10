@@ -32,20 +32,6 @@ export function looksLikeBug(text: string): boolean {
 export function isArtaFile(it: LibraryItem): boolean { return it.id < 0 || !it.work; }
 
 
-/** A real photo the brain found and attached (photo.jpg / photo-bw.jpg), drawn as a captioned figure. */
-export function isArtaPhoto(it: { name: string }): boolean { return /^photo(-bw)?(-\d+)?\.jpe?g$/i.test(it.name); }
-
-/** The photo credit the brain appends to a reply ("📷 [author, license](file page)"), split off so
- *  it can be drawn as the photo's caption instead of trailing the text. Safe hrefs only. */
-const CREDIT_RE = /\s*📷\s*\[([^\]\n]{1,200})\]\((https:\/\/[^)\s]{1,500})\)\s*/u;
-export function splitPhotoCredit(body: string): { text: string; credit: { label: string; href: string } | null } {
-  const m = CREDIT_RE.exec(body || "");
-  const href = m && /^https:\/\/[^\s<>"']+$/i.test(m[2]) ? m[2] : null;
-  if (!m || !href) return { text: body, credit: null };
-  return { text: (body.slice(0, m.index) + " " + body.slice(m.index + m[0].length)).replace(/\s{2,}/g, " ").trim(), credit: { label: m[1], href } };
-}
-
-
 const OPEN = new Set<ArtaMentionState["status"]>(["queued", "working", "replying"]);
 
 /**

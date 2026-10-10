@@ -283,8 +283,8 @@ test("prompt lists the attached files and the ones that could not be attached", 
   const t = promptText(mention(), { attached: [a], notAttached: [{ a: att({ name: "model.zip", mime: "application/zip", bytes: 5_000_000 }), why: "type not supported" }] });
   assert.match(t, /Files attached to this message[^\n]*\n1\. plot\.png \(image\/png, 117 KB\) — on an earlier post in the thread/);
   assert.match(t, /could NOT be attached[^\n]*\n- model\.zip \(application\/zip, 4\.8 MB\) — type not supported/);
-  assert.match(t, /"details"/);
-  assert.equal(parseDecision('{"kind":"answer","reply":"short","details":"# Long\\n\\ncode"}').details, "# Long\n\ncode");
+  assert.doesNotMatch(t, /"details"/);
+  assert.equal((parseDecision('{"kind":"answer","reply":"short","details":"# Long"}') as Record<string, unknown>).details, undefined, "details is ignored");
 });
 
 test("a mention with a picture: the file reaches the engine, then the temp copy is gone", async () => {
@@ -299,7 +299,7 @@ test("a mention with a picture: the file reaches the engine, then the temp copy 
   assert.match(net.prompts[0], /1\. plot\.png \(image\/png/);
 });
 
-test("files OUT: a long answer is trimmed with the full text attached; generated images ride along (multipart)", async () => {
+test("files OUT: a long answer is trimmed, never attached as text; images ride along (multipart)", async () => {
   const long = "word ".repeat(120).trim();
   const img = solidPng(128, 128, [30, 144, 255]);
   const net = fakeNet({ llm: { text: JSON.stringify({ kind: "answer", reply: long }), files: [{ name: "square-1.png", mime: "image/png", bytes: img }] } });
@@ -309,29 +309,28 @@ test("files OUT: a long answer is trimmed with the full text attached; generated
   const b = r.body as { body: string; files: { field: string; name: string; type: string; size: number; text: string }[]; mention_id: string };
   assert.ok(b.body.length <= 280 && b.body.endsWith("…"), "the public reply is trimmed to the limit");
   assert.equal(b.mention_id, "11");
-  assert.deepEqual(b.files.map((f) => [f.field, f.name, f.type]), [["files[]", "answer.md", "text/markdown"], ["files[]", "square-1.png", "image/png"]]);
-  assert.equal(b.files[0].text.trim(), long, "the full answer is the attached file");
+  assert.deepEqual(b.files.map((f) => [f.field, f.name, f.type]), [["files[]", "square-1.png", "image/png"]]);
   assert.equal(r.headers["x-arta-token"], "t".repeat(40));
 });
 
-test("outgoing(): details become answer.md, caps hold, a short plain answer sends no file", () => {
+test("outgoing(): no text files ever, only images, caps hold, text clipped", () => {
   const c = cfg({ outFilesMax: 2, outFileBytes: 1000 });
-  assert.deepEqual(outgoing("short", undefined, 280, [], c).files, []);
-  const d = outgoing("short", "## steps\n1. a", 280, [], c);
-  assert.equal(d.text, "short");
-  assert.equal(new TextDecoder().decode(d.files[0].bytes), "short\n\n## steps\n1. a\n");
+  assert.deepEqual(outgoing("short", 280, [], c), { text: "short", files: [] });
   const big = { name: "huge.png", mime: "image/png", bytes: new Uint8Array(5000) };
   const ok = { name: "ok.png", mime: "image/png", bytes: new Uint8Array(10) };
-  assert.deepEqual(outgoing("short", "x", 280, [big, ok, ok, ok], c).files.map((f) => f.name), ["answer.md", "ok.png"]);
+  const md = { name: "x.md", mime: "text/markdown", bytes: new Uint8Array(10) };
+  const pdf = { name: "x.pdf", mime: "application/pdf", bytes: new Uint8Array(10) };
+  assert.deepEqual(outgoing("short", 280, [md, pdf, big, ok, ok, ok], c).files.map((f) => f.name), ["ok.png", "ok.png"]);
+  assert.ok(outgoing("word ".repeat(200), 280, [], c).text.length <= 280);
 });
 
 test("dry run with files posts nothing and logs what would be attached", async () => {
   const logs: string[] = [];
-  const net = fakeNet({ llm: { text: JSON.stringify({ kind: "answer", reply: "Here.", details: "full" }), files: [], mode: "Expert" } });
+  const net = fakeNet({ llm: { text: JSON.stringify({ kind: "answer", reply: "Here.", details: "full" }), files: [{ name: "g-1.png", mime: "image/png", bytes: solidPng(8, 8, [1, 2, 3]) }], mode: "Expert" } });
   const out = await handleMention(11, { cfg: cfg({ dryRun: true }), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: (s) => logs.push(s) });
   assert.equal(out, "dry-run");
   assert.equal(net.calls.filter((c) => c.url.endsWith("/arta/reply")).length, 0);
-  assert.match(logs.join("\n"), /mode=Expert reply="Here\." files=\[answer\.md \(text\/markdown, \d+ B\)\]/);
+  assert.match(logs.join("\n"), /mode=Expert reply="Here\." files=\[g-1\.png \(image\/png, \d+ B\)\]/);
 });
 
 test("config: top-effort defaults, sniffing, and the generated PNG", () => {
@@ -358,7 +357,7 @@ const okanAnswer = (over: Record<string, unknown> = {}) => JSON.stringify({
   kind: "answer",
   reply: "Okan Tekman: the guy Ekşi swears can debug production by staring at it 👀",
   image: { url: WIKI, page: PAGE, grayscale: true, credit: "Jane Doe, CC BY-SA 4.0" },
-  lore: [{ claim: "debugs by staring", quote: "adam loglara bakıyor, bug kendiliğinden düzeliyor", source: EKSI }],
+  lore: [{ claim: "debugs by staring", quote: "the man looks at the logs and the bug fixes itself", source: EKSI }],
   ...over,
 });
 function okanDeps(llm: string, photo: (() => Promise<Response>) | null, logs: string[] = []) {
@@ -377,6 +376,9 @@ test("prompt: X-user voice, Ekşi lore with verbatim quotes, no allegations, rea
   assert.match(p, /never repeat allegations/i);
   assert.match(p, /upload\.wikimedia\.org/);
   assert.doesNotMatch(p, /Be warm, direct and accurate/);
+  assert.match(p, /ALWAYS reply in English/);
+  assert.match(p, /English translation/);
+  assert.doesNotMatch(p, /"details"|answer\.md|Markdown file/);
 });
 
 test("parseDecision: photo only from Wikimedia, lore only with quote + https source", () => {
@@ -389,7 +391,7 @@ test("parseDecision: photo only from Wikimedia, lore only with quote + https sou
   assert.equal(dec.lore?.length, 1);
 });
 
-test("Okan Tekman: casual reply + grayscale JPEG attached first, credited, Ekşi linked, no answer.md", async () => {
+test("Okan Tekman: English casual reply + grayscale JPEG attached first, credited, Ekşi linked, no answer.md", async () => {
   const png = await colour();
   const { net, d } = okanDeps(okanAnswer(), async () => new Response(png, { status: 200, headers: { "content-length": String(png.byteLength) } }));
   assert.equal(await handleMention(11, d), "replied");
@@ -401,6 +403,7 @@ test("Okan Tekman: casual reply + grayscale JPEG attached first, credited, Ekşi
   assert.match(r.body, /\[Ekşi Sözlük\]\(https:\/\/eksisozluk\.com/);
   assert.ok(r.body.length <= 280);
   assert.doesNotMatch(r.body, /born in/i);
+  assert.ok(!r.files!.some((f) => /\.md$/.test(f.name)), "no .md attachment");
 });
 
 test("fetchPhoto: output really is grayscale and bounded", async () => {
