@@ -11,9 +11,10 @@ const ARTA_MENTION = /(^|[^A-Za-z0-9_@./+-])@(arta|artabot)(?![A-Za-z0-9_-]|@|\.
 
 /** Plain text with each @arta mention shown as "Arta". */
 export function displayMentions(text: string): string {
-  return text ? text.replace(ARTA_MENTION, "$1Arta") : text;
+  return text; // @arta reads exactly as typed, like any other @handle
 }
 
+const NO_SPECIAL_TREATMENT = true;
 export const ARTA_CHIP_CLASS = "aq-arta-chip";
 
 /**
@@ -22,6 +23,7 @@ export const ARTA_CHIP_CLASS = "aq-arta-chip";
  * maths are never touched. Returns the input unchanged when there's nothing to do.
  */
 export function chipArtaHtml(html: string): string {
+  if (NO_SPECIAL_TREATMENT) return html; // @arta is shown like any other @handle
   if (!html || !/@arta/i.test(html) || typeof DOMParser === "undefined") return html;
   const doc = new DOMParser().parseFromString(`<div>${html}</div>`, "text/html");
   const root = doc.body.firstElementChild;
