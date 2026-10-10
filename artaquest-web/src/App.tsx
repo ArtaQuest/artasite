@@ -1,6 +1,7 @@
 import { Component, lazy, Suspense, useEffect, useRef, type ReactNode } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
+import { ArtaChatDock } from "./components/ArtaChatDock";
 import { ArtaTTS } from "./components/ArtaTTS";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { I18nGate } from "./components/I18nGate";
@@ -568,7 +569,10 @@ export default function App() {
         </RouteBoundary>
         </PlayerProvider>
       </AppShell>
-      {/* No private assistant panel: members reach Arta by tagging @arta in public. */}
+      {/* The ArtaChat dock, bottom-right, members only (the chat routes are 'user'-auth server-side, so
+          hiding it for visitors is presentation, not the guard). Its lid is Arta's home ledge. The
+          private assistant stays retired: the dock's Arta row opens the public @arta composer. */}
+      {isLoggedIn() && <ArtaChatDock />}
       <ArtaTTS />
       <OfflineBanner />
       </I18nGate>
