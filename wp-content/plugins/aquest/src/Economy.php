@@ -798,7 +798,7 @@ final class Economy {
 		if ( ! get_userdata( $to ) )      { return [ false, 'no_member', 'That member no longer exists.' ]; }
 		// Arta is an assistant, not a member with a wallet: nothing it could do with coins, and a bot
 		// that accepts payment reads as one you can pay for answers. Enforced here, not by a hidden button.
-		if ( class_exists( '\\AQ\\Arta' ) && Arta::is_arta( $to ) ) { return [ false, 'arta_public_only', 'Arta doesn’t take coins — mention @arta in a public post instead.' ]; }
+		if ( class_exists( '\\AQ\\Arta' ) && Arta::is_arta( $to ) ) { return [ false, 'arta_public_only', 'Arta doesn’t take coins — mention @artabot in a public post instead.' ]; }
 
 		$lock = 'wallet_u' . $from;
 		if ( ! self::acquire_lock( $lock, 15 ) ) {

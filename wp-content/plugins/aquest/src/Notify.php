@@ -154,7 +154,7 @@ final class Notify {
 			'items'  => array_map( fn( $r ) => [
 				'id'    => (int) $r['id'],
 				'type'  => $r['type'],
-				'title' => Arta::display_mentions( $r['title'] ),   // "@arta" reads as "Arta"
+				'title' => Arta::display_mentions( $r['title'] ),   // "@artabot" reads as "Arta"
 				'body'  => Arta::display_mentions( (string) $r['body'] ),
 				'url'   => (string) $r['url'],
 				'read'  => (int) $r['read'] === 1,

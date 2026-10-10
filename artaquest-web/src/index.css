@@ -1837,7 +1837,7 @@ html[dir="rtl"] .aq-bot-panel { right: auto; left: calc(1.25rem + env(safe-area-
 @media (min-width: 768px) { .aq-shell { --nav-w: var(--spacing-rail); } }
 @media (min-width: 1280px) { .aq-shell { --nav-w: var(--spacing-sidebar); } }
 
-/* ── @arta's profile cover ────────────────────────────────────────────────────
+/* ── @artabot's profile cover ────────────────────────────────────────────────────
    The assistant's own band (pages/ArtaBotProfile.tsx): the brand pair, gold → blue, with two soft
    highlights drifting slowly under a field of small "thought" dots. Decorative only; it holds still
    under prefers-reduced-motion. */
@@ -1863,7 +1863,7 @@ html[dir="rtl"] .aq-bot-panel { right: auto; left: calc(1.25rem + env(safe-area-
 @keyframes aq-arta-drift { from { background-position: 0% 0%, 100% 100%, 30% 0%, 0 0 } to { background-position: 35% 25%, 65% 75%, 70% 60%, 0 0 } }
 @media (prefers-reduced-motion: reduce) { .aq-arta-cover { animation: none } }
 
-/* The @arta chip inside sanitised HTML (comments, thread bodies — lib/mentions.ts chipArtaHtml).
+/* The @artabot chip inside sanitised HTML (comments, thread bodies — lib/mentions.ts chipArtaHtml).
    Same look as the React chip in components/arta.tsx: a gold pill that reads "Arta". */
 .aq-prose a.aq-arta-chip, a.aq-arta-chip {
   display: inline-flex;

@@ -8,7 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *
  * WHAT IS LEFT OF THE OLD ASSISTANT (2026-10-08). The paid, private, metered chat assistant is gone:
  * no chat window, no sessions, no transcripts, no per-turn billing, no daily invoice. Arta now speaks
- * ONLY in public — tag @arta in a post or a comment and it answers in that thread (src/Arta.php,
+ * ONLY in public — tag @artabot in a post or a comment and it answers in that thread (src/Arta.php,
  * answered by the Arta brain, arta-brain/). What remains here is the platform-borne work that was never
  * part of the paid product and never charged anyone:
  *   1. Ticket triage — on every contribution, Arta acknowledges, classifies the kind, asks one

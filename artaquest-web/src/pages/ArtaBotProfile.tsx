@@ -4,8 +4,8 @@
  * Arta is not a member: it has no wallet, no diary and no inbox (the server refuses coins, bookings
  * and DMs to it — Economy::transfer_coins, Booking::page/slots/take, Chat::send/knock). So this page
  * drops Message / Book a time / Send coins / the coin chip / the rank, keeps Follow, and says what
- * the account is FOR: a primary "Ask @arta in public" (the composer, "@arta " typed), a small "Report
- * a bug" ("@arta bug: "), the live status from arta/status, a short how-to, and — instead of "No
+ * the account is FOR: a primary "Ask @artabot in public" (the composer, "@artabot " typed), a small "Report
+ * a bug" ("@artabot bug: "), the live status from arta/status, a short how-to, and — instead of "No
  * posts yet", which is all a notebook list can say about an account that publishes none — its recent
  * public answers, each with the question it answered and a link to the thread.
  *
@@ -60,7 +60,7 @@ function StatusChip({ st, failed }: { st: ArtaStatus | null; failed: boolean }) 
 const STEP_ICO = { viewBox: "0 0 24 24", width: 18, height: 18, fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
 const STEPS: Array<[React.ReactNode, string, string]> = [
   [<svg {...STEP_ICO}><circle cx="12" cy="12" r="4" /><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" /></svg>,
-    "Mention @arta", "In a post, a reply or a comment — anywhere public."],
+    "Mention @artabot", "In a post, a reply or a comment — anywhere public."],
   [<svg {...STEP_ICO}><path d="M21 11.5a8.4 8.4 0 0 1-9.4 8.3L3 21l1.2-3.6A8.4 8.4 0 1 1 21 11.5Z" /></svg>,
     "It replies in the thread", "In public, under your post. There is no private chat."],
   [<svg {...STEP_ICO}><path d="M21.4 11.1 12.2 20.3a5 5 0 0 1-7.1-7.1l9.2-9.2a3.5 3.5 0 0 1 5 5l-9.2 9.2a2 2 0 0 1-2.8-2.9l8.5-8.4" /></svg>,
@@ -132,7 +132,7 @@ export default function ArtaBotProfile({ p, following, followers, followBusy, on
   const { st, failed } = useArtaStatus();
   const signedIn = isLoggedIn();
   const ask = askArtaHref();
-  const bug = `/works/?compose=${encodeURIComponent("@arta bug: ")}`;
+  const bug = `/works/?compose=${encodeURIComponent("@artabot bug: ")}`;
   const gate = (to: string) => (signedIn ? to : `${localePath("/login/")}?redirect_to=${encodeURIComponent(to)}`);
 
   const [items, setItems] = useState<Reply[]>([]);

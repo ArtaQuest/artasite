@@ -1,9 +1,19 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Button, cx, Logo } from "./ui";
-import { thumbSrc, thumbSrcSet } from "../lib/img";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { Button, cx } from "./ui";
+import { shareLinks, shareToast } from "../lib/share";
 
 /**
- * Shared "ready-to-post" share popover — a pre-composed caption + the page link (whose OG tags unfurl an
+ * Share — a popover anchored to the button on desktop, a bottom sheet on phones (the system share
+ * sheet first when the device has one). Rendered in a PORTAL with fixed positioning, so no card's
+ * overflow, stacking context or the viewport edge can hide it (the old in-flow popover opened below
+ * the fold / under the next card, so a click looked like it did nothing). Every action answers with
+ * a toast. X gets the caption trimmed to fit 280 with the link; LinkedIn/Facebook unfurl the page's
+ * server-rendered 1200×630 card; Instagram gets real images (a 1080×1350 post and a 1080×1920 Story,
+ * rendered server-side per post) — shared as files on a phone, downloaded with the caption copied on a
+ * desktop.
+ *
+ * (Formerly: shared "ready-to-post" share popover — a pre-composed caption + the page link (whose OG tags unfurl an
  * image preview on every network), one-tap posting to each platform, a Copy button, and the device's
  * native share sheet where one exists. Used by course pages AND the Journal of Seasonality article reader;
  * the caller supplies the caption via `message` so each surface posts its own words.
@@ -25,120 +35,154 @@ const NETWORK_ICONS: Record<string, ReactNode> = {
   telegram: brandGlyph("M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.139-5.061 3.345-.479.329-.913.489-1.302.481-.428-.009-1.252-.242-1.865-.44-.752-.244-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"),
 };
 
-export function SharePanel({ title, url, message, image, dialogLabel = "Share", className, compact }: { title: string; url: string; message: string; image?: string; dialogLabel?: string; className?: string;
-  /** Icon-only trigger for tight rows (the feed card's title line) — same popover, no label. */
+const LINK_ICON = (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" /><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" /></svg>
+);
+
+async function fileFrom(src: string, name: string): Promise<File | null> {
+  try {
+    const r = await fetch(src, { credentials: "omit" });
+    const b = await r.blob();
+    return r.ok && b.type.startsWith("image/") ? new File([b], name, { type: b.type }) : null;
+  } catch { return null; }
+}
+function download(f: File) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(f); a.download = f.name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+const isPhone = () => typeof window !== "undefined" && (window.matchMedia?.("(max-width: 639px)").matches || window.matchMedia?.("(pointer: coarse)").matches);
+
+export function SharePanel({ title, url, message, image, cardId, dialogLabel = "Share", className, compact }: { title: string; url: string; message: string; image?: string;
+  /** A feed post id: Instagram gets that post's generated 1080×1350 + 1080×1920 cards. */
+  cardId?: number;
+  dialogLabel?: string; className?: string;
+  /** Icon-only trigger for tight rows (the feed card's action row) — same sheet, no label. */
   compact?: boolean }) {
   const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [imgOk, setImgOk] = useState(true);
-  const ref = useRef<HTMLDivElement>(null);
-  const post = `${message} ${url}`;
-  const host = (() => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return "artaquest.com"; } })();
-  const both = encodeURIComponent(post);
-  const u = encodeURIComponent(url);
-  const networks: { key: string; label: string; href: string }[] = [
-    { key: "x", label: "X", href: `https://twitter.com/intent/tweet?text=${encodeURIComponent(message)}&url=${u}` },
-    { key: "facebook", label: "Facebook", href: `https://www.facebook.com/sharer/sharer.php?u=${u}` },
-    { key: "linkedin", label: "LinkedIn", href: `https://www.linkedin.com/sharing/share-offsite/?url=${u}` },
-    { key: "whatsapp", label: "WhatsApp", href: `https://wa.me/?text=${both}` },
-    { key: "telegram", label: "Telegram", href: `https://t.me/share/url?url=${u}&text=${encodeURIComponent(message)}` },
-  ];
+  const [sheet, setSheet] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const btn = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const links = shareLinks(message, url);
+  const caption = `${message} ${url}`;
+
+  const place = useCallback(() => {
+    const b = btn.current?.getBoundingClientRect(); const p = panel.current;
+    if (!b || !p) return;
+    const w = p.offsetWidth, h = p.offsetHeight, m = 8;
+    const below = b.bottom + m, above = b.top - m - h;
+    const top = below + h <= innerHeight - m || above < m ? Math.min(below, Math.max(m, innerHeight - m - h)) : above;
+    const left = Math.min(Math.max(m, b.right - w), innerWidth - m - w);
+    setPos({ top, left });
+  }, []);
+  useLayoutEffect(() => { if (open && !sheet) place(); }, [open, sheet, place]);
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", onDown);
+    const onDown = (e: PointerEvent) => { const t = e.target as Node; if (!panel.current?.contains(t) && !btn.current?.contains(t)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setOpen(false); btn.current?.querySelector<HTMLElement>("button")?.focus(); } };
+    const onMove = () => { if (!sheet) place(); };
+    document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
-  }, [open]);
-  const copy = () => { navigator.clipboard?.writeText(post).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); }).catch(() => {}); };
-  const hasNative = typeof navigator !== "undefined" && typeof navigator.share === "function";
-  const nativeShare = async () => { try { await navigator.share?.({ title, text: message, url }); setOpen(false); } catch { /* dismissed */ } };
-  // On a phone the trigger opens the system share sheet straight away (every installed app, Instagram
-  // included); the popover is the desktop path and the fallback when there is no sheet.
-  const coarse = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
-  const trigger = () => { if (!open && hasNative && coarse) { void nativeShare(); return; } setOpen((o) => !o); };
-  const [igNote, setIgNote] = useState("");
-  /** Instagram has no web share URL. Phone: the share sheet, with the image as a file when the browser
-   *  allows it. Elsewhere: copy the link and download the picture, ready to post from the app. */
-  const instagram = async () => {
-    let file: File | null = null;
-    if (image) {
-      try {
-        const b = await (await fetch(image, { credentials: "omit" })).blob();
-        if (b.type.startsWith("image/")) file = new File([b], `artaquest.${b.type.split("/")[1] || "png"}`, { type: b.type });
-      } catch { /* cross-origin or offline: link only */ }
+    addEventListener("resize", onMove); addEventListener("scroll", onMove, true);
+    requestAnimationFrame(() => panel.current?.querySelector<HTMLElement>("a,button")?.focus({ preventScroll: true }));
+    return () => { document.removeEventListener("pointerdown", onDown); document.removeEventListener("keydown", onKey); removeEventListener("resize", onMove); removeEventListener("scroll", onMove, true); };
+  }, [open, sheet, place]);
+
+  const show = () => { setSheet(!!window.matchMedia?.("(max-width: 639px)").matches); setPos(null); setOpen(true); };
+  const trigger = async () => {
+    if (open) { setOpen(false); return; }
+    // A phone opens the system share sheet first (every installed app); the bottom sheet is the fallback.
+    if (isPhone() && typeof navigator.share === "function") {
+      try { await navigator.share({ title, text: message, url }); return; }
+      catch (e) { if ((e as Error)?.name === "AbortError") return; /* unsupported/blocked → our sheet */ }
     }
-    try {
-      if (file && navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title, text: post }); setOpen(false); return; }
-      if (hasNative && coarse) { await navigator.share({ title, text: message, url }); setOpen(false); return; }
-    } catch { return; /* dismissed */ }
-    await navigator.clipboard?.writeText(post).catch(() => {});
-    if (file) {
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(file); a.download = file.name; a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    }
-    setIgNote(file ? "Link copied and image downloaded — post it from the Instagram app." : "Link copied — paste it in Instagram.");
-    setTimeout(() => setIgNote(""), 4000);
+    show();
   };
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(url); shareToast("Copied"); }
+    catch { shareToast("Couldn’t copy — long-press the address bar instead"); }
+    setOpen(false);
+  };
+  const instagram = async () => {
+    if (busy) return;
+    setBusy(true); shareToast("Preparing Instagram images…", 6000);
+    const base = `${location.origin}/wp-json/aq/v1/share-card/${cardId}`;
+    const got: (File | null)[] = await Promise.all(cardId
+      ? [fileFrom(`${base}/feed`, "artaquest-post.png"), fileFrom(`${base}/story`, "artaquest-story.png")]
+      : image ? [fileFrom(image, "artaquest.jpg")] : []);
+    const files: File[] = got.filter((f): f is File => f !== null);
+    setBusy(false);
+    if (isPhone() && files.length && navigator.canShare?.({ files })) {
+      try { await navigator.share({ files, text: caption }); setOpen(false); shareToast("Shared"); return; }
+      catch (e) { if ((e as Error)?.name === "AbortError") { shareToast("Cancelled"); return; } }
+    }
+    await navigator.clipboard?.writeText(caption).catch(() => {});
+    files.forEach(download);
+    setOpen(false);
+    shareToast(files.length ? "Images downloaded and caption copied — post them from the Instagram app (feed post 4:5, Story 9:16)." : "Caption copied — paste it in Instagram.", 6000);
+  };
+  const go = (name: string) => () => { setOpen(false); shareToast(`Opening ${name}…`); };
+
+  const item = "flex flex-col items-center gap-1.5 rounded-field px-1 py-2.5 text-[12px] text-ink-2 transition-colors hover:bg-veil/[0.06] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-ink";
+  const disc = "grid h-12 w-12 place-items-center rounded-full border border-line bg-veil/[0.04] text-ink";
+  const entries: { key: string; label: string; href?: string; on?: () => void; icon: ReactNode }[] = [
+    { key: "x", label: "X", href: links.x, icon: NETWORK_ICONS.x },
+    { key: "instagram", label: busy ? "Preparing…" : "Instagram", on: () => void instagram(), icon: NETWORK_ICONS.instagram },
+    { key: "linkedin", label: "LinkedIn", href: links.linkedin, icon: NETWORK_ICONS.linkedin },
+    { key: "facebook", label: "Facebook", href: links.facebook, icon: NETWORK_ICONS.facebook },
+    { key: "whatsapp", label: "WhatsApp", href: links.whatsapp, icon: NETWORK_ICONS.whatsapp },
+    { key: "copy", label: "Copy link", on: () => void copy(), icon: LINK_ICON },
+  ];
+  const grid = (
+    <div className="grid grid-cols-3 gap-1 sm:grid-cols-6">
+      {entries.map((n) => n.href ? (
+        <a key={n.key} href={n.href} target="_blank" rel="noopener noreferrer" onClick={go(n.label)} aria-label={`Share on ${n.label}`} className={item}>
+          <span className={disc}>{n.icon}</span>{n.label}
+        </a>
+      ) : (
+        <button key={n.key} type="button" onClick={n.on} aria-label={n.key === "copy" ? "Copy link" : `Share on ${n.label}`} aria-busy={n.key === "instagram" && busy} className={item}>
+          <span className={disc}>{n.icon}</span>{n.label}
+        </button>
+      ))}
+    </div>
+  );
+  const ui = open ? createPortal(sheet ? (
+    <div className="fixed inset-0 z-[1000]" onClick={(e) => e.stopPropagation()}>
+      <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} aria-hidden />
+      <div ref={panel} role="dialog" aria-modal="true" aria-label={dialogLabel}
+        className="absolute inset-x-0 bottom-0 rounded-t-[20px] border-t border-line bg-space-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 shadow-card">
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" aria-hidden />
+        <p className="mb-1 truncate px-1 text-[15px] font-semibold text-ink">{dialogLabel}</p>
+        <p className="mb-3 line-clamp-2 px-1 text-[13px] text-ink-3">{title}</p>
+        {grid}
+        <Button variant="subtle" onClick={() => setOpen(false)} className="mt-3 h-11 w-full text-[15px]">Cancel</Button>
+      </div>
+    </div>
+  ) : (
+    <div ref={panel} role="dialog" aria-label={dialogLabel} onClick={(e) => e.stopPropagation()}
+      style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999 }}
+      className="fixed z-[1000] w-[22rem] max-w-[calc(100vw-1rem)] rounded-card border border-line bg-space-2 p-3 text-start shadow-card">
+      <p className="mb-2 px-1 text-[13px] font-semibold text-ink">{dialogLabel}</p>
+      {grid}
+    </div>
+  ), document.body) : null;
+
   return (
-    <div ref={ref} className={cx("relative", className)}>
+    <div ref={btn} className={cx("relative", className)}>
       {compact ? (
-        <button type="button" onClick={trigger} aria-haspopup="dialog" aria-expanded={open} aria-label="Share" title="Share"
-          className="-my-2 grid min-h-11 w-9 place-items-center rounded-pill text-ink-3 transition-colors hover:text-yin-ink">
+        <button type="button" onClick={() => void trigger()} aria-haspopup="dialog" aria-expanded={open} aria-label="Share" title="Share"
+          className={cx("grid h-9 w-9 place-items-center rounded-full outline-none transition-colors hover:bg-yin-ink/10 hover:text-yin-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-ink", open ? "bg-yin-ink/10 text-yin-ink" : "text-ink-3")}>
           {SHARE_ICON}
         </button>
       ) : (
-        <Button variant="outline" onClick={trigger} aria-haspopup="dialog" aria-expanded={open} className="h-9 w-full gap-1.5 px-3.5 text-[14px] sm:w-auto">
+        <Button variant="outline" onClick={() => void trigger()} aria-haspopup="dialog" aria-expanded={open} className="h-9 w-full gap-1.5 px-3.5 text-[14px] sm:w-auto">
           {SHARE_ICON}Share
         </Button>
       )}
-      {open && (
-        <div role="dialog" aria-label={dialogLabel} className="absolute right-0 z-30 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-card border border-line bg-space-2 p-4 text-start shadow-card">
-          <p className="text-[13px] font-semibold text-ink">Ready-to-post — pick a platform</p>
-          <div className="mt-3 overflow-hidden rounded-field border border-line">
-            <div className="aspect-[16/9] w-full overflow-hidden bg-space-3">
-              {image && imgOk ? (
-                <img src={thumbSrc(image)} srcSet={thumbSrcSet(image)} sizes="288px" alt="" loading="lazy" decoding="async" onError={() => setImgOk(false)} className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#010C17] via-[#06121E] to-[#0C1E32]"><Logo size="text-2xl" /></div>
-              )}
-            </div>
-            <div className="border-t border-line bg-veil/[0.02] px-3 py-2">
-              <p className="truncate text-[11px] uppercase tracking-wide text-ink-2">{host}</p>
-              <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-ink">{title}</p>
-            </div>
-          </div>
-          <p className="mt-3 rounded-field border border-line bg-veil/[0.03] p-3 text-[13px] leading-relaxed text-ink-2">{post}</p>
-          <div className="mt-3 grid grid-cols-6 gap-1.5">
-            {networks.slice(0, 3).map((n) => (
-              <a key={n.key} href={n.href} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}
-                aria-label={`Share on ${n.label}`} title={`Share on ${n.label}`}
-                className="flex h-12 items-center justify-center rounded-field border border-line bg-veil/[0.03] text-ink-2 transition-colors hover:border-yin-ink hover:bg-veil/[0.06] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-ink">
-                {NETWORK_ICONS[n.key]}
-              </a>
-            ))}
-            <button type="button" onClick={() => void instagram()} aria-label="Share on Instagram" title="Share on Instagram"
-              className="flex h-12 items-center justify-center rounded-field border border-line bg-veil/[0.03] text-ink-2 transition-colors hover:border-yin-ink hover:bg-veil/[0.06] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-ink">
-              {NETWORK_ICONS.instagram}
-            </button>
-            {networks.slice(3).map((n) => (
-              <a key={n.key} href={n.href} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}
-                aria-label={`Share on ${n.label}`} title={`Share on ${n.label}`}
-                className="flex h-12 items-center justify-center rounded-field border border-line bg-veil/[0.03] text-ink-2 transition-colors hover:border-yin-ink hover:bg-veil/[0.06] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-ink">
-                {NETWORK_ICONS[n.key]}
-              </a>
-            ))}
-          </div>
-          {igNote ? <p role="status" className="mt-2 text-[12.5px] text-ink-2">{igNote}</p> : null}
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Button onClick={copy} variant="subtle" className="h-9 px-3.5 text-[13px]">{copied ? "Copied ✓" : "Copy post"}</Button>
-            {hasNative && <Button onClick={nativeShare} variant="subtle" className="h-9 px-3.5 text-[13px]">More…</Button>}
-          </div>
-          <span className="sr-only" role="status" aria-live="polite">{copied ? "Post copied to clipboard" : ""}</span>
-        </div>
-      )}
+      {ui}
     </div>
   );
 }

@@ -672,8 +672,8 @@ add_action(
 );
 
 /**
- * Display copy for member text: an @arta mention reads as "Arta" (link-card descriptions, structured
- * data). The stored text keeps "@arta". Falls through untouched when the plugin isn't loaded.
+ * Display copy for member text: an @artabot mention reads as "Arta" (link-card descriptions, structured
+ * data). The stored text keeps "@artabot". Falls through untouched when the plugin isn't loaded.
  */
 if ( ! function_exists( 'aq_display_mentions' ) ) {
 	function aq_display_mentions( $text ) {

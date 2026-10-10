@@ -47,7 +47,7 @@ import { displayMentions } from "../lib/mentions";
 
 /**
  * A post's replies, oldest first, with a reply box. Arta's answers arrive as replies too; the parent
- * FeedPost watches its own @arta mention and bumps `reloadKey` when the answer lands, so this list
+ * FeedPost watches its own @artabot mention and bumps `reloadKey` when the answer lands, so this list
  * refreshes itself without a page reload.
  */
 function PostReplies({ postId, onCount, reloadKey = 0, pill }: { postId: number; onCount: (n: number) => void; reloadKey?: number; pill?: React.ReactNode }) {
@@ -444,7 +444,7 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
   // notebook comment thread below.
   const [replyOpen, setReplyOpen] = useState(!!watchArta || !!openReplies || (!post.nb && (post.replies || 0) > 0 && mentionsArta(post.body)));
   const [replyCount, setReplyCount] = useState(post.replies || 0);
-  // ARTA'S ANSWER, LIVE. A post that asks @arta (and is young enough to still be answered — the
+  // ARTA'S ANSWER, LIVE. A post that asks @artabot (and is young enough to still be answered — the
   // server expires a mention after 48h) watches its own mention: a pill says where it is, and when
   // the answer lands the thread refreshes (or opens, for the member who just asked).
   const [mountedAt] = useState(() => Date.now() / 1000);
@@ -633,18 +633,19 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
             {!nb ? (
               /* A post's own permalink (/works/?post=<id>) — the server renders its card (title, text,
                  first image) into the page head, so X, LinkedIn and Facebook unfurl it. */
-              <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} className="-my-2 inline-flex items-center">
+              <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} className="inline-flex items-center">
                 <SharePanel
                   compact
                   title={`${post.author.name} on ArtaQuest`}
                   url={`${location.origin}/works/?post=${post.id}`}
                   message={shareText(body)}
+                  cardId={post.id}
                   image={mediaOf(post).find((m) => m.mime.startsWith("image/") && m.mime !== "image/svg+xml")?.url}
                 />
               </span>
             ) : null}
             {nb ? (
-              <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} className="-my-2 inline-flex items-center">
+              <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} className="inline-flex items-center">
                 <SharePanel
                   compact
                   title={nb.title}
@@ -758,7 +759,7 @@ function Composer({ onPosted, initialText = "" }: { onPosted: (p: FeedPostT) => 
     return () => { document.removeEventListener("mousedown", down); document.removeEventListener("keydown", key); };
   }, [nbOpen]);
   useEffect(() => { quoteIntent = (p) => { setQuote(p); setOpen(true); box.current?.focus(); }; return () => { quoteIntent = null; }; }, []);
-  // "Ask @arta" links land here with the handle already typed: focus with the caret at the end.
+  // "Ask @artabot" links land here with the handle already typed: focus with the caret at the end.
   useEffect(() => {
     if (!initialText) return;
     setText(initialText); setOpen(true);

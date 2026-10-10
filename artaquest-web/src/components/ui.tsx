@@ -868,7 +868,7 @@ export function RichText({ html, className, srcLang }: { html: string; className
   const ref = useRef<HTMLDivElement>(null);
   // Typeset the `.aq-math` nodes AND keep them typeset: re-render if the i18n engine (this block is a
   // translated `[data-ay-tr]` root) or any re-render reverts a node to its raw "$…$" source. (#143)
-  // An @arta mention in member text reads as the Arta chip (the stored text keeps "@arta").
+  // An @artabot mention in member text reads as the Arta chip (the stored text keeps "@artabot").
   const shown = useMemo(() => chipArtaHtml(html), [html]);
   useEffect(() => watchMath(ref.current, "nodes"), [shown]);
   const mark = srcLang !== undefined

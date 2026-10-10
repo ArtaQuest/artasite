@@ -4,15 +4,15 @@ namespace AQ;
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 /**
- * @arta — ArtaQuest's public assistant. A real member account that only ever speaks in public.
+ * @artabot — ArtaQuest's public assistant. A real member account that only ever speaks in public.
  *
- * THE ONLY WAY TO TALK TO ARTA IS IN PUBLIC. A member writes "Hey @arta …" in a feed post, a reply
+ * THE ONLY WAY TO TALK TO ARTA IS IN PUBLIC. A member writes "Hey @artabot …" in a feed post, a reply
  * to a post, or a comment anywhere on the platform; Arta answers in that same thread, as a reply
  * everybody can read. There is no private chat, no session, no inbox, no price.
  *
  * HOW A MENTION TRAVELS
  *   1. The post/comment is written as usual. In the same request, Arta::record() reads its text,
- *      notifies any member it @-mentions, and — when it mentions @arta (or the old @artabot alias) —
+ *      notifies any member it @-mentions, and — when it mentions @artabot (or the old @artabot alias) —
  *      inserts ONE aq_mentions row (UNIQUE on source + target, so a retry cannot double it).
  *   2. If the author and the platform are under the rate limits, the row is `queued`. That row IS
  *      the queue: nothing is pushed anywhere. Arta's brain (/arta-brain, a daemon on the operator's
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *      waits (up to MAX_AGE) and is answered when it is back.
  *   3. The brain CLAIMS the row (atomic queued → working), decides what it is (a question, a bug
  *      report, or something to leave alone), and posts the answer through `arta/reply`. That route
- *      writes the reply as @arta, in-thread, exactly once: a second reply for the same mention is
+ *      writes the reply as @artabot, in-thread, exactly once: a second reply for the same mention is
  *      refused as a duplicate, whoever sends it.
  *
  * NOTHING HERE CAN TAKE A MEMBER'S POST DOWN. Every entry point is wrapped so that a failure in
@@ -34,7 +34,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Arta {
 
-	const HANDLE = 'arta';
+	const HANDLE = 'artabot';
 	const NAME   = 'Arta';
 	/** Every handle that reaches Arta. `artabot` is the account's old name, kept as an alias. */
 	const ALIASES = [ 'arta', 'artabot' ];
@@ -45,10 +45,10 @@ final class Arta {
 		'hey-arta', 'heyarta', 'arta-help', 'artahelp', 'arta-support', 'artasupport', 'arta1', 'arta0',
 		'artta', 'arrta', 'arta-quest-bot', 'artaquest-bot', 'artaquestbot',
 	];
-	const BIO = 'ArtaQuest’s public assistant. Mention @arta in a post or a comment and I reply in the thread, in public. Start with “bug:” to report a problem and I file it on GitHub for the team.';
+	const BIO = 'ArtaQuest’s public assistant. Mention @artabot in a post or a comment and I reply in the thread, in public. Start with “bug:” to report a problem and I file it on GitHub for the team.';
 
 	const TABLE_VERSION = '4';   // 2: aq_arta_files (files on Arta's replies); 3: + source_url; 4: aq_arta_dm (private chat)
-	const IDENTITY_VERSION = '1';
+	const IDENTITY_VERSION = '2';
 
 	// ── Limits. A participant, not a flood. ──────────────────────────────────────────────────────
 	const USER_PER_HOUR   = 5;
@@ -112,8 +112,8 @@ final class Arta {
 	}
 
 	/**
-	 * How a mention READS: "@arta" (or the old @artabot) shown as "Arta" in display copy such as
-	 * notifications, link-card descriptions and structured data. The stored text keeps "@arta", which
+	 * How a mention READS: "@artabot" (or the old @artabot) shown as "Arta" in display copy such as
+	 * notifications, link-card descriptions and structured data. The stored text keeps "@artabot", which
 	 * is what detection runs on. Same edges as extract_handles, so an email like x@arta.com is untouched.
 	 */
 	public static function display_mentions( $text ) {
@@ -531,7 +531,7 @@ final class Arta {
 				'author' => self::who( $src['author_id'] ),
 			],
 			'context'   => $ctx,
-			// Public files on the mentioning post and the posts above it ("@arta what's this?" under a
+			// Public files on the mentioning post and the posts above it ("@artabot what's this?" under a
 			// picture). `skip` names why one is listed but not handed over: type | size | count.
 			'attachments' => $ids ? self::attachments_for_posts( $ids ) : [],
 		];
@@ -888,8 +888,8 @@ final class Arta {
 		try {
 			$title = sanitize_text_field( $title !== '' ? $title : wp_trim_words( wp_strip_all_tags( (string) $src['body'] ), 10, '…' ) );
 			$body  = wp_strip_all_tags( (string) $src['body'] );
-			if ( mb_strlen( $title ) < 4 ) { $title = 'Bug reported to @arta'; }
-			if ( mb_strlen( $body ) < 10 ) { $body = $body . ' (reported to @arta)'; }
+			if ( mb_strlen( $title ) < 4 ) { $title = 'Bug reported to @artabot'; }
+			if ( mb_strlen( $body ) < 10 ) { $body = $body . ' (reported to @artabot)'; }
 			$t = Tickets::open_from_arta( (int) $m['author_id'], $title, $body, self::reply_url( $m ), $issue );
 			return $t;
 		} catch ( \Throwable $e ) {

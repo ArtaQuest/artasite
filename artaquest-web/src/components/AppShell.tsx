@@ -90,7 +90,7 @@ function Icon({ d }: { d: IconKey }) {
 // static for the page's life — safe to resolve once at module scope.
 const ME_SLUG = currentUser()?.slug;
 /** Gen-Z mobile: an app-style bottom tab bar for signed-in members (phones only). Five thumb
- *  slots; the raised centre one is Ask @arta (ticket #156 — members wanted the A button in the
+ *  slots; the raised centre one is Ask @artabot (ticket #156 — members wanted the A button in the
  *  hero position, not floating over the bar's right end where it covered the Profile tab; the
  *  floating launcher is gone; the centre tab opens the public composer). Rankings left the bar for
  *  the sidebar. The slot beside Home is the Studio — book icon + "Studio" label, exactly the
@@ -101,7 +101,7 @@ const ME_SLUG = currentUser()?.slug;
  *  joining (the fixed join banner was removed 2026-07-16). */
 function BottomTabs() {
   // Unread count for the ArtaChat tab. On a phone the floating dock launcher is hidden (ticket
-  // #156 — the centre slot is Ask @arta), so without this the badge a member sees on desktop simply
+  // #156 — the centre slot is Ask @artabot), so without this the badge a member sees on desktop simply
   // does not exist on the device they mostly read on. Hooks run before the visitor early-return
   // below, because they must be called in the same order on every render.
   const [unread, setUnread] = useState(0);
@@ -159,8 +159,8 @@ function BottomTabs() {
     <nav aria-label="Quick navigation" data-floor="top" {...(dockOpen ? {} : { "data-floor-home": "" })}
       className="fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-line bg-space-1/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
       {T.slice(0, 2).map(tab)}
-      {/* @arta in the centre slot — same glassy gold/blue circle, now opens the feed composer
-          with "@arta " ready to type (public-only; the private chat is retired). */}
+      {/* @artabot in the centre slot — same glassy gold/blue circle, now opens the feed composer
+          with "@artabot " ready to type (public-only; the private chat is retired). */}
       <Link to="/works/?compose=%40arta%20" aria-label="Ask Arta in a public post"
         className="-mt-4 grid h-12 w-12 shrink-0 place-items-center self-center rounded-full border border-yang/40 bg-space-1 p-0.5 shadow-lg shadow-black/40 transition-transform active:scale-95">
         <ArtaAvatar className="h-full w-full" />
@@ -699,7 +699,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
         </IconButton>
         <div ref={rightRef} className="flex min-w-0 flex-1 items-center justify-end gap-1.5 md:gap-3">
         <CartButton />
-          {/* Ask @arta moved INTO the search field's end corner (SearchBox.tsx) — one door,
+          {/* Ask @artabot moved INTO the search field's end corner (SearchBox.tsx) — one door,
               where the operator asked for it, instead of a second icon in this row. */}
           {/* Language selector lives in the topbar so it is visible on EVERY surface —
               mobile, desktop, and when the sidebar is collapsed (the sidebar foot, where
@@ -885,7 +885,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           under the mobile nav (z-40) and every dialog. */}
       {/* `ground` draws the stage line. OFF when a real ledge exists — Arta prefers the messaging
           dock, its documented home — and ON when none does. Both existing floors (the dock in
-          the Ask @arta button and the bottom tab bar above) render only for members, so a signed-out visitor
+          the Ask @artabot button and the bottom tab bar above) render only for members, so a signed-out visitor
           had nothing underfoot at all. Feet on a visible edge either way, which is the rule. */}
       <Arta fill figure={128} start={0.72} ground={!signedIn} ropeZ={61}
         className="pointer-events-none fixed inset-0 z-30" />

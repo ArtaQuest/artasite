@@ -594,7 +594,7 @@ function TokenManager() {
 }
 
 // ── What your terminal costs ────────────────────────────────────────────────
-// Only terminal sessions are metered now: @arta is free and public, and the old private assistant
+// Only terminal sessions are metered now: @artabot is free and public, and the old private assistant
 // chat (and its billing) is retired. Charging after the fact is only fair if it can be taken apart,
 // so this shows the parts: what ran, for how long, the compute cost, and what that came to in coins
 // at the gold price of the moment. Older lines from the retired chat stay listed as history.
@@ -619,7 +619,7 @@ function UsageManager() {
     <section>
       <h2 className="text-[20px] font-bold tracking-tight">What your terminal costs</h2>
       <p className="mt-1 text-[13px] text-ink-3">
-        Asking @arta is free. Only terminal sessions are charged, and only for what actually ran — a session when it
+        Asking @artabot is free. Only terminal sessions are charged, and only for what actually ran — a session when it
         ends — from the compute it really used and the gold price at the time. Assistant usage from the retired private
         chat that had not been charged yet has been written off. Nothing is estimated or held in advance. One ArtaCoin is one milligram
         of gold, and gold has no fractions of a milligram, so usage adds up exactly and only whole coins are taken; the

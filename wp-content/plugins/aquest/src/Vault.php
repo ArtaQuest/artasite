@@ -38,9 +38,9 @@ final class Vault {
 	const REGISTRY = [
 		// (The old paid model-API key was removed 2026-06-13 — ArtaMod and ID verification run on the
 		//  operator's model relay only; no per-call model API key is held here.)
-		// @arta, the public assistant (src/Arta.php). The brain (arta-brain/) pulls mentions from the site
+		// @artabot, the public assistant (src/Arta.php). The brain (arta-brain/) pulls mentions from the site
 		// with this token. Optional: unset = mentions are recorded and wait; nothing answers them.
-		'AQ_ARTA_REPLY_TOKEN'        => [ 'Token the Arta brain presents (X-Arta-Token) to claim mentions and post replies as @arta — ≥32 chars, same value as the brain setting ARTA_REPLY_TOKEN', 180, true ],
+		'AQ_ARTA_REPLY_TOKEN'        => [ 'Token the Arta brain presents (X-Arta-Token) to claim mentions and post replies as @artabot — ≥32 chars, same value as the brain setting ARTA_REPLY_TOKEN', 180, true ],
 		// Transactional email at sign-up scale. When both are set, Mailer sends through Azure
 		// Communication Services and falls back to SMTP only if ACS refuses.
 		'AQ_ACS_EMAIL_CONNECTION'    => [ 'Azure Communication Services connection string (endpoint=…;accesskey=…) — primary sender for all platform email', 180, true ],

@@ -992,7 +992,7 @@ export const BURSARY_GROUPS: { key: string; label: string }[] = [
   { key: "indigenous", label: "Indigenous communities" },
 ];
 
-// ── Contributions (AI-triaged tickets; @arta files bug reports here too) ─────
+// ── Contributions (AI-triaged tickets; @artabot files bug reports here too) ─────
 export type TicketKind = "bug" | "feature" | "content" | "suggestion";
 export type TicketRole = "user" | "assistant" | "agent" | "system";
 /** Single source of truth for the four contribution kinds → contributor role + UI copy.
@@ -1037,10 +1037,10 @@ export const Tickets = {
 };
 
 // ── Arta (the public assistant) ──────────────────────────────────────────────
-// There is no private chat any more: members talk to Arta by tagging @arta in a public post or
+// There is no private chat any more: members talk to Arta by tagging @artabot in a public post or
 // comment, and Arta answers in the same thread. `ARTA_HANDLE` is the one place the handle lives.
-export const ARTA_HANDLE = "arta";
-/** Open the composer with "@arta " (plus an optional question) already typed. */
+export const ARTA_HANDLE = "artabot";
+/** Open the composer with "@artabot " (plus an optional question) already typed. */
 export function askArtaHref(q = ""): string {
   const text = `@${ARTA_HANDLE} ${q.trim()}`.trimEnd() + " ";
   return `/works/?compose=${encodeURIComponent(text)}`;
@@ -1049,14 +1049,14 @@ export type ArtaStatus = { handle: string; name: string; enabled: boolean; onlin
 export function artaStatus() {
   return get<ArtaStatus>("/arta/status");
 }
-/** Where Arta is with each @arta mention in ONE thread (the post and its direct replies) — statuses
+/** Where Arta is with each @artabot mention in ONE thread (the post and its direct replies) — statuses
  *  and queue positions only, never text. `replied` carries the reply's post id. */
 export type ArtaMentionState = { post_id: number; status: "queued" | "working" | "replying" | "replied" | "skipped" | "failed" | "limited" | "expired"; position: number; reply_id: number };
 export type ArtaWatch = { online: boolean; enabled: boolean; paused_until: number; queued: number; items: ArtaMentionState[] };
 export function artaWatch(postId: number) {
   return get<ArtaWatch>(`/arta/watch/${postId}`);
 }
-/** The member's PRIVATE 1:1 chat with Arta (ArtaChat dock). Same brain and limits as @arta in public. */
+/** The member's PRIVATE 1:1 chat with Arta (ArtaChat dock). Same brain and limits as @artabot in public. */
 export type ArtaDmItem = { id: number; from_arta: boolean; body: string; created: number };
 export type ArtaDm = { items: ArtaDmItem[]; pending: { status: string; position: number } | null; online: boolean; enabled: boolean; paused_until: number };
 export function artaDm(after?: number) { return get<ArtaDm>("/arta/dm", after ? { after } : undefined); }
@@ -2475,7 +2475,7 @@ export function getPost(id: number) {
 export function listReplies(id: number, cursor?: number) {
   return get<Page<FeedPostT> & { mine?: number[] }>(`/posts/${id}/replies`, cursor ? { cursor } : undefined);
 }
-/** Reply under a post. Tag @arta in it and Arta answers in the same thread. */
+/** Reply under a post. Tag @artabot in it and Arta answers in the same thread. */
 export function replyToPost(parentId: number, body: string) {
   return post<FeedPostT>("/posts", { body, parent_id: parentId });
 }

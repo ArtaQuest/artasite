@@ -446,7 +446,7 @@ export default function Issues() {
       <PageHero
         eyebrow="Contributions"
         title="Help shape ArtaQuest"
-        lede="Report a bug, request a feature, suggest an improvement, or share an idea. Arta triages it with you and the best contributions ship automatically — and every contribution is public, just like the discussion boards. You can also post “@arta bug: …” anywhere on the feed and Arta files it on GitHub for you."
+        lede="Report a bug, request a feature, suggest an improvement, or share an idea. Arta triages it with you and the best contributions ship automatically — and every contribution is public, just like the discussion boards. You can also post “@artabot bug: …” anywhere on the feed and Arta files it on GitHub for you."
       />
 
       {/* grid-cols-1 (not the implicit `auto` track) so the single mobile column is minmax(0,1fr) —
@@ -529,7 +529,7 @@ export default function Issues() {
           ) : (
             <Card className="flex flex-col items-start gap-3 p-6">
               <h2 className="text-[18px] font-bold">Sign in to contribute</h2>
-              {/* Signed-in members can also file a bug in public: post "@arta bug: …" and Arta opens a
+              {/* Signed-in members can also file a bug in public: post "@artabot bug: …" and Arta opens a
                   GitHub issue and mirrors it here. There is no anonymous path. */}
               <p className="text-[14px] leading-relaxed text-ink-2">Anyone can browse every contribution. Sign in to open one of your own — an account links it to you, lets Arta follow up, and is how you hear back.</p>
               <Button href="/login/?redirect_to=/issues/" size="md">Sign in</Button>

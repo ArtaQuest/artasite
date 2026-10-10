@@ -571,7 +571,7 @@ export default function App() {
       </AppShell>
       {/* The ArtaChat dock, bottom-right, members only (the chat routes are 'user'-auth server-side, so
           hiding it for visitors is presentation, not the guard). Its lid is Arta's home ledge. The
-          private assistant stays retired: the dock's Arta row opens the public @arta composer. */}
+          private assistant stays retired: the dock's Arta row opens the public @artabot composer. */}
       {isLoggedIn() && <ArtaChatDock />}
       <ArtaTTS />
       <OfflineBanner />

@@ -1,6 +1,6 @@
 <?php
 /**
- * test-arta.php — @arta, the public assistant, exercised without WordPress.
+ * test-arta.php — @artabot, the public assistant, exercised without WordPress.
  *
  *   php wp-content/plugins/aquest/tools/test-arta.php        # exit 0 = green
  *
@@ -110,27 +110,27 @@ namespace {
 	$cases = [
 		[ 'Hey @Arta what is a p-value?', [ 'arta' ] ],
 		[ '@arta, @ArtaBot and @someone-else', [ 'arta', 'artabot', 'someone-else' ] ],
-		[ 'mail me@arta.org or see x.com/@arta', [] ],
+		[ 'mail me@arta.org or see x.com/@artabot', [] ],
 		[ '@ab is too short, @-bad- is not a handle', [] ],
-		[ '(@arta) "@arta" @arta. @arta!', [ 'arta' ] ],
+		[ '(@artabot) "@artabot" @arta. @artabot!', [ 'artabot', 'arta' ] ],
 		[ '@arta.com is a domain, not a mention', [] ],
 		[ '@a1 @b22 @c333 @d4444 @e5555 @f6666 @g7777', [ 'b22', 'c333', 'd4444', 'e5555', 'f6666' ] ],
-		[ "line one\n@arta line two", [ 'arta' ] ],
+		[ "line one\n@artabot line two", [ 'artabot' ] ],
 		[ 'no mention here', [] ],
 	];
 	foreach ( $cases as [ $text, $want ] ) { t_ok( Arta::extract_handles( $text ) === $want, 'extract_handles ' . json_encode( $text ) ); }
-	t_ok( Arta::mentions_arta( 'yo @ArtaBot' ) && ! Arta::mentions_arta( 'artaquest.com/@arta' ), 'mentions_arta honours the alias and ignores paths' );
+	t_ok( Arta::mentions_arta( 'yo @ArtaBot' ) && ! Arta::mentions_arta( 'artaquest.com/@artabot' ), 'mentions_arta honours the alias and ignores paths' );
 
 	foreach ( [ 'arta', 'artabot', 'arta-bot', 'arta_ai', 'theArta', 'the-arta', 'arta-official', 'arta2', 'arta-support', 'ARTA' ] as $h ) {
 		t_ok( Arta::is_reserved( str_replace( '_', '-', $h ) ), "is_reserved($h)" );
 	}
 	foreach ( [ 'artaquest-fan', 'martha', 'arta-smith', 'artan', 'bartab' ] as $h ) { t_ok( ! Arta::is_reserved( $h ), "not reserved($h)" ); }
 
-	t_ok( Arta::is_bug_prefix( '@arta bug: the feed is blank' ), 'bug prefix after a mention' );
-	t_ok( Arta::is_bug_prefix( 'Hey @arta, [bug] login loops' ), 'bracketed bug prefix after a greeting' );
+	t_ok( Arta::is_bug_prefix( '@artabot bug: the feed is blank' ), 'bug prefix after a mention' );
+	t_ok( Arta::is_bug_prefix( 'Hey @artabot, [bug] login loops' ), 'bracketed bug prefix after a greeting' );
 	t_ok( Arta::is_bug_prefix( '#bug wallet shows NaN' ), 'hashtag bug prefix' );
-	t_ok( ! Arta::is_bug_prefix( '@arta is debugging hard?' ), 'no false bug prefix' );
-	t_ok( ! Arta::is_bug_prefix( '@arta what bug: is this?' ), 'bug: mid-sentence is not a prefix' );
+	t_ok( ! Arta::is_bug_prefix( '@artabot is debugging hard?' ), 'no false bug prefix' );
+	t_ok( ! Arta::is_bug_prefix( '@artabot what bug: is this?' ), 'bug: mid-sentence is not a prefix' );
 
 	t_ok( Arta::limit_verdict( 0, 0, 0, 0 ) === 'ok', 'limit ok' );
 	t_ok( Arta::limit_verdict( Arta::USER_PER_HOUR, 0, 0, 0 ) === 'user', 'user hourly limit' );
@@ -200,10 +200,10 @@ namespace {
 	$count = fn( $where = '1=1' ) => (int) $pdo->query( "SELECT COUNT(*) FROM wp_aq_mentions WHERE $where" )->fetchColumn();
 
 	// Idempotency: the same source recorded three times is ONE row and ONE webhook.
-	$p1 = $post( 1, '@arta what is overfitting? cc @bob' );
-	$m1 = Arta::record( 'post', $p1, 1, '@arta what is overfitting? cc @bob', 'post', $p1 );
-	Arta::record( 'post', $p1, 1, '@arta what is overfitting? cc @bob', 'post', $p1 );
-	Arta::record( 'post', $p1, 1, '@arta what is overfitting? cc @bob', 'post', $p1 );
+	$p1 = $post( 1, '@artabot what is overfitting? cc @bob' );
+	$m1 = Arta::record( 'post', $p1, 1, '@artabot what is overfitting? cc @bob', 'post', $p1 );
+	Arta::record( 'post', $p1, 1, '@artabot what is overfitting? cc @bob', 'post', $p1 );
+	Arta::record( 'post', $p1, 1, '@artabot what is overfitting? cc @bob', 'post', $p1 );
 	t_ok( $m1 > 0 && $count() === 1, 'a source is queued once however often it is recorded' );
 	t_ok( count( $GLOBALS['T_HTTP'] ) === 0, 'and nothing is pushed anywhere (the brain pulls)' );
 	t_ok( count( array_filter( $GLOBALS['T_NOTIFY'], fn( $n ) => $n['uid'] === 2 && $n['type'] === 'mention' ) ) >= 1, 'a mentioned member is notified' );
@@ -224,14 +224,14 @@ namespace {
 	t_ok( Arta::public_status( [] )['online'] === false, 'a brain silent past BEAT_FRESH is offline' );
 
 	// Arta never answers itself, and bots never trigger it.
-	$p2 = $post( 9000, '@arta talking to myself' );
-	t_ok( Arta::record( 'post', $p2, 9000, '@arta talking to myself', 'post', $p2 ) === 0, 'Arta does not answer itself' );
+	$p2 = $post( 9000, '@artabot talking to myself' );
+	t_ok( Arta::record( 'post', $p2, 9000, '@artabot talking to myself', 'post', $p2 ) === 0, 'Arta does not answer itself' );
 	t_ok( Arta::record( 'post', 99, 1, 'no mention', 'post', 99 ) === 0, 'text without a mention records nothing' );
 
 	// Rate limit: after USER_PER_HOUR live mentions in an hour the next one is 'limited' + noticed.
-	for ( $i = 0; $i < Arta::USER_PER_HOUR; $i++ ) { $pid = $post( 3, "@arta q$i" ); Arta::record( 'post', $pid, 3, "@arta q$i", 'post', $pid ); }
-	$pl = $post( 3, '@arta one too many' );
-	$ml = Arta::record( 'post', $pl, 3, '@arta one too many', 'post', $pl );
+	for ( $i = 0; $i < Arta::USER_PER_HOUR; $i++ ) { $pid = $post( 3, "@artabot q$i" ); Arta::record( 'post', $pid, 3, "@artabot q$i", 'post', $pid ); }
+	$pl = $post( 3, '@artabot one too many' );
+	$ml = Arta::record( 'post', $pl, 3, '@artabot one too many', 'post', $pl );
 	$row = \AQ\Data::one( 'SELECT * FROM wp_aq_mentions WHERE id = %d', [ $ml ] );
 	t_ok( $count( 'author_id = 3' ) === Arta::USER_PER_HOUR + 1 && $row['status'] === 'limited' && $row['note'] === 'limit:user', 'the member\'s next mention past the hourly limit is limited' );
 	t_ok( count( array_filter( $GLOBALS['T_NOTIFY'], fn( $n ) => $n['uid'] === 3 && $n['type'] === 'arta' ) ) === 1, 'and the member is told once' );
@@ -256,22 +256,22 @@ namespace {
 	t_ok( ( Arta::claim( [ 'id' => $m1 ] )['status'] ?? 0 ) === 409, 'a replied mention cannot be claimed again' );
 
 	// Bug report: issue link validated, ticket mirrored.
-	$pb = $post( 2, '@arta bug: the wallet shows NaN coins after a refund' );
-	$mb = Arta::record( 'post', $pb, 2, '@arta bug: the wallet shows NaN coins after a refund', 'post', $pb );
+	$pb = $post( 2, '@artabot bug: the wallet shows NaN coins after a refund' );
+	$mb = Arta::record( 'post', $pb, 2, '@artabot bug: the wallet shows NaN coins after a refund', 'post', $pb );
 	t_ok( \AQ\Data::one( 'SELECT hint FROM wp_aq_mentions WHERE id = %d', [ $mb ] )['hint'] === 'bug', 'a bug: mention is hinted as a bug' );
 	Arta::claim( [ 'id' => $mb ] );
 	$rb = Arta::reply( [ 'mention_id' => $mb, 'body' => 'Thanks — filed as https://github.com/ArtaQuest/artasite/issues/42', 'kind' => 'bug', 'issue_url' => 'https://github.com/ArtaQuest/artasite/issues/42', 'issue_title' => 'Wallet shows NaN' ] );
 	$rowb = \AQ\Data::one( 'SELECT * FROM wp_aq_mentions WHERE id = %d', [ $mb ] );
 	t_ok( ! empty( $rb['ok'] ) && $rowb['issue_url'] === 'https://github.com/ArtaQuest/artasite/issues/42' && count( \AQ\Tickets::$opened ) === 1, 'a bug reply stores the issue and mirrors a ticket' );
-	$pe = $post( 2, '@arta bug: another' ); $me = Arta::record( 'post', $pe, 2, '@arta bug: another', 'post', $pe );
+	$pe = $post( 2, '@artabot bug: another' ); $me = Arta::record( 'post', $pe, 2, '@artabot bug: another', 'post', $pe );
 	Arta::reply( [ 'mention_id' => $me, 'body' => 'ok', 'kind' => 'bug', 'issue_url' => 'https://github.com/evil/repo/issues/1' ] );
 	t_ok( \AQ\Data::one( 'SELECT issue_url FROM wp_aq_mentions WHERE id = %d', [ $me ] )['issue_url'] === '' && count( \AQ\Tickets::$opened ) === 1, 'a foreign issue URL is dropped' );
 
 	// Comments: Arta's reply nests under the comment, in the same thread.
 	$pdo->exec( "INSERT INTO wp_aq_threads (id, title, body) VALUES (7, 'Kaggle help', 'thread body')" );
-	\AQ\Data::insert( 'aq_comments', [ 'context_type' => 'thread', 'context_id' => 7, 'author_id' => 2, 'body' => '@arta how do I cite a dataset?', 'created' => time() ] );
+	\AQ\Data::insert( 'aq_comments', [ 'context_type' => 'thread', 'context_id' => 7, 'author_id' => 2, 'body' => '@artabot how do I cite a dataset?', 'created' => time() ] );
 	$cid = (int) $pdo->lastInsertId();
-	$mc = Arta::record( 'comment', $cid, 2, '@arta how do I cite a dataset?', 'thread', 7 );
+	$mc = Arta::record( 'comment', $cid, 2, '@artabot how do I cite a dataset?', 'thread', 7 );
 	$cl = Arta::claim( [ 'id' => $mc ] );
 	t_ok( ( $cl['mention']['context'][0]['title'] ?? '' ) === 'Kaggle help', 'a comment mention carries its thread as context' );
 	Arta::reply( [ 'mention_id' => $mc, 'body' => 'Use the DOI on the dataset page.' ] );
@@ -280,13 +280,13 @@ namespace {
 	t_ok( (int) $pdo->query( 'SELECT comment_count FROM wp_aq_threads WHERE id = 7' )->fetchColumn() === 1, 'the thread counts the reply' );
 
 	// A flagged (moderated) comment is skipped, not answered.
-	\AQ\Data::insert( 'aq_comments', [ 'context_type' => 'thread', 'context_id' => 7, 'author_id' => 2, 'body' => '@arta something hateful', 'flagged' => 1, 'created' => time() ] );
+	\AQ\Data::insert( 'aq_comments', [ 'context_type' => 'thread', 'context_id' => 7, 'author_id' => 2, 'body' => '@artabot something hateful', 'flagged' => 1, 'created' => time() ] );
 	$fid = (int) $pdo->lastInsertId();
-	$mf = Arta::record( 'comment', $fid, 2, '@arta something hateful', 'thread', 7 );
+	$mf = Arta::record( 'comment', $fid, 2, '@artabot something hateful', 'thread', 7 );
 	t_ok( ( Arta::claim( [ 'id' => $mf ] )['status'] ?? 0 ) === 410, 'a flagged comment is not answered (410, skipped)' );
 
 	// Housekeeping: a stale claim returns to the queue (and nothing is ever pushed).
-	$pq = $post( 1, '@arta second question' ); $mq = Arta::record( 'post', $pq, 1, '@arta second question', 'post', $pq );
+	$pq = $post( 1, '@artabot second question' ); $mq = Arta::record( 'post', $pq, 1, '@artabot second question', 'post', $pq );
 	Arta::claim( [ 'id' => $mq ] );
 	Arta::reconcile_tick();
 	t_ok( \AQ\Data::one( 'SELECT status FROM wp_aq_mentions WHERE id = %d', [ $mq ] )['status'] === 'working', 'a fresh claim is left alone' );
@@ -313,8 +313,8 @@ namespace {
 		$lib( 50, 'e.csv', 'text/csv', 10 ),
 	];
 	foreach ( $files_on_pp as $pos => $lid ) { \AQ\Data::insert( 'aq_post_media', [ 'post_id' => $pp, 'lib_id' => $lid, 'pos' => $pos, 'created' => time() ] ); }
-	$pr = $post( 1, "@arta what's this?", $pp );
-	$mr = Arta::record( 'post', $pr, 1, "@arta what's this?", 'post', $pr );
+	$pr = $post( 1, "@artabot what's this?", $pp );
+	$mr = Arta::record( 'post', $pr, 1, "@artabot what's this?", 'post', $pr );
 	$att = Arta::claim( [ 'id' => $mr ] )['mention']['attachments'] ?? [];
 	$by  = array_column( $att, null, 'name' );
 	t_ok( isset( $by['plot.png'] ) && $by['plot.png']['url'] === 'https://cdn.test/lib/plot.png' && $by['plot.png']['mime'] === 'image/png' && $by['plot.png']['bytes'] === 120000 && $by['plot.png']['from'] === 'parent' && $by['plot.png']['skip'] === '', 'a reply under a picture carries the parent post\'s file (url, mime, size, name)' );
@@ -334,7 +334,7 @@ namespace {
 	t_ok( Arta::sniff( $tmpf( '{"a":1}' ), 'a.json' ) === 'application/json' && Arta::sniff( $tmpf( '{broken' ), 'a.json' ) === '', 'sniff: JSON must parse' );
 	t_ok( Arta::sniff( $tmpf( "# Answer\n\nfull text ✓" ), 'answer.md' ) === 'text/markdown', 'sniff: UTF-8 Markdown accepted' );
 
-	$pf = $post( 3, '@arta draw a square' ); $mf2 = Arta::record( 'post', $pf, 3, '@arta draw a square', 'post', $pf );
+	$pf = $post( 3, '@artabot draw a square' ); $mf2 = Arta::record( 'post', $pf, 3, '@artabot draw a square', 'post', $pf );
 	Arta::claim( [ 'id' => $mf2 ] );
 	$up = [ 'files' => [
 		[ 'name' => 'square.png', 'tmp_name' => $tmpf( $png ), 'error' => 0 ],
@@ -355,9 +355,9 @@ namespace {
 	[ $okf, $drop ] = Arta::reply_files( [ '_files' => $many ] );
 	t_ok( count( $okf ) === Arta::REPLY_FILES_MAX && count( $drop ) === 1, 'PHP files[] shape parsed; at most REPLY_FILES_MAX files per reply' );
 
-	\AQ\Data::insert( 'aq_comments', [ 'context_type' => 'thread', 'context_id' => 7, 'author_id' => 1, 'body' => '@arta make a diagram', 'created' => time() ] );
+	\AQ\Data::insert( 'aq_comments', [ 'context_type' => 'thread', 'context_id' => 7, 'author_id' => 1, 'body' => '@artabot make a diagram', 'created' => time() ] );
 	$cid2 = (int) $pdo->lastInsertId();
-	$mc2 = Arta::record( 'comment', $cid2, 1, '@arta make a diagram', 'thread', 7 );
+	$mc2 = Arta::record( 'comment', $cid2, 1, '@artabot make a diagram', 'thread', 7 );
 	Arta::claim( [ 'id' => $mc2 ] );
 	Arta::reply( [ 'mention_id' => $mc2, 'body' => 'Here it is.', '_files' => [ 'files' => [ [ 'name' => 'diagram.png', 'tmp_name' => $tmpf( $png ), 'error' => 0 ] ] ] ] );
 	$cbody = (string) $pdo->query( "SELECT body FROM wp_aq_comments WHERE author_id = 9000 AND parent_id = $cid2" )->fetchColumn();
@@ -366,10 +366,10 @@ namespace {
 	// arta/watch: one thread's mentions, as statuses and queue positions only.
 	$GLOBALS['T_OPTS']['aq_arta_beat'] = time();
 	$pw  = $post( 1, 'a thread about priors' );
-	$pw1 = $post( 41, '@arta what is a prior?', $pw );
-	$pw2 = $post( 42, '@arta and a posterior?', $pw );
-	$mw1 = Arta::record( 'post', $pw1, 41, '@arta what is a prior?', 'post', $pw );
-	$mw2 = Arta::record( 'post', $pw2, 42, '@arta and a posterior?', 'post', $pw );
+	$pw1 = $post( 41, '@artabot what is a prior?', $pw );
+	$pw2 = $post( 42, '@artabot and a posterior?', $pw );
+	$mw1 = Arta::record( 'post', $pw1, 41, '@artabot what is a prior?', 'post', $pw );
+	$mw2 = Arta::record( 'post', $pw2, 42, '@artabot and a posterior?', 'post', $pw );
 	$w   = Arta::watch( [ 'id' => $pw ] );
 	$by  = array_column( $w['items'], null, 'post_id' );
 	$raw = wp_json_encode( $w );
@@ -383,7 +383,7 @@ namespace {
 	t_ok( $after[ $pw1 ]['status'] === 'replied' && $after[ $pw1 ]['reply_id'] > 0 && $after[ $pw2 ]['position'] >= 1, 'a replied mention carries its reply id; the next one keeps its place' );
 	t_ok( Arta::watch( [ 'id' => 0 ] )['items'] === [] && Arta::watch( [ 'id' => 987654 ] )['items'] === [], 'watch on nothing is empty, not an error' );
 	t_ok( strpos( Arta::avatar_url(), '/assets/arta/arta-thinking.svg' ) !== false, 'Arta wears the thinking mascot' );
-	t_ok( Arta::display_mentions( 'Hey @arta how?' ) === 'Hey Arta how?', 'a mention reads as "Arta"' );
+	t_ok( Arta::display_mentions( 'Hey @artabot how?' ) === 'Hey Arta how?', 'a mention reads as "Arta"' );
 	t_ok( Arta::display_mentions( '@Arta bug: x' ) === 'Arta bug: x' && Arta::display_mentions( '@artabot hi' ) === 'Arta hi', 'any case, and the old alias' );
 	t_ok( Arta::display_mentions( 'x@arta.com, @artas, see @arta.com' ) === 'x@arta.com, @artas, see @arta.com', 'emails, longer handles and domains are left alone' );
 
