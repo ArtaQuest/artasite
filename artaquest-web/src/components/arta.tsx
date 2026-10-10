@@ -21,7 +21,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { searchMembers, ARTA_HANDLE, type LibraryItem, type MemberCard } from "../lib/api";
-import { ARTA_AVATAR, MENTION_RE, looksLikeBug, mentionsArta, type ArtaPillState } from "../lib/arta";
+import { ARTA_AVATAR, MENTION_RE, isArtaPhoto as isPhoto, looksLikeBug, mentionsArta, type ArtaPillState } from "../lib/arta";
 import { fmtBytes } from "../lib/bytes";
 import { Avatar, cx } from "./ui";
 
@@ -102,7 +102,7 @@ function inline(text: string, keyBase: string): React.ReactNode[] {
     else if (m[3]) {
       const mm = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(tok);
       const href = mm ? safeHref(mm[2]) : null;
-      if (mm && href) out.push(<a key={key} href={href} target={href.startsWith("/") ? undefined : "_blank"} rel="noopener noreferrer nofollow ugc" onClick={(e) => e.stopPropagation()} className="font-medium text-yin-ink underline decoration-yin-ink/40 underline-offset-2 hover:decoration-yin-ink">{mm[1]}</a>);
+      if (mm && href) out.push(<a key={key} href={href} target={href.startsWith("/") ? undefined : "_blank"} rel="noopener noreferrer nofollow ugc" onClick={(e) => e.stopPropagation()} className="rounded-sm font-medium text-yin-ink underline decoration-yin-ink/40 underline-offset-2 outline-none hover:decoration-yin-ink focus-visible:ring-2 focus-visible:ring-yin-ink">{mm[1]}</a>);
       else out.push(tok);
     } else if (m[4]) {
       const href = safeHref(tok);
@@ -213,21 +213,21 @@ function FileChip({ it }: { it: LibraryItem }) {
           <span className="block truncate text-[12px] text-ink-3">{fmtBytes(it.bytes)}<span className="hidden sm:inline">{readable ? " · the full answer" : ""}</span></span>
         </span>
         {readable ? (
-          <button type="button" onClick={toggle} aria-expanded={open}
-            className="inline-flex min-h-9 shrink-0 items-center rounded-pill border border-line px-3 text-[12.5px] font-semibold text-ink-2 transition-colors hover:border-yin-ink hover:text-ink">
+          <button type="button" onClick={toggle} aria-expanded={open} aria-label={`${open ? "Hide" : "Read"} ${it.name}`}
+            className={cx("inline-flex min-h-11 shrink-0 items-center rounded-pill border border-line px-3.5 text-[12.5px] font-semibold text-ink-2 transition-colors hover:border-yin-ink hover:text-ink sm:min-h-9", FOCUS)}>
             {open ? "Hide" : "Read"}
           </button>
         ) : null}
         <a href={it.url} target="_blank" rel="noopener noreferrer" download={it.name} onClick={(e) => e.stopPropagation()}
           aria-label={`Open ${it.name}`} title="Open"
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-3 transition-colors hover:bg-veil/[0.06] hover:text-ink">
+          className={cx("grid h-11 w-11 shrink-0 place-items-center rounded-full text-ink-3 transition-colors hover:bg-veil/[0.06] hover:text-ink sm:h-9 sm:w-9", FOCUS)}>
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14" />
           </svg>
         </a>
       </div>
       {open ? (
-        <div className="max-h-96 overflow-y-auto border-t border-line px-3.5 py-3" onClick={(e) => e.stopPropagation()}>
+        <div tabIndex={0} role="region" aria-label={it.name} className={cx("max-h-96 overflow-y-auto overscroll-contain border-t border-line px-3.5 py-3", FOCUS)} onClick={(e) => e.stopPropagation()}>
           {body !== null ? (
             it.mime === "text/markdown" ? <ArtaMarkdown text={body} className="text-[14px]" /> : <pre className="whitespace-pre-wrap font-mono text-[12.5px] text-ink-2">{body}</pre>
           ) : failed ? (
@@ -241,20 +241,46 @@ function FileChip({ it }: { it: LibraryItem }) {
   );
 }
 
-/** Images as a 1–4 grid (each opens full size), every other file as a chip. */
-export function ArtaFiles({ items }: { items: LibraryItem[] }) {
+const FOCUS = "outline-none focus-visible:ring-2 focus-visible:ring-yin-ink focus-visible:ring-offset-2 focus-visible:ring-offset-space-1";
+
+/**
+ * What Arta attached. A real photo it found (photo.jpg / photo-bw.jpg) is drawn inline as a captioned
+ * figure — fixed 4:5 frame (no layout shift while it loads), face-first crop, credit underneath.
+ * Other images: a 1–4 grid in fixed aspect boxes. Everything else: chips (.md/.txt readable in place).
+ */
+export function ArtaFiles({ items, credit }: { items: LibraryItem[]; credit?: { label: string; href: string } | null }) {
   if (!items.length) return null;
-  const imgs = items.filter((i) => i.class === "image" || i.mime.startsWith("image/"));
-  const files = items.filter((i) => !imgs.includes(i));
+  const photos = items.filter(isPhoto);
+  const imgs = items.filter((i) => !isPhoto(i) && (i.class === "image" || i.mime.startsWith("image/")));
+  const files = items.filter((i) => !photos.includes(i) && !imgs.includes(i));
   return (
     <div className="mt-2.5 flex flex-col gap-2">
+      {photos.map((it, i) => (
+        <figure key={it.id} className="m-0 w-full max-w-[26rem]">
+          <a href={it.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+            className={cx("block aspect-[4/5] w-full overflow-hidden rounded-2xl border border-line bg-space-2", FOCUS)}>
+            <img src={it.url} width={960} height={1200} loading="lazy" decoding="async"
+              alt={`${/-bw/i.test(it.name) ? "Black-and-white photo" : "Photo"} attached by Arta${credit && i === 0 ? ` — ${credit.label}` : ""}`}
+              className="h-full w-full object-cover object-top" />
+          </a>
+          {credit && i === 0 ? (
+            <figcaption className="mt-1 flex min-w-0 items-center gap-1 px-0.5 text-[12px] text-ink-3">
+              <span aria-hidden>📷</span>
+              <a href={credit.href} target="_blank" rel="noopener noreferrer nofollow" onClick={(e) => e.stopPropagation()}
+                className={cx("inline-flex min-h-6 min-w-0 items-center truncate rounded underline decoration-ink-3/40 underline-offset-2 hover:text-ink-2", FOCUS)}>
+                <span data-ay-skip="1" className="truncate">{credit.label}</span>
+              </a>
+            </figcaption>
+          ) : null}
+        </figure>
+      ))}
       {imgs.length ? (
         <ul className={cx("grid gap-1.5 overflow-hidden rounded-2xl", imgs.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
           {imgs.map((it, i) => (
             <li key={it.id} className={cx("overflow-hidden border border-line bg-space-2", imgs.length === 1 ? "rounded-2xl" : "rounded-xl", imgs.length === 3 && i === 2 && "col-span-2")}>
               <a href={it.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} aria-label={`Open image ${it.name}`}
-                className={cx("block w-full", imgs.length === 1 ? "aspect-[16/10]" : "aspect-square")}>
-                <img src={it.url} alt={it.name} loading="lazy" decoding="async" className={cx("h-full w-full", imgs.length === 1 ? "object-contain" : "object-cover")} />
+                className={cx("block w-full", imgs.length === 1 ? "aspect-[16/10]" : "aspect-square", FOCUS)}>
+                <img src={it.url} alt={`Image attached by Arta: ${it.name}`} loading="lazy" decoding="async" className={cx("h-full w-full", imgs.length === 1 ? "object-contain" : "object-cover")} />
               </a>
             </li>
           ))}

@@ -17,7 +17,7 @@ import {
   type Challenge, type FeedPostT, type LibraryItem,
   type NbKind, type NotebookCard,
   normalizeNbKind } from "../lib/api";
-import { isArta, isArtaFile, mentionsArta, pillState, useArtaWatch } from "../lib/arta";
+import { isArta, isArtaFile, isArtaPhoto, mentionsArta, splitPhotoCredit, pillState, useArtaWatch } from "../lib/arta";
 import { ArtaAvatar, ArtaBadge, ArtaFiles, ArtaHint, ArtaMarkdown, ArtaStatusPill, MentionText, MentionTextarea } from "../components/arta";
 import { assetItem, NB_KIND_META, teaserSrc, TeaserVideo, useAqTheme, useCalmFlag } from "../components/nbview";
 import { AutoLoopVideo, FeedPlayer, LibraryMedia, LibraryPicker } from "../components/library";
@@ -438,6 +438,9 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
   const me = currentUser();
   const own = !!me?.slug && me.slug === post.author.slug;
   const [body, setBody] = useState(post.body);
+  // Arta's photo credit is drawn as the photo's caption — only when a photo is actually attached, so
+  // a credit never disappears from a reply whose photo the site dropped.
+  const artaBody = bot && mediaOf(post).some((m) => isArtaFile(m) && isArtaPhoto(m)) ? splitPhotoCredit(body) : { text: body, credit: null };
   const [editing, setEditing] = useState(false);
   // The post's own confirmation, in our surface rather than the browser's (ui.tsx ConfirmDialog).
   // No typed word here: a post is one sentence and deleting it is not a DOI-bearing act — the guard
@@ -552,14 +555,14 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
                 </div>
               </div>
             ) : body ? (
-              bot ? <ArtaMarkdown text={body} className="mt-0.5" />
+              bot ? <ArtaMarkdown text={artaBody.text} className="mt-0.5" />
                 : <p className="mt-0.5 whitespace-pre-wrap text-[15px] leading-relaxed text-ink [overflow-wrap:anywhere]"><MentionText text={body} /></p>
             ) : null}
             {writeErr ? (
               <p role="status" className="mt-1 text-[12.5px] text-yang" onClick={(e) => e.stopPropagation()}>{writeErr}</p>
             ) : null}
             <PostMedia items={bot ? mediaOf(post).filter((m) => !isArtaFile(m)) : mediaOf(post)} />
-            {bot ? <ArtaFiles items={mediaOf(post).filter(isArtaFile)} /> : null}
+            {bot ? <ArtaFiles items={mediaOf(post).filter(isArtaFile)} credit={artaBody.credit} /> : null}
             {post.repost ? (
               <div className="mt-2 rounded-2xl border border-line bg-space-2/40 px-3 py-2.5">
                 <p className="flex items-center gap-1.5 text-[13px]">

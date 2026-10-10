@@ -4,6 +4,7 @@ import type { Config } from "./config";
 import { type Engine, type EngineAnswer, EngineBusy, EngineDown } from "./engine";
 import type { Fetch } from "./http";
 import type { GitHub } from "./github";
+import { fetchPhoto } from "./photo";
 import { parseDecision, promptText } from "./prompt";
 import { clip } from "./text";
 import type { Mention, OutFile } from "./types";
@@ -79,8 +80,9 @@ async function answer(m: Mention, d: Deps): Promise<Outcome> {
   const dec = parseDecision(got.text);
   // The member's own "bug:" prefix always files a report (unless the request was declined).
   if (m.hint === "bug" && dec.kind !== "declined") dec.kind = "bug";
-  const said = dec.reply.trim() || (dec.kind === "bug" ? "Thanks for reporting this — I've passed it to the team." : "");
+  let said = dec.reply.trim() || (dec.kind === "bug" ? "Thanks for reporting this — I've passed it to the team." : "");
   if (!said) throw new Error("empty answer");
+  if (dec.kind === "answer") said = await enrich(said, dec, m, max, got, d);
 
   const out = dec.kind === "declined" ? { text: clip(said, max), files: [] as OutFile[] } : outgoing(said, dec.details, max, got.files, d.cfg);
 
@@ -103,6 +105,30 @@ async function answer(m: Mention, d: Deps): Promise<Outcome> {
     return r.status === "duplicate" ? "bug-duplicate" : "bug-filed";
   }
 
-  await d.wp.reply(m.id, out.text, dec.kind === "bug" ? "answer" : dec.kind, undefined, out.files);
+  const res = await d.wp.reply(m.id, out.text, dec.kind === "bug" ? "answer" : dec.kind, undefined, out.files);
+  if (res?.dropped?.length) d.log(`mention ${m.id}: site dropped file(s): ${res.dropped.join(", ")}`);
   return "replied";
+}
+
+/**
+ * The extras of a casual answer, all best-effort: a real photo (fetched, converted, attached FIRST,
+ * credited with its file page) and one Ekşi Sözlük source link for the lore. Each tail only goes on
+ * when it fits; the reply text is trimmed to make room rather than the credit being dropped.
+ */
+async function enrich(said: string, dec: ReturnType<typeof parseDecision>, m: Mention, max: number, got: EngineAnswer, d: Deps): Promise<string> {
+  const tails: string[] = [];
+  if (dec.image) {
+    const ph = await fetchPhoto(dec.image, d.cfg, d.fetch ?? fetch, (s) => d.log(`mention ${m.id}: ${s}`));
+    if (ph) { got.files = [ph, ...got.files.filter((f) => !f.mime.startsWith("image/"))]; tails.push(`📷 [${dec.image.credit}](${dec.image.page})`); }
+    else tails.push("(Couldn't grab a usable photo this time.)");
+  }
+  const src = dec.lore?.[0]?.source;
+  if (src && !said.includes(src)) tails.push(`[Ekşi Sözlük](${src})`);
+  let out = said;
+  for (const t of tails) {
+    const room = max - t.length - 1;
+    if (room < 60) continue;
+    out = `${out.length > room ? clip(out, room) : out} ${t}`;
+  }
+  return out;
 }

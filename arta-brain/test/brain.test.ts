@@ -343,3 +343,104 @@ test("config: top-effort defaults, sniffing, and the generated PNG", () => {
   assert.equal(sniffMime(solidPng(2, 2, [1, 2, 3])), "image/png");
   assert.equal(sniffMime(new TextEncoder().encode("<svg/>")), "");
 });
+
+// ── voice, Ekşi lore, real photos (the Okan Tekman example) ─────────────────
+import sharp from "sharp";
+import { loreOf, photoOf } from "../src/prompt";
+import { fetchPhoto } from "../src/photo";
+
+const OKAN_Q = "@arta who is Okan Tekman and what people say about him? Show me a black and white picture of him too";
+const WIKI = "https://upload.wikimedia.org/wikipedia/commons/a/ab/Okan_Tekman.jpg";
+const PAGE = "https://commons.wikimedia.org/wiki/File:Okan_Tekman.jpg";
+const EKSI = "https://eksisozluk.com/okan-tekman--123";
+const colour = () => sharp({ create: { width: 600, height: 600, channels: 3, background: { r: 200, g: 40, b: 90 } } }).png().toBuffer();
+const okanAnswer = (over: Record<string, unknown> = {}) => JSON.stringify({
+  kind: "answer",
+  reply: "Okan Tekman: the guy Ekşi swears can debug production by staring at it 👀",
+  image: { url: WIKI, page: PAGE, grayscale: true, credit: "Jane Doe, CC BY-SA 4.0" },
+  lore: [{ claim: "debugs by staring", quote: "adam loglara bakıyor, bug kendiliğinden düzeliyor", source: EKSI }],
+  ...over,
+});
+function okanDeps(llm: string, photo: (() => Promise<Response>) | null, logs: string[] = []) {
+  const net = fakeNet({ llm, mention: mention({ source: { ...mention().source, body: OKAN_Q } }) });
+  const d = { ...deps(net), log: (s: string) => logs.push(s) };
+  const f: typeof net.f = async (url, init) => (url.startsWith("https://upload.wikimedia.org/") && photo ? photo() : net.f(url, init));
+  return { net, d: { ...d, fetch: f, wp: new WpClient(d.cfg, f) }, logs };
+}
+const replyOf = (net: ReturnType<typeof fakeNet>) => net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; files?: { name: string; type: string; size: number }[] };
+
+test("prompt: X-user voice, Ekşi lore with verbatim quotes, no allegations, real photos only", () => {
+  const p = systemPrompt(280);
+  assert.match(p, /X user/);
+  assert.match(p, /eksisozluk\.com/);
+  assert.match(p, /NEVER invent entries/);
+  assert.match(p, /never repeat allegations/i);
+  assert.match(p, /upload\.wikimedia\.org/);
+  assert.doesNotMatch(p, /Be warm, direct and accurate/);
+});
+
+test("parseDecision: photo only from Wikimedia, lore only with quote + https source", () => {
+  assert.equal(photoOf({ url: "https://i.imgur.com/x.jpg", page: PAGE })?.url, undefined);
+  assert.equal(photoOf({ url: WIKI, page: "https://evil.example/x" }), undefined);
+  assert.deepEqual(photoOf({ url: WIKI, page: PAGE, grayscale: true }), { url: WIKI, page: PAGE, grayscale: true, credit: "Wikimedia Commons" });
+  assert.equal(loreOf([{ claim: "c", quote: "", source: EKSI }, { claim: "c", quote: "q", source: "javascript:x" }, { claim: "c", quote: "q", source: EKSI }]).length, 1);
+  const dec = parseDecision(okanAnswer());
+  assert.equal(dec.image?.grayscale, true);
+  assert.equal(dec.lore?.length, 1);
+});
+
+test("Okan Tekman: casual reply + grayscale JPEG attached first, credited, Ekşi linked, no answer.md", async () => {
+  const png = await colour();
+  const { net, d } = okanDeps(okanAnswer(), async () => new Response(png, { status: 200, headers: { "content-length": String(png.byteLength) } }));
+  assert.equal(await handleMention(11, d), "replied");
+  const r = replyOf(net);
+  assert.equal(r.files?.length, 1);
+  assert.equal(r.files![0].name, "photo-bw.jpg");
+  assert.equal(r.files![0].type, "image/jpeg");
+  assert.match(r.body, /📷 \[Jane Doe, CC BY-SA 4.0\]\(https:\/\/commons\.wikimedia\.org/);
+  assert.match(r.body, /\[Ekşi Sözlük\]\(https:\/\/eksisozluk\.com/);
+  assert.ok(r.body.length <= 280);
+  assert.doesNotMatch(r.body, /born in/i);
+});
+
+test("fetchPhoto: output really is grayscale and bounded", async () => {
+  const big = await sharp({ create: { width: 2400, height: 1600, channels: 3, background: { r: 10, g: 200, b: 30 } } }).jpeg().toBuffer();
+  const out = await fetchPhoto({ url: WIKI, page: PAGE, grayscale: true, credit: "x" }, cfg(), async () => new Response(big, { status: 200 }));
+  assert.ok(out);
+  const meta = await sharp(Buffer.from(out!.bytes)).raw().toBuffer({ resolveWithObject: true });
+  assert.ok(meta.info.width <= 1200 && meta.info.height <= 1200);
+  const px = meta.data; const ch = meta.info.channels;
+  assert.ok(ch === 1 || (px[0] === px[1] && px[1] === px[2]), "channels equal");
+});
+
+test("photo failures never fail the reply: 404, timeout-ish error, junk bytes, SVG, oversize", async () => {
+  const cases: (() => Promise<Response>)[] = [
+    async () => new Response("nope", { status: 404 }),
+    async () => { throw new Error("aborted"); },
+    async () => new Response(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), { status: 200 }),
+    async () => new Response("<svg xmlns='http://www.w3.org/2000/svg'/>", { status: 200 }),
+    async () => new Response(new Uint8Array(1), { status: 200, headers: { "content-length": String(20 * 1048576) } }),
+  ];
+  for (const c of cases) {
+    const { net, d, logs } = okanDeps(okanAnswer(), c);
+    assert.equal(await handleMention(11, d), "replied");
+    const r = replyOf(net);
+    assert.ok(!r.files?.length, "no file");
+    assert.match(r.body, /Couldn't grab a usable photo/);
+    assert.ok(logs.some((l) => /photo:/.test(l)));
+  }
+});
+
+test("wrong host or ambiguous person: no image field → no photo, no failure note", async () => {
+  const { net, d } = okanDeps(okanAnswer({ image: { url: "https://i.imgur.com/x.jpg", page: PAGE } }), null);
+  assert.equal(await handleMention(11, d), "replied");
+  const r = replyOf(net);
+  assert.ok(!r.files?.length);
+  assert.doesNotMatch(r.body, /photo/i);
+});
+
+test("Ekşi unreachable: honest reply passes through with no lore link", async () => {
+  const { net, d } = okanDeps(JSON.stringify({ kind: "answer", reply: "Ekşi wouldn't load for me right now, so no legends this time." }), null);
+  assert.equal(await handleMention(11, d), "replied");
+  assert.equal(replyOf(net).body, "Ekşi wouldn't load for me right now, so no legends this time.");
+});
