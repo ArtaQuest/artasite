@@ -8,7 +8,7 @@ import { facultyPhoto } from "./faculty";
 import { fetchPhoto } from "./photo";
 import { imagePrompt, parseDecision, promptText, stripImageClaims } from "./prompt";
 import { clip, fitText } from "./text";
-import type { Lore, Mention, OutFile } from "./types";
+import type { Mention, OutFile } from "./types";
 import type { WpClient } from "./wp";
 
 export type Deps = { cfg: Config; wp: WpClient; engine: Engine; gh: GitHub | null; log: (msg: string) => void; onPrompt?: () => void; fetch?: Fetch };
@@ -58,49 +58,9 @@ export function outgoing(said: string, max: number, produced: OutFile[], cfg: Co
   return { text: fitText(said, max), files: files.slice(0, cfg.outFilesMax) };
 }
 
-/** Ekşi Sözlük entry permalinks only (https, eksisozluk.com, /entry/<digits>), deduped, in lore order. */
-export function eksiLinks(lore: Lore[]): string[] {
-  const out: string[] = [];
-  for (const l of lore) {
-    let u: URL;
-    try { u = new URL(l.source); } catch { continue; }
-    const m = /^\/entry\/(\d{1,12})\/?$/.exec(u.pathname);
-    if (u.protocol !== "https:" || !/^(www\.)?eksisozluk\.com$/.test(u.hostname) || !m) continue;
-    const link = `https://eksisozluk.com/entry/${m[1]}`;
-    if (!out.includes(link)) out.push(link);
-  }
-  return out;
-}
-
-/** Lore items with a valid Ekşi entry permalink, normalised, deduped by entry, best first. */
-export function quotedEntries(lore: Lore[]): { quote: string; link: string }[] {
-  const out: { quote: string; link: string }[] = [];
-  for (const l of lore) {
-    const [link] = eksiLinks([l]);
-    const quote = l.quote.replace(/^["“”'‘’\s]+|["“”'‘’\s]+$/g, "").replace(/\s+/g, " ");
-    if (link && quote && !out.some((o) => o.link === link)) out.push({ quote, link });
-  }
-  return out;
-}
-
-/**
- * The reply built from the quotes: the lead-in, then `"quote" <link>` for each entry, best first, as many
- * as fit in `max`. If not even the best fits after the lead-in, the lead-in is clipped (or dropped) for it.
- */
-export function withQuotes(lead: string, lore: Lore[], max: number): string {
-  const qs = quotedEntries(lore).map((q) => `“${q.quote}” ${q.link}`).filter((q) => [...q].length <= max);
-  const L = (x: string) => [...x].length;
-  if (!qs.length) return fitText(lead, max);
-  if (L(lead) + 1 + L(qs[0]) <= max) {
-    // Extra quotes are dropped before anything of the lead-in is.
-    let out = lead;
-    for (const q of qs) if (L(out) + 1 + L(q) <= max) out = `${out} ${q}`;
-    return out;
-  }
-  // The lead-in is too long next to the best quote: keep whole sentences of it if they make sense alone.
-  const room = max - L(qs[0]) - 1;
-  const short = fitText(lead, room);
-  return short && L(short) >= 10 && /[.!?…]["”’)]*$/.test(short) ? `${short} ${qs[0]}` : fitText(lead, max);
+/** Safety net: Arta's reply text carries no links — the only source rides on the photo. */
+export function stripUrls(t: string): string {
+  return t.replace(/\b(?:https?:\/\/|www\.)[^\s<>()]+/gi, " ").replace(/[“”"]/g, "").replace(/\s{2,}/g, " ").replace(/\s+([.!?,])/g, "$1").trim();
 }
 
 async function answer(m: Mention, d: Deps): Promise<Outcome> {
@@ -139,10 +99,10 @@ async function answer(m: Mention, d: Deps): Promise<Outcome> {
     if (dec.kind === "declined") return { text: fitText(l, max), files: [] as OutFile[] };
     if (photo && dec.photo) {
       // The photo's source page rides on the file (the feed opens it on click), not in the text.
-      const t = dec.kind === "answer" ? withQuotes(l, dec.lore ?? [], max) : l;
+      const t = dec.kind === "answer" ? stripUrls(l) : l;
       return { text: fitText(t, max), files: [{ ...photo, source: dec.photo.page }] };
     }
-    const t = dec.kind === "answer" ? withQuotes(l, dec.lore ?? [], max) : l;
+    const t = dec.kind === "answer" ? stripUrls(l) : l;
     return outgoing(t, max, got.files, d.cfg);
   };
   let out = compose(lead);

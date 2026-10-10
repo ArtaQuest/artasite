@@ -344,20 +344,19 @@ test("config: top-effort defaults, sniffing, and the generated PNG", () => {
 });
 
 // ── voice and quoted Ekşi entries (the Okan Tekman example) ─────────────────
-import { imagePrompt, loreOf, stripImageClaims } from "../src/prompt";
-import { eksiLinks, quotedEntries, withQuotes } from "../src/worker";
+import { imagePrompt, stripImageClaims } from "../src/prompt";
+import { stripUrls } from "../src/worker";
 
 const EKSI = "https://eksisozluk.com/entry/123456";
 const Q = (quote: string, id: number | string) => ({ quote, source: typeof id === "number" ? `https://eksisozluk.com/entry/${id}` : id });
 
-test("prompt: English X-user voice, verbatim quotes with real permalinks, no source framing, no allegations", () => {
+test("prompt: English X-user voice, one witty line, no quotes or links, no allegations", () => {
   const p = systemPrompt(280);
   assert.match(p, /X user/);
   assert.match(p, /ALWAYS reply in English/);
-  assert.match(p, /eksisozluk\.com\/entry\/<id>/);
-  assert.match(p, /verbatim or faithfully translated/);
-  assert.match(p, /actually opened/);
-  assert.match(p, /NEVER invent, guess or reconstruct a quote or a permalink/);
+  assert.match(p, /ONE short, witty, original line/);
+  assert.match(p, /no quotations, no quotation marks, no links or URLs/);
+  assert.doesNotMatch(p, /"lore"|eksisozluk\.com\/entry/);
   assert.match(p, /never repeat allegations/i);
   assert.match(p, /never draw or generate a likeness/);
   assert.match(p, /real photo of them on an official or reputable page/);
@@ -365,8 +364,8 @@ test("prompt: English X-user voice, verbatim quotes with real permalinks, no sou
   assert.doesNotMatch(p, /"details"|answer\.md/i);
 });
 
-test("parseDecision: lore only with quote + https source; image is a text description only, never a URL or object", () => {
-  assert.equal(loreOf([{ quote: "", source: EKSI }, { quote: "q", source: "javascript:x" }, { quote: "q", source: EKSI }]).length, 1);
+test("parseDecision: lore ignored; image is a text description only, never a URL or object", () => {
+  assert.equal((parseDecision(JSON.stringify({ kind: "answer", reply: "hi", lore: [{ quote: "q", source: EKSI }] })) as Record<string, unknown>).lore, undefined);
   assert.equal(parseDecision(JSON.stringify({ kind: "answer", reply: "hi", image: { url: "https://x/y.jpg" } })).image, undefined);
   assert.equal(parseDecision(JSON.stringify({ kind: "answer", reply: "hi", image: "see https://x/y.jpg" })).image, undefined);
   assert.equal(parseDecision(JSON.stringify({ kind: "declined", reply: "no", image: "a cat" })).image, undefined);
@@ -381,32 +380,13 @@ test("image claims are cut from the lead-in, the rest stays", () => {
   assert.equal(stripImageClaims("He treats Maple like an oracle."), "He treats Maple like an oracle.");
 });
 
-test("Ekşi links: only https eksisozluk.com/entry/<id>, deduped, in order", () => {
-  assert.deepEqual(eksiLinks([Q("q", EKSI), Q("q", "http://eksisozluk.com/entry/1"), Q("q", "https://eksisozluk.com/okan-tekman--123"), Q("q", "https://evil.com/entry/2"),
-    Q("q", "https://eksisozluk.com.evil.com/entry/3"), Q("q", "https://www.eksisozluk.com/entry/777/"), Q("q", EKSI)]), [EKSI, "https://eksisozluk.com/entry/777"]);
-  assert.deepEqual(quotedEntries([Q('"he fixes bugs by staring"', 1), Q("dup", 1), Q("bad", "https://x.com/entry/2")]), [{ quote: "he fixes bugs by staring", link: "https://eksisozluk.com/entry/1" }]);
-});
-
-test("reply from quotes: “quote” link, best first, as many as fit; the lead-in yields room for the best", () => {
-  assert.equal(withQuotes("Okan Tekman:", [Q("a", 1), Q("b", 2)], 280), "Okan Tekman: “a” https://eksisozluk.com/entry/1 “b” https://eksisozluk.com/entry/2");
-  const long = "x".repeat(150);
-  const r = withQuotes("Lead.", [Q(long, 1), Q(long, 2)], 280);
-  assert.ok(r.includes("entry/1") && !r.includes("entry/2") && r.length <= 280, "second quote dropped");
-  const tight = withQuotes("Short opener. " + "word ".repeat(60).trim() + ".", [Q(long, 42)], 280);
-  assert.equal(tight, `Short opener. “${long}” https://eksisozluk.com/entry/42`, "whole sentences of the lead kept for the best quote");
-  const noSentence = withQuotes("word ".repeat(60).trim(), [Q(long, 42)], 280);
-  assert.ok(!noSentence.includes("…") && !noSentence.includes("entry/42") && noSentence.length <= 280, "quote dropped rather than cutting the lead mid-sentence");
-  assert.equal(withQuotes("no quotes", [], 280), "no quotes");
-  assert.equal(withQuotes("bad link only", [Q("q", "https://eksisozluk.com/okan--1")], 280), "bad link only");
-});
-
-test("Okan Tekman: short English lead-in + quoted entries with links + generated illustration, no source framing, no .md", async () => {
+test("Okan Tekman: one short English line, no quotes or links, image attached, no .md", async () => {
   const img = solidPng(512, 512, [128, 128, 128]);
   const lore = [Q("he looks at the logs and the bug fixes itself", 123456), Q("asks one question in the meeting, leaves with the whole roadmap", 654321)];
   const net = fakeNet({ llm: { text: JSON.stringify({ kind: "answer", reply: "Okan Tekman, in the wild 👀", lore }), files: [{ name: "generated-1.png", mime: "image/png", bytes: img }] } });
   assert.equal(await handleMention(11, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {} }), "replied");
   const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; files: { name: string; type: string }[] };
-  assert.equal(b.body, "Okan Tekman, in the wild 👀 “he looks at the logs and the bug fixes itself” https://eksisozluk.com/entry/123456 “asks one question in the meeting, leaves with the whole roadmap” https://eksisozluk.com/entry/654321");
+  assert.equal(b.body, "Okan Tekman, in the wild 👀", "one line: no quotes, no links");
   assert.ok(b.body.length <= 280);
   assert.doesNotMatch(b.body, /lore|Ekşi'de|on Ekşi/i);
   assert.deepEqual(b.files.map((f) => [f.name, f.type]), [["generated-1.png", "image/png"]]);
@@ -419,7 +399,7 @@ test("picture asked: second turn requested; no image produced → the reply neve
   assert.equal(net.followUps.length, 1);
   assert.match(net.followUps[0], /^Generate an image now: black-and-white pen sketch/);
   const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string };
-  assert.equal(b.body, "Bilkent's calculus legend. “comes to class in a t-shirt while it snows” https://eksisozluk.com/entry/11594413");
+  assert.equal(b.body, "Bilkent's calculus legend.");
 });
 
 test("picture produced: the claim may stay and the image goes out; no picture asked → no second turn", async () => {
@@ -463,7 +443,7 @@ test("real person: real photo attached as grayscale photo.jpg, its page sent as 
   const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; sources: string; files: { name: string; type: string }[] };
   assert.ok(!b.body.includes(PAGE) && b.body.length <= 280, b.body);
   assert.deepEqual(JSON.parse(b.sources), { "photo.jpg": PAGE });
-  assert.ok(b.body.includes("“short legend” https://eksisozluk.com/entry/1"));
+  assert.equal(b.body, "Bilkent's calculus legend.");
   assert.deepEqual(b.files.map((f) => [f.name, f.type]), [["photo.jpg", "image/jpeg"]]);
 });
 
@@ -521,7 +501,7 @@ test("Okan: no photo from the model → faculty photo attached in B&W with the f
   await handleMention(17, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {}, fetch: facFetch({ n: 0 }, solidPng(400, 400, [200, 30, 30])) });
   assert.equal(net.followUps.length, 0, "no generated likeness");
   const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; sources: string; files: { name: string; type: string }[] };
-  assert.equal(b.body, "Bilkent's calculus legend. “t-shirt in the snow” https://eksisozluk.com/entry/11594413");
+  assert.equal(b.body, "Bilkent's calculus legend.");
   assert.deepEqual(JSON.parse(b.sources), { "photo.jpg": "https://math.bilkent.edu.tr/faculty.html" });
   assert.deepEqual(b.files.map((f) => [f.name, f.type]), [["photo.jpg", "image/jpeg"]]);
 });
@@ -551,4 +531,8 @@ test("prompt: opener examples are generic and marked style-only", () => {
   assert.doesNotMatch(p, /Okan|Tekman|blizzard|professor|lecturer|calculus/i);
   assert.match(p, /never reuse their wording/);
   assert.ok((p.match(/Openers that work[^\n]*/)?.[0].split(" / ").length ?? 0) >= 3, "several varied examples");
+});
+
+test("stripUrls: the reply text never carries links or quotation marks", () => {
+  assert.equal(stripUrls("Legend. https://eksisozluk.com/entry/1 www.x.com “quoted” ok"), "Legend. quoted ok");
 });
