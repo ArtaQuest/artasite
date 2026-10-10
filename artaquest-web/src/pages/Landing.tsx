@@ -74,58 +74,15 @@ export default function Landing() {
           <h1 className="text-[clamp(1.95rem,7cqw,3.25rem)] font-extrabold leading-[1.07] text-ink [text-wrap:balance]">
             Post stuff that actually works
           </h1>
-          {/* 34ch was a 365px ribbon under a 668px headline — three short lines that read as an
-              afterthought. 44ch fills the measure without passing it. */}
           <p className="mx-auto mt-4 max-w-[44ch] text-[17px] leading-relaxed text-ink-2">
-            Publish work anyone can run again for themselves. Hearts decide who takes the prize pool.
+            Publish work anyone can run again. Hearts decide who takes the prize pool.
           </p>
           <div ref={cta} className="mt-7 inline-flex flex-wrap justify-center gap-3">
-            <Button href={join} size="xl">Join in — it's free</Button>
+            <Button href={join} size="xl">Sign up free</Button>
           </div>
-          <p className="mt-3 text-[13px] text-ink-3">No password, no spam — your email or Google.</p>
+          {/* @arta, condensed to one line: a real reason to sign up, not a section of its own. */}
+          <p className="mt-3 text-[13px] text-ink-3">Tag @arta on any post and Arta answers in public. No card needed.</p>
         </div>
-      </section>
-
-      {/*
-        The moat, in three lines a stranger can go and check without us. This was TWO sections of
-        three cards each — the claims, then the same ground again as "how it works" — about 120 words
-        of prose that nobody scrolling a landing page was going to read. Each claim is now one
-        sentence, because a claim you can verify does not need a paragraph defending it.
-      */}
-      {/* auto-fit, not `sm:grid-cols-3`: `sm:` is a 640px VIEWPORT query, so three tracks were on at
-          every desktop width — 137px each at 1100, about eighteen characters a line for a claim that
-          is a whole sentence. Each card asks for 14rem, which is the number that keeps the three
-          claims on ONE line where they belong — (718 + 16) / (224 + 16) = 3 at a 1440px window — and
-          gives each of them the whole column at 1100 and on a phone rather than a 137px sliver. */}
-      <section className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-4">
-        {[
-          ["Public, all the way down", "The notebook and everything it was built from are open on Kaggle. No account needed."],
-          ["It ran, and these are the files", "Kaggle's own record says the run finished and made exactly these files. We quote it back to you."],
-          ["Internet off, or we say so", "Kaggle enforces the offline switch, not us. The checklist reports whichever it finds."],
-        ].map(([h, b]) => (
-          /* yang-ink, not yang: the fill token is 1.84:1 on the light canvas an anonymous visitor
-             gets by default — unreadable. yang-ink is the text half of the same pair. */
-          <div key={h} className="rounded-card border border-line bg-space-2 p-5">
-            {/* balance, so a two-line claim breaks near the middle instead of leaving one word
-                stranded ("Public, all the / way down"). */}
-            <h2 className="text-[15px] font-extrabold text-yang-ink [text-wrap:balance]">{h}</h2>
-            <p className="mt-1.5 text-[14px] leading-relaxed text-ink-2">{b}</p>
-          </div>
-        ))}
-      </section>
-
-      {/* @arta is a real reason to sign up, so it stays — but as one line, not the full-height
-          section it was. The widget is members-only (App.tsx gates the launcher), which is why a
-          visitor sees this instead of the chat. */}
-      {/* Wrapping, not `sm:flex-row`: the row holds a 17px heading, a line of prose and a button, and
-          a 442px column cannot carry all three side by side. The text asks for 20rem; below that the
-          button drops under it and both centre themselves. */}
-      <section className="flex flex-wrap items-center justify-center gap-3 rounded-card border border-line bg-space-2 px-5 py-6 text-center sm:justify-between sm:text-start">
-        <div className="min-w-0 flex-[1_1_20rem]">
-          <h2 className="text-[17px] font-extrabold text-yang-ink">Ask Arta in public, free</h2>
-          <p className="mt-1 text-[14px] text-ink-2">Tag @arta on a post or comment and Arta answers in the thread. No card needed.</p>
-        </div>
-        <Button href={join} size="lg">Sign up free</Button>
       </section>
 
       {/* The live feed IS the pitch. Embedded: no second <h1>, no nested <main>, no rail calls. */}
@@ -138,17 +95,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* A visitor who read the whole page used to arrive at the footer with nothing to do. */}
-      <section className="rounded-card border border-line bg-space-2 px-5 py-8 text-center">
-        <h2 className="text-[21px] font-extrabold">Make the next one</h2>
-        <p className="mx-auto mt-2 max-w-[44ch] text-[14.5px] leading-relaxed text-ink-2">
-          Publishing is always free. You only pay to enter a tournament, and every coin of it goes
-          into the prize pool.
-        </p>
-        <div className="mt-5 flex flex-wrap justify-center gap-3">
-          <Button href={join} size="lg">Create your free account</Button>
-        </div>
-      </section>
     </div>
   );
 }
