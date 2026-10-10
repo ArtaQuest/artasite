@@ -1,5 +1,5 @@
 /* GENERATED — DO NOT EDIT HERE.
- * Vendored from artalife src/render/Arta.tsx @ d8cfea3.
+ * Vendored from artalife src/render/Arta.tsx @ d6ffa98.
  * Source of truth: https://github.com/ArtaQuest/artalife.git
  * Re-run: node tools/arta-sync.mjs
  */
@@ -341,10 +341,31 @@ export default function Arta({
     // Fast-forward 0.6s of simulation so a commanded gesture is shown at rest.
     // Painting at t=0 would show the arrow at the very start of its fade-in,
     // which is opacity 0 — the gesture would silently never appear.
+    /*
+     * Reduced motion still has to FOLLOW its home.
+     *
+     * `still()` used to place Arta once, on the home it found first, and never
+     * again — there is no loop to notice anything after that. So when the
+     * message dock opened, its lid moved up 560 px and Arta stayed where the
+     * lid had been: behind the open panel, invisible for as long as the panel
+     * was open. With motion on, Arta ropes up to the new edge; with motion off
+     * it simply vanished, which is the "absence is the lazy answer" this
+     * setting must never get. A moved home now gets one repaint at the new
+     * edge: a single static pose, zero animation frames.
+     */
+    const homeSig = (fl: Floor[]) => {
+      const h = homeFloor(fl);
+      return h ? `${Math.round(h.x1)}:${Math.round(h.x2)}:${Math.round(h.y)}` : "";
+    };
+    let stillHome = "";
     const still = () => {
       const fl = readFloors();
       const home = homeFloor(fl);
-      if (home && !placed) { placed = true; brain.placeAt({ x: (home.x1 + home.x2) / 2, y: home.y - RIG.HIP }, gnd); }
+      const sig = homeSig(fl);
+      if (home && (!placed || (stillHome && sig !== stillHome))) {
+        placed = true; brain.placeAt({ x: (home.x1 + home.x2) / 2, y: home.y - RIG.HIP }, gnd);
+      }
+      stillHome = sig;
       const inp = { look: null, busy: true, ground: gnd, scale, floors: fl,
                     minX: vw * rangeLo, maxX: Math.max(vw * rangeLo + 60, vw * rangeHi) };
       let f = brain.step(0, inp);
@@ -541,7 +562,17 @@ export default function Arta({
     // frozen for the rest of the visit. A slow heartbeat closes that hole for
     // the cost of one rect read twice a second, and it is the ONLY thing that
     // recovers a state nothing else will observe.
-    const beat = window.setInterval(() => sync(true), 500);
+    // Reduced motion: repaint once if the home ledge has moved since the last
+    // still pose. Cheap enough for the heartbeat, and also run right after a
+    // click (two frames later, once layout has settled) because a click is how
+    // a drawer opens — waiting up to half a second for the beat leaves Arta
+    // behind the panel long enough to be seen missing.
+    const restill = () => { if (reduce?.matches && homeSig(readFloors()) !== stillHome) still(); };
+    const onClick = () => {
+      if (!reduce?.matches) return;
+      requestAnimationFrame(() => requestAnimationFrame(restill));
+    };
+    const beat = window.setInterval(() => { sync(true); restill(); }, 500);
     const io = new IntersectionObserver(() => sync(true), { rootMargin: "80px" });
     const onVis = () => sync(true);
     const ro = new ResizeObserver(() => { setBox(); sync(true); });
@@ -558,6 +589,7 @@ export default function Arta({
     window.addEventListener("pointercancel", onLeave);
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("keydown", onKey, { passive: true });
+    window.addEventListener("click", onClick, { passive: true, capture: true });
     document.addEventListener("visibilitychange", onVis);
     const onReduce = () => { if (reduce?.matches) { stopLoop(); still(); } else sync(true); };
     reduce?.addEventListener?.("change", onReduce);
@@ -577,6 +609,7 @@ export default function Arta({
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onResize);
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("click", onClick, { capture: true });
       document.removeEventListener("visibilitychange", onVis);
       reduce?.removeEventListener?.("change", onReduce);
     };
