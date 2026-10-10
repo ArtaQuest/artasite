@@ -17,8 +17,8 @@ import {
   type Challenge, type FeedPostT, type LibraryItem,
   type NbKind, type NotebookCard,
   normalizeNbKind } from "../lib/api";
-import { isArta, isArtaFile, mentionsArta, pillState, useArtaWatch } from "../lib/arta";
-import { ArtaAvatar, ArtaHint, ArtaMarkdown, ArtaStatusPill, MentionText, MentionTextarea } from "../components/arta";
+import { isArta, mentionsArta, pillState, useArtaWatch } from "../lib/arta";
+import { ArtaAvatar, ArtaHint, ArtaStatusPill, MentionText, MentionTextarea } from "../components/arta";
 import { assetItem, NB_KIND_META, teaserSrc, TeaserVideo, useAqTheme, useCalmFlag } from "../components/nbview";
 import { AutoLoopVideo, FeedPlayer, LibraryMedia, LibraryPicker } from "../components/library";
 import { SharePanel } from "../components/SharePanel";
@@ -212,9 +212,16 @@ export function PostMedia({ items }: { items: LibraryItem[] }) {
               {audio ? (
                 <LibraryMedia item={it} className="w-full" />
               ) : (
-                <span className={cx("block w-full", wide ? "aspect-[16/9]" : "aspect-square")}>
-                  <LibraryMedia item={it} className="h-full w-full" />
-                </span>
+                it.source && /^https:\/\//i.test(it.source) ? (
+                  <a href={it.source} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title={`Source: ${it.source.replace(/^https:\/\/(www\.)?/, "")}`}
+                    className={cx("block w-full", wide ? "aspect-[16/9]" : "aspect-square")}>
+                    <LibraryMedia item={it} className="h-full w-full" />
+                  </a>
+                ) : (
+                  <span className={cx("block w-full", wide ? "aspect-[16/9]" : "aspect-square")}>
+                    <LibraryMedia item={it} className="h-full w-full" />
+                  </span>
+                )
               )}
             </li>
           );
@@ -435,7 +442,7 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
   const bot = isArta(post.author);
   // Text posts carry their own conversation (replies are posts with a parent); a work keeps its
   // notebook comment thread below.
-  const [replyOpen, setReplyOpen] = useState(!!watchArta || !!openReplies);
+  const [replyOpen, setReplyOpen] = useState(!!watchArta || !!openReplies || (!post.nb && (post.replies || 0) > 0 && mentionsArta(post.body)));
   const [replyCount, setReplyCount] = useState(post.replies || 0);
   // ARTA'S ANSWER, LIVE. A post that asks @arta (and is young enough to still be answered — the
   // server expires a mention after 48h) watches its own mention: a pill says where it is, and when
@@ -446,10 +453,10 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
   const { data: watch } = useArtaWatch(post.id, asks, () => {
     setReplyCount((n) => n + 1);
     if (replyOpen) setReloadKey((k) => k + 1);
-    else if (watchArta) setReplyOpen(true);
+    else setReplyOpen(true); // the answer shows inline, like any reply
   });
   const pst = asks ? pillState(watch, (m) => m.post_id === post.id) : null;
-  const pill = pst ? <ArtaStatusPill state={pst} onShow={replyOpen ? undefined : () => setReplyOpen(true)} /> : null;
+  const pill = pst && pst.kind !== "replied" ? <ArtaStatusPill state={pst} /> : null;
   const me = currentUser();
   const own = !!me?.slug && me.slug === post.author.slug;
   const [body, setBody] = useState(post.body);
@@ -563,14 +570,13 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
                 </div>
               </div>
             ) : body ? (
-              bot ? <ArtaMarkdown text={body} className="mt-0.5" />
-                : <p className="mt-0.5 whitespace-pre-wrap text-[15px] leading-relaxed text-ink [overflow-wrap:anywhere]"><MentionText text={body} /></p>
+              <p className="mt-0.5 whitespace-pre-wrap text-[15px] leading-relaxed text-ink [overflow-wrap:anywhere]"><LinkedText text={body} /></p>
             ) : null}
             {writeErr ? (
               <p role="status" className="mt-1 text-[12.5px] text-yang" onClick={(e) => e.stopPropagation()}>{writeErr}</p>
             ) : null}
             {/* Arta's photo renders exactly like any member's image; text files never show on its replies. */}
-            <PostMedia items={bot ? mediaOf(post).filter((m) => !isArtaFile(m) || m.class === "image" || m.mime.startsWith("image/")) : mediaOf(post)} />
+            <PostMedia items={mediaOf(post)} />
             {post.repost ? (
               <div className="mt-2 rounded-2xl border border-line bg-space-2/40 px-3 py-2.5">
                 <p className="flex items-center gap-1.5 text-[13px]">
@@ -1164,3 +1170,11 @@ export default function Feed({ initialKind, embedded = false }: { initialKind?: 
   );
 }
 
+
+/** A post's text: @handles linked (MentionText) and bare https links clickable — the same for everyone. */
+function LinkedText({ text }: { text: string }) {
+  const parts = text.split(/(https:\/\/[^\s<>()"]+[^\s<>()".,;:!?'”’])/g);
+  return <>{parts.map((p, i) => i % 2
+    ? <a key={i} href={p} target="_blank" rel="noopener noreferrer nofollow ugc" onClick={(e) => e.stopPropagation()} className="break-all font-medium text-yin-ink underline decoration-yin-ink/40 underline-offset-2 hover:decoration-yin-ink">{p.replace(/^https:\/\/(www\.)?/, "")}</a>
+    : <MentionText key={i} text={p} />)}</>;
+}

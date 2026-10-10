@@ -42,6 +42,8 @@ export class WpClient {
     const fd = new FormData();
     for (const [k, v] of Object.entries(fields)) fd.set(k, String(v));
     for (const f of files) fd.append("files[]", new Blob([f.bytes], { type: f.mime }), f.name);
+    const sources = Object.fromEntries(files.filter((f) => f.source).map((f) => [f.name, f.source]));
+    if (Object.keys(sources).length) fd.append("sources", JSON.stringify(sources)); // where a real photo came from
     const r = await timed(this.f, `${this.cfg.wpBase}/wp-json/aq/v1/arta/reply`, {
       method: "POST", headers: { "X-Arta-Token": this.cfg.replyToken, "User-Agent": "arta-brain/1" }, body: fd,
     }, 120_000);

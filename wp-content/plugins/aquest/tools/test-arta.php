@@ -147,6 +147,9 @@ namespace {
 	$r = Arta::sanitize_reply( '“q” https://eksisozluk.com/entry/2066444 https://math.bilkent.edu.tr/faculty.html http://eksisozluk.com/entry/1 https://eksisozluk.com/okan--1 https://evil.edu.tr.example.com/x', 280 );
 	t_ok( strpos( $r, 'https://eksisozluk.com/entry/2066444' ) !== false && strpos( $r, 'https://math.bilkent.edu.tr/faculty.html' ) !== false, 'sanitize_reply keeps cited sources' );
 	t_ok( substr_count( $r, '[link removed]' ) === 3, 'sanitize_reply removes http, non-entry and look-alike links' );
+	$s = Arta::file_sources( '{"photo.jpg":"https://math.bilkent.edu.tr/faculty.html","x.jpg":"https://evil.example/p","y.jpg":"http://en.wikipedia.org/wiki/X","z.jpg":"javascript:alert(1)"}' );
+	t_ok( $s === [ 'photo.jpg' => 'https://math.bilkent.edu.tr/faculty.html' ], 'file_sources keeps only https cited photo pages' );
+	t_ok( Arta::file_sources( 'not json' ) === [], 'file_sources ignores junk' );
 
 	// ACS e-mail signature, against an independently computed value.
 	require $src . 'Mailer.php';
