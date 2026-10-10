@@ -343,20 +343,24 @@ test("config: top-effort defaults, sniffing, and the generated PNG", () => {
   assert.equal(sniffMime(new TextEncoder().encode("<svg/>")), "");
 });
 
-// ── voice and Ekşi lore (the Okan Tekman example) ───────────────────────────
+// ── voice and quoted Ekşi entries (the Okan Tekman example) ─────────────────
 import { loreOf } from "../src/prompt";
-import { eksiLinks, withSources } from "../src/worker";
+import { eksiLinks, quotedEntries, withQuotes } from "../src/worker";
 
 const EKSI = "https://eksisozluk.com/entry/123456";
+const Q = (quote: string, id: number | string) => ({ claim: "c", quote, source: typeof id === "number" ? `https://eksisozluk.com/entry/${id}` : id });
 
-test("prompt: English X-user voice, Ekşi lore, no allegations, generated illustrations only", () => {
+test("prompt: English X-user voice, verbatim quotes with real permalinks, no source framing, no allegations", () => {
   const p = systemPrompt(280);
   assert.match(p, /X user/);
   assert.match(p, /ALWAYS reply in English/);
-  assert.match(p, /eksisozluk\.com/);
-  assert.match(p, /NEVER invent entries/);
+  assert.match(p, /eksisozluk\.com\/entry\/<id>/);
+  assert.match(p, /verbatim or faithfully translated/);
+  assert.match(p, /actually opened/);
+  assert.match(p, /NEVER invent, guess or reconstruct a quote or a permalink/);
   assert.match(p, /never repeat allegations/i);
-  assert.match(p, /stylized illustration/);
+  assert.match(p, /never a photoreal likeness/);
+  assert.doesNotMatch(p, /legend on Ekşi|as LORE|Cite Ekşi|Ekşi Sözlük has/);
   assert.doesNotMatch(p, /wikimedia|"details"|answer\.md/i);
 });
 
@@ -366,36 +370,31 @@ test("parseDecision: lore only with quote + https source; image/url fields ignor
   assert.equal((dec as Record<string, unknown>).image, undefined);
 });
 
-test("Okan Tekman: short English reply + the chat's generated illustration attached, no .md", async () => {
+test("Ekşi links: only https eksisozluk.com/entry/<id>, deduped, in order", () => {
+  assert.deepEqual(eksiLinks([Q("q", EKSI), Q("q", "http://eksisozluk.com/entry/1"), Q("q", "https://eksisozluk.com/okan-tekman--123"), Q("q", "https://evil.com/entry/2"),
+    Q("q", "https://eksisozluk.com.evil.com/entry/3"), Q("q", "https://www.eksisozluk.com/entry/777/"), Q("q", EKSI)]), [EKSI, "https://eksisozluk.com/entry/777"]);
+  assert.deepEqual(quotedEntries([Q('"he fixes bugs by staring"', 1), Q("dup", 1), Q("bad", "https://x.com/entry/2")]), [{ quote: "he fixes bugs by staring", link: "https://eksisozluk.com/entry/1" }]);
+});
+
+test("reply from quotes: “quote” link, best first, as many as fit; the lead-in yields room for the best", () => {
+  assert.equal(withQuotes("Okan Tekman:", [Q("a", 1), Q("b", 2)], 280), "Okan Tekman: “a” https://eksisozluk.com/entry/1 “b” https://eksisozluk.com/entry/2");
+  const long = "x".repeat(150);
+  const r = withQuotes("Lead.", [Q(long, 1), Q(long, 2)], 280);
+  assert.ok(r.includes("entry/1") && !r.includes("entry/2") && r.length <= 280, "second quote dropped");
+  const tight = withQuotes("word ".repeat(60).trim(), [Q(long, 42)], 280);
+  assert.ok(tight.length <= 280 && tight.endsWith(`“${long}” https://eksisozluk.com/entry/42`), "lead clipped for the best quote");
+  assert.equal(withQuotes("no quotes", [], 280), "no quotes");
+  assert.equal(withQuotes("bad link only", [Q("q", "https://eksisozluk.com/okan--1")], 280), "bad link only");
+});
+
+test("Okan Tekman: short English lead-in + quoted entries with links + generated illustration, no source framing, no .md", async () => {
   const img = solidPng(512, 512, [128, 128, 128]);
-  const reply = "Okan Tekman, per Ekşi lore: looks at the logs and the bug fixes itself 👀";
-  const net = fakeNet({ llm: { text: JSON.stringify({ kind: "answer", reply, lore: [{ claim: "debugs by staring", quote: "he looks at the logs and the bug fixes itself", source: EKSI }] }), files: [{ name: "generated-1.png", mime: "image/png", bytes: img }] } });
+  const lore = [Q("he looks at the logs and the bug fixes itself", 123456), Q("asks one question in the meeting, leaves with the whole roadmap", 654321)];
+  const net = fakeNet({ llm: { text: JSON.stringify({ kind: "answer", reply: "Okan Tekman, in the wild 👀", lore }), files: [{ name: "generated-1.png", mime: "image/png", bytes: img }] } });
   assert.equal(await handleMention(11, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {} }), "replied");
   const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; files: { name: string; type: string }[] };
-  assert.equal(b.body, `${reply} ${EKSI}`);
+  assert.equal(b.body, "Okan Tekman, in the wild 👀 “he looks at the logs and the bug fixes itself” https://eksisozluk.com/entry/123456 “asks one question in the meeting, leaves with the whole roadmap” https://eksisozluk.com/entry/654321");
+  assert.ok(b.body.length <= 280);
+  assert.doesNotMatch(b.body, /lore|Ekşi'de|on Ekşi/i);
   assert.deepEqual(b.files.map((f) => [f.name, f.type]), [["generated-1.png", "image/png"]]);
-});
-
-test("Ekşi links: only https eksisozluk.com/entry/<id>, deduped, in order", () => {
-  const L = (source: string) => ({ claim: "c", quote: "q", source });
-  assert.deepEqual(eksiLinks([L(EKSI), L("http://eksisozluk.com/entry/1"), L("https://eksisozluk.com/okan-tekman--123"), L("https://evil.com/entry/2"),
-    L("https://eksisozluk.com.evil.com/entry/3"), L("https://www.eksisozluk.com/entry/777/"), L(EKSI)]), [EKSI, "https://eksisozluk.com/entry/777"]);
-});
-
-test("Ekşi links: as many as fit; none fit → the best one kept and the text clipped", () => {
-  const L = (id: number) => ({ claim: "c", quote: "q", source: `https://eksisozluk.com/entry/${id}` });
-  assert.equal(withSources("short", [L(1), L(2)], 280), "short https://eksisozluk.com/entry/1 https://eksisozluk.com/entry/2");
-  const two = withSources("x".repeat(220), [L(1), L(2)], 280);
-  assert.ok(two.endsWith("https://eksisozluk.com/entry/1") && two.length <= 280);
-  const tight = withSources("word ".repeat(60).trim(), [L(42), L(43)], 280);
-  assert.ok(tight.length <= 280 && tight.endsWith(" https://eksisozluk.com/entry/42"));
-  assert.equal(withSources("no lore", [], 280), "no lore");
-});
-
-test("prompt: real entry permalinks only, never invented", () => {
-  const p = systemPrompt(280);
-  assert.match(p, /eksisozluk\.com\/entry\/<id>/);
-  assert.match(p, /actually opened/);
-  assert.match(p, /NEVER invent, guess or reconstruct a permalink/);
-  assert.match(p, /never a photoreal likeness/);
 });

@@ -70,17 +70,29 @@ export function eksiLinks(lore: Lore[]): string[] {
   return out;
 }
 
-/**
- * The quoted entries' real links, appended to the reply as many as fit in `max`; when none fits, the
- * best (first) one is kept and the text is clipped to make room.
- */
-export function withSources(said: string, lore: Lore[], max: number): string {
-  const links = eksiLinks(lore).filter((l) => !said.includes(l));
-  if (!links.length) return said;
-  let out = said;
-  for (const l of links) if (out.length + 1 + l.length <= max) out = `${out} ${l}`;
-  if (out === said) out = `${clip(said, Math.max(20, max - links[0].length - 1))} ${links[0]}`;
+/** Lore items with a valid Ekşi entry permalink, normalised, deduped by entry, best first. */
+export function quotedEntries(lore: Lore[]): { quote: string; link: string }[] {
+  const out: { quote: string; link: string }[] = [];
+  for (const l of lore) {
+    const [link] = eksiLinks([l]);
+    const quote = l.quote.replace(/^["“”'‘’\s]+|["“”'‘’\s]+$/g, "").replace(/\s+/g, " ");
+    if (link && quote && !out.some((o) => o.link === link)) out.push({ quote, link });
+  }
   return out;
+}
+
+/**
+ * The reply built from the quotes: the lead-in, then `"quote" <link>` for each entry, best first, as many
+ * as fit in `max`. If not even the best fits after the lead-in, the lead-in is clipped (or dropped) for it.
+ */
+export function withQuotes(lead: string, lore: Lore[], max: number): string {
+  const qs = quotedEntries(lore).map((q) => `“${q.quote}” ${q.link}`).filter((q) => q.length <= max);
+  if (!qs.length) return lead;
+  let out = lead;
+  for (const q of qs) if (out.length + 1 + q.length <= max) out = out ? `${out} ${q}` : q;
+  if (out !== lead) return out;
+  const room = max - qs[0].length - 1;
+  return room >= 20 ? `${clip(lead, room)} ${qs[0]}` : qs[0];
 }
 
 async function answer(m: Mention, d: Deps): Promise<Outcome> {
@@ -100,7 +112,7 @@ async function answer(m: Mention, d: Deps): Promise<Outcome> {
   if (m.hint === "bug" && dec.kind !== "declined") dec.kind = "bug";
   let said = dec.reply.trim() || (dec.kind === "bug" ? "Thanks for reporting this — I've passed it to the team." : "");
   if (!said) throw new Error("empty answer");
-  if (dec.kind === "answer") said = withSources(said, dec.lore ?? [], max);
+  if (dec.kind === "answer") said = withQuotes(said, dec.lore ?? [], max);
 
   const out = dec.kind === "declined" ? { text: clip(said, max), files: [] as OutFile[] } : outgoing(said, max, got.files, d.cfg);
 
