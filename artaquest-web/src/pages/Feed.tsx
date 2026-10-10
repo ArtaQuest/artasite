@@ -186,7 +186,7 @@ function Collapse({ children }: { children: React.ReactNode }) {
 const MEDIA_MAX = 4;
 /** A post's words as a share caption: markdown links → their label, folded, ≤ 200 chars. */
 function shareText(body: string): string {
-  const t = (body || "").replace(/\[([^\]\n]{1,200})\]\((https?:\/\/[^)\s]+)\)/g, "$1").replace(/\s+/g, " ").trim();
+  const t = (body || "").replace(/\[([^\]\n]{1,200})\]\((https?:\/\/[^)\s]+)\)/g, "$1").replace(/(^|[^A-Za-z0-9_@./+-])@arta(?![A-Za-z0-9_-])/gi, "$1@artabot").replace(/\s+/g, " ").trim();
   return t.length > 200 ? `${t.slice(0, 199).trimEnd()}…` : t || "A post on ArtaQuest";
 }
 function mediaOf(p: FeedPostT | null | undefined): LibraryItem[] {
