@@ -1,23 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400" role="img" aria-label="Arta, thinking">
   <title>Arta, thinking</title>
-  <desc>Official think pose from ArtaQuest/artalife (src/rig/arta.ts think): weight on one leg, a hand up near the head. Upper-body crop. Faceless. Proportions spine 70 · neck 24 · head r20 · upper/fore arm 34/32. Colour #E8B923. Stroke 7 matching the live companion (src/render/Arta.tsx). No thought bubble — artalife says the pose with its posture.</desc>
+  <desc>Avatar v5. artalife's think() pose (src/rig/arta.ts): one hand raised to the chin, the other arm relaxed, upper-body crop. Faceless, gold #E8B923 on the brand night disc. v5 centres the figure's visual mass in the circle, sizes the head and strokes so the pose still reads at 16-24 px, and adds a thin gold rim so the disc separates from dark backgrounds as well as light ones. Pure vector, crisp at any size and pixel density.</desc>
   <defs>
-    <radialGradient id="bg" cx="40%" cy="32%" r="78%">
-      <stop offset="0" stop-color="#1a2448"/>
-      <stop offset="0.55" stop-color="#12162c"/>
-      <stop offset="1" stop-color="#0a0a0c"/>
+    <radialGradient id="bg" cx="42%" cy="30%" r="80%">
+      <stop offset="0" stop-color="#22306a"/>
+      <stop offset="0.55" stop-color="#141a36"/>
+      <stop offset="1" stop-color="#0a0b12"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="38%" r="40%">
+      <stop offset="0" stop-color="#E8B923" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#E8B923" stop-opacity="0"/>
     </radialGradient>
     <clipPath id="disc"><circle cx="200" cy="200" r="200"/></clipPath>
   </defs>
   <circle cx="200" cy="200" r="200" fill="url(#bg)"/>
-  <g clip-path="url(#disc)" fill="none" stroke="#E8B923" stroke-width="22.95"
+  <circle cx="200" cy="200" r="200" fill="url(#glow)"/>
+  <g clip-path="url(#disc)" fill="none" stroke="#E8B923" stroke-width="30"
      stroke-linecap="round" stroke-linejoin="round">
-    <path d="M227.8 454.5L203.9 226.3"/>
-    <path d="M203.9 226.3L245.5 329.6L310.1 412.2"/>
-    <path d="M203.9 226.3L120.9 151.6L128.1 47.0"/>
-    <path d="M227.8 454.5L242.2 512.2"/>
-    <path d="M227.8 454.5L207.5 510.6"/>
-    <circle cx="206.6" cy="147.5" r="65.6"/>
+    <!-- spine, from the neck down past the crop -->
+    <path d="M206 214L214 420"/>
+    <!-- relaxed arm: shoulder, elbow, hand out of frame -->
+    <path d="M209 262L272 338L304 430"/>
+    <!-- thinking arm: shoulder, elbow, hand at the chin -->
+    <path d="M209 262L128 318L150 214"/>
+    <!-- head -->
+    <circle cx="204" cy="150" r="56"/>
   </g>
+  <!-- rim: separates the disc on dark pages; inside the circle, so it never changes the crop -->
+  <circle cx="200" cy="200" r="194" fill="none" stroke="#E8B923" stroke-opacity="0.38" stroke-width="12"/>
 </svg>

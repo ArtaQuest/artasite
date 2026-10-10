@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import artaAvatarUrl from "../assets/arta-thinking.svg";
 import { artaWatch, ARTA_HANDLE, type ArtaWatch, type ArtaMentionState, type LibraryItem } from "./api";
 
-/** Arta's avatar: upper-body crop of artalife's official think() pose. Same file the server
+/** Arta's avatar: upper-body crop of artalife's official think() pose (v5: centred, legible at 16px, gold rim for dark pages). Same file the server
  *  hands out (wp-content/plugins/aquest/assets/arta/arta-thinking.svg) — keep the two identical. */
 export const ARTA_AVATAR = artaAvatarUrl;
 
