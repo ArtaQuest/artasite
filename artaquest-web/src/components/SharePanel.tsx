@@ -137,7 +137,7 @@ export function SharePanel({ title, url, message, image, cardId, dialogLabel = "
     { key: "copy", label: "Copy link", on: () => void copy(), icon: LINK_ICON },
   ];
   const grid = (
-    <div className="grid grid-cols-3 gap-1 sm:grid-cols-6">
+    <div className="grid grid-cols-3 gap-1">
       {entries.map((n) => n.href ? (
         <a key={n.key} href={n.href} target="_blank" rel="noopener noreferrer" onClick={go(n.label)} aria-label={`Share on ${n.label}`} className={item}>
           <span className={disc}>{n.icon}</span>{n.label}
