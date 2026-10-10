@@ -1,5 +1,5 @@
 /* GENERATED — DO NOT EDIT HERE.
- * Vendored from artalife src/rig/arta.ts @ e37c551.
+ * Vendored from artalife src/rig/arta.ts @ 816f4f5.
  * Source of truth: https://github.com/ArtaQuest/artalife.git
  * Re-run: node tools/arta-sync.mjs
  */
@@ -695,8 +695,13 @@ export function floorUnder(
 
 /** Arta's home ledge, if the page offers one. */
 export function homeFloor(floors: Floor[]): Floor | null {
-  for (const f of floors) if (f.home) return f;
-  return null;
+  // The WIDEST home segment, not the first. A ledge split around an obstacle
+  // yields several, and "whichever came first in the DOM" would be an arbitrary
+  // choice that changes when the markup is reordered; most room to stroll is at
+  // least a reason.
+  let best: Floor | null = null;
+  for (const f of floors) if (f.home && (!best || f.x2 - f.x1 > best.x2 - best.x1)) best = f;
+  return best;
 }
 
 /** How high Arta can step while walking, in world units — about a third of a leg. */
@@ -858,6 +863,20 @@ export class Brain {
     this.act = "idle";
     this.t = 0;
     this.pose = { ...this.pose, x: goal.x, y: Math.min(goal.y, ground - RIG.HIP) };
+  }
+
+  /**
+   * The ledge under Arta moved (a drawer opening, a keyboard lifting the dock).
+   * Someone standing on a lift rises WITH it; before this, a lid that jumped
+   * 500 px left Arta standing on air for a frame, then falling to the stage
+   * floor and roping back up to where it had been standing all along.
+   * Only applies while grounded on that ledge — mid-flight, on a rope or on a
+   * different surface, the move is none of Arta's business.
+   */
+  ride(fromY: number, toY: number) {
+    if (this.act === "fly" || this.anchor) return;
+    if (Math.abs(this.pose.y + RIG.HIP - fromY) > 16) return;
+    this.pose = { ...this.pose, y: this.pose.y + (toY - fromY) };
   }
 
   /** Ask Arta to do something. Queued, never interrupting mid-gesture. */
@@ -1091,6 +1110,19 @@ export class Brain {
         // stride no matter what the frame rate or the ease are doing.
         this.phase = (this.phase + Math.abs(stepD) / WALK.CYCLE) % 1;
         want = walk(this.phase);
+        /*
+         * Come UPRIGHT as you arrive.
+         *
+         * A walk leans forward because it is falling into the next stride. The
+         * braking above shortens the strides, but the lean stayed at a constant
+         * 7 degrees all the way to a standstill — a figure still pitched into a
+         * stride it is no longer taking, which is the posture of someone
+         * stopped mid-shove rather than someone who has arrived. `brake` is
+         * already how much stride is left, so it is also how much lean is
+         * earned; at the 0.3 floor Arta is nearly straight, and the last steps
+         * read as settling instead of stalling.
+         */
+        want.lean *= 0.3 + 0.7 * brake;
         want.x = this.rootX;
         // The SUPPORT, not the stage floor. `base.y` was resolved from
         // `floorUnder` fifty lines above and `walk` returns `RIG.HIP - h`

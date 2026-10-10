@@ -278,7 +278,20 @@ body {
 .aq-bot-body {
   height: min(560px, calc(100dvh - 8rem - var(--aq-safe-bottom)));
   min-height: 0;
-  transition: height 220ms ease, visibility 220ms;
+  /* Expo-out: fast start, long soft settle — reads as a drawer with weight rather than a linear
+     slide. Only the body's height animates; the bar never moves. */
+  transition: height 320ms cubic-bezier(0.22, 1, 0.36, 1), visibility 320ms;
+}
+/* Arrival: the dock rises into the corner once per page load (transform + opacity only — GPU,
+   no layout). */
+.aq-dock-card { animation: aq-dock-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes aq-dock-in { from { transform: translate3d(0, 24px, 0); opacity: 0; } to { transform: none; opacity: 1; } }
+/* Phones: collapsed, the dock is a compact pill in the corner (above the tab bar) instead of a
+   400px bar across the content; it widens to the full drawer when opened. */
+@media (max-width: 767px) {
+  .aq-bot-panel.aq-dock-compact { width: auto; max-width: calc(100vw - 2.5rem); margin-bottom: 0.5rem; }
+  .aq-bot-panel.aq-dock-compact .aq-dock-card { border-radius: 9999px; border-bottom-width: 1px; }
+  .aq-bot-panel.aq-dock-compact .aq-dock-card > div:first-child { border-bottom-width: 0; padding-block: 0.25rem; }
 }
 .aq-bot-body[data-collapsed="1"] { height: 0; visibility: hidden; }
 /* Signed-in phones have AppShell's fixed quick-nav on the bottom edge (min-h-12 + the safe inset,
@@ -288,8 +301,10 @@ body {
 @media (max-width: 767px) {
   .aq-bot-panel.aq-bot-above-tabs { bottom: var(--aq-bottom-bar); }
   .aq-bot-panel.aq-bot-above-tabs .aq-bot-body { height: min(560px, calc(100dvh - 11rem - var(--aq-safe-bottom))); }
+  /* Collapsed must still win over the line above (it is more specific than the base rule). */
+  .aq-bot-panel.aq-bot-above-tabs .aq-bot-body[data-collapsed="1"] { height: 0; }
 }
-@media (prefers-reduced-motion: reduce) { .aq-bot-body { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .aq-bot-body { transition: none; } .aq-dock-card { animation: none; } }
 
 /* An in-page sticky action bar (the Studio's "pick a kind → name it → Create" footer). On phones
    AppShell's quick-nav is FIXED to the bottom (min-h-12 tabs + the safe inset, md:hidden), so a
