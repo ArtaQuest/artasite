@@ -36,3 +36,23 @@ export function similarity(a: string, b: string): number {
   for (const w of A) if (B.has(w)) inter++;
   return inter / (A.size + B.size - inter);
 }
+
+/**
+ * Fit text into `max` characters WITHOUT an ellipsis or a cut mid-sentence: the longest run of whole
+ * sentences that fits; else the first clause, closed with a full stop; only as a last resort whole words.
+ */
+export function fitText(s: string, max: number): string {
+  const t = String(s).replace(/[ \t]+/g, " ").trim();
+  const len = (x: string) => [...x].length;
+  if (len(t) <= max) return t;
+  const sentences = t.match(/[^.!?…]+(?:[.!?…]+["”’)]*|$)\s*/g) ?? [t];
+  let out = "";
+  for (const x of sentences) { if (len((out + x).trim()) > max) break; out += x; }
+  if (out.trim()) return out.trim();
+  const clause = /^(.+?)\s*(?:[,;:]|\s[—–-]\s|\()/.exec(t)?.[1]?.replace(/[\s,;:—–-]+$/, "");
+  if (clause && len(clause) + 1 <= max && len(clause) >= 12) return `${clause}.`;
+  const words = t.split(" ");
+  out = "";
+  for (const w of words) { if (len(out ? `${out} ${w}` : w) > max) break; out = out ? `${out} ${w}` : w; }
+  return (out || [...t].slice(0, max).join("")).replace(/[\s,;:—–-]+$/, "");
+}

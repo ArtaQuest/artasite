@@ -169,12 +169,23 @@ final class Arta {
 	 * links except to artaquest.com/.org and the GitHub repository the issues live in. A model that
 	 * is talked into emitting a phishing link has that link removed here, not merely discouraged.
 	 */
+	/**
+	 * The sources Arta cites (https only): an Ekşi Sözlük entry permalink, or the official page a real
+	 * person's photo came from — Wikipedia/Wikimedia or a university site.
+	 */
+	public static function cited_link( $url, $host ) {
+		if ( stripos( $url, 'https://' ) !== 0 ) { return false; }
+		if ( ( $host === 'eksisozluk.com' || $host === 'www.eksisozluk.com' ) ) { return (bool) preg_match( '#^https://(www\.)?eksisozluk\.com/entry/\d+/?$#i', $url ); }
+		return (bool) preg_match( '/(^|\.)(wikipedia\.org|wikimedia\.org|edu\.tr|edu)$/', $host );
+	}
+
 	public static function sanitize_reply( $text, $max ) {
 		$t = html_entity_decode( strip_tags( (string) $text ), ENT_QUOTES, 'UTF-8' );
 		$t = preg_replace_callback( '#https?://[^\s<>()]+#iu', function ( $m ) {
 			$host = strtolower( (string) parse_url( $m[0], PHP_URL_HOST ) );
 			$ok   = in_array( $host, [ 'artaquest.com', 'www.artaquest.com', 'artaquest.org', 'www.artaquest.org' ], true )
-				|| ( $host === 'github.com' && stripos( $m[0], 'github.com/ArtaQuest/' ) !== false );
+				|| ( $host === 'github.com' && stripos( $m[0], 'github.com/ArtaQuest/' ) !== false )
+				|| self::cited_link( $m[0], $host );
 			return $ok ? $m[0] : '[link removed]';
 		}, $t );
 		$t = preg_replace( "/\n{3,}/", "\n\n", (string) $t );

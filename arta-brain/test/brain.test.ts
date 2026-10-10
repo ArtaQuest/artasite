@@ -307,7 +307,7 @@ test("files OUT: a long answer is trimmed, never attached as text; images ride a
   assert.equal(out, "replied");
   const r = net.calls.find((c) => c.url.endsWith("/arta/reply"))!;
   const b = r.body as { body: string; files: { field: string; name: string; type: string; size: number; text: string }[]; mention_id: string };
-  assert.ok(b.body.length <= 280 && b.body.endsWith("…"), "the public reply is trimmed to the limit");
+  assert.ok(b.body.length <= 280 && !b.body.includes("…"), "the public reply is fitted to the limit, never with an ellipsis");
   assert.equal(b.mention_id, "11");
   assert.deepEqual(b.files.map((f) => [f.field, f.name, f.type]), [["files[]", "square-1.png", "image/png"]]);
   assert.equal(r.headers["x-arta-token"], "t".repeat(40));
@@ -392,8 +392,10 @@ test("reply from quotes: “quote” link, best first, as many as fit; the lead-
   const long = "x".repeat(150);
   const r = withQuotes("Lead.", [Q(long, 1), Q(long, 2)], 280);
   assert.ok(r.includes("entry/1") && !r.includes("entry/2") && r.length <= 280, "second quote dropped");
-  const tight = withQuotes("word ".repeat(60).trim(), [Q(long, 42)], 280);
-  assert.ok(tight.length <= 280 && tight.endsWith(`“${long}” https://eksisozluk.com/entry/42`), "lead clipped for the best quote");
+  const tight = withQuotes("Short opener. " + "word ".repeat(60).trim() + ".", [Q(long, 42)], 280);
+  assert.equal(tight, `Short opener. “${long}” https://eksisozluk.com/entry/42`, "whole sentences of the lead kept for the best quote");
+  const noSentence = withQuotes("word ".repeat(60).trim(), [Q(long, 42)], 280);
+  assert.ok(!noSentence.includes("…") && !noSentence.includes("entry/42") && noSentence.length <= 280, "quote dropped rather than cutting the lead mid-sentence");
   assert.equal(withQuotes("no quotes", [], 280), "no quotes");
   assert.equal(withQuotes("bad link only", [Q("q", "https://eksisozluk.com/okan--1")], 280), "bad link only");
 });
@@ -520,4 +522,24 @@ test("Okan: no photo from the model → faculty photo attached in B&W with the f
   const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; files: { name: string; type: string }[] };
   assert.equal(b.body, "Bilkent's calculus legend. “t-shirt in the snow” https://eksisozluk.com/entry/11594413 https://math.bilkent.edu.tr/faculty.html");
   assert.deepEqual(b.files.map((f) => [f.name, f.type]), [["photo.jpg", "image/jpeg"]]);
+});
+
+import { fitText } from "../src/text";
+test("fitText: whole sentences, then a closed clause, never an ellipsis", () => {
+  const cv = "Okan Tekman is Bilkent's senior math lecturer (Minnesota PhD '92) and a longtime calculus institution with a reputation that never ends.";
+  assert.equal(fitText("A. B is longer here. C", 12), "A.");
+  assert.equal(fitText(cv, 80), "Okan Tekman is Bilkent's senior math lecturer.");
+  assert.equal(fitText("short", 280), "short");
+  for (const n of [20, 50, 100]) assert.ok(!fitText(cv, n).includes("…") && [...fitText(cv, n)].length <= n);
+});
+
+test("live Okan shape: long CV lead never truncated with …; photo link kept", async () => {
+  clearFacultyCache();
+  const cv = "Okan Tekman is Bilkent's senior math lecturer (Minnesota PhD '92) and a longtime calculus institution with a reputation that refuses to quit for decades.";
+  const net = fakeNet({ llm: JSON.stringify({ kind: "answer", reply: cv, lore: [Q("Countless legends circulate about him, eats 3 students in one sitting, finished METU math and electronics in 3 years with 4.00", 2066444)], person: { name: "Okan Tekman", affiliation: "Bilkent" } }) });
+  await handleMention(18, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {}, fetch: facFetch({ n: 0 }, solidPng(400, 400, [9, 9, 9])) });
+  const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; files: unknown[] };
+  assert.ok(!b.body.includes("…") && [...b.body].length <= 280, b.body);
+  assert.ok(b.body.endsWith(" https://math.bilkent.edu.tr/faculty.html"));
+  assert.equal(b.files.length, 1, "photo for a person question even without an image request");
 });
