@@ -37,7 +37,7 @@ const GLOW_YIN = "hover:shadow-[0_8px_28px_color-mix(in_srgb,var(--color-yin)_38
 const BTN_VARIANT: Record<ButtonVariant, string> = {
   primary: `rounded-pill bg-yang font-bold text-on-accent shadow-card hover:-translate-y-0.5 active:translate-y-0 hover:bg-yin hover:text-white ${GLOW_YIN}`,
   primaryYin: `rounded-pill bg-yang font-bold text-on-accent shadow-card hover:-translate-y-0.5 active:translate-y-0 hover:bg-yin hover:text-white ${GLOW_YIN}`, // course "Start"
-  outline: "rounded-pill border border-line font-semibold text-ink-2 hover:border-yin-light hover:text-ink",
+  outline: "rounded-pill border border-line font-semibold text-ink-2 hover:border-yin-ink hover:text-ink",
   ghost: "rounded-field text-ink-2 hover:bg-veil/5 hover:text-ink",
   subtle: "rounded-pill bg-veil/5 font-semibold text-ink-2 hover:bg-veil/10 hover:text-ink",
 };
@@ -247,7 +247,7 @@ export function Avatar({ src, name, country, alt, className, palm, priority }: {
   const topicMarkup = useTopicIconMarkup(src && !failed && isTopicIcon(src) ? src : undefined);
   let core: ReactNode;
   if (!src || failed) {
-    core = <span aria-hidden className={cx("grid shrink-0 place-items-center rounded-full bg-yin/20 font-bold text-yin-light", className)}>{initial}</span>;
+    core = <span aria-hidden className={cx("grid shrink-0 place-items-center rounded-full bg-yin/20 font-bold text-yin-ink", className)}>{initial}</span>;
   } else if (isTopicIcon(src)) {
     if (topicMarkup) {
       core = <span role={alt ? "img" : undefined} aria-label={alt || undefined} aria-hidden={alt ? undefined : true} className={cx("aq-topic-icon shrink-0 rounded-full", className)} dangerouslySetInnerHTML={{ __html: topicMarkup }} />;
@@ -289,14 +289,14 @@ function FlipAvatar({ src, name, country, alt, className, palm, priority }: { sr
     ? <img src={src} alt={alt || ""} decoding="async"
         loading={priority ? "eager" : "lazy"} {...(priority ? { fetchPriority: "high" as const } : {})}
         onError={() => setFaceFailed(true)} className="h-full w-full rounded-full object-cover" />
-    : <span aria-hidden className="grid h-full w-full place-items-center rounded-full bg-yin/20 font-bold text-yin-light">{initial}</span>;
+    : <span aria-hidden className="grid h-full w-full place-items-center rounded-full bg-yin/20 font-bold text-yin-ink">{initial}</span>;
   const hidden3d = { backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" } as const;
   return (
     <span className="relative inline-grid shrink-0" style={{ perspective: "700px" }}>
       <button
         type="button" aria-label={label} aria-pressed={flipped} title={label}
         onClick={(e) => { e.stopPropagation(); e.preventDefault(); setFlipped((v) => !v); }}
-        className={cx("group relative block rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-light", className)}
+        className={cx("group relative block rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-ink", className)}
         style={{ transformStyle: "preserve-3d", transition: "transform 0.5s", transform: flipped ? "rotateY(180deg)" : undefined }}
       >
         {/* Front — the normal avatar + nationality flag */}
@@ -332,7 +332,7 @@ function FlipAvatar({ src, name, country, alt, className, palm, priority }: { sr
  *  aria-current when active) — one pill for filter rows AND pill-style nav (e.g. forum switcher). */
 export function Chip({ active, onClick, href, className, children }: { active?: boolean; onClick?: () => void; href?: string; className?: string; children: ReactNode }) {
   const cls = cx("inline-flex h-8 items-center whitespace-nowrap rounded-pill border px-3.5 text-[13px] font-medium transition-colors",
-    active ? "border-yin bg-yin/15 text-yang" : "border-line text-ink-2 hover:border-yin-light/50 hover:text-ink", className);
+    active ? "border-yin-ink bg-yin/15 text-yang" : "border-line text-ink-2 hover:border-yin-ink/50 hover:text-ink", className);
   if (href) {
     return <a href={localePath(href)} aria-current={active ? "page" : undefined} className={cls}>{children}</a>;
   }
@@ -378,7 +378,7 @@ export function ErrorNote({ children, className }: { children: ReactNode; classN
   // a third accent, and the submission checklist already paints the same semantic (a blocking failure)
   // in blue — so the two most important error surfaces disagreed with each other.
   return (
-    <p role="alert" className={cx("flex items-start gap-2 rounded-card border border-yin/40 bg-yin/10 px-4 py-2.5 text-[14px] text-yin-ink", className)}>
+    <p role="alert" className={cx("flex items-start gap-2 rounded-card border border-yin-ink/40 bg-yin/10 px-4 py-2.5 text-[14px] text-yin-ink", className)}>
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="mt-0.5 shrink-0"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
       <span>{children}</span>
     </p>
@@ -767,7 +767,7 @@ export function Field({ label, optional, required, hint, className, children }: 
    (5.5:1 on space-2 at the default level, and it rises with the contrast slider like everything
    else). SearchPill had it right; the two primitives everything else is built from did not. */
 export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={cx("h-11 rounded-field border border-line bg-space-2 px-4 text-[15px] text-ink outline-none transition-colors placeholder:text-ink-2 focus:border-yin-light", className)} {...rest} />;
+  return <input className={cx("h-11 rounded-field border border-line bg-space-2 px-4 text-[15px] text-ink outline-none transition-colors placeholder:text-ink-2 focus:border-yin-ink", className)} {...rest} />;
 }
 
 /** Native <select> matching the Input look (border-line / space-2 / focus:yin-light). Accepts plain
@@ -792,7 +792,7 @@ export function Select({ value, onChange, options, label, className, skipOptions
 }) {
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}
-      className={cx("h-11 rounded-field border border-line bg-space-2 px-4 text-[15px] text-ink outline-none transition-colors focus:border-yin-light", className)}>
+      className={cx("h-11 rounded-field border border-line bg-space-2 px-4 text-[15px] text-ink outline-none transition-colors focus:border-yin-ink", className)}>
       {options.map((o) => {
         const v = typeof o === "string" ? o : o.value;
         const l = typeof o === "string" ? o : o.label;
@@ -847,7 +847,7 @@ export function GatewayPicker({ gateways, value, onChange, descriptions, labelId
 }
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(
   function Textarea({ className, ...rest }, ref) {
-    return <textarea ref={ref} className={cx("rounded-card border border-line bg-space-2 px-4 py-2.5 text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-2 focus:border-yin-light", className)} {...rest} />;
+    return <textarea ref={ref} className={cx("rounded-card border border-line bg-space-2 px-4 py-2.5 text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-2 focus:border-yin-ink", className)} {...rest} />;
   },
 );
 
@@ -1246,7 +1246,7 @@ export function LoadMoreButton({ onClick, loading, label = "Load more", classNam
   return (
     <div className={cx("flex justify-center pt-2", className)}>
       <button type="button" onClick={onClick} disabled={loading}
-        className="inline-flex h-11 items-center gap-2 rounded-pill border border-line bg-space-2 px-6 text-[14px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink disabled:opacity-50">
+        className="inline-flex h-11 items-center gap-2 rounded-pill border border-line bg-space-2 px-6 text-[14px] font-semibold text-ink-2 transition-colors hover:border-yin-ink hover:text-ink disabled:opacity-50">
         {loading ? "Loading…" : label}
       </button>
     </div>
@@ -1329,7 +1329,7 @@ export function ConfirmDialog({ open, title, body, confirmLabel = "Delete", word
             <input value={typed} onChange={(e) => setTyped(e.target.value)}
               autoCapitalize="characters" autoCorrect="off" spellCheck={false} placeholder={word}
               onKeyDown={(e) => { if (e.key === "Enter" && ready) onConfirm(); }}
-              className="h-10 w-full rounded-field border border-line bg-space-2 px-3 text-[14px] text-ink placeholder:text-ink-3 focus:border-yin-light focus:outline-none" />
+              className="h-10 w-full rounded-field border border-line bg-space-2 px-3 text-[14px] text-ink placeholder:text-ink-3 focus:border-yin-ink focus:outline-none" />
           </label>
         ) : null}
         <div className="mt-5 flex flex-wrap justify-end gap-2">

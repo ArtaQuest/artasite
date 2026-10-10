@@ -285,7 +285,7 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { failed: bo
         <div className="mt-5 flex flex-wrap justify-center gap-3">
           <button type="button" onClick={() => window.location.reload()}
             className="rounded-pill bg-yang px-5 py-2 text-[14px] font-semibold text-on-accent hover:opacity-90">Reload</button>
-          <a href={localePath("/offline/")} className="rounded-pill border border-line px-5 py-2 text-[14px] font-semibold text-ink hover:border-yin-light">Offline downloads</a>
+          <a href={localePath("/offline/")} className="rounded-pill border border-line px-5 py-2 text-[14px] font-semibold text-ink hover:border-yin-ink">Offline downloads</a>
         </div>
       </div>
       </>

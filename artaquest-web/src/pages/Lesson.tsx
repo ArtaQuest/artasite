@@ -121,7 +121,7 @@ const Check = ({ cls = "" }: { cls?: string }) => <svg viewBox="0 0 24 24" width
 function SectionIcon({ l }: { l: CurriculumItem }) {
   // Complete = watched + commented + upvoted (gold check). Watched-only = ring. Else number.
   if (l.complete) return <span className="text-yang"><Check /></span>;
-  if (l.done) return <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" className="text-yin-light" role="img" aria-label="Watched — join the discussion"><circle cx="12" cy="12" r="8" /></svg>;
+  if (l.done) return <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" className="text-yin-ink" role="img" aria-label="Watched — join the discussion"><circle cx="12" cy="12" r="8" /></svg>;
   return <span className="text-[13px] text-ink-3">{l.n}</span>;
 }
 
@@ -387,7 +387,7 @@ export default function Lesson({ id }: { id: number | string }) {
         <h1 className="mt-2 text-[22px] font-bold tracking-tight">{d.title}</h1>
 
         {offlineMedia && (
-          <p className="mt-3 inline-flex items-center gap-1.5 rounded-pill bg-yin/15 px-3 py-1 text-[12px] font-semibold text-yin-light">
+          <p className="mt-3 inline-flex items-center gap-1.5 rounded-pill bg-yin/15 px-3 py-1 text-[12px] font-semibold text-yin-ink">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M12 3v12" strokeLinecap="round" /><path d="M7 11l5 4 5-4" strokeLinecap="round" strokeLinejoin="round" /><path d="M5 21h14" strokeLinecap="round" /></svg>
             Playing your downloaded copy — works offline
           </p>

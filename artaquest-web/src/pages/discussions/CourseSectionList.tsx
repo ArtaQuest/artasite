@@ -30,7 +30,7 @@ export default function CourseSectionList({ courseId }: { courseId: number }) {
                 <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-line text-[13px] text-ink-3">{l.complete ? "✓" : i + 1}</span>
                 <span className="min-w-0 flex-1 truncate text-[15px] text-ink-2" data-ay-skip="1">{l.title}</span>
                 {l.comments > 0 && (
-                  <span className="flex shrink-0 items-center gap-1 rounded-pill bg-yin/15 px-2 py-0.5 text-[12px] font-semibold text-yin-light" title={`${l.comments} comments`}>
+                  <span className="flex shrink-0 items-center gap-1 rounded-pill bg-yin/15 px-2 py-0.5 text-[12px] font-semibold text-yin-ink" title={`${l.comments} comments`}>
                     <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M21 11.5a8.4 8.4 0 0 1-9.4 8.3L3 21l1.2-3.6A8.4 8.4 0 1 1 21 11.5Z" /></svg>
                     {l.comments}
                   </span>

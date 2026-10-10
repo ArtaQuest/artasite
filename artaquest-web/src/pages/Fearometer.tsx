@@ -176,7 +176,7 @@ export default function Fearometer() {
             </ul>
           </Card>
           <Card className="border-t-2 border-t-yin-light p-6 sm:p-7">
-            <h3 className="text-[17px] font-bold text-yin-light">Not red flags — always welcome</h3>
+            <h3 className="text-[17px] font-bold text-yin-ink">Not red flags — always welcome</h3>
             <ul className="mt-4 flex list-none flex-col gap-3">
               {NOT_FLAGS.map((x) => (
                 <li key={x} className="flex gap-3 text-[14.5px] leading-relaxed text-ink-2"><Tick /><span>{x}</span></li>
@@ -199,10 +199,10 @@ export default function Fearometer() {
           {PAIRS.map((p) => (
             <Card key={p.topic} className="p-5 sm:p-6">
               <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">{p.topic}</p>
-              <div className="mt-3 flex gap-3 rounded-card border border-yin-light/25 bg-yin/5 p-3">
+              <div className="mt-3 flex gap-3 rounded-card border border-yin-ink/25 bg-yin/5 p-3">
                 <Tick />
                 <div>
-                  <p className="text-[12px] font-bold uppercase tracking-wide text-yin-light">Stays</p>
+                  <p className="text-[12px] font-bold uppercase tracking-wide text-yin-ink">Stays</p>
                   <p className="mt-0.5 text-[14.5px] leading-relaxed text-ink">“{p.stays}”</p>
                 </div>
               </div>
@@ -390,12 +390,12 @@ export default function Fearometer() {
                     <li key={c.key} className="flex items-center justify-between gap-2 rounded-field border border-line bg-space-1 px-2.5 py-1.5 text-[12.5px]">
                       <span className="truncate text-ink-2">{c.key.replace(/-/g, " ")}</span>
                       <span className="shrink-0 tabular-nums text-ink-3">
-                        <span className="text-rose-300">{c.flagged}</span>/<span className="text-yin-light">{c.welcome}</span>
+                        <span className="text-rose-300">{c.flagged}</span>/<span className="text-yin-ink">{c.welcome}</span>
                       </span>
                     </li>
                   ))}
                 </ul>
-                <p className="mt-2 text-[11.5px] text-ink-2"><span className="text-rose-300">set aside</span> / <span className="text-yin-light">welcome</span> in each kind</p>
+                <p className="mt-2 text-[11.5px] text-ink-2"><span className="text-rose-300">set aside</span> / <span className="text-yin-ink">welcome</span> in each kind</p>
               </details>
             )}
           </Card>

@@ -215,7 +215,7 @@ function GrowingTextarea({ value, onChange, onKeyDown, onPaste, placeholder, dis
     <textarea ref={ref} value={value} rows={1} maxLength={12000} placeholder={placeholder} disabled={disabled}
       aria-label="Encrypted message" dir="auto"
       onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} onPaste={onPaste}
-      className="max-h-[152px] min-h-[42px] flex-1 resize-none rounded-field border border-line bg-space-1 px-3.5 py-2.5 text-[14.5px] leading-snug text-ink outline-none transition-colors placeholder:text-ink-2 focus:border-yin-light" />
+      className="max-h-[152px] min-h-[42px] flex-1 resize-none rounded-field border border-line bg-space-1 px-3.5 py-2.5 text-[14.5px] leading-snug text-ink outline-none transition-colors placeholder:text-ink-2 focus:border-yin-ink" />
   );
 }
 
@@ -327,7 +327,7 @@ function Media({ att, url, onZoom }: { att: SealedAttachment; url: string | null
   }
   return (
     <a href={url} download={att.name || "attachment"}
-      className="flex max-w-[260px] items-center gap-2.5 rounded-field border border-line bg-space-1 px-3 py-2 transition-colors hover:border-yin-light">
+      className="flex max-w-[260px] items-center gap-2.5 rounded-field border border-line bg-space-1 px-3 py-2 transition-colors hover:border-yin-ink">
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-veil/[0.07] text-ink-2"><Ic d={IC.file} size={17} /></span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13px] font-semibold text-ink">{att.name || "File"}</span>
@@ -420,7 +420,7 @@ function Composer({
     <div ref={boxRef}>
       {(replyTo || editing) && (
         /* Quotes the message being replied to / edited — decrypted plaintext. */
-        <div data-ay-skip="1" className="mb-2 flex items-center gap-2 rounded-field border-s-2 border-yin-light/70 bg-veil/[0.05] px-3 py-1.5">
+        <div data-ay-skip="1" className="mb-2 flex items-center gap-2 rounded-field border-s-2 border-yin-ink/70 bg-veil/[0.05] px-3 py-1.5">
           <p className="min-w-0 flex-1 text-[12px] text-ink-2">
             <span className="wrap-anywhere font-semibold text-ink-2">{editing ? "Editing your message" : `Replying to ${replyPreview ? peerName : peerName}`}</span>
             {!editing && replyPreview && <span className="block truncate">— {replyPreview}</span>}
@@ -1511,7 +1511,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                   negative margin, so nothing on the header moves. */}
               <a href={localePath(`/u/${peer.slug}/`)} data-ay-skip="1"
                 title="See their profile"
-                className={`-my-3 py-3 font-semibold text-ink hover:text-yin-light ${nameClass(peer.name, 15)}`}>{peer.name}</a>
+                className={`-my-3 py-3 font-semibold text-ink hover:text-yin-ink ${nameClass(peer.name, 15)}`}>{peer.name}</a>
               {/* ink-2, not ink-3: at 11.5px this is the line that says whether the conversation is
                   encrypted, muted, or the other person is typing — text a member reads, and ink-3 is
                   the 3.0:1 tier the contrast engine reserves for non-text marks. */}
@@ -1640,7 +1640,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
             <button key={t.v} type="button"
               onClick={() => { chatSetTtl(peer.id, t.v).then(() => setLive((l) => ({ ...l, ttl: t.v }))).catch(() => undefined); setPanel(""); }}
               className={`rounded-pill border px-3 py-1 text-[12px] font-semibold transition-colors ${
-                live.ttl === t.v ? "border-yang text-ink" : "border-line text-ink-2 hover:border-yin-light hover:text-ink"
+                live.ttl === t.v ? "border-yang text-ink" : "border-line text-ink-2 hover:border-yin-ink hover:text-ink"
               }`}>{t.label}</button>
           ))}
           <span className="w-full text-[12px] text-ink-2">Expiry hard-deletes the sealed rows and attachments from the public database for both of you.</span>
@@ -1669,7 +1669,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
         }} className={`relative flex-1 overflow-y-auto py-3 ${compact ? "px-3" : "px-3 md:px-4"}`}>
         {older !== null && (
           <div className="pb-2 text-center">
-            <button type="button" className="rounded-pill border border-line px-3.5 py-1 text-[12px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink"
+            <button type="button" className="rounded-pill border border-line px-3.5 py-1 text-[12px] font-semibold text-ink-2 hover:border-yin-ink hover:text-ink"
               onClick={async () => {
                 try {
                   const page = await chatMessages(peer.id, { cursor: older });
@@ -1801,7 +1801,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                       } ${m.pending ? "opacity-70" : ""} ${m.failed ? "opacity-60 ring-1 ring-yang" : ""}`}>
                         {replyRef && (
                           <button type="button" onClick={() => rowRefs.current.get(replyRef)?.scrollIntoView({ block: "center" })}
-                            className="mb-1.5 block w-full truncate rounded border-s-2 border-yin-light/70 bg-veil/[0.06] px-2 py-1 text-start text-[12px] text-ink-2">
+                            className="mb-1.5 block w-full truncate rounded border-s-2 border-yin-ink/70 bg-veil/[0.06] px-2 py-1 text-start text-[12px] text-ink-2">
                             {view.textOf.get(replyRef) || "Earlier message"}
                           </button>
                         )}
@@ -1869,7 +1869,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                             <button key={emoji} type="button" onClick={() => toggleReact(m, emoji)}
                               aria-label={`${emoji} ${who.size}`}
                               className={`inline-flex min-h-9 min-w-9 items-center justify-center rounded-pill border px-1.5 py-0.5 text-[12px] shadow-card transition-colors ${
-                                who.has(me) ? "border-yang bg-space-2" : "border-line bg-space-2 hover:border-yin-light"
+                                who.has(me) ? "border-yang bg-space-2" : "border-line bg-space-2 hover:border-yin-ink"
                               }`}>{emoji}{who.size > 1 ? ` ${who.size}` : ""}</button>
                           ))}
                         </div>
@@ -1914,7 +1914,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
         {!atBottom && (
           <button type="button" aria-label="Jump to latest"
             onClick={() => { const el = scroller.current; if (el) el.scrollTop = el.scrollHeight; setAtBottom(true); setMissed(0); }}
-            className="sticky bottom-2 start-full z-10 -translate-x-2 rounded-pill border border-line bg-space-2 px-3 py-1.5 text-[12px] font-semibold text-ink shadow-card hover:border-yin-light rtl:translate-x-2">
+            className="sticky bottom-2 start-full z-10 -translate-x-2 rounded-pill border border-line bg-space-2 px-3 py-1.5 text-[12px] font-semibold text-ink shadow-card hover:border-yin-ink rtl:translate-x-2">
             ↓{missed > 0 ? ` ${missed} new` : ""}
           </button>
         )}
@@ -1968,7 +1968,7 @@ export function DmThread({ me, identity, myKey, peer, onBack, compact = false }:
                   <span>, so neither of you can write here.</span>
                 </p>
                 <button type="button" onClick={() => void relate("unblock")} disabled={acting}
-                  className="rounded-pill border border-line px-3 py-1 text-[12.5px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink disabled:opacity-50">Unblock</button>
+                  className="rounded-pill border border-line px-3 py-1 text-[12.5px] font-semibold text-ink-2 hover:border-yin-ink hover:text-ink disabled:opacity-50">Unblock</button>
               </>
             ) : rel.blocked_by ? (
               <p>
@@ -2427,7 +2427,7 @@ export default function Messages() {
                     already yours, that you can sit in alone with the camera on, and that becomes a
                     group the moment you invite anybody. */}
                 <button type="button" onClick={() => void openMyRoom()} disabled={makingRoom}
-                  className="flex items-center gap-3 rounded-card border border-line bg-space-2 px-3 py-2.5 text-start shadow-card hover:border-yin-light disabled:opacity-50">
+                  className="flex items-center gap-3 rounded-card border border-line bg-space-2 px-3 py-2.5 text-start shadow-card hover:border-yin-ink disabled:opacity-50">
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-yang/20 text-[17px]">🌓</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[14px] font-semibold text-ink">Your room</span>

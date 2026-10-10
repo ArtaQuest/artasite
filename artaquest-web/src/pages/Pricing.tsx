@@ -70,7 +70,7 @@ export default function Pricing() {
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card className="p-5"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Buy 1 coin ({w.base_fiat})</p><p className="mt-1.5 text-[24px] font-extrabold text-yang tabular-nums">{local(w.buy_base, w.base_fiat)}</p></Card>
-        <Card className="p-5"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Sell 1 coin ({w.base_fiat})</p><p className="mt-1.5 text-[24px] font-extrabold text-yin-light tabular-nums">{local(w.sell_base, w.base_fiat)}</p></Card>
+        <Card className="p-5"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Sell 1 coin ({w.base_fiat})</p><p className="mt-1.5 text-[24px] font-extrabold text-yin-ink tabular-nums">{local(w.sell_base, w.base_fiat)}</p></Card>
         {/* A missing or zero spot price renders as "$0", which on a money page reads as a real
             quote — gold at nothing. There is no honest way to show a price we do not have, so we
             say we do not have it. Guard the VALUE, not just `undefined`: the field is typed number

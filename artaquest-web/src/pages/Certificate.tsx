@@ -72,7 +72,7 @@ export default function Certificate() {
           {cert.verify_url && (
             <p className="aq-no-print mt-4 text-center text-[12px] text-ink-3">
               Anyone can confirm this certificate is genuine at{" "}
-              <a href={cert.verify_url} className="text-yin-light underline-offset-2 hover:underline" data-ay-skip="1">{verifyDisplay(cert.verify_url)}</a>
+              <a href={cert.verify_url} className="text-yin-ink underline-offset-2 hover:underline" data-ay-skip="1">{verifyDisplay(cert.verify_url)}</a>
             </p>
           )}
         </div>

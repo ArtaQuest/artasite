@@ -20,7 +20,7 @@ export default function NotFound() {
       <div className="mt-6 flex w-full justify-center"><SearchBox autoFocus /></div>
       <div className="mt-6 flex flex-wrap justify-center gap-3">
         <Button href="/" size="lg">Go home</Button>
-        <Button variant="outline" size="lg" href="/courses/" className="text-ink hover:text-yin-light">Browse courses</Button>
+        <Button variant="outline" size="lg" href="/courses/" className="text-ink hover:text-yin-ink">Browse courses</Button>
       </div>
     </div>
   );

@@ -381,7 +381,7 @@ function AccountRow({ me, labelShow, onNavigate }: {
       <a href={href} onClick={onNavigate} aria-label={`${me.name} — your profile`}
         className="mx-2 mb-3 mt-1 flex min-h-14 shrink-0 items-center rounded-pill py-1 transition-colors hover:bg-veil/[0.06]">
         <span className="grid w-[52px] shrink-0 place-items-center">
-          <Avatar src={me.avatar} name={me.name} className="h-9 w-9 text-[13px] text-ink ring-1 ring-yin-light/50" />
+          <Avatar src={me.avatar} name={me.name} className="h-9 w-9 text-[13px] text-ink ring-1 ring-yin-ink/50" />
         </span>
         {/* A NAME IS NEVER SHORTENED — nameClass wraps and steps the type down (lib/fmt). */}
         <span className={`min-w-0 flex-1 pe-1 transition-opacity duration-200 ${labelShow}`}>

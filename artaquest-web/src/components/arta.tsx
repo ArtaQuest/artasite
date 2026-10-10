@@ -51,8 +51,9 @@ export function ArtaBadge({ size = 16, chip = true }: { size?: number; chip?: bo
 // ── @mentions ────────────────────────────────────────────────────────────────
 function Mention({ handle }: { handle: string }) {
   // @arta is a handle like any other (artabot is its old name, kept as an alias).
-  const to = `/u/${/^artabot$/i.test(handle) ? "arta" : handle}`;
-  return <Link to={to} onClick={(e) => e.stopPropagation()} data-ay-skip="1" className="font-medium text-yin-ink hover:underline">@{handle}</Link>;
+  const h = handle.toLowerCase(); // shown as the canonical handle, however it was typed
+  const to = `/u/${h === "artabot" ? "arta" : h}`;
+  return <Link to={to} onClick={(e) => e.stopPropagation()} data-ay-skip="1" className="font-medium text-yin-ink hover:underline">@{h}</Link>;
 }
 
 /** Plain text with every @handle linked — @arta included, exactly like any member. */

@@ -53,7 +53,7 @@ function Verbatim({ text }: { text: string }) {
 /** One annotated block: the exact prompt text, then the plain-English "why it's here" beside/under it. */
 function Block({ block, index }: { block: PromptBlock; index: number }) {
   const tag = block.group === "composer" ? "Composer prompt" : "Critic prompt";
-  const tagCls = block.group === "composer" ? "border-yang/40 bg-yang/[0.10] text-yang" : "border-yin/40 bg-yin/[0.10] text-yin-light";
+  const tagCls = block.group === "composer" ? "border-yang/40 bg-yang/[0.10] text-yang" : "border-yin-ink/40 bg-yin/[0.10] text-yin-ink";
   return (
     <section className="scroll-mt-24">
       <div className="flex flex-wrap items-center gap-2">
@@ -119,7 +119,7 @@ export default function ArtaSound() {
   return (
     <div className="flex flex-col py-1">
       {/* ── 1. HEADER ── */}
-      <a href={localePath("/music/")} className="text-[14px] font-semibold text-yin-light hover:underline"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Music</a>
+      <a href={localePath("/music/")} className="text-[14px] font-semibold text-yin-ink hover:underline"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Music</a>
       <div className="mt-4">
         <PageHero
           eyebrow="ArtaSound · Transparency"
@@ -132,7 +132,7 @@ export default function ArtaSound() {
         <Card className="p-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-2">Composer & critic</p>
           <p className="mt-1 text-[15px] font-bold text-ink">{STUDIO_MODEL}</p>
-          <p className="mt-0.5 text-[12.5px] text-ink-3">effort: <span className="font-semibold text-yin-light">{STUDIO_EFFORT}</span> · sung vocals by open models on free GPUs</p>
+          <p className="mt-0.5 text-[12.5px] text-ink-3">effort: <span className="font-semibold text-yin-ink">{STUDIO_EFFORT}</span> · sung vocals by open models on free GPUs</p>
         </Card>
         <Card className="p-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-2">How it judges</p>
@@ -146,7 +146,7 @@ export default function ArtaSound() {
 
       <StudioPulse />
 
-      <p className="mt-5 rounded-card border border-yin/30 bg-yin/[0.06] p-4 text-[15px] leading-relaxed text-ink-2">
+      <p className="mt-5 rounded-card border border-yin-ink/30 bg-yin/[0.06] p-4 text-[15px] leading-relaxed text-ink-2">
         The platform's ethos is <b className="text-ink">radical transparency</b> — the entire database is public. In that spirit,
         every round of every project is published with its own playable recording, its measurements and the critic's verbatim
         report, and the full prompts below are exactly what the studio is given. Nothing is paraphrased or withheld.
@@ -194,7 +194,7 @@ export default function ArtaSound() {
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {ENGINES.map((e) => (
             <div key={e.name} className="rounded-card border border-line bg-space-2 p-4">
-              <p className="text-[14px] font-bold text-yin-light">{e.name}</p>
+              <p className="text-[14px] font-bold text-yin-ink">{e.name}</p>
               <p className="mt-1 text-[13px] leading-relaxed text-ink-2">{e.role}</p>
             </div>
           ))}
@@ -237,9 +237,9 @@ export default function ArtaSound() {
           track, play each round's recording next to its verdict.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <a href={localePath("/music/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">Browse the music <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
-          <a href={localePath("/data/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">Open the Data explorer <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
-          <a href={localePath("/research/artascience/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">ArtaScience — the same loop on research <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
+          <a href={localePath("/music/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-ink hover:text-ink">Browse the music <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
+          <a href={localePath("/data/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-ink hover:text-ink">Open the Data explorer <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
+          <a href={localePath("/research/artascience/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-ink hover:text-ink">ArtaScience — the same loop on research <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
         </div>
         <p className="mt-6 border-t border-line pt-4 text-[12px] text-ink-3">ArtaSound · original music and audiobooks by members · every draft critiqued in the open before its author hears it</p>
       </div>

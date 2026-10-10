@@ -312,7 +312,7 @@ function TimePicker({ hostSlug, hostName, rule, onBook }: {
                     return (
                       <button key={ts} type="button" aria-pressed={on} onClick={() => { setPicked(ts); setErr(""); }}
                         className={cx("h-12 rounded-field border text-[15px] font-semibold tabular-nums transition-colors duration-150 md:h-11 md:text-[14.5px]",
-                          on ? "border-yang bg-yang text-on-accent" : "border-line text-ink-2 hover:border-yin-light hover:text-ink")}>
+                          on ? "border-yang bg-yang text-on-accent" : "border-line text-ink-2 hover:border-yin-ink hover:text-ink")}>
                         <span data-ay-skip="1">{clockOnly(ts, tz)}</span>
                       </button>
                     );
@@ -1030,7 +1030,7 @@ export default function ArtaCast() {
                       <button key={h.id} type="button" role="radio" aria-checked={on} disabled={!!booked}
                         onClick={() => { castSave({ host: h.id }).then((r) => setRequest(r.request)).catch((e) => setSaveErr(errText(e, "Couldn’t change the host."))); }}
                         className={cx("flex min-h-[56px] w-full items-center gap-3 rounded-field border p-3 text-start transition-colors duration-150 disabled:opacity-60",
-                          on ? "border-yang bg-yang/12" : "border-line hover:border-yin-light")}>
+                          on ? "border-yang bg-yang/12" : "border-line hover:border-yin-ink")}>
                         <Avatar src={h.avatar} name={h.name} className="h-9 w-9 text-[13px]" />
                         <span className="min-w-0 flex-1 text-[14px] font-semibold text-ink" data-ay-skip="1">{h.name}</span>
                         <span className="shrink-0 text-[12px] text-ink-2">{h.open ? "calendar open" : "not open yet"}</span>

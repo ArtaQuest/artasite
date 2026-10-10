@@ -136,7 +136,7 @@ function KindTag({ kind, timed }: { kind: CalendarKind; timed: boolean }) {
     // thing that starts at a clock time, blue is an all-day date. The word beside the glyph says
     // which of the three sources it came from, so nothing rests on colour alone.
     <span className={cx("inline-flex h-6 shrink-0 items-center gap-1 rounded-pill px-2 text-[11px] font-semibold",
-      timed ? "bg-yang/15 text-yang" : "bg-yin/15 text-yin-light")}>
+      timed ? "bg-yang/15 text-yang" : "bg-yin/15 text-yin-ink")}>
       <svg viewBox="0 0 20 20" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.6"
         strokeLinecap="round" strokeLinejoin="round" aria-hidden>{KIND[kind].glyph}</svg>
       {KIND[kind].label}
@@ -227,7 +227,7 @@ function ItemRow({ it, now }: { it: CalendarItem; now: number }) {
             {fmt(it.start_ts, { hour: "2-digit", minute: "2-digit" })}
           </span>
         ) : (
-          <span className="block text-[13px] font-semibold leading-tight text-yin-light">All day</span>
+          <span className="block text-[13px] font-semibold leading-tight text-yin-ink">All day</span>
         )}
       </div>
 
@@ -303,7 +303,7 @@ function SubscribePanel({ cal }: { cal: CalendarCal | null }) {
               Subscribe
             </a>
             <button type="button" onClick={() => void copy()}
-              className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink">
+              className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 hover:border-yin-ink hover:text-ink">
               {copied ? "Copied" : "Copy the address"}
             </button>
           </div>
@@ -563,7 +563,7 @@ export default function Calendar() {
           {items !== null && items.length > 0 && days < 90 && (
             <div className="flex justify-center pt-1">
               <button type="button" onClick={() => setDays(days === 7 ? 30 : 90)}
-                className="inline-flex h-11 items-center rounded-pill border border-line bg-space-2 px-6 text-[14px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink">
+                className="inline-flex h-11 items-center rounded-pill border border-line bg-space-2 px-6 text-[14px] font-semibold text-ink-2 transition-colors hover:border-yin-ink hover:text-ink">
                 {days === 7 ? "Look 30 days ahead" : "Look 3 months ahead"}
               </button>
             </div>

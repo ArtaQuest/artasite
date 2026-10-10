@@ -40,7 +40,7 @@ function Verbatim({ text }: { text: string }) {
 
 function Block({ block, index }: { block: PromptBlock; index: number }) {
   const tag = block.group === "director" ? "Art director" : "Adversarial critic";
-  const tagCls = block.group === "director" ? "border-yang/40 bg-yang/[0.10] text-yang" : "border-yin/40 bg-yin/[0.10] text-yin-light";
+  const tagCls = block.group === "director" ? "border-yang/40 bg-yang/[0.10] text-yang" : "border-yin-ink/40 bg-yin/[0.10] text-yin-ink";
   return (
     <section className="scroll-mt-24">
       <div className="flex flex-wrap items-center gap-2">
@@ -89,7 +89,7 @@ function LiveActivity() {
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {items.map((i) => (
-        <a key={i.id} href={localePath(`/illustration/${i.id}/`)} className="group flex gap-3 rounded-card border border-line bg-space-2 p-3 no-underline transition hover:border-yin/40">
+        <a key={i.id} href={localePath(`/illustration/${i.id}/`)} className="group flex gap-3 rounded-card border border-line bg-space-2 p-3 no-underline transition hover:border-yin-ink/40">
           <div className="h-20 w-20 shrink-0 overflow-hidden rounded bg-space-1">
             {i.image
               ? <img src={i.image} alt="" loading="lazy" className="h-full w-full object-cover" />
@@ -122,7 +122,7 @@ export default function ArtaIllustrationStudio() {
   return (
     <div className="flex flex-col py-1">
       {/* ── 1. HEADER ── */}
-      <a href={localePath("/illustrations/")} className="text-[14px] font-semibold text-yin-light hover:underline"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Illustrations</a>
+      <a href={localePath("/illustrations/")} className="text-[14px] font-semibold text-yin-ink hover:underline"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Illustrations</a>
       <div className="mt-4">
         <PageHero
           eyebrow="ArtaIllustration · Transparency"
@@ -135,7 +135,7 @@ export default function ArtaIllustrationStudio() {
         <Card className="p-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-2">Director & critic</p>
           <p className="mt-1 text-[15px] font-bold text-ink">{STUDIO_MODEL}</p>
-          <p className="mt-0.5 text-[12.5px] text-ink-3">effort: <span className="font-semibold text-yin-light">{STUDIO_EFFORT}</span> — the critic sees the real pixels</p>
+          <p className="mt-0.5 text-[12.5px] text-ink-3">effort: <span className="font-semibold text-yin-ink">{STUDIO_EFFORT}</span> — the critic sees the real pixels</p>
         </Card>
         <Card className="p-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-2">How it judges</p>
@@ -147,7 +147,7 @@ export default function ArtaIllustrationStudio() {
         </Card>
       </div>
 
-      <p className="mt-5 rounded-card border border-yin/30 bg-yin/[0.06] p-4 text-[15px] leading-relaxed text-ink-2">
+      <p className="mt-5 rounded-card border border-yin-ink/30 bg-yin/[0.06] p-4 text-[15px] leading-relaxed text-ink-2">
         The platform's ethos is <b className="text-ink">radical transparency</b> — the entire database is public. In that spirit,
         the prompts below are exactly what the director and the critic are given, and every piece's page carries its full
         improvement history: each round's image, the critique it earned, the per-axis scores, and the fix that followed.
@@ -176,7 +176,7 @@ export default function ArtaIllustrationStudio() {
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {SECURITY.map((x) => (
               <div key={x.title} className="rounded-card border border-line bg-space-2 p-4">
-                <p className="text-[14px] font-bold text-yin-light">{x.title}</p>
+                <p className="text-[14px] font-bold text-yin-ink">{x.title}</p>
                 <p className="mt-1 text-[13px] leading-relaxed text-ink-2">{x.body}</p>
               </div>
             ))}

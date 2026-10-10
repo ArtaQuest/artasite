@@ -74,7 +74,7 @@ export default function ArtaProfile() {
               key={name}
               type="button"
               onClick={run}
-              className="rounded-card border border-line bg-space-1 p-4 text-start transition hover:border-yin hover:bg-space-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+              className="rounded-card border border-line bg-space-1 p-4 text-start transition hover:border-yin-ink hover:bg-space-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
             >
               <span className="block text-[15px] font-bold text-yang-ink">{name}</span>
               <span className="mt-1 block text-[13px] leading-relaxed text-ink-3">{why}</span>

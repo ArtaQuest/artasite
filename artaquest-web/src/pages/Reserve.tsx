@@ -64,7 +64,7 @@ function PriceChart({ history, fiat }: { history: ReservePoint[]; fiat: string }
 }
 
 function TickerCard({ label, value, sub, tone }: { label: string; value: ReactNode; sub?: string; tone: "yang" | "yin" | "ink" }) {
-  const color = tone === "yang" ? "text-yang" : tone === "yin" ? "text-yin-light" : "text-ink";
+  const color = tone === "yang" ? "text-yang" : tone === "yin" ? "text-yin-ink" : "text-ink";
   return (
     <Card className="p-5">
       <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">{label}</p>
@@ -140,7 +140,7 @@ export default function Reserve() {
           <p className="mt-3 text-[14px] text-ink-3"><bdi dir="ltr" data-ay-skip="1">{r.peg}</bdi></p>
           <div className="mt-7 flex flex-wrap gap-3">
             <Button href="/wallet/" size="xl">Buy or cash out coins</Button>
-            <Button href="/donate/" variant="outline" size="xl" className="text-ink hover:text-yin-light">See the books</Button>
+            <Button href="/donate/" variant="outline" size="xl" className="text-ink hover:text-yin-ink">See the books</Button>
           </div>
         </div>
         {/* The rings ride WITH the coin now rather than floating over the section, so a decoration
@@ -206,7 +206,7 @@ export default function Reserve() {
                 : "Cash-out is not open yet. Coins can be spent and held; redemption for money starts when the payout rail does."}
             </p>
           </div>
-          <span className={`shrink-0 rounded-pill px-3.5 py-1.5 text-[13px] font-bold ${r.backed ? "bg-yin/15 text-yin-light" : "bg-yang/15 text-yang"}`}>
+          <span className={`shrink-0 rounded-pill px-3.5 py-1.5 text-[13px] font-bold ${r.backed ? "bg-yin/15 text-yin-ink" : "bg-yang/15 text-yang"}`}>
             {r.backed ? `${backedPct}% backed` : `${backedPct}% backed — a shortfall we owe`}
           </span>
         </Card>
@@ -260,7 +260,7 @@ export default function Reserve() {
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <Button href="/wallet/" size="lg">Open your wallet</Button>
-            <Button href="/challenges/" variant="outline" size="lg" className="text-ink hover:text-yin-light">Win coins in a challenge</Button>
+            <Button href="/challenges/" variant="outline" size="lg" className="text-ink hover:text-yin-ink">Win coins in a challenge</Button>
           </div>
         </div>
       </section>

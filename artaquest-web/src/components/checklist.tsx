@@ -28,7 +28,7 @@ function tone(i: NbCheck) {
   if (i.state === "pass") return { mark: "✓", cls: "text-ink-3", ring: "border-line" };
   if (i.state === "skip") return { mark: "·", cls: "text-ink-3", ring: "border-line" };
   return i.severity === "block"
-    ? { mark: "✕", cls: "text-yin-ink", ring: "border-yin" }
+    ? { mark: "✕", cls: "text-yin-ink", ring: "border-yin-ink" }
     : { mark: "!", cls: "text-yang", ring: "border-yang" };
 }
 

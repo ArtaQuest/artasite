@@ -819,7 +819,7 @@ function Composer({ onPosted, initialText = "" }: { onPosted: (p: FeedPostT) => 
             </div>
           ) : null}
           {attach ? (
-            <div className="mb-2 flex items-center gap-2 rounded-xl border border-yin/50 bg-yin/10 px-3 py-2 text-[13px]">
+            <div className="mb-2 flex items-center gap-2 rounded-xl border border-yin-ink/50 bg-yin/10 px-3 py-2 text-[13px]">
               <span className="truncate text-ink-2">📓 {attach.title}</span>
               <button type="button" onClick={() => setAttach(null)} className="ml-auto text-yin-ink hover:underline">remove</button>
             </div>

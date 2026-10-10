@@ -22,7 +22,7 @@ import { ConfirmDialog, Button } from "./ui";
 import { deleteNotebook, saveNotebook, type NotebookFull } from "../lib/api";
 
 const field =
-  "w-full rounded-field border border-line bg-space-1 px-3 py-2 text-ink outline-none transition-colors focus:border-yin-light";
+  "w-full rounded-field border border-line bg-space-1 px-3 py-2 text-ink outline-none transition-colors focus:border-yin-ink";
 
 export function WorkEdit({
   nb,

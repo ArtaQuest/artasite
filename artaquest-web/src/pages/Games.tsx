@@ -135,13 +135,13 @@ function PlayerBar({ p, score, you, pending, clock, running, showClock }: {
       <div className="min-w-0 flex-1">
         <p className={cx("font-bold", nameClass(p ? p.name : "Arta", 15))}>
           {p && p.slug ? <a className="hover:underline" href={`/u/${p.slug}`}>{p.name}</a> : (p ? p.name : "Arta")}
-          {you && <span className="ms-2 rounded-pill bg-yin/15 px-1.5 py-0.5 text-[10.5px] font-semibold text-yin-light">you</span>}
+          {you && <span className="ms-2 rounded-pill bg-yin/15 px-1.5 py-0.5 text-[10.5px] font-semibold text-yin-ink">you</span>}
         </p>
         <p className="mt-0.5 text-[12px] text-ink-3">{p ? `${p.wins}W · ${p.losses}L · ${p.draws}D` : "practice partner"}{pending && <span className="ms-2 text-yang">✦ sealed a throw</span>}</p>
       </div>
       {p && <RatingPill p={p} />}
       <ClockChip seconds={clock} running={running} show={showClock} />
-      <span className={cx("min-w-[3ch] text-end text-[26px] font-extrabold tabular-nums", score < 0 ? "text-yin-light" : "text-ink")}>{sc(score)}</span>
+      <span className={cx("min-w-[3ch] text-end text-[26px] font-extrabold tabular-nums", score < 0 ? "text-yin-ink" : "text-ink")}>{sc(score)}</span>
     </div>
   );
 }
@@ -169,7 +169,7 @@ function RevealStage({ round, mineIsA, onDone }: { round: RpsRound; mineIsA: boo
     return () => { clearTimeout(showT); clearTimeout(doneT); };
   }, [round.r, dismiss]);
   const verdict = pm === pt ? (pm > 0 ? "Both rise" : "Both fall") : LAWS[idx(pm > pt ? mine : theirs)];
-  const tone = pm > 0 ? "text-yang" : pm < 0 && pt < 0 ? "text-yin-light" : pm > pt ? "text-yang" : "text-yin-light";
+  const tone = pm > 0 ? "text-yang" : pm < 0 && pt < 0 ? "text-yin-ink" : pm > pt ? "text-yang" : "text-yin-ink";
   return (
     <div role="button" tabIndex={0} aria-label={`Round ${round.r}: ${TOOL_NAME[mine]} versus ${TOOL_NAME[theirs]} — tap to continue`}
       onClick={dismiss} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " " || e.key === "Escape") { e.preventDefault(); dismiss(); } }}
@@ -178,7 +178,7 @@ function RevealStage({ round, mineIsA, onDone }: { round: RpsRound; mineIsA: boo
         <div className="relative flex min-w-0 flex-1 flex-col items-center">
           {shown && pm > pt && <div aria-hidden className="absolute inset-[-12%] rounded-full bg-yang/20 blur-2xl" />}
           <HandThrow tool={mine} width={150} pumps={2} onRevealed={() => setShown(true)} className="relative w-[min(150px,34vw)]" />
-          <span className={cx("relative mt-1 text-[16px] font-extrabold tabular-nums", pm >= 0 ? "text-yang" : "text-yin-light")}>
+          <span className={cx("relative mt-1 text-[16px] font-extrabold tabular-nums", pm >= 0 ? "text-yang" : "text-yin-ink")}>
             {shown ? (pm > 0 ? `+${pm}` : sc(pm)) : " "}
           </span>
           <span className="relative text-[11px] font-bold text-ink-3">{shown ? TOOL_NAME[mine] : " "}</span>
@@ -190,7 +190,7 @@ function RevealStage({ round, mineIsA, onDone }: { round: RpsRound; mineIsA: boo
         <div className="relative flex min-w-0 flex-1 flex-col items-center">
           {shown && pt > pm && <div aria-hidden className="absolute inset-[-12%] rounded-full bg-yin/15 blur-2xl" />}
           <HandThrow tool={theirs} width={150} pumps={2} blue mirror className="relative w-[min(150px,34vw)]" />
-          <span className={cx("relative mt-1 text-[16px] font-extrabold tabular-nums", pt >= 0 ? "text-yang" : "text-yin-light")}>
+          <span className={cx("relative mt-1 text-[16px] font-extrabold tabular-nums", pt >= 0 ? "text-yang" : "text-yin-ink")}>
             {shown ? (pt > 0 ? `+${pt}` : sc(pt)) : " "}
           </span>
           <span className="relative text-[11px] font-bold text-ink-3">{shown ? TOOL_NAME[theirs] : " "}</span>
@@ -472,7 +472,7 @@ function MatchBoard({ match, onExit, onRematch }: { match: RpsMatch; onExit: () 
               return (
                 <span key={r.r} title={`Round ${r.r}: ${TOOL_NAME[r.a as ToolKey]} vs ${TOOL_NAME[r.b as ToolKey]} (${r.pa > 0 ? "+" : ""}${r.pa} / ${r.pb > 0 ? "+" : ""}${r.pb})`}
                   className={cx("inline-flex items-center gap-1 rounded-pill px-1.5 py-0.5 text-[11px] font-bold ring-1",
-                    my > 0 ? "bg-yang/15 text-yang ring-yang/30" : my < 0 ? "bg-yin/10 text-yin-light ring-yin/25" : "bg-veil/[0.06] text-ink-3 ring-line")}>
+                    my > 0 ? "bg-yang/15 text-yang ring-yang/30" : my < 0 ? "bg-yin/10 text-yin-ink ring-yin-ink/25" : "bg-veil/[0.06] text-ink-3 ring-line")}>
                   <HandGlyph tool={mine as ToolKey} width={17} />·<HandGlyph tool={theirs as ToolKey} width={17} blue mirror />
                   <span className="tabular-nums">{my > 0 ? `+${my}` : sc(my)}</span>
                 </span>
@@ -488,7 +488,7 @@ function MatchBoard({ match, onExit, onRematch }: { match: RpsMatch; onExit: () 
               <span className="ms-2 text-ink-3 tabular-nums">{scoreLine(m.score[0], m.score[1])}</span>
             </p>
             {m.rated && seat !== 0 && m.delta[meIdx] !== 0 && (
-              <p className={cx("mt-1 text-[14px] font-bold", m.delta[meIdx] > 0 ? "text-yang" : "text-yin-light")}>
+              <p className={cx("mt-1 text-[14px] font-bold", m.delta[meIdx] > 0 ? "text-yang" : "text-yin-ink")}>
                 {m.delta[meIdx] > 0 ? "+" : ""}{m.delta[meIdx]} Elo
               </p>
             )}
@@ -506,7 +506,7 @@ function MatchBoard({ match, onExit, onRematch }: { match: RpsMatch; onExit: () 
         <div className="flex-1 space-y-2 overflow-y-auto px-3.5 py-3" style={{ maxHeight: 420 }}>
           {chat.length === 0 && <p className="text-[13px] text-ink-3">Say hello — good games start friendly.</p>}
           {chat.map((c) => (
-            <p key={c.id} className="text-[13.5px] leading-snug"><b className={cx(c.uid === (self?.uid ?? -1) ? "text-yang" : "text-yin-light")}>{c.name}</b> <span className="text-ink-2">{c.body}</span></p>
+            <p key={c.id} className="text-[13.5px] leading-snug"><b className={cx(c.uid === (self?.uid ?? -1) ? "text-yang" : "text-yin-ink")}>{c.name}</b> <span className="text-ink-2">{c.body}</span></p>
           ))}
           <div ref={chatEnd} />
         </div>
@@ -514,7 +514,7 @@ function MatchBoard({ match, onExit, onRematch }: { match: RpsMatch; onExit: () 
           <div className="flex gap-2 border-t border-line p-2.5">
             <input value={msg} onChange={(e) => setMsg(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") send(); }}
               maxLength={500} placeholder="Message…" aria-label="Chat message"
-              className="h-9 min-w-0 flex-1 rounded-card border border-line bg-transparent px-3 text-[13.5px] outline-none focus:border-yin" />
+              className="h-9 min-w-0 flex-1 rounded-card border border-line bg-transparent px-3 text-[13.5px] outline-none focus:border-yin-ink" />
             <Button size="sm" onClick={send} disabled={!msg.trim()}>Send</Button>
           </div>
         )}
@@ -626,7 +626,7 @@ function GameCard({ g }: { g: GameDef }) {
         </div>
         <p className="mt-0.5 text-[12.5px] font-semibold text-yang">{g.tagline} · {g.rounds} rounds</p>
         <p className="mt-1.5 text-[13px] leading-relaxed text-ink-3">{g.blurb}</p>
-        <span className="mt-3 inline-flex items-center gap-1 text-[13px] font-bold text-yin-light group-hover:underline">Play {g.title} →</span>
+        <span className="mt-3 inline-flex items-center gap-1 text-[13px] font-bold text-yin-ink group-hover:underline">Play {g.title} →</span>
       </div>
     </Card>
   );
@@ -645,7 +645,7 @@ function GamesCatalog({ embedded }: { embedded?: boolean }) {
       </div>
       <p className="mt-5 text-center text-[12.5px] text-ink-3">
         Each game is a 10-minute chess-style match — your clock ticks only while it's your throw. The printed 145-card edition is in the{" "}
-        <a className="font-semibold text-yin-light hover:underline" href={localePath("/shop/")}>Shop</a>.
+        <a className="font-semibold text-yin-ink hover:underline" href={localePath("/shop/")}>Shop</a>.
       </p>
     </div>
   );
@@ -746,7 +746,7 @@ function GameHub({ game, embedded }: { game: GameDef; embedded?: boolean }) {
               <div className="mt-1 rounded-card border border-line bg-veil/[0.03] p-3">
                 <p className="text-[12px] font-bold text-ink">{game.rounds} rounds · every tool once · ⏱ 10-min clock</p>
                 <p className="mt-1 text-[12px] leading-relaxed text-ink-3">
-                  An alliance pays <b className="text-yang">both</b>, a duel pays its <b className="text-yang">winner</b> and stings the loser, a clash costs <b className="text-yin-light">both</b>. Your clock ticks only while it's your throw — run out and you lose on time.
+                  An alliance pays <b className="text-yang">both</b>, a duel pays its <b className="text-yang">winner</b> and stings the loser, a clash costs <b className="text-yin-ink">both</b>. Your clock ticks only while it's your throw — run out and you lose on time.
                 </p>
               </div>
             </div>
@@ -814,7 +814,7 @@ function GameHub({ game, embedded }: { game: GameDef; embedded?: boolean }) {
                         <span className="flex items-center gap-2">
                           <Avatar name={r.name} />
                           {r.slug ? <a className={cx("min-w-0 font-semibold hover:underline", nameClass(r.name, 14))} href={`/u/${r.slug}`}>{r.name}</a> : <span className={cx("min-w-0 font-semibold", nameClass(r.name, 14))}>{r.name}</span>}
-                          {board.me?.uid === r.uid && <span className="rounded-pill bg-yin/15 px-1.5 py-0.5 text-[10.5px] font-semibold text-yin-light">you</span>}
+                          {board.me?.uid === r.uid && <span className="rounded-pill bg-yin/15 px-1.5 py-0.5 text-[10.5px] font-semibold text-yin-ink">you</span>}
                         </span>
                       </td>
                       <td className="py-2.5 pe-3 text-end font-bold tabular-nums">{r.rating}</td>
@@ -834,7 +834,7 @@ function GameHub({ game, embedded }: { game: GameDef; embedded?: boolean }) {
       {tab === "rules" && (
         <div className="mt-5 max-w-2xl space-y-4 text-[14.5px] leading-relaxed text-ink-2">
           <p><b className="text-ink">{game.title} — {tools.length} tools, {game.rounds} rounds.</b> Each round both players secretly throw one of the tools they haven't spent — a hand sign — and the throws reveal together. Every tool is thrown <b className="text-ink">exactly once</b>.</p>
-          <p>The wheel decides each reveal. Between the two tools: <b className="text-yang">an alliance lifts BOTH</b> (+2 or +3 each); <b className="text-ink">a duel</b> pays its winner +2 and stings the loser −2, and the Twelve Laws below say who wins; anything else <b className="text-yin-light">clashes — both fall</b> (−2 each). Highest total takes the match; online matches move Elo (K = 32).</p>
+          <p>The wheel decides each reveal. Between the two tools: <b className="text-yang">an alliance lifts BOTH</b> (+2 or +3 each); <b className="text-ink">a duel</b> pays its winner +2 and stings the loser −2, and the Twelve Laws below say who wins; anything else <b className="text-yin-ink">clashes — both fall</b> (−2 each). Highest total takes the match; online matches move Elo (K = 32).</p>
           <p><b className="text-ink">The clock.</b> Each player gets <b>10 minutes</b>, chess-style — but it ticks only while it's <i>your</i> throw to seal. A few seconds are added back every round (so you never flag on the reveal). Run your bank to zero before you throw and you lose on time.</p>
           <Card className="p-4">
             <p className="font-bold">The Twelve Laws — who beats whom</p>
@@ -849,7 +849,7 @@ function GameHub({ game, embedded }: { game: GameDef; embedded?: boolean }) {
             {tools.length < 12 && <p className="mt-2 text-[12px] text-ink-3">Faded laws belong to tools outside {game.title} — you meet them on the bigger boards.</p>}
           </Card>
           <p>Arta <i>chill</i> throws its remaining tools at random — unbeatable in expectation. Arta <i>sharp</i> hunts patterns in what you have left and punishes them.</p>
-          <p>The printed 145-card edition — twelve decks, the Twelve Laws on every card — is in the <a className="font-semibold text-yin-light hover:underline" href={localePath("/shop/")}>Shop</a>.</p>
+          <p>The printed 145-card edition — twelve decks, the Twelve Laws on every card — is in the <a className="font-semibold text-yin-ink hover:underline" href={localePath("/shop/")}>Shop</a>.</p>
         </div>
       )}
     </FocusFrame>

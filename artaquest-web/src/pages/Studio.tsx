@@ -216,7 +216,7 @@ function BooksMode() {
         <Button href="/library" tip="Brief the AI editor and publish an original book">Write a book</Button>
       </div>
       {books === null ? <SkeletonGrid count={6} /> : books.length === 0 ? (
-        <StatusNote>You haven't written a book yet. <a className="font-semibold text-yin-light hover:underline" href={localePath("/library/")}>Write your first one</a> — brief the AI editor, review the draft, and publish it under your name.</StatusNote>
+        <StatusNote>You haven't written a book yet. <a className="font-semibold text-yin-ink hover:underline" href={localePath("/library/")}>Write your first one</a> — brief the AI editor, review the draft, and publish it under your name.</StatusNote>
       ) : (
         /* auto-fit, not `sm:`/`lg:` (operator 2026-08-21) — see the courses grid above. This column is
             ~686px at 1440 and ~366px at 1024, where three tracks left 114px a book. 13rem a card gives
@@ -273,7 +273,7 @@ function MusicMode() {
         <Button href="/music" tip="Brief the AI studio and publish an original track">Compose a track</Button>
       </div>
       {items === null ? <SkeletonGrid count={6} /> : items.length === 0 ? (
-        <StatusNote>You haven't composed a track yet. <a className="font-semibold text-yin-light hover:underline" href={localePath("/music/")}>Compose your first one</a>.</StatusNote>
+        <StatusNote>You haven't composed a track yet. <a className="font-semibold text-yin-ink hover:underline" href={localePath("/music/")}>Compose your first one</a>.</StatusNote>
       ) : (
         /* auto-fit, not `sm:`/`lg:` (operator 2026-08-21). A track card is a 56px cover beside its title,
             so three tracks in the ~366px column at 1024 left 114px — barely 34px of it for the name. 13rem
@@ -307,7 +307,7 @@ function AnimationsMode() {
         <Button href="/animations" tip="Brief the AI studio and publish an original animation">Animate a topic</Button>
       </div>
       {items === null ? <SkeletonGrid count={6} /> : items.length === 0 ? (
-        <StatusNote>You haven't made an animation yet. <a className="font-semibold text-yin-light hover:underline" href={localePath("/animations/")}>Animate your first topic</a>.</StatusNote>
+        <StatusNote>You haven't made an animation yet. <a className="font-semibold text-yin-ink hover:underline" href={localePath("/animations/")}>Animate your first topic</a>.</StatusNote>
       ) : (
         /* auto-fit, not `sm:`/`lg:` (operator 2026-08-21) — the same column as the grids above: ~686px at
             1440, ~570px at 1280, ~366px at 1024. 13rem a card gives three at 1440, two at 1280 and one
@@ -342,7 +342,7 @@ function IllustrationsMode() {
         <Button href="/illustrations" tip="Brief the AI art studio — it paints, then improves the piece over adversarial rounds">Commission art</Button>
       </div>
       {items === null ? <SkeletonGrid count={6} /> : items.length === 0 ? (
-        <StatusNote>You haven't commissioned an illustration yet. <a className="font-semibold text-yin-light hover:underline" href={localePath("/illustrations/")}>Commission your first one</a> — a standalone artwork, or a cover/plate for one of your books.</StatusNote>
+        <StatusNote>You haven't commissioned an illustration yet. <a className="font-semibold text-yin-ink hover:underline" href={localePath("/illustrations/")}>Commission your first one</a> — a standalone artwork, or a cover/plate for one of your books.</StatusNote>
       ) : (
         /* auto-fit, not `sm:`/`lg:` (operator 2026-08-21). At 1024 `lg:grid-cols-3` gave each piece 114px
             of the ~366px column — narrower than its own state pill and kind label side by side. 13rem a
@@ -839,7 +839,7 @@ function HousesMode() {
           <div className="flex flex-wrap gap-1.5">
             {queue.add.map((w) => (
               <span key={`a-${w}`} className="inline-flex items-center gap-1 rounded-full border border-line bg-space-3/40 px-2.5 py-1 text-[13px]">
-                <span className="text-yin-light">+ {w}</span>
+                <span className="text-yin-ink">+ {w}</span>
                 <button onClick={() => unqueue("add", w)} disabled={busy === w} className="text-ink-3 hover:text-ink" aria-label={`cancel adding ${w}`}>×</button>
               </span>
             ))}
@@ -868,8 +868,8 @@ function HousesMode() {
                 {h.fields.map((f) => (
                   <span key={f.key}
                     className={cx("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px]",
-                      f.rep ? "border-yin-light bg-space-3/70 font-semibold text-ink" : "border-line bg-space-3/40 text-ink-2")}>
-                    <a href={localePath(`/topics/?field=${encodeURIComponent(f.key)}`)} className="hover:text-yin-light">{f.label}</a>
+                      f.rep ? "border-yin-ink bg-space-3/70 font-semibold text-ink" : "border-line bg-space-3/40 text-ink-2")}>
+                    <a href={localePath(`/topics/?field=${encodeURIComponent(f.key)}`)} className="hover:text-yin-ink">{f.label}</a>
                     {f.rep ? <span className="text-[11px] text-ink-2">rep {f.ratio}×</span> : null}
                     <button onClick={() => removeField(f.key)} disabled={busy === f.key} className="text-ink-3 hover:text-yang" aria-label={`purge ${f.label}`} title="Purge this field from the analysis">×</button>
                   </span>
@@ -997,7 +997,7 @@ function VideosMode() {
   if (!data) return err ? <StatusNote error>{err}</StatusNote> : <SkeletonGrid count={4} />;
   const items = data.items.filter((v) => filter === "all" || v.state === filter);
   const badge: Record<string, string> = {
-    "in-course": "bg-yang/15 text-yang", candidate: "bg-yin/15 text-yin-light", standalone: "bg-veil/10 text-ink-3", missing: "bg-rose-500/15 text-rose-300",
+    "in-course": "bg-yang/15 text-yang", candidate: "bg-yin/15 text-yin-ink", standalone: "bg-veil/10 text-ink-3", missing: "bg-rose-500/15 text-rose-300",
   };
   const filters: [typeof filter, string][] = [["all", `All ${data.counts.total}`], ["candidate", `Incubating ${data.counts.candidates}`], ["in-course", "In a course"], ["standalone", "Standalone"], ["missing", `Missing ${data.counts.missing}`]];
   return (
@@ -1009,14 +1009,14 @@ function VideosMode() {
       <div className="flex flex-wrap gap-1.5 text-[13px]">
         {filters.map(([f, label]) => (
           <button key={f} type="button" onClick={() => setFilter(f)} title={`Show ${f} videos`}
-            className={cx("rounded-pill border px-3 py-1 font-semibold transition-colors", filter === f ? "border-yin bg-yin/15 text-yang" : "border-line text-ink-3 hover:text-ink")}>{label}</button>
+            className={cx("rounded-pill border px-3 py-1 font-semibold transition-colors", filter === f ? "border-yin-ink bg-yin/15 text-yang" : "border-line text-ink-3 hover:text-ink")}>{label}</button>
         ))}
       </div>
       <ul className="flex list-none flex-col gap-1.5">
         {items.length === 0 ? <li className="text-[13px] text-ink-3">No videos match.</li> : items.map((v) => (
           <li key={v.video} className="flex flex-wrap items-center gap-2 rounded-card border border-line bg-veil/[0.02] p-2 text-[13px]">
             {v.thumb ? <img src={v.thumb} alt="" loading="lazy" className="h-9 w-16 shrink-0 rounded object-cover" /> : <span className="h-9 w-16 shrink-0 rounded bg-veil/10" />}
-            <a href={`https://youtu.be/${v.video}`} target="_blank" rel="noreferrer" className="font-mono text-[12px] text-yin-light hover:underline">{v.video}</a>
+            <a href={`https://youtu.be/${v.video}`} target="_blank" rel="noreferrer" className="font-mono text-[12px] text-yin-ink hover:underline">{v.video}</a>
             <span className={cx("rounded-pill px-2 py-0.5 text-[11px] font-semibold", badge[v.state])}>{v.state}</span>
             {v.course && <a href={localePath(`/courses/${v.course.slug}`)} className="truncate text-ink-2 hover:text-yang hover:underline" title={v.course.title}>{v.course.title}</a>}
             {v.candidate && <span className="text-ink-3">→ {v.candidate.course} · {v.candidate.ripe_in > 0 ? `ripe in ${rel(v.candidate.ripe_in)}` : "ready"} (vs {v.candidate.baseline})</span>}
@@ -1217,7 +1217,7 @@ function ShopMode() {
                 <div className="flex flex-wrap items-center gap-3">
                   <Button variant="outline" className="h-8 px-3 text-[12px]" disabled={busy} onClick={() => act(o, "delivered")}>Mark delivered</Button>
                   {o.tracking && o.track_url && (
-                    <a href={o.track_url} target="_blank" rel="noopener noreferrer" className="text-[12px] font-mono font-semibold text-yin-light hover:underline">PTT {o.tracking} ↗</a>
+                    <a href={o.track_url} target="_blank" rel="noopener noreferrer" className="text-[12px] font-mono font-semibold text-yin-ink hover:underline">PTT {o.tracking} ↗</a>
                   )}
                 </div>
               )}
@@ -1340,7 +1340,7 @@ function Editor({ course, onClose }: { course: StudioCourseDetail; onClose: (ref
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="House" optional>
             <select value={topic} onChange={(e) => setTopic(e.target.value)}
-              className="h-11 w-full rounded-card border border-line bg-space-2 px-4 text-[15px] text-ink outline-none focus:border-yin-light">
+              className="h-11 w-full rounded-card border border-line bg-space-2 px-4 text-[15px] text-ink outline-none focus:border-yin-ink">
               <option value="">— pick a house —</option>
               {houseOpts.map(([slug, label]) => <option key={slug} value={slug}>{label}</option>)}
             </select>
@@ -1362,7 +1362,7 @@ function Editor({ course, onClose }: { course: StudioCourseDetail; onClose: (ref
           </Field>
           <Field label="Visibility">
             <select value={status} onChange={(e) => setStatus(e.target.value)}
-              className="h-11 w-full rounded-card border border-line bg-space-2 px-4 text-[15px] text-ink outline-none focus:border-yin-light">
+              className="h-11 w-full rounded-card border border-line bg-space-2 px-4 text-[15px] text-ink outline-none focus:border-yin-ink">
               <option value="publish">Published — visible to everyone</option>
               <option value="draft">Draft — hidden from public lists</option>
             </select>
@@ -1443,7 +1443,7 @@ function Editor({ course, onClose }: { course: StudioCourseDetail; onClose: (ref
             Testing now:{" "}
             {course.candidates.map((c) => (
               <span key={c.video} className="me-3">
-                <a href={`https://youtu.be/${c.video}`} target="_blank" rel="noreferrer" className="font-mono text-yin-light hover:underline">{c.video}</a>
+                <a href={`https://youtu.be/${c.video}`} target="_blank" rel="noreferrer" className="font-mono text-yin-ink hover:underline">{c.video}</a>
                 {" "}<span className={cx(c.rate >= c.baseline && c.rate > 0 ? "text-yang" : "")}>{c.rate}/day vs {c.baseline}</span>, {c.ripe_in > 0 ? `ripe in ${rel(c.ripe_in)}` : "ready"}
               </span>
             ))}
@@ -1563,7 +1563,7 @@ function TopicsMode() {
                 <span className="font-semibold leading-snug text-ink transition-colors group-hover:text-yang">{t.name}</span>
                 <span className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink-3">
                   {t.category && <span className="rounded-full border border-line px-2 py-0.5">{t.category}</span>}
-                  {t.status && <span className="rounded-full border border-yin/40 px-2 py-0.5 text-yin-light">{t.status}</span>}
+                  {t.status && <span className="rounded-full border border-yin-ink/40 px-2 py-0.5 text-yin-ink">{t.status}</span>}
                   {typeof t.trend === "number" && t.trend >= 0 && <span className="rounded-full border border-yang/40 px-2 py-0.5 font-semibold text-yang" title="Search-demand score (0–100): how close worldwide Google interest is to this topic's all-time peak, blended with its long-run trajectory since 2004">trend {t.trend}</span>}
                 </span>
                 {t.sponsor && <span className="mt-auto text-[12px] font-semibold text-yang">Sponsored by {t.sponsor}</span>}

@@ -48,7 +48,7 @@ function Recent({ r }: { r: TranslateRecent }) {
   return (
     <div className="rounded-card border border-line bg-space-2 p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-full border border-yin/40 bg-yin/[0.10] px-2 py-0.5 text-[11px] font-semibold uppercase text-yin-light">{r.lang}</span>
+        <span className="rounded-full border border-yin-ink/40 bg-yin/[0.10] px-2 py-0.5 text-[11px] font-semibold uppercase text-yin-ink">{r.lang}</span>
         <span className="rounded-full border border-yang/40 bg-yang/[0.10] px-2 py-0.5 text-[11px] font-semibold text-yang">quality {r.quality}</span>
         <span className="text-[11px] text-ink-2">{r.rounds.length} rounds</span>
       </div>
@@ -57,7 +57,7 @@ function Recent({ r }: { r: TranslateRecent }) {
       <p data-ay-skip="1" className="mt-2 text-[13px] leading-relaxed text-ink-3">{r.source}</p>
       <p data-ay-skip="1" className="mt-1 text-[14.5px] font-semibold leading-relaxed text-ink" dir="auto">{r.final}</p>
       <button onClick={() => setOpen(!open)} aria-expanded={open}
-        className="mt-2 text-[12.5px] font-semibold text-yin-light hover:underline">
+        className="mt-2 text-[12.5px] font-semibold text-yin-ink hover:underline">
         {open ? "Hide the rounds" : "See every round"}
       </button>
       {open && (
@@ -157,7 +157,7 @@ export default function ArtaTranslate({ embedded = false }: { embedded?: boolean
             <div key={p.k} className="rounded-card border border-line bg-space-2 p-4">
               <div className="flex items-baseline justify-between gap-3">
                 <p className="text-[14.5px] font-bold text-ink">{p.title}</p>
-                <span className="shrink-0 rounded-full border border-yin/40 bg-yin/[0.10] px-2.5 py-0.5 text-[12px] font-bold text-yin-light">
+                <span className="shrink-0 rounded-full border border-yin-ink/40 bg-yin/[0.10] px-2.5 py-0.5 text-[12px] font-bold text-yin-ink">
                   {status?.queue?.[p.k] != null ? status.queue[p.k].toLocaleString() : "—"}
                 </span>
               </div>
@@ -168,10 +168,10 @@ export default function ArtaTranslate({ embedded = false }: { embedded?: boolean
       </div>
 
       {/* Audiobooks */}
-      <div className="mt-12 rounded-card border border-yin/30 bg-yin/[0.06] p-5">
+      <div className="mt-12 rounded-card border border-yin-ink/30 bg-yin/[0.06] p-5">
         <h2 className="text-[17px] font-bold text-ink">Translated audiobooks</h2>
         <p className="mt-1.5 max-w-[80ch] text-[14px] leading-relaxed text-ink-2">
-          When a member commissions an <a href={localePath("/library/")} className="font-semibold text-yin-light hover:underline">ArtaVoice</a> narration
+          When a member commissions an <a href={localePath("/library/")} className="font-semibold text-yin-ink hover:underline">ArtaVoice</a> narration
           in another language, the book's every sentence goes through this same pipeline first — at the
           head of the queue — and the voice reads the adversarially-reviewed translation, never raw
           machine output. The reader's sentence highlighting follows the same upgraded text, so what you
@@ -186,7 +186,7 @@ export default function ArtaTranslate({ embedded = false }: { embedded?: boolean
         <p className="mt-2 max-w-[72ch] text-[14px] leading-relaxed text-ink-2">
           Each card shows the English source, the accepted translation, and — expanded — every candidate,
           every critique and every score on the way there. The full history of every string lives in the
-          public <a href={localePath("/data/")} className="font-semibold text-yin-light hover:underline">Data explorer</a>.
+          public <a href={localePath("/data/")} className="font-semibold text-yin-ink hover:underline">Data explorer</a>.
         </p>
         <div className={cx("mt-4 grid gap-3", status?.recent?.length ? "lg:grid-cols-2" : "")}>
           {status === null && !err && <p className="text-[14px] text-ink-3">Loading the live queue…</p>}
@@ -208,8 +208,8 @@ export default function ArtaTranslate({ embedded = false }: { embedded?: boolean
           Because the entire database is public, you can audit every translation and every critique yourself.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <a href={localePath("/data/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">Open the Data explorer <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
-          <a href={localePath("/library/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">Hear a read-along <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
+          <a href={localePath("/data/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-ink hover:text-ink">Open the Data explorer <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
+          <a href={localePath("/library/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-ink hover:text-ink">Hear a read-along <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
         </div>
       </div>
     </div>

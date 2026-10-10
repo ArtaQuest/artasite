@@ -75,7 +75,7 @@ function EmojiTab({ onPick }: { onPick: (c: string) => void }) {
     <div className="flex flex-col">
       <div className="px-2 pt-2">
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search emoji" aria-label="Search emoji"
-          className="w-full rounded-field border border-line bg-space-2 px-3 py-1.5 text-[13px] text-ink outline-none placeholder:text-ink-2 focus:border-yin-light" />
+          className="w-full rounded-field border border-line bg-space-2 px-3 py-1.5 text-[13px] text-ink outline-none placeholder:text-ink-2 focus:border-yin-ink" />
       </div>
       {!q.trim() && recents.length > 0 && (
         <div className="px-2 pt-2">
@@ -127,7 +127,7 @@ function StickerTab({ onPick }: { onPick: (id: string) => void }) {
     <div className="flex flex-col">
       <div className="px-2 pt-2">
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search stickers" aria-label="Search stickers"
-          className="w-full rounded-field border border-line bg-space-2 px-3 py-1.5 text-[13px] text-ink outline-none placeholder:text-ink-2 focus:border-yin-light" />
+          className="w-full rounded-field border border-line bg-space-2 px-3 py-1.5 text-[13px] text-ink outline-none placeholder:text-ink-2 focus:border-yin-ink" />
       </div>
       {/* FOUR columns at every width, deliberately. A `sm:`/`md:` breakpoint resolves against the
           WINDOW, not this container — and this panel also mounts inside the 400px chat dock, where
@@ -183,7 +183,7 @@ function GifTab({ onPick }: { onPick: (bytes: ArrayBuffer, mime: string) => void
 
   return (
     <div className="flex flex-col gap-2.5 p-3">
-      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-field border border-dashed border-line px-3 py-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink">
+      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-field border border-dashed border-line px-3 py-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-ink hover:text-ink">
         Choose a GIF from this device
         <input type="file" accept="image/gif,image/webp,image/png,image/jpeg,video/mp4" className="hidden"
           onChange={async (e) => {
@@ -201,7 +201,7 @@ function GifTab({ onPick }: { onPick: (bytes: ArrayBuffer, mime: string) => void
         <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…/something.gif"
           aria-label="GIF link" inputMode="url" dir="ltr"
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void fromUrl(); } }}
-          className="min-w-0 flex-1 rounded-field border border-line bg-space-2 px-3 py-1.5 text-[13px] text-ink outline-none placeholder:text-ink-2 focus:border-yin-light" />
+          className="min-w-0 flex-1 rounded-field border border-line bg-space-2 px-3 py-1.5 text-[13px] text-ink outline-none placeholder:text-ink-2 focus:border-yin-ink" />
         <button type="button" onClick={() => void fromUrl()} disabled={busy || !url.trim()}
           className="shrink-0 rounded-pill bg-yang px-3.5 py-1.5 text-[12.5px] font-bold text-on-accent transition-opacity hover:opacity-90 disabled:opacity-40">
           {busy ? "Fetching…" : "Add"}

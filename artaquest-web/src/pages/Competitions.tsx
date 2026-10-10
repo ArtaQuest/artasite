@@ -43,7 +43,7 @@ function CompetitionRow({ c }: { c: CompetitionCard }) {
   const left = isOpen(c.status) ? closesIn(c.deadline) : null;
   return (
     <a href={`${localePath("/competition/")}?slug=${encodeURIComponent(c.slug)}`} className="block">
-      <Card className="p-4 transition-colors hover:border-yin-light sm:p-5">
+      <Card className="p-4 transition-colors hover:border-yin-ink sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className={cx("font-bold tracking-tight", nameClass(c.title, 17))}>{c.title}</h2>
@@ -54,7 +54,7 @@ function CompetitionRow({ c }: { c: CompetitionCard }) {
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12.5px] text-ink-3">
           <StatusPill status={c.status} deadline={c.deadline} />
           {left && (
-            <span className="inline-flex items-center gap-1 rounded-pill bg-yin/15 px-2 py-0.5 text-[11px] font-semibold text-yin-light">
+            <span className="inline-flex items-center gap-1 rounded-pill bg-yin/15 px-2 py-0.5 text-[11px] font-semibold text-yin-ink">
               closes in <span className="tabular-nums">{left}</span>
             </span>
           )}

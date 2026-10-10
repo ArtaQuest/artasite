@@ -144,7 +144,7 @@ export default function CitySelect({ value, onPick, onClear, id, required, inval
         onKeyDown={onKey}
         className={cx(
           "h-11 w-full rounded-field border bg-space-1 px-3.5 text-[15px] text-ink outline-none transition-colors",
-          invalid ? "border-yang" : "border-line focus:border-yin-light",
+          invalid ? "border-yang" : "border-line focus:border-yin-ink",
         )}
       />
       {/* "You look like you are in Istanbul" — one tap to accept, and typing dismisses it by filling

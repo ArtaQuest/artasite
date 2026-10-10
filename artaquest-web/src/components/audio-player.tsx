@@ -260,7 +260,7 @@ export default function AudioPlayer({ src, motionOff = false, className }: {
         <button
           type="button" onClick={toggle} disabled={failed}
           aria-label={playing ? "Pause" : "Play"} title={playing ? "Pause" : "Play"}
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line text-ink transition-colors hover:border-yin hover:text-yang disabled:opacity-40 sm:h-9 sm:w-9"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line text-ink transition-colors hover:border-yin-ink hover:text-yang disabled:opacity-40 sm:h-9 sm:w-9"
         >
           {playing
             ? <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden><path d="M7 5h4v14H7zM13 5h4v14h-4z" /></svg>

@@ -28,7 +28,7 @@ function IdentityPrompt() {
     finally { setBusy(false); }
   }
   return (
-    <div data-goal="needs-identity" className="rounded-card border border-yin/30 bg-yin/5 px-4 py-3.5">
+    <div data-goal="needs-identity" className="rounded-card border border-yin-ink/30 bg-yin/5 px-4 py-3.5">
       <p className="text-[14px] font-semibold text-ink">Add your date of birth to post</p>
       <p className="mt-0.5 text-[13px] text-ink-2">It takes a few seconds — and you keep your place here.</p>
       {/* The wheels and the button share a row from sm up and stack on a phone. */}
@@ -84,7 +84,7 @@ function InlineComposer({ submitLabel, placeholder, autoFocus, onSubmit, onCance
       <textarea value={val} autoFocus={autoFocus} onChange={(e) => setVal(e.target.value)}
         onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") submit(); }}
         rows={3} placeholder={placeholder}
-        className="w-full rounded-card border border-line bg-space-2 px-3.5 py-2.5 text-[15px] text-ink outline-none focus:border-yin-light" />
+        className="w-full rounded-card border border-line bg-space-2 px-3.5 py-2.5 text-[15px] text-ink outline-none focus:border-yin-ink" />
       <div className="flex items-center gap-2">
         <Button type="submit" disabled={busy || val.trim().length < 3} className="h-9 px-4 text-[14px] disabled:opacity-50">{busy ? "Posting…" : submitLabel}</Button>
         {onCancel && <button type="button" onClick={onCancel} className="text-[13px] font-semibold text-ink-3 hover:text-ink">Cancel</button>}
@@ -106,7 +106,7 @@ function WriteGate({ writeState, caps, submitLabel, placeholder, autoFocus, onSu
   }
   if (writeState.kind === "needs-enrol") {
     return (
-      <div className="rounded-card border border-yin/30 bg-yin/5 px-4 py-3.5">
+      <div className="rounded-card border border-yin-ink/30 bg-yin/5 px-4 py-3.5">
         <p className="text-[14px] text-ink-2">Watching is free; <span className="font-semibold text-ink">enrol to reply and vote</span> in this course's discussion.</p>
         <Button href={writeState.courseUrl} variant="primaryYin" className="mt-2.5 h-10 px-4 text-[14px]">Enrol to join · {writeState.priceLabel}</Button>
       </div>
@@ -170,7 +170,7 @@ function CommentNode(p: NodeProps) {
                 : <span data-ay-skip="1" className={cx("font-semibold", c.deleted ? "italic text-ink-3" : "text-ink-2")}>{c.author}{c.verified && !c.deleted && <BlueCheck size={14} className="ms-1" />}</span>}
               {c.timeLabel && !c.deleted && <><span aria-hidden>·</span><span>{c.timeLabel}</span></>}
               {c.edited && !c.deleted && <span className="text-ink-3">· edited</span>}
-              {c.bot && <span className="rounded-pill bg-yin/15 px-2 py-0.5 text-[11px] font-semibold text-yin-light">Arta</span>}
+              {c.bot && <span className="rounded-pill bg-yin/15 px-2 py-0.5 text-[11px] font-semibold text-yin-ink">Arta</span>}
               {!!c.anchor && c.anchor > 0 && (
                 <span title="This reply references a moment in the video" className="rounded-pill bg-yang/15 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-yang">
                   ▶ {Math.floor(c.anchor / 60)}:{String(c.anchor % 60).padStart(2, "0")}
@@ -204,7 +204,7 @@ function CommentNode(p: NodeProps) {
               with their profile name + picture + live thumbs-up; tap through to the comment on YouTube. */}
           {!c.deleted && !editing && c.ytRef && (
             <a href={c.ytRef.url} target="_blank" rel="noopener noreferrer" data-ay-skip="1"
-              className="mt-2 block rounded-card border border-line bg-veil/[0.03] p-3 transition-colors hover:border-yin-light/40">
+              className="mt-2 block rounded-card border border-line bg-veil/[0.03] p-3 transition-colors hover:border-yin-ink/40">
               <div className="flex items-center gap-2">
                 <Avatar src={c.ytRef.avatar} name={c.ytRef.author} className="h-7 w-7 text-[11px]" />
                 <span className={cx("min-w-0 font-semibold text-ink-2", nameClass(c.ytRef.author, 13))}>{c.ytRef.author}</span>
@@ -247,7 +247,7 @@ function CommentNode(p: NodeProps) {
           {moreKids > 0 && p.onLoadMoreReplies && (
             <button type="button" disabled={loadingKids}
               onClick={async () => { setLoadingKids(true); try { await p.onLoadMoreReplies!(c.id); } finally { setLoadingKids(false); } }}
-              className="mt-1 ps-3 text-[12px] font-semibold text-yin-light hover:underline disabled:opacity-50">
+              className="mt-1 ps-3 text-[12px] font-semibold text-yin-ink hover:underline disabled:opacity-50">
               {loadingKids ? "Loading…" : `Show ${moreKids} more ${moreKids === 1 ? "reply" : "replies"}`}
             </button>
           )}
@@ -302,7 +302,7 @@ export function CommentThread({
         <div className="flex items-center gap-1 text-[13px] font-semibold">
           {(["top", "new"] as const).map((s) => (
             <button key={s} type="button" onClick={() => onSortChange(s)}
-              className={cx("rounded-pill px-2.5 py-1 transition-colors", sort === s ? "bg-yin/15 text-yin-light" : "text-ink-3 hover:text-ink")}>
+              className={cx("rounded-pill px-2.5 py-1 transition-colors", sort === s ? "bg-yin/15 text-yin-ink" : "text-ink-3 hover:text-ink")}>
               {s === "top" ? "Top" : "New"}
             </button>
           ))}

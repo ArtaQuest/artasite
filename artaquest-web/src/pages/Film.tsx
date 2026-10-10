@@ -36,7 +36,7 @@ function OwnerStudio({ film, reload }: { film: Film; reload: () => void }) {
         <Button onClick={() => act("gen", () => generateFilm(film.id))} disabled={!!busy}>{busy === "gen" ? "Starting…" : "Film it"}</Button>
       )}
       {film.film_state === "review" && film.status !== "published" && (
-        <div className="flex flex-col gap-2 rounded-md border border-yin/30 bg-yin/[0.04] p-4">
+        <div className="flex flex-col gap-2 rounded-md border border-yin-ink/30 bg-yin/[0.04] p-4">
           <p className="text-[14px] font-semibold text-ink">Your draft is ready to watch above</p>
           <p className="text-[12.5px] text-ink-3">Publishing makes it public on Films and your profile, and costs <strong>₳{cost}</strong>.</p>
           <div className="flex items-center gap-2">

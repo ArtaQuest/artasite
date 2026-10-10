@@ -174,7 +174,7 @@ export default function Careers() {
 
         <div className="mt-8 grid gap-5 sm:grid-cols-2">
           <Card className="border-t-2 border-t-yin-light p-6 sm:p-7">
-            <h3 className="text-[17px] font-bold text-yin-light">What we welcome</h3>
+            <h3 className="text-[17px] font-bold text-yin-ink">What we welcome</h3>
             {/* "Faith, philosophy, and the unprovable" names philosophy as a welcomed CATEGORY of
                 content (the academic discipline) — not the retired "physics+philosophy" brand
                 framing. Exempt from the brand-vocab lint; the section prose stays linted. */}
@@ -281,7 +281,7 @@ export default function Careers() {
         <p className="mx-auto mt-3 max-w-xl text-[15px] text-ink-2">If you are not yet sure it fits, write to us with a one-paragraph summary. We read every message and reply within 3–5 business days.</p>
         <div className="mt-7 flex flex-wrap justify-center gap-3">
           <Button href="mailto:support@artaquest.org" size="xl">Email support@artaquest.org</Button>
-          <Button variant="outline" size="xl" href="/faq-contact/" className="text-ink hover:text-yin-light">FAQ & contact</Button>
+          <Button variant="outline" size="xl" href="/faq-contact/" className="text-ink hover:text-yin-ink">FAQ & contact</Button>
         </div>
       </section>
     </div>

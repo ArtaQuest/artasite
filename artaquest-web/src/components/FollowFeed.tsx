@@ -21,8 +21,8 @@ const VERB: Record<string, string> = {
 // type column reads at a glance. `fill` switches the svg between stroke icons and the solid
 // vote triangle (the same shape VoteControl uses).
 const GLYPH: Record<string, { d: string; tone: string; tint: string; fill?: boolean; label: string }> = {
-  thread: { d: "M21 11.5a8.38 8.38 0 0 1-8.5 8.5A8.5 8.5 0 0 1 9 19.07L3 21l1.93-6A8.5 8.5 0 1 1 21 11.5Z", tone: "text-yin-light", tint: "bg-yin/15", label: "New discussion" },
-  reply: { d: "M9 17l-5-5 5-5M20 18v-2a4 4 0 0 0-4-4H4", tone: "text-yin-light", tint: "bg-yin/15", label: "Reply" },
+  thread: { d: "M21 11.5a8.38 8.38 0 0 1-8.5 8.5A8.5 8.5 0 0 1 9 19.07L3 21l1.93-6A8.5 8.5 0 1 1 21 11.5Z", tone: "text-yin-ink", tint: "bg-yin/15", label: "New discussion" },
+  reply: { d: "M9 17l-5-5 5-5M20 18v-2a4 4 0 0 0-4-4H4", tone: "text-yin-ink", tint: "bg-yin/15", label: "Reply" },
   upvote: { d: "M12 4l8 10h-5v6H9v-6H4z", tone: "text-yang", tint: "bg-yang/15", fill: true, label:
   "Heart" },   upvote_thread: { d: "M12 4l8 10h-5v6H9v-6H4z", tone: "text-yang", tint: "bg-yang/15",
   fill: true, label: "Heart" },
@@ -94,7 +94,7 @@ function EventLine({ it, lead, busy, err, onVote }: {
             votersTarget={{ kind: it.target.kind, id: it.target.id }} />
         </div>
       )}
-      {err && <p role="alert" className="mt-1.5 rounded-card border border-yin/30 bg-yin/5 px-3 py-1.5 text-[12px] text-yin-light">{err}</p>}
+      {err && <p role="alert" className="mt-1.5 rounded-card border border-yin-ink/30 bg-yin/5 px-3 py-1.5 text-[12px] text-yin-ink">{err}</p>}
     </>
   );
 }

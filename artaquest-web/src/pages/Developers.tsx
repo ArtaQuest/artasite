@@ -49,7 +49,7 @@ function OnThisPage() {
       <ul className="flex flex-col gap-1.5">
         {SECTIONS.map((s) => (
           <li key={s.id}>
-            <a href={`#${s.id}`} className="block text-[14px] leading-snug text-ink-2 hover:text-yin-light hover:underline">
+            <a href={`#${s.id}`} className="block text-[14px] leading-snug text-ink-2 hover:text-yin-ink hover:underline">
               {s.label}
             </a>
           </li>
@@ -144,7 +144,7 @@ published until GET /notebooks/{id} shows status "published".`;
 
 function MethodPill({ m }: { m: string }) {
   return (
-    <span className={`inline-block w-14 rounded-pill px-1.5 py-0.5 text-center text-[11px] font-bold ${m === "GET" ? "bg-yin-light/10 text-yin-light" : "bg-yang/10 text-yang"}`}>
+    <span className={`inline-block w-14 rounded-pill px-1.5 py-0.5 text-center text-[11px] font-bold ${m === "GET" ? "bg-yin-light/10 text-yin-ink" : "bg-yang/10 text-yang"}`}>
       {m}
     </span>
   );
@@ -172,7 +172,7 @@ function EndpointReference() {
   const [err, setErr] = useState(false);
   useEffect(() => { apiDocs().then(setDocs).catch(() => setErr(true)); }, []);
   if (err) {
-    return <p className="text-[14px] text-ink-3">The live reference could not load — the same data is at <a className="text-yin-light hover:underline" href={`${BASE}/api/docs`}>{`${BASE}/api/docs`}</a>.</p>;
+    return <p className="text-[14px] text-ink-3">The live reference could not load — the same data is at <a className="text-yin-ink hover:underline" href={`${BASE}/api/docs`}>{`${BASE}/api/docs`}</a>.</p>;
   }
   if (!docs) return <p className="text-[14px] text-ink-3">Loading the live endpoint table…</p>;
   const tokenable = docs.endpoints.filter((r) => r.token_scope);
@@ -230,7 +230,7 @@ export default function Developers() {
         <section className="flex flex-col gap-3">
           <H2 id="auth">Authentication</H2>
           <p className="text-[15px] leading-relaxed text-ink-2">
-            Create a token under <a className="text-yin-light hover:underline" href={localePath("/user-account/")}>Account → API tokens</a>.
+            Create a token under <a className="text-yin-ink hover:underline" href={localePath("/user-account/")}>Account → API tokens</a>.
             It is shown once — the server keeps only a hash — and you can revoke it any time. Send it on every request as
             a bearer header (or <code>X-AQ-Token</code>, if a proxy strips <code>Authorization</code>):
           </p>
@@ -300,7 +300,7 @@ export default function Developers() {
           <CodeBlock code={JS_EXAMPLE} />
           <h3 className="text-[15px] font-bold text-ink">Briefing an AI agent</h3>
           <p className="text-[14px] leading-relaxed text-ink-2">
-            Give your agent the token plus this note (also see <a className="text-yin-light hover:underline" href="/llms.txt">/llms.txt</a>):
+            Give your agent the token plus this note (also see <a className="text-yin-ink hover:underline" href="/llms.txt">/llms.txt</a>):
           </p>
           <CodeBlock code={AGENT_NOTE} />
         </section>
@@ -314,7 +314,7 @@ export default function Developers() {
             <li>A draft is a Kaggle notebook URL: the <code>/code/{"{owner}"}/{"{slug}"}</code> form and its <code>/output</code> page both resolve. The notebook must be public and finished, and so must every dataset, model and notebook it takes as an input.</li>
             <li>We never execute anything. Kaggle ran it; we read its public record and report what it says — including whether the run had the internet switched off, which is Kaggle's flag, not our promise.</li>
             <li>Reproducible here means anyone can copy the notebook on Kaggle and run it from public inputs and get this. It is weaker than a claim about identical bytes and stronger than trusting a laptop, and we state it that way everywhere.</li>
-            <li>The whole database is public by design (see <a className="text-yin-light hover:underline" href={localePath("/data/")}>Open data</a>) — write nothing into a work you would not publish.</li>
+            <li>The whole database is public by design (see <a className="text-yin-ink hover:underline" href={localePath("/data/")}>Open data</a>) — write nothing into a work you would not publish.</li>
           </ul>
         </section>
 

@@ -153,7 +153,7 @@ function OwnerStudio({ track, reload }: { track: Track; reload: () => void }) {
         <Button onClick={() => act("gen", () => generateTrack(track.id))} disabled={!!busy}>{busy === "gen" ? "Starting…" : track.kind === "audiobook" ? "Record the audiobook" : "Compose the track"}</Button>
       )}
       {track.track_state === "review" && track.status !== "published" && (
-        <div className="flex flex-col gap-2 rounded-md border border-yin/30 bg-yin/[0.04] p-4">
+        <div className="flex flex-col gap-2 rounded-md border border-yin-ink/30 bg-yin/[0.04] p-4">
           <p className="text-[14px] font-semibold text-ink">Your draft is ready to hear above</p>
           <p className="text-[12.5px] text-ink-3">Publishing makes it public on Music and your profile, and costs <strong>₳{cost}</strong>.</p>
           <div className="flex items-center gap-2">

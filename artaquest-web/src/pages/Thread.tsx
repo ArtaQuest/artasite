@@ -200,7 +200,7 @@ export default function Thread({ forum, slug }: { forum: string; slug: string })
 
       {/* The SAME <CommentThread> that drives the per-course section boards — one renderer everywhere. */}
       <section className="mt-6">
-        {voteErr && <p role="alert" className="mb-2 rounded-card border border-yin/30 bg-yin/5 px-3 py-2 text-[13px] text-yin-light">{voteErr}</p>}
+        {voteErr && <p role="alert" className="mb-2 rounded-card border border-yin-ink/30 bg-yin/5 px-3 py-2 text-[13px] text-yin-ink">{voteErr}</p>}
         <CommentThread
           comments={boardComments} capabilities={THREAD_CAPS} writeState={writeState} layout="pill"
           sort={sort} onSortChange={setSort} total={d.total ?? d.comments.length}

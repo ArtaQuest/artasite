@@ -164,13 +164,13 @@ function PlanetView({ planet, cfg }: { planet: string; cfg: AxisCfg }) {
     .sort((x, y) => (y.domShare || 0) - (x.domShare || 0));
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:py-10">
-      <a href={localePath(cfg.base + "/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-light">← {cfg.title}</a>
+      <a href={localePath(cfg.base + "/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-ink">← {cfg.title}</a>
       <h1 className="text-2xl font-bold capitalize tracking-tight sm:text-3xl">{planet}</h1>
       <p className="mt-1 text-[13px] text-ink-3">The {rows.length} topics whose longest arrow is {planet} — the body that explains most of their rhythm.</p>
       <div className="mt-4 space-y-1.5">
         {rows.map((t) => (
           <a key={t.key} href={`${localePath(cfg.base + "/")}?field=${encodeURIComponent(t.key)}`}
-             className="flex items-center justify-between gap-3 rounded-card border border-line bg-space-2 px-3 py-2 text-[14px] transition-colors hover:border-yin-light">
+             className="flex items-center justify-between gap-3 rounded-card border border-line bg-space-2 px-3 py-2 text-[14px] transition-colors hover:border-yin-ink">
             <span className="min-w-0 flex-1 truncate text-ink-2">{t.label}</span>
             <span className="shrink-0 text-[12px] text-ink-3">{t.phaseSign}</span>
             <span className="w-12 shrink-0 text-end text-[12px] tabular-nums text-ink-3">{Math.round((t.domShare || 0) * 100)}%</span>
@@ -212,7 +212,7 @@ function TrendView({ cfg, initial }: { cfg: AxisCfg; initial: string }) {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:py-10">
-      <a href={localePath(cfg.base + "/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-light">← {cfg.title}</a>
+      <a href={localePath(cfg.base + "/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-ink">← {cfg.title}</a>
       <header className="mb-4">
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">ArtaTrend</h1>
         <p className="mt-1 text-[13px] text-ink-3">Pick a field and read its next thirty years — rolled forward from the sky alone.</p>
@@ -276,7 +276,7 @@ function TrendView({ cfg, initial }: { cfg: AxisCfg; initial: string }) {
                 ))}
               </div>
             </div>
-            <p className="mt-2 text-[12px] text-ink-3">Each year is the field&rsquo;s predicted share of that year&rsquo;s citations. The forecast reads <b>only the sky</b> — the planets&rsquo; angles are known centuries in advance, so the curve extends without ever seeing a future citation. How it is built, and how well it scores against thirty years it never saw, is on the <a href={localePath(cfg.base + "/")} className="font-semibold text-yin-light hover:underline">topics page <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a></p>
+            <p className="mt-2 text-[12px] text-ink-3">Each year is the field&rsquo;s predicted share of that year&rsquo;s citations. The forecast reads <b>only the sky</b> — the planets&rsquo; angles are known centuries in advance, so the curve extends without ever seeing a future citation. How it is built, and how well it scores against thirty years it never saw, is on the <a href={localePath(cfg.base + "/")} className="font-semibold text-yin-ink hover:underline">topics page <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a></p>
           </Card>
         );
       })()}
@@ -381,7 +381,7 @@ export default function Fields({ cfg = SKILLS_CFG }: { cfg?: AxisCfg } = {}) {
         <>
           <div className="mb-3 flex flex-wrap gap-1.5">
             {PLANETS.map((b) => (
-              <a key={b} href={`${localePath(cfg.base + "/")}?planet=${b}`} className="rounded-pill border border-line bg-space-2 px-3 py-1 text-[12px] capitalize text-ink-2 hover:border-yin-light">{b}</a>
+              <a key={b} href={`${localePath(cfg.base + "/")}?planet=${b}`} className="rounded-pill border border-line bg-space-2 px-3 py-1 text-[12px] capitalize text-ink-2 hover:border-yin-ink">{b}</a>
             ))}
           </div>
 
@@ -406,7 +406,7 @@ export default function Fields({ cfg = SKILLS_CFG }: { cfg?: AxisCfg } = {}) {
                     Follow this season
                   </button>
                 )}
-                <a href={localePath(selSeason.createHref)} className="text-[12px] font-semibold text-yin-light hover:underline">
+                <a href={localePath(selSeason.createHref)} className="text-[12px] font-semibold text-yin-ink hover:underline">
                   {selSeason.craftLabel} is its craft →
                 </a>
               </div>
@@ -425,7 +425,7 @@ export default function Fields({ cfg = SKILLS_CFG }: { cfg?: AxisCfg } = {}) {
                     return (
                       <a key={d.key} href={fieldHref(d.key)}
                         title={resonanceTitle(d.key) || resonanceTitle(d.label) || undefined}
-                        className={`rounded-full border px-2.5 py-1 text-[13px] transition-colors hover:border-yin-light hover:text-yin-light ${rep ? "border-yin-light bg-space-3/70 font-semibold text-ink" : "border-line bg-space-3/40 text-ink-2"}`}>
+                        className={`rounded-full border px-2.5 py-1 text-[13px] transition-colors hover:border-yin-ink hover:text-yin-ink ${rep ? "border-yin-ink bg-space-3/70 font-semibold text-ink" : "border-line bg-space-3/40 text-ink-2"}`}>
                         {d.label}
                         <span className="ms-1.5 text-[10.5px] tabular-nums text-ink-3">{Math.round(r2Of(d) * 100)}%</span>
                       </a>
@@ -438,10 +438,10 @@ export default function Fields({ cfg = SKILLS_CFG }: { cfg?: AxisCfg } = {}) {
           </Card>
 
           <p className="mb-2 mt-6 max-w-2xl text-[13px] leading-relaxed text-ink-3">
-            <a href={localePath(cfg.base + "/?trend=")} className="font-semibold text-yin-light hover:underline">ArtaTrend — roll any field forward thirty years <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
+            <a href={localePath(cfg.base + "/?trend=")} className="font-semibold text-yin-ink hover:underline">ArtaTrend — roll any field forward thirty years <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
           </p>
           <p className="mb-2 mt-2 max-w-2xl text-[13px] leading-relaxed text-ink-3">
-            Every {cfg.noun} peaks on its own natural rhythm — <a href={localePath("/cycles/")} className="font-semibold text-yin-light hover:underline">explore the cycles <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
+            Every {cfg.noun} peaks on its own natural rhythm — <a href={localePath("/cycles/")} className="font-semibold text-yin-ink hover:underline">explore the cycles <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
           </p>
 
           {AGGREGATE && (() => {
@@ -552,7 +552,7 @@ function FieldView({ d, loading, cfg }: { d: Discipline | null; loading: boolean
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:py-10">
-      <a href={localePath(cfg.base + "/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-light">← {cfg.title}</a>
+      <a href={localePath(cfg.base + "/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-ink">← {cfg.title}</a>
       {loading || !d ? (
         <p className="text-[14px] text-ink-3">{loading ? "Loading…" : "Unknown field."}</p>
       ) : (
@@ -791,7 +791,7 @@ function FieldView({ d, loading, cfg }: { d: Discipline | null; loading: boolean
                 )}
 
 
-                <p className="mt-4 text-[12.5px] text-ink-3">How this all works — the data, the independent receiver, the per-field history, the training and the three honest walls — is explained once on the <a href={localePath(cfg.base + "/")} className="font-semibold text-yin-light hover:underline">topics page <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a></p>
+                <p className="mt-4 text-[12.5px] text-ink-3">How this all works — the data, the independent receiver, the per-field history, the training and the three honest walls — is explained once on the <a href={localePath(cfg.base + "/")} className="font-semibold text-yin-ink hover:underline">topics page <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a></p>
 
 
                 {daily?.bench && daily.bench.length > 48 && daily.actual && (() => {

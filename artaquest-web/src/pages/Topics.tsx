@@ -22,7 +22,7 @@ function OptionRow({ multi, checked, label, short, desc, image, seed, onToggle }
   return (
     <li>
       <button type="button" role={multi ? "checkbox" : "radio"} aria-checked={checked} onClick={onToggle}
-        className={`flex w-full items-start gap-3 rounded-field border px-3.5 py-2.5 text-start transition-colors ${checked ? "border-yang/60 bg-yang/[0.06]" : "border-line hover:border-yin-light/40 hover:bg-veil/[0.02]"}`}>
+        className={`flex w-full items-start gap-3 rounded-field border px-3.5 py-2.5 text-start transition-colors ${checked ? "border-yang/60 bg-yang/[0.06]" : "border-line hover:border-yin-ink/40 hover:bg-veil/[0.02]"}`}>
         <span aria-hidden className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center border ${multi ? "rounded-[4px]" : "rounded-full"} ${checked ? "border-yang bg-yang" : "border-ink-3"}`}>
           {checked && <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="var(--color-on-accent)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5 10 17 19 6" /></svg>}
         </span>
@@ -112,7 +112,7 @@ function SystemCard({ sys, sel, onChange, openInitially }: {
   const learn = courseExists ? sys : { ...sys, course: undefined };
 
   return (
-    <Card className="overflow-hidden p-0 transition-colors hover:border-yin-light/40">
+    <Card className="overflow-hidden p-0 transition-colors hover:border-yin-ink/40">
       <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)}
         className="flex w-full items-start gap-3 px-4 py-3.5 text-start">
         {/* The topic's profile picture when one is set (real canonical image or self-hosted bespoke
@@ -141,13 +141,13 @@ function SystemCard({ sys, sel, onChange, openInitially }: {
               otherwise a YouTube search that surfaces them. (Working toward a full course per system.) */}
           <div className="mt-3 flex flex-wrap gap-2">
             <a href={systemLearnUrl(learn)} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-pill border border-yin/40 bg-yin/[0.06] px-3 py-1.5 text-[13px] font-semibold text-yin-light transition-colors hover:border-yang hover:text-yang">
+              className="inline-flex items-center gap-1.5 rounded-pill border border-yin-ink/40 bg-yin/[0.06] px-3 py-1.5 text-[13px] font-semibold text-yin-ink transition-colors hover:border-yang hover:text-yang">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden><path d="M8 5v14l11-7z" /></svg>
               {learn.course ? "Take the course" : learn.instructor ? `Watch ${learn.instructor} explain this` : "Learn this — watch an instructor"}
             </a>
             {/* Each topic has its own shareable landing page (a focused view + its own SEO URL). */}
             <a href={localePath(`/typologies/${sys.key}/`)}
-              className="inline-flex items-center gap-1.5 rounded-pill border border-line px-3 py-1.5 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light/40 hover:text-ink">
+              className="inline-flex items-center gap-1.5 rounded-pill border border-line px-3 py-1.5 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-ink/40 hover:text-ink">
               Open full page
               <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M7 17 17 7M9 7h8v8" /></svg>
             </a>
@@ -165,7 +165,7 @@ function SystemCard({ sys, sel, onChange, openInitially }: {
                   return (
                     <li key={i} className="text-[12px] leading-snug text-ink-3">
                       {href
-                        ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-yin-light transition-colors hover:text-yang">{text}</a>
+                        ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-yin-ink transition-colors hover:text-yang">{text}</a>
                         : <span>{text}</span>}
                     </li>
                   );
@@ -384,7 +384,7 @@ export default function Topics({ embedded = false }: { embedded?: boolean } = {}
           lede="Every framework people use to make sense of who they are — personality models, temperaments, the popular typologies and traditions, and the identities and communities you belong to. Each option is described plainly and honestly, with no claim that a system is more than it is."
         />
       )}
-      <p className="max-w-3xl rounded-card border border-yin/30 bg-yin/[0.06] px-4 py-3 text-[13.5px] leading-relaxed text-ink-2">
+      <p className="max-w-3xl rounded-card border border-yin-ink/30 bg-yin/[0.06] px-4 py-3 text-[13.5px] leading-relaxed text-ink-2">
         <span className="font-semibold text-ink">Everything you select is public.</span> Choosing a group is a statement
         you make to the world — and publicly identifying with a group is how you can stand with its donation class. Add or
         remove a tag at any time; nothing is shown until you choose it.

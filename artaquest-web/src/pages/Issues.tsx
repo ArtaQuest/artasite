@@ -20,8 +20,8 @@ function fmtTime(unix: number) {
 const OPEN_STATES = ["open", "triaging", "queued", "in_progress", "shipped"];
 const statusTone = (s: string) =>
   s === "resolved" ? "bg-yang/15 text-yang"
-  : s === "shipped" ? "bg-yin/15 text-yin-light"
-  : ["queued", "in_progress"].includes(s) ? "bg-yin/10 text-yin-light"
+  : s === "shipped" ? "bg-yin/15 text-yin-ink"
+  : ["queued", "in_progress"].includes(s) ? "bg-yin/10 text-yin-ink"
   : "bg-space-2 text-ink-3";
 const roleOf = (k: string) => KINDS.find((x) => x.key === k)?.role || "Sage";
 
@@ -367,7 +367,7 @@ export default function Issues() {
               </div>
               <h1 className="break-words text-[20px] font-bold leading-snug">{t.title}</h1>
               <p className="mt-1 text-[12px] text-ink-3">Opened by {owner ? "you" : t.author}</p>
-              {t.pr_url && <a href={t.pr_url} target="_blank" rel="noopener noreferrer" className="text-[13px] text-yin-light hover:underline">View the change <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>}
+              {t.pr_url && <a href={t.pr_url} target="_blank" rel="noopener noreferrer" className="text-[13px] text-yin-ink hover:underline">View the change <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>}
             </div>
           </header>
         )}
@@ -379,7 +379,7 @@ export default function Issues() {
         {t?.chat_prompt && (
           <figure className="rounded-card border border-line bg-space-2 p-4">
             <figcaption className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-2">Original message</figcaption>
-            <blockquote className="whitespace-pre-wrap break-words border-s-2 border-yin/50 ps-3 text-[14px] leading-relaxed text-ink-2">{t.chat_prompt}</blockquote>
+            <blockquote className="whitespace-pre-wrap break-words border-s-2 border-yin-ink/50 ps-3 text-[14px] leading-relaxed text-ink-2">{t.chat_prompt}</blockquote>
           </figure>
         )}
 
@@ -468,7 +468,7 @@ export default function Issues() {
                   onDrop={(e) => { e.preventDefault(); handleFile(e.dataTransfer.files?.[0]); }}
                   role="button" tabIndex={0}
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
-                  className={`relative grid min-h-[180px] cursor-pointer place-items-center overflow-hidden rounded-card border-2 border-dashed transition-colors ${shotPreview ? "border-yang/50 bg-space-2" : "border-line bg-space-2 hover:border-yin-light"}`}
+                  className={`relative grid min-h-[180px] cursor-pointer place-items-center overflow-hidden rounded-card border-2 border-dashed transition-colors ${shotPreview ? "border-yang/50 bg-space-2" : "border-line bg-space-2 hover:border-yin-ink"}`}
                 >
                   {shotPreview ? (
                     <>
@@ -539,8 +539,8 @@ export default function Issues() {
           <Card className="p-5">
             <h2 className="text-[15px] font-bold">How it works</h2>
             <ol className="mt-3 flex list-none flex-col gap-3 text-[13px] leading-relaxed text-ink-2">
-              <li className="flex gap-3"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-yin/15 text-[12px] font-bold text-yin-light">1</span>You open a contribution and chat it through with Arta — out in the open for everyone to follow.</li>
-              <li className="flex gap-3"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-yin/15 text-[12px] font-bold text-yin-light">2</span>When it's concrete, an agent picks it up and ships the change.</li>
+              <li className="flex gap-3"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-yin/15 text-[12px] font-bold text-yin-ink">1</span>You open a contribution and chat it through with Arta — out in the open for everyone to follow.</li>
+              <li className="flex gap-3"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-yin/15 text-[12px] font-bold text-yin-ink">2</span>When it's concrete, an agent picks it up and ships the change.</li>
               <li className="flex gap-3"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-yang/15 text-[12px] font-bold text-yang">3</span>You verify and mark it resolved — earning a point on your board (Sentinel · Visionary · Curator · Sage).</li>
             </ol>
           </Card>

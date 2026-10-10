@@ -16,7 +16,7 @@ function Reference({ c }: { c: Citation }) {
   const text = <>{c.authors} ({c.year}). {c.title}{c.venue ? <span className="italic">. {c.venue}</span> : null}</>;
   return (
     <li className="text-[13px] leading-snug text-ink-3">
-      {href ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-yin-light transition-colors hover:text-yang">{text}</a> : <span>{text}</span>}
+      {href ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-yin-ink transition-colors hover:text-yang">{text}</a> : <span>{text}</span>}
     </li>
   );
 }
@@ -105,7 +105,7 @@ export default function TopicDetail() {
           <p className="mt-2 text-[12px] leading-snug text-ink-3"><span className="font-semibold">{statusLabel(sys.status)}.</span> {sys.statusNote}{sys.source ? <span className="text-ink-3/80"> · {sys.source}</span> : null}</p>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ink-3">
             {sys.author?.slug && (
-              <span>Curated by <a href={localePath(`/u/${sys.author.slug}`)} className="font-medium text-yin-light hover:text-yang">{sys.author.name}</a></span>
+              <span>Curated by <a href={localePath(`/u/${sys.author.slug}`)} className="font-medium text-yin-ink hover:text-yang">{sys.author.name}</a></span>
             )}
             {sys.sponsor?.name && (
               <span className="inline-flex items-center gap-1.5 rounded-pill border border-yang/40 bg-yang/[0.07] px-2.5 py-0.5 font-medium text-yang">
@@ -122,7 +122,7 @@ export default function TopicDetail() {
       {/* Actions: learn from an instructor + stand with this group on the hub. */}
       <div className="flex flex-wrap gap-3">
         <a href={systemLearnUrl(learn)} target="_blank" rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-pill border border-yin/40 bg-yin/[0.06] px-4 py-2 text-[14px] font-semibold text-yin-light transition-colors hover:border-yang hover:text-yang">
+          className="inline-flex items-center gap-1.5 rounded-pill border border-yin-ink/40 bg-yin/[0.06] px-4 py-2 text-[14px] font-semibold text-yin-ink transition-colors hover:border-yang hover:text-yang">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden><path d="M8 5v14l11-7z" /></svg>
           {learn.course ? "Take the course" : learn.instructor ? `Watch ${learn.instructor} explain this` : "Learn this — watch an instructor"}
         </a>
@@ -161,7 +161,7 @@ export default function TopicDetail() {
           <div className="flex flex-wrap gap-2">
             {related.map((r) => (
               <a key={r.key} href={localePath(`/typologies/${r.key}/`)}
-                className="inline-flex items-center gap-2 rounded-pill border border-line py-1 ps-1.5 pe-3 text-[13px] text-ink-2 transition-colors hover:border-yin-light/40 hover:text-ink">
+                className="inline-flex items-center gap-2 rounded-pill border border-line py-1 ps-1.5 pe-3 text-[13px] text-ink-2 transition-colors hover:border-yin-ink/40 hover:text-ink">
                 <Avatar src={resolveImage(r.image) || emblemUrl(r.key, r.name)} name={r.name} alt="" className="h-6 w-6 text-[11px]" />
                 {r.name}
               </a>

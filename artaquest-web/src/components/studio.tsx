@@ -105,7 +105,7 @@ export function WorkCardChip({ w }: { w: WorkItem }) {
   return (
     <span title={`Season ${se.rank} — ${se.keeper}, ${se.epithet}`}
       className="absolute right-2 top-2 rounded bg-space-1/85 px-1.5 py-0.5 text-[11px] font-bold">
-      <span className={se.tone === "yang" ? "text-yang-ink" : se.tone === "yin" ? "text-yin-light" : undefined} style={toneStyle}>{se.rank}</span>
+      <span className={se.tone === "yang" ? "text-yang-ink" : se.tone === "yin" ? "text-yin-ink" : undefined} style={toneStyle}>{se.rank}</span>
     </span>
   );
 }
@@ -181,7 +181,7 @@ export function CoverArt({ title, src, className }: { title: string; src?: strin
 /** ONE card for every kind — cover (kind-appropriate aspect), title, author, one meta line. */
 export function WorkCard({ w }: { w: WorkItem }) {
   return (
-    <Card as={Link} to={localePath(w.to)} className="group flex flex-col overflow-hidden no-underline transition hover:border-yin/40">
+    <Card as={Link} to={localePath(w.to)} className="group flex flex-col overflow-hidden no-underline transition hover:border-yin-ink/40">
       <div className={cx("relative w-full overflow-hidden bg-space-2", w.aspect)}>
         <CoverArt title={w.title} src={w.image} />
         {(w.kind === "animation" || w.kind === "film" || w.kind === "course") && (
@@ -248,7 +248,7 @@ export function ChallengeStrip({ kind }: { kind: MakeKind }) {
       <span className="font-bold text-yang">₳{c.pool} pool</span>
       <span>· {c.entries} {c.entries === 1 ? "entry" : "entries"} · closes in {c.closes}</span>
       <span>· publishing enters your work</span>
-      <Link to={localePath(`/challenges/${kind}/`)} className="ms-auto font-semibold text-yin-light no-underline hover:underline">Board <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></Link>
+      <Link to={localePath(`/challenges/${kind}/`)} className="ms-auto font-semibold text-yin-ink no-underline hover:underline">Board <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></Link>
     </p>
   );
 }
@@ -327,7 +327,7 @@ export function StudioPulseStrip({ kind }: { kind: MakeKind }) {
       ))}
       <span className="text-[12.5px] text-ink-3">{pulse.model} · +{pulse.points_per_coin} points per ₳1 published</span>
       {record && (
-        <Link to={localePath(record)} className="ml-auto text-[12.5px] font-semibold text-yin-light no-underline hover:underline">
+        <Link to={localePath(record)} className="ml-auto text-[12.5px] font-semibold text-yin-ink no-underline hover:underline">
           Full studio record <span aria-hidden className="inline-block rtl:-scale-x-100">→</span>
         </Link>
       )}
@@ -372,7 +372,7 @@ function LengthPills({ presets, value, onPick, min, max, onCustom }: { presets: 
       {presets.map((s) => (
         <button key={s} type="button" onClick={() => onPick(s)}
           className={cx("rounded-full border px-3 py-1 text-[12.5px] font-medium transition-colors",
-            value === s ? "border-yin bg-yin/10 text-ink" : "border-line text-ink-3 hover:border-yin/50")}>
+            value === s ? "border-yin-ink bg-yin/10 text-ink" : "border-line text-ink-3 hover:border-yin-ink/50")}>
           {mmss(s)}
         </button>
       ))}
@@ -490,7 +490,7 @@ export function CreateWork({ initialKind = "book", onDone }: { initialKind?: Mak
         {CREATABLE.map((k) => (
           <button key={k} type="button" role="tab" aria-selected={kind === k} onClick={() => pick(k)}
             className={cx("rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-colors",
-              kind === k ? "border-yin bg-yin/10 text-ink" : "border-line text-ink-3 hover:border-yin/50")}>
+              kind === k ? "border-yin-ink bg-yin/10 text-ink" : "border-line text-ink-3 hover:border-yin-ink/50")}>
             {WORK_KINDS[k].label}
           </button>
         ))}
@@ -581,7 +581,7 @@ export function CreateWork({ initialKind = "book", onDone }: { initialKind?: Mak
                   <div className="flex flex-wrap gap-1.5">
                     {(["art", "cover", "plate"] as const).map((k) => (
                       <button key={k} type="button" onClick={() => { setArtKind(k); if (k === "cover") setAspect("2:3"); }}
-                        className={cx("rounded-full border px-3 py-1 text-[12.5px] font-medium transition-colors", artKind === k ? "border-yin bg-yin/10 text-ink" : "border-line text-ink-3 hover:border-yin/50")}>
+                        className={cx("rounded-full border px-3 py-1 text-[12.5px] font-medium transition-colors", artKind === k ? "border-yin-ink bg-yin/10 text-ink" : "border-line text-ink-3 hover:border-yin-ink/50")}>
                         {KIND_LABEL[k]}
                       </button>
                     ))}
@@ -602,7 +602,7 @@ export function CreateWork({ initialKind = "book", onDone }: { initialKind?: Mak
                     {["1:1", "3:2", "2:3", "16:9", "9:16"].map((a) => (
                       <button key={a} type="button" onClick={() => setAspect(a)} disabled={artKind === "cover" && a !== "2:3"}
                         className={cx("rounded-full border px-3 py-1 text-[12.5px] font-medium transition-colors disabled:opacity-40",
-                          (artKind === "cover" ? "2:3" : aspect) === a ? "border-yin bg-yin/10 text-ink" : "border-line text-ink-3 hover:border-yin/50")}>
+                          (artKind === "cover" ? "2:3" : aspect) === a ? "border-yin-ink bg-yin/10 text-ink" : "border-line text-ink-3 hover:border-yin-ink/50")}>
                         {a}
                       </button>
                     ))}

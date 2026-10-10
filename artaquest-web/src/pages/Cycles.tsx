@@ -95,7 +95,7 @@ export default function CyclesPage() {
           const nat = dossier[c.slug]?.natural_cycle;
           return (
             <a key={c.slug} href={cycleHref(c.slug)} className="block">
-              <Card className="p-4 transition-colors hover:border-yin-light sm:p-5">
+              <Card className="p-4 transition-colors hover:border-yin-ink sm:p-5">
                 <div className="flex items-baseline justify-between gap-3">
                   <h2 className="min-w-0 text-[17px] font-bold tracking-tight">
                     <span className="me-2 tabular-nums text-ink-3/60">{i + 1}</span>
@@ -127,7 +127,7 @@ function CycleView({ stat, dossier, n }: { stat: CycleStat | null; dossier?: Cyc
   if (!stat) {
     return (
       <article className="mx-auto max-w-2xl py-8 sm:py-10">
-        <a href={localePath("/cycles/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-light"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Cycles</a>
+        <a href={localePath("/cycles/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-ink"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Cycles</a>
         <p className="text-[14px] text-ink-3">Unknown cycle.</p>
       </article>
     );
@@ -149,7 +149,7 @@ function CycleView({ stat, dossier, n }: { stat: CycleStat | null; dossier?: Cyc
   return (
     <WithRail label="How to cite this cycle" rail={citeCard}>
       <article className="mx-auto min-w-0 max-w-2xl py-8 sm:py-10">
-        <a href={localePath("/cycles/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-light"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Cycles</a>
+        <a href={localePath("/cycles/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-ink"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Cycles</a>
         <header className="mb-4">
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{stat.body}</h1>
           <p className="mt-1 text-[13px] text-ink-3">{stat.period}{dossier?.natural_cycle ? <> · {dossier.natural_cycle}</> : null}</p>
@@ -176,7 +176,7 @@ function CycleView({ stat, dossier, n }: { stat: CycleStat | null; dossier?: Cyc
               : ", a faint background presence"}
             {stat.top.length ? <>, like{" "}
               {stat.top.slice(0, 6).map((t, j) => (
-                <span key={t.key}>{j ? ", " : ""}<a href={fieldHref(t.key)} className="hover:text-yin-light">{t.label}</a></span>
+                <span key={t.key}>{j ? ", " : ""}<a href={fieldHref(t.key)} className="hover:text-yin-ink">{t.label}</a></span>
               ))}</> : null}.
           </p>
           <p className="mt-1.5 text-[11.5px] text-ink-2/70">Computed from ArtaQuest&rsquo;s weekly analysis of {n} fields&rsquo; 20-year search trends.</p>
@@ -189,7 +189,7 @@ function CycleView({ stat, dossier, n }: { stat: CycleStat | null; dossier?: Cyc
               {dossier.references.map((r) => (
                 <li key={r.id} id={`ref-${r.id}`} className="text-[12px] leading-relaxed text-ink-3">
                   [{r.id}] {r.text}{" "}
-                  {r.url && <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-yin-light hover:underline">↗</a>}
+                  {r.url && <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-yin-ink hover:underline">↗</a>}
                 </li>
               ))}
             </ol>
