@@ -109,7 +109,7 @@ function DownloadRow({ label, url, hint, size }: { label: string; url?: string |
       <span className="flex shrink-0 items-center gap-3">
         {!!size && <span className="text-[12px] tabular-nums text-ink-3">{fmtBytes(size)}</span>}
         {url ? (
-          <a href={url} download data-native className="text-[13px] font-semibold text-yin-light hover:underline">Download ↓</a>
+          <a href={url} download data-native className="text-[13px] font-semibold text-yin-ink hover:underline">Download ↓</a>
         ) : (
           <span className="text-[12px] text-ink-3">unavailable</span>
         )}
@@ -199,7 +199,7 @@ function Overview({ c, onTab }: { c: CompetitionDetail; onTab: (k: string) => vo
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-card border border-line bg-space-2 px-4 py-3">
           <div className="min-w-0 text-[14px]">
             {c.owner_slug
-              ? <a href={localePath(`/u/${c.owner_slug}`)} className={cx("font-semibold text-ink hover:text-yin-light", nameClass(c.owner || "ArtaQuest", 14))}>{c.owner || "ArtaQuest"}</a>
+              ? <a href={localePath(`/u/${c.owner_slug}`)} className={cx("font-semibold text-ink hover:text-yin-ink", nameClass(c.owner || "ArtaQuest", 14))}>{c.owner || "ArtaQuest"}</a>
               : <span className={cx("font-semibold text-ink", nameClass(c.owner || "ArtaQuest", 14))}>{c.owner || "ArtaQuest"}</span>}
             {Number.isFinite(createdTs) && (
               <span className="ms-2 text-[12.5px] text-ink-3">hosted {relAgo(Math.floor(createdTs / 1000))}</span>
@@ -207,7 +207,7 @@ function Overview({ c, onTab }: { c: CompetitionDetail; onTab: (k: string) => vo
           </div>
           {c.thread_id > 0 && (
             <button type="button" onClick={() => onTab("discussion")}
-              className="shrink-0 text-[13px] font-semibold text-yin-light hover:underline">
+              className="shrink-0 text-[13px] font-semibold text-yin-ink hover:underline">
               Official discussion <span aria-hidden className="inline-block rtl:-scale-x-100">→</span>
             </button>
           )}
@@ -478,12 +478,12 @@ function Leaderboard({ slug, prize, naming, phase }: { slug: string; prize: numb
                   : r.rank}
               </td>
               <td className="py-2.5 pe-3">
-                <a href={localePath(`/u/${r.slug}`)} className="font-semibold text-ink hover:text-yin-light">{r.name}</a>
-                {r.verified && <span title="Solution verified by adversarial review — prize-eligible" className="ms-2 rounded-pill bg-yin/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-yin-light">✓ verified</span>}
+                <a href={localePath(`/u/${r.slug}`)} className="font-semibold text-ink hover:text-yin-ink">{r.name}</a>
+                {r.verified && <span title="Solution verified by adversarial review — prize-eligible" className="ms-2 rounded-pill bg-yin/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-yin-ink">✓ verified</span>}
                 {r.bot && <span className="ms-2 rounded-pill bg-veil/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-2">bot</span>}
               </td>
               <td className="py-2.5 pe-3 text-end font-semibold tabular-nums">{fmt(r.score)}</td>
-              <td className="py-2.5 pe-3 text-end">{r.code_url ? <a href={r.code_url} target="_blank" rel="noopener noreferrer" className="text-[12.5px] font-semibold text-yin-light hover:underline">code ↗</a> : <span className="text-ink-3">—</span>}</td>
+              <td className="py-2.5 pe-3 text-end">{r.code_url ? <a href={r.code_url} target="_blank" rel="noopener noreferrer" className="text-[12.5px] font-semibold text-yin-ink hover:underline">code ↗</a> : <span className="text-ink-3">—</span>}</td>
               <td className="py-2.5 pe-3 text-end tabular-nums text-ink-2">{r.n_subs}</td>
               <td className="py-2.5 text-end text-ink-3">{r.last ? relAgo(r.last) : "—"}</td>
             </tr>
@@ -524,7 +524,7 @@ function ResultsPanel({ slug }: { slug: string }) {
         <Card className="p-4 sm:p-5">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[14px]">
             <span className="text-ink-3">Current leader</span>
-            <a href={localePath(`/u/${res.winner.slug}`)} className="font-bold text-ink hover:text-yin-light">{res.winner.name}</a>
+            <a href={localePath(`/u/${res.winner.slug}`)} className="font-bold text-ink hover:text-yin-ink">{res.winner.name}</a>
             <span className="font-semibold tabular-nums">score {res.winner.score.toFixed(2)}<span className="text-ink-3">/100</span></span>
           </div>
           <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">
@@ -616,8 +616,8 @@ const REVIEW_PILL: Record<string, string> = {
 function ReviewStatePill({ review, verified, chant }: { review: string; verified: boolean; chant?: boolean }) {
   if (verified || review === "verified")
     return chant
-      ? <span title="Measured by the automated chant pipeline" className="rounded-pill bg-yin/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-yin-light">✓ measured</span>
-      : <span title="Solution verified by adversarial review — prize-eligible" className="rounded-pill bg-yin/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-yin-light">✓ verified</span>;
+      ? <span title="Measured by the automated chant pipeline" className="rounded-pill bg-yin/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-yin-ink">✓ measured</span>
+      : <span title="Solution verified by adversarial review — prize-eligible" className="rounded-pill bg-yin/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-yin-ink">✓ verified</span>;
   if (chant && review === "reviewing")
     return <span className="rounded-pill bg-veil/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-2">measuring</span>;
   if (!review || review === "none") return null;
@@ -683,12 +683,12 @@ function Solutions({ slug, naming, phase }: { slug: string; naming?: boolean; ph
             return (
               <div key={s.submission_id} className="rounded-card border border-line bg-space-2 px-4 py-3">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px]">
-                  <a href={localePath(`/u/${s.slug}`)} className={cx("min-w-0 font-semibold text-ink hover:text-yin-light", nameClass(s.name, 13))}>{s.name}</a>
+                  <a href={localePath(`/u/${s.slug}`)} className={cx("min-w-0 font-semibold text-ink hover:text-yin-ink", nameClass(s.name, 13))}>{s.name}</a>
                   <span className="tabular-nums text-ink-2">{fmt(s.score)}</span>
                   <ReviewStatePill review={s.review} verified={s.verified} chant={naming} />
                   {s.code_url && (
                     <a href={s.code_url} target="_blank" rel="noopener noreferrer"
-                      className="text-[12.5px] font-semibold text-yin-light hover:underline">open code ↗</a>
+                      className="text-[12.5px] font-semibold text-yin-ink hover:underline">open code ↗</a>
                   )}
                 </div>
                 {naming && s.audio && <ChantPlayers audio={s.audio} who={s.name} />}
@@ -700,7 +700,7 @@ function Solutions({ slug, naming, phase }: { slug: string; naming?: boolean; ph
                       <div key={r.round} className="mt-2 rounded-card border border-line/60 px-3 py-2">
                         <p className="text-[12px] text-ink-3">
                           round <span className="tabular-nums">{r.round}</span> · <span className="font-semibold text-ink-2">{r.verdict}</span>
-                          {r.verified && <span className="text-yin-light"> ✓</span>}
+                          {r.verified && <span className="text-yin-ink"> ✓</span>}
                           {" · "}<span className="tabular-nums">{fmt(r.score)}</span>
                           {r.model && <> · {r.model}{r.effort ? <>/{r.effort}</> : null}</>}
                           {r.runtime_s > 0 && <> · <span className="tabular-nums">{r.runtime_s}</span>s</>}
@@ -756,7 +756,7 @@ function VerifyPanel({ slug, prize, my, phase }: { slug: string; prize: number; 
       </p>
       {my && (
         <p className="mt-2 text-[13px]">
-          Status: <span className={state === "verified" ? "font-semibold text-yin-light" : state === "flagged" ? "font-semibold text-rose-300" : "font-semibold text-ink-2"}>{REVIEW_LABEL[state] || "Not yet submitted"}</span>
+          Status: <span className={state === "verified" ? "font-semibold text-yin-ink" : state === "flagged" ? "font-semibold text-rose-300" : "font-semibold text-ink-2"}>{REVIEW_LABEL[state] || "Not yet submitted"}</span>
           {my.round > 0 && <span className="text-ink-3"> · round {my.round}/{my.max_rounds}</span>}
           {my.submission_id > 0 && <span className="text-ink-3"> · on your best submission ({phase ? `score ${my.score.toFixed(2)}/100` : `R² ${my.score.toFixed(5)}`})</span>}
         </p>
@@ -779,7 +779,7 @@ function VerifyPanel({ slug, prize, my, phase }: { slug: string; prize: number; 
         </div>
       )}
       {!my && <p className="mt-2 text-[13px] text-ink-3">Make a scored submission first, then submit your solution here for review.</p>}
-      {state === "verified" && <p className="mt-2 text-[13px] text-yin-light">Your solution is verified — you&rsquo;re in the running for the prize.</p>}
+      {state === "verified" && <p className="mt-2 text-[13px] text-yin-ink">Your solution is verified — you&rsquo;re in the running for the prize.</p>}
     </Card>
   );
 }
@@ -820,7 +820,7 @@ function MySubmissions({ slug, refresh, naming, phase }: { slug: string; refresh
                     {s.best && <span title="Your best submission — the one that counts" role="img" aria-label="best">★ </span>}
                     {fmt(s.score)}
                   </td>
-                  <td className="px-3 py-2 text-end">{s.code_url ? <a href={s.code_url} target="_blank" rel="noopener noreferrer" className="text-[12.5px] font-semibold text-yin-light hover:underline">code ↗</a> : <span className="text-ink-3">—</span>}</td>
+                  <td className="px-3 py-2 text-end">{s.code_url ? <a href={s.code_url} target="_blank" rel="noopener noreferrer" className="text-[12.5px] font-semibold text-yin-ink hover:underline">code ↗</a> : <span className="text-ink-3">—</span>}</td>
                   <td className="max-w-[200px] truncate px-3 py-2 text-ink-3" title={s.note || undefined}>{s.note || "—"}</td>
                   <td className="px-3 py-2"><ReviewStatePill review={s.review} verified={s.verified} chant={naming} /></td>
                   <td className="whitespace-nowrap px-3 py-2 text-end text-ink-3">{s.created ? relAgo(s.created) : "—"}</td>
@@ -879,7 +879,7 @@ function ChantSubmit({ slug, onSubmitted }: { slug: string; onSubmitted: () => v
   }
 
   const inputCls = (bad: boolean) =>
-    "mt-1 block w-full rounded-card border bg-space-2 px-3 py-2 text-[14px] text-ink placeholder:text-ink-2 focus:outline-none focus:ring-2 focus:ring-yin-light/60 " +
+    "mt-1 block w-full rounded-card border bg-space-2 px-3 py-2 text-[14px] text-ink placeholder:text-ink-2 focus:outline-none focus:ring-2 focus:ring-yin-ink/60 " +
     (bad ? "border-rose-400/60" : "border-line");
 
   return (
@@ -1182,7 +1182,7 @@ export default function CompetitionPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:py-10">
-      <a href={localePath("/competitions/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-light"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Competitions</a>
+      <a href={localePath("/competitions/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-ink"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Competitions</a>
       <header className="mb-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{c ? c.title : slug}</h1>
@@ -1195,7 +1195,7 @@ export default function CompetitionPage() {
             <span>
               by{" "}
               {c.owner_slug
-                ? <a href={localePath(`/u/${c.owner_slug}`)} className="font-semibold text-ink-2 hover:text-yin-light">{c.owner || "ArtaQuest"}</a>
+                ? <a href={localePath(`/u/${c.owner_slug}`)} className="font-semibold text-ink-2 hover:text-yin-ink">{c.owner || "ArtaQuest"}</a>
                 : <span className="font-semibold text-ink-2">{c.owner || "ArtaQuest"}</span>}
             </span>
             {c.metric && <Pill>{c.metric}</Pill>}

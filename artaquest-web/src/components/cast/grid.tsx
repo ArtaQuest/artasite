@@ -138,7 +138,7 @@ export function DayGrid({ month, dayMap, todayKey, horizonKey, selected, onChoos
                   {...(isToday ? { "aria-current": "date" as const } : {})}
                   style={{ position: "relative" }}
                   className={cx("grid place-items-center text-[15px] font-normal tabular-nums text-ink-2 outline-none md:text-[17px]", CELL_H)}>
-                  {isToday && <span aria-hidden className="pointer-events-none absolute h-9 w-9 rounded-full ring-1 ring-inset ring-yin-light/60 md:h-11 md:w-11" />}
+                  {isToday && <span aria-hidden className="pointer-events-none absolute h-9 w-9 rounded-full ring-1 ring-inset ring-yin-ink/60 md:h-11 md:w-11" />}
                   <span aria-hidden data-ay-skip="1">{Number(key.slice(8, 10))}</span>
                   <span className="sr-only"><span data-ay-skip="1">{dayHeadingLong(key)}</span> — nothing free</span>
                 </div>
@@ -155,7 +155,7 @@ export function DayGrid({ month, dayMap, todayKey, horizonKey, selected, onChoos
                   className={cx("relative grid h-9 w-9 place-items-center rounded-full text-[15px] font-semibold tabular-nums transition-colors duration-150 md:h-11 md:w-11 md:text-[17px]",
                     on ? "bg-yang text-on-accent shadow-card"
                        : "bg-yang/[0.10] text-ink group-hover:bg-yang/25 group-focus-visible:bg-yang/25",
-                    isToday && !on && "ring-1 ring-inset ring-yin-light/60")}>
+                    isToday && !on && "ring-1 ring-inset ring-yin-ink/60")}>
                   <span data-ay-skip="1">{Number(key.slice(8, 10))}</span>
                 </span>
                 <span aria-hidden className="mt-1 h-1 w-1 rounded-full bg-yang" style={{ opacity: on ? 0 : 0.25 + (pct / 100) * 0.6 }} />

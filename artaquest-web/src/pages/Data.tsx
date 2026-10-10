@@ -81,7 +81,7 @@ function CodeBlock({ title, code }: { title: string; code: string }) {
         <CopyButton text={code} className="h-6 px-1.5 hover:bg-veil/5" />
       </div>
       {/* tabIndex+role make the horizontally-scrolling code sample keyboard-operable (WCAG 2.1.1). */}
-      <pre data-ay-skip="1" tabIndex={0} role="region" aria-label={`${title} code sample, scrollable`} className="overflow-x-auto px-3.5 py-3 font-mono text-[12.5px] leading-relaxed text-ink-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-yin-light"><code>{code}</code></pre>
+      <pre data-ay-skip="1" tabIndex={0} role="region" aria-label={`${title} code sample, scrollable`} className="overflow-x-auto px-3.5 py-3 font-mono text-[12.5px] leading-relaxed text-ink-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-yin-ink"><code>{code}</code></pre>
     </div>
   );
 }
@@ -168,7 +168,7 @@ export default function Data() {
             track from being wider than the box on a narrow phone. */}
         <div className="mt-5 grid grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))] gap-3">
           {USE_CASES.map((u, i) => {
-            const tint = i % 2 === 0 ? "bg-yang/10 text-yang" : "bg-yin/15 text-yin-light";
+            const tint = i % 2 === 0 ? "bg-yang/10 text-yang" : "bg-yin/15 text-yin-ink";
             return (
               <Card key={u.title} className="flex gap-3.5 p-4">
                 <span className={cx("grid h-10 w-10 shrink-0 place-items-center rounded-field", tint)} aria-hidden>
@@ -244,7 +244,7 @@ export default function Data() {
                     <Card className="overflow-hidden p-0">
                       {/* tabIndex + role/label make the horizontally-scrolling grid keyboard-operable
                           (WCAG 2.1.1) — without it, keyboard users can't reach off-screen columns. */}
-                      <div className="overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-yin-light" tabIndex={0} role="region" aria-label={`${data.label} table, scrollable`}>
+                      <div className="overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-yin-ink" tabIndex={0} role="region" aria-label={`${data.label} table, scrollable`}>
                         <table className="w-full border-collapse text-[12.5px]" data-ay-skip="1">
                           <caption className="sr-only">{data.label} — {data.total.toLocaleString()} rows</caption>
                           <thead>

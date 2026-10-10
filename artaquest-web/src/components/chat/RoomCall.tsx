@@ -1076,7 +1076,7 @@ export function RoomCall({ room, roomKey, me, onLeft, episode, meeting }: {
 
   const nameOf = (uid: number) => room.members.find((m2) => m2.id === uid);
   const btn = "inline-flex h-10 shrink-0 items-center gap-1.5 rounded-pill px-3 text-[12.5px] font-semibold";
-  const chip = (on: boolean) => `${btn} ${on ? "bg-yang text-on-accent" : "border border-line text-ink-2 hover:border-yin-light hover:text-ink"}`;
+  const chip = (on: boolean) => `${btn} ${on ? "bg-yang text-on-accent" : "border border-line text-ink-2 hover:border-yin-ink hover:text-ink"}`;
 
   /** Picture-in-picture: the stage, or whoever is talking, popped out of the tab. */
   const pipOk = typeof document !== "undefined" && !!(document as Document & { pictureInPictureEnabled?: boolean }).pictureInPictureEnabled;
@@ -1215,7 +1215,7 @@ export function RoomCall({ room, roomKey, me, onLeft, episode, meeting }: {
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="React">
           {CHEERS.map((e) => (
             <button key={e} type="button" onClick={() => cheer(e)} aria-label={`React ${e}`}
-              className="grid h-11 w-11 place-items-center rounded-pill border border-line text-[22px] hover:border-yin-light">
+              className="grid h-11 w-11 place-items-center rounded-pill border border-line text-[22px] hover:border-yin-ink">
               <span data-ay-skip="1">{e}</span>
             </button>
           ))}

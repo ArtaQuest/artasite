@@ -69,7 +69,7 @@ function Group({ label, hits, cursor, base }: { label: string; hits: SearchHit[]
                     member is recognisable in every list on the platform. */}
                 {h.person ? (
                   <Avatar src={h.person.avatar} name={h.person.name}
-                    className="h-8 w-8 shrink-0 text-[12px] text-ink ring-1 ring-yin-light/40" />
+                    className="h-8 w-8 shrink-0 text-[12px] text-ink ring-1 ring-yin-ink/40" />
                 ) : null}
                 <span className="min-w-0 flex-1">
                   {/* A PERSON'S NAME IS NEVER SHORTENED (operator 2026-08-16): it wraps and the
@@ -204,7 +204,7 @@ export function SearchBox({ autoFocus = false, compact = false }: { autoFocus?: 
       <form role="search" onSubmit={onSubmit}>
         {/* X's field: a filled pill that turns into an outlined one on focus, with the magnifier
             taking the accent. No border colour shift on hover — the field is a utility, not a CTA. */}
-        <div className={`flex ${h} items-center gap-2.5 rounded-pill border border-transparent bg-space-2 px-4 text-ink-3 transition-colors focus-within:border-yin-light/70 focus-within:bg-space-1 focus-within:text-yin-ink`}>
+        <div className={`flex ${h} items-center gap-2.5 rounded-pill border border-transparent bg-space-2 px-4 text-ink-3 transition-colors focus-within:border-yin-ink/70 focus-within:bg-space-1 focus-within:text-yin-ink`}>
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden className="shrink-0"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.5-4.5" strokeLinecap="round" /></svg>
           <input
             ref={inputRef}

@@ -51,8 +51,9 @@ export function ArtaBadge({ size = 16, chip = true }: { size?: number; chip?: bo
 // ── @mentions ────────────────────────────────────────────────────────────────
 function Mention({ handle }: { handle: string }) {
   // @arta is a handle like any other (artabot is its old name, kept as an alias).
-  const to = `/u/${/^artabot$/i.test(handle) ? "arta" : handle}`;
-  return <Link to={to} onClick={(e) => e.stopPropagation()} data-ay-skip="1" className="font-medium text-yin-ink hover:underline">@{handle}</Link>;
+  const h = handle.toLowerCase(); // shown as the canonical handle, however it was typed
+  const to = `/u/${h === "artabot" ? "arta" : h}`;
+  return <Link to={to} onClick={(e) => e.stopPropagation()} data-ay-skip="1" className="font-medium text-yin-ink hover:underline">@{h}</Link>;
 }
 
 /** Plain text with every @handle linked — @arta included, exactly like any member. */
@@ -329,7 +330,6 @@ export function MentionTextarea({ value, onValue, onSubmit, textareaRef, maxGrow
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1 text-[13.5px] font-semibold text-ink">
                   <span className="truncate" data-ay-skip="1">{s.name}</span>
-                  {s.arta ? <ArtaBadge size={14} chip={false} /> : null}
                 </span>
                 <span className="block truncate text-[12px] text-ink-3">
                   {s.arta ? "Public assistant · answers in the thread" : <bdi dir="ltr" data-ay-skip="1">@{s.slug}</bdi>}

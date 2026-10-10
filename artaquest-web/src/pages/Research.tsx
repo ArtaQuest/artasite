@@ -47,7 +47,7 @@ function skinFor(slug: string): JournalSkin {
 // Per-lean Tailwind tokens (accent ring/fill for the journal's lead colour). Hover accent stays blue everywhere.
 const leanTok = (lean: Lean) => lean === "yang"
   ? { text: "text-yang", border: "border-yang/45", soft: "bg-yang/[0.10]", chipBorder: "border-yang/50", chipBg: "bg-yang/[0.12]" }
-  : { text: "text-yin-light", border: "border-yin/45", soft: "bg-yin/[0.10]", chipBorder: "border-yin/45", chipBg: "bg-yin/[0.12]" };
+  : { text: "text-yin-ink", border: "border-yin-ink/45", soft: "bg-yin/[0.10]", chipBorder: "border-yin-ink/45", chipBg: "bg-yin/[0.12]" };
 
 // A small journal badge shown on cards / readers / the queue so a reader always knows the journal.
 function JournalBadge({ name, slug }: { name?: string; slug?: string }) {
@@ -95,10 +95,10 @@ function CiteTabs({ s }: { s: Submission }) {
           <button key={key} aria-pressed={k === key} onClick={() => setK(key)} className={cx("rounded-pill px-2.5 py-1 text-[12px] font-semibold", k === key ? "bg-yang text-on-accent" : "bg-space-3 text-ink-2 hover:text-ink")}>{lbl}</button>
         ))}
         <button onClick={() => { navigator.clipboard?.writeText(f[k]).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); }).catch(() => {}); }}
-          className="ml-auto rounded-pill bg-space-3 px-2.5 py-1 text-[12px] font-semibold text-yin-light hover:text-ink">{copied ? "copied ✓" : "Copy"}</button>
+          className="ml-auto rounded-pill bg-space-3 px-2.5 py-1 text-[12px] font-semibold text-yin-ink hover:text-ink">{copied ? "copied ✓" : "Copy"}</button>
       </div>
       <Cite text={f[k]} />
-      <p className="mt-1 text-[12px] text-ink-3">Download: <a className="text-yin-light hover:underline" href={dataUri(f.bibtex)} download="citation.bib">.bib</a> · <a className="text-yin-light hover:underline" href={dataUri(f.ris)} download="citation.ris">.ris</a></p>
+      <p className="mt-1 text-[12px] text-ink-3">Download: <a className="text-yin-ink hover:underline" href={dataUri(f.bibtex)} download="citation.bib">.bib</a> · <a className="text-yin-ink hover:underline" href={dataUri(f.ris)} download="citation.ris">.ris</a></p>
     </div>
   );
 }
@@ -124,13 +124,13 @@ function MetricsBadge({ doi }: { doi: string }) {
 type StatusMeta = { label: string; tone: string; dot: string; step: number };
 const STATUS: Record<string, StatusMeta> = {
   submitted:             { label: "Queued",              tone: "border-line text-ink-2",                     dot: "bg-ink-3",     step: 1 },
-  reviewing:             { label: "Under AI review",      tone: "border-yin/40 bg-yin/[0.10] text-yin-light", dot: "bg-yin-light", step: 2 },
+  reviewing:             { label: "Under AI review",      tone: "border-yin-ink/40 bg-yin/[0.10] text-yin-ink", dot: "bg-yin-light", step: 2 },
   "revisions-requested": { label: "Revisions requested",  tone: "border-yang/40 bg-yang/[0.10] text-yang",    dot: "bg-yang",      step: 2 },
   accepted:              { label: "Published",            tone: "border-yang/50 bg-yang/[0.14] text-yang",    dot: "bg-yang",      step: 4 },
   rejected:              { label: "Not accepted",         tone: "border-rose-400/40 bg-rose-400/[0.08] text-rose-300", dot: "bg-rose-400/80", step: 0 },
   withdrawn:             { label: "Withdrawn",            tone: "border-line text-ink-3",                     dot: "bg-ink-3",     step: 0 },
 };
-const VERDICT_TONE: Record<string, string> = { accept: "text-yang", reject: "text-ink-3", revise: "text-yin-light" };
+const VERDICT_TONE: Record<string, string> = { accept: "text-yang", reject: "text-ink-3", revise: "text-yin-ink" };
 const smeta = (s: string): StatusMeta => STATUS[s] || { label: s, tone: "border-line text-ink-2", dot: "bg-ink-3", step: 0 };
 
 function StatusPill({ status }: { status: string }) {
@@ -157,7 +157,7 @@ function StatusTimeline({ status, doi }: { status: string; doi?: string }) {
           <div key={s.n} className="flex flex-1 items-center gap-1">
             <div className="flex flex-col items-center gap-1">
               <span className={cx("flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold",
-                done ? "bg-yang text-on-accent" : here ? "border-2 border-yin-light text-yin-light" : "border border-line text-ink-2")}>
+                done ? "bg-yang text-on-accent" : here ? "border-2 border-yin-ink text-yin-ink" : "border border-line text-ink-2")}>
                 {done && s.n < 4 ? "✓" : s.n}
               </span>
               <span className={cx("text-[10px] font-semibold", done || here ? "text-ink" : "text-ink-2")}>{s.label}</span>
@@ -175,7 +175,7 @@ function StatusTimeline({ status, doi }: { status: string; doi?: string }) {
 function ArtefactChips({ s }: { s: Submission }) {
   const chip = (label: string, href?: string) => href ? (
     <a key={label} href={href} target="_blank" rel="noopener noreferrer"
-      className="inline-flex items-center gap-1.5 rounded-field border border-line bg-space-2 px-3 py-1.5 text-[12.5px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink">
+      className="inline-flex items-center gap-1.5 rounded-field border border-line bg-space-2 px-3 py-1.5 text-[12.5px] font-semibold text-ink-2 hover:border-yin-ink hover:text-ink">
       <span className="text-ink-3">{label}</span> ↗
     </a>
   ) : null;
@@ -249,7 +249,7 @@ function NotebookPreview({ json }: { json: string }) {
                 to the left of the source in every language, exactly as in Jupyter. Without the pin the
                 gutter jumps to the trailing edge while the <pre> inside stays LTR (index.css). */}
             <div dir="ltr" className="flex gap-2 bg-space-1/40">
-              <span className="select-none py-2 pl-3 pr-1 font-mono text-[11px] text-yin-light/70">In</span>
+              <span className="select-none py-2 pl-3 pr-1 font-mono text-[11px] text-yin-ink/70">In</span>
               <pre className="flex-1 overflow-x-auto py-2 pr-3 font-mono text-[12px] leading-relaxed text-ink"><code>{nbText(c.source)}</code></pre>
             </div>
             <NotebookOutputs outputs={c.outputs} />
@@ -257,7 +257,7 @@ function NotebookPreview({ json }: { json: string }) {
         ) : null)}
       </div>
       {clamped && (
-        <button onClick={() => setOpen((v) => !v)} className="mt-2 text-[13px] font-semibold text-yin-light hover:underline">
+        <button onClick={() => setOpen((v) => !v)} className="mt-2 text-[13px] font-semibold text-yin-ink hover:underline">
           {open ? "Show less" : `Show the full notebook (${cells.length} cells)`}
         </button>
       )}
@@ -273,7 +273,7 @@ function PdfViewer({ url }: { url: string }) {
   return (
     <div>
       <iframe src={`${url}#view=FitH`} title="Manuscript (PDF)" className="h-[640px] w-full rounded-card border border-line bg-space-1" loading="lazy" />
-      <p className="mt-1 text-[12px] text-ink-3"><a className="text-yin-light hover:underline" href={url} target="_blank" rel="noopener noreferrer">Open the PDF in a new tab</a> · <a className="text-yin-light hover:underline" href={url} download>download</a></p>
+      <p className="mt-1 text-[12px] text-ink-3"><a className="text-yin-ink hover:underline" href={url} target="_blank" rel="noopener noreferrer">Open the PDF in a new tab</a> · <a className="text-yin-ink hover:underline" href={url} download>download</a></p>
     </div>
   );
 }
@@ -309,7 +309,7 @@ function CsvTable({ id, url }: { id: number; url: string }) {
     return () => { ok = false; };
   }, [id, url]);
   if (!state) return <div className="h-24 animate-pulse rounded-card bg-veil/[0.05]" role="status" aria-busy="true" />;
-  if (state.err || !state.rows?.length) return <p className="text-[13px] text-ink-3"><a className="font-semibold text-yin-light hover:underline" href={url} target="_blank" rel="noopener noreferrer">Download the data ↗</a> (can't preview this file inline)</p>;
+  if (state.err || !state.rows?.length) return <p className="text-[13px] text-ink-3"><a className="font-semibold text-yin-ink hover:underline" href={url} target="_blank" rel="noopener noreferrer">Download the data ↗</a> (can't preview this file inline)</p>;
   const [head, ...body] = state.rows;
   return (
     <div>
@@ -325,7 +325,7 @@ function CsvTable({ id, url }: { id: number; url: string }) {
           </tbody>
         </table>
       </div>
-      <p className="mt-1 text-[12px] text-ink-3">{Math.max(0, (state.total ?? 1) - 1).toLocaleString()} rows × {head.length} columns{state.truncated ? ` · showing the first ${MAXR}` : ""} · <a className="text-yin-light hover:underline" href={url} target="_blank" rel="noopener noreferrer">download the full CSV</a></p>
+      <p className="mt-1 text-[12px] text-ink-3">{Math.max(0, (state.total ?? 1) - 1).toLocaleString()} rows × {head.length} columns{state.truncated ? ` · showing the first ${MAXR}` : ""} · <a className="text-yin-ink hover:underline" href={url} target="_blank" rel="noopener noreferrer">download the full CSV</a></p>
     </div>
   );
 }
@@ -342,9 +342,9 @@ function CodeViewer({ id, url }: { id: number; url: string }) {
     getArtefact(id, "code").then((d) => ok && setData({ text: d.text })).catch(() => ok && setData({ err: true }));
     return () => { ok = false; };
   }, [id, url, inlineable]);
-  if (!inlineable) return <p className="text-[13px] text-ink-3"><a className="font-semibold text-yin-light hover:underline" href={url} target="_blank" rel="noopener noreferrer">Open the code ↗</a> — the runnable reproduction is the notebook below</p>;
+  if (!inlineable) return <p className="text-[13px] text-ink-3"><a className="font-semibold text-yin-ink hover:underline" href={url} target="_blank" rel="noopener noreferrer">Open the code ↗</a> — the runnable reproduction is the notebook below</p>;
   if (!data) return <div className="h-24 animate-pulse rounded-card bg-veil/[0.05]" role="status" aria-busy="true" />;
-  if (data.err || !data.text) return <p className="text-[13px] text-ink-3"><a className="font-semibold text-yin-light hover:underline" href={url} target="_blank" rel="noopener noreferrer">Open the code ↗</a></p>;
+  if (data.err || !data.text) return <p className="text-[13px] text-ink-3"><a className="font-semibold text-yin-ink hover:underline" href={url} target="_blank" rel="noopener noreferrer">Open the code ↗</a></p>;
   if (ext === "ipynb") return <NotebookPreview json={data.text} />;
   return <pre className="max-h-[480px] overflow-auto rounded-card border border-line bg-space-1 p-3 font-mono text-[12px] leading-relaxed text-ink-2"><code>{data.text}</code></pre>;
 }
@@ -377,7 +377,7 @@ function RubricBreakdown({ scores }: { scores?: Record<string, number> | null })
     <div className="mt-3 rounded-card border border-line bg-space-1 p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
         <span className="text-[11.5px] font-semibold uppercase tracking-wide text-ink-2">Rubric breakdown</span>
-        <a href="/artascience" className="text-[11px] font-semibold text-yin-light hover:underline">How scoring works <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
+        <a href="/artascience" className="text-[11px] font-semibold text-yin-ink hover:underline">How scoring works <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
       </div>
       <p className="mt-0.5 text-[11px] leading-relaxed text-ink-2">Seven weighted axes (each 0–100); the score above is their weighted average.</p>
       <dl className="mt-2.5 space-y-1.5">
@@ -457,7 +457,7 @@ function SubmitView({ onClose, reviseId, onDone, journals, journalSlug, backLabe
   }, [reviseId]);
   const chosen = journals.find((j) => j.slug === journal);
   const targetName = chosen?.name || "the journal";
-  const field = "w-full rounded-field border border-line bg-space-2 px-3.5 py-2 text-[14px] text-ink placeholder:text-ink-2 focus:border-yin-light focus:outline-none";
+  const field = "w-full rounded-field border border-line bg-space-2 px-3.5 py-2 text-[14px] text-ink placeholder:text-ink-2 focus:border-yin-ink focus:outline-none";
   async function go() {
     setErr(""); setBusy(true);
     try {
@@ -471,12 +471,12 @@ function SubmitView({ onClose, reviseId, onDone, journals, journalSlug, backLabe
   const valid = abstract.trim().length >= 40 && isUrl(paper) && datasetId > 0 && modelId > 0 && (revising || (title.trim().length >= 8 && consent && !!journal));
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:py-10">
-      <button onClick={onClose} className="text-[14px] font-semibold text-yin-light hover:underline">← {backLabel}</button>
+      <button onClick={onClose} className="text-[14px] font-semibold text-yin-ink hover:underline">← {backLabel}</button>
       <h1 className="mt-4 text-[clamp(1.7rem,4vw,2.3rem)] font-extrabold leading-tight">{revising ? "Submit a revision" : journalSlug ? `Submit to ${targetName}` : "Submit a manuscript"}</h1>
       <p className="mt-3 text-[15px] leading-relaxed text-ink-2">Every manuscript is built on two registered prerequisites: an open <b className="text-ink">dataset</b> and a <b className="text-ink">model</b> (your code bundle carrying the standard reproduction contract). Review is fully automated: the platform <b className="text-ink">pre-runs your model on your dataset</b>, then ArtaScience compiles your manuscript, checks the run against your claims, and gives you a verdict and a detailed report.</p>
-      <p className="mt-2 text-[13px] text-ink-3">Write your manuscript with our class — <a className="font-semibold text-yin-light hover:underline" href="https://artaquest.com/papers/artaquest-latex-template.zip">download the LaTeX template (.zip)</a> · <a className="font-semibold text-yin-light hover:underline" href="https://artaquest.com/papers/style-guide.html" target="_blank" rel="noopener noreferrer">style guide &amp; checklist</a>. For each artefact, paste a public URL <i>or</i> upload the file.</p>
+      <p className="mt-2 text-[13px] text-ink-3">Write your manuscript with our class — <a className="font-semibold text-yin-ink hover:underline" href="https://artaquest.com/papers/artaquest-latex-template.zip">download the LaTeX template (.zip)</a> · <a className="font-semibold text-yin-ink hover:underline" href="https://artaquest.com/papers/style-guide.html" target="_blank" rel="noopener noreferrer">style guide &amp; checklist</a>. For each artefact, paste a public URL <i>or</i> upload the file.</p>
       {!authed ? (
-        <p className="mt-6 rounded-card border border-line bg-space-2 p-4 text-[15px] text-ink-2">Please <a className="font-semibold text-yin-light hover:underline" href={((typeof window !== "undefined" && (window as unknown as Record<string, string>).AQ_LOGIN_URL) || "/login/") + (typeof window !== "undefined" ? `?redirect_to=${encodeURIComponent(window.location.pathname + window.location.search)}` : "")}>sign in</a> to submit your manuscript.</p>
+        <p className="mt-6 rounded-card border border-line bg-space-2 p-4 text-[15px] text-ink-2">Please <a className="font-semibold text-yin-ink hover:underline" href={((typeof window !== "undefined" && (window as unknown as Record<string, string>).AQ_LOGIN_URL) || "/login/") + (typeof window !== "undefined" ? `?redirect_to=${encodeURIComponent(window.location.pathname + window.location.search)}` : "")}>sign in</a> to submit your manuscript.</p>
       ) : (
         <div className="mt-6 space-y-4">
           {!revising && (
@@ -491,7 +491,7 @@ function SubmitView({ onClose, reviseId, onDone, journals, journalSlug, backLabe
                     const t = leanTok(skinFor(j.slug).lean);
                     return (
                       <button key={j.slug} type="button" role="radio" aria-checked={on} onClick={() => setJournal(j.slug)}
-                        className={cx("flex items-start gap-2.5 rounded-card border p-3 text-start transition", on ? cx(t.chipBorder, t.soft) : "border-line bg-space-2 hover:border-yin-light")}>
+                        className={cx("flex items-start gap-2.5 rounded-card border p-3 text-start transition", on ? cx(t.chipBorder, t.soft) : "border-line bg-space-2 hover:border-yin-ink")}>
                         <span className="mt-0.5 shrink-0">{skinFor(j.slug).glyph}</span>
                         <span className="min-w-0">
                           <span className={cx("block text-[14px] font-bold", on ? t.text : "text-ink")}>{j.name}</span>
@@ -563,7 +563,7 @@ function ArtefactField({ label, hint, accept, value, setValue, placeholder }: { 
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState("");
   const [uerr, setUerr] = useState("");
-  const field = "w-full rounded-field border border-line bg-space-2 px-3.5 py-2 text-[14px] text-ink placeholder:text-ink-2 focus:border-yin-light focus:outline-none";
+  const field = "w-full rounded-field border border-line bg-space-2 px-3.5 py-2 text-[14px] text-ink placeholder:text-ink-2 focus:border-yin-ink focus:outline-none";
   const ok = /^https?:\/\/[^\s]{4,}$/i.test(value.trim());
   async function onFile(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; if (!f) return;
@@ -579,7 +579,7 @@ function ArtefactField({ label, hint, accept, value, setValue, placeholder }: { 
       </Lbl>
       <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-ink-3">
         <span>or</span>
-        <label className={cx("cursor-pointer font-semibold text-yin-light hover:underline", uploading && "pointer-events-none opacity-60")}>
+        <label className={cx("cursor-pointer font-semibold text-yin-ink hover:underline", uploading && "pointer-events-none opacity-60")}>
           {uploading ? "uploading…" : "upload a file"}
           <input type="file" accept={accept} className="hidden" disabled={uploading} onChange={onFile} />
         </label>
@@ -600,7 +600,7 @@ function ArtifactPicker({ kind, selected, onSelect, hint, accept, placeholder }:
   const [nUrl, setNUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const field = "w-full rounded-field border border-line bg-space-2 px-3.5 py-2 text-[14px] text-ink placeholder:text-ink-2 focus:border-yin-light focus:outline-none";
+  const field = "w-full rounded-field border border-line bg-space-2 px-3.5 py-2 text-[14px] text-ink placeholder:text-ink-2 focus:border-yin-ink focus:outline-none";
   useEffect(() => {
     let ok = true;
     if (!me?.id) { setMine([]); return; }
@@ -630,7 +630,7 @@ function ArtifactPicker({ kind, selected, onSelect, hint, accept, placeholder }:
       {mine === null ? <p className="mt-2 text-[13px] text-ink-3">Loading your {kind}s…</p> : (
         <div className="mt-2 space-y-1.5">
           {mine.map((a) => (
-            <label key={a.id} className={cx("flex cursor-pointer items-start gap-2 rounded-field border p-2.5 text-[13px]", selected === a.id ? "border-yang/60 bg-yang/[0.06]" : "border-line hover:border-yin-light")}>
+            <label key={a.id} className={cx("flex cursor-pointer items-start gap-2 rounded-field border p-2.5 text-[13px]", selected === a.id ? "border-yang/60 bg-yang/[0.06]" : "border-line hover:border-yin-ink")}>
               <input type="radio" name={`artifact-${kind}`} checked={selected === a.id} onChange={() => onSelect(a.id)} className="mt-0.5 h-3.5 w-3.5 accent-yang" />
               <span className="min-w-0">
                 <span className="block font-semibold text-ink">{a.title}</span>
@@ -643,7 +643,7 @@ function ArtifactPicker({ kind, selected, onSelect, hint, accept, placeholder }:
             </label>
           ))}
           {!creating ? (
-            <button type="button" onClick={() => setCreating(true)} className="text-[13px] font-semibold text-yin-light hover:underline">+ New {kind}</button>
+            <button type="button" onClick={() => setCreating(true)} className="text-[13px] font-semibold text-yin-ink hover:underline">+ New {kind}</button>
           ) : (
             <div className="space-y-2 rounded-field border border-dashed border-line p-2.5">
               <input className={field} value={nTitle} onChange={(e) => setNTitle(e.target.value)} placeholder={`${label} name (≥4 characters)`} />
@@ -676,7 +676,7 @@ function SubmissionsView({ open, onClose, onNew, journalSlug, backLabel }: { ope
   const shown = items?.filter(f.match) ?? null;
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:py-10">
-      <button onClick={onClose} className="text-[14px] font-semibold text-yin-light hover:underline">← {backLabel}</button>
+      <button onClick={onClose} className="text-[14px] font-semibold text-yin-ink hover:underline">← {backLabel}</button>
       <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
         <h1 className="text-[clamp(1.7rem,4vw,2.3rem)] font-extrabold leading-tight">Review queue</h1>
         <button onClick={onNew} className="rounded-field bg-yang px-3.5 py-2 text-[14px] font-bold text-on-accent hover:opacity-90">Submit a manuscript</button>
@@ -705,7 +705,7 @@ function SubmissionsView({ open, onClose, onNew, journalSlug, backLabel }: { ope
               <span>round {s.round}</span>
               {s.score ? <span>score {s.score}/100</span> : null}
               {s.reproduced ? <span className="text-yang">reproduced ✓</span> : null}
-              {s.doi ? <span className="font-medium text-yin-light">DOI ✓</span> : null}
+              {s.doi ? <span className="font-medium text-yin-ink">DOI ✓</span> : null}
               {s.updated ? <span>updated {new Date(s.updated * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}</span> : null}
             </p>
           </Card>
@@ -749,11 +749,11 @@ function PublishedList({ open, journalSlug, heading = "Published articles" }: { 
                   <p className="mt-2.5 flex flex-wrap items-center gap-x-2.5 text-[11.5px] text-ink-2">
                     <span className="text-yang">reproduced ✓</span>
                     {s.score ? <span>score {s.score}/100</span> : null}
-                    {s.doi ? <span className="font-medium text-yin-light">DOI ✓</span> : null}
-                    {(s.kaggle_url || s.colab_url) ? <span className="font-medium text-yin-light">▶ runnable on Kaggle</span> : null}
+                    {s.doi ? <span className="font-medium text-yin-ink">DOI ✓</span> : null}
+                    {(s.kaggle_url || s.colab_url) ? <span className="font-medium text-yin-ink">▶ runnable on Kaggle</span> : null}
                     <span>CC BY 4.0</span>
                   </p>
-                  <p className="mt-3 text-[13px] font-semibold text-yin-light">Read the article <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></p>
+                  <p className="mt-3 text-[13px] font-semibold text-yin-ink">Read the article <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></p>
                 </div>
                 {s.thumb_url && (
                   <img src={s.thumb_url} alt="" loading="lazy"
@@ -787,7 +787,7 @@ function InReviewList({ open, onQueue, journalSlug }: { open: (id: number) => vo
     <section className="mt-9">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-[13px] font-semibold uppercase tracking-[0.14em] text-ink-3">In review now</h2>
-        <button onClick={onQueue} className="text-[12.5px] font-semibold text-yin-light hover:underline">Full queue <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></button>
+        <button onClick={onQueue} className="text-[12.5px] font-semibold text-yin-ink hover:underline">Full queue <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></button>
       </div>
       <p className="mt-1 text-[12.5px] text-ink-3">Every submission — and every round of AI feedback — is public from the moment it enters the queue</p>
       <div className="mt-3 space-y-2">
@@ -1197,7 +1197,7 @@ function ResultChart({ spec, fig, panel, anchor }: { spec: ChartSpec; fig?: numb
           });
         })()}
         {/* hover column highlight */}
-        {hover !== null && type !== "bar" && <line x1={xPos(hover)} x2={xPos(hover)} y1={MT} y2={MT + ih} stroke="currentColor" className="text-yin-light" strokeWidth={1} opacity={0.45} strokeDasharray="3 3" />}
+        {hover !== null && type !== "bar" && <line x1={xPos(hover)} x2={xPos(hover)} y1={MT} y2={MT + ih} stroke="currentColor" className="text-yin-ink" strokeWidth={1} opacity={0.45} strokeDasharray="3 3" />}
         {/* series. With many series (an honest "median + band + a few exemplars" figure can still arrive
             with leftover alphabetical lines), the un-named filler lines are drawn thin + faint so the
             emphasised median/exemplars dominate — without dropping any series the spec sent. */}
@@ -1378,7 +1378,7 @@ function ArticleReader({ s, onClose, backLabel }: { s: Submission; onClose: () =
   // plateau, not the muted secondary), body leading 1.6 (was 1.78 — too loose hurts line-tracking; matches
   // the abstract + the published measurement, APCA paper DOI 10.5281/zenodo.21046102), prose
   // links use the accessible yin-ink (the lightened brand blue) not yin-light (Lc ~32 on dark), tables 14px.
-  const prose = "[&_h2]:mt-10 [&_h2]:scroll-mt-24 [&_h2]:text-[22px] [&_h2]:font-bold [&_h2]:tracking-tight [&_h2]:text-ink [&_h3]:mt-7 [&_h3]:scroll-mt-24 [&_h3]:text-[18px] [&_h3]:font-bold [&_h3]:text-ink [&_p]:mt-4 [&_p]:text-[16px] [&_p]:leading-[1.6] [&_p]:text-ink [&_ul]:mt-3 [&_ul]:list-disc [&_ul]:ps-6 [&_ul]:text-ink [&_ol]:mt-3 [&_ol]:list-decimal [&_ol]:ps-6 [&_ol]:text-ink [&_li]:mt-1.5 [&_li]:leading-relaxed [&_a]:text-yin-ink [&_a]:font-medium hover:[&_a]:underline [&_figure]:my-7 [&_figure]:text-center [&_img]:mx-auto [&_img]:max-w-full [&_img]:rounded-card [&_img]:border [&_img]:border-line [&_img]:cursor-zoom-in [&_figcaption]:mt-2 [&_figcaption]:text-[13px] [&_figcaption]:leading-relaxed [&_figcaption]:text-ink-2 [&_table]:my-5 [&_table]:scroll-mt-24 [&_table]:w-full [&_table]:border-collapse [&_table]:text-[14px] [&_th]:border [&_th]:border-line [&_th]:bg-space-2 [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-start [&_td]:border [&_td]:border-line [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:text-ink [&_blockquote]:my-4 [&_blockquote]:border-s-2 [&_blockquote]:border-yin/40 [&_blockquote]:ps-4 [&_blockquote]:italic [&_blockquote]:text-ink [&_sup]:text-[11px] [&_sup_a]:font-semibold [&_sup_a]:text-yin-ink [&_code]:rounded [&_code]:bg-space-1 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[13px] [&_section]:mt-2 [&_section]:scroll-mt-24";
+  const prose = "[&_h2]:mt-10 [&_h2]:scroll-mt-24 [&_h2]:text-[22px] [&_h2]:font-bold [&_h2]:tracking-tight [&_h2]:text-ink [&_h3]:mt-7 [&_h3]:scroll-mt-24 [&_h3]:text-[18px] [&_h3]:font-bold [&_h3]:text-ink [&_p]:mt-4 [&_p]:text-[16px] [&_p]:leading-[1.6] [&_p]:text-ink [&_ul]:mt-3 [&_ul]:list-disc [&_ul]:ps-6 [&_ul]:text-ink [&_ol]:mt-3 [&_ol]:list-decimal [&_ol]:ps-6 [&_ol]:text-ink [&_li]:mt-1.5 [&_li]:leading-relaxed [&_a]:text-yin-ink [&_a]:font-medium hover:[&_a]:underline [&_figure]:my-7 [&_figure]:text-center [&_img]:mx-auto [&_img]:max-w-full [&_img]:rounded-card [&_img]:border [&_img]:border-line [&_img]:cursor-zoom-in [&_figcaption]:mt-2 [&_figcaption]:text-[13px] [&_figcaption]:leading-relaxed [&_figcaption]:text-ink-2 [&_table]:my-5 [&_table]:scroll-mt-24 [&_table]:w-full [&_table]:border-collapse [&_table]:text-[14px] [&_th]:border [&_th]:border-line [&_th]:bg-space-2 [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-start [&_td]:border [&_td]:border-line [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:text-ink [&_blockquote]:my-4 [&_blockquote]:border-s-2 [&_blockquote]:border-yin-ink/40 [&_blockquote]:ps-4 [&_blockquote]:italic [&_blockquote]:text-ink [&_sup]:text-[11px] [&_sup_a]:font-semibold [&_sup_a]:text-yin-ink [&_code]:rounded [&_code]:bg-space-1 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[13px] [&_section]:mt-2 [&_section]:scroll-mt-24";
   // The shared-TOC item set for the inline reader: Abstract + the body's h2/h3 + the end-matter sections.
   const readerToc = useMemo<TocItem[]>(() => {
     const out: TocItem[] = [{ id: "abstract", label: "Abstract", level: 2 }];
@@ -1395,30 +1395,30 @@ function ArticleReader({ s, onClose, backLabel }: { s: Submission; onClose: () =
     <>
       <div className="fixed left-0 top-0 z-40 h-[3px] bg-yang transition-[width] duration-150" style={{ width: `${progress}%` }} aria-hidden />
       <div className="flex flex-col py-1">
-        <button onClick={onClose} className="text-[14px] font-semibold text-yin-light hover:underline">← {backLabel}</button>
+        <button onClick={onClose} className="text-[14px] font-semibold text-yin-ink hover:underline">← {backLabel}</button>
         <header className="mt-4 border-b border-line pb-6">
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] font-semibold uppercase tracking-[0.18em] text-ink-3">
             <span>{JOURNAL} · Article</span>
             {s.reproduced && <span className="text-yang">· Reproduced ✓</span>}
           </p>
           {s.template_ok === false && (
-            <p className="mt-3 rounded-card border border-yang/30 bg-yang/[0.06] px-3 py-2 text-[12.5px] text-ink-2">⚠ This manuscript was not written with the journal template. Authors: please use the <a className="font-semibold text-yin-light hover:underline" href="https://artaquest.com/papers/artaquest-latex-template.zip">{JOURNAL} LaTeX template</a> for consistent formatting and metadata.</p>
+            <p className="mt-3 rounded-card border border-yang/30 bg-yang/[0.06] px-3 py-2 text-[12.5px] text-ink-2">⚠ This manuscript was not written with the journal template. Authors: please use the <a className="font-semibold text-yin-ink hover:underline" href="https://artaquest.com/papers/artaquest-latex-template.zip">{JOURNAL} LaTeX template</a> for consistent formatting and metadata.</p>
           )}
           <h1 className="mt-3 text-[clamp(1.8rem,4.2vw,2.6rem)] font-extrabold leading-[1.15]">{s.title}</h1>
           <p className="mt-3 text-[15px] text-ink">
-            {s.author?.slug ? <a className="font-bold hover:text-yin-light hover:underline" href={`/u/${s.author.slug}`}>{s.author.name}</a> : <b>{s.author?.name || "—"}</b>}
+            {s.author?.slug ? <a className="font-bold hover:text-yin-ink hover:underline" href={`/u/${s.author.slug}`}>{s.author.name}</a> : <b>{s.author?.name || "—"}</b>}
             <span className="text-ink-3"> · ArtaQuest Foundation</span>
           </p>
           <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[12.5px] text-ink-3">
             {received && received !== published && <span>Received {received} ·</span>}
             {published && <span>Published {published}</span>}
             <span>· Open access · CC BY 4.0 · AI-reviewed</span>
-            {s.doi && <span>· <a className="font-medium text-yin-light hover:underline" href={doiShort(s.id)} target="_blank" rel="noopener noreferrer">DOI ↗</a> <MetricsBadge doi={s.doi} /></span>}
+            {s.doi && <span>· <a className="font-medium text-yin-ink hover:underline" href={doiShort(s.id)} target="_blank" rel="noopener noreferrer">DOI ↗</a> <MetricsBadge doi={s.doi} /></span>}
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button ref={readBtnRef} type="button" onClick={() => setReading(true)} aria-haspopup="dialog"
               title="Open a distraction-free, full-screen reading view"
-              className="inline-flex items-center gap-1.5 rounded-field border border-yang/50 bg-yang/[0.12] px-3 py-1.5 text-[13px] font-semibold text-yang transition-colors hover:border-yin-light hover:bg-yin/[0.12] hover:text-yin-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-light">
+              className="inline-flex items-center gap-1.5 rounded-field border border-yang/50 bg-yang/[0.12] px-3 py-1.5 text-[13px] font-semibold text-yang transition-colors hover:border-yin-ink hover:bg-yin/[0.12] hover:text-yin-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-ink">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M2 5h7a3 3 0 0 1 3 3v11a2.5 2.5 0 0 0-2.5-2.5H2zM22 5h-7a3 3 0 0 0-3 3v11a2.5 2.5 0 0 1 2.5-2.5H22z" /></svg>
               Read
             </button>
@@ -1473,16 +1473,16 @@ function ArticleReader({ s, onClose, backLabel }: { s: Submission; onClose: () =
               <section id="reproduce" className="mt-10 scroll-mt-24 border-t border-line pt-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h2 className="text-[16px] font-bold">Reproduce in one click</h2>
-                  {(s.kaggle_url || s.colab_url) && <a href={s.kaggle_url || s.colab_url} target="_blank" rel="noopener noreferrer" title="Open the reproduction notebook on Kaggle" className="inline-flex h-[26px] items-center gap-1.5 rounded-field border border-yin-light/40 bg-yin/10 px-2.5 text-[12px] font-semibold text-yin-light no-underline transition-colors hover:bg-yin/20 hover:text-ink"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden><path d="M8 5v14l11-7z" /></svg>Open on Kaggle</a>}
+                  {(s.kaggle_url || s.colab_url) && <a href={s.kaggle_url || s.colab_url} target="_blank" rel="noopener noreferrer" title="Open the reproduction notebook on Kaggle" className="inline-flex h-[26px] items-center gap-1.5 rounded-field border border-yin-ink/40 bg-yin/10 px-2.5 text-[12px] font-semibold text-yin-ink no-underline transition-colors hover:bg-yin/20 hover:text-ink"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden><path d="M8 5v14l11-7z" /></svg>Open on Kaggle</a>}
                 </div>
-                <p className="mt-1 text-[13px] leading-relaxed text-ink-3">Open the notebook in Colab and choose <b className="text-ink-2">Runtime → Run all</b>: it fetches the open code and data and regenerates the results.{s.notebook && <> Or <a className="font-semibold text-yin-light hover:underline" href={"data:application/x-ipynb+json;charset=utf-8," + encodeURIComponent(s.notebook)} download={`reproduce-${s.id}.ipynb`}>download the notebook (.ipynb)</a>.</>}</p>
+                <p className="mt-1 text-[13px] leading-relaxed text-ink-3">Open the notebook in Colab and choose <b className="text-ink-2">Runtime → Run all</b>: it fetches the open code and data and regenerates the results.{s.notebook && <> Or <a className="font-semibold text-yin-ink hover:underline" href={"data:application/x-ipynb+json;charset=utf-8," + encodeURIComponent(s.notebook)} download={`reproduce-${s.id}.ipynb`}>download the notebook (.ipynb)</a>.</>}</p>
                 {s.notebook && <div className="mt-3"><NotebookPreview json={s.notebook} /></div>}
               </section>
             )}
 
             <section id="review" className="mt-10 scroll-mt-24 border-t border-line pt-6">
               <h2 className="text-[16px] font-bold">AI review {s.reviews?.length ? `· ${s.reviews.length} round${s.reviews.length > 1 ? "s" : ""}` : ""}</h2>
-              <p className="mt-1 text-[13px] text-ink-3">Reviewed by ArtaScience, which ran this code on its open data. <a href="/research/artascience" className="font-semibold text-yin-light hover:underline">See the exact review prompt <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a></p>
+              <p className="mt-1 text-[13px] text-ink-3">Reviewed by ArtaScience, which ran this code on its open data. <a href="/research/artascience" className="font-semibold text-yin-ink hover:underline">See the exact review prompt <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a></p>
               {/* Earlier rounds collapse to their verdict line; the decisive (latest) round opens in full. */}
               <div className="mt-2 space-y-3">{s.reviews?.map((r, i, a) => <ReviewRoundCard key={r.round} r={r} defaultOpen={i === a.length - 1} />)}</div>
             </section>
@@ -1508,11 +1508,11 @@ function ArticleReader({ s, onClose, backLabel }: { s: Submission; onClose: () =
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-2">At a glance</p>
                 <dl className="mt-2.5 space-y-2 text-[12.5px]">
                   <div className="flex items-center justify-between gap-2"><dt className="text-ink-3">Access</dt><dd className="font-semibold text-yang">Open · CC BY 4.0</dd></div>
-                  <div className="flex items-center justify-between gap-2"><dt className="text-ink-3">Review</dt><dd className="font-semibold text-yin-light">AI · {s.reviews?.length || 1} round{(s.reviews?.length || 1) > 1 ? "s" : ""}</dd></div>
+                  <div className="flex items-center justify-between gap-2"><dt className="text-ink-3">Review</dt><dd className="font-semibold text-yin-ink">AI · {s.reviews?.length || 1} round{(s.reviews?.length || 1) > 1 ? "s" : ""}</dd></div>
                   {s.reproduced && <div className="flex items-center justify-between gap-2"><dt className="text-ink-3">Reproduced</dt><dd className="font-semibold text-yang">yes ✓</dd></div>}
                   {s.score ? <div className="flex items-center justify-between gap-2"><dt className="text-ink-3">Score</dt><dd className="font-semibold text-ink">{s.score}/100</dd></div> : null}
                   {published && <div className="flex items-center justify-between gap-2"><dt className="text-ink-3">Published</dt><dd className="font-semibold text-ink">{published}</dd></div>}
-                  {s.doi && <div className="border-t border-line pt-2"><dt className="text-ink-3">DOI</dt><dd className="mt-0.5 break-all"><a className="font-medium text-yin-light hover:underline" href={doiShort(s.id)} target="_blank" rel="noopener noreferrer">{doiShort(s.id).replace("https://", "")}</a></dd></div>}
+                  {s.doi && <div className="border-t border-line pt-2"><dt className="text-ink-3">DOI</dt><dd className="mt-0.5 break-all"><a className="font-medium text-yin-ink hover:underline" href={doiShort(s.id)} target="_blank" rel="noopener noreferrer">{doiShort(s.id).replace("https://", "")}</a></dd></div>}
                 </dl>
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {(s.pdf_url || fileExt(s.paper_url) === "pdf") && <a href={s.pdf_url || s.paper_url} target="_blank" rel="noopener noreferrer" className="rounded-field border border-line px-2.5 py-1 text-[12px] font-semibold text-ink hover:bg-veil/[0.04]">PDF</a>}
@@ -1526,7 +1526,7 @@ function ArticleReader({ s, onClose, backLabel }: { s: Submission; onClose: () =
                   <ol className="mt-2 space-y-1.5">
                     {figureGroups(charts).map((g) => (
                       <li key={g.fig}>
-                        <a href={`#fig-${g.fig}`} onClick={(e) => jump(e, `fig-${g.fig}`)} className="block text-[12.5px] leading-snug text-ink-3 hover:text-yin-light">
+                        <a href={`#fig-${g.fig}`} onClick={(e) => jump(e, `fig-${g.fig}`)} className="block text-[12.5px] leading-snug text-ink-3 hover:text-yin-ink">
                           <span className="font-semibold text-yang">Fig {g.fig}{g.items.length > 1 ? ` (${g.items[0].panel}–${g.items[g.items.length - 1].panel})` : ""}.</span> {stripFigPrefix(g.items[0].spec.title) || "Figure"}
                         </a>
                       </li>
@@ -1565,7 +1565,7 @@ function SubmissionDetail({ id, onClose, onRevise, backLabel }: { id: number; on
   const [actErr, setActErr] = useState("");
   const [copied, setCopied] = useState(false);
   useEffect(() => { let ok = true; getSubmission(id).then((d) => ok && setS(d)).catch(() => ok && setMissing(true)); return () => { ok = false; }; }, [id]);
-  if (missing) return <div className="mx-auto max-w-3xl px-4 py-10"><button onClick={onClose} className="text-[14px] font-semibold text-yin-light hover:underline">← {backLabel}</button><p className="mt-6 text-ink-3">Article not found.</p></div>;
+  if (missing) return <div className="mx-auto max-w-3xl px-4 py-10"><button onClick={onClose} className="text-[14px] font-semibold text-yin-ink hover:underline">← {backLabel}</button><p className="mt-6 text-ink-3">Article not found.</p></div>;
   if (!s) return <div className="mx-auto max-w-3xl px-4 py-10" role="status" aria-busy="true"><div className="h-7 w-2/3 animate-pulse rounded bg-veil/[0.06]" /><div className="mt-4 h-16 animate-pulse rounded-card bg-veil/[0.05]" /></div>;
   const JOURNAL = s.journal_name || "ArtaQuest Journals";
   // Author-only actions: compare the article's author id to the signed-in user's id (the backend also
@@ -1585,7 +1585,7 @@ function SubmissionDetail({ id, onClose, onRevise, backLabel }: { id: number; on
   };
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:py-10">
-      <button onClick={onClose} className="text-[14px] font-semibold text-yin-light hover:underline">← {backLabel}</button>
+      <button onClick={onClose} className="text-[14px] font-semibold text-yin-ink hover:underline">← {backLabel}</button>
 
       <header className="mt-4">
         <div className="flex items-start justify-between gap-3">
@@ -1595,14 +1595,14 @@ function SubmissionDetail({ id, onClose, onRevise, backLabel }: { id: number; on
         <h1 className="mt-2 text-[clamp(1.7rem,4vw,2.4rem)] font-extrabold leading-tight">{s.title}</h1>
         <p className="mt-2 text-[14px] text-ink">
           {s.author?.slug
-            ? <a className="font-bold hover:text-yin-light hover:underline" href={`/u/${s.author.slug}`}>{s.author.name}</a>
+            ? <a className="font-bold hover:text-yin-ink hover:underline" href={`/u/${s.author.slug}`}>{s.author.name}</a>
             : <b>{s.author?.name || "—"}</b>}
         </p>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[12.5px] text-ink-3">
           {date && <span>{date}</span>}
           {!published && <span>· round {s.round}{s.score ? ` · score ${s.score}/100` : ""}</span>}
-          {published && s.doi && <span>· <a className="font-medium text-yin-light hover:underline" href={doiShort(s.id)} target="_blank" rel="noopener noreferrer">DOI ↗</a> <MetricsBadge doi={s.doi} /></span>}
-          <button onClick={share} className="text-yin-light hover:underline" title="Copy a link to this article">· {copied ? "link copied ✓" : "share"}</button>
+          {published && s.doi && <span>· <a className="font-medium text-yin-ink hover:underline" href={doiShort(s.id)} target="_blank" rel="noopener noreferrer">DOI ↗</a> <MetricsBadge doi={s.doi} /></span>}
+          <button onClick={share} className="text-yin-ink hover:underline" title="Copy a link to this article">· {copied ? "link copied ✓" : "share"}</button>
         </p>
       </header>
 
@@ -1612,7 +1612,7 @@ function SubmissionDetail({ id, onClose, onRevise, backLabel }: { id: number; on
         <div className="mt-5 rounded-card border border-yang/40 bg-yang/[0.07] p-4">
           <p className="text-[14px] text-ink-2"><b className="text-ink">Published, open access.</b> Accepted by automated AI review — the reviewer ran the code on the open data and confirmed the results reproduce — and assigned a permanent DOI. Licensed <b className="text-ink">CC BY 4.0</b>.</p>
           <p className="mt-1.5 text-[13px]">
-            <a className="font-semibold text-yin-light hover:underline" href={doiShort(s.id)} target="_blank" rel="noopener noreferrer">{doiShort(s.id).replace("https://", "")}</a>
+            <a className="font-semibold text-yin-ink hover:underline" href={doiShort(s.id)} target="_blank" rel="noopener noreferrer">{doiShort(s.id).replace("https://", "")}</a>
           </p>
         </div>
       )}
@@ -1641,12 +1641,12 @@ function SubmissionDetail({ id, onClose, onRevise, backLabel }: { id: number; on
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-[16px] font-bold">Reproduce in one click</h2>
             {(s.kaggle_url || s.colab_url) && (
-              <a href={s.kaggle_url || s.colab_url} target="_blank" rel="noopener noreferrer" title="Open the reproduction notebook on Kaggle — runs on Kaggle's machines, no setup" className="inline-flex h-[26px] items-center gap-1.5 rounded-field border border-yin-light/40 bg-yin/10 px-2.5 text-[12px] font-semibold text-yin-light no-underline transition-colors hover:bg-yin/20 hover:text-ink">
+              <a href={s.kaggle_url || s.colab_url} target="_blank" rel="noopener noreferrer" title="Open the reproduction notebook on Kaggle — runs on Kaggle's machines, no setup" className="inline-flex h-[26px] items-center gap-1.5 rounded-field border border-yin-ink/40 bg-yin/10 px-2.5 text-[12px] font-semibold text-yin-ink no-underline transition-colors hover:bg-yin/20 hover:text-ink">
                 <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden><path d="M8 5v14l11-7z" /></svg>Open in Colab
               </a>
             )}
           </div>
-          <p className="mt-1 text-[13px] leading-relaxed text-ink-3">ArtaScience reviewed this article by running it. Open the notebook in Colab and choose <b className="text-ink-2">Runtime → Run all</b>: it fetches the open code and data and regenerates the results — nothing to install.{s.notebook && <> Or <a className="font-semibold text-yin-light hover:underline" href={"data:application/x-ipynb+json;charset=utf-8," + encodeURIComponent(s.notebook)} download={`reproduce-${s.id}.ipynb`}>download the notebook (.ipynb)</a> to run it locally.</>}</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-ink-3">ArtaScience reviewed this article by running it. Open the notebook in Colab and choose <b className="text-ink-2">Runtime → Run all</b>: it fetches the open code and data and regenerates the results — nothing to install.{s.notebook && <> Or <a className="font-semibold text-yin-ink hover:underline" href={"data:application/x-ipynb+json;charset=utf-8," + encodeURIComponent(s.notebook)} download={`reproduce-${s.id}.ipynb`}>download the notebook (.ipynb)</a> to run it locally.</>}</p>
           {s.notebook && <div className="mt-3"><NotebookPreview json={s.notebook} /></div>}
         </section>
       )}
@@ -1709,7 +1709,7 @@ function Foot({ name = PORTAL }: { name?: string }) {
 // ── The shared review model, explained once (reused by the hub + every journal's About) ─────────────
 function ReviewModelExplainer() {
   return (
-    <p className="text-[15px] leading-relaxed text-ink-2">Every ArtaQuest journal runs a <b className="text-ink">fully automated, end-to-end AI review process</b>. There is no human peer review. The reviewer — ArtaScience, an AI reviewer running at maximum effort with tools — clones your code, fetches your data, <b className="text-ink">runs the analysis itself</b>, and checks whether the results reproduce your claims. It returns a reproduced (yes/no) verdict, a score, and a detailed report, and either accepts, requests revisions, or rejects. Revisions loop: address the report, resubmit, and a fresh round is reviewed — for as many rounds as it takes. Only work that <i>reproduces</i> is accepted. Every submission and every round of feedback is public. In the spirit of radical transparency, the reviewer's <a className="font-semibold text-yin-light hover:underline" href="/artascience">exact prompt is published and annotated line by line — see how ArtaScience works <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a></p>
+    <p className="text-[15px] leading-relaxed text-ink-2">Every ArtaQuest journal runs a <b className="text-ink">fully automated, end-to-end AI review process</b>. There is no human peer review. The reviewer — ArtaScience, an AI reviewer running at maximum effort with tools — clones your code, fetches your data, <b className="text-ink">runs the analysis itself</b>, and checks whether the results reproduce your claims. It returns a reproduced (yes/no) verdict, a score, and a detailed report, and either accepts, requests revisions, or rejects. Revisions loop: address the report, resubmit, and a fresh round is reviewed — for as many rounds as it takes. Only work that <i>reproduces</i> is accepted. Every submission and every round of feedback is public. In the spirit of radical transparency, the reviewer's <a className="font-semibold text-yin-ink hover:underline" href="/artascience">exact prompt is published and annotated line by line — see how ArtaScience works <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a></p>
   );
 }
 
@@ -1737,7 +1737,7 @@ function JournalCard({ j, onOpen, onSubmit }: { j: Journal; onOpen: () => void; 
       <div className="flex items-start gap-3">
         <span className="shrink-0">{skin.glyph}</span>
         <div className="min-w-0">
-          <button onClick={onOpen} className="block text-start text-[19px] font-bold leading-snug text-ink hover:text-yin-light hover:underline">{j.name}</button>
+          <button onClick={onOpen} className="block text-start text-[19px] font-bold leading-snug text-ink hover:text-yin-ink hover:underline">{j.name}</button>
           <p className={cx("mt-0.5 text-[13.5px] font-semibold", t.text)}>{j.tagline}</p>
         </div>
       </div>
@@ -1748,7 +1748,7 @@ function JournalCard({ j, onOpen, onSubmit }: { j: Journal; onOpen: () => void; 
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-2 pt-1">
         <button onClick={onOpen} className="rounded-field border border-line px-3.5 py-1.5 text-[13px] font-semibold text-ink hover:bg-veil/[0.04]">Enter the journal <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></button>
-        <button onClick={onSubmit} className={cx("rounded-field px-3.5 py-1.5 text-[13px] font-bold", skin.lean === "yang" ? "bg-yang text-on-accent hover:opacity-90" : "border border-yin/50 bg-yin/[0.12] text-yin-light hover:bg-yin/[0.18]")}>Submit</button>
+        <button onClick={onSubmit} className={cx("rounded-field px-3.5 py-1.5 text-[13px] font-bold", skin.lean === "yang" ? "bg-yang text-on-accent hover:opacity-90" : "border border-yin-ink/50 bg-yin/[0.12] text-yin-ink hover:bg-yin/[0.18]")}>Submit</button>
       </div>
     </Card>
   );
@@ -1766,7 +1766,7 @@ function Hub({ journals, set }: { journals: Journal[]; set: (patch: Record<strin
         </p>
         <h1 className="mt-2 text-[clamp(2rem,4.6vw,3rem)] font-extrabold leading-[1.05] tracking-tight">{PORTAL}</h1>
         <p className="mt-3 max-w-2xl text-[16px] leading-relaxed text-ink">A growing family of open-access journals of short, reproducible studies. Every paper ships its open data and code and is reviewed by an AI that <b className="text-ink">re-runs the analysis and reproduces the result</b> before it is published — with a permanent DOI.</p>
-        <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-ink-2"><b className="text-ink">No human peer review.</b> Open access (CC BY 4.0), no fees to read or publish. <a className="font-semibold text-yin-light hover:underline" href="/artascience">How papers are reviewed <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a></p>
+        <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-ink-2"><b className="text-ink">No human peer review.</b> Open access (CC BY 4.0), no fees to read or publish. <a className="font-semibold text-yin-ink hover:underline" href="/artascience">How papers are reviewed <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a></p>
         <div className="mt-5 flex flex-wrap items-center gap-2.5">
           <button onClick={() => set({ submit: "1" })} className="rounded-field bg-yang px-3.5 py-2 text-[14px] font-bold text-on-accent hover:opacity-90" title="Pick a journal, then submit — a registered dataset + model required">Submit a manuscript</button>
           <button onClick={() => set({ submissions: "1" })} className="rounded-field border border-line px-3.5 py-2 text-[14px] font-semibold text-ink hover:bg-veil/[0.04]">All submissions</button>
@@ -1774,7 +1774,7 @@ function Hub({ journals, set }: { journals: Journal[]; set: (patch: Record<strin
         <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-ink-3">
           <span><b className="text-ink">{journals.length}</b> journal{journals.length === 1 ? "" : "s"}</span>
           <span><b className="text-ink">{total}</b> article{total === 1 ? "" : "s"} published</span>
-          <span className="text-yin-light">more journals coming</span>
+          <span className="text-yin-ink">more journals coming</span>
         </div>
       </header>
 
@@ -1822,7 +1822,7 @@ function JournalHome({ j, set }: { j: Journal; set: (patch: Record<string, strin
   const t = leanTok(skin.lean);
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:py-10">
-      <button onClick={() => set({ journal: null })} className="text-[14px] font-semibold text-yin-light hover:underline">← {PORTAL}</button>
+      <button onClick={() => set({ journal: null })} className="text-[14px] font-semibold text-yin-ink hover:underline">← {PORTAL}</button>
       {/* Journal masthead with its own emblem + accent lean */}
       <header className={cx("relative mt-4 overflow-hidden rounded-card border p-6 sm:p-7", t.border, t.soft)}>
         <p className="flex items-center gap-2.5">
@@ -1833,13 +1833,13 @@ function JournalHome({ j, set }: { j: Journal; set: (patch: Record<string, strin
         <p className={cx("mt-2 text-[16px] font-semibold", t.text)}>{j.tagline}</p>
         <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-ink-2">{j.scope[0].toUpperCase() + j.scope.slice(1)}. Every study ships its open data and code, and is reviewed by an AI that re-runs the analysis and confirms it reproduces before it is published.</p>
       </header>
-      <p className="mt-3 text-[13px] text-ink-3">ArtaQuest Foundation · open access (CC BY 4.0) · <button onClick={() => set({ about: "1" })} className="font-semibold text-yin-light hover:underline">About &amp; author guidelines</button></p>
+      <p className="mt-3 text-[13px] text-ink-3">ArtaQuest Foundation · open access (CC BY 4.0) · <button onClick={() => set({ about: "1" })} className="font-semibold text-yin-ink hover:underline">About &amp; author guidelines</button></p>
       <div className="mt-4 flex flex-wrap items-center gap-2.5">
         <button onClick={() => set({ submit: "1" })} className="rounded-field bg-yang px-3.5 py-2 text-[14px] font-bold text-on-accent hover:opacity-90" title="Open data + code required; reviewed entirely by AI">Submit to {j.name}</button>
         <button onClick={() => set({ submissions: "1" })} className="rounded-field border border-line px-3.5 py-2 text-[14px] font-semibold text-ink hover:bg-veil/[0.04]">Review queue</button>
       </div>
       <div className="mt-3"><ReviewStatusBanner journal={j.slug} /></div>
-      <p className="mt-4 text-[14px] leading-relaxed text-ink-2"><b className="text-ink">No human peer review.</b> Every submission is read, run, and checked by an AI that reproduces your results from your own code and data — round after round — and only reproduced work is published, each with a permanent DOI. <button onClick={() => set({ about: "1" })} className="font-semibold text-yin-light hover:underline">How it works <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></button></p>
+      <p className="mt-4 text-[14px] leading-relaxed text-ink-2"><b className="text-ink">No human peer review.</b> Every submission is read, run, and checked by an AI that reproduces your results from your own code and data — round after round — and only reproduced work is published, each with a permanent DOI. <button onClick={() => set({ about: "1" })} className="font-semibold text-yin-ink hover:underline">How it works <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></button></p>
       <div className="mt-6"><PipelineStrip /></div>
       <PublishedList open={(sid) => set({ submission: String(sid) })} journalSlug={j.slug} />
       <InReviewList open={(sid) => set({ submission: String(sid) })} onQueue={() => set({ submissions: "1" })} journalSlug={j.slug} />
@@ -1858,12 +1858,12 @@ function AboutPanel({ journal, set }: { journal: Journal | null; set: (patch: Re
     : "Each journal is scoped to its own question, but all share one model: empirical, reproducible, honestly-caveated studies whose every result must reproduce from its open data and code.";
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:py-10">
-      <button onClick={() => set({ about: null })} className="text-[14px] font-semibold text-yin-light hover:underline">← {backLabel}</button>
+      <button onClick={() => set({ about: null })} className="text-[14px] font-semibold text-yin-ink hover:underline">← {backLabel}</button>
       <h1 className="mt-4 text-[clamp(1.9rem,4vw,2.6rem)] font-extrabold leading-tight">About {name}</h1>
       <p className="mt-3 text-[16px] leading-relaxed text-ink-2">{journal
         ? <>{name} is an open-access journal in the {PORTAL} family. {scopeSentence} Every article ships with its open data and code, a one-click reproduction, citations, and an open discussion.</>
         : <>{PORTAL} is a family of open-access journals of short, reproducible studies. Every article ships with its open data and code, a one-click reproduction, citations, and an open discussion.</>}</p>
-      <p className="mt-3 rounded-card border border-yin/30 bg-yin/[0.06] p-4 text-[15px] leading-relaxed text-ink-2">A journal with <b className="text-ink">no human peer review</b>. Every submission is reviewed by an AI that runs your code on your open data and confirms your results reproduce — the reproducibility check that ordinary review only assumes. Submit, get rounds of concrete feedback, and once it reproduces it is published with a permanent DOI.</p>
+      <p className="mt-3 rounded-card border border-yin-ink/30 bg-yin/[0.06] p-4 text-[15px] leading-relaxed text-ink-2">A journal with <b className="text-ink">no human peer review</b>. Every submission is reviewed by an AI that runs your code on your open data and confirms your results reproduce — the reproducibility check that ordinary review only assumes. Submit, get rounds of concrete feedback, and once it reproduces it is published with a permanent DOI.</p>
       <H>Aims &amp; scope</H>
       <p className="text-[15px] leading-relaxed text-ink-2">{scopeSentence} We value transparent methods and falsifiable claims, and every result must reproduce from its open data and code.</p>
       <H>Open access &amp; licence</H>
@@ -1872,7 +1872,7 @@ function AboutPanel({ journal, set }: { journal: Journal | null; set: (patch: Re
       <ReviewModelExplainer />
       <H>Author guidelines</H>
       <ul className="mt-1 list-disc space-y-1.5 ps-5 text-[15px] leading-relaxed text-ink-2">
-        <li><b className="text-ink">Manuscript in LaTeX.</b> Submit it as a <b className="text-ink">zipped LaTeX project</b> that compiles to a PDF. Our class <span className="font-mono text-[13px]">artaquest.cls</span> is recommended: <a className="font-semibold text-yin-light hover:underline" href="https://artaquest.com/papers/artaquest-latex-template.zip">download the template</a> · <a className="font-semibold text-yin-light hover:underline" href="https://artaquest.com/papers/style-guide.html" target="_blank" rel="noopener noreferrer">style guide</a>.</li>
+        <li><b className="text-ink">Manuscript in LaTeX.</b> Submit it as a <b className="text-ink">zipped LaTeX project</b> that compiles to a PDF. Our class <span className="font-mono text-[13px]">artaquest.cls</span> is recommended: <a className="font-semibold text-yin-ink hover:underline" href="https://artaquest.com/papers/artaquest-latex-template.zip">download the template</a> · <a className="font-semibold text-yin-ink hover:underline" href="https://artaquest.com/papers/style-guide.html" target="_blank" rel="noopener noreferrer">style guide</a>.</li>
         <li><b className="text-ink">Open data + open code are mandatory.</b> A submission is reviewed only if both are public and runnable — provide a code URL (a git repo is ideal) and a data URL the code can read, or upload each file.</li>
         <li><b className="text-ink">Make it run end-to-end.</b> A self-contained script or notebook that regenerates every figure from the open data (a one-click Colab is ideal). Pin dependencies; document how to run it.</li>
         <li><b className="text-ink">Claims must reproduce.</b> The numbers and figures in your abstract must follow from running your code on your data.</li>
@@ -1884,7 +1884,7 @@ function AboutPanel({ journal, set }: { journal: Journal | null; set: (patch: Re
       <H>Indexing &amp; citability</H>
       <p className="text-[15px] leading-relaxed text-ink-2">Every published article is assigned a permanent <b className="text-ink">DOI</b> (registered with DataCite) and preserved in a CERN-backed long-term archive, so the version of record persists independently of this site. Citations export as BibTeX, RIS, and APA.</p>
       <H>Submit</H>
-      <p className="text-[15px] leading-relaxed text-ink-2">Submissions are open. <button onClick={() => set({ about: null, submit: "1" })} className="font-semibold text-yin-light hover:underline">Submit a manuscript</button> with its open data and code, or browse the <button onClick={() => set({ about: null, submissions: "1" })} className="font-semibold text-yin-light hover:underline">public review queue</button> to see every submission and its AI feedback.</p>
+      <p className="text-[15px] leading-relaxed text-ink-2">Submissions are open. <button onClick={() => set({ about: null, submit: "1" })} className="font-semibold text-yin-ink hover:underline">Submit a manuscript</button> with its open data and code, or browse the <button onClick={() => set({ about: null, submissions: "1" })} className="font-semibold text-yin-ink hover:underline">public review queue</button> to see every submission and its AI feedback.</p>
       <Foot name={name} />
     </div>
   );

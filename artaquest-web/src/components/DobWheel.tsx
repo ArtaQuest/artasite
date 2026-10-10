@@ -115,7 +115,7 @@ export function DobWheel({
   // 16px text on a phone, always: iOS Safari zooms the whole page into any form control set
   // smaller than 16px when it is focused, and zooms back out unpredictably afterwards.
   // `aria-invalid` paints the border so a wrong date is visible without relying on the text alone.
-  const sel = `${large ? "h-12" : "h-11"} min-w-0 flex-1 cursor-pointer rounded-field border border-line bg-space-1 px-2.5 text-[16px] sm:text-[15px] text-ink outline-none transition-colors hover:border-ink-3 focus:border-yin-light aria-[invalid=true]:border-rose-400`;
+  const sel = `${large ? "h-12" : "h-11"} min-w-0 flex-1 cursor-pointer rounded-field border border-line bg-space-1 px-2.5 text-[16px] sm:text-[15px] text-ink outline-none transition-colors hover:border-ink-3 focus:border-yin-ink aria-[invalid=true]:border-rose-400`;
 
   return (
     <div className="flex gap-2" id={id}>

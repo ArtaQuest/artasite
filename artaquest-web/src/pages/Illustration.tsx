@@ -30,7 +30,7 @@ function Improvements({ rounds }: { rounds: IllustrationRound[] }) {
         <h2 className="text-[18px] font-bold tracking-tight">How it was refined</h2>
         <p className="mt-0.5 text-[12.5px] text-ink-3">
           Every illustration is adversarially improved: an AI critic inspects each render against the brief and directs the next fix.
-          The whole loop is public — every attempt, image and critique, across {rounds.length} round{rounds.length > 1 ? "s" : ""}. <a className="font-semibold text-yin-light hover:underline" href={localePath("/artaillustration/")}>How the studio works <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
+          The whole loop is public — every attempt, image and critique, across {rounds.length} round{rounds.length > 1 ? "s" : ""}. <a className="font-semibold text-yin-ink hover:underline" href={localePath("/artaillustration/")}>How the studio works <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
         </p>
       </div>
       <ol className="flex list-none flex-col gap-4">
@@ -92,7 +92,7 @@ function OwnerStudio({ art, reload, onDeleted }: { art: Illustration; reload: ()
         <Button onClick={() => act("gen", () => generateIllustration(art.id))} disabled={!!busy}>{busy === "gen" ? "Starting…" : "Paint it"}</Button>
       )}
       {art.art_state === "review" && art.status !== "published" && (
-        <div className="flex flex-col gap-2 rounded-md border border-yin/30 bg-yin/[0.04] p-4">
+        <div className="flex flex-col gap-2 rounded-md border border-yin-ink/30 bg-yin/[0.04] p-4">
           <p className="text-[14px] font-semibold text-ink">Your illustration is ready above</p>
           <p className="text-[12.5px] text-ink-3">
             Publishing makes it public on Illustrations and your profile{art.kind === "cover" && art.book ? <> and sets it as the cover of <strong>“{art.book.title}”</strong></> : null}, and costs <strong>₳{cost}</strong>.

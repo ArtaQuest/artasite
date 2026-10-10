@@ -206,7 +206,7 @@ function RsvpControl({ mine, busy, onPick }: { mine: MeetRsvp; busy: boolean; on
         {(["yes", "maybe", "no"] as const).map((r) => (
           <button key={r} type="button" disabled={busy} onClick={() => onPick(r)} aria-pressed={mine === r}
             className={`h-10 rounded-pill border px-3.5 text-[13px] font-semibold transition-colors disabled:opacity-50 ${
-              mine === r ? "border-yin bg-yin/15 text-yang" : "border-line text-ink-2 hover:border-yin-light hover:text-ink"}`}>
+              mine === r ? "border-yin-ink bg-yin/15 text-yang" : "border-line text-ink-2 hover:border-yin-ink hover:text-ink"}`}>
             {RSVP_LABEL[r]}
           </button>
         ))}
@@ -249,7 +249,7 @@ function GuestList({ guests, seats, hostId, isHost, bound, busy, onRemove }: {
             </Link>
             {isHost && g.id !== hostId && onRemove && (
               <button type="button" disabled={busy} onClick={() => onRemove(g.id)}
-                className="inline-flex h-10 shrink-0 items-center rounded-pill border border-line px-3.5 text-[12.5px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink disabled:opacity-50">
+                className="inline-flex h-10 shrink-0 items-center rounded-pill border border-line px-3.5 text-[12.5px] font-semibold text-ink-2 hover:border-yin-ink hover:text-ink disabled:opacity-50">
                 Remove
               </button>
             )}
@@ -323,7 +323,7 @@ function CalendarPanel({ cal, failed, onRotate }: { cal: MeetCal | null; failed?
               Subscribe
             </a>
             <button type="button" onClick={() => void copy()}
-              className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink">
+              className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 hover:border-yin-ink hover:text-ink">
               {copied ? "Copied" : "Copy the address"}
             </button>
           </div>
@@ -490,7 +490,7 @@ function NewMeetingForm({ seatsMax, onDone, onClose }: {
           <Input value={guest} onChange={(e) => setGuest(e.target.value)} placeholder="@username" className="flex-1"
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addGuest(); } }} />
           <button type="button" onClick={addGuest} disabled={!guest.trim() || guests.length >= seats - 1}
-            className="h-11 shrink-0 rounded-pill border border-line px-4 text-[13.5px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink disabled:opacity-50">
+            className="h-11 shrink-0 rounded-pill border border-line px-4 text-[13.5px] font-semibold text-ink-2 hover:border-yin-ink hover:text-ink disabled:opacity-50">
             Add
           </button>
         </div>
@@ -500,7 +500,7 @@ function NewMeetingForm({ seatsMax, onDone, onClose }: {
           {guests.map((h) => (
             <li key={h}>
               <button type="button" onClick={() => setGuests((cur) => cur.filter((x) => x !== h))}
-                className="inline-flex h-8 items-center gap-1.5 rounded-pill border border-line px-3 text-[12.5px] text-ink-2 hover:border-yin-light hover:text-ink">
+                className="inline-flex h-8 items-center gap-1.5 rounded-pill border border-line px-3 text-[12.5px] text-ink-2 hover:border-yin-ink hover:text-ink">
                 @{h}<span aria-hidden>×</span><span className="sr-only">Remove</span>
               </button>
             </li>
@@ -861,7 +861,7 @@ function HostControls({ meet, busy, now, onInvite, onRetime, onEdit, onEnd, onCa
       <div className="mt-3 border-t border-line pt-3">
         <button type="button" aria-expanded={editing}
           onClick={() => setEditing((o) => { if (!o) { setTitle(String(meet.title || "")); setAgenda(String(meet.agenda || "")); } return !o; })}
-          className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink">
+          className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-ink hover:text-ink">
           {editing ? "Keep the words" : "Title and agenda"}
         </button>
         {editing && (
@@ -892,7 +892,7 @@ function HostControls({ meet, busy, now, onInvite, onRetime, onEdit, onEnd, onCa
             if (!o) { setDate(from.date); setTime(from.time); setMinutes(minutesOf(meet)); }
             return !o;
           })}
-          className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink">
+          className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-ink hover:text-ink">
           {open ? "Keep the time" : "Change the time"}
         </button>
         {open && (
@@ -935,7 +935,7 @@ function HostControls({ meet, busy, now, onInvite, onRetime, onEdit, onEnd, onCa
             </div>
           ) : (
             <button type="button" onClick={() => setConfirmEnd(true)}
-              className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink">End the meeting</button>
+              className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-ink hover:text-ink">End the meeting</button>
           )}
         </div>
       )}
@@ -951,7 +951,7 @@ function HostControls({ meet, busy, now, onInvite, onRetime, onEdit, onEnd, onCa
           </div>
         ) : (
           <button type="button" onClick={() => setConfirming(true)}
-            className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink">Cancel this meeting</button>
+            className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-ink hover:text-ink">Cancel this meeting</button>
         )}
       </div>
     </section>
@@ -1562,7 +1562,7 @@ function MeetingPage({ id }: { id: number }) {
                       <label htmlFor="aq-ask-when" className="text-[12.5px] font-semibold text-ink">Suggest a time</label>
                       <input id="aq-ask-when" type="datetime-local" value={askAt} min={tsToZoned(now + 600, VIEWER_TZ).date + "T" + tsToZoned(now + 600, VIEWER_TZ).time}
                         onChange={(e) => setAskAt(e.target.value)}
-                        className="h-11 rounded-field border border-line bg-space-2 px-3 text-[14px] text-ink outline-none focus:border-yin-light" />
+                        className="h-11 rounded-field border border-line bg-space-2 px-3 text-[14px] text-ink outline-none focus:border-yin-ink" />
                       <p className="text-[12px] text-ink-2">In your own time zone. Nothing moves until the host agrees.</p>
                       <div className="flex flex-wrap gap-2">
                         <button type="button" disabled={busy || !askAt} onClick={() => void doAsk()}
@@ -1573,7 +1573,7 @@ function MeetingPage({ id }: { id: number }) {
                     </div>
                   ) : (
                     <button type="button" onClick={() => setAskOpen(true)}
-                      className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink">Ask for a different time</button>
+                      className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-ink hover:text-ink">Ask for a different time</button>
                   )}
                 </div>
               )}
@@ -1591,7 +1591,7 @@ function MeetingPage({ id }: { id: number }) {
                     </div>
                   ) : (
                     <button type="button" onClick={() => setConfirmDrop(true)}
-                      className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink">Cancel this booking</button>
+                      className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-ink hover:text-ink">Cancel this booking</button>
                   )}
                 </div>
               )}
@@ -1658,7 +1658,7 @@ function MeetingPage({ id }: { id: number }) {
 
           {cal && meet.status !== "cancelled" && (
             <a href={oneEventIcs(cal.ics, id)}
-              className="inline-flex h-10 items-center justify-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink">
+              className="inline-flex h-10 items-center justify-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 hover:border-yin-ink hover:text-ink">
               Add this one to your calendar
             </a>
           )}
@@ -1668,7 +1668,7 @@ function MeetingPage({ id }: { id: number }) {
               second place for this meeting's wording to drift out of step with the .ics above. */}
           {meet.gcal_url && meet.status !== "cancelled" && (
             <a href={meet.gcal_url} target="_blank" rel="noopener noreferrer"
-              className="inline-flex h-10 items-center justify-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink">
+              className="inline-flex h-10 items-center justify-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 hover:border-yin-ink hover:text-ink">
               Add to Google Calendar
             </a>
           )}

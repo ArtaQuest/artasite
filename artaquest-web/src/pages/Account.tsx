@@ -514,7 +514,7 @@ function TokenManager() {
         </Button>
       </div>
       <p className="mt-1 text-[13px] text-ink-3">
-        Let scripts and AI agents act as you through the open API — see the <a className="text-yin-light hover:underline" href={localePath("/developers/")}>developer docs</a>.
+        Let scripts and AI agents act as you through the open API — see the <a className="text-yin-ink hover:underline" href={localePath("/developers/")}>developer docs</a>.
         Whatever a token does, publishing still requires your own emailed confirmation — the single-use link sent to your registered address — so nothing goes public without you.
       </p>
 
@@ -837,7 +837,7 @@ function ShellManager() {
           <Field label="Your PUBLIC key (the .pub file)">
             <textarea value={key} onChange={(e) => setKey(e.target.value)} rows={3} spellCheck={false}
               placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5..."
-              className="w-full rounded-card border border-line bg-space-2 px-3 py-2 font-mono text-[12.5px] text-ink outline-none focus:border-yin" />
+              className="w-full rounded-card border border-line bg-space-2 px-3 py-2 font-mono text-[12.5px] text-ink outline-none focus:border-yin-ink" />
           </Field>
           {/* Said plainly because the consequence is permanent: everything in this database is
               published at /data/, so a private key pasted here would be published too. */}
@@ -1231,7 +1231,7 @@ function PhotoTile({ label, hint, value, onPick }: { label: string; hint: string
   const ref = useRef<HTMLInputElement>(null);
   return (
     <button type="button" onClick={() => ref.current?.click()}
-      className="group flex flex-col items-center justify-center gap-1.5 rounded-card border border-dashed border-line bg-space-2/40 p-3 text-center transition-colors hover:border-yin-light/50">
+      className="group flex flex-col items-center justify-center gap-1.5 rounded-card border border-dashed border-line bg-space-2/40 p-3 text-center transition-colors hover:border-yin-ink/50">
       {value
         ? <img src={value} alt="" className="h-20 w-full rounded-lg object-cover" />
         : <span className="flex h-20 w-full items-center justify-center text-[22px] text-ink-3" aria-hidden>＋</span>}
@@ -1284,7 +1284,7 @@ function PalmBackPhoto({ user, onChange }: { user: Dashboard["user"]; onChange: 
               flip it and see your palm — a human, self-chosen sign that you’re a real person. It’s separate from
               the blue-check verification, and public like the rest of your profile. {palm ? "Tap your picture to preview the flip." : ""}
             </p>
-            {err && <p className="mt-2 text-[13px] text-yin-light">{err}</p>}
+            {err && <p className="mt-2 text-[13px] text-yin-ink">{err}</p>}
             <div className="mt-3 flex flex-wrap gap-2">
               <Button variant="outline" onClick={() => ref.current?.click()} disabled={busy} className="h-9 px-4 text-[13px]">
                 {busy ? "Working…" : palm ? "Replace palm photo" : "Add palm photo"}
@@ -1388,7 +1388,7 @@ function IdentityVerification() {
           </p>
         )}
         {st?.verified ? (
-          <div className="flex items-center gap-2 text-[15px] font-semibold text-yin-light">
+          <div className="flex items-center gap-2 text-[15px] font-semibold text-yin-ink">
             <BlueCheck size={18} /> Verified{st.verified_at ? ` · ${new Date(st.verified_at * 1000).toLocaleDateString()}` : ""}
           </div>
         ) : !st?.configured ? (
@@ -1413,7 +1413,7 @@ function IdentityVerification() {
             </div>
           </>
         )}
-        {vmsg && <p className={`text-[14px] ${vmsg.ok ? "text-yin-light" : "text-rose-300"}`}>{vmsg.text}</p>}
+        {vmsg && <p className={`text-[14px] ${vmsg.ok ? "text-yin-ink" : "text-rose-300"}`}>{vmsg.text}</p>}
       </Card>
     </section>
   );
@@ -1527,7 +1527,7 @@ function KaggleIdentity() {
                       <>
                         {k.verified_at ? `proved ${ago(k.verified_at)}` : "proved"}
                         {kernelLink(k.proof_kernel) && (
-                          <> · <a className="text-yin-light hover:underline" href={kernelLink(k.proof_kernel)}
+                          <> · <a className="text-yin-ink hover:underline" href={kernelLink(k.proof_kernel)}
                             target="_blank" rel="noopener noreferrer">the notebook we read it from</a></>
                         )}
                       </>
@@ -1581,7 +1581,7 @@ function KaggleIdentity() {
             <div className="text-[13px] text-ink-3">
               You claimed @<span data-ay-skip="1" className="font-semibold text-ink">{proving}</span> earlier. Your string was shown once
               and we cannot show it again —{" "}
-              <button type="button" onClick={() => void claim(proving)} disabled={busy === "claim"} className="text-yin-light hover:underline">
+              <button type="button" onClick={() => void claim(proving)} disabled={busy === "claim"} className="text-yin-ink hover:underline">
                 claim again for a new one
               </button>{" "}
               if you no longer have it. The old string stops working the moment you do.
@@ -1609,7 +1609,7 @@ function KaggleIdentity() {
               <li>The notebook is public and saved — Kaggle answers for a private, draft or deleted one the same way, and we can read none of them</li>
               <li>It belongs to @<span data-ay-skip="1">{proving}</span> — a notebook you can edit but do not own says nothing about the account</li>
               <li>The string is somewhere in it: any cell, or the title, exactly as it was given to you</li>
-              <li>Nobody else has proved that handle already — only one member can hold it. If it is truly yours, <a className="text-yin-light hover:underline" href={localePath("/issues/")}>report an issue</a></li>
+              <li>Nobody else has proved that handle already — only one member can hold it. If it is truly yours, <a className="text-yin-ink hover:underline" href={localePath("/issues/")}>report an issue</a></li>
             </ul>
           )}
         </>
@@ -1675,7 +1675,7 @@ function BursaryApply() {
   const fundShare = res?.fund_empty ? res.share : (status && !status.available ? status.share : null);
   if (fundShare) return <GrowFund share={fundShare} donateUrl={status?.donate_url || "/donate/"} note={res?.fund_empty ? res.message : undefined} />;
 
-  const cls = "h-11 w-full rounded-field border border-line bg-space-1 px-3.5 text-[15px] text-ink outline-none focus:border-yin-light";
+  const cls = "h-11 w-full rounded-field border border-line bg-space-1 px-3.5 text-[15px] text-ink outline-none focus:border-yin-ink";
   return (
     <Card className="flex flex-col gap-4 p-6">
       <div>
@@ -1705,7 +1705,7 @@ function BursaryApply() {
           <Field label="Anything we should know?" optional>
             <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} maxLength={600} placeholder="A sentence on your situation helps, but isn't required." className="w-full resize-y" />
           </Field>
-          {res && !res.ok && <p className="text-[13px] text-yin-light">{res.message || res.error || "Couldn't submit — please try again."}</p>}
+          {res && !res.ok && <p className="text-[13px] text-yin-ink">{res.message || res.error || "Couldn't submit — please try again."}</p>}
           <Button data-goal="bursary-apply" onClick={apply} disabled={busy || !courseId || !group} className="h-11 px-6 text-[15px] disabled:opacity-50">{busy ? "Applying…" : "Apply for a bursary"}</Button>
         </>
       )}
@@ -1729,7 +1729,7 @@ function ParticipationCerts() {
       <ul className="mt-4 grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-2">
         {items.map((c) => (
           <li key={c.challenge_id}>
-            <Card as="a" href={localePath(c.url)} className="group block w-full px-4 py-3 hover:border-yin-light/40">
+            <Card as="a" href={localePath(c.url)} className="group block w-full px-4 py-3 hover:border-yin-ink/40">
               <span className={`block font-semibold transition-colors group-hover:text-yang ${nameClass(c.challenge, 15)}`} data-ay-skip="1">{c.challenge}</span>
               <span className="mt-0.5 block text-[12px] text-ink-2">
                 <span data-ay-skip="1">{c.kind} · {c.topic}</span> ·{" "}
@@ -1800,7 +1800,7 @@ export default function Account() {
           </div>
           <div className="min-w-0">
             <h1 className="text-[26px] font-bold leading-tight tracking-tight wrap-anywhere">{d.user.name}</h1>
-            {photoErr && <p className="mt-0.5 text-[12px] text-yin-light">{photoErr}</p>}
+            {photoErr && <p className="mt-0.5 text-[12px] text-yin-ink">{photoErr}</p>}
             <div className="mt-1 flex items-center gap-2">
               {d.tier.next
                 ? <Pill className="px-3 py-0.5 text-[13px]">{d.tier.pct}% to {d.tier.next}</Pill>
@@ -1850,7 +1850,7 @@ export default function Account() {
           <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {d.courses.map((c) => (
               <li key={c.url} className="flex flex-col items-start gap-1.5">
-                <Card as="a" href={localePath(c.url)} className="group block w-full px-4 py-3 hover:border-yin-light/40">
+                <Card as="a" href={localePath(c.url)} className="group block w-full px-4 py-3 hover:border-yin-ink/40">
                   <span className="block text-[15px] font-semibold transition-colors group-hover:text-yang">{c.value}</span>
                   <span className="mt-0.5 block text-[12px] text-ink-3">{c.pct ?? 0}% complete{c.lessons ? ` · ${c.lessons} video${c.lessons === 1 ? "" : "s"}` : ""}</span>
                 </Card>

@@ -54,7 +54,7 @@ function FoundationBooks({ fin }: { fin: FoundationFinances }) {
           fit — four at 1440, two at 1100, one on a phone — with no breakpoint to be wrong. */}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3">
         <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">In the fund</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-yang">{formatFiat(fin.donations_fiat, fin.fiat)}</p><p className="text-[12px] text-ink-3">donated money still on hand, every bucket</p></Card>
-        <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">ArtaCredits held</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-yin-light">{formatFiat(creditsHeld, fin.fiat)}</p><p className="text-[12px] text-ink-3">of the above, waiting for the slices donors chose</p></Card>
+        <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">ArtaCredits held</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-yin-ink">{formatFiat(creditsHeld, fin.fiat)}</p><p className="text-[12px] text-ink-3">of the above, waiting for the slices donors chose</p></Card>
         <Card className="p-4"><p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">Coins in circulation</p><p className="mt-1 text-[22px] font-extrabold tabular-nums text-ink"><Coins n={fin.coin_supply} /></p><p className="text-[12px] text-ink-3">{(fin.reserve_mg / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} g of gold held</p></Card>
         {/* `|| 1` here printed "100% gold-backed" for a ratio of 0 — directly beside the "0.0 g of
             gold held" card above it. Coerce, then default to 0: a missing figure must never render
@@ -79,7 +79,7 @@ function FoundationBooks({ fin }: { fin: FoundationFinances }) {
                     <span className="block truncate text-[14px] text-ink">{r.reason || r.scope}</span>
                     <span className="text-[12px] text-ink-3">{fmt(r.date)} · {r.scope}</span>
                   </div>
-                  <span className={`shrink-0 text-[14px] font-semibold tabular-nums ${out ? "text-yin-light" : "text-yang-dark"}`}>{out ? "−" : "+"}{formatFiat(Math.abs(r.coins), fin.fiat)}</span>
+                  <span className={`shrink-0 text-[14px] font-semibold tabular-nums ${out ? "text-yin-ink" : "text-yang-dark"}`}>{out ? "−" : "+"}{formatFiat(Math.abs(r.coins), fin.fiat)}</span>
                 </li>
               );
             })}
@@ -136,7 +136,7 @@ function Picker({ id, label, value, onChange, children }: {
     <label htmlFor={id} className="flex min-w-0 flex-col gap-1.5 text-[13px] font-semibold text-ink-2">
       {label}
       <select id={id} value={value} onChange={(e) => onChange(e.currentTarget.value)}
-        className="h-11 w-full rounded-field border border-line bg-space-1 px-3 text-[15px] font-normal text-ink outline-none focus:border-yin-light">
+        className="h-11 w-full rounded-field border border-line bg-space-1 px-3 text-[15px] font-normal text-ink outline-none focus:border-yin-ink">
         {children}
       </select>
     </label>
@@ -393,7 +393,7 @@ export default function Donate() {
                   <Chip key={p} active={!custom && preset === p} onClick={() => { setPreset(p); setCustom(""); }}
                     className="h-10 min-w-[64px] justify-center px-4 text-[15px] font-semibold">{sym}{p}</Chip>
                 ))}
-                <div className="flex h-10 items-center rounded-pill border border-line px-3 text-ink-2 focus-within:border-yin-light">
+                <div className="flex h-10 items-center rounded-pill border border-line px-3 text-ink-2 focus-within:border-yin-ink">
                   <span className="text-[15px]">{sym}</span>
                   <input value={custom} onChange={(e) => setCustom(sanitizeDecimal(e.target.value))} inputMode="decimal" placeholder="Other" aria-label={`Custom amount (${cur})`} className="h-full w-20 bg-transparent px-1 text-[15px] text-ink outline-none" />
                 </div>
@@ -427,7 +427,7 @@ export default function Donate() {
             <Card className="flex flex-col gap-3 p-5">
               <input value={donorName} onChange={(e) => setDonorName(e.target.value.slice(0, 80))} disabled={anon}
                 placeholder="Your name, as it should appear" aria-label="Your name as it should appear on the certificate"
-                className="h-11 w-full rounded-field border border-line bg-space-1 px-3 text-[15px] text-ink outline-none focus:border-yin-light disabled:opacity-50" />
+                className="h-11 w-full rounded-field border border-line bg-space-1 px-3 text-[15px] text-ink outline-none focus:border-yin-ink disabled:opacity-50" />
               <label className="flex items-center gap-2.5 text-[14px] text-ink-2">
                 <input type="checkbox" checked={anon} onChange={(e) => setAnon(e.currentTarget.checked)} className="h-4 w-4 accent-yang" />
                 Give without my name — the certificate will read “A friend of ArtaQuest”

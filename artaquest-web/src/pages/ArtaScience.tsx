@@ -54,7 +54,7 @@ function Verbatim({ text }: { text: string }) {
 /** One annotated block: the exact prompt text, then the plain-English "why it's here" beside/under it. */
 function Block({ block, index }: { block: PromptBlock; index: number }) {
   const tag = block.group === "system" ? "System prompt" : "Task prompt";
-  const tagCls = block.group === "system" ? "border-yin/40 bg-yin/[0.10] text-yin-light" : "border-yang/40 bg-yang/[0.10] text-yang";
+  const tagCls = block.group === "system" ? "border-yin-ink/40 bg-yin/[0.10] text-yin-ink" : "border-yang/40 bg-yang/[0.10] text-yang";
   return (
     <section className="scroll-mt-24">
       <div className="flex flex-wrap items-center gap-2">
@@ -95,7 +95,7 @@ export default function ArtaScience() {
   return (
     <div className="flex flex-col py-1">
       {/* ── 1. HEADER ── */}
-      <a href={localePath("/research/")} className="text-[14px] font-semibold text-yin-light hover:underline"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> ArtaQuest Journals</a>
+      <a href={localePath("/research/")} className="text-[14px] font-semibold text-yin-ink hover:underline"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> ArtaQuest Journals</a>
       <div className="mt-4">
         <PageHero
           eyebrow={`${REVIEWER} · Transparency`}
@@ -108,7 +108,7 @@ export default function ArtaScience() {
         <Card className="p-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-2">Reviewer</p>
           <p className="mt-1 text-[15px] font-bold text-ink">{REVIEWER_MODEL}</p>
-          <p className="mt-0.5 text-[12.5px] text-ink-3">effort: <span className="font-semibold text-yin-light">{REVIEWER_EFFORT}</span>, with full tools</p>
+          <p className="mt-0.5 text-[12.5px] text-ink-3">effort: <span className="font-semibold text-yin-ink">{REVIEWER_EFFORT}</span>, with full tools</p>
         </Card>
         <Card className="p-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-2">How it judges</p>
@@ -120,7 +120,7 @@ export default function ArtaScience() {
         </Card>
       </div>
 
-      <p className="mt-5 rounded-card border border-yin/30 bg-yin/[0.06] p-4 text-[15px] leading-relaxed text-ink-2">
+      <p className="mt-5 rounded-card border border-yin-ink/30 bg-yin/[0.06] p-4 text-[15px] leading-relaxed text-ink-2">
         The platform's ethos is <b className="text-ink">radical transparency</b> — the entire database is public. In that spirit, the
         full prompt below is exactly what the reviewer is given. Nothing is paraphrased or withheld: the verbatim system
         and task prompts are shown alongside a plain-English note on why each part is there.
@@ -145,7 +145,7 @@ export default function ArtaScience() {
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {SECURITY.map((x) => (
               <div key={x.title} className="rounded-card border border-line bg-space-2 p-4">
-                <p className="text-[14px] font-bold text-yin-light">{x.title}</p>
+                <p className="text-[14px] font-bold text-yin-ink">{x.title}</p>
                 <p className="mt-1 text-[13px] leading-relaxed text-ink-2">{x.body}</p>
               </div>
             ))}
@@ -211,9 +211,9 @@ export default function ArtaScience() {
           database is public, you can read every submission and every round of review yourself.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <a href={localePath("/research/?submissions=1")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">Browse the public review queue <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
-          <a href={localePath("/data/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">Open the Data explorer <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
-          <a href={localePath("/research/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-light hover:text-ink">ArtaQuest Journals <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
+          <a href={localePath("/research/?submissions=1")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-ink hover:text-ink">Browse the public review queue <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
+          <a href={localePath("/data/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-ink hover:text-ink">Open the Data explorer <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
+          <a href={localePath("/research/")} className="rounded-field border border-line px-3.5 py-2 text-[13px] font-semibold text-ink hover:border-yin-ink hover:text-ink">ArtaQuest Journals <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
         </div>
         <p className="mt-6 border-t border-line pt-4 text-[12px] text-ink-3">ArtaQuest Journals · automated AI review · open access (CC BY 4.0) · every article reproduced from its open data and code before publication</p>
       </div>

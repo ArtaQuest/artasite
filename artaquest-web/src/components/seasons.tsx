@@ -21,6 +21,7 @@ import { cx } from "./ui";
 
 /** The gold→blue blend for dual-toned ranks — its midpoint is pure neutral (the pair are exact
  *  complements), so no third hue ever appears. */
+// eslint-disable-next-line react-refresh/only-export-components -- pre-existing shared exports
 export const DUAL_TEXT: React.CSSProperties = {
   backgroundImage: "linear-gradient(105deg, var(--color-yang-ink), var(--color-yin-ink))",
   WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
@@ -29,7 +30,7 @@ export const DUAL_TEXT: React.CSSProperties = {
 /** The season's RANK ("Q", "1" … "10", "J"), stability-toned. Ranks only — never a suit. */
 export function SeasonSigil({ season, className }: { season: Season; className?: string }) {
   if (season.tone === "dual") return <span className={cx("whitespace-nowrap font-semibold", className)} style={DUAL_TEXT}>{season.rank}</span>;
-  return <span className={cx("whitespace-nowrap font-semibold", season.tone === "yang" ? "text-yang-ink" : "text-yin-light", className)}>{season.rank}</span>;
+  return <span className={cx("whitespace-nowrap font-semibold", season.tone === "yang" ? "text-yang-ink" : "text-yin-ink", className)}>{season.rank}</span>;
 }
 
 /** Corner badge: the member's season card emblem on their avatar (mirror of FlagBadge). */
@@ -46,6 +47,7 @@ export function SeasonBadge({ n, className }: { n?: number | null; className?: s
 }
 
 /** The viewer's season: explicit subscription (server-injected / freshly saved), else birth season. */
+// eslint-disable-next-line react-refresh/only-export-components -- pre-existing shared exports
 export function mySeason(): Season | null {
   const u = currentUser();
   if (!u) return null;
@@ -53,6 +55,7 @@ export function mySeason(): Season | null {
 }
 
 /** One season's topics (the atlas disciplines whose fitted peak falls in it), best first. */
+// eslint-disable-next-line react-refresh/only-export-components -- pre-existing shared exports
 export function topicsOfSeason(discs: Discipline[], s: Season): Discipline[] {
   return discs
     .filter((d) => seasonForPhase(d.sign)?.n === s.n)
@@ -93,18 +96,18 @@ export default function SeasonNow() {
           <div className="flex flex-wrap gap-1.5">
             {myTopics.map((d) => (
               <a key={d.key} href={localePath(`/topics/?field=${encodeURIComponent(d.key)}`)}
-                className="rounded-full border border-line bg-space-3/40 px-2.5 py-1 text-[12.5px] text-ink-2 transition-colors hover:border-yin-light hover:text-yin-light">
+                className="rounded-full border border-line bg-space-3/40 px-2.5 py-1 text-[12.5px] text-ink-2 transition-colors hover:border-yin-ink hover:text-yin-ink">
                 {d.label}
               </a>
             ))}
-            <a href={localePath("/topics/")} className="rounded-full px-2.5 py-1 text-[12.5px] font-semibold text-yin-light hover:underline">the whole cycle <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
+            <a href={localePath("/topics/")} className="rounded-full px-2.5 py-1 text-[12.5px] font-semibold text-yin-ink hover:underline">the whole cycle <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
           </div>
         </div>
       )}
       {!mine && (
         <p className="mt-3 border-t border-line/60 pt-3 text-[12.5px] text-ink-3">
           Every member follows ONE of the twelve seasons — by default the one they were born in.{" "}
-          <a href={localePath("/topics/")} className="font-semibold text-yin-light hover:underline">Pick yours on the cycle <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
+          <a href={localePath("/topics/")} className="font-semibold text-yin-ink hover:underline">Pick yours on the cycle <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
         </p>
       )}
     </section>

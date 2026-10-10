@@ -43,7 +43,7 @@ function VerifyPaste() {
       <label htmlFor="aq-cert-paste" className="text-[13px] font-semibold text-ink">Verification address</label>
       <input id="aq-cert-paste" value={raw} onChange={(e) => { setRaw(e.target.value); setBad(false); }}
         placeholder="artaquest.com/verify/?p=…&u=…&k=…" spellCheck={false} autoCapitalize="off"
-        className="h-11 w-full rounded-field border border-line bg-space-2 px-4 text-[15px] text-ink outline-none transition-colors focus:border-yin-light" />
+        className="h-11 w-full rounded-field border border-line bg-space-2 px-4 text-[15px] text-ink outline-none transition-colors focus:border-yin-ink" />
       {bad && (
         <p className="text-[12.5px] leading-relaxed text-ink-2">
           That address is missing part of the code. Copy the whole line from the certificate — it ends
@@ -127,7 +127,7 @@ export default function Participation() {
            to sign in. The address is long; being able to act on what you can see matters more. */
         <p className="aq-no-print break-all text-center text-[12px] text-ink-3">
           Anyone can confirm this is genuine at{" "}
-          <a href={cert.verify_url} className="text-yin-light underline-offset-2 hover:underline" data-ay-skip="1">
+          <a href={cert.verify_url} className="text-yin-ink underline-offset-2 hover:underline" data-ay-skip="1">
             artaquest.com{cert.verify_url}
           </a>
         </p>

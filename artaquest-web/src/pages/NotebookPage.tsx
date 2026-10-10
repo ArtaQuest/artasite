@@ -123,7 +123,7 @@ function Credit({ nb }: { nb: NotebookFull }) {
   const same = who.toLowerCase() === nb.author.name.trim().toLowerCase();
   if (same) return null;
   return (
-    <p className="rounded-card border border-yin/40 bg-yin/5 px-4 py-3 text-[13px] leading-relaxed text-ink-2">
+    <p className="rounded-card border border-yin-ink/40 bg-yin/5 px-4 py-3 text-[13px] leading-relaxed text-ink-2">
       <span className="font-semibold text-ink">Written by</span>{" "}
       <a href={`https://www.kaggle.com/${kg.owner}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-yin-ink hover:underline">
         <span data-ay-skip="1">{who}</span>
@@ -444,7 +444,7 @@ export default function NotebookPage() {
           <button
             type="button" onClick={toggleHeart}
             className={cx("inline-flex items-center gap-1.5 rounded-pill border px-3 py-1 text-sm transition-colors",
-              mine ? "border-yin bg-yin/15 text-yang" : "border-line text-ink-2 hover:border-yin-ink")}
+              mine ? "border-yin-ink bg-yin/15 text-yang" : "border-line text-ink-2 hover:border-yin-ink")}
             aria-pressed={mine}
           >
             <HeartGlyph size={14} filled={mine} /> {hearts}

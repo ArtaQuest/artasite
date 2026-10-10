@@ -175,7 +175,7 @@ function CourseRankingsPanel({ courseId }: { courseId: number }) {
                     <a href={localePath(`/u/${it.slug}/`)} className="group flex min-w-0 items-center gap-2.5">
                       <Avatar src={it.avatar} name={it.name} country={it.country} className="h-7 w-7 text-[12px]" />
                       <span className={cx("min-w-0 font-semibold text-ink group-hover:text-yang", nameClass(it.name, 14))}>{it.name}</span>
-                      {it.certified && <span title="Certified — eligible to collect" className="shrink-0 rounded-pill bg-yin/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yin-light">cert</span>}
+                      {it.certified && <span title="Certified — eligible to collect" className="shrink-0 rounded-pill bg-yin/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-yin-ink">cert</span>}
                     </a>
                   </td>
                   {/* Archived seasons don't snapshot the comment count, so show "—" rather than a misleading 0. */}
@@ -584,7 +584,7 @@ export default function CourseDetail() {
                   <textarea value={rBody} onChange={(e) => setRBody(e.target.value)} rows={3} placeholder="What did you think of this course?" className="w-full rounded-card border border-line bg-transparent p-3 text-[14px] text-ink outline-none focus:border-yang" />
                   <Button type="button" onClick={submitReview} disabled={rBusy} className="mt-2 h-9 text-[14px] disabled:opacity-60">{rBusy ? "Saving…" : "Submit review"}</Button>
                   {rErr && (
-                    <p className="mt-2 text-[13px] text-yin-light">
+                    <p className="mt-2 text-[13px] text-yin-ink">
                       {rErr}{" "}
                       {/name|birthday|identity/i.test(rErr) && <a href={localePath("/user-account/")} className="font-semibold text-yang hover:underline">Update your profile <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>}
                     </p>
@@ -610,12 +610,12 @@ export default function CourseDetail() {
               {/* The competition lives on the unified board: every section's discussion is browsable
                   from the global /discussions home, grouped under this course. */}
               <a href={localePath(`/discussions?course=${c.id}`)}
-                className="mb-6 flex items-center justify-between gap-3 rounded-card border border-yin/30 bg-yin/5 px-4 py-3.5 transition-colors hover:border-yin/60">
+                className="mb-6 flex items-center justify-between gap-3 rounded-card border border-yin-ink/30 bg-yin/5 px-4 py-3.5 transition-colors hover:border-yin-ink/60">
                 <span className="min-w-0">
                   <span className="block text-[14px] font-semibold text-ink">Section discussion boards</span>
                   <span className="block text-[13px] text-ink-3">Watch a section, then reply and upvote — the most-upvoted replies climb the rankings.</span>
                 </span>
-                <span className="shrink-0 text-[14px] font-semibold text-yin-light">Browse <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></span>
+                <span className="shrink-0 text-[14px] font-semibold text-yin-ink">Browse <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></span>
               </a>
 
               {/* Course Q&A — free, course-level threads open to everyone (distinct from the per-section
@@ -627,7 +627,7 @@ export default function CourseDetail() {
                   <textarea value={tBody} onChange={(e) => setTBody(e.target.value)} rows={3} placeholder="Ask a question or share a thought… (LaTeX with $…$ supported)" className="w-full rounded-card border border-line bg-transparent p-3 text-[14px] text-ink outline-none focus:border-yang" />
                   <Button type="button" onClick={submitThread} disabled={tBusy || !tTitle.trim()} className="mt-2 h-9 text-[14px] disabled:opacity-60">{tBusy ? "Posting…" : "Post"}</Button>
                   {tErr && (
-                    <p className="mt-2 text-[13px] text-yin-light">
+                    <p className="mt-2 text-[13px] text-yin-ink">
                       {tErr}{" "}
                       {/name|birthday|identity/i.test(tErr) && <a href={localePath("/user-account/")} className="font-semibold text-yang hover:underline">Update your profile <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>}
                     </p>

@@ -76,7 +76,7 @@ export function ArtaTTS() {
       {pill && (
         <button
           type="button"
-          className="aq-tts-ui fixed z-50 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-line bg-space-1/95 px-3 py-1.5 text-[12.5px] font-semibold text-ink shadow-[0_8px_24px_rgba(0,0,0,.4)] backdrop-blur hover:border-yin"
+          className="aq-tts-ui fixed z-50 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-line bg-space-1/95 px-3 py-1.5 text-[12.5px] font-semibold text-ink shadow-[0_8px_24px_rgba(0,0,0,.4)] backdrop-blur hover:border-yin-ink"
           style={{ left: pill.x, top: pill.y }}
           onPointerDown={(e) => e.preventDefault()} // keep the selection alive through the click
           onClick={open}

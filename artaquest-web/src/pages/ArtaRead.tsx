@@ -205,7 +205,7 @@ export default function ArtaRead() {
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
         onDrop={(e) => { e.preventDefault(); setDrag(false); open(e.dataTransfer.files?.[0]); }}
-        className={`mt-6 flex min-h-[11rem] cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-6 py-8 text-center transition-colors ${drag ? "border-yin bg-space-2" : "border-line hover:border-yin"}`}
+        className={`mt-6 flex min-h-[11rem] cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-6 py-8 text-center transition-colors ${drag ? "border-yin-ink bg-space-2" : "border-line hover:border-yin-ink"}`}
       >
         <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="text-ink-3"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><path d="M14 3v6h6M12 18v-6M9.5 14.5 12 12l2.5 2.5" /></svg>
         {busy ? (

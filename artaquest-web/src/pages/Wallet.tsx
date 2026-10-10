@@ -252,7 +252,7 @@ function SellPanel({ balance, balanceKnown, sellPrice, fiat, cashout, reserveKno
           <Button variant="outline" size="md" onClick={() => setCoins(String(balance))} className="shrink-0 px-3 text-[13px]">Max</Button>
         </div>
       </Field>
-      <p className="-mt-1 text-[13px] text-ink-3">{sellPrice > 0 && <>≈ <span className="font-semibold text-yin-light">{formatFiat(estPayout, fiat)}</span> · </>}balance after: <Coins n={Math.max(0, balance - n)} /></p>
+      <p className="-mt-1 text-[13px] text-ink-3">{sellPrice > 0 && <>≈ <span className="font-semibold text-yin-ink">{formatFiat(estPayout, fiat)}</span> · </>}balance after: <Coins n={Math.max(0, balance - n)} /></p>
       {needsOnboarding && (
         <p className="rounded-field border border-line bg-space-1 px-4 py-3 text-[13px] text-ink-2">First cash-out? You’ll set up a secure payout account with Stripe (a one-time, 2-minute step) so we can send money straight to your bank.</p>
       )}
@@ -369,7 +369,7 @@ export default function Wallet() {
           <div className="min-w-0 flex-[1_1_18rem]">
             <p className="text-[13px] font-semibold uppercase tracking-[0.18em] text-ink-3">Your wallet</p>
             <div className="mt-2 text-[clamp(2.4rem,6vw,3.2rem)] font-extrabold leading-none text-yang tabular-nums">{balance == null && !dash ? "—" : <Coins n={bal} />}</div>
-            <p className="mt-2 text-[14px] text-ink-2">Arta Coins · <a href="/reserve/" className="hover:text-yin-light hover:underline">{reserve ? `${Math.round((Number(reserve.backing_ratio) || 0) * 100)}% gold-backed` : "gold-backed"}</a>.{reserve ? <> Cash-out value ≈ <span className="font-semibold text-ink">{formatFiat(bal * reserve.sell, fiat)}</span>.</> : failed ? <> Live cash-out value is temporarily unavailable.</> : null}</p>
+            <p className="mt-2 text-[14px] text-ink-2">Arta Coins · <a href="/reserve/" className="hover:text-yin-ink hover:underline">{reserve ? `${Math.round((Number(reserve.backing_ratio) || 0) * 100)}% gold-backed` : "gold-backed"}</a>.{reserve ? <> Cash-out value ≈ <span className="font-semibold text-ink">{formatFiat(bal * reserve.sell, fiat)}</span>.</> : failed ? <> Live cash-out value is temporarily unavailable.</> : null}</p>
             <a href={localePath("/reserve/")} className="mt-3 inline-block text-[14px] font-semibold text-yang hover:underline">See the reserve <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></a>
           </div>
           {/* The `sm:` gate stays only as the art switch it always was (no coin on a phone); it no

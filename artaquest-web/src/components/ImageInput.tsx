@@ -146,7 +146,7 @@ function SvgPicker({ onPick, onClose }: { onPick: (name: string) => void; onClos
                 return (
                   <li key={f}>
                     <button type="button" onClick={() => onPick(f)} title={label}
-                      className="flex w-full flex-col items-center gap-1 rounded-card border border-line p-2 transition-colors hover:border-yin-light hover:bg-veil/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-light">
+                      className="flex w-full flex-col items-center gap-1 rounded-card border border-line p-2 transition-colors hover:border-yin-ink hover:bg-veil/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-ink">
                       <img src={resolveImage(`topic-art/${f}`)} alt="" width={48} height={48} loading="lazy" decoding="async" className="h-12 w-12 object-contain" />
                       <span className="w-full truncate text-center text-[10px] text-ink-2">{label}</span>
                     </button>

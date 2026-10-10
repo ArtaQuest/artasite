@@ -71,7 +71,7 @@ export default function NewsDetectionPage() {
           {/* One link, and it says where it goes. There is no detections index to offer instead —
               /news and /news/ are both <Navigate to="/">, so a second link would be the same
               destination wearing a different label. The feed's rail IS the list, so say that. */}
-          <a className="text-yin-light hover:underline" href={localePath("/")}>
+          <a className="text-yin-ink hover:underline" href={localePath("/")}>
             See what the instruments have detected
           </a>
         </p>
@@ -181,7 +181,7 @@ export default function NewsDetectionPage() {
                   </p>
                   <p className="mt-1 text-[13px] text-ink-2">{r.match_note}</p>
                   <p className="mt-1 break-all text-[12px]">
-                    <a className="text-yin-light hover:underline" href={r.url} rel="noreferrer nofollow" target="_blank">
+                    <a className="text-yin-ink hover:underline" href={r.url} rel="noreferrer nofollow" target="_blank">
                       {r.url}
                     </a>
                   </p>
@@ -209,7 +209,7 @@ export default function NewsDetectionPage() {
           <p className="text-[15px]">{d.source?.name}</p>
           {d.source?.url ? (
             <p className="mt-2 break-all text-[13px]">
-              <a className="text-yin-light hover:underline" href={d.source.url} rel="noreferrer nofollow" target="_blank">
+              <a className="text-yin-ink hover:underline" href={d.source.url} rel="noreferrer nofollow" target="_blank">
                 {d.source.url}
               </a>
             </p>
@@ -228,7 +228,7 @@ export default function NewsDetectionPage() {
               {d.evidence.map((e) => (
                 <li key={e.url}>
                   <a
-                    className="text-[14px] font-semibold text-yin-light hover:underline"
+                    className="text-[14px] font-semibold text-yin-ink hover:underline"
                     href={e.url}
                     rel="noreferrer nofollow"
                     target="_blank"

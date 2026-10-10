@@ -171,7 +171,7 @@ export function SectionBoardView({ lessonId, onEngagementChange, onTotalChange }
 
   return (
     <>
-      {voteErr && <p role="alert" className="mb-2 rounded-card border border-yin/30 bg-yin/5 px-3 py-2 text-[13px] text-yin-light">{voteErr}</p>}
+      {voteErr && <p role="alert" className="mb-2 rounded-card border border-yin-ink/30 bg-yin/5 px-3 py-2 text-[13px] text-yin-ink">{voteErr}</p>}
       <CommentThread
         comments={comments} capabilities={SECTION_CAPS} writeState={writeState} layout="pillar"
         sort={sort} onSortChange={setSort} total={thread.total}

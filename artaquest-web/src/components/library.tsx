@@ -982,13 +982,13 @@ export function LibraryCard({ item, onPick, picked, compact }: {
         onClick={() => onPick(item)}
         className={cx("relative flex w-full min-w-0 rounded-card border p-2 text-start transition-colors",
           compact ? "items-center gap-3" : "flex-col gap-2",
-          picked ? "border-yin bg-yin/10" : "border-line bg-space-2 hover:border-yin-ink/60")}
+          picked ? "border-yin-ink bg-yin/10" : "border-line bg-space-2 hover:border-yin-ink/60")}
       >
         {thumb}
         <span className="flex min-w-0 flex-1 flex-col gap-1">{head}{prov}</span>
         <span aria-hidden className={cx("grid h-6 w-6 shrink-0 place-items-center rounded-full border",
           compact ? "ms-auto" : "absolute end-3 top-3",
-          picked ? "border-yin bg-yin text-on-accent" : "border-line bg-space-1/80 text-ink-3")}>
+          picked ? "border-yin-ink bg-yin text-on-accent" : "border-line bg-space-1/80 text-ink-3")}>
           {picked ? <CheckGlyph /> : null}
         </span>
       </button>

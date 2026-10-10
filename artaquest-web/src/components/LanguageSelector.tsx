@@ -140,7 +140,7 @@ export function LanguageSelector({ compact = false }: { compact?: boolean } = {}
               aria-controls={listId}
               aria-autocomplete="list"
               aria-activedescendant={ordered[activeIdx] ? optId(activeIdx) : undefined}
-              className="h-8 w-full rounded-field border border-line bg-space-1 px-2.5 text-[13px] text-ink placeholder:text-ink-2 focus:border-yin-light focus:outline-none"
+              className="h-8 w-full rounded-field border border-line bg-space-1 px-2.5 text-[13px] text-ink placeholder:text-ink-2 focus:border-yin-ink focus:outline-none"
             />
           </div>
           <ul ref={listRef} id={listId} role="listbox" aria-label="Select your language" className="max-h-[50vh] overflow-y-auto">
@@ -174,7 +174,7 @@ export function LanguageSelector({ compact = false }: { compact?: boolean } = {}
           </ul>
           {/* ArtaTranslate transparency — every language here is continuously upgraded by it. */}
           <div className="border-t border-line px-4 pb-1 pt-2">
-            <a href="/artatranslate" className="text-[12px] font-semibold text-yin-light hover:underline">
+            <a href="/artatranslate" className="text-[12px] font-semibold text-yin-ink hover:underline">
               How these translations are made and improved <span aria-hidden className="inline-block rtl:-scale-x-100">→</span>
             </a>
           </div>

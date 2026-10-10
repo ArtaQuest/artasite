@@ -44,7 +44,7 @@ export function CallModeChoice({ value, onChange, compact, suggested }: {
           <button key={m.value} type="button" role="radio" aria-checked={value === m.value}
             title={m.blurb} onClick={() => onChange(m.value)}
             className={`inline-flex h-10 items-center rounded-pill border px-3 text-[12.5px] font-semibold transition-colors ${
-              value === m.value ? "border-yin bg-yin/15 text-yang" : "border-line text-ink-2 hover:border-yin-light hover:text-ink"}`}>
+              value === m.value ? "border-yin-ink bg-yin/15 text-yang" : "border-line text-ink-2 hover:border-yin-ink hover:text-ink"}`}>
             {m.label}
           </button>
         ))}
@@ -57,7 +57,7 @@ export function CallModeChoice({ value, onChange, compact, suggested }: {
         <button key={m.value} type="button" role="radio" aria-checked={value === m.value}
           onClick={() => onChange(m.value)}
           className={`flex min-h-[44px] w-full items-start gap-2.5 rounded-card border px-3 py-2 text-start transition-colors ${
-            value === m.value ? "border-yin bg-yin/10" : "border-line hover:border-yin-light"}`}>
+            value === m.value ? "border-yin-ink bg-yin/10" : "border-line hover:border-yin-ink"}`}>
           <span aria-hidden className={`mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2 ${
             value === m.value ? "border-yang bg-yang" : "border-line"}`} />
           <span className="min-w-0">
@@ -269,7 +269,7 @@ export function CallPanel({
           {showQuality && (
             <button type="button" onClick={() => setQuality((q) => !q)} aria-expanded={quality}
               className={`inline-flex h-11 shrink-0 items-center rounded-pill border px-3 text-[12.5px] font-semibold transition-colors sm:h-9 ${
-                quality ? "border-yin bg-yin/15 text-yang" : "border-line text-ink-2 hover:border-yin-light hover:text-ink"}`}>
+                quality ? "border-yin-ink bg-yin/15 text-yang" : "border-line text-ink-2 hover:border-yin-ink hover:text-ink"}`}>
               Quality
             </button>
           )}

@@ -101,7 +101,7 @@ function BookBody({ book }: { book: Book }) {
                 ref={readBtnRef}
                 type="button"
                 onClick={() => setReading(true)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-line px-3.5 py-1.5 text-[13px] font-semibold text-ink transition hover:border-yin/50"
+                className="inline-flex items-center gap-1.5 rounded-full border border-line px-3.5 py-1.5 text-[13px] font-semibold text-ink transition hover:border-yin-ink/50"
               >
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M2 6h20M2 6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4a2 2 0 0 1-2-2zM12 6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v10a2 2 0 0 0-2 2h-6a2 2 0 0 0-2 2" /></svg>
                 Read mode
@@ -191,7 +191,7 @@ function OwnerStudio({ book, reload }: { book: Book; reload: () => void }) {
         <Button onClick={() => act("gen", () => generateBook(book.id))} disabled={!!busy}>{busy === "gen" ? "Starting…" : "Write the book"}</Button>
       )}
       {book.book_state === "review" && book.status !== "published" && (
-        <div className="flex flex-col gap-2 rounded-md border border-yin/30 bg-yin/[0.04] p-4">
+        <div className="flex flex-col gap-2 rounded-md border border-yin-ink/30 bg-yin/[0.04] p-4">
           <p className="text-[14px] font-semibold text-ink">Your draft is ready below</p>
           <p className="text-[12.5px] text-ink-3">Publishing makes it public on the Library and your profile, and costs <strong>₳{cost}</strong> ({book.pages} pages × ₳1).</p>
           <div className="flex items-center gap-2">
@@ -221,11 +221,11 @@ function BookArt({ bookId, isOwner }: { bookId: number; isOwner: boolean }) {
     <section aria-label="Illustrations for this book" className="flex flex-col gap-3">
       <h2 className="text-[15px] font-semibold text-ink-2">Illustrations</h2>
       {items.length === 0 ? (
-        <p className="text-[13px] text-ink-3">No published art yet — <Link className="font-semibold text-yin-light hover:underline" to={localePath("/illustrations/")}>commission a cover or plates</Link> for this book in the art studio.</p>
+        <p className="text-[13px] text-ink-3">No published art yet — <Link className="font-semibold text-yin-ink hover:underline" to={localePath("/illustrations/")}>commission a cover or plates</Link> for this book in the art studio.</p>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {items.map((i) => (
-            <Link key={i.id} to={localePath(`/illustration/${i.id}/`)} className="group flex flex-col overflow-hidden rounded-card border border-line bg-space-1/40 transition-colors hover:border-yin/50">
+            <Link key={i.id} to={localePath(`/illustration/${i.id}/`)} className="group flex flex-col overflow-hidden rounded-card border border-line bg-space-1/40 transition-colors hover:border-yin-ink/50">
               <span className="aspect-square w-full overflow-hidden bg-space-2"><img src={i.image} alt={i.summary || i.title} loading="lazy" className="h-full w-full object-cover" /></span>
               <span className="truncate p-2 text-[12.5px] font-medium text-ink-2 group-hover:text-ink">{i.title}</span>
             </Link>

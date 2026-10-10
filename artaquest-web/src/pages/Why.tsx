@@ -277,7 +277,7 @@ function CycleDetail({ cycle }: { cycle: Cycle }) {
                 <h3 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.12em] text-ink-3">Topics</h3>
                 <ul className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
                   {topics.map((t) => (
-                    <li key={t.key}><a href={localePath(`/topics/${t.key}/`)} className="text-[14px] text-ink-2 hover:text-yin-light">{t.name}</a></li>
+                    <li key={t.key}><a href={localePath(`/topics/${t.key}/`)} className="text-[14px] text-ink-2 hover:text-yin-ink">{t.name}</a></li>
                   ))}
                 </ul>
               </div>
@@ -287,7 +287,7 @@ function CycleDetail({ cycle }: { cycle: Cycle }) {
                 <h3 className="mb-1 text-[12px] font-semibold uppercase tracking-[0.12em] text-ink-3">Courses</h3>
                 <ul className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
                   {courses.map((c) => (
-                    <li key={c.url}><a href={localePath(c.url)} className="line-clamp-1 text-[14px] text-ink-2 hover:text-yin-light">{c.title}</a></li>
+                    <li key={c.url}><a href={localePath(c.url)} className="line-clamp-1 text-[14px] text-ink-2 hover:text-yin-ink">{c.title}</a></li>
                   ))}
                 </ul>
               </div>
@@ -319,7 +319,7 @@ function CycleIndex() {
       />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {CYCLES.map((c) => (
-          <Card as="a" key={c.slug} href={localePath(`/why/${c.slug}/`)} className="group flex flex-col gap-1 p-5 transition-colors hover:border-yin-light/40">
+          <Card as="a" key={c.slug} href={localePath(`/why/${c.slug}/`)} className="group flex flex-col gap-1 p-5 transition-colors hover:border-yin-ink/40">
             <span className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--color-yang)" }}>{c.period}</span>
             <h2 className="text-[18px] font-bold tracking-tight transition-colors group-hover:text-yang">{c.name}</h2>
             <p className="text-[13.5px] leading-relaxed text-ink-3">{c.essence.charAt(0).toUpperCase() + c.essence.slice(1)}.</p>

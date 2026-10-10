@@ -97,7 +97,7 @@ export function PreJoin({ mode }: { mode: CallMode }) {
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)}
-        className="mb-3 inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink">
+        className="mb-3 inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-ink hover:text-ink">
         {wantVideo ? "Check my camera and microphone" : "Check my microphone"}
       </button>
     );
@@ -157,7 +157,7 @@ export function PreJoin({ mode }: { mode: CallMode }) {
       <div className="mt-2 flex items-center justify-between gap-2">
         <p className="text-[12px] leading-relaxed text-ink-3">Only you can see this. The camera closes when you press Done.</p>
         <button type="button" onClick={() => setOpen(false)}
-          className="inline-flex h-10 shrink-0 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink">Done</button>
+          className="inline-flex h-10 shrink-0 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 hover:border-yin-ink hover:text-ink">Done</button>
       </div>
     </div>
   );

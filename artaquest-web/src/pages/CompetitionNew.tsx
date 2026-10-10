@@ -20,7 +20,7 @@ function DatasetHelp() {
       <h2 className="text-sm font-bold uppercase tracking-wider text-ink-3">Uploading a dataset</h2>
       <p className="text-[13px] leading-relaxed text-ink-3">
         Custom dataset uploads are set up by hand for now. Once your competition exists, reach us via{" "}
-        <a href={localePath("/faq-contact/")} className="text-yin-light hover:underline">FAQ &amp; contact</a>{" "}
+        <a href={localePath("/faq-contact/")} className="text-yin-ink hover:underline">FAQ &amp; contact</a>{" "}
         with your train/test files and the target you want scored, and we&rsquo;ll wire in the hidden holdout.
       </p>
     </section>
@@ -69,7 +69,7 @@ export default function CompetitionNewPage() {
     <div className="flex flex-col">
       <WithRail label="Hosting a competition" rail={<DatasetHelp />}>
         <div className="mx-auto max-w-lg">
-          <a href={localePath("/competitions/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-light"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Competitions</a>
+          <a href={localePath("/competitions/")} className="mb-5 inline-flex text-[13px] text-ink-3 hover:text-yin-ink"><span aria-hidden className="inline-block rtl:-scale-x-100">←</span> Competitions</a>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">New competition</h1>
           <p className="mt-2 text-[14px] leading-relaxed text-ink-3">
             Host a dataset with a hidden holdout and let others compete on it. Name it and describe it in a line;

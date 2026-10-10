@@ -113,7 +113,7 @@ export function TodaysNewsCard({ items }: { items: TrendingKindItem[] | null }) 
         <article key={n.url || n.title} className="px-4 py-2.5" data-ay-skip="1">
           {n.url ? (
             <a
-              className="line-clamp-2 block text-[14px] font-bold leading-snug text-ink hover:text-yin-light hover:underline"
+              className="line-clamp-2 block text-[14px] font-bold leading-snug text-ink hover:text-yin-ink hover:underline"
               href={n.url}
               rel="noreferrer nofollow"
               target="_blank"

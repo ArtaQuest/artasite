@@ -148,7 +148,7 @@ export default function About() {
               <div>
                 <H2 id="founder">From the founder</H2>
                 <p className="text-[13px] text-ink-2">
-                  <a href={localePath("/u/artafather/")} className="hover:text-yin-light hover:underline">Arash Ashrafnejad</a> · Founder, ArtaQuest Foundation
+                  <a href={localePath("/u/artafather/")} className="hover:text-yin-ink hover:underline">Arash Ashrafnejad</a> · Founder, ArtaQuest Foundation
                 </p>
               </div>
             </div>
@@ -250,7 +250,7 @@ export default function About() {
         <h2 className="mx-auto max-w-2xl text-[clamp(1.4rem,3vw,1.9rem)] font-bold leading-snug">We do not need to keep you happy — we need to keep you thinking</h2>
         <div className="mt-7 flex flex-col items-center gap-4">
           <Button href="/donate/" size="xl">Support this work</Button>
-          <a href={localePath("/faq-contact/")} className="inline-block py-1.5 text-[14px] font-semibold text-ink-2 hover:text-yin-light hover:underline">
+          <a href={localePath("/faq-contact/")} className="inline-block py-1.5 text-[14px] font-semibold text-ink-2 hover:text-yin-ink hover:underline">
             FAQ &amp; contact
           </a>
         </div>

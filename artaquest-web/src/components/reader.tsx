@@ -78,7 +78,7 @@ export function MarkdownLite({ text }: { text: string }) {
       if (m.index > last) out.push(s.slice(last, m.index));
       if (m[2] != null) out.push(<b key={k++} className="text-ink">{m[2]}</b>);
       else if (m[3] != null) out.push(<code key={k++} className="rounded bg-space-1 px-1 py-0.5 font-mono text-[12px]">{m[3]}</code>);
-      else if (m[4] != null) out.push(<a key={k++} href={m[5]} target="_blank" rel="noopener noreferrer" className="text-yin-light hover:underline">{m[4]}</a>);
+      else if (m[4] != null) out.push(<a key={k++} href={m[5]} target="_blank" rel="noopener noreferrer" className="text-yin-ink hover:underline">{m[4]}</a>);
       else if (m[6] != null) out.push(<i key={k++}>{m[6]}</i>);
       last = m.index + m[0].length;
     }

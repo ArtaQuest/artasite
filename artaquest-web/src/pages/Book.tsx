@@ -562,7 +562,7 @@ function DayGrid({ month, dayMap, todayKey, horizonKey, selected, onChoose, onMo
                   style={{ position: "relative" }}
                   className={cx("grid place-items-center text-[15px] font-normal tabular-nums text-ink-2 outline-none md:text-[17px]",
                     CELL_H)}>
-                  {isToday && <span aria-hidden className="pointer-events-none absolute h-9 w-9 rounded-full ring-1 ring-inset ring-yin-light/60 md:h-11 md:w-11" />}
+                  {isToday && <span aria-hidden className="pointer-events-none absolute h-9 w-9 rounded-full ring-1 ring-inset ring-yin-ink/60 md:h-11 md:w-11" />}
                   {/* The numeral is the DECORATION and the sr-only line is the NAME: a reader who
                       cannot see which column a square is in gets the weekday, not a bare "17". The
                       formatted date is skip-wrapped, the words beside it are not. */}
@@ -592,7 +592,7 @@ function DayGrid({ month, dayMap, todayKey, horizonKey, selected, onChoose, onMo
                        : "bg-yang/[0.10] text-ink group-hover:bg-yang/25 group-focus-visible:bg-yang/25",
                     // Blue marks where you STAND, gold marks what you CHOSE. The two brand colours
                     // never do the same job, and no third mark is invented for "today".
-                    isToday && !on && "ring-1 ring-inset ring-yin-light/60")}>
+                    isToday && !on && "ring-1 ring-inset ring-yin-ink/60")}>
                   <span data-ay-skip="1">{Number(key.slice(8, 10))}</span>
                 </span>
                 <span aria-hidden
@@ -622,7 +622,7 @@ function TypeChooser({ offered, current, onPick }: { offered: BookRule[]; curren
         return (
           <button key={t.slug} type="button" role="radio" aria-checked={on} onClick={() => onPick(t.slug)}
             className={cx("flex min-h-[56px] w-full items-center justify-between gap-3 rounded-field border p-3 text-start transition-colors duration-150",
-              on ? "border-yang bg-yang/12" : "border-line hover:border-yin-light")}>
+              on ? "border-yang bg-yang/12" : "border-line hover:border-yin-ink")}>
             <span className="min-w-0 text-[14px] font-semibold text-ink" data-ay-skip="1">{t.title}</span>
             <span className="shrink-0 text-[12.5px] text-ink-2"><DurationText m={Number(t.minutes) || 30} /></span>
           </button>
@@ -1274,7 +1274,7 @@ function VisitorPage({ handle }: { handle: string }) {
     <PageHero eyebrow="Time with" title={<span data-ay-skip="1">{owner.name}</span>} lede={heroLede} />,
     <>
       {viewerIsOwner && (
-        <p className="rounded-card border border-yin/40 bg-yin/10 px-4 py-3 text-[13px] leading-relaxed text-ink-2">
+        <p className="rounded-card border border-yin-ink/40 bg-yin/10 px-4 py-3 text-[13px] leading-relaxed text-ink-2">
           This is your own page — exactly what a visitor sees.{" "}
           <LinkButton className={cx("text-[13px]", LINK_HIT)} onClick={() => { window.location.assign(localePath("/book")); }}>Edit your hours</LinkButton>
         </p>
@@ -1436,7 +1436,7 @@ function VisitorPage({ handle }: { handle: string }) {
                           className={cx("h-12 rounded-field border text-[15px] font-semibold tabular-nums transition-colors duration-150 md:h-11 md:text-[14.5px]",
                             dead ? "cursor-not-allowed border-line text-ink-2"
                               : on ? "border-yang bg-yang text-on-accent"
-                              : "border-line text-ink-2 hover:border-yin-light hover:text-ink")}>
+                              : "border-line text-ink-2 hover:border-yin-ink hover:text-ink")}>
                           {dead
                             ? <>Taken <span className="sr-only">— <span data-ay-skip="1">{clockOnly(ts, displayTz)}</span></span></>
                             : <span data-ay-skip="1">{clockOnly(ts, displayTz)}</span>}
@@ -1595,7 +1595,7 @@ function RuleForm({ rule, onSaved, onCancel }: { rule: BookRule; onSaved: (r: Bo
               return (
                 <button key={i} type="button" aria-pressed={on} onClick={() => toggleDay(i)}
                   className={cx("h-10 min-w-[52px] rounded-pill border px-3 text-[13px] font-semibold transition-colors",
-                    on ? "border-yang bg-yang/15 text-yang" : "border-line text-ink-2 hover:border-yin-light hover:text-ink")}>
+                    on ? "border-yang bg-yang/15 text-yang" : "border-line text-ink-2 hover:border-yin-ink hover:text-ink")}>
                   <span data-ay-skip="1">{WEEKDAY_NAMES[i]}</span>
                 </button>
               );
@@ -1603,11 +1603,11 @@ function RuleForm({ rule, onSaved, onCancel }: { rule: BookRule; onSaved: (r: Bo
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
             <button type="button" onClick={() => setDays("1111111")}
-              className="inline-flex h-10 items-center rounded-pill border border-line px-3.5 text-[12.5px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink">
+              className="inline-flex h-10 items-center rounded-pill border border-line px-3.5 text-[12.5px] font-semibold text-ink-2 hover:border-yin-ink hover:text-ink">
               Any day
             </button>
             <button type="button" onClick={() => setDays("1111100")}
-              className="inline-flex h-10 items-center rounded-pill border border-line px-3.5 text-[12.5px] font-semibold text-ink-2 hover:border-yin-light hover:text-ink">
+              className="inline-flex h-10 items-center rounded-pill border border-line px-3.5 text-[12.5px] font-semibold text-ink-2 hover:border-yin-ink hover:text-ink">
               Weekdays
             </button>
           </div>
@@ -1714,12 +1714,12 @@ function RuleCard({ rule, onEdit, onOff, onOn, busy }: { rule: BookRule; onEdit:
           /* Withdrawing was one-way unless you opened the form — a visible dead end on your own
              page. The row survives a withdrawal precisely so the same link works again. */
           <button type="button" onClick={onOn} disabled={busy}
-            className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink disabled:opacity-50">
+            className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-ink hover:text-ink disabled:opacity-50">
             Offer this again
           </button>
         ) : (
           <button type="button" onClick={onOff} disabled={busy}
-            className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink disabled:opacity-50">
+            className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-ink hover:text-ink disabled:opacity-50">
             Stop offering it
           </button>
         )}
@@ -1758,7 +1758,7 @@ function ShareCard({ handle, url: given }: { handle: string; url?: string }) {
           {copied ? "Copied" : "Copy the link"}
         </button>
         <a href={localePath(`/book/${handle}`)}
-          className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-light hover:text-ink">
+          className="inline-flex h-10 items-center rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:border-yin-ink hover:text-ink">
           See what they see
         </a>
       </div>

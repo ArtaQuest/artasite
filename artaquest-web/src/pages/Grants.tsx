@@ -108,7 +108,7 @@ function GrantDetail({ g, loggedIn, onChanged }: { g: OutreachGrant; loggedIn: b
                     <span>{m.name}</span>
                   </a>
                   <span className={cx("rounded-full px-1.5 py-0.5 text-[11px]",
-                    m.status === "verified" ? "bg-yang/15 text-yang" : m.status === "submitted" ? "bg-yin/15 text-yin-light" : "bg-veil/5 text-ink-2")}>{m.status}</span>
+                    m.status === "verified" ? "bg-yang/15 text-yang" : m.status === "submitted" ? "bg-yin/15 text-yin-ink" : "bg-veil/5 text-ink-2")}>{m.status}</span>
                 </li>
               ))}
             </ul>
@@ -125,7 +125,7 @@ function GrantDetail({ g, loggedIn, onChanged }: { g: OutreachGrant; loggedIn: b
                   <span className="tabular-nums" data-ay-skip="1">{fmtMeeting(mt.start)}</span>
                   {mt.meet_url ? (
                     <>
-                      <Link to={localePath(mt.meet_url)} className="rounded-md bg-yin/15 px-2 py-0.5 text-[12px] font-medium text-yin-light no-underline hover:bg-yin/25">Open the session</Link>
+                      <Link to={localePath(mt.meet_url)} className="rounded-md bg-yin/15 px-2 py-0.5 text-[12px] font-medium text-yin-ink no-underline hover:bg-yin/25">Open the session</Link>
                       <span className="text-[12px] text-ink-3">opens 15 minutes before</span>
                     </>
                   ) : (
@@ -160,7 +160,7 @@ function GrantDetail({ g, loggedIn, onChanged }: { g: OutreachGrant; loggedIn: b
         ) : g.my_status === "claimed" ? (
           !showSubmit ? (
             <div className="flex flex-col gap-2">
-              <Pill className="bg-yin/12 text-yin-light">You claimed this — prepare the application</Pill>
+              <Pill className="bg-yin/12 text-yin-ink">You claimed this — prepare the application</Pill>
               <div className="flex items-center gap-3">
                 <Button size="sm" onClick={() => setShowSubmit(true)}>Mark submitted</Button>
                 <LinkButton disabled={busy} onClick={() => run(releaseGrant(g.id))} className="text-[12.5px]">Release</LinkButton>
@@ -323,7 +323,7 @@ export default function Grants() {
               const soon = du !== null && du >= 0 && du <= 30;
               const action = g.my_status === "verified" ? { text: "✓ Verified", cls: "font-medium text-yang" }
                 : g.my_status === "submitted" ? { text: "Submitted", cls: "text-yang" }
-                : g.my_status === "claimed" ? { text: "Claimed", cls: "text-yin-light" }
+                : g.my_status === "claimed" ? { text: "Claimed", cls: "text-yin-ink" }
                 : g.slots_left <= 0 ? { text: "Full", cls: "text-ink-3" }
                 : { text: isOpen ? "Open" : "Claim →", cls: "font-medium text-yang" };
               return (
@@ -374,7 +374,7 @@ export default function Grants() {
                     <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 ps-5 text-[11px]">
                       {eligChips(g).map((c) => (
                         <span key={c.label} className={cx("whitespace-nowrap rounded-full px-1.5 py-0.5",
-                          c.tone === "ok" ? "bg-yang/12 text-yang" : c.tone === "warn" ? "bg-yin/15 text-yin-light" : "bg-veil/5 text-ink-2")}>{c.label}</span>
+                          c.tone === "ok" ? "bg-yang/12 text-yang" : c.tone === "warn" ? "bg-yin/15 text-yin-ink" : "bg-veil/5 text-ink-2")}>{c.label}</span>
                       ))}
                       {g.fit ? <span className={cx("whitespace-nowrap rounded-full px-1.5 py-0.5", g.fit >= 4 ? "bg-yang/15 font-medium text-yang" : "bg-veil/5 text-ink-2")}>Fit {g.fit}</span> : null}
                       <span className="whitespace-nowrap rounded-full bg-veil/5 px-1.5 py-0.5 tabular-nums text-ink-2">{g.slots_left}/{g.capacity} slots</span>

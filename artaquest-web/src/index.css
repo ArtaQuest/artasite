@@ -101,7 +101,7 @@
   --color-on-accent: #0d0d0f;
   /* Focus ring colour — gold on the dark cosmos; light mode overrides to blue (gold on
      white is ~2:1, failing WCAG 1.4.11 non-text contrast). */
-  --color-focus: var(--color-yang);
+  --color-focus: var(--color-yin-ink); /* focus rings use the one UI blue */
 
   /* Layout */
   --spacing-sidebar: 256px;
@@ -170,7 +170,7 @@ html[data-theme="light"] {
 
   /* Washes darken instead of lighten; focus ring switches to the blue accent. */
   --color-veil: #10131a;
-  --color-focus: var(--color-yin);
+  --color-focus: var(--color-yin-ink);
   --shadow-card: 0 1px 2px rgba(16, 20, 30, 0.06), 0 8px 20px -10px rgba(16, 20, 30, 0.12);
   --shadow-pop: 0 6px 16px rgba(16, 20, 30, 0.08), 0 24px 48px -16px rgba(16, 20, 30, 0.16);
 
@@ -473,10 +473,10 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
   outline: none;
-  border-color: var(--color-yin-light);
+  border-color: var(--color-yin-ink);
 }
 /* Composed controls: the wrapper carries the shape, so the wrapper carries the focus. */
-.aq-focus-wrap:focus-within { border-color: var(--color-yin-light); }
+.aq-focus-wrap:focus-within { border-color: var(--color-yin-ink); }
 
 /* iOS SAFARI ZOOMS THE WHOLE PAGE when a focused text field's font-size is under 16px, and the
    member then has to pinch back out — on a sign-up form, mid-typing. `body` is 16px but form
@@ -528,7 +528,7 @@ select option, select optgroup { color: #111; background: #fff; }
 .aq-continue-arrow { transition: transform .18s ease-out; }
 [role="link"]:hover .aq-continue,
 [role="link"]:focus-visible .aq-continue { animation: none; }
-[role="link"]:hover .aq-continue { border-color: var(--color-yin); color: var(--color-yin); }
+[role="link"]:hover .aq-continue { border-color: var(--color-yin-ink); color: var(--color-yin-ink); }
 [role="link"]:hover .aq-continue-arrow { transform: translateX(3px); }
 
 @media (prefers-reduced-motion: reduce) {
@@ -938,9 +938,9 @@ html[data-theme="light"] .aq-sig-img { filter: none; }
 }
 .aq-toc-sub { padding-inline-start: 1.55rem; font-size: 0.78rem; }
 /* Upcoming sections read muted, passed ones normal, the active one gold + medium. */
-.aq-toc-item:hover { color: var(--color-yin-light); }
+.aq-toc-item:hover { color: var(--color-yin-ink); }
 .aq-toc-item:focus-visible {
-  outline: none; color: var(--color-yin-light);
+  outline: none; color: var(--color-yin-ink);
   box-shadow: -2px 0 0 0 var(--color-yin-light);
   border-radius: 2px;
 }
@@ -962,7 +962,7 @@ html[data-theme="light"] .aq-sig-img { filter: none; }
   padding-right: 0.5rem;
 }
 .aq-read-toc .aq-toc-item { color: var(--color-ink-3); }
-.aq-read-toc .aq-toc-item:hover { color: var(--color-yin-light); }
+.aq-read-toc .aq-toc-item:hover { color: var(--color-yin-ink); }
 .aq-read-toc .aq-toc-item.is-active { color: var(--color-yang-ink, var(--color-yang)); }
 /* Only show the left TOC when there's room beside the reading column (≈ col 54rem + 2×TOC gutters). */
 @media (max-width: 1100px) { .aq-read-toc { display: none; } }
@@ -996,7 +996,7 @@ html[data-theme="light"] .aq-sig-img { filter: none; }
 .aq-read-byline { margin-top: 0.85rem; font-size: calc(0.92rem * var(--aq-read-scale)); color: var(--color-ink-3); line-height: 1.6; }
 .aq-read-byline b, .aq-read-byline a { color: var(--color-ink-2); font-weight: 600; }
 .aq-read-byline a { text-decoration: none; }
-.aq-read-byline a:hover { color: var(--color-yin-light); text-decoration: underline; }
+.aq-read-byline a:hover { color: var(--color-yin-ink); text-decoration: underline; }
 .aq-read-abstract {
   margin-top: 1.6rem;
   padding: 0 0 0 1.1rem;
@@ -1054,8 +1054,8 @@ html[data-theme="light"] .aq-sig-img { filter: none; }
   color: var(--color-ink-2); font-size: 0.8rem; font-weight: 600;
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
-.aq-read-ctl:hover { color: var(--color-ink); border-color: var(--color-yin-light); }
-.aq-read-ctl:focus-visible { outline: none; border-color: var(--color-yin-light); color: var(--color-ink); }
+.aq-read-ctl:hover { color: var(--color-ink); border-color: var(--color-yin-ink); }
+.aq-read-ctl:focus-visible { outline: none; border-color: var(--color-yin-ink); color: var(--color-ink); }
 .aq-read-ctl[aria-pressed="true"] { color: var(--color-on-accent); background: var(--color-yang); border-color: var(--color-yang); }
 .aq-read-ctl:disabled { opacity: 0.4; cursor: not-allowed; }
 .aq-read-seg { display: inline-flex; align-items: center; gap: 0.15rem; }
@@ -1108,7 +1108,7 @@ html[data-theme="light"] .aq-sig-img { filter: none; }
   background: transparent; color: var(--color-ink-2); border: 0; font: inherit;
   font-size: 0.78rem; font-weight: 600; cursor: pointer; max-width: 10.5rem;
 }
-.aq-listen select:focus-visible { outline: none; border-color: var(--color-yin-light); }
+.aq-listen select:focus-visible { outline: none; border-color: var(--color-yin-ink); }
 .aq-listen select option { color: #111; }   /* native menus paint their own light surface */
 .aq-listen-steps { display: inline-flex; gap: 0.1rem; }
 /* The status chip floats above the bar only while there is something to say (progress, notes). */
@@ -1552,8 +1552,8 @@ html[data-theme="dark"] .aq-pdf-crop[data-invert] svg { filter: invert(1) hue-ro
 .aq-lib-tab { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.38rem 0.7rem; border-radius: 999px;
   border: 1px solid var(--color-line); background: transparent; color: var(--color-ink-2);
   font-size: 12.5px; font-weight: 600; cursor: pointer; }
-.aq-lib-tab:hover { border-color: var(--color-yin); color: var(--color-ink); }
-.aq-lib-tab-on { background: color-mix(in srgb, var(--color-yin) 26%, transparent); border-color: var(--color-yin); color: var(--color-ink); }
+.aq-lib-tab:hover { border-color: var(--color-yin-ink); color: var(--color-ink); }
+.aq-lib-tab-on { background: color-mix(in srgb, var(--color-yin) 26%, transparent); border-color: var(--color-yin-ink); color: var(--color-ink); }
 .aq-lib-count { font-variant-numeric: tabular-nums; opacity: 0.65; font-size: 11.5px; }
 .aq-lib-search { flex: 0 1 15rem; min-width: 9rem; padding: 0.4rem 0.7rem; border-radius: 999px;
   border: 1px solid var(--color-line); background: var(--color-space-2); color: var(--color-ink); font-size: 13px; }
@@ -1562,7 +1562,7 @@ html[data-theme="dark"] .aq-pdf-crop[data-invert] svg { filter: invert(1) hue-ro
 .aq-lib-empty { margin-top: 1.5rem; display: flex; min-height: 12rem; cursor: pointer; flex-direction: column;
   align-items: center; justify-content: center; gap: 0.45rem; border-radius: 16px; border: 2px dashed var(--color-line);
   padding: 2rem 1.5rem; text-align: center; transition: border-color 0.15s ease, background 0.15s ease; }
-.aq-lib-empty:hover, .aq-lib-drag { border-color: var(--color-yin); background: var(--color-space-2); }
+.aq-lib-empty:hover, .aq-lib-drag { border-color: var(--color-yin-ink); background: var(--color-space-2); }
 
 .aq-lib-grid { list-style: none; margin: 1.4rem 0 0; padding: 0;
   display: grid; gap: 1rem 0.9rem; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }

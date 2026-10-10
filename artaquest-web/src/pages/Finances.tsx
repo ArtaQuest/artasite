@@ -77,7 +77,7 @@ function Section({ title, children, note }: { title: string; children: React.Rea
 
 /** One of the three headline figures. */
 function BigNumber({ label, value, tone, plain }: { label: string; value: string; tone: "neutral" | "yang" | "yin"; plain: string }) {
-  const colour = tone === "yang" ? "text-yang" : tone === "yin" ? "text-yin-light" : "text-ink";
+  const colour = tone === "yang" ? "text-yang" : tone === "yin" ? "text-yin-ink" : "text-ink";
   return (
     <div className="rounded-card border border-line bg-space-1 p-4">
       <p className="text-[12px] font-medium uppercase tracking-[0.1em] text-ink-3">{label}</p>
@@ -372,7 +372,7 @@ export default function Finances() {
       <nav className="mt-8 flex flex-wrap gap-1 border-b border-line" role="tablist">
         {([["overview", "In plain words"], ["statements", "Statements"], ["invoices", "Costs & invoices"], ["cra", "Year-end return"]] as const).map(([k, label]) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
-            className={`-mb-px border-b-2 px-3 py-2 text-[14px] font-medium transition-colors ${tab === k ? "border-yang text-ink" : "border-transparent text-ink-3 hover:text-yin-light"}`}>
+            className={`-mb-px border-b-2 px-3 py-2 text-[14px] font-medium transition-colors ${tab === k ? "border-yang text-ink" : "border-transparent text-ink-3 hover:text-yin-ink"}`}>
             {label}
           </button>
         ))}
@@ -438,7 +438,7 @@ export default function Finances() {
                 <div className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-4">
                   <div><p className="text-[12px] uppercase tracking-wide text-ink-3">Coins issued</p><p data-ay-skip="1" className="mt-1 text-[20px] font-semibold text-ink">{res.issued_coins.toLocaleString()} ₳</p></div>
                   <div><p className="text-[12px] uppercase tracking-wide text-ink-3">Gold held</p><p data-ay-skip="1" className="mt-1 text-[20px] font-semibold text-ink">{res.backing_mg.toLocaleString()} mg</p></div>
-                  <div><p className="text-[12px] uppercase tracking-wide text-ink-3">Backed</p><p className={`mt-1 text-[20px] font-semibold ${res.backed ? "text-yin-light" : "text-yang"}`}>{res.backed ? "Fully" : "Not fully"}</p></div>
+                  <div><p className="text-[12px] uppercase tracking-wide text-ink-3">Backed</p><p className={`mt-1 text-[20px] font-semibold ${res.backed ? "text-yin-ink" : "text-yang"}`}>{res.backed ? "Fully" : "Not fully"}</p></div>
                 </div>
                 {res.shortfall_note ? <p className="mt-4 max-w-[72ch] text-[13.5px] leading-relaxed text-ink-2">{res.shortfall_note}</p> : null}
               </Card>
@@ -487,7 +487,7 @@ export default function Finances() {
                 <li><strong className="text-ink">Open the invoices.</strong> Every cost has the supplier&rsquo;s own PDF attached, published with the SHA-256 of its bytes, so you can confirm the file you downloaded is the file we recorded.</li>
                 <li><strong className="text-ink">Read the ledger.</strong> The Statements tab shows every entry with both of its sides. Nothing is entered as a total; each total is the sum of the entries above it.</li>
                 <li><strong className="text-ink">Re-run the arithmetic.</strong> <span data-ay-skip="1" className="text-ink-3">/wp-json/aq/v1/foundation/books/verify</span> recomputes every check from the raw lines. Add a unique query string to bypass the cache and force a fresh computation.</li>
-                <li><strong className="text-ink">Query the raw tables.</strong> The whole database is public at <a href="/data/" className="text-yin-light hover:underline">/data</a>, including the four tables behind this page.</li>
+                <li><strong className="text-ink">Query the raw tables.</strong> The whole database is public at <a href="/data/" className="text-yin-ink hover:underline">/data</a>, including the four tables behind this page.</li>
               </ul>
             </Card>
           </Section>
@@ -628,9 +628,9 @@ export default function Finances() {
                 <div className="mt-3 flex flex-wrap gap-2">
                   {r.documents.map((d) => (
                     <a key={d.id} href={d.url}
-                      className="group inline-flex items-baseline gap-2 rounded-card border border-line px-3 py-2 text-[12.5px] text-ink-2 transition-colors hover:border-yin-light hover:text-yin-light">
+                      className="group inline-flex items-baseline gap-2 rounded-card border border-line px-3 py-2 text-[12.5px] text-ink-2 transition-colors hover:border-yin-ink hover:text-yin-ink">
                       <span className="font-medium capitalize">{d.kind}</span>
-                      <span data-ay-skip="1" className="text-ink-3 group-hover:text-yin-light">{bytes(d.bytes)}</span>
+                      <span data-ay-skip="1" className="text-ink-3 group-hover:text-yin-ink">{bytes(d.bytes)}</span>
                       <span data-ay-skip="1" className="hidden font-mono text-[10px] text-ink-3 sm:inline">{d.sha256.slice(0, 12)}…</span>
                     </a>
                   ))}
@@ -711,9 +711,9 @@ export default function Finances() {
                 <div className="mt-3 flex flex-wrap gap-2">
                   {st.fiscal.archives.map((a) => (
                     <a key={a.id} href={a.url}
-                      className="group inline-flex items-baseline gap-2 rounded-card border border-line px-3 py-2 text-[12.5px] text-ink-2 transition-colors hover:border-yin-light hover:text-yin-light">
+                      className="group inline-flex items-baseline gap-2 rounded-card border border-line px-3 py-2 text-[12.5px] text-ink-2 transition-colors hover:border-yin-ink hover:text-yin-ink">
                       <span data-ay-skip="1" className="font-medium">{a.name}</span>
-                      <span data-ay-skip="1" className="text-ink-3 group-hover:text-yin-light">{bytes(a.bytes)}</span>
+                      <span data-ay-skip="1" className="text-ink-3 group-hover:text-yin-ink">{bytes(a.bytes)}</span>
                       <span data-ay-skip="1" className="hidden font-mono text-[10px] text-ink-3 sm:inline">{a.sha256.slice(0, 12)}…</span>
                     </a>
                   ))}

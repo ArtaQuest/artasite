@@ -69,7 +69,7 @@ export function DomainGlyph({ domain, className }: { domain: Domain; className?:
 export function StatusBadge({ label, empirical, className }: { label: string; empirical?: boolean; className?: string }) {
   return (
     <span className={cx("inline-flex items-center rounded-pill px-2 py-0.5 text-[11px] font-semibold",
-      empirical ? "bg-yin/15 text-yin-light" : "bg-veil/[0.06] text-ink-2", className)}>
+      empirical ? "bg-yin/15 text-yin-ink" : "bg-veil/[0.06] text-ink-2", className)}>
       {label}
     </span>
   );
@@ -162,7 +162,7 @@ export type ResultCardProps = Common & (
 const SHELL = "group relative flex flex-col overflow-hidden rounded-card border bg-space-2 text-start shadow-card transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yang focus-visible:ring-offset-2 focus-visible:ring-offset-space-1";
 
 function Shell({ href, onClick, selected, label, children }: Common & { label?: string; children: ReactNode }) {
-  const cls = cx(SHELL, selected ? "border-yang" : "border-line hover:border-yin-light/40");
+  const cls = cx(SHELL, selected ? "border-yang" : "border-line hover:border-yin-ink/40");
   if (href) return <a href={localePath(href)} aria-label={label} className={cls}>{children}</a>;
   if (onClick) return <button type="button" onClick={onClick} aria-pressed={selected} className={cls}>{children}</button>;
   return <div className={cls}>{children}</div>;

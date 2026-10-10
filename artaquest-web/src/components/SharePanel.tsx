@@ -115,18 +115,18 @@ export function SharePanel({ title, url, message, image, dialogLabel = "Share", 
             {networks.slice(0, 3).map((n) => (
               <a key={n.key} href={n.href} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}
                 aria-label={`Share on ${n.label}`} title={`Share on ${n.label}`}
-                className="flex h-12 items-center justify-center rounded-field border border-line bg-veil/[0.03] text-ink-2 transition-colors hover:border-yin-light hover:bg-veil/[0.06] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-light">
+                className="flex h-12 items-center justify-center rounded-field border border-line bg-veil/[0.03] text-ink-2 transition-colors hover:border-yin-ink hover:bg-veil/[0.06] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-ink">
                 {NETWORK_ICONS[n.key]}
               </a>
             ))}
             <button type="button" onClick={() => void instagram()} aria-label="Share on Instagram" title="Share on Instagram"
-              className="flex h-12 items-center justify-center rounded-field border border-line bg-veil/[0.03] text-ink-2 transition-colors hover:border-yin-light hover:bg-veil/[0.06] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-light">
+              className="flex h-12 items-center justify-center rounded-field border border-line bg-veil/[0.03] text-ink-2 transition-colors hover:border-yin-ink hover:bg-veil/[0.06] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-ink">
               {NETWORK_ICONS.instagram}
             </button>
             {networks.slice(3).map((n) => (
               <a key={n.key} href={n.href} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}
                 aria-label={`Share on ${n.label}`} title={`Share on ${n.label}`}
-                className="flex h-12 items-center justify-center rounded-field border border-line bg-veil/[0.03] text-ink-2 transition-colors hover:border-yin-light hover:bg-veil/[0.06] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-light">
+                className="flex h-12 items-center justify-center rounded-field border border-line bg-veil/[0.03] text-ink-2 transition-colors hover:border-yin-ink hover:bg-veil/[0.06] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yin-ink">
                 {NETWORK_ICONS[n.key]}
               </a>
             ))}

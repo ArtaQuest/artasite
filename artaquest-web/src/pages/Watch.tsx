@@ -59,7 +59,7 @@ function OwnerStudio({ anim, reload }: { anim: Animation; reload: () => void }) 
         <Button onClick={() => act("gen", () => generateAnimation(anim.id))} disabled={!!busy}>{busy === "gen" ? "Starting…" : "Render the animation"}</Button>
       )}
       {anim.anim_state === "review" && anim.status !== "published" && (
-        <div className="flex flex-col gap-2 rounded-md border border-yin/30 bg-yin/[0.04] p-4">
+        <div className="flex flex-col gap-2 rounded-md border border-yin-ink/30 bg-yin/[0.04] p-4">
           <p className="text-[14px] font-semibold text-ink">Your draft is ready to watch above</p>
           <p className="text-[12.5px] text-ink-3">Publishing makes it public on Animations and your profile, and costs <strong>₳{cost}</strong>.</p>
           <div className="flex items-center gap-2">

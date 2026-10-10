@@ -88,7 +88,7 @@ function MyOrders({ refreshKey }: { refreshKey: number }) {
                 <p className="text-[13px] text-ink-3">
                   Tracking:{" "}
                   {o.track_url ? (
-                    <a href={o.track_url} target="_blank" rel="noopener noreferrer" className="font-mono font-semibold text-yin-light hover:underline">{o.tracking} ↗</a>
+                    <a href={o.track_url} target="_blank" rel="noopener noreferrer" className="font-mono font-semibold text-yin-ink hover:underline">{o.tracking} ↗</a>
                   ) : (
                     <span className="font-mono text-ink">{o.tracking}</span>
                   )}{" "}
@@ -258,7 +258,7 @@ function ProductDetail({ id, onAdd }: { id: number; onAdd: (p: ShopProduct) => v
     return () => { live = false; };
   }, [id]);
   useEffect(() => { if (p) document.title = `${p.title} – ArtaQuest Store`; }, [p]);
-  if (missing) return <EmptyState title="This product is no longer in the Store" body={<Link className="font-semibold text-yin-light hover:underline" to={localePath("/shop/")}>Back to the Store <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></Link>} />;
+  if (missing) return <EmptyState title="This product is no longer in the Store" body={<Link className="font-semibold text-yin-ink hover:underline" to={localePath("/shop/")}>Back to the Store <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></Link>} />;
   if (!p) return <SkeletonGrid count={2} />;
   const sourceHref = p.source_type === "document" ? `/read/${p.source_id}/` : p.source_type === "illustration" ? `/illustration/${p.source_id}/` : "";
   return (
@@ -275,7 +275,7 @@ function ProductDetail({ id, onAdd }: { id: number; onAdd: (p: ShopProduct) => v
         {sourceHref && (
           <p className="text-[13px] text-ink-3">
             This is the hard copy of a work published on ArtaQuest —{" "}
-            <Link className="font-semibold text-yin-light hover:underline" to={localePath(sourceHref)}>see the digital original (free) <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></Link>
+            <Link className="font-semibold text-yin-ink hover:underline" to={localePath(sourceHref)}>see the digital original (free) <span aria-hidden className="inline-block rtl:-scale-x-100">→</span></Link>
           </p>
         )}
         <div className="mt-auto flex items-center gap-4 pt-3">
@@ -348,7 +348,7 @@ export default function Shop() {
       />
       {basketCount > 0 && (
         <div className="-mb-3 flex justify-end">
-          <a href="#basket" className="rounded-pill border border-line px-4 py-2 text-[14px] font-semibold text-ink no-underline hover:border-yin-light">Basket ({basketCount})</a>
+          <a href="#basket" className="rounded-pill border border-line px-4 py-2 text-[14px] font-semibold text-ink no-underline hover:border-yin-ink">Basket ({basketCount})</a>
         </div>
       )}
 

@@ -130,7 +130,7 @@ export function UserMenu() {
   const headerBox = "flex min-w-0 flex-1 items-center gap-3 rounded-card border border-line px-3 py-2";
   const headerInner = (
     <>
-      <Avatar src={avatar} name={name} country={country} className="h-8 w-8 text-[13px] text-ink ring-1 ring-yin-light/50" />
+      <Avatar src={avatar} name={name} country={country} className="h-8 w-8 text-[13px] text-ink ring-1 ring-yin-ink/50" />
       <span className={`min-w-0 font-bold text-ink ${nameClass(name, 17)}`}>{name}</span>
     </>
   );
@@ -145,7 +145,7 @@ export function UserMenu() {
         aria-haspopup="dialog"
         aria-controls="aq-account-drawer"
         aria-expanded={open}
-        className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full bg-yin/20 text-sm font-bold text-ink ring-2 ring-yin-light/60 transition-shadow hover:ring-yin-light"
+        className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full bg-yin/20 text-sm font-bold text-ink ring-2 ring-yin-ink/60 transition-shadow hover:ring-yin-ink"
       >
         {avatar && !avatarFailed ? <img src={avatar} alt="" onError={() => setAvatarFailed(true)} className="h-full w-full rounded-full object-cover" /> : initial}
         <FlagBadge country={country} />
@@ -193,7 +193,7 @@ export function UserMenu() {
         {/* header: avatar + name + close */}
         <div className="flex items-center gap-3 px-4 py-3.5">
           {slug
-            ? <a href={localePath(`/u/${slug}/`)} className={`group ${headerBox} transition-colors hover:border-yin-light/40`}>{headerInner}</a>
+            ? <a href={localePath(`/u/${slug}/`)} className={`group ${headerBox} transition-colors hover:border-yin-ink/40`}>{headerInner}</a>
             : <div className={headerBox}>{headerInner}</div>}
           <IconButton label="Close account menu" onClick={() => setOpen(false)} className="h-10 w-10 shrink-0">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M6 6l12 12M18 6 6 18" strokeLinecap="round" /></svg>
@@ -206,7 +206,7 @@ export function UserMenu() {
           <a
             href={localePath("/wallet/")}
             aria-label={`Open wallet — ${d.coins.toLocaleString()} coins. ${d.tier.label || "Quester"} tier${d.tier.next ? `, ${d.tier.pct}% to ${d.tier.next}` : ", top tier"}`}
-            className="mx-4 mb-1 block rounded-card border border-line bg-space-2 px-4 py-3 transition-colors hover:border-yin-light/40"
+            className="mx-4 mb-1 block rounded-card border border-line bg-space-2 px-4 py-3 transition-colors hover:border-yin-ink/40"
           >
             <div className="flex items-center justify-between gap-3">
               <span className="flex items-center gap-2 text-[14px] font-semibold text-yang">
