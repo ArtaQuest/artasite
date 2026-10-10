@@ -302,7 +302,7 @@ final class Social {
 	 * list that cosmetic edge beats a composite cursor (the same stance as ::feed's cursor).
 	 */
 	public static function follows( $req ) {
-		$slug = Arta::resolve_alias( sanitize_title( (string) Rest::p( $req, 'slug', '' ) ) ); // @artabot → @arta
+		$slug = Arta::resolve_alias( sanitize_title( (string) Rest::p( $req, 'slug', '' ) ) ); // old @arta → @artabot
 		$u    = $slug ? get_user_by( 'slug', $slug ) : null;
 		if ( ! $u ) { return Rest::err( 'not_found', 'Profile not found', 404 ); }
 		// followers = rows pointing AT the member (show who cast the follow);
@@ -667,7 +667,7 @@ final class Social {
 	 *  whole DB is public (see Extra::db / /data/), so this mirrors it — identity, email, standing, and
 	 *  the wallet (coin) balance are all public. Nothing here is hidden that the data explorer shows. */
 	public static function profile( $req ) {
-		$slug = Arta::resolve_alias( sanitize_title( (string) Rest::p( $req, 'slug', '' ) ) ); // @artabot → @arta
+		$slug = Arta::resolve_alias( sanitize_title( (string) Rest::p( $req, 'slug', '' ) ) ); // old @arta → @artabot
 		$u    = $slug ? get_user_by( 'slug', $slug ) : null;
 		if ( ! $u ) { return Rest::err( 'not_found', 'Profile not found', 404 ); }
 		$id     = (int) $u->ID;

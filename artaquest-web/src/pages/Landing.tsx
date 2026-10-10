@@ -80,8 +80,8 @@ export default function Landing() {
           <div ref={cta} className="mt-7 inline-flex flex-wrap justify-center gap-3">
             <Button href={join} size="xl">Sign up free</Button>
           </div>
-          {/* @arta, condensed to one line: a real reason to sign up, not a section of its own. */}
-          <p className="mt-3 text-[13px] text-ink-3">Tag @arta on any post and Arta answers in public. No card needed.</p>
+          {/* @artabot, condensed to one line: a real reason to sign up, not a section of its own. */}
+          <p className="mt-3 text-[13px] text-ink-3">Tag @artabot on any post and Arta answers in public. No card needed.</p>
         </div>
       </section>
 

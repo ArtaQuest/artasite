@@ -1,5 +1,5 @@
 /**
- * @arta helpers that are not components (components/arta.tsx draws them): the avatar URL, mention
+ * @artabot helpers that are not components (components/arta.tsx draws them): the avatar URL, mention
  * detection, the bug: prefix, which attachments are Arta's own files, and the live-status hook.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -11,7 +11,7 @@ import { artaWatch, ARTA_HANDLE, type ArtaWatch, type ArtaMentionState, type Lib
 export const ARTA_AVATAR = artaAvatarUrl;
 
 export function isArta(a: { slug?: string; bot?: boolean } | null | undefined): boolean {
-  return !!a && (!!a.bot || a.slug === ARTA_HANDLE || a.slug === "artabot");
+  return !!a && (!!a.bot || a.slug === ARTA_HANDLE || a.slug === "arta");
 }
 
 
@@ -72,7 +72,7 @@ export function useArtaWatch(postId: number, active: boolean, onReplied?: (ids: 
     run();
     return () => { stop = true; window.clearTimeout(timer); };
   }, [postId, active, round]);
-  /** Look again now (a new @arta reply was just posted in the thread). */
+  /** Look again now (a new @artabot reply was just posted in the thread). */
   const kick = useCallback(() => setRound((n) => n + 1), []);
   return { data, kick };
 }

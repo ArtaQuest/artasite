@@ -408,7 +408,7 @@ function aq_app_current_feed_post() {
 	return $cache;
 }
 
-/** The share-card text of a post: markdown links → their label, @arta → Arta, whitespace folded. */
+/** The share-card text of a post: markdown links → their label, @artabot → Arta, whitespace folded. */
 function aq_app_post_text( $body ) {
 	$t = preg_replace( '/\[([^\]\n]{1,200})\]\((https?:\/\/[^)\s]+)\)/', '$1', (string) $body );
 	$t = preg_replace( '/[*_`#>]+/', '', $t );
@@ -1133,7 +1133,7 @@ function aq_app_head_meta() {
 			$desc = (string) get_the_excerpt( $post );
 		}
 	}
-	$desc = aq_display_mentions( trim( wp_strip_all_tags( $desc ) ) ); // "@arta" reads as "Arta" in link cards
+	$desc = aq_display_mentions( trim( wp_strip_all_tags( $desc ) ) ); // "@artabot" reads as "Arta" in link cards
 
 	// Localise the SERP-facing strings (title + description) from the mesh cache so a /xx/ page serves
 	// its localised meta to crawlers + non-JS clients, not English. No-op in English / when uncached.
@@ -1190,6 +1190,9 @@ function aq_app_head_meta() {
 	if ( $nb && ! empty( $nb->thumb ) ) {
 		$image = (string) $nb->thumb; // the work's own card
 		$image_w = 0; $image_h = 0; // stored thumbs vary in size — don't declare wrong dims
+	} elseif ( $fpost && class_exists( '\\AQ\\ShareCard' ) && '' !== ( $card = \AQ\ShareCard::url( (int) $fpost['id'], 'og' ) ) ) {
+		// The post's generated 1200×630 share card (text, author, photo, brand) — cached per content hash.
+		$image = $card; $image_w = 1200; $image_h = 630; $fpost_img = true;
 	} elseif ( $fpost ) {
 		// The post's own picture (a member's image or Arta's generated one) — the first still image,
 		// as an absolute https URL. Sizes vary, so no dims are declared; the brand card stays otherwise.
@@ -1255,7 +1258,7 @@ function aq_app_head_meta() {
 		if ( $nb ) {
 			$alt = (string) $nb->title;
 		} elseif ( $fpost_img ) {
-			$alt = 'Image from a post by ' . ( $fpost['author']['name'] ?? 'a member' );
+			$alt = 'A post by ' . ( $fpost['author']['name'] ?? 'a member' ) . ' on ArtaQuest';
 		} else {
 			$alt = $puser ? aq_profile_name( $puser ) : 'The ArtaQuest logo on a dark background';
 		}
@@ -1266,6 +1269,12 @@ function aq_app_head_meta() {
 		}
 		$tags[] = sprintf( '<meta property="og:image:alt" content="%s" />', esc_attr( $alt ) );
 		$tags[] = sprintf( '<meta name="twitter:image" content="%s" />', esc_url( $image ) );
+		$tags[] = sprintf( '<meta name="twitter:image:alt" content="%s" />', esc_attr( $alt ) );
+		$ext = strtolower( (string) pathinfo( (string) wp_parse_url( $image, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
+		if ( isset( [ 'png' => 1, 'jpg' => 1, 'jpeg' => 1 ][ $ext ] ) ) {
+			$tags[] = sprintf( '<meta property="og:image:type" content="%s" />', 'png' === $ext ? 'image/png' : 'image/jpeg' );
+		}
+		$tags[] = sprintf( '<meta property="og:image:secure_url" content="%s" />', esc_url( set_url_scheme( $image, 'https' ) ) );
 	}
 
 	// schema.org DiscussionForumPosting JSON-LD on a thread (the forum-post rich-result type). Replies →
@@ -2583,3 +2592,13 @@ if ( class_exists( 'WP_Sitemaps_Provider' ) ) {
 		// aqhubs + aqnotebooks above.)
 	} );
 }
+
+/** Arta's profile moved from /u/arta/ to /u/artabot/: old links (and locale copies) 301 to the new handle. */
+add_action( 'template_redirect', function () {
+	$path = (string) wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ?? '' ), PHP_URL_PATH );
+	if ( preg_match( '#^(/(?:[a-z]{2,3}(?:-[a-z]{2,4})?/)?)u/arta/?$#i', $path, $m ) ) {
+		$q = (string) wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ?? '' ), PHP_URL_QUERY );
+		wp_safe_redirect( $m[1] . 'u/artabot/' . ( '' !== $q ? '?' . $q : '' ), 301 );
+		exit;
+	}
+}, 1 );

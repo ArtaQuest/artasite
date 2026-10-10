@@ -5,7 +5,7 @@ import { ArtaAvatar } from "./arta";
 /**
  * A member's PRIVATE 1:1 chat with Arta, inside the ArtaChat dock.
  *
- * Same brain, queue and per-member limits as tagging @arta in public — only where the answer lands
+ * Same brain, queue and per-member limits as tagging @artabot in public — only where the answer lands
  * differs (here, visible to this member alone). It is NOT end-to-end encrypted, unlike member DMs:
  * Arta has to read a message to answer it. The panel says so, in plain words, above the composer.
  * Polls only while a question is waiting, and gently (5 s → 20 s), and stops when it is answered.
@@ -89,7 +89,7 @@ export function ArtaPrivateChat() {
           <div className="flex flex-col items-center gap-2 px-4 py-6 text-center">
             <ArtaAvatar className="h-12 w-12" />
             <p className="text-[13.5px] font-semibold text-ink">Ask Arta anything, privately</p>
-            <p className="text-[12px] leading-relaxed text-ink-3">Only you see this chat. To ask in public, tag @arta in a post.</p>
+            <p className="text-[12px] leading-relaxed text-ink-3">Only you see this chat. To ask in public, tag @artabot in a post.</p>
           </div>
         ) : items.map((m) => (
           <div key={m.id} className={`flex items-end gap-2 ${m.from_arta ? "" : "flex-row-reverse"}`}>

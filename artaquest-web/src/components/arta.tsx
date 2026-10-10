@@ -1,12 +1,12 @@
 /**
- * @arta in the feed — everything that makes the public assistant read as itself.
+ * @artabot in the feed — everything that makes the public assistant read as itself.
  *
- * Arta is reached ONLY in public: a member tags @arta in a post, a reply or a comment and the answer
+ * Arta is reached ONLY in public: a member tags @artabot in a post, a reply or a comment and the answer
  * lands in that thread. So this file is the assistant's whole visual vocabulary on the timeline:
  *
  *   • ArtaAvatar / ArtaBadge — the thinking mascot (the companion's own figure, gold, with a blue
  *     thought) and a verified-style seal, so an automated account can never pass for a person.
- *   • MentionText — @handles linked, @arta drawn as a chip.
+ *   • MentionText — @handles linked, @artabot drawn as a chip.
  *   • ArtaMarkdown — the small, SAFE markdown Arta writes in (paragraphs, lists, bold/italic, code,
  *     links). It never emits HTML: every piece is a React text node or an element we construct, and a
  *     link is only rendered for http(s) or a site-relative path.
@@ -50,13 +50,14 @@ export function ArtaBadge({ size = 16, chip = true }: { size?: number; chip?: bo
 
 // ── @mentions ────────────────────────────────────────────────────────────────
 function Mention({ handle }: { handle: string }) {
-  // @arta is a handle like any other (artabot is its old name, kept as an alias).
-  const h = handle.toLowerCase(); // shown as the canonical handle, however it was typed
-  const to = `/u/${h === "artabot" ? "arta" : h}`;
+  // @artabot is a handle like any other; the old name @arta (kept as an alias) shows as @artabot.
+  const l = handle.toLowerCase(); // shown as the canonical handle, however it was typed
+  const h = l === "arta" ? ARTA_HANDLE : l;
+  const to = `/u/${h}`;
   return <Link to={to} onClick={(e) => e.stopPropagation()} data-ay-skip="1" className="font-medium text-yin-ink hover:underline">@{h}</Link>;
 }
 
-/** Plain text with every @handle linked — @arta included, exactly like any member. */
+/** Plain text with every @handle linked — @artabot included, exactly like any member. */
 export function MentionText({ text }: { text: string }) {
   const out: React.ReactNode[] = [];
   let last = 0;
@@ -192,7 +193,7 @@ export function ArtaFiles({ items }: { items: LibraryItem[] }) {
   );
 }
 
-// ── live status of @arta mentions ────────────────────────────────────────────
+// ── live status of @artabot mentions ────────────────────────────────────────────
 /**
  * Arta's state on a thread, kept quiet: while it works, a reply-shaped row ("Arta is replying…" with
  * typing dots) sits where its answer will land; other states are one muted line.
@@ -240,7 +241,7 @@ type TAProps = Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, "value" |
   wrapClassName?: string;
 };
 
-/** A textarea with @-mention suggestions — @arta first — and ⌘/Ctrl+Enter to send. */
+/** A textarea with @-mention suggestions — @artabot first — and ⌘/Ctrl+Enter to send. */
 export function MentionTextarea({ value, onValue, onSubmit, textareaRef, maxGrow, wrapClassName, onKeyDown, ...rest }: TAProps) {
   const own = useRef<HTMLTextAreaElement | null>(null);
   const ref = textareaRef || own;
@@ -343,7 +344,7 @@ export function MentionTextarea({ value, onValue, onSubmit, textareaRef, maxGrow
   );
 }
 
-/** The small line under a composer, only once @arta is tagged: what it does, and the bug: shortcut. */
+/** The small line under a composer, only once @artabot is tagged: what it does, and the bug: shortcut. */
 export function ArtaHint({ text, className }: { text: string; className?: string }) {
   const asks = mentionsArta(text);
   const bug = asks && looksLikeBug(text);

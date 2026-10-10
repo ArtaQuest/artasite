@@ -311,7 +311,7 @@ final class Rest {
 		[ 'GET',  'studio/grants/(?P<id>[0-9]+)',  'Extra::grant_studio_get','user' ],
 		[ 'POST', 'bug-finding',                   'Extra::bug_finding',     'user' ],
 
-		// ── Contributions (triaged tickets; @arta files bugs here too) ─────────
+		// ── Contributions (triaged tickets; @artabot files bugs here too) ─────────
 		[ 'POST', 'tickets',                       'Tickets::create',        'user'   ],
 		[ 'POST', 'tickets/upload',                'Tickets::upload',        'user'   ],
 		[ 'GET',  'tickets',                       'Tickets::list',          'public' ],
@@ -319,10 +319,11 @@ final class Rest {
 		[ 'POST', 'tickets/(?P<id>[0-9]+)/message', 'Tickets::post_message', 'user'   ],
 		[ 'POST', 'tickets/(?P<id>[0-9]+)/resolve', 'Tickets::resolve',      'user'   ],
 		[ 'POST', 'tickets/(?P<id>[0-9]+)/reopen',  'Tickets::reopen',       'user'   ],
-		// ── @arta — the public assistant (src/Arta.php). There is no private channel: a member
-		//    mentions @arta in a post or comment and the reply lands in that thread. The routes below are
+		// ── @artabot — the public assistant (src/Arta.php). There is no private channel: a member
+		//    mentions @artabot in a post or comment and the reply lands in that thread. The routes below are
 		//    the Arta brain's side (a daemon that PULLS from here), authenticated by AQ_ARTA_REPLY_TOKEN ('arta' auth). They are
 		//    all POST so no edge or page cache can ever store a response. ──
+		[ 'GET',  'share-card/(?P<id>[0-9]+)/(?P<fmt>og|feed|story)', 'ShareCard::rest', 'public' ], // per-post share images (OG + Instagram)
 		[ 'GET',  'arta/status',                   'Arta::public_status',    'public' ],
 		[ 'GET',  'arta/watch/(?P<id>[0-9]+)',     'Arta::watch',            'public' ], // statuses + queue positions of the mentions in one thread
 		[ 'GET',  'arta/replies',                  'Notebook::arta_replies', 'public' ], // Arta's recent public replies, each with the post it answers

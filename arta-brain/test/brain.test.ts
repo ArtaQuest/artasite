@@ -53,7 +53,7 @@ test("an answer: claim → chat engine → one public reply", async () => {
   assert.deepEqual(reply?.body, { mention_id: 11, body: "A p-value is…", kind: "answer" });
   assert.equal(net.calls.filter((c) => c.url.startsWith("https://api.github.com")).length, 0, "no GitHub for an answer");
   assert.equal(net.prompts.length, 1);
-  assert.match(net.prompts[0], /@arta what is a p-value\?/);
+  assert.match(net.prompts[0], /@artabot what is a p-value\?/);
 });
 
 test("not claimable (another worker has it) → no model call, no reply", async () => {
@@ -63,7 +63,7 @@ test("not claimable (another worker has it) → no model call, no reply", async 
 });
 
 test("a bug: files one labelled issue with public data only, replies with the link", async () => {
-  const m = mention({ hint: "bug", source: { ...mention().source, body: "@arta bug: the wallet shows NaN coins. email me ada@example.com" } });
+  const m = mention({ hint: "bug", source: { ...mention().source, body: "@artabot bug: the wallet shows NaN coins. email me ada@example.com" } });
   const net = fakeNet({ mention: m, llm: JSON.stringify({ kind: "bug", reply: "Thanks Ada!", bug: { title: "Wallet shows NaN coins", summary: "Balance renders as NaN", area: "Wallet" } }) });
   assert.equal(await handleMention(11, deps(net)), "bug-filed");
   const created = net.calls.find((c) => c.method === "POST" && c.url.includes("api.github.com"));
@@ -71,7 +71,7 @@ test("a bug: files one labelled issue with public data only, replies with the li
   assert.deepEqual(b.labels, ["bug", "from-arta"]);
   assert.match(b.title, /^\[Arta\] Wallet shows NaN coins/);
   assert.doesNotMatch(b.body, /ada@example\.com/, "no private data in the issue");
-  assert.doesNotMatch(b.body, /@arta\b/, "no raw @mentions that would ping GitHub users");
+  assert.doesNotMatch(b.body, /@arta/, "no raw @mentions that would ping GitHub users");
   assert.match(b.body, /arta-mention:11 /);
   const reply = net.calls.find((c) => c.url.endsWith("/arta/reply"))?.body as { body: string; kind: string; issue_url: string };
   assert.equal(reply.kind, "bug");

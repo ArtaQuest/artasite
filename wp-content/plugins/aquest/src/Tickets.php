@@ -190,7 +190,7 @@ final class Tickets {
 	}
 
 	/**
-	 * Mirror a bug that @arta filed on GitHub into /issues, so the public contribution board, its
+	 * Mirror a bug that @artabot filed on GitHub into /issues, so the public contribution board, its
 	 * Sentinel points and the member's own list keep working. The GitHub issue is the record of
 	 * work; this row is the member's receipt, carrying the link (system message meta.github_issue —
 	 * no schema change). Idempotent on the same (member, content) hash as create(): a retried reply

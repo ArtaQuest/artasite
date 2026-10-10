@@ -12,7 +12,7 @@ export const cfg = (over: Partial<Config> = {}): Config => ({
 
 export const mention = (over: Partial<Mention> = {}): Mention => ({
   id: 11, hint: "", created: 1, max_chars: 280,
-  source: { type: "post", id: 5, url: "https://artaquest.com/works/?post=5", body: "@arta what is a p-value?", author: { handle: "ada", name: "Ada" } },
+  source: { type: "post", id: 5, url: "https://artaquest.com/works/?post=5", body: "@artabot what is a p-value?", author: { handle: "ada", name: "Ada" } },
   context: [], ...over,
 });
 

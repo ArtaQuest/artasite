@@ -89,7 +89,7 @@ function Group({ label, hits, cursor, base }: { label: string; hits: SearchHit[]
 }
 
 export function SearchBox({ autoFocus = false, compact = false }: { autoFocus?: boolean; compact?: boolean } = {}) {
-  // Ask @arta rides in the field itself; a signed-out visitor has no button either.
+  // Ask @artabot rides in the field itself; a signed-out visitor has no button either.
   const ask = isLoggedIn();
   const [q, setQ] = useState("");
   const [res, setRes] = useState<SearchResults>(EMPTY);
@@ -234,8 +234,8 @@ export function SearchBox({ autoFocus = false, compact = false }: { autoFocus?: 
               <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
             </button>
           ) : null}
-          {/* ASK — @arta, in the search field's own end corner (operator 2026-08-16), the way X puts
-              its assistant in search. Opens the feed composer with "@arta " ready. Members only. */}
+          {/* ASK — @artabot, in the search field's own end corner (operator 2026-08-16), the way X puts
+              its assistant in search. Opens the feed composer with "@artabot " ready. Members only. */}
           {ask ? (
             <Link to="/works/?compose=%40arta%20" title="Ask Arta in a public post; Arta replies in the thread"
               aria-label="Ask Arta in a public post"

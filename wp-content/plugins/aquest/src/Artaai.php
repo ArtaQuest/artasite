@@ -59,7 +59,7 @@ final class Artaai {
 	const SURFACES = [
 		'chat' => [
 			'label' => 'Triage relay', 'group' => 'chat',
-			'blurb' => 'Contribution triage, ArtaMod and ID verification share this relay. (@arta replies run on the Arta brain, not here.)',
+			'blurb' => 'Contribution triage, ArtaMod and ID verification share this relay. (@artabot replies run on the Arta brain, not here.)',
 			'beat' => 'aq_relay_beat', 'launch' => 'org.artaquest.artabot-relay',
 			'model' => 'ArtaAI', 'effort' => 'low', 'engine' => '', 'pausable' => false, 'poll' => '',
 			'table' => 'aq_relay_jobs', 'ts_col' => 'created', 'title_col' => '',

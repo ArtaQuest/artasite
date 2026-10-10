@@ -14,7 +14,7 @@ import { ArtaPrivateChat } from "./ArtaPrivateChat";
  * page for signed-in members. Restored from ArtaBot.tsx (removed in 09c01af when the paid private
  * assistant was retired): the DM list, encrypted threads, unread badge and the ringing-call banner
  * come back unchanged; the private bot conversation does NOT — its row now opens the public
- * "@arta" composer instead. The dock's lid is also Arta's home ledge (data-floor), which is what
+ * "@artabot" composer instead. The dock's lid is also Arta's home ledge (data-floor), which is what
  * brings the ArtaLife companion back to stand on it.
  */
 
@@ -151,7 +151,7 @@ function DockBody({ view, setView }: {
 
           <div className="min-h-0 flex-1 overflow-y-auto">
             {/* Arta is pinned first: the one conversation every member always has — a PRIVATE 1:1
-                chat (the answer is only theirs). Tagging @arta in a post is still the public route. */}
+                chat (the answer is only theirs). Tagging @artabot in a post is still the public route. */}
             <button type="button" onClick={() => setView({ k: "arta" })}
               className="flex w-full items-center gap-3 border-b border-line px-3 py-2.5 text-start transition-colors hover:bg-veil/[0.05]">
               <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full border border-yang/40 bg-space-1 p-0.5">

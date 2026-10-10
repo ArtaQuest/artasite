@@ -18,7 +18,7 @@ export function fingerprint(b: BugFields): string {
 /** A bug description when the model gave none (an explicit "bug:" the model did not classify). */
 export function deriveBug(m: Mention): BugFields {
   const text = stripLead(m.source.body).replace(/\s+/g, " ");
-  return { title: text.slice(0, 80) || "Bug reported to @arta", summary: text, area: "" };
+  return { title: text.slice(0, 80) || "Bug reported to @artabot", summary: text, area: "" };
 }
 
 /** GitHub @mentions in quoted member text would ping unrelated GitHub users — break them. */
