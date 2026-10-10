@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400" role="img" aria-label="Arta, thinking">
   <title>Arta, thinking</title>
-  <desc>Avatar v5. artalife's think() pose (src/rig/arta.ts): one hand raised to the chin, the other arm relaxed, upper-body crop. Faceless, gold #E8B923 on the brand night disc. v5 centres the figure's visual mass in the circle, sizes the head and strokes so the pose still reads at 16-24 px, and adds a thin gold rim so the disc separates from dark backgrounds as well as light ones. Pure vector, crisp at any size and pixel density.</desc>
+  <desc>Avatar v5. artalife's think() pose (src/rig/arta.ts): one hand raised to the chin, the other arm relaxed, upper-body crop. Faceless, gold #E8B923 on the brand night disc. v5 centres the figure's visual mass in the circle, keeps a light line (20 on 400, the same weight-to-head ratio as the live figure) that still reads at 16-24 px, and adds a thin gold rim so the disc separates from dark backgrounds as well as light ones. Pure vector, crisp at any size and pixel density.</desc>
   <defs>
     <radialGradient id="bg" cx="42%" cy="30%" r="80%">
       <stop offset="0" stop-color="#22306a"/>
@@ -16,7 +16,7 @@
   </defs>
   <circle cx="200" cy="200" r="200" fill="url(#bg)"/>
   <circle cx="200" cy="200" r="200" fill="url(#glow)"/>
-  <g clip-path="url(#disc)" fill="none" stroke="#E8B923" stroke-width="30"
+  <g clip-path="url(#disc)" fill="none" stroke="#E8B923" stroke-width="20"
      stroke-linecap="round" stroke-linejoin="round">
     <!-- spine, from the neck down past the crop -->
     <path d="M206 214L214 420"/>

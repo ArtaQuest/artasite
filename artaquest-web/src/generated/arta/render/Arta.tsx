@@ -1,7 +1,5 @@
 /* GENERATED — DO NOT EDIT HERE.
- * Vendored from artalife src/render/Arta.tsx @ e37c551 + local smoothing patch
- * (artasite PR: smoothed dt, per-frame floor tracking while a ledge moves,
- * fade in/out, layer containment) — port upstream, then re-sync.
+ * Vendored from artalife src/render/Arta.tsx @ 816f4f5.
  * Source of truth: https://github.com/ArtaQuest/artalife.git
  * Re-run: node tools/arta-sync.mjs
  */
@@ -37,6 +35,8 @@ import { Brain, RIG, SAFE, homeFloor, onArtaCommand, type Act, type Cmd, type Fl
  *  whose raised hands reach about 330 above the sole. */
 const WORLD_H = 380;
 const GROUND = 340;
+/** Arta's line weight in CSS px — one value for every device (see the <g>). */
+export const ARTA_STROKE = 4.5;
 
 export type ArtaProps = {
   /** Rendered height in CSS pixels. Arta occupies ~57% of it. */
@@ -163,8 +163,33 @@ export default function Arta({
         if (pos !== "fixed" && pos !== "sticky") continue;
         const edge = c.getAttribute("data-floor") === "bottom" ? b.bottom : b.top;
         if (edge < r.top + 40 || edge > r.bottom - 40) continue;   // off stage
-        out.push({ x1: (b.left - r.left) * sx, x2: (b.right - r.left) * sx,
-                   y: (edge - r.top) * sy, home: c.hasAttribute("data-floor-home") });
+        /*
+         * Split the ledge around anything standing ON it.
+         *
+         * The phone's tab bar carries a raised centre button that pokes 7 px
+         * above the bar's own top edge, and the bar paints above the companion
+         * layer — so Arta strolled straight through x 171..219 with its ankles,
+         * and the contact point, hidden behind it. Feet on a VISIBLE border is
+         * the rule; a border you cannot see Arta meeting does not satisfy it.
+         *
+         * So a child that protrudes through the surface is an obstacle, and the
+         * ledge becomes the clear runs either side of it. Segments too narrow
+         * to stand on are dropped by the same 120-unit test everything else
+         * uses, which is also what stops a fussy layout producing confetti.
+         */
+        const blockers = [...c.querySelectorAll("*")]
+          .map((e) => e.getBoundingClientRect())
+          .filter((q) => q.width > 16 && q.top < edge - 2)
+          .sort((q1, q2) => q1.left - q2.left);
+        const home = c.hasAttribute("data-floor-home");
+        let cut = b.left;
+        const push = (from: number, to: number) => {
+          if (to - from < 70) return;                     // too narrow to stand on
+          out.push({ x1: (from - r.left) * sx, x2: (to - r.left) * sx,
+                     y: (edge - r.top) * sy, home });
+        };
+        for (const q of blockers) { push(cut, q.left - 4); cut = Math.max(cut, q.right + 4); }
+        push(cut, b.right);
       }
       return out;
     };
@@ -345,7 +370,12 @@ export default function Arta({
         look = { x: look.x + (rawLook.x - look.x) * g, y: look.y + (rawLook.y - look.y) * g };
       }
       if (now - floorsAt > 250 || now < floorsHotUntil) {
+        const homeWas = placed ? homeFloor(floors) : null;
         floors = readFloors(); floorsAt = now;
+        if (homeWas) {
+          const homeNow = homeFloor(floors);
+          if (homeNow && Math.abs(homeNow.y - homeWas.y) > 0.5) brain.ride(homeWas.y, homeNow.y);
+        }
         const sig = floorSig(floors);
         if (sig !== lastSig) { if (lastSig) floorsHotUntil = now + 600; lastSig = sig; }
         if (!placed) {
@@ -556,7 +586,12 @@ export default function Arta({
           vectorEffect="non-scaling-stroke" className="text-arta-tool"
         />
         <g
-          fill="none" stroke="currentColor" strokeWidth="7"
+          /* BODY WEIGHT: 4.5 CSS px on every device. non-scaling-stroke makes
+             it a CSS-pixel width, so it is the same at DPR 1, 2 and 3, at any
+             browser zoom and whatever the figure's height — a phone's smaller
+             figure is no longer drawn in a desktop-weight line (7 px read as
+             heavy, worst on the tab bar). Upright, lighter, still legible. */
+          fill="none" stroke="currentColor" strokeWidth={ARTA_STROKE}
           strokeLinecap="round" strokeLinejoin="round"
           vectorEffect="non-scaling-stroke" className="text-arta"
         >
