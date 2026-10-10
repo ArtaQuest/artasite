@@ -144,6 +144,9 @@ namespace {
 	t_ok( strpos( $r, '<b>' ) === false, 'sanitize_reply strips markup' );
 	t_ok( strpos( $r, 'evil.example' ) === false && strpos( $r, 'github.com/other' ) === false, 'sanitize_reply removes foreign links' );
 	t_ok( strpos( $r, 'https://artaquest.com/works/' ) !== false && strpos( $r, 'github.com/ArtaQuest/artasite/issues/5' ) !== false, 'sanitize_reply keeps own links' );
+	$r = Arta::sanitize_reply( '“q” https://eksisozluk.com/entry/2066444 https://math.bilkent.edu.tr/faculty.html http://eksisozluk.com/entry/1 https://eksisozluk.com/okan--1 https://evil.edu.tr.example.com/x', 280 );
+	t_ok( strpos( $r, 'https://eksisozluk.com/entry/2066444' ) !== false && strpos( $r, 'https://math.bilkent.edu.tr/faculty.html' ) !== false, 'sanitize_reply keeps cited sources' );
+	t_ok( substr_count( $r, '[link removed]' ) === 3, 'sanitize_reply removes http, non-entry and look-alike links' );
 
 	// ACS e-mail signature, against an independently computed value.
 	require $src . 'Mailer.php';

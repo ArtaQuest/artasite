@@ -7,7 +7,7 @@ import type { GitHub } from "./github";
 import { facultyPhoto } from "./faculty";
 import { fetchPhoto } from "./photo";
 import { imagePrompt, parseDecision, promptText, stripImageClaims } from "./prompt";
-import { clip } from "./text";
+import { clip, fitText } from "./text";
 import type { Lore, Mention, OutFile } from "./types";
 import type { WpClient } from "./wp";
 
@@ -55,7 +55,7 @@ export async function handleMention(id: number, d: Deps, attempt = 1, maxAttempt
  */
 export function outgoing(said: string, max: number, produced: OutFile[], cfg: Config): { text: string; files: OutFile[] } {
   const files = produced.filter((f) => f.mime.startsWith("image/") && f.bytes.byteLength > 0 && f.bytes.byteLength <= cfg.outFileBytes);
-  return { text: clip(said, max), files: files.slice(0, cfg.outFilesMax) };
+  return { text: fitText(said, max), files: files.slice(0, cfg.outFilesMax) };
 }
 
 /** Ekşi Sözlük entry permalinks only (https, eksisozluk.com, /entry/<digits>), deduped, in lore order. */
@@ -88,13 +88,19 @@ export function quotedEntries(lore: Lore[]): { quote: string; link: string }[] {
  * as fit in `max`. If not even the best fits after the lead-in, the lead-in is clipped (or dropped) for it.
  */
 export function withQuotes(lead: string, lore: Lore[], max: number): string {
-  const qs = quotedEntries(lore).map((q) => `“${q.quote}” ${q.link}`).filter((q) => q.length <= max);
-  if (!qs.length) return lead;
-  let out = lead;
-  for (const q of qs) if (out.length + 1 + q.length <= max) out = out ? `${out} ${q}` : q;
-  if (out !== lead) return out;
-  const room = max - qs[0].length - 1;
-  return room >= 20 ? `${clip(lead, room)} ${qs[0]}` : qs[0];
+  const qs = quotedEntries(lore).map((q) => `“${q.quote}” ${q.link}`).filter((q) => [...q].length <= max);
+  const L = (x: string) => [...x].length;
+  if (!qs.length) return fitText(lead, max);
+  if (L(lead) + 1 + L(qs[0]) <= max) {
+    // Extra quotes are dropped before anything of the lead-in is.
+    let out = lead;
+    for (const q of qs) if (L(out) + 1 + L(q) <= max) out = `${out} ${q}`;
+    return out;
+  }
+  // The lead-in is too long next to the best quote: keep whole sentences of it if they make sense alone.
+  const room = max - L(qs[0]) - 1;
+  const short = fitText(lead, room);
+  return short && L(short) >= 10 && /[.!?…]["”’)]*$/.test(short) ? `${short} ${qs[0]}` : fitText(lead, max);
 }
 
 async function answer(m: Mention, d: Deps): Promise<Outcome> {
@@ -130,12 +136,12 @@ async function answer(m: Mention, d: Deps): Promise<Outcome> {
     }
   }
   const compose = (l: string) => {
-    if (dec.kind === "declined") return { text: clip(l, max), files: [] as OutFile[] };
+    if (dec.kind === "declined") return { text: fitText(l, max), files: [] as OutFile[] };
     if (photo && dec.photo) {
       // The photo's page link is kept whole; the lead-in and quotes share the rest.
       const room = max - dec.photo.page.length - 1;
       const t = dec.kind === "answer" ? withQuotes(l, dec.lore ?? [], room) : l;
-      return { text: `${clip(t, room)} ${dec.photo.page}`, files: [photo] };
+      return { text: `${fitText(t, room)} ${dec.photo.page}`, files: [photo] };
     }
     const t = dec.kind === "answer" ? withQuotes(l, dec.lore ?? [], max) : l;
     return outgoing(t, max, got.files, d.cfg);
