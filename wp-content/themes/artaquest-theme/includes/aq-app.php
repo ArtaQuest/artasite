@@ -2601,4 +2601,4 @@ add_action( 'template_redirect', function () {
 		wp_safe_redirect( $m[1] . 'u/artabot/' . ( '' !== $q ? '?' . $q : '' ), 301 );
 		exit;
 	}
-}, 1 );
+}, 0 ); // before the app shell (template_redirect priority 1), which would 404 the old slug
