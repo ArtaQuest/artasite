@@ -67,7 +67,7 @@ export function SharePanel({ title, url, message, image, cardId, dialogLabel = "
   const btn = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const links = shareLinks(message, url);
-  const caption = `${message} ${url}`;
+  const caption = message; // no link in the copied Instagram caption
 
   const place = useCallback(() => {
     const b = btn.current?.getBoundingClientRect(); const p = panel.current;

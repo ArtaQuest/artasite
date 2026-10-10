@@ -6,6 +6,7 @@ require AQ_DIR . '/src/ShareCard.php';
 use AQ\ShareCard;
 $fail = 0; $ok = function ( $c, $m ) use ( &$fail ) { echo ( $c ? 'PASS  ' : 'FAIL  ' ) . $m . "\n"; if ( ! $c ) { $fail++; } };
 $ok( ShareCard::clean( "Hi [there](https://x.y) **bold** 👀\n\nok" ) === 'Hi there bold ok', 'clean: links → labels, markup and emoji gone, folded' );
+$ok( ShareCard::clean( 'Legend. math.bilkent.edu.tr/faculty.html and https://eksisozluk.com/entry/1 www.x.com/a ok' ) === 'Legend. and ok', 'clean: no URLs survive' );
 if ( ! function_exists( 'imagettftext' ) ) { echo "SKIP  rendering (no GD/FreeType)\n"; exit( $fail ? 1 : 0 ); }
 $f = AQ_DIR . '/assets/fonts/Inter-Bold.ttf';
 $l = ShareCard::wrap( str_repeat( 'word ', 200 ), 40, $f, 600, 3 );

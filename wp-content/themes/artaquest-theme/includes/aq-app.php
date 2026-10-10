@@ -412,7 +412,8 @@ function aq_app_current_feed_post() {
 function aq_app_post_text( $body ) {
 	$t = preg_replace( '/\[([^\]\n]{1,200})\]\((https?:\/\/[^)\s]+)\)/', '$1', (string) $body );
 	$t = preg_replace( '/[*_`#>]+/', '', $t );
-	return trim( preg_replace( '/\s+/', ' ', wp_strip_all_tags( $t ) ) );
+	$t = trim( preg_replace( '/\s+/', ' ', wp_strip_all_tags( $t ) ) );
+	return class_exists( '\\AQ\\ShareCard' ) ? \AQ\ShareCard::strip_urls( $t ) : $t; // no visible URLs in titles/descriptions
 }
 
 /** Fix the server <title> on the app routes WP can't title itself: the Feed hubs (is_404() to

@@ -14,7 +14,7 @@ defined( 'ABSPATH' ) || exit;
  * rendered once. Fonts (Inter, OFL) ship with the plugin, so the look never depends on the host.
  */
 class ShareCard {
-	const VERSION = '1';
+	const VERSION = '2'; // 2: no URL footer, no URLs in the text
 	const FORMATS = [ 'og' => [ 1200, 630 ], 'feed' => [ 1080, 1350 ], 'story' => [ 1080, 1920 ] ];
 	const BLUE    = [ 0x17, 0x46, 0xDC ];
 	const GOLD    = [ 0xE8, 0xB9, 0x23 ];
@@ -76,9 +76,18 @@ class ShareCard {
 	public static function clean( $t ) {
 		$t = preg_replace( '/\[([^\]\n]{1,200})\]\((https?:\/\/[^)\s]+)\)/', '$1', $t );
 		$t = wp_strip_all_tags( (string) $t );
+		$t = self::strip_urls( (string) $t );
 		$t = preg_replace( '/[*_`#>]+/', '', $t );
 		$t = preg_replace( '/[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{FE00}-\x{FE0F}\x{200D}\x{E0000}-\x{E007F}]/u', '', (string) $t );
 		return trim( preg_replace( '/\s+/u', ' ', (string) $t ) );
+	}
+
+	/** No visible URLs: bare https://…, www.… and domain/path forms are dropped (display only). */
+	public static function strip_urls( $t ) {
+		$t = preg_replace( '~\b(?:https?://|www\.)[^\s<>()"“”]+~iu', '', (string) $t );
+		$t = preg_replace( '~(^|[\s(“"\'])(?:[a-z0-9-]+\.)+[a-z]{2,}/[^\s<>()"“”]*~iu', '$1', (string) $t );
+		$t = preg_replace( '~[ \t]+([.,;:!?])~u', '$1', (string) $t );
+		return trim( preg_replace( '~\s{2,}~u', ' ', (string) $t ) );
 	}
 
 	private static function font( $bold ) {
@@ -170,7 +179,6 @@ class ShareCard {
 		$text  = '' !== $d['text'] ? $d['text'] : 'A post on ArtaQuest';
 		$who   = $d['name'];
 		$at    = '' !== $d['handle'] ? '@' . $d['handle'] : '';
-		$link  = 'artaquest.com/works/?post=' . (int) $d['id'];
 
 		if ( 'og' === $fmt ) {
 			imagefilledrectangle( $im, 0, 0, 13, $H, $blue ); // logo-blue spine
@@ -181,8 +189,7 @@ class ShareCard {
 			[ $s, $lines ] = self::fit( $text, $bold, $tw, [ 52, 46, 40, 34, 30, 26 ], $H - 130 - 170, 1.3 );
 			$y = 170 + $s;
 			foreach ( $lines as $l ) { imagettftext( $im, $s, 0, $tx, $y, $ink, $bold, $l ); $y += (int) round( $s * 1.3 ); }
-			$r = self::wordmark( $im, $tx, $H - 56, 30, $gold, $blue );
-			imagettftext( $im, 20, 0, $r + 24, $H - 60, $dim, $reg, $link );
+			self::wordmark( $im, $tx, $H - 56, 30, $gold, $blue );
 		} else {
 			$pad = 88; $tw = $W - 2 * $pad;
 			imagefilledrectangle( $im, 0, 0, $W, 14, $blue );
@@ -201,8 +208,6 @@ class ShareCard {
 			}
 			imagefilledrectangle( $im, $pad, $foot - 34, $W - $pad, $foot - 32, $c( [ 0x2A, 0x2F, 0x3C ] ) );
 			self::wordmark( $im, $pad, $foot + 34, 40, $gold, $blue );
-			$bb = imagettfbbox( 26, 0, $reg, $link );
-			imagettftext( $im, 26, 0, $W - $pad - abs( $bb[2] - $bb[0] ), $foot + 30, $dim, $reg, $link );
 		}
 		if ( $photo ) { imagedestroy( $photo ); }
 		ob_start();
