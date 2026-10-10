@@ -345,8 +345,9 @@ test("config: top-effort defaults, sniffing, and the generated PNG", () => {
 
 // ── voice and Ekşi lore (the Okan Tekman example) ───────────────────────────
 import { loreOf } from "../src/prompt";
+import { eksiLinks, withSources } from "../src/worker";
 
-const EKSI = "https://eksisozluk.com/okan-tekman--123";
+const EKSI = "https://eksisozluk.com/entry/123456";
 
 test("prompt: English X-user voice, Ekşi lore, no allegations, generated illustrations only", () => {
   const p = systemPrompt(280);
@@ -371,6 +372,30 @@ test("Okan Tekman: short English reply + the chat's generated illustration attac
   const net = fakeNet({ llm: { text: JSON.stringify({ kind: "answer", reply, lore: [{ claim: "debugs by staring", quote: "he looks at the logs and the bug fixes itself", source: EKSI }] }), files: [{ name: "generated-1.png", mime: "image/png", bytes: img }] } });
   assert.equal(await handleMention(11, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {} }), "replied");
   const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; files: { name: string; type: string }[] };
-  assert.equal(b.body, reply);
+  assert.equal(b.body, `${reply} ${EKSI}`);
   assert.deepEqual(b.files.map((f) => [f.name, f.type]), [["generated-1.png", "image/png"]]);
+});
+
+test("Ekşi links: only https eksisozluk.com/entry/<id>, deduped, in order", () => {
+  const L = (source: string) => ({ claim: "c", quote: "q", source });
+  assert.deepEqual(eksiLinks([L(EKSI), L("http://eksisozluk.com/entry/1"), L("https://eksisozluk.com/okan-tekman--123"), L("https://evil.com/entry/2"),
+    L("https://eksisozluk.com.evil.com/entry/3"), L("https://www.eksisozluk.com/entry/777/"), L(EKSI)]), [EKSI, "https://eksisozluk.com/entry/777"]);
+});
+
+test("Ekşi links: as many as fit; none fit → the best one kept and the text clipped", () => {
+  const L = (id: number) => ({ claim: "c", quote: "q", source: `https://eksisozluk.com/entry/${id}` });
+  assert.equal(withSources("short", [L(1), L(2)], 280), "short https://eksisozluk.com/entry/1 https://eksisozluk.com/entry/2");
+  const two = withSources("x".repeat(220), [L(1), L(2)], 280);
+  assert.ok(two.endsWith("https://eksisozluk.com/entry/1") && two.length <= 280);
+  const tight = withSources("word ".repeat(60).trim(), [L(42), L(43)], 280);
+  assert.ok(tight.length <= 280 && tight.endsWith(" https://eksisozluk.com/entry/42"));
+  assert.equal(withSources("no lore", [], 280), "no lore");
+});
+
+test("prompt: real entry permalinks only, never invented", () => {
+  const p = systemPrompt(280);
+  assert.match(p, /eksisozluk\.com\/entry\/<id>/);
+  assert.match(p, /actually opened/);
+  assert.match(p, /NEVER invent, guess or reconstruct a permalink/);
+  assert.match(p, /never a photoreal likeness/);
 });

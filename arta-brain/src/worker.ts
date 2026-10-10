@@ -6,7 +6,7 @@ import type { Fetch } from "./http";
 import type { GitHub } from "./github";
 import { parseDecision, promptText } from "./prompt";
 import { clip } from "./text";
-import type { Mention, OutFile } from "./types";
+import type { Lore, Mention, OutFile } from "./types";
 import type { WpClient } from "./wp";
 
 export type Deps = { cfg: Config; wp: WpClient; engine: Engine; gh: GitHub | null; log: (msg: string) => void; onPrompt?: () => void; fetch?: Fetch };
@@ -56,6 +56,33 @@ export function outgoing(said: string, max: number, produced: OutFile[], cfg: Co
   return { text: clip(said, max), files: files.slice(0, cfg.outFilesMax) };
 }
 
+/** Ekşi Sözlük entry permalinks only (https, eksisozluk.com, /entry/<digits>), deduped, in lore order. */
+export function eksiLinks(lore: Lore[]): string[] {
+  const out: string[] = [];
+  for (const l of lore) {
+    let u: URL;
+    try { u = new URL(l.source); } catch { continue; }
+    const m = /^\/entry\/(\d{1,12})\/?$/.exec(u.pathname);
+    if (u.protocol !== "https:" || !/^(www\.)?eksisozluk\.com$/.test(u.hostname) || !m) continue;
+    const link = `https://eksisozluk.com/entry/${m[1]}`;
+    if (!out.includes(link)) out.push(link);
+  }
+  return out;
+}
+
+/**
+ * The quoted entries' real links, appended to the reply as many as fit in `max`; when none fits, the
+ * best (first) one is kept and the text is clipped to make room.
+ */
+export function withSources(said: string, lore: Lore[], max: number): string {
+  const links = eksiLinks(lore).filter((l) => !said.includes(l));
+  if (!links.length) return said;
+  let out = said;
+  for (const l of links) if (out.length + 1 + l.length <= max) out = `${out} ${l}`;
+  if (out === said) out = `${clip(said, Math.max(20, max - links[0].length - 1))} ${links[0]}`;
+  return out;
+}
+
 async function answer(m: Mention, d: Deps): Promise<Outcome> {
   const max = m.max_chars || 280;
   const prep = await prepareAttachments(m, d.cfg, d.fetch ?? fetch);
@@ -71,8 +98,9 @@ async function answer(m: Mention, d: Deps): Promise<Outcome> {
   const dec = parseDecision(got.text);
   // The member's own "bug:" prefix always files a report (unless the request was declined).
   if (m.hint === "bug" && dec.kind !== "declined") dec.kind = "bug";
-  const said = dec.reply.trim() || (dec.kind === "bug" ? "Thanks for reporting this — I've passed it to the team." : "");
+  let said = dec.reply.trim() || (dec.kind === "bug" ? "Thanks for reporting this — I've passed it to the team." : "");
   if (!said) throw new Error("empty answer");
+  if (dec.kind === "answer") said = withSources(said, dec.lore ?? [], max);
 
   const out = dec.kind === "declined" ? { text: clip(said, max), files: [] as OutFile[] } : outgoing(said, max, got.files, d.cfg);
 

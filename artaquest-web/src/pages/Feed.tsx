@@ -174,6 +174,11 @@ function Collapse({ children }: { children: React.ReactNode }) {
    attachment names the work it came from and who made it. Sliced defensively: the server caps
    attachments at MEDIA_MAX, and the layouts below only describe 1-4. */
 const MEDIA_MAX = 4;
+/** A post's words as a share caption: markdown links → their label, folded, ≤ 200 chars. */
+function shareText(body: string): string {
+  const t = (body || "").replace(/\[([^\]\n]{1,200})\]\((https?:\/\/[^)\s]+)\)/g, "$1").replace(/\s+/g, " ").trim();
+  return t.length > 200 ? `${t.slice(0, 199).trimEnd()}…` : t || "A post on ArtaQuest";
+}
 function mediaOf(p: FeedPostT | null | undefined): LibraryItem[] {
   return Array.isArray(p?.media) ? p.media.slice(0, MEDIA_MAX) : [];
 }
@@ -609,6 +614,19 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
             ) : null}
             {/* External share — the WORK's link with its OG unfurl, a different act from Quote
                 (which reposts the POST here). Same row, same 44px target as its neighbours. */}
+            {!nb ? (
+              /* A post's own permalink (/works/?post=<id>) — the server renders its card (title, text,
+                 first image) into the page head, so X, LinkedIn and Facebook unfurl it. */
+              <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} className="-my-2 ms-auto inline-flex items-center">
+                <SharePanel
+                  compact
+                  title={`${post.author.name} on ArtaQuest`}
+                  url={`${location.origin}/works/?post=${post.id}`}
+                  message={shareText(body)}
+                  image={mediaOf(post).find((m) => m.mime.startsWith("image/") && m.mime !== "image/svg+xml")?.url}
+                />
+              </span>
+            ) : null}
             {nb ? (
               <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} className="-my-2 inline-flex items-center">
                 <SharePanel
