@@ -21,6 +21,7 @@ import { cx } from "./ui";
 
 /** The gold→blue blend for dual-toned ranks — its midpoint is pure neutral (the pair are exact
  *  complements), so no third hue ever appears. */
+// eslint-disable-next-line react-refresh/only-export-components -- pre-existing shared exports
 export const DUAL_TEXT: React.CSSProperties = {
   backgroundImage: "linear-gradient(105deg, var(--color-yang-ink), var(--color-yin-ink))",
   WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
@@ -46,6 +47,7 @@ export function SeasonBadge({ n, className }: { n?: number | null; className?: s
 }
 
 /** The viewer's season: explicit subscription (server-injected / freshly saved), else birth season. */
+// eslint-disable-next-line react-refresh/only-export-components -- pre-existing shared exports
 export function mySeason(): Season | null {
   const u = currentUser();
   if (!u) return null;
@@ -53,6 +55,7 @@ export function mySeason(): Season | null {
 }
 
 /** One season's topics (the atlas disciplines whose fitted peak falls in it), best first. */
+// eslint-disable-next-line react-refresh/only-export-components -- pre-existing shared exports
 export function topicsOfSeason(discs: Discipline[], s: Season): Discipline[] {
   return discs
     .filter((d) => seasonForPhase(d.sign)?.n === s.n)
