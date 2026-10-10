@@ -1,5 +1,5 @@
 /* GENERATED — DO NOT EDIT HERE.
- * Vendored from artalife src/render/Arta.tsx @ d6ffa98.
+ * Vendored from artalife src/render/Arta.tsx @ 7de7c9f.
  * Source of truth: https://github.com/ArtaQuest/artalife.git
  * Re-run: node tools/arta-sync.mjs
  */
@@ -152,7 +152,11 @@ export default function Arta({
       if (!r.width || !r.height) return [];
       const sx = vw / r.width, sy = wh / r.height;
       const out: Floor[] = [];
-      for (const c of document.querySelectorAll("[data-floor]")) {
+      const all = [...document.querySelectorAll("[data-floor]")];
+      // Room Arta needs ABOVE a ledge, in CSS px: its height, plus the head's
+      // stroke and the idle bob.
+      const tall = figureFor(el.clientWidth) * 1.1;
+      for (const c of all) {
         const b = c.getBoundingClientRect();
         if (b.width < 90) continue;                       // too narrow, or hidden
         // A ledge must not MOVE when the page scrolls. Arta is a fixed layer,
@@ -184,14 +188,52 @@ export default function Arta({
           .filter((q) => q.width > 16 && q.top < edge - 2)
           .sort((q1, q2) => q1.left - q2.left);
         const home = c.hasAttribute("data-floor-home");
-        let cut = b.left;
-        const push = (from: number, to: number) => {
-          if (to - from < 70) return;                     // too narrow to stand on
-          out.push({ x1: (from - r.left) * sx, x2: (to - r.left) * sx,
-                     y: (edge - r.top) * sy, home });
+        const runs = (from: number, to: number, obs: DOMRect[], min: number) => {
+          const got: [number, number][] = [];
+          let cut = from;
+          const add = (a: number, z: number) => { if (z - a >= min) got.push([a, z]); };
+          for (const q of obs) { add(cut, Math.min(to, q.left - 4)); cut = Math.max(cut, q.right + 4); }
+          add(cut, to);
+          return got;
         };
-        for (const q of blockers) { push(cut, q.left - 4); cut = Math.max(cut, q.right + 4); }
-        push(cut, b.right);
+        /*
+         * …and around anything FLOATING over it.
+         *
+         * On a phone the collapsed message dock is a pill hovering 10 px above
+         * the tab bar, painted above the companion layer. The bar ran on
+         * underneath it, so on a 412-wide phone Arta's home was the run right
+         * of the centre button — directly under the pill: head poking out above
+         * it, legs in the gap below, the figure cut in half by the UI. Feet on
+         * a visible border is not enough; the figure on it must be visible too.
+         * So another fixed surface occupying the column Arta would stand in
+         * (any part of it within a figure's height above the edge) is an
+         * obstacle exactly like the centre button.
+         *
+         * Unlike the button, it does not cut the SURFACE: the bar is still
+         * there under the pill, so `solid` keeps the run it was cut from. A
+         * figure that finds itself there (the pill grew, a drawer shut over
+         * it) walks out along the bar instead of falling through it. And if
+         * floating things cover every run of a ledge (an opening drawer passing
+         * over the tab bar) the ledge is kept whole for that moment, so a home
+         * never blinks out of existence mid-transition.
+         */
+        const floating = all
+          .filter((o) => o !== c && !o.contains(c) && !c.contains(o))
+          .filter((o) => { const p = getComputedStyle(o).position; return p === "fixed" || p === "sticky"; })
+          .map((o) => o.getBoundingClientRect())
+          .filter((q) => q.width > 16 && q.height > 0 && q.top < edge - 2 && q.bottom > edge - tall)
+          .sort((q1, q2) => q1.left - q2.left);
+        const wx = (x: number) => (x - r.left) * sx;
+        const y = (edge - r.top) * sy;
+        const mine: Floor[] = [];
+        for (const [a, z] of runs(b.left, b.right, blockers, 70)) {
+          for (const [p, q] of runs(a, z, floating, 70))
+            mine.push(p === a && q === z ? { x1: wx(a), x2: wx(z), y, home }
+                                         : { x1: wx(p), x2: wx(q), y, home, solid: { x1: wx(a), x2: wx(z) } });
+        }
+        if (!mine.length && floating.length)
+          for (const [a, z] of runs(b.left, b.right, blockers, 70)) mine.push({ x1: wx(a), x2: wx(z), y, home });
+        out.push(...mine);
       }
       return out;
     };
@@ -217,6 +259,8 @@ export default function Arta({
     let lastSig = "";
     let lastHome: Floor | null = null;
     let frozenY: number | null = null;
+    let frozenFrom: Floor | null = null;
+    let homeLostAt = 0;
     let settled = 0;
 
     const setBox = () => {
@@ -238,6 +282,7 @@ export default function Arta({
     };
 
     let shownAct = "";
+    let shownZ = "";
     /** Last value written per attribute slot, so an unchanged one is skipped. */
     const written: string[] = [];
     const set = (n: Element | null, attr: string, v: string, slot: number) => {
@@ -252,9 +297,22 @@ export default function Arta({
       // the only reason the reduced-motion arrow bug was findable at all.
       if (f.act !== shownAct) {
         shownAct = f.act; el.setAttribute("data-act", f.act);
-        // On the rope, Arta is in front of whatever it is climbing past (the
-        // host says how far forward with `ropeZ`); back in its layer after.
-        if (ropeZ !== undefined) el.style.zIndex = f.act === "throw" || f.act === "fly" ? String(ropeZ) : "";
+      }
+      /*
+       * On the rope, Arta is in front of whatever it is climbing past (the host
+       * says how far forward with `ropeZ`); back in its layer after.
+       *
+       * And from the moment its home starts MOVING, not only once the rope is
+       * out. A drawer opening slides its panel up over the spot Arta stands
+       * on, and Arta's own layer is beneath the panel's — so for the whole
+       * slide and wind-up the figure vanished behind it and then popped back
+       * in front when the throw began. Measured on desktop: 100% covered for
+       * 870 ms of every dock opening. Coming forward as the lift starts keeps
+       * one continuous figure on screen.
+       */
+      if (ropeZ !== undefined) {
+        const z = f.act === "throw" || f.act === "fly" || frozenY !== null ? String(ropeZ) : "";
+        if (z !== shownZ) { shownZ = z; el.style.zIndex = z; }
       }
       // Self-reporting invariant: this attribute must never appear. It is the
       // cheapest possible way to notice a future gesture outrunning the limit.
@@ -403,6 +461,20 @@ export default function Arta({
       if (now - floorsAt > 250 || now < floorsHotUntil) {
         floors = readFloors(); floorsAt = now;
         /*
+         * A home handed from one element to another is not atomic. Closing the
+         * phone dock clears the panel's home mark and sets the tab bar's in two
+         * different components, a render apart, so for one frame the page has
+         * NO home — and in that frame Arta, on a lid it no longer lives on, is
+         * over nothing and starts to fall; the move is lost with it, because
+         * there was no home to compare against. A home that vanishes is
+         * therefore held for a moment: a real handoff completes within frames,
+         * and a page that truly has none is let go of shortly after.
+         */
+        if (placed && !homeFloor(floors) && lastHome) {
+          if (!homeLostAt) homeLostAt = now;
+          if (now - homeLostAt < 400) floors = [...floors, lastHome];
+        } else homeLostAt = 0;
+        /*
          * A MOVING home ledge (a drawer sliding open or shut) is followed as
          * ONE move, not frame by frame: while it travels, Arta keeps standing
          * on where it was (so it neither falls nor is dragged through the
@@ -412,14 +484,38 @@ export default function Arta({
         const homeNow = placed ? homeFloor(floors) : null;
         if (homeNow && lastHome) {
           const moved = Math.abs(homeNow.y - lastHome.y) > 0.5;
-          if (moved && frozenY === null) { frozenY = lastHome.y; settled = 0; }
+          if (moved && frozenY === null) { frozenY = lastHome.y; frozenFrom = lastHome; settled = 0; }
           else if (frozenY !== null) {
             settled = moved ? 0 : settled + 1;
             if (settled >= 2) { brain.ride(frozenY, homeNow.y, homeNow); frozenY = null; }
           }
         }
         lastHome = homeNow;
-        if (frozenY !== null) floors = floors.map((f) => (f.home ? { ...f, y: frozenY as number } : f));
+        /*
+         * The frozen home is where Arta STOOD, so it supports Arta across the
+         * extent of the surface it stood on, not only across the new home's.
+         * A phone's dock closing hands home from the open panel to a run of
+         * the tab bar that may not reach Arta's x (it stops short of the pill),
+         * and a frozen ledge Arta is not over is no ledge: it fell to the stage
+         * floor mid-transition and had to rope back up.
+         */
+        if (frozenY !== null) {
+          const was = frozenFrom ? frozenFrom.solid ?? { x1: frozenFrom.x1, x2: frozenFrom.x2 } : null;
+          floors = floors.map((f) => (f.home ? { ...f, y: frozenY as number, ...(was ? { solid: was } : {}) } : f));
+        }
+        /*
+         * Keep reading every frame for as long as the home is in motion.
+         *
+         * The hot window below is opened by a change in the floor signature,
+         * but that signature is taken AFTER the freeze — and a frozen home
+         * reports its old y, so when the moving ledge is the same element
+         * (the desktop dock rising 560 px) the signature never changed, reads
+         * fell back to 4 Hz, and "settled for two reads" took half a second
+         * after the panel had stopped. Arta stood waiting, hidden behind it,
+         * for ~870 ms before the rope went up. On a phone the home switches
+         * element, the signature changes, and the same trip started at once.
+         */
+        if (frozenY !== null) floorsHotUntil = Math.max(floorsHotUntil, now + 150);
         const sig = floorSig(floors);
         if (sig !== lastSig) { if (lastSig) floorsHotUntil = now + 600; lastSig = sig; }
         if (!placed) {
@@ -569,7 +665,9 @@ export default function Arta({
     // behind the panel long enough to be seen missing.
     const restill = () => { if (reduce?.matches && homeSig(readFloors()) !== stillHome) still(); };
     const onClick = () => {
-      if (!reduce?.matches) return;
+      // A click is how a drawer opens: read floors every frame for a moment
+      // so its first frame of travel is seen, not up to 250 ms into it.
+      if (!reduce?.matches) { floorsHotUntil = performance.now() + 600; return; }
       requestAnimationFrame(() => requestAnimationFrame(restill));
     };
     const beat = window.setInterval(() => { sync(true); restill(); }, 500);

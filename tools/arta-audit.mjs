@@ -1,5 +1,5 @@
 /* GENERATED — DO NOT EDIT HERE.
- * Vendored from artalife tools/arta-audit.mjs @ d6ffa98.
+ * Vendored from artalife tools/arta-audit.mjs @ 7de7c9f.
  * Source of truth: https://github.com/ArtaQuest/artalife.git
  * Re-run: node tools/arta-sync.mjs
  */
