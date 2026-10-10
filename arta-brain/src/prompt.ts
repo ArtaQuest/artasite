@@ -1,5 +1,5 @@
 import { fetchable } from "./attachments";
-import type { Attachment, Decision, Kind, Lore, Mention, Photo } from "./types";
+import type { Attachment, Decision, Kind, Lore, Mention, Person, Photo } from "./types";
 
 /** What reached the chat page with the prompt, and what could not (see attachments.ts). */
 export type FilesNote = { attached: Attachment[]; notAttached: { a: Attachment; why: string }[] };
@@ -28,12 +28,12 @@ export function systemPrompt(maxChars: number): string {
     "- Bug reports: when the member reports something broken or wrong on ArtaQuest itself (the website or app), set kind to \"bug\" and fill the bug fields with a neutral, factual description in English. Feature ideas, questions and general conversation are kind \"answer\".",
     "",
     "- Files: the member's files, when there are any, are attached to this message — look at them. Never attach text files. Never say in \"reply\" that a picture or photo is attached or below — the system adds it only when it exists.",
-    "- Pictures of a REAL person: never draw or generate a likeness. Find a real photo of them on an official or reputable page (Wikimedia Commons/Wikipedia, their university or company faculty/staff page, major news) and put it in \"photo\": {url: the direct https image file, page: the https page it appears on, gray: true when the member asked for black and white}. Look properly: search images and the department/company people page (photos there are often plain files such as /personnel_photos/<name>.jpg, or listed in the page's data), and open the image URL to confirm it loads. Only when you are confident it clearly shows this person (named on that page, not a placeholder); otherwise omit \"photo\". Never invent a URL.",
+    "- Pictures of a REAL person: never draw or generate a likeness. Find a real photo of them on an official or reputable page (Wikimedia Commons/Wikipedia, their university or company faculty/staff page, major news) and put it in \"photo\": {url: the direct https image file, page: the https page it appears on, gray: true when the member asked for black and white}. Look properly: search images and the department/company people page (photos there are often plain files such as /personnel_photos/<name>.jpg, or listed in the page's data), and open the image URL to confirm it loads. Only when you are confident it clearly shows this person (named on that page, not a placeholder); otherwise omit \"photo\". Never invent a URL. Whenever the question is about a real person, also set \"person\": {name: their full name, affiliation: their university or employer} and \"gray\": true when black and white was asked.",
     "- Any other picture (not a real person): do NOT draw it now; put a one-sentence image description in \"image\" (the system generates it next), black and white when asked.",
     "",
     "Output a single JSON object and nothing else:",
-    '{"kind":"answer"|"bug"|"declined","reply":"<your public reply>","lore":[{"quote":"…","source":"https://eksisozluk.com/entry/<id>"}],"photo":{"url":"https://…/x.jpg","page":"https://…","gray":false},"image":"<picture description>","bug":{"title":"<under 80 chars>","summary":"…","steps":"…","expected":"…","actual":"…","area":"<page or feature>"}}',
-    "Include \"bug\" only when kind is \"bug\", \"lore\", \"photo\" and \"image\" only when used. For a bug, the reply is a short thank-you; the system adds the issue link itself.",
+    '{"kind":"answer"|"bug"|"declined","reply":"<your public reply>","lore":[{"quote":"…","source":"https://eksisozluk.com/entry/<id>"}],"photo":{"url":"https://…/x.jpg","page":"https://…","gray":false},"person":{"name":"…","affiliation":"…"},"gray":false,"image":"<picture description>","bug":{"title":"<under 80 chars>","summary":"…","steps":"…","expected":"…","actual":"…","area":"<page or feature>"}}',
+    "Include \"bug\" only when kind is \"bug\", \"lore\", \"photo\", \"person\" and \"image\" only when used. For a bug, the reply is a short thank-you; the system adds the issue link itself.",
   ].join("\n");
 }
 
@@ -97,10 +97,13 @@ export function parseDecision(raw: string): Decision {
       area: String(j.bug.area || "").slice(0, 80),
     } : undefined;
     const lore = loreOf(j.lore);
-    const photo = kind === "answer" ? photoOf((j as Record<string, unknown>).photo) : null;
+    const jr = j as Record<string, unknown>;
+    const photo = kind === "answer" ? photoOf(jr.photo) : null;
     // A real person gets a real photo, never a generated likeness: with a photo there is no image turn.
-    const image = kind === "answer" && !photo ? imageOf((j as Record<string, unknown>).image) : "";
-    return { kind, reply, ...(bug ? { bug } : {}), ...(lore.length ? { lore } : {}), ...(photo ? { photo } : {}), ...(image ? { image } : {}) };
+    const person = kind === "answer" ? personOf(jr.person) : null;
+    const gray = jr.gray === true || photo?.gray === true;
+    const image = kind === "answer" && !photo && !person ? imageOf((j as Record<string, unknown>).image) : "";
+    return { kind, reply, ...(bug ? { bug } : {}), ...(lore.length ? { lore } : {}), ...(photo ? { photo } : {}), ...(person ? { person } : {}), ...(gray ? { gray } : {}), ...(image ? { image } : {}) };
   } catch {
     return { kind: "answer", reply: s };
   }
@@ -150,4 +153,13 @@ export function photoOf(v: unknown): Photo | null {
   const url = String(o.url ?? "").trim(), page = String(o.page ?? "").trim();
   const ok = (u: string) => /^https:\/\//.test(u) && u.length <= 500 && fetchable(u) && !/\s/.test(u);
   return ok(url) && ok(page) ? { url, page, gray: o.gray === true } : null;
+}
+
+/** The real person named by the answer: short plain strings only. */
+export function personOf(v: unknown): Person | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const name = String(o.name ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+  const affiliation = String(o.affiliation ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
+  return name.split(" ").length >= 2 && !/https?:|[<>{}]/.test(name + affiliation) ? { name, affiliation } : null;
 }

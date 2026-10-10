@@ -4,6 +4,7 @@ import type { Config } from "./config";
 import { type Engine, type EngineAnswer, EngineBusy, EngineDown } from "./engine";
 import type { Fetch } from "./http";
 import type { GitHub } from "./github";
+import { facultyPhoto } from "./faculty";
 import { fetchPhoto } from "./photo";
 import { imagePrompt, parseDecision, promptText, stripImageClaims } from "./prompt";
 import { clip } from "./text";
@@ -118,7 +119,16 @@ async function answer(m: Mention, d: Deps): Promise<Outcome> {
   if (!said) throw new Error("empty answer");
   const lead = said;
   if (dec.photo) d.log(`mention ${m.id}: photo ${dec.photo.url} from ${dec.photo.page}`);
-  const photo = dec.photo ? await fetchPhoto(dec.photo, d.cfg.outFileBytes, d.fetch ?? fetch, d.log) : null;
+  let photo = dec.photo ? await fetchPhoto(dec.photo, d.cfg.outFileBytes, d.fetch ?? fetch, d.log) : null;
+  if (!photo && dec.person) {
+    // No usable photo from the answer: try the person's official faculty listing.
+    const alt = await facultyPhoto(dec.person, dec.gray === true, d.fetch ?? fetch, d.log);
+    if (alt) {
+      d.log(`mention ${m.id}: faculty photo ${alt.url}`);
+      photo = await fetchPhoto(alt, d.cfg.outFileBytes, d.fetch ?? fetch, d.log);
+      if (photo) dec.photo = alt;
+    }
+  }
   const compose = (l: string) => {
     if (dec.kind === "declined") return { text: clip(l, max), files: [] as OutFile[] };
     if (photo && dec.photo) {
