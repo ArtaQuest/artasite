@@ -16,8 +16,7 @@
     "smoke": "npm run build && node --test \"dist/smoke/*.test.js\""
   },
   "dependencies": {
-    "playwright": "~1.64.0",
-    "sharp": "^0.35.5"
+    "playwright": "~1.64.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

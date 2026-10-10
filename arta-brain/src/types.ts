@@ -18,10 +18,8 @@ export type Mention = {
 };
 export type Kind = "answer" | "bug" | "declined";
 export type BugFields = { title: string; summary: string; steps?: string; expected?: string; actual?: string; area?: string };
-/** A real photo Arta found (Wikimedia only) — fetched and converted by the brain, never generated. */
-export type Photo = { url: string; page: string; grayscale: boolean; credit: string };
 /** One Ekşi Sözlük "legend", kept only with a verbatim quote and its source page. */
 export type Lore = { claim: string; quote: string; source: string };
-export type Decision = { kind: Kind; reply: string; bug?: BugFields; image?: Photo; lore?: Lore[] };
+export type Decision = { kind: Kind; reply: string; bug?: BugFields; lore?: Lore[] };
 /** A file going OUT with Arta's reply (a generated image, the full text of a long answer). */
 export type OutFile = { name: string; mime: string; bytes: Uint8Array };

@@ -31,16 +31,16 @@ export function ArtaAvatar({ className, alt = "" }: { className?: string; alt?: 
 
 /** Verified-style seal for Arta: the platform's gold with a dark tick, plus (from sm) a quiet
  *  "Assistant" chip — an automated account is always labelled as one. */
-export function ArtaBadge({ size = 16, chip = true, seal = true }: { size?: number; chip?: boolean; seal?: boolean }) {
+export function ArtaBadge({ size = 16, chip = true }: { size?: number; chip?: boolean }) {
   return (
     <span className="inline-flex shrink-0 items-center gap-1" title="Arta — ArtaQuest's automated public assistant">
-      {seal ? <svg viewBox="0 0 24 24" width={size} height={size} role="img" aria-label="Automated assistant" className="shrink-0">
+      <svg viewBox="0 0 24 24" width={size} height={size} role="img" aria-label="Automated assistant" className="shrink-0">
         <path style={{ fill: "var(--color-yang)" }}
           d="M12 1.5l2.4 1.9 3 .2.9 2.9 2.3 1.9-1 2.9 1 2.9-2.3 1.9-.9 2.9-3 .2L12 22.5l-2.4-1.9-3-.2-.9-2.9L3.4 15.6l1-2.9-1-2.9 2.3-1.9.9-2.9 3-.2L12 1.5z" />
         <path d="M8.2 12.2l2.5 2.5 5.1-5.4" fill="none" stroke="#0d0d0f" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-      </svg> : null}
+      </svg>
       {chip ? (
-        <span aria-hidden={seal} className={cx("rounded-pill border border-yang/35 bg-yang/[0.10] px-1.5 py-px text-[10.5px] font-semibold uppercase tracking-wide text-yang-ink", seal ? "hidden min-[400px]:inline" : "inline")}>
+        <span aria-hidden className="hidden rounded-pill border border-yang/35 bg-yang/[0.10] px-1.5 py-px text-[10.5px] font-semibold uppercase tracking-wide text-yang-ink min-[400px]:inline">
           Assistant
         </span>
       ) : null}

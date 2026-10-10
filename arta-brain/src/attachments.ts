@@ -12,7 +12,7 @@ export type Prepared = { paths: string[]; attached: Attachment[]; notAttached: N
 const WHY: Record<string, string> = { type: "type not supported", size: "too large", count: "too many files" };
 
 /** Only public https URLs (and the local stand-in server in tests) are ever fetched. */
-export function fetchable(url: string): boolean {
+function fetchable(url: string): boolean {
   try {
     const u = new URL(url);
     if (u.protocol === "http:" && u.hostname === "127.0.0.1") return true;
@@ -22,7 +22,7 @@ export function fetchable(url: string): boolean {
 }
 
 /** Read a response body, refusing more than `cap` bytes (whatever Content-Length claimed). */
-export async function capped(r: Response, cap: number): Promise<Uint8Array | null> {
+async function capped(r: Response, cap: number): Promise<Uint8Array | null> {
   const len = Number(r.headers.get("content-length") || 0);
   if (len > cap) return null;
   if (!r.body) return new Uint8Array(await r.arrayBuffer());

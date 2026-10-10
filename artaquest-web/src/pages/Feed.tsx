@@ -18,7 +18,7 @@ import {
   type NbKind, type NotebookCard,
   normalizeNbKind } from "../lib/api";
 import { isArta, isArtaFile, mentionsArta, pillState, useArtaWatch } from "../lib/arta";
-import { ArtaAvatar, ArtaBadge, ArtaHint, ArtaMarkdown, ArtaStatusPill, MentionText, MentionTextarea } from "../components/arta";
+import { ArtaAvatar, ArtaHint, ArtaMarkdown, ArtaStatusPill, MentionText, MentionTextarea } from "../components/arta";
 import { assetItem, NB_KIND_META, teaserSrc, TeaserVideo, useAqTheme, useCalmFlag } from "../components/nbview";
 import { AutoLoopVideo, FeedPlayer, LibraryMedia, LibraryPicker } from "../components/library";
 import { SharePanel } from "../components/SharePanel";
@@ -490,7 +490,6 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
   return (
     <article onDoubleClick={doubleTap}
       className={cx("relative transition-colors hover:bg-space-2/40", nested ? "px-3.5 py-3" : "px-4 py-4")}>
-      {/* Arta's replies use the same card as everyone's; only the ASSISTANT label marks them. */}
       {burst ? (
         <span aria-hidden className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
           <span className="animate-ping text-5xl">❤️</span>
@@ -508,7 +507,6 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
           <div className="flex items-center gap-1.5 text-sm">
             <Link to={`/u/${post.author.slug}`} className={`min-w-0 truncate font-bold text-ink hover:underline ${nameClass(post.author.name)}`}>{post.author.name}</Link>
             {post.author.verified ? <BlueCheck size={16} className="-ms-0.5" /> : null}
-            {bot ? <ArtaBadge seal={false} /> : null}
             <Link to={`/u/${post.author.slug}`} tabIndex={-1} className="hidden min-w-0 shrink-[2] break-all text-ink-3 sm:block"><bdi dir="ltr" data-ay-skip="1">@{post.author.slug}</bdi></Link>
             <span className="text-ink-3">·</span>
             <time className="shrink-0 text-ink-3" dateTime={new Date(post.created * 1000).toISOString()}>{timeAgo(post.created)}</time>
