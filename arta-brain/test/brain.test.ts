@@ -348,7 +348,7 @@ import { loreOf } from "../src/prompt";
 import { eksiLinks, quotedEntries, withQuotes } from "../src/worker";
 
 const EKSI = "https://eksisozluk.com/entry/123456";
-const Q = (quote: string, id: number | string) => ({ claim: "c", quote, source: typeof id === "number" ? `https://eksisozluk.com/entry/${id}` : id });
+const Q = (quote: string, id: number | string) => ({ quote, source: typeof id === "number" ? `https://eksisozluk.com/entry/${id}` : id });
 
 test("prompt: English X-user voice, verbatim quotes with real permalinks, no source framing, no allegations", () => {
   const p = systemPrompt(280);
@@ -365,7 +365,7 @@ test("prompt: English X-user voice, verbatim quotes with real permalinks, no sou
 });
 
 test("parseDecision: lore only with quote + https source; image/url fields ignored", () => {
-  assert.equal(loreOf([{ claim: "c", quote: "", source: EKSI }, { claim: "c", quote: "q", source: "javascript:x" }, { claim: "c", quote: "q", source: EKSI }]).length, 1);
+  assert.equal(loreOf([{ quote: "", source: EKSI }, { quote: "q", source: "javascript:x" }, { quote: "q", source: EKSI }]).length, 1);
   const dec = parseDecision(JSON.stringify({ kind: "answer", reply: "hi", image: { url: "https://x/y.jpg" } }));
   assert.equal((dec as Record<string, unknown>).image, undefined);
 });
