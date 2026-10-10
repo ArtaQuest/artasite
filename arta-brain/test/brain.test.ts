@@ -359,9 +359,10 @@ test("prompt: English X-user voice, verbatim quotes with real permalinks, no sou
   assert.match(p, /actually opened/);
   assert.match(p, /NEVER invent, guess or reconstruct a quote or a permalink/);
   assert.match(p, /never repeat allegations/i);
-  assert.match(p, /never a photoreal likeness/);
+  assert.match(p, /never draw or generate a likeness/);
+  assert.match(p, /real photo of them on an official or reputable page/);
   assert.doesNotMatch(p, /legend on Ekşi|as LORE|Cite Ekşi|Ekşi Sözlük has/);
-  assert.doesNotMatch(p, /wikimedia|"details"|answer\.md/i);
+  assert.doesNotMatch(p, /"details"|answer\.md/i);
 });
 
 test("parseDecision: lore only with quote + https source; image is a text description only, never a URL or object", () => {
@@ -429,4 +430,52 @@ test("picture produced: the claim may stay and the image goes out; no picture as
   const plain = fakeNet({ llm: JSON.stringify({ kind: "answer", reply: "A p-value is…" }) });
   await handleMention(14, { cfg: cfg(), wp: new WpClient(cfg(), plain.f), engine: plain.engine, gh: null, log: () => {} });
   assert.equal(plain.followUps.length, 0);
+});
+
+import { photoOf } from "../src/prompt";
+import sharpLib from "sharp";
+
+const PAGE = "https://www.example.edu/people/okan-tekman";
+const photoFetch = (bytes: Uint8Array | null) => (async (url: string) => {
+  if (url === "https://upload.example.org/okan.jpg" && bytes) return new Response(bytes, { headers: { "content-type": "image/png" } });
+  return new Response("nope", { status: 404 });
+}) as typeof fetch;
+
+test("photoOf: both https and public, gray only when true", () => {
+  assert.deepEqual(photoOf({ url: "https://upload.example.org/okan.jpg", page: PAGE, gray: true }), { url: "https://upload.example.org/okan.jpg", page: PAGE, gray: true });
+  assert.equal(photoOf({ url: "http://x.org/a.jpg", page: PAGE }), null);
+  assert.equal(photoOf({ url: "https://10.0.0.1/a.jpg", page: PAGE }), null);
+  assert.equal(photoOf({ url: "https://x.org/a.jpg" }), null);
+  assert.equal(photoOf("https://x.org/a.jpg"), null);
+  const d = parseDecision(JSON.stringify({ kind: "answer", reply: "hi", photo: { url: "https://upload.example.org/okan.jpg", page: PAGE }, image: "a likeness" }));
+  assert.ok(d.photo && !d.image, "a real photo suppresses image generation");
+});
+
+test("real person: real photo attached as grayscale photo.jpg, page link kept whole, quotes trimmed first, no image turn", async () => {
+  const png = solidPng(600, 600, [200, 30, 30]);
+  const long = "x".repeat(120);
+  const lore = [Q("short legend", 1), Q(long, 2), Q(long, 3)];
+  const net = fakeNet({ llm: JSON.stringify({ kind: "answer", reply: "Bilkent's calculus legend.", lore, photo: { url: "https://upload.example.org/okan.jpg", page: PAGE, gray: true }, image: "x" }) });
+  await handleMention(15, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {}, fetch: photoFetch(png) });
+  assert.equal(net.followUps.length, 0);
+  const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; files: { name: string; type: string }[] };
+  assert.ok(b.body.endsWith(` ${PAGE}`) && b.body.length <= 280, b.body);
+  assert.ok(b.body.includes("“short legend” https://eksisozluk.com/entry/1"));
+  assert.deepEqual(b.files.map((f) => [f.name, f.type]), [["photo.jpg", "image/jpeg"]]);
+});
+
+test("real person photo fails: no file, no page link, no claim", async () => {
+  const net = fakeNet({ llm: JSON.stringify({ kind: "answer", reply: "Calculus legend. Here's a photo of him.", photo: { url: "https://upload.example.org/okan.jpg", page: PAGE } }) });
+  await handleMention(16, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {}, fetch: photoFetch(null) });
+  const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; files: unknown[] };
+  assert.equal(b.body, "Calculus legend.");
+  assert.equal((b.files ?? []).length, 0);
+});
+
+test("fetchPhoto: grayscale really is gray; non-images refused", async () => {
+  const { fetchPhoto } = await import("../src/photo");
+  const f = await fetchPhoto({ url: "https://upload.example.org/okan.jpg", page: PAGE, gray: true }, 5_000_000, photoFetch(solidPng(300, 300, [200, 30, 30])));
+  const st = await sharpLib(Buffer.from(f!.bytes)).stats();
+  assert.ok(st.channels.length === 1 || Math.abs(st.channels[0].mean - st.channels[2].mean) < 2);
+  assert.equal(await fetchPhoto({ url: "https://upload.example.org/okan.jpg", page: PAGE, gray: false }, 5_000_000, photoFetch(new TextEncoder().encode("<html>"))), null);
 });

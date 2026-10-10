@@ -4,6 +4,7 @@ import type { Config } from "./config";
 import { type Engine, type EngineAnswer, EngineBusy, EngineDown } from "./engine";
 import type { Fetch } from "./http";
 import type { GitHub } from "./github";
+import { fetchPhoto } from "./photo";
 import { imagePrompt, parseDecision, promptText, stripImageClaims } from "./prompt";
 import { clip } from "./text";
 import type { Lore, Mention, OutFile } from "./types";
@@ -103,7 +104,7 @@ async function answer(m: Mention, d: Deps): Promise<Outcome> {
     if (prep.notAttached.length) d.log(`mention ${m.id}: ${prep.notAttached.length} file(s) not attached (${prep.notAttached.map((n) => n.why).join(", ")})`);
     d.onPrompt?.();
     const raw = await d.engine.ask(promptText(m, prep), d.cfg.answerTimeoutSec * 1000, prep.paths, (t) => {
-      const want = parseDecision(t).image;
+      const want = parseDecision(t).image; // never set when the answer names a real photo
       return want ? imagePrompt(want) : null;
     });
     got = typeof raw === "string" ? { text: raw, files: [] } : raw;
@@ -116,9 +117,18 @@ async function answer(m: Mention, d: Deps): Promise<Outcome> {
   let said = dec.reply.trim() || (dec.kind === "bug" ? "Thanks for reporting this — I've passed it to the team." : "");
   if (!said) throw new Error("empty answer");
   const lead = said;
+  if (dec.photo) d.log(`mention ${m.id}: photo ${dec.photo.url} from ${dec.photo.page}`);
+  const photo = dec.photo ? await fetchPhoto(dec.photo, d.cfg.outFileBytes, d.fetch ?? fetch, d.log) : null;
   const compose = (l: string) => {
+    if (dec.kind === "declined") return { text: clip(l, max), files: [] as OutFile[] };
+    if (photo && dec.photo) {
+      // The photo's page link is kept whole; the lead-in and quotes share the rest.
+      const room = max - dec.photo.page.length - 1;
+      const t = dec.kind === "answer" ? withQuotes(l, dec.lore ?? [], room) : l;
+      return { text: `${clip(t, room)} ${dec.photo.page}`, files: [photo] };
+    }
     const t = dec.kind === "answer" ? withQuotes(l, dec.lore ?? [], max) : l;
-    return dec.kind === "declined" ? { text: clip(t, max), files: [] as OutFile[] } : outgoing(t, max, got.files, d.cfg);
+    return outgoing(t, max, got.files, d.cfg);
   };
   let out = compose(lead);
   // Never claim a picture that is not going out: cut the claim from the lead-in (never from the quotes).
