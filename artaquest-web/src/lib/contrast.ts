@@ -209,11 +209,11 @@ export function tokensFor(level: number, theme: Theme, bg: RGB, bgPage: RGB = bg
     // Hue-locked LEGIBLE brand inks per theme (small brand-coloured text + UI marks). The law
     // fixes how LIGHT they must be; these are the audited hue-preserving realisations. Brand
     // blue as fine text on dark is physically unusable (blue is ~7% of luminance), hence the
-    // brightened #9CB6FF — the law's verdict, not a preference.
+    // minimally lightened logo blue #587AE6 (logo #1746DC + 28% white, 4.6:1 on the darkest card) — the law's verdict, not a preference.
     "--color-yang-ink": theme === "light" ? "#8a6300" : "#e8b923",
-    "--color-yin-ink": theme === "light" ? "#1746dc" : "#9cb6ff",
+    "--color-yin-ink": theme === "light" ? "#1746dc" : "#587ae6",
     "--ico-gold": theme === "light" ? "#9a6e00" : "#e8b923",
-    "--color-yin-light": theme === "light" ? "#1746dc" : "#9cb6ff",
+    "--color-yin-light": theme === "light" ? "#1746dc" : "#587ae6",
   };
 }
 
