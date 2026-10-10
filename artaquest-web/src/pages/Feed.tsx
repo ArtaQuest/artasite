@@ -58,8 +58,13 @@ function PostReplies({ postId, onCount, reloadKey = 0, pill }: { postId: number;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [fresh, setFresh] = useState<Set<number>>(new Set());
+  const me = currentUser();
+  // Replies that arrive after the first load (yours, or Arta's answer replacing its "replying…" row)
+  // fade in rather than pop, so the pending status hands over to the real reply smoothly.
+  const seen = useRef<Set<number> | null>(null);
   const load = useCallback(() => listReplies(postId).then((r) => {
     setItems(r.items); setNext(r.next); setMine(new Set(r.mine || []));
+    if (!seen.current) seen.current = new Set(r.items.map((x) => x.id));
     return r.items;
   }), [postId]);
   useEffect(() => { load().catch(() => setItems([])); }, [load, reloadKey]);
@@ -89,8 +94,8 @@ function PostReplies({ postId, onCount, reloadKey = 0, pill }: { postId: number;
       {items && items.length ? (
         <div className="overflow-hidden rounded-2xl border border-line bg-space-1/50">
           <div className="divide-y divide-line">
-            {items.map((r) => <FeedPost key={r.id} post={r} nested hearted={mine.has(r.id)} watchArta={fresh.has(r.id) && mentionsArta(r.body)}
-              onDeleted={(id) => { setItems((cur) => (cur || []).filter((x) => x.id !== id)); onCount(-1); }} />)}
+            {items.map((r) => <div key={r.id} className={seen.current && !seen.current.has(r.id) ? "aq-fade-in" : undefined}><FeedPost post={r} nested hearted={mine.has(r.id)} watchArta={fresh.has(r.id) && mentionsArta(r.body)}
+              onDeleted={(id) => { setItems((cur) => (cur || []).filter((x) => x.id !== id)); onCount(-1); }} /></div>)}
           </div>
           {next != null ? (
             <button type="button" className="w-full border-t border-line px-4 py-2.5 text-start text-[13px] font-semibold text-yin-ink transition-colors hover:bg-veil/[0.04]"
@@ -100,21 +105,26 @@ function PostReplies({ postId, onCount, reloadKey = 0, pill }: { postId: number;
           ) : null}
         </div>
       ) : null}
-      {pill ? <div className="flex">{pill}</div> : null}
+      {pill ? <div className="px-1">{pill}</div> : null}
       {isLoggedIn() ? (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-end gap-2">
-            <MentionTextarea value={text} onValue={setText} onSubmit={send} rows={1} maxLength={CHAR_LIMIT + 60} maxGrow={160}
-              placeholder="Post your reply" aria-label="Write a reply" wrapClassName="min-w-0 flex-1"
-              className="block min-h-[42px] w-full resize-none rounded-2xl border border-line bg-space-1 px-3.5 py-2.5 text-[14.5px] leading-snug text-ink outline-none transition-colors placeholder:text-ink-3 focus:border-yin-ink" />
-            <button type="button" onClick={send} disabled={!canSend}
-              className={cx("h-[42px] shrink-0 rounded-pill px-4 text-[14px] font-bold transition-colors",
-                canSend ? "bg-yang text-on-accent shadow-sm hover:bg-yang-light" : "cursor-not-allowed bg-veil/[0.07] text-ink-3")}>
-              {busy ? "Sending…" : "Reply"}
-            </button>
+        <div className="group/compose flex flex-col gap-1">
+          {/* X's inline composer: your avatar, an auto-growing field, Reply sitting on its baseline. */}
+          <div className="flex items-start gap-2.5">
+            <Avatar name={me?.name || "You"} src={me?.avatar} className="mt-0.5 h-8 w-8 shrink-0 text-[12px]" />
+            <div className="flex min-w-0 flex-1 items-end gap-2 rounded-2xl border border-line bg-space-1 py-1 pe-1 ps-3 transition-colors focus-within:border-yin-ink">
+              <MentionTextarea value={text} onValue={setText} onSubmit={send} rows={1} maxLength={CHAR_LIMIT + 60} maxGrow={160}
+                placeholder="Post your reply" aria-label="Write a reply" wrapClassName="min-w-0 flex-1"
+                className="block min-h-9 w-full resize-none bg-transparent py-[7px] text-[15px] leading-snug text-ink outline-none placeholder:text-ink-3" />
+              <button type="button" onClick={send} disabled={!canSend} aria-disabled={!canSend}
+                className={cx("min-h-9 shrink-0 rounded-pill px-4 text-[14px] font-bold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-focus",
+                  canSend ? "bg-yang text-on-accent hover:bg-yang-light active:bg-yang" : "cursor-not-allowed bg-veil/[0.07] text-ink-3")}>
+                {busy ? "Sending…" : "Reply"}
+              </button>
+            </div>
           </div>
-          <div className="flex min-w-0 items-start gap-3 px-1">
+          <div className="flex min-h-4 min-w-0 items-start gap-3 ps-[42px] pe-1">
             <ArtaHint text={text} className="min-w-0 flex-1" />
+            <span aria-hidden className="ms-auto hidden shrink-0 text-[11.5px] text-ink-3 sm:group-focus-within/compose:inline">⌘/Ctrl + Enter</span>
             {left <= 40 ? (
               <span aria-live="polite" className={cx("shrink-0 text-[12px] font-semibold tabular-nums", left < 0 ? "text-rose-400" : left <= 20 ? "text-yang-ink" : "text-ink-3")}>{left}</span>
             ) : null}
@@ -398,8 +408,8 @@ function OwnMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => voi
   );
 }
 
-/** One verb in a post's action row: a round icon that tints on hover/focus, its count beside it in
- *  tabular figures (blank at 0, but the slot keeps its width so rows line up), a 44px hit target. */
+/** One verb in a post's action row: a round icon that tints on hover/focus and darkens while pressed,
+ *  its count beside it in tabular figures (0 included, so every row reads the same), a 44px hit target. */
 function Act({ label, count, onClick, active, tone = "yin", pressed, expanded, title, children }: {
   label: string; count?: number; onClick: (e: React.MouseEvent) => void; active?: boolean; tone?: "yin" | "yang";
   pressed?: boolean; expanded?: boolean; title?: string; children: React.ReactNode;
@@ -410,10 +420,10 @@ function Act({ label, count, onClick, active, tone = "yin", pressed, expanded, t
       className={cx("group -my-1.5 inline-flex min-h-11 min-w-11 items-center gap-0.5 rounded-pill pe-1.5 text-[13px] tabular-nums outline-none transition-colors",
         active ? (yin ? "text-yin-ink" : "text-yang-ink") : cx("text-ink-3", yin ? "hover:text-yin-ink focus-visible:text-yin-ink" : "hover:text-yang-ink focus-visible:text-yang-ink"))}>
       <span className={cx("grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors group-focus-visible:ring-2 group-focus-visible:ring-focus",
-        yin ? "group-hover:bg-yin/[0.12]" : "group-hover:bg-yang/[0.14]")}>
+        yin ? "group-hover:bg-yin/[0.12] group-active:bg-yin/[0.22]" : "group-hover:bg-yang/[0.14] group-active:bg-yang/[0.24]")}>
         {children}
       </span>
-      <span className="min-w-[2ch] text-start">{count && count > 0 ? fmtCount(count) : ""}</span>
+      <span className="min-w-[2ch] text-start">{count != null ? fmtCount(count) : ""}</span>
     </button>
   );
 }
@@ -582,7 +592,7 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
               order — reply · repost · quote · heart, then views · share · run for a work. Every verb is
               the same Act: a round icon that tints on hover/focus, its count beside it, 44px tall.
               Quote is an icon now (it was the one worded control, which threw the spacing off). */}
-          <div className="-ms-2 mt-1 flex max-w-[460px] items-center justify-between text-[13px] text-ink-3">
+          <div className="-ms-2 mt-1 grid max-w-[520px] auto-cols-fr grid-flow-col items-center text-[13px] text-ink-3">
             {nb ? (
               <Act label={nb.comments > 0 ? `Reply, ${nb.comments} comments` : "Reply"} count={nb.comments} expanded={talk} active={talk}
                 onClick={(e) => { e.stopPropagation(); setTalk((v) => !v); }}>
@@ -617,7 +627,7 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
             {!nb ? (
               /* A post's own permalink (/works/?post=<id>) — the server renders its card (title, text,
                  first image) into the page head, so X, LinkedIn and Facebook unfurl it. */
-              <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} className="-my-2 ms-auto inline-flex items-center">
+              <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} className="-my-2 inline-flex items-center">
                 <SharePanel
                   compact
                   title={`${post.author.name} on ArtaQuest`}
