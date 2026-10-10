@@ -4,7 +4,7 @@ import type { Config } from "./config";
 import { type Engine, type EngineAnswer, EngineBusy, EngineDown } from "./engine";
 import type { Fetch } from "./http";
 import type { GitHub } from "./github";
-import { parseDecision, promptText } from "./prompt";
+import { imagePrompt, parseDecision, promptText, stripImageClaims } from "./prompt";
 import { clip } from "./text";
 import type { Lore, Mention, OutFile } from "./types";
 import type { WpClient } from "./wp";
@@ -102,7 +102,10 @@ async function answer(m: Mention, d: Deps): Promise<Outcome> {
   try {
     if (prep.notAttached.length) d.log(`mention ${m.id}: ${prep.notAttached.length} file(s) not attached (${prep.notAttached.map((n) => n.why).join(", ")})`);
     d.onPrompt?.();
-    const raw = await d.engine.ask(promptText(m, prep), d.cfg.answerTimeoutSec * 1000, prep.paths);
+    const raw = await d.engine.ask(promptText(m, prep), d.cfg.answerTimeoutSec * 1000, prep.paths, (t) => {
+      const want = parseDecision(t).image;
+      return want ? imagePrompt(want) : null;
+    });
     got = typeof raw === "string" ? { text: raw, files: [] } : raw;
   } finally {
     await prep.cleanup();   // the downloaded copies never outlive the prompt
@@ -112,9 +115,18 @@ async function answer(m: Mention, d: Deps): Promise<Outcome> {
   if (m.hint === "bug" && dec.kind !== "declined") dec.kind = "bug";
   let said = dec.reply.trim() || (dec.kind === "bug" ? "Thanks for reporting this — I've passed it to the team." : "");
   if (!said) throw new Error("empty answer");
-  if (dec.kind === "answer") said = withQuotes(said, dec.lore ?? [], max);
-
-  const out = dec.kind === "declined" ? { text: clip(said, max), files: [] as OutFile[] } : outgoing(said, max, got.files, d.cfg);
+  const lead = said;
+  const compose = (l: string) => {
+    const t = dec.kind === "answer" ? withQuotes(l, dec.lore ?? [], max) : l;
+    return dec.kind === "declined" ? { text: clip(t, max), files: [] as OutFile[] } : outgoing(t, max, got.files, d.cfg);
+  };
+  let out = compose(lead);
+  // Never claim a picture that is not going out: cut the claim from the lead-in (never from the quotes).
+  if (!out.files.length) {
+    const bare = stripImageClaims(lead);
+    if (bare !== lead) out = compose(bare || lead);
+  }
+  said = out.text;
 
   if (d.cfg.dryRun) {
     const fl = out.files.map((f) => `${f.name} (${f.mime}, ${f.bytes.byteLength} B)`).join(", ");

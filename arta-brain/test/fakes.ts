@@ -71,18 +71,21 @@ export function fakeNet(opts: { llm?: Answer | ((n: number) => Answer); mention?
     return json(404, {});
   };
   const prompts: string[] = [];
+  const followUps: string[] = [];
   const attached: { path: string; bytes: number; exists: boolean }[][] = [];
   const engine: Engine = {
-    async ask(prompt: string, _t: number, files: string[] = []) {
+    async ask(prompt: string, _t: number, files: string[] = [], followUp?: (t: string) => string | null) {
       llmN++;
       prompts.push(prompt);
       const { statSync } = await import("node:fs");
       attached.push(files.map((path) => ({ path, bytes: statSync(path).size, exists: true })));
       const out = typeof opts.llm === "function" ? opts.llm(llmN) : (opts.llm ?? JSON.stringify({ kind: "answer", reply: "A p-value is…" }));
       if (out instanceof Error) throw out;
+      const next = followUp?.(typeof out === "string" ? out : out.text);
+      if (next) followUps.push(next);
       return out;
     },
     async close() {},
   };
-  return { f, calls, issues, engine, prompts, attached, llmCount: () => llmN };
+  return { f, calls, issues, engine, prompts, followUps, attached, llmCount: () => llmN };
 }

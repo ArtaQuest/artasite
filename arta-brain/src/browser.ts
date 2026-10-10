@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { BrowserContext, Page } from "playwright";
 import type { Config } from "./config";
-import { type Engine, type EngineAnswer, EngineBusy, EngineDown } from "./engine";
+import { type Engine, type EngineAnswer, EngineBusy, EngineDown, type FollowUp } from "./engine";
 import { safeName, sniffMime, solidPng } from "./files";
 import type { OutFile } from "./types";
 
@@ -325,7 +325,7 @@ export class BrowserEngine implements Engine {
     return files;
   }
 
-  async ask(prompt: string, timeoutMs: number, files: string[] = []): Promise<EngineAnswer> {
+  async ask(prompt: string, timeoutMs: number, files: string[] = [], followUp?: FollowUp): Promise<EngineAnswer> {
     if (!this.cfg.sel.answer) throw new EngineDown("ARTA_SEL_ANSWER not set — run calibrate");
     const p = await this.open();
     const mode = await this.selectMode(p);
@@ -333,7 +333,36 @@ export class BrowserEngine implements Engine {
     const before = await p.locator(this.cfg.sel.answer).count(); // 0: open() guarantees a fresh conversation
     await this.send(p, prompt);
     const text = await this.waitAnswer(p, before, timeoutMs);
-    return { text, files: await this.produced(p, before), mode };
+    const next = followUp?.(text);
+    if (!next) return { text, files: await this.produced(p, before), mode };
+    // The picture, in a turn of its own: the chat only generates images when asked outright.
+    const second = await p.locator(this.cfg.sel.answer).count();
+    await this.send(p, next);
+    try {
+      await this.waitAnswer(p, second, Math.min(timeoutMs, 300_000));
+      await this.waitImage(p, second, 90_000);
+    } catch (e) {
+      if (e instanceof EngineBusy || e instanceof EngineDown) throw e;
+      this.log(`image turn: ${(e as Error).message.split("\n")[0]}`);
+      return { text, files: [], mode };
+    }
+    const out = await this.produced(p, second);
+    if (!out.length) this.log("image turn: no generated picture found");
+    return { text, files: out, mode };
+  }
+
+  /** A generated picture can finish loading after the answer's text settles: wait until one is decoded. */
+  private async waitImage(p: Page, before: number, ms: number) {
+    const deadline = Date.now() + ms;
+    while (Date.now() < deadline) {
+      const n = await p.locator(this.cfg.sel.answer).count();
+      if (n > before) {
+        const ok = await p.locator(this.cfg.sel.answer).nth(n - 1).evaluate((el, sel) =>
+          Array.from(el.querySelectorAll<HTMLImageElement>(sel)).some((i) => i.complete && i.naturalWidth >= 256), this.cfg.sel.outImage).catch(() => false);
+        if (ok) return;
+      }
+      await sleep(1000);
+    }
   }
 
   /** Is the profile signed in and the page usable? Opens the page; sends nothing. */
