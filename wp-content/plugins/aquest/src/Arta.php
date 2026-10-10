@@ -47,7 +47,7 @@ final class Arta {
 	];
 	const BIO = 'ArtaQuest’s public assistant. Mention @arta in a post or a comment and I reply in the thread, in public. Start with “bug:” to report a problem and I file it on GitHub for the team.';
 
-	const TABLE_VERSION = '2';   // 2: aq_arta_files (files on Arta's replies)
+	const TABLE_VERSION = '3';   // 2: aq_arta_files (files on Arta's replies); 3: + source_url
 	const IDENTITY_VERSION = '1';
 
 	// ── Limits. A participant, not a flood. ──────────────────────────────────────────────────────
@@ -179,6 +179,23 @@ final class Arta {
 		return (bool) preg_match( '/(^|\.)(wikipedia\.org|wikimedia\.org|edu\.tr|edu)$/', $host );
 	}
 
+	/**
+	 * `sources` = JSON {file name: page URL}: where an attached real photo came from. Kept only when it
+	 * is a cited source (cited_link); the feed opens it when the photo is clicked.
+	 */
+	public static function file_sources( $raw ) {
+		$j   = is_string( $raw ) ? json_decode( $raw, true ) : $raw;
+		$out = [];
+		foreach ( is_array( $j ) ? $j : [] as $name => $url ) {
+			$url  = trim( (string) $url );
+			$host = strtolower( (string) parse_url( $url, PHP_URL_HOST ) );
+			if ( strlen( $url ) <= 500 && preg_match( '#^https://[^\s<>"\']+$#', $url ) && self::cited_link( $url, $host ) && ! preg_match( '#^https://(www\.)?eksisozluk\.com#i', $url ) ) {
+				$out[ (string) $name ] = $url;
+			}
+		}
+		return $out;
+	}
+
 	public static function sanitize_reply( $text, $max ) {
 		$t = html_entity_decode( strip_tags( (string) $text ), ENT_QUOTES, 'UTF-8' );
 		$t = preg_replace_callback( '#https?://[^\s<>()]+#iu', function ( $m ) {
@@ -243,6 +260,7 @@ final class Arta {
 			bytes INT UNSIGNED NOT NULL DEFAULT 0,
 			sha256 CHAR(64) NOT NULL DEFAULT '',
 			cdn_key VARCHAR(190) NOT NULL DEFAULT '',
+			source_url VARCHAR(500) NOT NULL DEFAULT '',
 			created INT UNSIGNED NOT NULL DEFAULT 0,
 			PRIMARY KEY  (id),
 			KEY reply (reply_type, reply_id, pos),
@@ -524,13 +542,15 @@ final class Arta {
 
 	/** Arta's reply files, shaped like Library cards so the feed renders them as post attachments. */
 	public static function files_for( $type, $id ) {
-		if ( (string) get_option( 'aq_arta_table_version' ) !== self::TABLE_VERSION ) { return []; }
+		if ( ! get_option( 'aq_arta_table_version' ) ) { return []; }
+		self::ensure_tables(); // a one-time column add after an upgrade; a single option read otherwise
 		$rows = Data::all( 'SELECT * FROM ' . Data::t( 'aq_arta_files' ) . ' WHERE reply_type = %s AND reply_id = %d ORDER BY pos, id', [ (string) $type, (int) $id ] );
 		return array_map( function ( $r ) {
 			return [
 				'id' => -(int) $r['id'], 'nb_id' => 0, 'name' => (string) $r['name'], 'label' => (string) $r['name'],
 				'class' => (string) $r['class'], 'mime' => (string) $r['mime'], 'bytes' => (int) $r['bytes'],
 				'sha256' => (string) $r['sha256'], 'url' => Media::url( (string) $r['cdn_key'] ), 'uses' => 0, 'mine' => false,
+				'source' => (string) ( $r['source_url'] ?? '' ),
 			];
 		}, (array) $rows );
 	}
@@ -742,6 +762,7 @@ final class Arta {
 		$body = self::sanitize_reply( (string) Rest::p( $req, 'body', '' ), $max );
 		if ( mb_strlen( $body ) < 2 ) { return Rest::err( 'empty', 'Reply body is empty' ); }
 		[ $files, $dropped ] = self::reply_files( $req );
+		$sources = self::file_sources( Rest::p( $req, 'sources', '' ) );
 
 		$now = time();
 		$won = $wpdb->query( $wpdb->prepare(
@@ -784,7 +805,7 @@ final class Arta {
 			Data::insert( 'aq_arta_files', [
 				'mention_id' => $id, 'reply_type' => $type, 'reply_id' => (int) $rid, 'pos' => $pos,
 				'name' => $f['name'], 'class' => $f['class'], 'mime' => $f['mime'], 'bytes' => $f['bytes'],
-				'sha256' => $f['sha'], 'cdn_key' => $f['key'], 'created' => time(),
+				'sha256' => $f['sha'], 'cdn_key' => $f['key'], 'source_url' => $sources[ $f['name'] ] ?? '', 'created' => time(),
 			] );
 		}
 		Data::update( 'aq_mentions', [

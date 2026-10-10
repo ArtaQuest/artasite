@@ -453,15 +453,16 @@ test("photoOf: both https and public, gray only when true", () => {
   assert.ok(d.photo && !d.image, "a real photo suppresses image generation");
 });
 
-test("real person: real photo attached as grayscale photo.jpg, page link kept whole, quotes trimmed first, no image turn", async () => {
+test("real person: real photo attached as grayscale photo.jpg, its page sent as the file source (not in the text), no image turn", async () => {
   const png = solidPng(600, 600, [200, 30, 30]);
   const long = "x".repeat(120);
   const lore = [Q("short legend", 1), Q(long, 2), Q(long, 3)];
   const net = fakeNet({ llm: JSON.stringify({ kind: "answer", reply: "Bilkent's calculus legend.", lore, photo: { url: "https://upload.example.org/okan.jpg", page: PAGE, gray: true }, image: "x" }) });
   await handleMention(15, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {}, fetch: photoFetch(png) });
   assert.equal(net.followUps.length, 0);
-  const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; files: { name: string; type: string }[] };
-  assert.ok(b.body.endsWith(` ${PAGE}`) && b.body.length <= 280, b.body);
+  const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; sources: string; files: { name: string; type: string }[] };
+  assert.ok(!b.body.includes(PAGE) && b.body.length <= 280, b.body);
+  assert.deepEqual(JSON.parse(b.sources), { "photo.jpg": PAGE });
   assert.ok(b.body.includes("“short legend” https://eksisozluk.com/entry/1"));
   assert.deepEqual(b.files.map((f) => [f.name, f.type]), [["photo.jpg", "image/jpeg"]]);
 });
@@ -519,8 +520,9 @@ test("Okan: no photo from the model → faculty photo attached in B&W with the f
   const net = fakeNet({ llm: JSON.stringify({ kind: "answer", reply: "Bilkent's calculus legend.", lore: [Q("t-shirt in the snow", 11594413)], person: { name: "Okan Tekman", affiliation: "Bilkent University" }, gray: true }) });
   await handleMention(17, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {}, fetch: facFetch({ n: 0 }, solidPng(400, 400, [200, 30, 30])) });
   assert.equal(net.followUps.length, 0, "no generated likeness");
-  const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; files: { name: string; type: string }[] };
-  assert.equal(b.body, "Bilkent's calculus legend. “t-shirt in the snow” https://eksisozluk.com/entry/11594413 https://math.bilkent.edu.tr/faculty.html");
+  const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; sources: string; files: { name: string; type: string }[] };
+  assert.equal(b.body, "Bilkent's calculus legend. “t-shirt in the snow” https://eksisozluk.com/entry/11594413");
+  assert.deepEqual(JSON.parse(b.sources), { "photo.jpg": "https://math.bilkent.edu.tr/faculty.html" });
   assert.deepEqual(b.files.map((f) => [f.name, f.type]), [["photo.jpg", "image/jpeg"]]);
 });
 
@@ -533,14 +535,14 @@ test("fitText: whole sentences, then a closed clause, never an ellipsis", () => 
   for (const n of [20, 50, 100]) assert.ok(!fitText(cv, n).includes("…") && [...fitText(cv, n)].length <= n);
 });
 
-test("live Okan shape: long CV lead never truncated with …; photo link kept", async () => {
+test("live Okan shape: long CV lead never truncated with …; photo attached", async () => {
   clearFacultyCache();
   const cv = "Okan Tekman is Bilkent's senior math lecturer (Minnesota PhD '92) and a longtime calculus institution with a reputation that refuses to quit for decades.";
   const net = fakeNet({ llm: JSON.stringify({ kind: "answer", reply: cv, lore: [Q("Countless legends circulate about him, eats 3 students in one sitting, finished METU math and electronics in 3 years with 4.00", 2066444)], person: { name: "Okan Tekman", affiliation: "Bilkent" } }) });
   await handleMention(18, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {}, fetch: facFetch({ n: 0 }, solidPng(400, 400, [9, 9, 9])) });
   const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; files: unknown[] };
   assert.ok(!b.body.includes("…") && [...b.body].length <= 280, b.body);
-  assert.ok(b.body.endsWith(" https://math.bilkent.edu.tr/faculty.html"));
+  assert.ok(!b.body.includes("math.bilkent.edu.tr"), "the photo source is not in the text");
   assert.equal(b.files.length, 1, "photo for a person question even without an image request");
 });
 

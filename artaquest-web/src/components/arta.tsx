@@ -195,21 +195,11 @@ export function ArtaFiles({ items }: { items: LibraryItem[] }) {
 // ── live status of @arta mentions ────────────────────────────────────────────
 /**
  * Arta's state on a thread, kept quiet: while it works, a reply-shaped row ("Arta is replying…" with
- * typing dots) sits where its answer will land; other states are one muted line. `onShow` turns
- * "replied" into a small link that opens the thread.
+ * typing dots) sits where its answer will land; other states are one muted line.
  */
-export function ArtaStatusPill({ state, onShow, className }: { state: ArtaPillState; onShow?: () => void; className?: string }) {
+export function ArtaStatusPill({ state, className }: { state: ArtaPillState; className?: string }) {
   if (!state) return null;
-  if (state.kind === "replied") {
-    if (!onShow) return null;
-    return (
-      <button type="button" onClick={(e) => { e.stopPropagation(); onShow(); }}
-        className={cx("inline-flex min-h-11 items-center gap-1.5 rounded-pill text-[13px] font-medium text-yin-ink outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus", className)}>
-        <ArtaAvatar className="h-5 w-5" />
-        Arta replied · Show
-      </button>
-    );
-  }
+  if (state.kind === "replied") return null; // the answer itself is shown inline, like any reply
   if (state.kind === "thinking" || state.kind === "queued") {
     return (
       <div role="status" aria-live="polite" className={cx("flex items-center gap-2.5 py-1", className)}

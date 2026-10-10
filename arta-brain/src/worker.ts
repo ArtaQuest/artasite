@@ -138,10 +138,9 @@ async function answer(m: Mention, d: Deps): Promise<Outcome> {
   const compose = (l: string) => {
     if (dec.kind === "declined") return { text: fitText(l, max), files: [] as OutFile[] };
     if (photo && dec.photo) {
-      // The photo's page link is kept whole; the lead-in and quotes share the rest.
-      const room = max - dec.photo.page.length - 1;
-      const t = dec.kind === "answer" ? withQuotes(l, dec.lore ?? [], room) : l;
-      return { text: `${fitText(t, room)} ${dec.photo.page}`, files: [photo] };
+      // The photo's source page rides on the file (the feed opens it on click), not in the text.
+      const t = dec.kind === "answer" ? withQuotes(l, dec.lore ?? [], max) : l;
+      return { text: fitText(t, max), files: [{ ...photo, source: dec.photo.page }] };
     }
     const t = dec.kind === "answer" ? withQuotes(l, dec.lore ?? [], max) : l;
     return outgoing(t, max, got.files, d.cfg);

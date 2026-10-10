@@ -26,4 +26,4 @@ export type Person = { name: string; affiliation: string };
 /** A REAL photo of a real person: a direct https image and the https page it was found on. */
 export type Photo = { url: string; page: string; gray: boolean };
 /** A file going OUT with Arta's reply (a generated image, the full text of a long answer). */
-export type OutFile = { name: string; mime: string; bytes: Uint8Array };
+export type OutFile = { name: string; mime: string; bytes: Uint8Array; source?: string };
