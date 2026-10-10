@@ -1061,7 +1061,7 @@ export default function Feed({ initialKind, embedded = false }: { initialKind?: 
           <Composer initialText={composeText} onPosted={(p) => { setItems((cur) => [p, ...cur]); if (mentionsArta(p.body)) setWatching((cur) => new Set([...cur, p.id])); }} />
         ) : (
           <div className="flex items-center gap-3 border-b border-line px-4 py-3.5">
-            <p className="text-[14px] text-ink-2">Every post proves itself — it is a public Kaggle notebook that ran, from public inputs, and you can run it again yourself.</p>
+            <p className="text-[14px] text-ink-2">Every post is a notebook that ran. Run it again yourself.</p>
             <Button href="/login/" size="sm" className="ml-auto shrink-0">Join</Button>
           </div>
         )}
