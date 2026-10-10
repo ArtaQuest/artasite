@@ -1862,3 +1862,10 @@ html[dir="rtl"] .aq-bot-panel { right: auto; left: calc(1.25rem + env(safe-area-
   transition: background-color 0.15s;
 }
 .aq-prose a.aq-arta-chip:hover, a.aq-arta-chip:hover { background: color-mix(in srgb, var(--color-yang) 25%, transparent); text-decoration: none; }
+
+/* Post replies: a reply that lands after the thread loaded (yours, or Arta's answer replacing its
+   "replying…" row) fades up instead of popping in. */
+@keyframes aq-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.aq-fade-in { animation: aq-fade-in .32s ease-out both; }
+.aq-think-dots--quiet > i { background: currentColor; }
+@media (prefers-reduced-motion: reduce) { .aq-fade-in { animation: none; } }

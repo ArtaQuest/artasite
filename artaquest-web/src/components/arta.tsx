@@ -193,40 +193,45 @@ export function ArtaFiles({ items }: { items: LibraryItem[] }) {
 }
 
 // ── live status of @arta mentions ────────────────────────────────────────────
-/** A small status pill. `onShow` turns the "replied" state into a button that opens the thread. */
+/**
+ * Arta's state on a thread, kept quiet: while it works, a reply-shaped row ("Arta is replying…" with
+ * typing dots) sits where its answer will land; other states are one muted line. `onShow` turns
+ * "replied" into a small link that opens the thread.
+ */
 export function ArtaStatusPill({ state, onShow, className }: { state: ArtaPillState; onShow?: () => void; className?: string }) {
   if (!state) return null;
   if (state.kind === "replied") {
     if (!onShow) return null;
     return (
       <button type="button" onClick={(e) => { e.stopPropagation(); onShow(); }}
-        className={cx("inline-flex min-h-8 items-center gap-1.5 rounded-pill border border-yang/40 bg-yang/[0.10] py-1 pe-3 ps-1 text-[12.5px] font-semibold text-yang-ink transition-colors hover:bg-yang/20", className)}>
+        className={cx("inline-flex min-h-11 items-center gap-1.5 rounded-pill text-[13px] font-medium text-yin-ink outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus", className)}>
         <ArtaAvatar className="h-5 w-5" />
         Arta replied · Show
       </button>
     );
   }
-  const muted = state.kind === "limited" || state.kind === "missed" || state.kind === "offline";
+  if (state.kind === "thinking" || state.kind === "queued") {
+    return (
+      <div role="status" aria-live="polite" className={cx("flex items-center gap-2.5 py-1", className)}
+        title={state.kind === "queued" ? "The answer will appear in this thread — no need to ask again." : undefined}>
+        <ArtaAvatar className="h-8 w-8 shrink-0" />
+        <span className="flex min-w-0 items-center gap-2 rounded-2xl bg-veil/[0.05] px-3 py-2 text-[13px] text-ink-3">
+          <span className="truncate">{state.kind === "thinking" ? "Arta is replying" : state.position <= 1 ? "Arta will reply shortly" : `Arta will reply soon · #${state.position} in line`}</span>
+          <span aria-hidden className="aq-think-dots aq-think-dots--tiny aq-think-dots--quiet"><i /><i /><i /></span>
+        </span>
+      </div>
+    );
+  }
   const text =
-    state.kind === "thinking" ? "Arta is thinking…"
-    : state.kind === "queued" ? (state.position <= 1 ? "Queued · up next" : `Queued · #${state.position}`)
-    : state.kind === "offline" ? "Arta is offline — it will answer when it's back"
+    state.kind === "offline" ? "Arta is offline — it will answer when it's back"
     : state.kind === "paused" ? "Arta is taking a short break — your question is saved"
     : state.kind === "limited" ? "Arta's limit is reached for now — mention it again a little later"
     : "Arta couldn't answer this one in time";
   return (
-    <span role="status" aria-live="polite"
-      title={state.kind === "queued" || state.kind === "offline" || state.kind === "paused" ? "The answer will appear in this thread — no need to ask again." : undefined}
-      className={cx("inline-flex min-h-8 max-w-full items-center gap-2 rounded-pill border py-1 pe-3 ps-1 text-[12.5px] font-medium",
-        muted ? "border-line bg-veil/[0.04] text-ink-3" : "border-yang/35 bg-yang/[0.08] text-ink-2", className)}>
-      <span className="relative shrink-0">
-        <ArtaAvatar className={cx("h-5 w-5", state.kind === "offline" && "opacity-60 grayscale")} />
-        <span aria-hidden className={cx("absolute -bottom-px -end-px h-2 w-2 rounded-full ring-2 ring-space-1",
-          state.kind === "thinking" || state.kind === "queued" ? "bg-yang" : state.kind === "paused" ? "bg-yin-light" : "bg-ink-3")} />
-      </span>
-      <span className="min-w-0 truncate">{text}</span>
-      {state.kind === "thinking" ? <span aria-hidden className="aq-think-dots aq-think-dots--tiny"><i /><i /><i /></span> : null}
-    </span>
+    <p role="status" aria-live="polite" className={cx("flex min-h-8 items-center gap-2 text-[12.5px] text-ink-3", className)}>
+      <ArtaAvatar className={cx("h-5 w-5 shrink-0", state.kind === "offline" && "opacity-60 grayscale")} />
+      <span className="min-w-0">{text}</span>
+    </p>
   );
 }
 
@@ -349,20 +354,18 @@ export function MentionTextarea({ value, onValue, onSubmit, textareaRef, maxGrow
   );
 }
 
-/** The small line under a composer: what tagging Arta does, and the bug: shortcut. */
+/** The small line under a composer, only once @arta is tagged: what it does, and the bug: shortcut. */
 export function ArtaHint({ text, className }: { text: string; className?: string }) {
   const asks = mentionsArta(text);
   const bug = asks && looksLikeBug(text);
+  if (!asks) return null;
   return (
     <p className={cx("flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-ink-3", className)}>
       {bug ? (
         <span className="text-yang-ink">Arta will file this as a bug on GitHub and reply with the link.</span>
       ) : asks ? (
         <span>Arta replies in this thread, in public. Tip: start with <code className="rounded bg-veil/[0.08] px-1 font-mono text-[11.5px] text-ink-2">bug:</code> to report a bug.</span>
-      ) : (
-        <span>Tag <span className="font-semibold text-ink-2">@arta</span> to ask Arta in public.</span>
-      )}
-      <span aria-hidden className="hidden text-ink-3/80 sm:inline">· ⌘/Ctrl + Enter to send</span>
+      ) : null}
     </p>
   );
 }
