@@ -1,5 +1,5 @@
 /* GENERATED — DO NOT EDIT HERE.
- * Vendored from artalife src/rig/arta.ts @ d8cfea3.
+ * Vendored from artalife src/rig/arta.ts @ d6ffa98.
  * Source of truth: https://github.com/ArtaQuest/artalife.git
  * Re-run: node tools/arta-sync.mjs
  */
@@ -729,6 +729,30 @@ export type Frame = {
  *  stall cannot fling Arta across the stage in a single frame. */
 const MAX_STEP = 1 / 45;
 
+/**
+ * The last step of a walk, in world space. One foot stays exactly where it is;
+ * the other is lifted and set down beside it, and the hip moves over the pair.
+ */
+type Settle = {
+  t: number; dur: number;
+  pin: 0 | 1;                 // 0: the left foot stays planted, 1: the right
+  pinX: number;               // where the planted foot is, world x
+  sw0: number; lift0: number; // swing foot start: world x and height off the ground
+  sw1: number;                // swing foot destination, world x
+  hip0: XY; hipX1: number;    // hip start, and where it ends over the stance
+  lean0: number; la0: [number, number]; ra0: [number, number];
+};
+
+/**
+ * Where each standing foot sits relative to the hip, facing +x, solved from the
+ * stance. NOT mirror images: both knees bend the same way, so the left foot is
+ * ~5 units in front of the hip and the right one ~20 behind.
+ */
+const STAND_DX = [
+  limb(0, 0, STANCE[0], STANCE[1], RIG.THIGH, RIG.SHIN).ex,
+  limb(0, 0, -STANCE[0], STANCE[1], RIG.THIGH, RIG.SHIN).ex,
+] as const;
+
 export class Brain {
   private pose: Pose;
   private act: Act = "idle";
@@ -765,6 +789,10 @@ export class Brain {
   private peakPx = 0;
   /** authoritative ground position while walking; null when not walking */
   private rootX: number | null = null;
+  /** The closing step at the end of a walk; null when not stopping. See `beginSettle`. */
+  private settle: Settle | null = null;
+  /** scratch joints for reading where the feet are, so no frame allocates */
+  private jFeet: number[] = new Array(JOINTS).fill(0);
   private vy = 0;                     // vertical speed while falling, world units/s
   private impact = 0;                 // speed at touchdown — how hard to absorb
   private fellFrom: number | null = null; // hip height where this fall began
@@ -944,6 +972,10 @@ export class Brain {
   }
 
   private enter(act: Act, opts: { at?: XY; x?: number } = {}) {
+    // A closing step interrupted by anything — even another walk — leaves the
+    // legs in a configuration the stored gait phase knows nothing about, so the
+    // next walk has to choose its phase from the feet again (`startPhase`).
+    if (this.settle) { this.settle = null; this.rootX = null; }
     // The integrated walk root belongs to one walk. Carrying it into the next
     // one would start that walk from wherever the last one was aiming.
     if (act !== "walk") this.rootX = null;
@@ -952,6 +984,97 @@ export class Brain {
     this.t = 0;
     if (opts.at) { this.aim = opts.at; this.aimAt = this.clock; }
     if (opts.x !== undefined) this.targetX = opts.x;
+  }
+
+  /** World positions of both feet: [lx, ly, rx, ry]. */
+  private feetNow(): [number, number, number, number] {
+    const j = joints(this.pose, this.jFeet);
+    return [j[16], j[17], j[20], j[21]];
+  }
+
+  /**
+   * The gait phase to set off from: the one whose PLANTED foot is already
+   * where one of Arta's feet is, and whose lifted foot has the shortest,
+   * forward-going trip through the air. A planted mismatch is a slide, so it
+   * costs ten times as much as a mismatch in the air; travelling backwards to
+   * reach the swing reads as a kick, so that costs more than going forward.
+   */
+  private startPhase(dir: Face, ground: number): number {
+    const [lx, ly, rx, ry] = this.feetNow();
+    const hx = this.pose.x;
+    const cur = [{ dx: (lx - hx) * dir, lift: ground - ly }, { dx: (rx - hx) * dir, lift: ground - ry }];
+    let best = this.phase, bestCost = Infinity;
+    for (let i = 0; i < 180; i++) {
+      const ph = i / 180;
+      const want = [foot(ph), foot((ph + 0.5) % 1)];
+      let cost = 0;
+      for (let k = 0; k < 2; k++) {
+        const w = want[k], c = cur[k], gap = w.dx - c.dx;
+        cost += w.lift < 0.5
+          ? 10 * Math.abs(gap) + 4 * Math.max(0, c.lift)
+          : (gap < 0 ? 1.5 : 0.5) * Math.abs(gap) + 1.5 * Math.max(0, 8 - w.lift);
+      }
+      if (cost < bestCost) { bestCost = cost; best = ph; }
+    }
+    return best;
+  }
+
+  /**
+   * Begin the closing step. The foot that is down (the front one, if both
+   * are) stays put; the hip ends over the standing stance beside it, so when
+   * the act becomes `idle` the stand pose is already what is drawn and the
+   * idle ease has nothing left to move in the legs.
+   */
+  private beginSettle(ground: number): Settle {
+    const [lx, ly, rx, ry] = this.feetNow();
+    const f = this.facing;
+    const hx = this.pose.x;
+    const liftL = ground - ly, liftR = ground - ry;
+    // End in the stand pose exactly, so `idle` inherits it with nothing to ease.
+    const plan = (pin: 0 | 1) => {
+      const pinX = pin === 0 ? lx : rx;
+      const hipX1 = pinX - STAND_DX[pin] * f;
+      return { pin, pinX, hipX1, sw1: hipX1 + STAND_DX[1 - pin] * f };
+    };
+    // Only a foot that is DOWN can be the one that stays. With both down
+    // (double support) either could, and the stance is not symmetric, so take
+    // whichever ends the walk with the smaller step and the shorter shift of
+    // the hip — the other choice can carry Arta a whole stride past its mark.
+    const cost = (c: ReturnType<typeof plan>) =>
+      Math.abs(c.hipX1 - hx) + 0.5 * Math.abs(c.sw1 - (c.pin === 0 ? rx : lx));
+    const a = plan(0), b = plan(1);
+    const { pin, pinX, hipX1, sw1 } = Math.abs(liftL - liftR) > 1
+      ? (liftL < liftR ? a : b)
+      : (cost(a) <= cost(b) ? a : b);
+    const sw0 = pin === 0 ? rx : lx;
+    const lift0 = Math.max(0, pin === 0 ? liftR : liftL);
+    const trip = Math.abs(sw1 - sw0);
+    return {
+      t: 0, dur: clamp(0.16 + trip / 260, 0.2, 0.42), pin, pinX, sw0, lift0, sw1,
+      hip0: { x: hx, y: this.pose.y }, hipX1,
+      lean0: this.pose.lean, la0: [...this.pose.la], ra0: [...this.pose.ra],
+    };
+  }
+
+  /** The closing step at progress `u`, legs solved so the planted foot cannot move. */
+  private settlePose(st: Settle, u: number, ground: number): Pose {
+    const e = ease(u), f = this.facing, st0 = P();
+    const hx = lerp(st.hip0.x, st.hipX1, e);
+    const hy = lerp(st.hip0.y, ground - RIG.HIP, e);
+    const trip = Math.abs(st.sw1 - st.sw0);
+    // A short shuffle barely leaves the floor; a full half-stride clears it.
+    const lift = st.lift0 * (1 - e) + Math.min(WALK.LIFT * 0.7, 3 + trip * 0.2) * Math.sin(Math.PI * u) ** 2;
+    const swX = lerp(st.sw0, st.sw1, e);
+    const pinLeg = legIK((st.pinX - hx) * f, ground - hy);
+    const swLeg = legIK((swX - hx) * f, ground - lift - hy);
+    return P({
+      x: hx, y: hy,
+      lean: lerp(st.lean0, 0, e),
+      la: [lerp(st.la0[0], st0.la[0], e), lerp(st.la0[1], st0.la[1], e)],
+      ra: [lerp(st.ra0[0], st0.ra[0], e), lerp(st.ra0[1], st0.ra[1], e)],
+      ll: st.pin === 0 ? pinLeg : swLeg,
+      rl: st.pin === 0 ? swLeg : pinLeg,
+    });
   }
 
   /** Advance the simulation. dt in SECONDS. Returns the frame to draw.
@@ -1112,12 +1235,50 @@ export class Brain {
          * and the root together, which is no skate at all.
          */
         const tx = clamp(this.targetX ?? this.pose.x, input.minX, input.maxX);
+        const fresh = this.rootX === null;
         if (this.rootX === null) this.rootX = this.pose.x;
         const d = tx - this.rootX;
         const dir: Face = d >= 0 ? 1 : -1;
-        if (Math.abs(d) < 4 && Math.abs(tx - this.pose.x) < 6) {
-          this.rootX = null; this.enter("idle"); want = base; break;
+        /*
+         * ARRIVING is a step, not a blend.
+         *
+         * This used to hand the walk straight to `idle`, whose stand pose was
+         * then eased in joint space from wherever the stride had left the legs.
+         * Interpolating two leg ANGLES moves the foot at the end of them, so
+         * both feet skated together across the floor — measured on production
+         * at ~36 world units each over half a second, and a few units UNDER the
+         * floor on the way, because angle space shortens the leg mid-blend.
+         * That is the single most visible tell left in the walk, and it
+         * happened at the end of every one.
+         *
+         * So the planted foot stays exactly where it is and the other one is
+         * picked up and put down beside it (see `beginSettle`).
+         */
+        if (this.settle || (Math.abs(d) < 4 && Math.abs(tx - this.pose.x) < 6)) {
+          if (!this.settle) this.settle = this.beginSettle(support);
+          const st = this.settle;
+          st.t += dt;
+          const u = clamp(st.t / st.dur, 0, 1);
+          want = this.settlePose(st, u, support);
+          this.rootX = want.x;
+          if (u >= 1) {
+            this.settle = null; this.rootX = null; this.enter("idle");
+            want = { ...base, x: want.x };
+          }
+          break;
         }
+        /*
+         * And DEPARTING picks a foot up rather than sliding both.
+         *
+         * The gait phase used to carry over from the previous walk, so the
+         * first frames eased the standing legs toward an arbitrary stride:
+         * on production, one foot slid 46 units forward and the other 48 back
+         * in five frames — a scissor across the floor every time Arta set off.
+         * Choosing the phase whose planted foot is already where a foot IS
+         * makes the departure what a real one is: weight on one leg, the other
+         * one lifting.
+         */
+        if (fresh) this.phase = this.startPhase(dir, support);
         /*
          * Choose a speed the budget can actually afford, instead of walking at
          * a fixed 210 px/s and letting the clamp throttle it.
