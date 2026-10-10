@@ -144,6 +144,12 @@ namespace {
 	t_ok( strpos( $r, '<b>' ) === false, 'sanitize_reply strips markup' );
 	t_ok( strpos( $r, 'evil.example' ) === false && strpos( $r, 'github.com/other' ) === false, 'sanitize_reply removes foreign links' );
 	t_ok( strpos( $r, 'https://artaquest.com/works/' ) !== false && strpos( $r, 'github.com/ArtaQuest/artasite/issues/5' ) !== false, 'sanitize_reply keeps own links' );
+	$r = Arta::sanitize_reply( '“q” https://eksisozluk.com/entry/2066444 https://math.bilkent.edu.tr/faculty.html http://eksisozluk.com/entry/1 https://eksisozluk.com/okan--1 https://evil.edu.tr.example.com/x', 280 );
+	t_ok( strpos( $r, 'https://eksisozluk.com/entry/2066444' ) !== false && strpos( $r, 'https://math.bilkent.edu.tr/faculty.html' ) !== false, 'sanitize_reply keeps cited sources' );
+	t_ok( substr_count( $r, '[link removed]' ) === 3, 'sanitize_reply removes http, non-entry and look-alike links' );
+	$s = Arta::file_sources( '{"photo.jpg":"https://math.bilkent.edu.tr/faculty.html","x.jpg":"https://evil.example/p","y.jpg":"http://en.wikipedia.org/wiki/X","z.jpg":"javascript:alert(1)"}' );
+	t_ok( $s === [ 'photo.jpg' => 'https://math.bilkent.edu.tr/faculty.html' ], 'file_sources keeps only https cited photo pages' );
+	t_ok( Arta::file_sources( 'not json' ) === [], 'file_sources ignores junk' );
 
 	// ACS e-mail signature, against an independently computed value.
 	require $src . 'Mailer.php';
@@ -178,7 +184,7 @@ namespace {
 	$pdo->exec( 'CREATE TABLE wp_aq_post_media (id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER, lib_id INTEGER, pos INTEGER DEFAULT 0, created INTEGER DEFAULT 0)' );
 	$pdo->exec( "CREATE TABLE wp_aq_library (id INTEGER PRIMARY KEY AUTOINCREMENT, nb_id INTEGER, name TEXT, label TEXT DEFAULT '', mime TEXT, bytes INTEGER, cdn_key TEXT)" );
 	$pdo->exec( "CREATE TABLE wp_aq_notebooks (id INTEGER PRIMARY KEY, status TEXT, comments INTEGER DEFAULT 0)" );
-	$pdo->exec( "CREATE TABLE wp_aq_arta_files (id INTEGER PRIMARY KEY AUTOINCREMENT, mention_id INTEGER, reply_type TEXT, reply_id INTEGER, pos INTEGER, name TEXT, class TEXT, mime TEXT, bytes INTEGER, sha256 TEXT, cdn_key TEXT, created INTEGER)" );
+	$pdo->exec( "CREATE TABLE wp_aq_arta_files (id INTEGER PRIMARY KEY AUTOINCREMENT, mention_id INTEGER, reply_type TEXT, reply_id INTEGER, pos INTEGER, name TEXT, class TEXT, mime TEXT, bytes INTEGER, sha256 TEXT, cdn_key TEXT, source_url TEXT DEFAULT '', created INTEGER)" );
 	$GLOBALS['T_OPTS']['aq_arta_table_version'] = Arta::TABLE_VERSION; // the table above stands in for dbDelta's
 	$mk = function ( $id, $slug, $name, $bot = false ) {
 		$u = (object) [ 'ID' => $id, 'user_nicename' => $slug, 'user_login' => $slug, 'display_name' => $name, 'meta' => $bot ? [ '_aq_is_bot' => 1 ] : [] ];
@@ -333,11 +339,12 @@ namespace {
 		[ 'name' => 'evil.png', 'tmp_name' => $tmpf( '<html><script>alert(1)</script>' ), 'error' => 0 ],
 		[ 'name' => 'tool.exe', 'tmp_name' => $tmpf( "MZ\x90\x00" ), 'error' => 0 ],
 	] ];
-	$rf = Arta::reply( [ 'mention_id' => $mf2, 'body' => 'Here is your square (full answer attached).', 'kind' => 'answer', '_files' => $up ] );
+	$rf = Arta::reply( [ 'mention_id' => $mf2, 'body' => 'Here is your square (full answer attached).', 'kind' => 'answer', 'sources' => '{"square.png":"https://en.wikipedia.org/wiki/Square","answer.md":"https://evil.example/x"}', '_files' => $up ] );
 	$reply_post = (int) $pdo->query( "SELECT id FROM wp_aq_posts WHERE parent_id = $pf AND author_id = 9000" )->fetchColumn();
 	$cards = Arta::files_for( 'post', $reply_post );
 	t_ok( ! empty( $rf['ok'] ) && $rf['files'] === 2 && count( $rf['dropped'] ) === 2, 'reply stores the two valid files and names the two refused' );
 	t_ok( count( $cards ) === 2 && $cards[0]['class'] === 'image' && $cards[0]['mime'] === 'image/png' && $cards[1]['class'] === 'doc' && $cards[1]['name'] === 'answer.md' && $cards[0]['id'] < 0, 'the reply renders them as attachment cards (image, doc)' );
+	t_ok( $cards[0]['source'] === 'https://en.wikipedia.org/wiki/Square' && $cards[1]['source'] === '', 'a photo keeps its cited source page; a foreign source is dropped' );
 	t_ok( isset( \AQ\Media::$stored[ 'arta/' . hash( 'sha256', $png ) . '.png' ] ) && count( \AQ\Media::$stored ) === 2, 'files land content-addressed in the media store, nothing refused is stored' );
 	$rf2 = Arta::reply( [ 'mention_id' => $mf2, 'body' => 'again', '_files' => $up ] );
 	t_ok( ! empty( $rf2['duplicate'] ) && count( Arta::files_for( 'post', $reply_post ) ) === 2 && count( \AQ\Media::$stored ) === 2, 'a retried reply stores no second copy' );

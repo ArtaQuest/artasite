@@ -1946,6 +1946,8 @@ export type NbChecklist = {
 /** One published file, in the Library, attachable to any member's post. */
 export type LibraryItem = {
   id: number;
+  /** Where an attached real photo came from (Arta's photo of a real person): clicking it opens this page. */
+  source?: string;
   nb_id: number;
   /** True when the viewer is the file's author — the Library shows them a delete control. */
   mine?: boolean;

@@ -307,7 +307,7 @@ test("files OUT: a long answer is trimmed, never attached as text; images ride a
   assert.equal(out, "replied");
   const r = net.calls.find((c) => c.url.endsWith("/arta/reply"))!;
   const b = r.body as { body: string; files: { field: string; name: string; type: string; size: number; text: string }[]; mention_id: string };
-  assert.ok(b.body.length <= 280 && b.body.endsWith("…"), "the public reply is trimmed to the limit");
+  assert.ok(b.body.length <= 280 && !b.body.includes("…"), "the public reply is fitted to the limit, never with an ellipsis");
   assert.equal(b.mention_id, "11");
   assert.deepEqual(b.files.map((f) => [f.field, f.name, f.type]), [["files[]", "square-1.png", "image/png"]]);
   assert.equal(r.headers["x-arta-token"], "t".repeat(40));
@@ -344,7 +344,7 @@ test("config: top-effort defaults, sniffing, and the generated PNG", () => {
 });
 
 // ── voice and quoted Ekşi entries (the Okan Tekman example) ─────────────────
-import { loreOf } from "../src/prompt";
+import { imagePrompt, loreOf, stripImageClaims } from "../src/prompt";
 import { eksiLinks, quotedEntries, withQuotes } from "../src/worker";
 
 const EKSI = "https://eksisozluk.com/entry/123456";
@@ -359,15 +359,26 @@ test("prompt: English X-user voice, verbatim quotes with real permalinks, no sou
   assert.match(p, /actually opened/);
   assert.match(p, /NEVER invent, guess or reconstruct a quote or a permalink/);
   assert.match(p, /never repeat allegations/i);
-  assert.match(p, /never a photoreal likeness/);
+  assert.match(p, /never draw or generate a likeness/);
+  assert.match(p, /real photo of them on an official or reputable page/);
   assert.doesNotMatch(p, /legend on Ekşi|as LORE|Cite Ekşi|Ekşi Sözlük has/);
-  assert.doesNotMatch(p, /wikimedia|"details"|answer\.md/i);
+  assert.doesNotMatch(p, /"details"|answer\.md/i);
 });
 
-test("parseDecision: lore only with quote + https source; image/url fields ignored", () => {
+test("parseDecision: lore only with quote + https source; image is a text description only, never a URL or object", () => {
   assert.equal(loreOf([{ quote: "", source: EKSI }, { quote: "q", source: "javascript:x" }, { quote: "q", source: EKSI }]).length, 1);
-  const dec = parseDecision(JSON.stringify({ kind: "answer", reply: "hi", image: { url: "https://x/y.jpg" } }));
-  assert.equal((dec as Record<string, unknown>).image, undefined);
+  assert.equal(parseDecision(JSON.stringify({ kind: "answer", reply: "hi", image: { url: "https://x/y.jpg" } })).image, undefined);
+  assert.equal(parseDecision(JSON.stringify({ kind: "answer", reply: "hi", image: "see https://x/y.jpg" })).image, undefined);
+  assert.equal(parseDecision(JSON.stringify({ kind: "declined", reply: "no", image: "a cat" })).image, undefined);
+  assert.equal(parseDecision(JSON.stringify({ kind: "answer", reply: "hi", image: "  a  b&w chalkboard  " })).image, "a b&w chalkboard");
+  assert.match(imagePrompt("a b&w chalkboard."), /^Generate an image now: a b&w chalkboard\. .*not a photorealistic/);
+});
+
+test("image claims are cut from the lead-in, the rest stays", () => {
+  assert.equal(stripImageClaims("Bilkent's calculus emperor. Black-and-white stylized take attached."), "Bilkent's calculus emperor.");
+  assert.equal(stripImageClaims("Campus folklore. Here's a black-and-white stylized illustration of him."), "Campus folklore.");
+  assert.equal(stripImageClaims("Legend. Picture below 👇"), "Legend.");
+  assert.equal(stripImageClaims("He treats Maple like an oracle."), "He treats Maple like an oracle.");
 });
 
 test("Ekşi links: only https eksisozluk.com/entry/<id>, deduped, in order", () => {
@@ -381,8 +392,10 @@ test("reply from quotes: “quote” link, best first, as many as fit; the lead-
   const long = "x".repeat(150);
   const r = withQuotes("Lead.", [Q(long, 1), Q(long, 2)], 280);
   assert.ok(r.includes("entry/1") && !r.includes("entry/2") && r.length <= 280, "second quote dropped");
-  const tight = withQuotes("word ".repeat(60).trim(), [Q(long, 42)], 280);
-  assert.ok(tight.length <= 280 && tight.endsWith(`“${long}” https://eksisozluk.com/entry/42`), "lead clipped for the best quote");
+  const tight = withQuotes("Short opener. " + "word ".repeat(60).trim() + ".", [Q(long, 42)], 280);
+  assert.equal(tight, `Short opener. “${long}” https://eksisozluk.com/entry/42`, "whole sentences of the lead kept for the best quote");
+  const noSentence = withQuotes("word ".repeat(60).trim(), [Q(long, 42)], 280);
+  assert.ok(!noSentence.includes("…") && !noSentence.includes("entry/42") && noSentence.length <= 280, "quote dropped rather than cutting the lead mid-sentence");
   assert.equal(withQuotes("no quotes", [], 280), "no quotes");
   assert.equal(withQuotes("bad link only", [Q("q", "https://eksisozluk.com/okan--1")], 280), "bad link only");
 });
@@ -397,4 +410,145 @@ test("Okan Tekman: short English lead-in + quoted entries with links + generated
   assert.ok(b.body.length <= 280);
   assert.doesNotMatch(b.body, /lore|Ekşi'de|on Ekşi/i);
   assert.deepEqual(b.files.map((f) => [f.name, f.type]), [["generated-1.png", "image/png"]]);
+});
+
+test("picture asked: second turn requested; no image produced → the reply never claims one", async () => {
+  const lore = [Q("comes to class in a t-shirt while it snows", 11594413)];
+  const net = fakeNet({ llm: JSON.stringify({ kind: "answer", reply: "Bilkent's calculus legend. Black-and-white stylized take attached.", lore, image: "black-and-white pen sketch of a professor at a chalkboard in the snow" }) });
+  assert.equal(await handleMention(12, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {} }), "replied");
+  assert.equal(net.followUps.length, 1);
+  assert.match(net.followUps[0], /^Generate an image now: black-and-white pen sketch/);
+  const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string };
+  assert.equal(b.body, "Bilkent's calculus legend. “comes to class in a t-shirt while it snows” https://eksisozluk.com/entry/11594413");
+});
+
+test("picture produced: the claim may stay and the image goes out; no picture asked → no second turn", async () => {
+  const img = solidPng(512, 512, [0, 0, 0]);
+  const net = fakeNet({ llm: { text: JSON.stringify({ kind: "answer", reply: "Legend. Sketch attached.", image: "a chalkboard" }), files: [{ name: "generated-1.jpg", mime: "image/png", bytes: img }] } });
+  await handleMention(13, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {} });
+  const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; files: unknown[] };
+  assert.equal(b.body, "Legend. Sketch attached.");
+  assert.equal(b.files.length, 1);
+  const plain = fakeNet({ llm: JSON.stringify({ kind: "answer", reply: "A p-value is…" }) });
+  await handleMention(14, { cfg: cfg(), wp: new WpClient(cfg(), plain.f), engine: plain.engine, gh: null, log: () => {} });
+  assert.equal(plain.followUps.length, 0);
+});
+
+import { photoOf } from "../src/prompt";
+import sharpLib from "sharp";
+
+const PAGE = "https://www.example.edu/people/okan-tekman";
+const photoFetch = (bytes: Uint8Array | null) => (async (url: string) => {
+  if (url === "https://upload.example.org/okan.jpg" && bytes) return new Response(bytes, { headers: { "content-type": "image/png" } });
+  return new Response("nope", { status: 404 });
+}) as typeof fetch;
+
+test("photoOf: both https and public, gray only when true", () => {
+  assert.deepEqual(photoOf({ url: "https://upload.example.org/okan.jpg", page: PAGE, gray: true }), { url: "https://upload.example.org/okan.jpg", page: PAGE, gray: true });
+  assert.equal(photoOf({ url: "http://x.org/a.jpg", page: PAGE }), null);
+  assert.equal(photoOf({ url: "https://10.0.0.1/a.jpg", page: PAGE }), null);
+  assert.equal(photoOf({ url: "https://x.org/a.jpg" }), null);
+  assert.equal(photoOf("https://x.org/a.jpg"), null);
+  const d = parseDecision(JSON.stringify({ kind: "answer", reply: "hi", photo: { url: "https://upload.example.org/okan.jpg", page: PAGE }, image: "a likeness" }));
+  assert.ok(d.photo && !d.image, "a real photo suppresses image generation");
+});
+
+test("real person: real photo attached as grayscale photo.jpg, its page sent as the file source (not in the text), no image turn", async () => {
+  const png = solidPng(600, 600, [200, 30, 30]);
+  const long = "x".repeat(120);
+  const lore = [Q("short legend", 1), Q(long, 2), Q(long, 3)];
+  const net = fakeNet({ llm: JSON.stringify({ kind: "answer", reply: "Bilkent's calculus legend.", lore, photo: { url: "https://upload.example.org/okan.jpg", page: PAGE, gray: true }, image: "x" }) });
+  await handleMention(15, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {}, fetch: photoFetch(png) });
+  assert.equal(net.followUps.length, 0);
+  const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; sources: string; files: { name: string; type: string }[] };
+  assert.ok(!b.body.includes(PAGE) && b.body.length <= 280, b.body);
+  assert.deepEqual(JSON.parse(b.sources), { "photo.jpg": PAGE });
+  assert.ok(b.body.includes("“short legend” https://eksisozluk.com/entry/1"));
+  assert.deepEqual(b.files.map((f) => [f.name, f.type]), [["photo.jpg", "image/jpeg"]]);
+});
+
+test("real person photo fails: no file, no page link, no claim", async () => {
+  const net = fakeNet({ llm: JSON.stringify({ kind: "answer", reply: "Calculus legend. Here's a photo of him.", photo: { url: "https://upload.example.org/okan.jpg", page: PAGE } }) });
+  await handleMention(16, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {}, fetch: photoFetch(null) });
+  const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; files: unknown[] };
+  assert.equal(b.body, "Calculus legend.");
+  assert.equal((b.files ?? []).length, 0);
+});
+
+test("fetchPhoto: grayscale really is gray; non-images refused", async () => {
+  const { fetchPhoto } = await import("../src/photo");
+  const f = await fetchPhoto({ url: "https://upload.example.org/okan.jpg", page: PAGE, gray: true }, 5_000_000, photoFetch(solidPng(300, 300, [200, 30, 30])));
+  const st = await sharpLib(Buffer.from(f!.bytes)).stats();
+  assert.ok(st.channels.length === 1 || Math.abs(st.channels[0].mean - st.channels[2].mean) < 2);
+  assert.equal(await fetchPhoto({ url: "https://upload.example.org/okan.jpg", page: PAGE, gray: false }, 5_000_000, photoFetch(new TextEncoder().encode("<html>"))), null);
+});
+
+import { clearFacultyCache, facultyPhoto, nameTokens, sameName } from "../src/faculty";
+import { readFileSync } from "node:fs";
+import { join as pjoin } from "node:path";
+
+const FAC = readFileSync(pjoin(__dirname, "../../test/fixtures/bilkent-math-faculty.js"), "utf8");
+const facFetch = (counter = { n: 0 }, img: Uint8Array | null = null) => (async (url: string) => {
+  if (url === "https://math.bilkent.edu.tr/assets/data/faculty.js") { counter.n++; return new Response(FAC); }
+  if (img && url === "https://math.bilkent.edu.tr/personnel_photos/tekman-2.jpg") return new Response(img);
+  return new Response("no", { status: 404 });
+}) as typeof fetch;
+
+test("names: Turkish letters, case, titles and middle names; surname must match", () => {
+  assert.deepEqual(nameTokens("Prof. Dr. İnci PEKGÜLEÇ"), ["inci", "pekgulec"]);
+  assert.ok(sameName("Mehmet Okan Tekman", "Okan Tekman"));
+  assert.ok(sameName("okan tekman", "OKAN TEKMAN"));
+  assert.ok(sameName("Inci Pekgulec Apaydin", "İnci Pekgüleç Apaydın"));
+  assert.ok(!sameName("Okan Tekin", "Okan Tekman"));
+  assert.ok(!sameName("Tekman", "Okan Tekman"));
+  assert.ok(!sameName("Ayşe Tekman", "Okan Tekman"));
+});
+
+test("faculty photo: unique match at Bilkent → official photo + faculty page; cached; ambiguous/none/other site → null", async () => {
+  clearFacultyCache();
+  const c = { n: 0 };
+  const p = await facultyPhoto({ name: "Mehmet Okan Tekman", affiliation: "Bilkent University" }, true, facFetch(c));
+  assert.deepEqual(p, { url: "https://math.bilkent.edu.tr/personnel_photos/tekman-2.jpg", page: "https://math.bilkent.edu.tr/faculty.html", gray: true });
+  assert.equal(await facultyPhoto({ name: "Ali Kaya", affiliation: "Bilkent" }, false, facFetch(c)), null, "two Ali Kayas");
+  assert.equal(await facultyPhoto({ name: "Ayşe Tekman", affiliation: "Bilkent" }, false, facFetch(c)), null, "no photo");
+  assert.equal(await facultyPhoto({ name: "Okan Tekman", affiliation: "Boğaziçi University" }, false, facFetch(c)), null);
+  assert.equal(c.n, 1, "faculty data fetched once");
+});
+
+test("Okan: no photo from the model → faculty photo attached in B&W with the faculty page link", async () => {
+  clearFacultyCache();
+  const net = fakeNet({ llm: JSON.stringify({ kind: "answer", reply: "Bilkent's calculus legend.", lore: [Q("t-shirt in the snow", 11594413)], person: { name: "Okan Tekman", affiliation: "Bilkent University" }, gray: true }) });
+  await handleMention(17, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {}, fetch: facFetch({ n: 0 }, solidPng(400, 400, [200, 30, 30])) });
+  assert.equal(net.followUps.length, 0, "no generated likeness");
+  const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; sources: string; files: { name: string; type: string }[] };
+  assert.equal(b.body, "Bilkent's calculus legend. “t-shirt in the snow” https://eksisozluk.com/entry/11594413");
+  assert.deepEqual(JSON.parse(b.sources), { "photo.jpg": "https://math.bilkent.edu.tr/faculty.html" });
+  assert.deepEqual(b.files.map((f) => [f.name, f.type]), [["photo.jpg", "image/jpeg"]]);
+});
+
+import { fitText } from "../src/text";
+test("fitText: whole sentences, then a closed clause, never an ellipsis", () => {
+  const cv = "Okan Tekman is Bilkent's senior math lecturer (Minnesota PhD '92) and a longtime calculus institution with a reputation that never ends.";
+  assert.equal(fitText("A. B is longer here. C", 12), "A.");
+  assert.equal(fitText(cv, 80), "Okan Tekman is Bilkent's senior math lecturer.");
+  assert.equal(fitText("short", 280), "short");
+  for (const n of [20, 50, 100]) assert.ok(!fitText(cv, n).includes("…") && [...fitText(cv, n)].length <= n);
+});
+
+test("live Okan shape: long CV lead never truncated with …; photo attached", async () => {
+  clearFacultyCache();
+  const cv = "Okan Tekman is Bilkent's senior math lecturer (Minnesota PhD '92) and a longtime calculus institution with a reputation that refuses to quit for decades.";
+  const net = fakeNet({ llm: JSON.stringify({ kind: "answer", reply: cv, lore: [Q("Countless legends circulate about him, eats 3 students in one sitting, finished METU math and electronics in 3 years with 4.00", 2066444)], person: { name: "Okan Tekman", affiliation: "Bilkent" } }) });
+  await handleMention(18, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {}, fetch: facFetch({ n: 0 }, solidPng(400, 400, [9, 9, 9])) });
+  const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; files: unknown[] };
+  assert.ok(!b.body.includes("…") && [...b.body].length <= 280, b.body);
+  assert.ok(!b.body.includes("math.bilkent.edu.tr"), "the photo source is not in the text");
+  assert.equal(b.files.length, 1, "photo for a person question even without an image request");
+});
+
+test("prompt: opener examples are generic and marked style-only", () => {
+  const p = systemPrompt(280);
+  assert.doesNotMatch(p, /Okan|Tekman|blizzard|professor|lecturer|calculus/i);
+  assert.match(p, /never reuse their wording/);
+  assert.ok((p.match(/Openers that work[^\n]*/)?.[0].split(" / ").length ?? 0) >= 3, "several varied examples");
 });

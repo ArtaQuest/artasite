@@ -4,8 +4,10 @@ import type { Config } from "./config";
 import { type Engine, type EngineAnswer, EngineBusy, EngineDown } from "./engine";
 import type { Fetch } from "./http";
 import type { GitHub } from "./github";
-import { parseDecision, promptText } from "./prompt";
-import { clip } from "./text";
+import { facultyPhoto } from "./faculty";
+import { fetchPhoto } from "./photo";
+import { imagePrompt, parseDecision, promptText, stripImageClaims } from "./prompt";
+import { clip, fitText } from "./text";
 import type { Lore, Mention, OutFile } from "./types";
 import type { WpClient } from "./wp";
 
@@ -53,7 +55,7 @@ export async function handleMention(id: number, d: Deps, attempt = 1, maxAttempt
  */
 export function outgoing(said: string, max: number, produced: OutFile[], cfg: Config): { text: string; files: OutFile[] } {
   const files = produced.filter((f) => f.mime.startsWith("image/") && f.bytes.byteLength > 0 && f.bytes.byteLength <= cfg.outFileBytes);
-  return { text: clip(said, max), files: files.slice(0, cfg.outFilesMax) };
+  return { text: fitText(said, max), files: files.slice(0, cfg.outFilesMax) };
 }
 
 /** Ekşi Sözlük entry permalinks only (https, eksisozluk.com, /entry/<digits>), deduped, in lore order. */
@@ -86,13 +88,19 @@ export function quotedEntries(lore: Lore[]): { quote: string; link: string }[] {
  * as fit in `max`. If not even the best fits after the lead-in, the lead-in is clipped (or dropped) for it.
  */
 export function withQuotes(lead: string, lore: Lore[], max: number): string {
-  const qs = quotedEntries(lore).map((q) => `“${q.quote}” ${q.link}`).filter((q) => q.length <= max);
-  if (!qs.length) return lead;
-  let out = lead;
-  for (const q of qs) if (out.length + 1 + q.length <= max) out = out ? `${out} ${q}` : q;
-  if (out !== lead) return out;
-  const room = max - qs[0].length - 1;
-  return room >= 20 ? `${clip(lead, room)} ${qs[0]}` : qs[0];
+  const qs = quotedEntries(lore).map((q) => `“${q.quote}” ${q.link}`).filter((q) => [...q].length <= max);
+  const L = (x: string) => [...x].length;
+  if (!qs.length) return fitText(lead, max);
+  if (L(lead) + 1 + L(qs[0]) <= max) {
+    // Extra quotes are dropped before anything of the lead-in is.
+    let out = lead;
+    for (const q of qs) if (L(out) + 1 + L(q) <= max) out = `${out} ${q}`;
+    return out;
+  }
+  // The lead-in is too long next to the best quote: keep whole sentences of it if they make sense alone.
+  const room = max - L(qs[0]) - 1;
+  const short = fitText(lead, room);
+  return short && L(short) >= 10 && /[.!?…]["”’)]*$/.test(short) ? `${short} ${qs[0]}` : fitText(lead, max);
 }
 
 async function answer(m: Mention, d: Deps): Promise<Outcome> {
@@ -102,7 +110,10 @@ async function answer(m: Mention, d: Deps): Promise<Outcome> {
   try {
     if (prep.notAttached.length) d.log(`mention ${m.id}: ${prep.notAttached.length} file(s) not attached (${prep.notAttached.map((n) => n.why).join(", ")})`);
     d.onPrompt?.();
-    const raw = await d.engine.ask(promptText(m, prep), d.cfg.answerTimeoutSec * 1000, prep.paths);
+    const raw = await d.engine.ask(promptText(m, prep), d.cfg.answerTimeoutSec * 1000, prep.paths, (t) => {
+      const want = parseDecision(t).image; // never set when the answer names a real photo
+      return want ? imagePrompt(want) : null;
+    });
     got = typeof raw === "string" ? { text: raw, files: [] } : raw;
   } finally {
     await prep.cleanup();   // the downloaded copies never outlive the prompt
@@ -112,9 +123,35 @@ async function answer(m: Mention, d: Deps): Promise<Outcome> {
   if (m.hint === "bug" && dec.kind !== "declined") dec.kind = "bug";
   let said = dec.reply.trim() || (dec.kind === "bug" ? "Thanks for reporting this — I've passed it to the team." : "");
   if (!said) throw new Error("empty answer");
-  if (dec.kind === "answer") said = withQuotes(said, dec.lore ?? [], max);
-
-  const out = dec.kind === "declined" ? { text: clip(said, max), files: [] as OutFile[] } : outgoing(said, max, got.files, d.cfg);
+  const lead = said;
+  if (dec.photo) d.log(`mention ${m.id}: photo ${dec.photo.url} from ${dec.photo.page}`);
+  let photo = dec.photo ? await fetchPhoto(dec.photo, d.cfg.outFileBytes, d.fetch ?? fetch, d.log) : null;
+  if (!photo && dec.person) {
+    // No usable photo from the answer: try the person's official faculty listing.
+    const alt = await facultyPhoto(dec.person, dec.gray === true, d.fetch ?? fetch, d.log);
+    if (alt) {
+      d.log(`mention ${m.id}: faculty photo ${alt.url}`);
+      photo = await fetchPhoto(alt, d.cfg.outFileBytes, d.fetch ?? fetch, d.log);
+      if (photo) dec.photo = alt;
+    }
+  }
+  const compose = (l: string) => {
+    if (dec.kind === "declined") return { text: fitText(l, max), files: [] as OutFile[] };
+    if (photo && dec.photo) {
+      // The photo's source page rides on the file (the feed opens it on click), not in the text.
+      const t = dec.kind === "answer" ? withQuotes(l, dec.lore ?? [], max) : l;
+      return { text: fitText(t, max), files: [{ ...photo, source: dec.photo.page }] };
+    }
+    const t = dec.kind === "answer" ? withQuotes(l, dec.lore ?? [], max) : l;
+    return outgoing(t, max, got.files, d.cfg);
+  };
+  let out = compose(lead);
+  // Never claim a picture that is not going out: cut the claim from the lead-in (never from the quotes).
+  if (!out.files.length) {
+    const bare = stripImageClaims(lead);
+    if (bare !== lead) out = compose(bare || lead);
+  }
+  said = out.text;
 
   if (d.cfg.dryRun) {
     const fl = out.files.map((f) => `${f.name} (${f.mime}, ${f.bytes.byteLength} B)`).join(", ");

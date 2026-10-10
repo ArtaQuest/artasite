@@ -50,13 +50,12 @@ export function ArtaBadge({ size = 16, chip = true }: { size?: number; chip?: bo
 
 // ── @mentions ────────────────────────────────────────────────────────────────
 function Mention({ handle }: { handle: string }) {
-  const arta = /^(arta|artabot)$/i.test(handle);
-  const to = `/u/${handle}`;
-  if (arta) return <>@{handle}</>; // typed as-is: plain text, no chip or colour
+  // @arta is a handle like any other (artabot is its old name, kept as an alias).
+  const to = `/u/${/^artabot$/i.test(handle) ? "arta" : handle}`;
   return <Link to={to} onClick={(e) => e.stopPropagation()} data-ay-skip="1" className="font-medium text-yin-ink hover:underline">@{handle}</Link>;
 }
 
-/** Plain text with every @handle linked; @arta stays plain text exactly as typed. */
+/** Plain text with every @handle linked — @arta included, exactly like any member. */
 export function MentionText({ text }: { text: string }) {
   const out: React.ReactNode[] = [];
   let last = 0;
@@ -195,21 +194,11 @@ export function ArtaFiles({ items }: { items: LibraryItem[] }) {
 // ── live status of @arta mentions ────────────────────────────────────────────
 /**
  * Arta's state on a thread, kept quiet: while it works, a reply-shaped row ("Arta is replying…" with
- * typing dots) sits where its answer will land; other states are one muted line. `onShow` turns
- * "replied" into a small link that opens the thread.
+ * typing dots) sits where its answer will land; other states are one muted line.
  */
-export function ArtaStatusPill({ state, onShow, className }: { state: ArtaPillState; onShow?: () => void; className?: string }) {
+export function ArtaStatusPill({ state, className }: { state: ArtaPillState; className?: string }) {
   if (!state) return null;
-  if (state.kind === "replied") {
-    if (!onShow) return null;
-    return (
-      <button type="button" onClick={(e) => { e.stopPropagation(); onShow(); }}
-        className={cx("inline-flex min-h-11 items-center gap-1.5 rounded-pill text-[13px] font-medium text-yin-ink outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus", className)}>
-        <ArtaAvatar className="h-5 w-5" />
-        Arta replied · Show
-      </button>
-    );
-  }
+  if (state.kind === "replied") return null; // the answer itself is shown inline, like any reply
   if (state.kind === "thinking" || state.kind === "queued") {
     return (
       <div role="status" aria-live="polite" className={cx("flex items-center gap-2.5 py-1", className)}
