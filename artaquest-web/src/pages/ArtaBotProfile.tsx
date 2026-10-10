@@ -15,7 +15,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { artaReplies, artaStatus, askArtaHref, type ArtaStatus, type FeedPostT } from "../lib/api";
 import { isArtaFile } from "../lib/arta";
-import { ArtaAvatar, ArtaBadge, ArtaFiles, ArtaMarkdown, MentionText } from "../components/arta";
+import { ArtaAvatar, ArtaFiles, MentionText } from "../components/arta";
 import { Avatar, Button, EmptyState, LoadMoreButton, StatusNote, cx } from "../components/ui";
 import { isLoggedIn, localePath, type Profile as ProfileData } from "../lib/wp";
 import { timeAgo } from "../lib/fmt";
@@ -109,15 +109,13 @@ function ReplyCard({ r }: { r: Reply }) {
         </div>
       ) : null}
       <div className="relative flex gap-3 bg-gradient-to-br from-yang/[0.06] via-transparent to-yin/[0.04] px-4 py-3.5">
-        <span aria-hidden className="absolute inset-y-3 start-0 w-[3px] rounded-e-full bg-gradient-to-b from-yang to-yin opacity-80" />
-        <ArtaAvatar className="h-9 w-9 ring-1 ring-yang/40" />
+                <ArtaAvatar className="h-9 w-9" />
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 text-[13.5px]">
             <span className="font-bold text-ink">Arta</span>
-            <ArtaBadge size={15} />
             <span className="text-ink-3">· {timeAgo(r.created)}</span>
           </p>
-          <ArtaMarkdown text={r.body} className="mt-0.5 text-[14.5px]" />
+          <p className="mt-0.5 whitespace-pre-wrap text-[15px] leading-relaxed text-ink [overflow-wrap:anywhere]"><MentionText text={r.body} /></p>
           <ArtaFiles items={(r.media || []).filter(isArtaFile)} />
           <Link to={thread} className="mt-2 inline-flex min-h-9 items-center gap-1 text-[13px] font-semibold text-yin-ink hover:underline">
             View thread <span aria-hidden className="inline-block rtl:-scale-x-100">→</span>
@@ -181,7 +179,6 @@ export default function ArtaBotProfile({ p, following, followers, followBusy, on
           <div className="mt-3 min-w-0">
             <h1 className="flex flex-wrap items-center gap-2 text-[24px] font-extrabold leading-tight tracking-tight sm:text-[28px]">
               <span>{p.fullName?.trim() || p.name || "Arta"}</span>
-              <ArtaBadge size={22} />
             </h1>
             <p className="mt-0.5 text-[15px] text-ink-3"><bdi dir="ltr">@{p.slug}</bdi> · ArtaQuest's public assistant</p>
           </div>

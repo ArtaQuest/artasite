@@ -329,7 +329,6 @@ export function MentionTextarea({ value, onValue, onSubmit, textareaRef, maxGrow
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1 text-[13.5px] font-semibold text-ink">
                   <span className="truncate" data-ay-skip="1">{s.name}</span>
-                  {s.arta ? <ArtaBadge size={14} chip={false} /> : null}
                 </span>
                 <span className="block truncate text-[12px] text-ink-3">
                   {s.arta ? "Public assistant · answers in the thread" : <bdi dir="ltr" data-ay-skip="1">@{s.slug}</bdi>}
