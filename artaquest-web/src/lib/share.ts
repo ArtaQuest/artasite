@@ -1,5 +1,6 @@
 /** Share helpers (no React): platform links, X caption fitting, and the share toast. */
-/** X counts every link as 23 characters; the caption is trimmed (at a word, with "…") so caption + space + link ≤ 280. */
+/** The link goes ONLY in the intent's url param (X shows it as the card), never in the text.
+ *  X counts every link as 23 characters; the caption is trimmed (at a word, with "…") so caption + space + link ≤ 280. */
 export function xText(message: string, max = 280 - 23 - 1): string {
   const t = message.replace(/\s+/g, " ").trim();
   if ([...t].length <= max) return t;
@@ -14,7 +15,7 @@ export function shareLinks(message: string, url: string) {
     x: `https://twitter.com/intent/tweet?text=${encodeURIComponent(xText(message))}&url=${u}`,
     linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${u}`,
     facebook: `https://www.facebook.com/sharer/sharer.php?u=${u}`,
-    whatsapp: `https://wa.me/?text=${encodeURIComponent(`${message} ${url}`)}`,
+    whatsapp: `https://wa.me/?text=${u}`, // the URL is only the share target; WhatsApp unfurls it as a card
   };
 }
 

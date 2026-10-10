@@ -22,6 +22,7 @@ import { ArtaAvatar, ArtaHint, ArtaStatusPill, MentionText, MentionTextarea } fr
 import { assetItem, NB_KIND_META, teaserSrc, TeaserVideo, useAqTheme, useCalmFlag } from "../components/nbview";
 import { AutoLoopVideo, FeedPlayer, LibraryMedia, LibraryPicker } from "../components/library";
 import { SharePanel } from "../components/SharePanel";
+import { stripLinks } from "../lib/nolinks";
 import { EmojiPicker } from "../components/EmojiPicker";
 
 import { PostThread } from "./NotebookPage";
@@ -186,7 +187,7 @@ function Collapse({ children }: { children: React.ReactNode }) {
 const MEDIA_MAX = 4;
 /** A post's words as a share caption: markdown links → their label, folded, ≤ 200 chars. */
 function shareText(body: string): string {
-  const t = (body || "").replace(/\[([^\]\n]{1,200})\]\((https?:\/\/[^)\s]+)\)/g, "$1").replace(/(^|[^A-Za-z0-9_@./+-])@arta(?![A-Za-z0-9_-])/gi, "$1@artabot").replace(/\s+/g, " ").trim();
+  const t = stripLinks(body || "").replace(/\[([^\]\n]{1,200})\]\((https?:\/\/[^)\s]+)\)/g, "$1").replace(/(^|[^A-Za-z0-9_@./+-])@arta(?![A-Za-z0-9_-])/gi, "$1@artabot").replace(/\s+/g, " ").trim();
   return t.length > 200 ? `${t.slice(0, 199).trimEnd()}…` : t || "A post on ArtaQuest";
 }
 function mediaOf(p: FeedPostT | null | undefined): LibraryItem[] {
@@ -585,7 +586,7 @@ function FeedPost({ post, onDeleted, hearted, watchArta, openReplies, nested }: 
                   {post.repost.author.verified ? <BlueCheck size={14} className="-ms-0.5" /> : null}
                   <span className="text-ink-3">· {timeAgo(post.repost.created)}</span>
                 </p>
-                {post.repost.body ? <p className="mt-1 whitespace-pre-wrap text-[14px] leading-relaxed text-ink-2 [overflow-wrap:anywhere]"><MentionText text={post.repost.body} /></p> : null}
+                {post.repost.body ? <p className="mt-1 whitespace-pre-wrap text-[14px] leading-relaxed text-ink-2 [overflow-wrap:anywhere]"><MentionText text={stripLinks(post.repost.body)} /></p> : null}
                 <PostMedia items={mediaOf(post.repost)} />
                 {post.repost.nb ? <NbBlock nb={post.repost.nb} compact /> : null}
               </div>
@@ -1174,8 +1175,6 @@ export default function Feed({ initialKind, embedded = false }: { initialKind?: 
 
 /** A post's text: @handles linked (MentionText) and bare https links clickable — the same for everyone. */
 function LinkedText({ text }: { text: string }) {
-  const parts = text.split(/(https:\/\/[^\s<>()"]+[^\s<>()".,;:!?'”’])/g);
-  return <>{parts.map((p, i) => i % 2
-    ? <a key={i} href={p} target="_blank" rel="noopener noreferrer nofollow ugc" onClick={(e) => e.stopPropagation()} className="break-all font-medium text-yin-ink underline decoration-yin-ink/40 underline-offset-2 hover:decoration-yin-ink">{p.replace(/^https:\/\/(www\.)?/, "")}</a>
-    : <MentionText key={i} text={p} />)}</>;
+  // No visible URLs in the feed (the user's rule): links are hidden at display, the stored text is untouched.
+  return <MentionText text={stripLinks(text)} />;
 }
