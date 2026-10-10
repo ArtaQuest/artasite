@@ -26,11 +26,11 @@ export function systemPrompt(maxChars: number): string {
     "- Decline harmful, hateful, sexual, dangerous or illegal requests briefly and kindly (kind \"declined\"). Do not lecture.",
     "- Bug reports: when the member reports something broken or wrong on ArtaQuest itself (the website or app), set kind to \"bug\" and fill the bug fields with a neutral, factual description in English. Feature ideas, questions and general conversation are kind \"answer\".",
     "",
-    "- Files: the member's files, when there are any, are attached to this message — look at them. Never attach text files. When the member asks for a picture, generate one in this chat: it is attached to your reply. For a real person, make a tasteful stylized illustration evoking them or the topic, never a photoreal likeness, and never based on, traced from or copied from a real photo of them; black and white when asked.",
+    "- Files: the member's files, when there are any, are attached to this message — look at them. Never attach text files. When the member asks for a picture, do NOT draw it now: put a one-sentence image description in \"image\" (the system generates it next). For a real person, describe a tasteful stylized illustration evoking them or the topic, never a photoreal likeness, never based on a real photo of them; black and white when asked. Never say in \"reply\" that a picture is attached or below — the system adds it only when it exists.",
     "",
     "Output a single JSON object and nothing else:",
-    '{"kind":"answer"|"bug"|"declined","reply":"<your public reply>","lore":[{"quote":"…","source":"https://eksisozluk.com/entry/<id>"}],"bug":{"title":"<under 80 chars>","summary":"…","steps":"…","expected":"…","actual":"…","area":"<page or feature>"}}',
-    "Include \"bug\" only when kind is \"bug\", \"lore\" only when used. For a bug, the reply is a short thank-you; the system adds the issue link itself.",
+    '{"kind":"answer"|"bug"|"declined","reply":"<your public reply>","lore":[{"quote":"…","source":"https://eksisozluk.com/entry/<id>"}],"image":"<picture description>","bug":{"title":"<under 80 chars>","summary":"…","steps":"…","expected":"…","actual":"…","area":"<page or feature>"}}',
+    "Include \"bug\" only when kind is \"bug\", \"lore\" and \"image\" only when used. For a bug, the reply is a short thank-you; the system adds the issue link itself.",
   ].join("\n");
 }
 
@@ -94,7 +94,8 @@ export function parseDecision(raw: string): Decision {
       area: String(j.bug.area || "").slice(0, 80),
     } : undefined;
     const lore = loreOf(j.lore);
-    return { kind, reply, ...(bug ? { bug } : {}), ...(lore.length ? { lore } : {}) };
+    const image = kind === "answer" ? imageOf((j as Record<string, unknown>).image) : "";
+    return { kind, reply, ...(bug ? { bug } : {}), ...(lore.length ? { lore } : {}), ...(image ? { image } : {}) };
   } catch {
     return { kind: "answer", reply: s };
   }
@@ -113,4 +114,26 @@ export function loreOf(v: unknown): Lore[] {
     if (out.length >= 5) break;
   }
   return out;
+}
+
+/** The picture to generate: a short text description only — never a URL, object or anything fetched. */
+export function imageOf(v: unknown): string {
+  if (typeof v !== "string") return "";
+  const t = v.replace(/\s+/g, " ").trim();
+  if (!t || /https?:\/\/|www\.|data:|blob:/i.test(t)) return "";
+  return t.slice(0, 400);
+}
+
+/** The second message that asks the chat to draw the picture, in the same conversation. */
+export function imagePrompt(description: string): string {
+  return `Generate an image now: ${description} A stylized illustration, not a photorealistic likeness of any real person. Reply with the image only, no text.`;
+}
+
+/** Arta never claims a picture it is not sending: such phrases are cut when no image goes out. */
+export function stripImageClaims(text: string): string {
+  const noun = "(?:picture|image|illustration|drawing|sketch|portrait|pic|take|render(?:ing)?|art(?:work)?)";
+  const claim = new RegExp(
+    `[^.!?]*\\b(?:attached|below|here(?:'s| is| it is)|enjoy|check out|see)\\b[^.!?]*\\b${noun}s?\\b[^.!?]*[.!?]?` +
+    `|[^.!?]*\\b${noun}s?\\b[^.!?]*\\b(?:attached|below|included)\\b[^.!?]*[.!?]?`, "gi");
+  return text.replace(claim, " ").replace(/\s{2,}/g, " ").replace(/\s+([.!?,])/g, "$1").trim();
 }

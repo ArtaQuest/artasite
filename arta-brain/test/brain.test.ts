@@ -344,7 +344,7 @@ test("config: top-effort defaults, sniffing, and the generated PNG", () => {
 });
 
 // ── voice and quoted Ekşi entries (the Okan Tekman example) ─────────────────
-import { loreOf } from "../src/prompt";
+import { imagePrompt, loreOf, stripImageClaims } from "../src/prompt";
 import { eksiLinks, quotedEntries, withQuotes } from "../src/worker";
 
 const EKSI = "https://eksisozluk.com/entry/123456";
@@ -364,10 +364,20 @@ test("prompt: English X-user voice, verbatim quotes with real permalinks, no sou
   assert.doesNotMatch(p, /wikimedia|"details"|answer\.md/i);
 });
 
-test("parseDecision: lore only with quote + https source; image/url fields ignored", () => {
+test("parseDecision: lore only with quote + https source; image is a text description only, never a URL or object", () => {
   assert.equal(loreOf([{ quote: "", source: EKSI }, { quote: "q", source: "javascript:x" }, { quote: "q", source: EKSI }]).length, 1);
-  const dec = parseDecision(JSON.stringify({ kind: "answer", reply: "hi", image: { url: "https://x/y.jpg" } }));
-  assert.equal((dec as Record<string, unknown>).image, undefined);
+  assert.equal(parseDecision(JSON.stringify({ kind: "answer", reply: "hi", image: { url: "https://x/y.jpg" } })).image, undefined);
+  assert.equal(parseDecision(JSON.stringify({ kind: "answer", reply: "hi", image: "see https://x/y.jpg" })).image, undefined);
+  assert.equal(parseDecision(JSON.stringify({ kind: "declined", reply: "no", image: "a cat" })).image, undefined);
+  assert.equal(parseDecision(JSON.stringify({ kind: "answer", reply: "hi", image: "  a  b&w chalkboard  " })).image, "a b&w chalkboard");
+  assert.match(imagePrompt("a b&w chalkboard."), /^Generate an image now: a b&w chalkboard\. .*not a photorealistic/);
+});
+
+test("image claims are cut from the lead-in, the rest stays", () => {
+  assert.equal(stripImageClaims("Bilkent's calculus emperor. Black-and-white stylized take attached."), "Bilkent's calculus emperor.");
+  assert.equal(stripImageClaims("Campus folklore. Here's a black-and-white stylized illustration of him."), "Campus folklore.");
+  assert.equal(stripImageClaims("Legend. Picture below 👇"), "Legend.");
+  assert.equal(stripImageClaims("He treats Maple like an oracle."), "He treats Maple like an oracle.");
 });
 
 test("Ekşi links: only https eksisozluk.com/entry/<id>, deduped, in order", () => {
@@ -397,4 +407,26 @@ test("Okan Tekman: short English lead-in + quoted entries with links + generated
   assert.ok(b.body.length <= 280);
   assert.doesNotMatch(b.body, /lore|Ekşi'de|on Ekşi/i);
   assert.deepEqual(b.files.map((f) => [f.name, f.type]), [["generated-1.png", "image/png"]]);
+});
+
+test("picture asked: second turn requested; no image produced → the reply never claims one", async () => {
+  const lore = [Q("comes to class in a t-shirt while it snows", 11594413)];
+  const net = fakeNet({ llm: JSON.stringify({ kind: "answer", reply: "Bilkent's calculus legend. Black-and-white stylized take attached.", lore, image: "black-and-white pen sketch of a professor at a chalkboard in the snow" }) });
+  assert.equal(await handleMention(12, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {} }), "replied");
+  assert.equal(net.followUps.length, 1);
+  assert.match(net.followUps[0], /^Generate an image now: black-and-white pen sketch/);
+  const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string };
+  assert.equal(b.body, "Bilkent's calculus legend. “comes to class in a t-shirt while it snows” https://eksisozluk.com/entry/11594413");
+});
+
+test("picture produced: the claim may stay and the image goes out; no picture asked → no second turn", async () => {
+  const img = solidPng(512, 512, [0, 0, 0]);
+  const net = fakeNet({ llm: { text: JSON.stringify({ kind: "answer", reply: "Legend. Sketch attached.", image: "a chalkboard" }), files: [{ name: "generated-1.jpg", mime: "image/png", bytes: img }] } });
+  await handleMention(13, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {} });
+  const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; files: unknown[] };
+  assert.equal(b.body, "Legend. Sketch attached.");
+  assert.equal(b.files.length, 1);
+  const plain = fakeNet({ llm: JSON.stringify({ kind: "answer", reply: "A p-value is…" }) });
+  await handleMention(14, { cfg: cfg(), wp: new WpClient(cfg(), plain.f), engine: plain.engine, gh: null, log: () => {} });
+  assert.equal(plain.followUps.length, 0);
 });

@@ -6,12 +6,19 @@ import type { OutFile } from "./types";
  */
 export type EngineAnswer = { text: string; files: OutFile[]; mode?: string };
 
+/**
+ * Asked with the first answer's text; a non-empty string is sent as a second message in the SAME
+ * conversation and the files come from that answer. Used for pictures: the chat does not generate an
+ * image while it is writing a JSON answer, only when asked for one in a turn of its own.
+ */
+export type FollowUp = (firstText: string) => string | null;
+
 export interface Engine {
   /**
    * One prompt in (plus local files to attach), the assistant's full text out — and any files it
    * produced. A plain string means text only. Throws EngineBusy / EngineDown / Error.
    */
-  ask(prompt: string, timeoutMs: number, files?: string[]): Promise<string | EngineAnswer>;
+  ask(prompt: string, timeoutMs: number, files?: string[], followUp?: FollowUp): Promise<string | EngineAnswer>;
   close(): Promise<void>;
 }
 
