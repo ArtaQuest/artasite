@@ -105,6 +105,14 @@ function BottomTabs() {
   // does not exist on the device they mostly read on. Hooks run before the visitor early-return
   // below, because they must be called in the same order on every render.
   const [unread, setUnread] = useState(0);
+  // While the ArtaChat dock is OPEN on a phone, its lid is Arta's home (it climbs up to it on the
+  // rope) and this bar stops being one; collapsing hands home back and Arta rappels down to it.
+  const [dockOpen, setDockOpen] = useState(false);
+  useEffect(() => {
+    const on = (e: Event) => setDockOpen(!!(e as CustomEvent<boolean>).detail);
+    window.addEventListener("aq:dock-open", on);
+    return () => window.removeEventListener("aq:dock-open", on);
+  }, []);
   useEffect(() => subscribeChat(() => setUnread(getChatState().unread)), []);
   // "Where am I" — the bar rendered every tab in the same grey, so on a phone (where this bar IS
   // the navigation) nothing said which surface was open. X marks the active tab in full-strength
@@ -148,7 +156,7 @@ function BottomTabs() {
        without one, Arta stands on the invisible stage floor over the footer
        with its legs behind this very bar. Both are marked; only ever one is
        rendered, because each is hidden at the other's breakpoint. */
-    <nav aria-label="Quick navigation" data-floor="top" data-floor-home
+    <nav aria-label="Quick navigation" data-floor="top" {...(dockOpen ? {} : { "data-floor-home": "" })}
       className="fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-line bg-space-1/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
       {T.slice(0, 2).map(tab)}
       {/* @arta in the centre slot — same glassy gold/blue circle, now opens the feed composer
@@ -879,7 +887,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           dock, its documented home — and ON when none does. Both existing floors (the dock in
           the Ask @arta button and the bottom tab bar above) render only for members, so a signed-out visitor
           had nothing underfoot at all. Feet on a visible edge either way, which is the rule. */}
-      <Arta fill figure={128} start={0.72} ground={!signedIn}
+      <Arta fill figure={128} start={0.72} ground={!signedIn} ropeZ={61}
         className="pointer-events-none fixed inset-0 z-30" />
     </div>
   );

@@ -1056,6 +1056,12 @@ export type ArtaWatch = { online: boolean; enabled: boolean; paused_until: numbe
 export function artaWatch(postId: number) {
   return get<ArtaWatch>(`/arta/watch/${postId}`);
 }
+/** The member's PRIVATE 1:1 chat with Arta (ArtaChat dock). Same brain and limits as @arta in public. */
+export type ArtaDmItem = { id: number; from_arta: boolean; body: string; created: number };
+export type ArtaDm = { items: ArtaDmItem[]; pending: { status: string; position: number } | null; online: boolean; enabled: boolean; paused_until: number };
+export function artaDm(after?: number) { return get<ArtaDm>("/arta/dm", after ? { after } : undefined); }
+export function artaDmSend(body: string) { return post<{ ok: boolean; item: ArtaDmItem; status: string }>("/arta/dm", { body }); }
+export function artaDmClear() { return post<{ ok: boolean; deleted: number }>("/arta/dm/clear", {}); }
 /** Arta's recent public replies, newest first, each with the post it answers. */
 export function artaReplies(cursor?: number) {
   return get<{ items: (FeedPostT & { parent: FeedPostT | null })[]; next: number | null }>("/arta/replies", cursor ? { cursor } : undefined);

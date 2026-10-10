@@ -81,6 +81,8 @@ namespace AQ {
 		public static function p( $req, $k, $d = null ) { return $req[ $k ] ?? $d; }
 		public static function pint( $req, $k, $d = 0 ) { return (int) ( $req[ $k ] ?? $d ); }
 		public static function err( $code, $msg, $status = 400 ) { return [ 'error' => $code, 'message' => $msg, 'status' => $status ]; }
+		public static $uid = 0;
+		public static function uid() { return self::$uid; }
 	}
 	final class Notebook {
 		public static function post_url( $id ) { return '/works/?post=' . (int) $id; }
@@ -185,12 +187,13 @@ namespace {
 	$pdo->exec( "CREATE TABLE wp_aq_library (id INTEGER PRIMARY KEY AUTOINCREMENT, nb_id INTEGER, name TEXT, label TEXT DEFAULT '', mime TEXT, bytes INTEGER, cdn_key TEXT)" );
 	$pdo->exec( "CREATE TABLE wp_aq_notebooks (id INTEGER PRIMARY KEY, status TEXT, comments INTEGER DEFAULT 0)" );
 	$pdo->exec( "CREATE TABLE wp_aq_arta_files (id INTEGER PRIMARY KEY AUTOINCREMENT, mention_id INTEGER, reply_type TEXT, reply_id INTEGER, pos INTEGER, name TEXT, class TEXT, mime TEXT, bytes INTEGER, sha256 TEXT, cdn_key TEXT, source_url TEXT DEFAULT '', created INTEGER)" );
+	$pdo->exec( "CREATE TABLE wp_aq_arta_dm (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL DEFAULT 0, from_arta INTEGER NOT NULL DEFAULT 0, body TEXT NOT NULL, mention_id INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL DEFAULT 0)" );
 	$GLOBALS['T_OPTS']['aq_arta_table_version'] = Arta::TABLE_VERSION; // the table above stands in for dbDelta's
 	$mk = function ( $id, $slug, $name, $bot = false ) {
 		$u = (object) [ 'ID' => $id, 'user_nicename' => $slug, 'user_login' => $slug, 'display_name' => $name, 'meta' => $bot ? [ '_aq_is_bot' => 1 ] : [] ];
 		$GLOBALS['T_USERS'][ $id ] = $u;
 	};
-	$mk( 9000, 'arta', 'Arta', true ); $mk( 1, 'ada', 'Ada' ); $mk( 2, 'bob', 'Bob' ); $mk( 3, 'cy', 'Cy' );
+	$mk( 9000, 'arta', 'Arta', true ); $mk( 4, 'dee', 'Dee' ); $mk( 1, 'ada', 'Ada' ); $mk( 2, 'bob', 'Bob' ); $mk( 3, 'cy', 'Cy' );
 	$GLOBALS['T_OPTS']['aq_artabot_uid'] = 9000;
 	$GLOBALS['T_SECRETS'] = [ 'AQ_ARTA_REPLY_TOKEN' => str_repeat( 't', 40 ) ];
 	$post = function ( $uid, $body, $parent = 0 ) { return \AQ\Data::insert( 'aq_posts', [ 'author_id' => $uid, 'body' => $body, 'parent_id' => $parent, 'created' => time() ] ); };
@@ -383,6 +386,36 @@ namespace {
 	t_ok( Arta::display_mentions( 'Hey @arta how?' ) === 'Hey Arta how?', 'a mention reads as "Arta"' );
 	t_ok( Arta::display_mentions( '@Arta bug: x' ) === 'Arta bug: x' && Arta::display_mentions( '@artabot hi' ) === 'Arta hi', 'any case, and the old alias' );
 	t_ok( Arta::display_mentions( 'x@arta.com, @artas, see @arta.com' ) === 'x@arta.com, @artas, see @arta.com', 'emails, longer handles and domains are left alone' );
+
+	// PRIVATE chat: a member's question is queued like a mention, the payload is marked private and
+	// carries only that member's own earlier turns, the answer lands in THEIR chat (never a public
+	// post), files are refused, nobody else can read it, and clearing it drops the pending question.
+	\AQ\Rest::$uid = 4;
+	$d0 = Arta::dm_send( [ 'body' => '' ] );
+	t_ok( ( $d0['error'] ?? '' ) === 'empty', 'private chat: an empty message is refused' );
+	$d1 = Arta::dm_send( [ 'body' => 'Privately: <b>how</b> do I cite a dataset?' ] );
+	t_ok( ! empty( $d1['ok'] ) && $d1['status'] === 'queued' && $d1['item']['body'] === 'Privately: how do I cite a dataset?', 'private chat: a question is stored (tags stripped) and queued' );
+	$dm = (int) $pdo->query( "SELECT id FROM wp_aq_mentions WHERE src_type = 'dm' AND author_id = 4" )->fetchColumn();
+	$pp = array_values( array_filter( Arta::pending( [ 'limit' => 50 ] )['items'], fn( $i ) => $i['id'] === $dm ) );
+	t_ok( $pp && $pp[0]['private'] === true && $pp[0]['source']['type'] === 'dm' && $pp[0]['max_chars'] === Arta::DM_MAX && $pp[0]['attachments'] === [], 'private chat: the brain gets it, marked private, no files' );
+	$posts_before = (int) $pdo->query( 'SELECT COUNT(*) FROM wp_aq_posts' )->fetchColumn();
+	Arta::claim( [ 'id' => $dm ] );
+	$dr = Arta::reply( [ 'mention_id' => $dm, 'body' => 'Use the DOI on its page.', '_files' => [ 'files' => [ [ 'name' => 'x.png', 'tmp_name' => $tmpf( $png ), 'error' => 0 ] ] ] ] );
+	t_ok( ! empty( $dr['ok'] ) && $dr['reply_type'] === 'dm' && (int) $pdo->query( 'SELECT COUNT(*) FROM wp_aq_posts' )->fetchColumn() === $posts_before, 'private chat: the answer is not a public post' );
+	t_ok( ( $dr['files'] ?? -1 ) === 0 && (int) $pdo->query( "SELECT COUNT(*) FROM wp_aq_arta_files WHERE reply_type = 'dm'" )->fetchColumn() === 0, 'private chat: files are refused (the media store is public)' );
+	$l2 = Arta::dm_list( [] );
+	t_ok( count( $l2['items'] ) === 2 && $l2['items'][1]['from_arta'] === true && $l2['items'][1]['body'] === 'Use the DOI on its page.' && $l2['pending'] === null, 'private chat: the member sees both turns, nothing pending' );
+	t_ok( Arta::reply( [ 'mention_id' => $dm, 'body' => 'again' ] )['duplicate'] === true && count( Arta::dm_list( [] )['items'] ) === 2, 'private chat: answered exactly once' );
+	\AQ\Rest::$uid = 1;
+	t_ok( Arta::dm_list( [] )['items'] === [], 'private chat: another member cannot see it' );
+	\AQ\Rest::$uid = 4;
+	Arta::dm_send( [ 'body' => 'and a follow-up' ] );
+	$dm2 = (int) $pdo->query( "SELECT MAX(id) FROM wp_aq_mentions WHERE src_type = 'dm' AND author_id = 4" )->fetchColumn();
+	$pl2 = Arta::claim( [ 'id' => $dm2 ] )['mention'];
+	t_ok( count( $pl2['context'] ) === 2 && $pl2['context'][1]['author']['is_arta'] === true, 'private chat: earlier turns travel as context' );
+	Arta::status( [ 'id' => $dm2, 'status' => 'queued' ] );
+	$cl = Arta::dm_clear( [] );
+	t_ok( $cl['deleted'] === 3 && Arta::dm_list( [] )['items'] === [] && $pdo->query( "SELECT status FROM wp_aq_mentions WHERE id = $dm2" )->fetchColumn() === 'skipped', 'private chat: clearing deletes it and drops the pending question' );
 
 	// The brain's token check: closed by default, constant-time, header or Bearer.
 	$_SERVER['HTTP_X_ARTA_TOKEN'] = str_repeat( 't', 40 ); t_ok( Arta::token_ok(), 'token accepted via X-Arta-Token' );

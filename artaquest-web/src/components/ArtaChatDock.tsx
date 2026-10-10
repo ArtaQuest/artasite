@@ -7,6 +7,7 @@ import { nameClass } from "../lib/fmt";
 import { Avatar, LogoMark } from "./ui";
 import { ArtaAvatar } from "./arta";
 import { IncomingCall } from "./chat/CallPanel";
+import { ArtaPrivateChat } from "./ArtaPrivateChat";
 
 /**
  * ArtaChat dock — the LinkedIn-style messaging drawer pinned to the bottom-right corner of every
@@ -34,7 +35,7 @@ function useChat(showingList: boolean) {
   return getChatState();
 }
 
-type View = { k: "list" } | { k: "dm"; peer: ChatUserCard };
+type View = { k: "list" } | { k: "arta" } | { k: "dm"; peer: ChatUserCard };
 
 /** One shared empty array, so "no conversations yet" is a STABLE reference. A fresh `[]` per render
  *  would invalidate every useMemo below on every render — the exact opposite of memoising. */
@@ -114,6 +115,8 @@ function DockBody({ view, setView }: {
   // stays on screen while the body is collapsed (LinkedIn's messaging drawer — operator, 2026-07-30).
   return (
     <>
+      {view.k === "arta" && <ArtaPrivateChat />}
+
       {view.k === "dm" && (
         <Suspense fallback={<p className="p-6 text-center text-[13px] text-ink-3">Opening…</p>}>
           {me ? (
@@ -147,18 +150,18 @@ function DockBody({ view, setView }: {
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {/* Arta is pinned first, as before — but public now: the row opens the feed composer
-                with "@arta " ready, the same door as the phone tab bar's centre button. */}
-            <a href={localePath("/works/?compose=%40arta%20")}
+            {/* Arta is pinned first: the one conversation every member always has — a PRIVATE 1:1
+                chat (the answer is only theirs). Tagging @arta in a post is still the public route. */}
+            <button type="button" onClick={() => setView({ k: "arta" })}
               className="flex w-full items-center gap-3 border-b border-line px-3 py-2.5 text-start transition-colors hover:bg-veil/[0.05]">
               <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full border border-yang/40 bg-space-1 p-0.5">
                 <ArtaAvatar className="h-full w-full" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[14px] font-semibold text-ink">Ask @arta</span>
-                <span className="block truncate text-[12px] text-ink-3">Arta answers in public, in the thread</span>
+                <span className="block truncate text-[14px] font-semibold text-ink">Arta</span>
+                <span className="block truncate text-[12px] text-ink-3">Ask anything — a private chat, only you see it</span>
               </span>
-            </a>
+            </button>
 
             {/* Waiting message requests. One line, not a tab: the dock is 400px of a page somebody
                 is doing something else on, so it points at the full inbox rather than growing a
@@ -298,6 +301,8 @@ export function ArtaChatDock() {
     window.addEventListener("aq:artachat", toggle);
     return () => window.removeEventListener("aq:artachat", toggle);
   }, []);
+  // Tell the phone tab bar whether the dock is open (it yields Arta's home to the open lid).
+  useEffect(() => { window.dispatchEvent(new CustomEvent("aq:dock-open", { detail: open })); }, [open]);
   // Arta's home ledge: the dock lid on desktop, the tab bar on phones (only one is "home").
   const [wide, setWide] = useState(() => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(min-width: 768px)").matches);
   useEffect(() => {
@@ -435,7 +440,7 @@ export function ArtaChatDock() {
   const hideDock = !ring && (onChatPage || (!open && ((fieldFocused && (vvSupported ? kbShrunk : true)) || scrolledAway)));
 
   const inThread = dockView.k !== "list";
-  const title = dockView.k === "dm" ? dockView.peer.name : "ArtaChat";
+  const title = dockView.k === "dm" ? dockView.peer.name : dockView.k === "arta" ? "Arta" : "ArtaChat";
   const toggle = () => setOpen((o) => !o);
   const me = currentUser();
 
@@ -465,7 +470,7 @@ export function ArtaChatDock() {
          feet on a visible border and its body over nothing. Marked while hidden
          too would be wrong — a ledge nobody can see is not a ledge — so the
          attribute follows the dock's own visibility. */
-      {...(hideDock ? {} : wide ? { "data-floor": "top", "data-floor-home": "" } : { "data-floor": "top" })}
+      {...(hideDock ? {} : wide || open ? { "data-floor": "top", "data-floor-home": "" } : { "data-floor": "top" })}
     >
       {/* AN INBOUND CALL, wherever the member is on the site. It rides the badge poll (30s, and
           Chat::RING_S is longer so no ring can fall between two polls), and "Answer" OPENS THE

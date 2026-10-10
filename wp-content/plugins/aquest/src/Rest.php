@@ -330,6 +330,11 @@ final class Rest {
 		[ 'POST', 'arta/mentions/(?P<id>[0-9]+)/claim',  'Arta::claim',      'arta'   ],
 		[ 'POST', 'arta/mentions/(?P<id>[0-9]+)/status', 'Arta::status',     'arta'   ],
 		[ 'POST', 'arta/reply',                    'Arta::reply',            'arta'   ], // idempotent: one reply per mention
+		// The member's PRIVATE 1:1 chat with Arta (ArtaChat dock). Same queue and brain; the answer
+		// lands in aq_arta_dm, readable only by that member. Not end-to-end encrypted — the UI says so.
+		[ 'GET',  'arta/dm',                       'Arta::dm_list',          'user'   ],
+		[ 'POST', 'arta/dm',                       'Arta::dm_send',          'user'   ],
+		[ 'POST', 'arta/dm/clear',                 'Arta::dm_clear',         'user'   ],
 		// The model relay — the operator's daemon answers platform-borne model work (ticket triage,
 		// ArtaMod, verification, news) (src/Relay.php). Same shared secret as the worker.
 		[ 'POST', 'relay/poll',                    'Relay::poll',            'worker' ],

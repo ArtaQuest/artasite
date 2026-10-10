@@ -536,3 +536,12 @@ test("prompt: opener examples are generic and marked style-only", () => {
 test("stripUrls: the reply text never carries links or quotation marks", () => {
   assert.equal(stripUrls("Legend. https://eksisozluk.com/entry/1 www.x.com “quoted” ok"), "Legend. quoted ok");
 });
+
+test("private chat: the prompt says private, never public, and forbids publishing", () => {
+  const p = promptText(mention({ private: true, source: { type: "dm", id: 7, url: "https://artaquest.com/messages/", body: "hi", author: { handle: "ada", name: "Ada" } } }));
+  assert.match(p, /PRIVATE 1:1 chat/);
+  assert.match(p, /never file anything publicly/);
+  assert.doesNotMatch(p, /Members reach you only in public/);
+  assert.doesNotMatch(p, /Everything you write is public/);
+  assert.match(p, /the member's PRIVATE chat with you/);
+});

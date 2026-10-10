@@ -300,7 +300,9 @@ body {
    the top of a short screen. Desktop has no bar and is untouched. */
 @media (max-width: 767px) {
   .aq-bot-panel.aq-bot-above-tabs { bottom: var(--aq-bottom-bar); }
-  .aq-bot-panel.aq-bot-above-tabs .aq-bot-body { height: min(560px, calc(100dvh - 11rem - var(--aq-safe-bottom))); }
+  /* 11rem of chrome + 6rem of head-room: open, the lid is Arta's home on a phone, and Arta stands
+     ~5.5rem tall on it — it must clear the header rather than stand inside it. */
+  .aq-bot-panel.aq-bot-above-tabs .aq-bot-body { height: min(560px, calc(100dvh - 17rem - var(--aq-safe-bottom))); }
   /* Collapsed must still win over the line above (it is more specific than the base rule). */
   .aq-bot-panel.aq-bot-above-tabs .aq-bot-body[data-collapsed="1"] { height: 0; }
 }
