@@ -543,3 +543,10 @@ test("live Okan shape: long CV lead never truncated with …; photo link kept", 
   assert.ok(b.body.endsWith(" https://math.bilkent.edu.tr/faculty.html"));
   assert.equal(b.files.length, 1, "photo for a person question even without an image request");
 });
+
+test("prompt: opener examples are generic and marked style-only", () => {
+  const p = systemPrompt(280);
+  assert.doesNotMatch(p, /Okan|Tekman|blizzard|professor|lecturer|calculus/i);
+  assert.match(p, /never reuse their wording/);
+  assert.ok((p.match(/Openers that work[^\n]*/)?.[0].split(" / ").length ?? 0) >= 3, "several varied examples");
+});
