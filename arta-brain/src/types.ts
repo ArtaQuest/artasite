@@ -20,7 +20,9 @@ export type Kind = "answer" | "bug" | "declined";
 export type BugFields = { title: string; summary: string; steps?: string; expected?: string; actual?: string; area?: string };
 /** One Ekşi Sözlük "legend", kept only with a verbatim quote and its source page. */
 export type Lore = { quote: string; source: string };
-export type Decision = { kind: Kind; reply: string; bug?: BugFields; lore?: Lore[]; image?: string; photo?: Photo };
+export type Decision = { kind: Kind; reply: string; bug?: BugFields; lore?: Lore[]; image?: string; photo?: Photo; person?: Person; gray?: boolean };
+/** A real person the answer is about, for the official-photo fallback. */
+export type Person = { name: string; affiliation: string };
 /** A REAL photo of a real person: a direct https image and the https page it was found on. */
 export type Photo = { url: string; page: string; gray: boolean };
 /** A file going OUT with Arta's reply (a generated image, the full text of a long answer). */

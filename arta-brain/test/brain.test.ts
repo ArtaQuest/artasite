@@ -479,3 +479,45 @@ test("fetchPhoto: grayscale really is gray; non-images refused", async () => {
   assert.ok(st.channels.length === 1 || Math.abs(st.channels[0].mean - st.channels[2].mean) < 2);
   assert.equal(await fetchPhoto({ url: "https://upload.example.org/okan.jpg", page: PAGE, gray: false }, 5_000_000, photoFetch(new TextEncoder().encode("<html>"))), null);
 });
+
+import { clearFacultyCache, facultyPhoto, nameTokens, sameName } from "../src/faculty";
+import { readFileSync } from "node:fs";
+import { join as pjoin } from "node:path";
+
+const FAC = readFileSync(pjoin(__dirname, "../../test/fixtures/bilkent-math-faculty.js"), "utf8");
+const facFetch = (counter = { n: 0 }, img: Uint8Array | null = null) => (async (url: string) => {
+  if (url === "https://math.bilkent.edu.tr/assets/data/faculty.js") { counter.n++; return new Response(FAC); }
+  if (img && url === "https://math.bilkent.edu.tr/personnel_photos/tekman-2.jpg") return new Response(img);
+  return new Response("no", { status: 404 });
+}) as typeof fetch;
+
+test("names: Turkish letters, case, titles and middle names; surname must match", () => {
+  assert.deepEqual(nameTokens("Prof. Dr. İnci PEKGÜLEÇ"), ["inci", "pekgulec"]);
+  assert.ok(sameName("Mehmet Okan Tekman", "Okan Tekman"));
+  assert.ok(sameName("okan tekman", "OKAN TEKMAN"));
+  assert.ok(sameName("Inci Pekgulec Apaydin", "İnci Pekgüleç Apaydın"));
+  assert.ok(!sameName("Okan Tekin", "Okan Tekman"));
+  assert.ok(!sameName("Tekman", "Okan Tekman"));
+  assert.ok(!sameName("Ayşe Tekman", "Okan Tekman"));
+});
+
+test("faculty photo: unique match at Bilkent → official photo + faculty page; cached; ambiguous/none/other site → null", async () => {
+  clearFacultyCache();
+  const c = { n: 0 };
+  const p = await facultyPhoto({ name: "Mehmet Okan Tekman", affiliation: "Bilkent University" }, true, facFetch(c));
+  assert.deepEqual(p, { url: "https://math.bilkent.edu.tr/personnel_photos/tekman-2.jpg", page: "https://math.bilkent.edu.tr/faculty.html", gray: true });
+  assert.equal(await facultyPhoto({ name: "Ali Kaya", affiliation: "Bilkent" }, false, facFetch(c)), null, "two Ali Kayas");
+  assert.equal(await facultyPhoto({ name: "Ayşe Tekman", affiliation: "Bilkent" }, false, facFetch(c)), null, "no photo");
+  assert.equal(await facultyPhoto({ name: "Okan Tekman", affiliation: "Boğaziçi University" }, false, facFetch(c)), null);
+  assert.equal(c.n, 1, "faculty data fetched once");
+});
+
+test("Okan: no photo from the model → faculty photo attached in B&W with the faculty page link", async () => {
+  clearFacultyCache();
+  const net = fakeNet({ llm: JSON.stringify({ kind: "answer", reply: "Bilkent's calculus legend.", lore: [Q("t-shirt in the snow", 11594413)], person: { name: "Okan Tekman", affiliation: "Bilkent University" }, gray: true }) });
+  await handleMention(17, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {}, fetch: facFetch({ n: 0 }, solidPng(400, 400, [200, 30, 30])) });
+  assert.equal(net.followUps.length, 0, "no generated likeness");
+  const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; files: { name: string; type: string }[] };
+  assert.equal(b.body, "Bilkent's calculus legend. “t-shirt in the snow” https://eksisozluk.com/entry/11594413 https://math.bilkent.edu.tr/faculty.html");
+  assert.deepEqual(b.files.map((f) => [f.name, f.type]), [["photo.jpg", "image/jpeg"]]);
+});
