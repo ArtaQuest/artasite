@@ -387,12 +387,46 @@ function aq_app_current_thread() {
 	return $cache;
 }
 
+/**
+ * A feed post in focus (/works/?post=<id>) — the permalink every post, and every Arta reply, shares.
+ * Shaped like the feed's own card (Notebook::post_public); null when there is no such post.
+ */
+function aq_app_current_feed_post() {
+	static $cache = false;
+	if ( false !== $cache ) {
+		return $cache;
+	}
+	$cache = null;
+	$path  = trim( (string) wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ?? '' ), PHP_URL_PATH ), '/' );
+	$path  = preg_replace( '#^[a-z]{2,3}(?:-[a-z]{2,4})?/(?=works$)#i', '', $path ); // /xx/works/ too
+	if ( 'works' === $path && isset( $_GET['post'] ) && class_exists( '\\AQ\\Notebook' ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+		$pid = (int) $_GET['post']; // phpcs:ignore WordPress.Security.NonceVerification
+		if ( $pid > 0 ) {
+			$cache = \AQ\Notebook::post_public( $pid );
+		}
+	}
+	return $cache;
+}
+
+/** The share-card text of a post: markdown links → their label, @arta → Arta, whitespace folded. */
+function aq_app_post_text( $body ) {
+	$t = preg_replace( '/\[([^\]\n]{1,200})\]\((https?:\/\/[^)\s]+)\)/', '$1', (string) $body );
+	$t = preg_replace( '/[*_`#>]+/', '', $t );
+	return trim( preg_replace( '/\s+/', ' ', wp_strip_all_tags( $t ) ) );
+}
+
 /** Fix the server <title> on the app routes WP can't title itself: the Feed hubs (is_404() to
  *  WP → would title "Page not found"), a published notebook (/nb/<id>/), and a discussion thread
  *  (shares the generic page title). Use the real names (matching what React sets client-side). */
 add_filter( 'document_title_parts', function ( $parts ) {
 	$aq_hub = trim( (string) wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ?? '' ), PHP_URL_PATH ), '/' );
 	$aq_hub_titles = array( 'works' => 'The Feed', 'console' => 'Console' );
+	$aq_fp = aq_app_current_feed_post();
+	if ( $aq_fp ) {
+		$aq_said = function_exists( 'aq_display_mentions' ) ? aq_display_mentions( aq_app_post_text( $aq_fp['body'] ) ) : aq_app_post_text( $aq_fp['body'] );
+		$parts['title'] = ( $aq_fp['author']['name'] ?? 'Member' ) . ( '' !== $aq_said ? ': “' . ( mb_strlen( $aq_said ) > 60 ? rtrim( mb_substr( $aq_said, 0, 59 ) ) . '…' : $aq_said ) . '”' : ' on ArtaQuest' );
+		return $parts;
+	}
 	foreach ( aq_feed_hubs() as $hslug => $h ) {
 		$aq_hub_titles[ $hslug ] = $h[0];
 	}
@@ -1015,6 +1049,7 @@ function aq_app_head_meta() {
 	$nb     = aq_app_current_notebook();   // /nb/<id>/(<slug>/) — a published feed notebook
 	$det    = aq_app_current_detection();  // /news/<slug>/ — one instrument detection
 	$thread = aq_app_current_thread();     // /discussions/?thread=<id> — its own indexable forum post
+	$fpost  = aq_app_current_feed_post();  // /works/?post=<id> — one feed post (what Share links to)
 	$puser  = null; // resolved profile user (so the canonical gate knows a /u/<slug>/ is real content)
 	if ( $nb ) {
 		$desc = trim( wp_strip_all_tags( (string) $nb->abstract ) );
@@ -1049,6 +1084,12 @@ function aq_app_head_meta() {
 		$type = 'article';
 	} elseif ( $thread ) {
 		$desc = (string) $thread->body;
+		$type = 'article';
+	} elseif ( $fpost ) {
+		$desc = aq_app_post_text( $fpost['body'] );
+		if ( '' === $desc ) {
+			$desc = 'A post by ' . ( $fpost['author']['name'] ?? 'a member' ) . ' on ArtaQuest.';
+		}
 		$type = 'article';
 	} elseif ( $pslug ) {
 		$u = aq_profile_user( $pslug );
@@ -1109,6 +1150,8 @@ function aq_app_head_meta() {
 	// form canonicalises onto the slugged one, so the two forms never compete); front page → home; …
 	if ( $nb ) {
 		$url = aq_notebook_url( $nb ); // self-canonical: each published notebook is its own indexable page
+	} elseif ( $fpost ) {
+		$url = home_url( '/works/?post=' . (int) $fpost['id'] );
 	} elseif ( $thread ) {
 		$url = home_url( '/discussions/?forum=' . rawurlencode( $thread->topic ? $thread->topic : 'general' ) . '&thread=' . (int) $thread->id );
 	} elseif ( is_front_page() ) {
@@ -1143,9 +1186,21 @@ function aq_app_head_meta() {
 	$image       = get_theme_file_uri( 'assets/brand/social-card-1200x630.png' );
 	$image_w     = 1200;
 	$image_h     = 630;
+	$fpost_img   = false;
 	if ( $nb && ! empty( $nb->thumb ) ) {
 		$image = (string) $nb->thumb; // the work's own card
 		$image_w = 0; $image_h = 0; // stored thumbs vary in size — don't declare wrong dims
+	} elseif ( $fpost ) {
+		// The post's own picture (a member's image or Arta's generated one) — the first still image,
+		// as an absolute https URL. Sizes vary, so no dims are declared; the brand card stays otherwise.
+		foreach ( (array) $fpost['media'] as $m ) {
+			$mu = (string) ( $m['url'] ?? '' );
+			if ( 0 === strpos( (string) ( $m['mime'] ?? '' ), 'image/' ) && 'image/svg+xml' !== $m['mime'] && '' !== $mu ) {
+				$image = set_url_scheme( 0 === strpos( $mu, '/' ) ? home_url( $mu ) : $mu, 'https' );
+				$image_w = 0; $image_h = 0; $fpost_img = true;
+				break;
+			}
+		}
 	} elseif ( $puser ) {
 		// Verify::avatar_url, NOT get_avatar_url — two reasons, and both are bugs the direct call had.
 		// (1) It is what the PAGE shows: an uploaded picture, else a typology pick, else the member's
@@ -1197,7 +1252,13 @@ function aq_app_head_meta() {
 		$tags[] = sprintf( '<meta name="twitter:description" content="%s" />', esc_attr( $desc ) );
 	}
 	if ( $image !== '' ) {
-		$alt = $nb ? (string) $nb->title : ( $puser ? aq_profile_name( $puser ) : 'The ArtaQuest logo on a dark background' );
+		if ( $nb ) {
+			$alt = (string) $nb->title;
+		} elseif ( $fpost_img ) {
+			$alt = 'Image from a post by ' . ( $fpost['author']['name'] ?? 'a member' );
+		} else {
+			$alt = $puser ? aq_profile_name( $puser ) : 'The ArtaQuest logo on a dark background';
+		}
 		$tags[] = sprintf( '<meta property="og:image" content="%s" />', esc_url( $image ) );
 		if ( $image_w > 0 && $image_h > 0 ) { // only declare dims we actually know (else let scrapers fetch)
 			$tags[] = sprintf( '<meta property="og:image:width" content="%d" />', (int) $image_w );

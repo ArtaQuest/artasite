@@ -283,8 +283,8 @@ test("prompt lists the attached files and the ones that could not be attached", 
   const t = promptText(mention(), { attached: [a], notAttached: [{ a: att({ name: "model.zip", mime: "application/zip", bytes: 5_000_000 }), why: "type not supported" }] });
   assert.match(t, /Files attached to this message[^\n]*\n1\. plot\.png \(image\/png, 117 KB\) — on an earlier post in the thread/);
   assert.match(t, /could NOT be attached[^\n]*\n- model\.zip \(application\/zip, 4\.8 MB\) — type not supported/);
-  assert.match(t, /"details"/);
-  assert.equal(parseDecision('{"kind":"answer","reply":"short","details":"# Long\\n\\ncode"}').details, "# Long\n\ncode");
+  assert.doesNotMatch(t, /"details"/);
+  assert.equal((parseDecision('{"kind":"answer","reply":"short","details":"# Long"}') as Record<string, unknown>).details, undefined, "details is ignored");
 });
 
 test("a mention with a picture: the file reaches the engine, then the temp copy is gone", async () => {
@@ -299,7 +299,7 @@ test("a mention with a picture: the file reaches the engine, then the temp copy 
   assert.match(net.prompts[0], /1\. plot\.png \(image\/png/);
 });
 
-test("files OUT: a long answer is trimmed with the full text attached; generated images ride along (multipart)", async () => {
+test("files OUT: a long answer is trimmed, never attached as text; images ride along (multipart)", async () => {
   const long = "word ".repeat(120).trim();
   const img = solidPng(128, 128, [30, 144, 255]);
   const net = fakeNet({ llm: { text: JSON.stringify({ kind: "answer", reply: long }), files: [{ name: "square-1.png", mime: "image/png", bytes: img }] } });
@@ -309,29 +309,28 @@ test("files OUT: a long answer is trimmed with the full text attached; generated
   const b = r.body as { body: string; files: { field: string; name: string; type: string; size: number; text: string }[]; mention_id: string };
   assert.ok(b.body.length <= 280 && b.body.endsWith("…"), "the public reply is trimmed to the limit");
   assert.equal(b.mention_id, "11");
-  assert.deepEqual(b.files.map((f) => [f.field, f.name, f.type]), [["files[]", "answer.md", "text/markdown"], ["files[]", "square-1.png", "image/png"]]);
-  assert.equal(b.files[0].text.trim(), long, "the full answer is the attached file");
+  assert.deepEqual(b.files.map((f) => [f.field, f.name, f.type]), [["files[]", "square-1.png", "image/png"]]);
   assert.equal(r.headers["x-arta-token"], "t".repeat(40));
 });
 
-test("outgoing(): details become answer.md, caps hold, a short plain answer sends no file", () => {
+test("outgoing(): no text files ever, only images, caps hold, text clipped", () => {
   const c = cfg({ outFilesMax: 2, outFileBytes: 1000 });
-  assert.deepEqual(outgoing("short", undefined, 280, [], c).files, []);
-  const d = outgoing("short", "## steps\n1. a", 280, [], c);
-  assert.equal(d.text, "short");
-  assert.equal(new TextDecoder().decode(d.files[0].bytes), "short\n\n## steps\n1. a\n");
+  assert.deepEqual(outgoing("short", 280, [], c), { text: "short", files: [] });
   const big = { name: "huge.png", mime: "image/png", bytes: new Uint8Array(5000) };
   const ok = { name: "ok.png", mime: "image/png", bytes: new Uint8Array(10) };
-  assert.deepEqual(outgoing("short", "x", 280, [big, ok, ok, ok], c).files.map((f) => f.name), ["answer.md", "ok.png"]);
+  const md = { name: "x.md", mime: "text/markdown", bytes: new Uint8Array(10) };
+  const pdf = { name: "x.pdf", mime: "application/pdf", bytes: new Uint8Array(10) };
+  assert.deepEqual(outgoing("short", 280, [md, pdf, big, ok, ok, ok], c).files.map((f) => f.name), ["ok.png", "ok.png"]);
+  assert.ok(outgoing("word ".repeat(200), 280, [], c).text.length <= 280);
 });
 
 test("dry run with files posts nothing and logs what would be attached", async () => {
   const logs: string[] = [];
-  const net = fakeNet({ llm: { text: JSON.stringify({ kind: "answer", reply: "Here.", details: "full" }), files: [], mode: "Expert" } });
+  const net = fakeNet({ llm: { text: JSON.stringify({ kind: "answer", reply: "Here.", details: "full" }), files: [{ name: "g-1.png", mime: "image/png", bytes: solidPng(8, 8, [1, 2, 3]) }], mode: "Expert" } });
   const out = await handleMention(11, { cfg: cfg({ dryRun: true }), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: (s) => logs.push(s) });
   assert.equal(out, "dry-run");
   assert.equal(net.calls.filter((c) => c.url.endsWith("/arta/reply")).length, 0);
-  assert.match(logs.join("\n"), /mode=Expert reply="Here\." files=\[answer\.md \(text\/markdown, \d+ B\)\]/);
+  assert.match(logs.join("\n"), /mode=Expert reply="Here\." files=\[g-1\.png \(image\/png, \d+ B\)\]/);
 });
 
 test("config: top-effort defaults, sniffing, and the generated PNG", () => {
@@ -342,4 +341,60 @@ test("config: top-effort defaults, sniffing, and the generated PNG", () => {
   assert.match("You've reached your Heavy usage limit", new RegExp(c.sel.limitText, "i"));
   assert.equal(sniffMime(solidPng(2, 2, [1, 2, 3])), "image/png");
   assert.equal(sniffMime(new TextEncoder().encode("<svg/>")), "");
+});
+
+// ── voice and quoted Ekşi entries (the Okan Tekman example) ─────────────────
+import { loreOf } from "../src/prompt";
+import { eksiLinks, quotedEntries, withQuotes } from "../src/worker";
+
+const EKSI = "https://eksisozluk.com/entry/123456";
+const Q = (quote: string, id: number | string) => ({ quote, source: typeof id === "number" ? `https://eksisozluk.com/entry/${id}` : id });
+
+test("prompt: English X-user voice, verbatim quotes with real permalinks, no source framing, no allegations", () => {
+  const p = systemPrompt(280);
+  assert.match(p, /X user/);
+  assert.match(p, /ALWAYS reply in English/);
+  assert.match(p, /eksisozluk\.com\/entry\/<id>/);
+  assert.match(p, /verbatim or faithfully translated/);
+  assert.match(p, /actually opened/);
+  assert.match(p, /NEVER invent, guess or reconstruct a quote or a permalink/);
+  assert.match(p, /never repeat allegations/i);
+  assert.match(p, /never a photoreal likeness/);
+  assert.doesNotMatch(p, /legend on Ekşi|as LORE|Cite Ekşi|Ekşi Sözlük has/);
+  assert.doesNotMatch(p, /wikimedia|"details"|answer\.md/i);
+});
+
+test("parseDecision: lore only with quote + https source; image/url fields ignored", () => {
+  assert.equal(loreOf([{ quote: "", source: EKSI }, { quote: "q", source: "javascript:x" }, { quote: "q", source: EKSI }]).length, 1);
+  const dec = parseDecision(JSON.stringify({ kind: "answer", reply: "hi", image: { url: "https://x/y.jpg" } }));
+  assert.equal((dec as Record<string, unknown>).image, undefined);
+});
+
+test("Ekşi links: only https eksisozluk.com/entry/<id>, deduped, in order", () => {
+  assert.deepEqual(eksiLinks([Q("q", EKSI), Q("q", "http://eksisozluk.com/entry/1"), Q("q", "https://eksisozluk.com/okan-tekman--123"), Q("q", "https://evil.com/entry/2"),
+    Q("q", "https://eksisozluk.com.evil.com/entry/3"), Q("q", "https://www.eksisozluk.com/entry/777/"), Q("q", EKSI)]), [EKSI, "https://eksisozluk.com/entry/777"]);
+  assert.deepEqual(quotedEntries([Q('"he fixes bugs by staring"', 1), Q("dup", 1), Q("bad", "https://x.com/entry/2")]), [{ quote: "he fixes bugs by staring", link: "https://eksisozluk.com/entry/1" }]);
+});
+
+test("reply from quotes: “quote” link, best first, as many as fit; the lead-in yields room for the best", () => {
+  assert.equal(withQuotes("Okan Tekman:", [Q("a", 1), Q("b", 2)], 280), "Okan Tekman: “a” https://eksisozluk.com/entry/1 “b” https://eksisozluk.com/entry/2");
+  const long = "x".repeat(150);
+  const r = withQuotes("Lead.", [Q(long, 1), Q(long, 2)], 280);
+  assert.ok(r.includes("entry/1") && !r.includes("entry/2") && r.length <= 280, "second quote dropped");
+  const tight = withQuotes("word ".repeat(60).trim(), [Q(long, 42)], 280);
+  assert.ok(tight.length <= 280 && tight.endsWith(`“${long}” https://eksisozluk.com/entry/42`), "lead clipped for the best quote");
+  assert.equal(withQuotes("no quotes", [], 280), "no quotes");
+  assert.equal(withQuotes("bad link only", [Q("q", "https://eksisozluk.com/okan--1")], 280), "bad link only");
+});
+
+test("Okan Tekman: short English lead-in + quoted entries with links + generated illustration, no source framing, no .md", async () => {
+  const img = solidPng(512, 512, [128, 128, 128]);
+  const lore = [Q("he looks at the logs and the bug fixes itself", 123456), Q("asks one question in the meeting, leaves with the whole roadmap", 654321)];
+  const net = fakeNet({ llm: { text: JSON.stringify({ kind: "answer", reply: "Okan Tekman, in the wild 👀", lore }), files: [{ name: "generated-1.png", mime: "image/png", bytes: img }] } });
+  assert.equal(await handleMention(11, { cfg: cfg(), wp: new WpClient(cfg(), net.f), engine: net.engine, gh: null, log: () => {} }), "replied");
+  const b = net.calls.find((c) => c.url.endsWith("/arta/reply"))!.body as { body: string; files: { name: string; type: string }[] };
+  assert.equal(b.body, "Okan Tekman, in the wild 👀 “he looks at the logs and the bug fixes itself” https://eksisozluk.com/entry/123456 “asks one question in the meeting, leaves with the whole roadmap” https://eksisozluk.com/entry/654321");
+  assert.ok(b.body.length <= 280);
+  assert.doesNotMatch(b.body, /lore|Ekşi'de|on Ekşi/i);
+  assert.deepEqual(b.files.map((f) => [f.name, f.type]), [["generated-1.png", "image/png"]]);
 });

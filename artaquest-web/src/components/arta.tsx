@@ -22,7 +22,6 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { searchMembers, ARTA_HANDLE, type LibraryItem, type MemberCard } from "../lib/api";
 import { ARTA_AVATAR, MENTION_RE, looksLikeBug, mentionsArta, type ArtaPillState } from "../lib/arta";
-import { fmtBytes } from "../lib/bytes";
 import { Avatar, cx } from "./ui";
 
 export function ArtaAvatar({ className, alt = "" }: { className?: string; alt?: string }) {
@@ -52,19 +51,12 @@ export function ArtaBadge({ size = 16, chip = true }: { size?: number; chip?: bo
 // ── @mentions ────────────────────────────────────────────────────────────────
 function Mention({ handle }: { handle: string }) {
   const arta = /^(arta|artabot)$/i.test(handle);
-  const to = `/u/${arta ? ARTA_HANDLE : handle}`;
-  if (arta) {
-    return (
-      <Link to={to} onClick={(e) => e.stopPropagation()} data-ay-skip="1" title="@arta"
-        className="mx-px inline-flex items-baseline rounded-pill bg-yang/[0.14] px-1.5 font-semibold text-yang-ink no-underline ring-1 ring-inset ring-yang/25 transition-colors hover:bg-yang/25">
-        Arta
-      </Link>
-    );
-  }
+  const to = `/u/${handle}`;
+  if (arta) return <>@{handle}</>; // typed as-is: plain text, no chip or colour
   return <Link to={to} onClick={(e) => e.stopPropagation()} data-ay-skip="1" className="font-medium text-yin-ink hover:underline">@{handle}</Link>;
 }
 
-/** Plain text with every @handle linked; @arta as a chip that reads "Arta" (the text keeps "@arta"). */
+/** Plain text with every @handle linked; @arta stays plain text exactly as typed. */
 export function MentionText({ text }: { text: string }) {
   const out: React.ReactNode[] = [];
   let last = 0;
@@ -102,7 +94,7 @@ function inline(text: string, keyBase: string): React.ReactNode[] {
     else if (m[3]) {
       const mm = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(tok);
       const href = mm ? safeHref(mm[2]) : null;
-      if (mm && href) out.push(<a key={key} href={href} target={href.startsWith("/") ? undefined : "_blank"} rel="noopener noreferrer nofollow ugc" onClick={(e) => e.stopPropagation()} className="font-medium text-yin-ink underline decoration-yin-ink/40 underline-offset-2 hover:decoration-yin-ink">{mm[1]}</a>);
+      if (mm && href) out.push(<a key={key} href={href} target={href.startsWith("/") ? undefined : "_blank"} rel="noopener noreferrer nofollow ugc" onClick={(e) => e.stopPropagation()} className="rounded-sm font-medium text-yin-ink underline decoration-yin-ink/40 underline-offset-2 outline-none hover:decoration-yin-ink focus-visible:ring-2 focus-visible:ring-yin-ink">{mm[1]}</a>);
       else out.push(tok);
     } else if (m[4]) {
       const href = safeHref(tok);
@@ -179,89 +171,24 @@ export function ArtaMarkdown({ text, className }: { text: string; className?: st
 }
 
 // ── files on Arta's replies ──────────────────────────────────────────────────
-function FileGlyph({ mime }: { mime: string }) {
-  const kind = mime === "application/pdf" ? "PDF" : mime === "text/csv" ? "CSV" : mime === "application/json" ? "JSON" : mime === "text/markdown" ? "MD" : "TXT";
-  return (
-    <span aria-hidden className="grid h-10 w-9 shrink-0 place-items-center rounded-lg border border-line bg-space-1 text-[9.5px] font-bold tracking-wide text-yin-ink">
-      {kind}
-    </span>
-  );
-}
+const FOCUS = "outline-none focus-visible:ring-2 focus-visible:ring-yin-ink focus-visible:ring-offset-2 focus-visible:ring-offset-space-1";
 
-function FileChip({ it }: { it: LibraryItem }) {
-  const readable = it.mime === "text/markdown" || it.mime === "text/plain";
-  const [open, setOpen] = useState(false);
-  const [body, setBody] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
-  const toggle = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const next = !open;
-    setOpen(next);
-    if (next && body === null && !failed) {
-      fetch(it.url, { credentials: "omit" })
-        .then((r) => (r.ok ? r.text() : Promise.reject(new Error(String(r.status)))))
-        .then((t) => setBody(t.slice(0, 60000)))
-        .catch(() => setFailed(true));
-    }
-  };
-  return (
-    <li className="min-w-0 overflow-hidden rounded-2xl border border-line bg-space-2/70">
-      <div className="flex min-w-0 items-center gap-2 px-2.5 py-2 sm:gap-3 sm:px-3 sm:py-2.5">
-        <FileGlyph mime={it.mime} />
-        <span className="min-w-0 flex-1">
-          <span data-ay-skip="1" className="block truncate text-[13.5px] font-semibold text-ink">{it.name}</span>
-          <span className="block truncate text-[12px] text-ink-3">{fmtBytes(it.bytes)}<span className="hidden sm:inline">{readable ? " · the full answer" : ""}</span></span>
-        </span>
-        {readable ? (
-          <button type="button" onClick={toggle} aria-expanded={open}
-            className="inline-flex min-h-9 shrink-0 items-center rounded-pill border border-line px-3 text-[12.5px] font-semibold text-ink-2 transition-colors hover:border-yin-ink hover:text-ink">
-            {open ? "Hide" : "Read"}
-          </button>
-        ) : null}
-        <a href={it.url} target="_blank" rel="noopener noreferrer" download={it.name} onClick={(e) => e.stopPropagation()}
-          aria-label={`Open ${it.name}`} title="Open"
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-3 transition-colors hover:bg-veil/[0.06] hover:text-ink">
-          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14" />
-          </svg>
-        </a>
-      </div>
-      {open ? (
-        <div className="max-h-96 overflow-y-auto border-t border-line px-3.5 py-3" onClick={(e) => e.stopPropagation()}>
-          {body !== null ? (
-            it.mime === "text/markdown" ? <ArtaMarkdown text={body} className="text-[14px]" /> : <pre className="whitespace-pre-wrap font-mono text-[12.5px] text-ink-2">{body}</pre>
-          ) : failed ? (
-            <p className="text-[13px] text-ink-3">This file opens in a new tab — <a href={it.url} target="_blank" rel="noopener noreferrer" className="text-yin-ink hover:underline">open {it.name}</a>.</p>
-          ) : (
-            <div aria-hidden className="flex flex-col gap-2"><span className="h-3 w-3/4 animate-pulse rounded bg-veil/[0.08]" /><span className="h-3 w-2/3 animate-pulse rounded bg-veil/[0.08]" /><span className="h-3 w-1/2 animate-pulse rounded bg-veil/[0.08]" /></div>
-          )}
-        </div>
-      ) : null}
-    </li>
-  );
-}
-
-/** Images as a 1–4 grid (each opens full size), every other file as a chip. */
+/** Arta's images (the photo it found), as a 1–4 grid in fixed aspect boxes — no layout shift. Arta
+ *  never attaches text files; any older ones are not shown. */
 export function ArtaFiles({ items }: { items: LibraryItem[] }) {
-  if (!items.length) return null;
   const imgs = items.filter((i) => i.class === "image" || i.mime.startsWith("image/"));
-  const files = items.filter((i) => !imgs.includes(i));
+  if (!imgs.length) return null;
   return (
-    <div className="mt-2.5 flex flex-col gap-2">
-      {imgs.length ? (
-        <ul className={cx("grid gap-1.5 overflow-hidden rounded-2xl", imgs.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
-          {imgs.map((it, i) => (
-            <li key={it.id} className={cx("overflow-hidden border border-line bg-space-2", imgs.length === 1 ? "rounded-2xl" : "rounded-xl", imgs.length === 3 && i === 2 && "col-span-2")}>
-              <a href={it.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} aria-label={`Open image ${it.name}`}
-                className={cx("block w-full", imgs.length === 1 ? "aspect-[16/10]" : "aspect-square")}>
-                <img src={it.url} alt={it.name} loading="lazy" decoding="async" className={cx("h-full w-full", imgs.length === 1 ? "object-contain" : "object-cover")} />
-              </a>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {files.length ? <ul className="flex flex-col gap-1.5">{files.map((it) => <FileChip key={it.id} it={it} />)}</ul> : null}
-    </div>
+    <ul className={cx("mt-2.5 grid gap-1.5 overflow-hidden rounded-2xl", imgs.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
+      {imgs.map((it, i) => (
+        <li key={it.id} className={cx("overflow-hidden border border-line bg-space-2", imgs.length === 1 ? "rounded-2xl" : "rounded-xl", imgs.length === 3 && i === 2 && "col-span-2")}>
+          <a href={it.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} aria-label={`Open image ${it.name}`}
+            className={cx("block w-full", imgs.length === 1 ? "aspect-[16/9]" : "aspect-square", FOCUS)}>
+            <img src={it.url} alt={`Image attached by Arta: ${it.name}`} loading="lazy" decoding="async" className="h-full w-full object-cover" />
+          </a>
+        </li>
+      ))}
+    </ul>
   );
 }
 

@@ -1504,6 +1504,13 @@ final class Notebook {
 	 *  than a new /post/{id} path, so no server routing, title or 404 handling had to change. */
 	public static function post_url( $id ) { return '/works/?post=' . (int) $id; }
 
+	/** One post as the feed shapes it, or null — for the server-rendered share card (aq_app_head_meta). */
+	public static function post_public( $id ) {
+		self::ensure_tables();
+		$p = Data::one( 'SELECT * FROM ' . Data::t( 'aq_posts' ) . ' WHERE id = %d', [ (int) $id ] );
+		return $p ? self::post_out( $p, 1 ) : null;
+	}
+
 	/**
 	 * GET arta/replies?cursor= — Arta's public replies, newest first, each with the post it answers
 	 * (`parent`), for the assistant's own profile. Arta publishes no notebooks, so without this its

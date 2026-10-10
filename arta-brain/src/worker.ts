@@ -6,7 +6,7 @@ import type { Fetch } from "./http";
 import type { GitHub } from "./github";
 import { parseDecision, promptText } from "./prompt";
 import { clip } from "./text";
-import type { Mention, OutFile } from "./types";
+import type { Lore, Mention, OutFile } from "./types";
 import type { WpClient } from "./wp";
 
 export type Deps = { cfg: Config; wp: WpClient; engine: Engine; gh: GitHub | null; log: (msg: string) => void; onPrompt?: () => void; fetch?: Fetch };
@@ -48,20 +48,51 @@ export async function handleMention(id: number, d: Deps, attempt = 1, maxAttempt
 }
 
 /**
- * The files that go out with the reply: when the answer does not fit (or the model wrote a longer
- * "details"), the complete answer as answer.md FIRST, then whatever the chat produced (images, files),
- * within the count and size caps. The site checks every file again.
+ * The files that go out with the reply: never text — only images the chat generated, within the
+ * count and size caps. The text is clipped to the post length. The site checks every file again.
  */
-export function outgoing(said: string, details: string | undefined, max: number, produced: OutFile[], cfg: Config): { text: string; files: OutFile[] } {
-  const files: OutFile[] = [];
-  let text = said;
-  if (said.length > max || details) {
-    const full = details ? `${said.trim()}\n\n${details.trim()}\n` : `${said.trim()}\n`;
-    files.push({ name: "answer.md", mime: "text/markdown", bytes: new TextEncoder().encode(full) });
-    text = clip(said, max);
+export function outgoing(said: string, max: number, produced: OutFile[], cfg: Config): { text: string; files: OutFile[] } {
+  const files = produced.filter((f) => f.mime.startsWith("image/") && f.bytes.byteLength > 0 && f.bytes.byteLength <= cfg.outFileBytes);
+  return { text: clip(said, max), files: files.slice(0, cfg.outFilesMax) };
+}
+
+/** Ekşi Sözlük entry permalinks only (https, eksisozluk.com, /entry/<digits>), deduped, in lore order. */
+export function eksiLinks(lore: Lore[]): string[] {
+  const out: string[] = [];
+  for (const l of lore) {
+    let u: URL;
+    try { u = new URL(l.source); } catch { continue; }
+    const m = /^\/entry\/(\d{1,12})\/?$/.exec(u.pathname);
+    if (u.protocol !== "https:" || !/^(www\.)?eksisozluk\.com$/.test(u.hostname) || !m) continue;
+    const link = `https://eksisozluk.com/entry/${m[1]}`;
+    if (!out.includes(link)) out.push(link);
   }
-  for (const f of produced) if (f.bytes.byteLength > 0 && f.bytes.byteLength <= cfg.outFileBytes) files.push(f);
-  return { text, files: files.filter((f) => f.bytes.byteLength <= cfg.outFileBytes).slice(0, cfg.outFilesMax) };
+  return out;
+}
+
+/** Lore items with a valid Ekşi entry permalink, normalised, deduped by entry, best first. */
+export function quotedEntries(lore: Lore[]): { quote: string; link: string }[] {
+  const out: { quote: string; link: string }[] = [];
+  for (const l of lore) {
+    const [link] = eksiLinks([l]);
+    const quote = l.quote.replace(/^["“”'‘’\s]+|["“”'‘’\s]+$/g, "").replace(/\s+/g, " ");
+    if (link && quote && !out.some((o) => o.link === link)) out.push({ quote, link });
+  }
+  return out;
+}
+
+/**
+ * The reply built from the quotes: the lead-in, then `"quote" <link>` for each entry, best first, as many
+ * as fit in `max`. If not even the best fits after the lead-in, the lead-in is clipped (or dropped) for it.
+ */
+export function withQuotes(lead: string, lore: Lore[], max: number): string {
+  const qs = quotedEntries(lore).map((q) => `“${q.quote}” ${q.link}`).filter((q) => q.length <= max);
+  if (!qs.length) return lead;
+  let out = lead;
+  for (const q of qs) if (out.length + 1 + q.length <= max) out = out ? `${out} ${q}` : q;
+  if (out !== lead) return out;
+  const room = max - qs[0].length - 1;
+  return room >= 20 ? `${clip(lead, room)} ${qs[0]}` : qs[0];
 }
 
 async function answer(m: Mention, d: Deps): Promise<Outcome> {
@@ -79,10 +110,11 @@ async function answer(m: Mention, d: Deps): Promise<Outcome> {
   const dec = parseDecision(got.text);
   // The member's own "bug:" prefix always files a report (unless the request was declined).
   if (m.hint === "bug" && dec.kind !== "declined") dec.kind = "bug";
-  const said = dec.reply.trim() || (dec.kind === "bug" ? "Thanks for reporting this — I've passed it to the team." : "");
+  let said = dec.reply.trim() || (dec.kind === "bug" ? "Thanks for reporting this — I've passed it to the team." : "");
   if (!said) throw new Error("empty answer");
+  if (dec.kind === "answer") said = withQuotes(said, dec.lore ?? [], max);
 
-  const out = dec.kind === "declined" ? { text: clip(said, max), files: [] as OutFile[] } : outgoing(said, dec.details, max, got.files, d.cfg);
+  const out = dec.kind === "declined" ? { text: clip(said, max), files: [] as OutFile[] } : outgoing(said, max, got.files, d.cfg);
 
   if (d.cfg.dryRun) {
     const fl = out.files.map((f) => `${f.name} (${f.mime}, ${f.bytes.byteLength} B)`).join(", ");
@@ -103,6 +135,7 @@ async function answer(m: Mention, d: Deps): Promise<Outcome> {
     return r.status === "duplicate" ? "bug-duplicate" : "bug-filed";
   }
 
-  await d.wp.reply(m.id, out.text, dec.kind === "bug" ? "answer" : dec.kind, undefined, out.files);
+  const res = await d.wp.reply(m.id, out.text, dec.kind === "bug" ? "answer" : dec.kind, undefined, out.files);
+  if (res?.dropped?.length) d.log(`mention ${m.id}: site dropped file(s): ${res.dropped.join(", ")}`);
   return "replied";
 }
