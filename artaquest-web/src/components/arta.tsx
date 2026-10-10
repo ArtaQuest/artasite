@@ -51,19 +51,12 @@ export function ArtaBadge({ size = 16, chip = true }: { size?: number; chip?: bo
 // ── @mentions ────────────────────────────────────────────────────────────────
 function Mention({ handle }: { handle: string }) {
   const arta = /^(arta|artabot)$/i.test(handle);
-  const to = `/u/${arta ? ARTA_HANDLE : handle}`;
-  if (arta) {
-    return (
-      <Link to={to} onClick={(e) => e.stopPropagation()} data-ay-skip="1" title="@arta"
-        className="mx-px inline-flex items-baseline rounded-pill bg-yang/[0.14] px-1.5 font-semibold text-yang-ink no-underline ring-1 ring-inset ring-yang/25 transition-colors hover:bg-yang/25">
-        Arta
-      </Link>
-    );
-  }
+  const to = `/u/${handle}`;
+  if (arta) return <>@{handle}</>; // typed as-is: plain text, no chip or colour
   return <Link to={to} onClick={(e) => e.stopPropagation()} data-ay-skip="1" className="font-medium text-yin-ink hover:underline">@{handle}</Link>;
 }
 
-/** Plain text with every @handle linked; @arta as a chip that reads "Arta" (the text keeps "@arta"). */
+/** Plain text with every @handle linked; @arta stays plain text exactly as typed. */
 export function MentionText({ text }: { text: string }) {
   const out: React.ReactNode[] = [];
   let last = 0;
