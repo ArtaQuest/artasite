@@ -47,7 +47,7 @@ final class Arta {
 	];
 	const BIO = 'ArtaQuest’s public assistant. Mention @arta in a post or a comment and I reply in the thread, in public. Start with “bug:” to report a problem and I file it on GitHub for the team.';
 
-	const TABLE_VERSION = '3';   // 2: aq_arta_files (files on Arta's replies); 3: + source_url
+	const TABLE_VERSION = '4';   // 2: aq_arta_files (files on Arta's replies); 3: + source_url; 4: aq_arta_dm (private chat)
 	const IDENTITY_VERSION = '1';
 
 	// ── Limits. A participant, not a flood. ──────────────────────────────────────────────────────
@@ -58,6 +58,8 @@ final class Arta {
 	const MAX_HANDLES     = 5;      // @-mentions honoured per post — more is a spam pattern, not a conversation
 	const POST_MAX        = 280;    // feed posts and replies — the same ceiling every member writes under
 	const COMMENT_MAX     = 2000;
+	const DM_MAX          = 2000;   // a private chat turn, either side
+	const DM_HISTORY      = 8;      // earlier turns handed to the brain as context
 
 	// ── Files IN: what a mention's post (and the posts above it) carries, handed to the brain. ─────
 	// The brain uploads these to the chat page, so only types that page reads are offered, and a few.
@@ -266,6 +268,18 @@ final class Arta {
 			KEY reply (reply_type, reply_id, pos),
 			KEY mention (mention_id)
 		) {$charset};" );
+		// The PRIVATE channel: one member and Arta, 1:1. Not end-to-end encrypted (Arta has to read it to
+		// answer), and the UI says so. Visible only to that member (and the brain, which answers it).
+		dbDelta( "CREATE TABLE {$wpdb->prefix}aq_arta_dm (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			from_arta TINYINT UNSIGNED NOT NULL DEFAULT 0,
+			body TEXT NOT NULL,
+			mention_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			created INT UNSIGNED NOT NULL DEFAULT 0,
+			PRIMARY KEY  (id),
+			KEY user_id_id (user_id, id)
+		) {$charset};" );
 		update_option( 'aq_arta_table_version', self::TABLE_VERSION, true );
 	}
 
@@ -461,6 +475,21 @@ final class Arta {
 		if ( ! $src ) { return null; }
 		$ctx  = [];
 		$ids  = [];   // posts whose files travel with the mention: the mentioning post, then upwards
+		if ( $m['src_type'] === 'dm' ) {
+			$prev = Data::all( 'SELECT from_arta, body FROM ' . Data::t( 'aq_arta_dm' ) . ' WHERE user_id = %d AND id < %d ORDER BY id DESC LIMIT %d',
+				[ (int) $src['user_id'], (int) $src['id'], self::DM_HISTORY ] );
+			$me = self::who( $src['user_id'] );
+			foreach ( array_reverse( (array) $prev ) as $p ) {
+				$ctx[] = [ 'author' => (int) $p['from_arta'] ? self::who( self::known_uid() ) : $me, 'body' => mb_substr( (string) $p['body'], 0, 1500 ) ];
+			}
+			return [
+				'id' => (int) $m['id'], 'hint' => (string) $m['hint'], 'created' => (int) $m['created'], 'max_chars' => self::DM_MAX,
+				'private' => true,
+				'source' => [ 'type' => 'dm', 'id' => (int) $src['id'], 'url' => home_url( '/messages/' ),
+					'body' => mb_substr( (string) $src['body'], 0, 4000 ), 'author' => $me ],
+				'context' => $ctx, 'attachments' => [],
+			];
+		}
 		if ( $m['src_type'] === 'post' ) {
 			$ids[] = (int) $src['id'];
 			$pid = (int) $src['parent_id'];
@@ -643,6 +672,9 @@ final class Arta {
 
 
 	private static function source( $m ) {
+		if ( $m['src_type'] === 'dm' ) {
+			return Data::one( 'SELECT * FROM ' . Data::t( 'aq_arta_dm' ) . ' WHERE id = %d AND from_arta = 0', [ (int) $m['src_id'] ] );
+		}
 		if ( $m['src_type'] === 'post' ) {
 			return Data::one( 'SELECT * FROM ' . Data::t( 'aq_posts' ) . ' WHERE id = %d', [ (int) $m['src_id'] ] );
 		}
@@ -758,10 +790,13 @@ final class Arta {
 		$kind  = in_array( $kind, [ 'answer', 'bug', 'declined' ], true ) ? $kind : 'answer';
 		$issue = esc_url_raw( (string) Rest::p( $req, 'issue_url', '' ) );
 		if ( $issue !== '' && ! preg_match( '#^https://github\.com/ArtaQuest/[A-Za-z0-9_.-]+/issues/[0-9]+$#', $issue ) ) { $issue = ''; }
-		$max  = $m['src_type'] === 'post' ? self::POST_MAX : self::COMMENT_MAX;
+		$dm   = $m['src_type'] === 'dm';
+		$max  = $dm ? self::DM_MAX : ( $m['src_type'] === 'post' ? self::POST_MAX : self::COMMENT_MAX );
 		$body = self::sanitize_reply( (string) Rest::p( $req, 'body', '' ), $max );
 		if ( mb_strlen( $body ) < 2 ) { return Rest::err( 'empty', 'Reply body is empty' ); }
 		[ $files, $dropped ] = self::reply_files( $req );
+		// Files would go to the PUBLIC media store, which a private chat must never feed. Refused.
+		if ( $dm && $files ) { foreach ( $files as $f ) { $dropped[] = $f['name'] . ': not in private chat'; } $files = []; }
 		$sources = self::file_sources( Rest::p( $req, 'sources', '' ) );
 
 		$now = time();
@@ -794,9 +829,11 @@ final class Arta {
 		}
 
 		$arta = self::uid();
-		[ $type, $rid ] = $m['src_type'] === 'post'
-			? [ 'post', Notebook::insert_reply( $arta, (int) $src['id'], $body ) ]
-			: [ 'comment', self::insert_comment_reply( $arta, $src, $body ) ];
+		[ $type, $rid ] = $dm
+			? [ 'dm', Data::insert( 'aq_arta_dm', [ 'user_id' => (int) $src['user_id'], 'from_arta' => 1, 'body' => $body, 'mention_id' => $id, 'created' => time() ] ) ]
+			: ( $m['src_type'] === 'post'
+				? [ 'post', Notebook::insert_reply( $arta, (int) $src['id'], $body ) ]
+				: [ 'comment', self::insert_comment_reply( $arta, $src, $body ) ] );
 		if ( ! $rid ) {
 			self::set_status( $id, 'queued', 'reply insert failed' );
 			return Rest::err( 'server_error', 'Could not write the reply', 500 );
@@ -815,13 +852,14 @@ final class Arta {
 		$m = self::row( $id );
 		$url = self::reply_url( $m );
 		Notify::push( (int) $m['author_id'], 'arta', 'Arta replied to you', mb_substr( $body, 0, 140 ), wp_make_link_relative( $url ), 'arta-reply-' . $id );
-		if ( $kind === 'bug' && $issue !== '' ) {
+		if ( $kind === 'bug' && $issue !== '' && ! $dm ) {
 			self::link_ticket( $m, $src, (string) Rest::p( $req, 'issue_title', '' ), $issue );
 		}
 		return [ 'ok' => true, 'duplicate' => false, 'reply_type' => $type, 'reply_id' => (int) $rid, 'url' => $url, 'files' => count( $stored ), 'dropped' => $dropped ];
 	}
 
 	private static function reply_url( $m ) {
+		if ( $m['reply_type'] === 'dm' || $m['src_type'] === 'dm' ) { return home_url( '/messages/?arta=1' ); }
 		if ( $m['reply_type'] === 'post' ) { return home_url( Notebook::post_url( (int) $m['reply_id'] ) ); }
 		$c = Data::one( 'SELECT * FROM ' . Data::t( 'aq_comments' ) . ' WHERE id = %d', [ (int) $m['reply_id'] ] );
 		return $c ? self::comment_url( $c ) : home_url( '/' );
@@ -858,6 +896,68 @@ final class Arta {
 			error_log( 'AQ Arta::link_ticket: ' . $e->getMessage() );
 			return null;
 		}
+	}
+
+	// ═════════════════════════════════════════════════════════════════════════════════════════════
+	// REST — the member's PRIVATE chat with Arta (auth 'user'). Same queue, limits and brain as the
+	// public mentions; only the place the answer lands differs (aq_arta_dm, visible to this member).
+	// ═════════════════════════════════════════════════════════════════════════════════════════════
+
+	/** One chat turn as the member's client sees it. */
+	private static function dm_row( $r ) {
+		return [ 'id' => (int) $r['id'], 'from_arta' => (bool) (int) $r['from_arta'], 'body' => (string) $r['body'], 'created' => (int) $r['created'] ];
+	}
+
+	/** GET arta/dm?after= — my private chat with Arta (newest 50, oldest first) and where my last question is. */
+	public static function dm_list( $req ) {
+		self::ensure_tables();
+		$uid   = Rest::uid();
+		$after = max( 0, Rest::pint( $req, 'after', 0 ) );
+		$D     = Data::t( 'aq_arta_dm' );
+		$rows  = $after
+			? Data::all( "SELECT * FROM $D WHERE user_id = %d AND id > %d ORDER BY id ASC LIMIT 50", [ $uid, $after ] )
+			: array_reverse( (array) Data::all( "SELECT * FROM $D WHERE user_id = %d ORDER BY id DESC LIMIT 50", [ $uid ] ) );
+		$T    = Data::t( 'aq_mentions' );
+		$last = Data::one( "SELECT id, status, note, created FROM $T WHERE src_type = 'dm' AND author_id = %d ORDER BY id DESC LIMIT 1", [ $uid ] );
+		$pending = null;
+		if ( $last && in_array( $last['status'], [ 'queued', 'working', 'replying', 'limited' ], true ) && (int) $last['created'] >= time() - self::MAX_AGE ) {
+			$pos = $last['status'] === 'queued'
+				? 1 + (int) Data::col( "SELECT COUNT(*) FROM $T WHERE status IN ('queued','working') AND created >= %d AND id < %d", [ time() - self::MAX_AGE, (int) $last['id'] ] )
+				: 0;
+			$pending = [ 'status' => (string) $last['status'], 'position' => $pos ];
+		}
+		$st = self::public_status( $req );
+		return [ 'items' => array_map( [ self::class, 'dm_row' ], (array) $rows ), 'pending' => $pending,
+			'online' => $st['online'], 'enabled' => $st['enabled'], 'paused_until' => $st['paused_until'] ];
+	}
+
+	/** POST arta/dm {body} — ask Arta privately. Queued exactly like a mention (same per-member limits). */
+	public static function dm_send( $req ) {
+		self::ensure_tables();
+		$uid  = Rest::uid();
+		$body = trim( wp_strip_all_tags( (string) Rest::p( $req, 'body', '' ) ) );
+		if ( mb_strlen( $body ) < 1 ) { return Rest::err( 'empty', 'Write something first' ); }
+		if ( mb_strlen( $body ) > self::DM_MAX ) { return Rest::err( 'too_long', 'Keep it under ' . self::DM_MAX . ' characters' ); }
+		$arta = self::uid();
+		if ( ! $arta || self::is_arta( $uid ) ) { return Rest::err( 'unavailable', 'Arta is not available', 503 ); }
+		$id = (int) Data::insert( 'aq_arta_dm', [ 'user_id' => $uid, 'from_arta' => 0, 'body' => $body, 'mention_id' => 0, 'created' => time() ] );
+		if ( ! $id ) { return Rest::err( 'server_error', 'Could not save your message', 500 ); }
+		$mid = self::enqueue( 'dm', $id, $uid, $body, 'dm', $uid, $arta );
+		if ( $mid ) { Data::update( 'aq_arta_dm', [ 'mention_id' => $mid ], [ 'id' => $id ] ); }
+		$m = $mid ? self::row( $mid ) : null;
+		return [ 'ok' => true, 'item' => self::dm_row( Data::one( 'SELECT * FROM ' . Data::t( 'aq_arta_dm' ) . ' WHERE id = %d', [ $id ] ) ),
+			'status' => $m ? (string) $m['status'] : 'failed' ];
+	}
+
+	/** POST arta/dm/clear — delete my whole private chat with Arta (both sides). */
+	public static function dm_clear( $req ) {
+		self::ensure_tables();
+		global $wpdb;
+		$uid = Rest::uid();
+		$n = (int) $wpdb->query( $wpdb->prepare( 'DELETE FROM ' . Data::t( 'aq_arta_dm' ) . ' WHERE user_id = %d', $uid ) );
+		// Unanswered questions go too, so the brain cannot answer into a chat that no longer exists.
+		$wpdb->query( $wpdb->prepare( 'UPDATE ' . Data::t( 'aq_mentions' ) . " SET status = 'skipped', note = 'chat cleared', updated = %d WHERE src_type = 'dm' AND author_id = %d AND status IN ('queued','working','limited')", time(), $uid ) );
+		return [ 'ok' => true, 'deleted' => $n ];
 	}
 
 	/** GET arta/status — public: is Arta wired up, and how much is waiting. For smoke tests and the UI. */

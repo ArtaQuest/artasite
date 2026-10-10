@@ -12,7 +12,9 @@ export type Mention = {
   hint: string;              // 'bug' when the member wrote an explicit bug: prefix
   created: number;
   max_chars: number;
-  source: { type: "post" | "comment"; id: number; url: string; body: string; author: NonNullable<Author> };
+  source: { type: "post" | "comment" | "dm"; id: number; url: string; body: string; author: NonNullable<Author> };
+  /** true for the member's PRIVATE 1:1 chat with Arta (src_type dm): the answer is seen only by them. */
+  private?: boolean;
   context: ContextItem[];
   attachments?: Attachment[];
 };

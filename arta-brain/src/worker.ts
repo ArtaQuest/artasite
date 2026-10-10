@@ -65,13 +65,14 @@ export function stripUrls(t: string): string {
 
 async function answer(m: Mention, d: Deps): Promise<Outcome> {
   const max = m.max_chars || 280;
+  const priv = m.private === true || m.source.type === "dm";
   const prep = await prepareAttachments(m, d.cfg, d.fetch ?? fetch);
   let got: EngineAnswer;
   try {
     if (prep.notAttached.length) d.log(`mention ${m.id}: ${prep.notAttached.length} file(s) not attached (${prep.notAttached.map((n) => n.why).join(", ")})`);
     d.onPrompt?.();
     const raw = await d.engine.ask(promptText(m, prep), d.cfg.answerTimeoutSec * 1000, prep.paths, (t) => {
-      const want = parseDecision(t).image; // never set when the answer names a real photo
+      const want = priv ? undefined : parseDecision(t).image; // never set when the answer names a real photo
       return want ? imagePrompt(want) : null;
     });
     got = typeof raw === "string" ? { text: raw, files: [] } : raw;
@@ -79,8 +80,11 @@ async function answer(m: Mention, d: Deps): Promise<Outcome> {
     await prep.cleanup();   // the downloaded copies never outlive the prompt
   }
   const dec = parseDecision(got.text);
+  // A private chat publishes nothing: no public GitHub issue, no files (the site's media store is
+  // public), no photos fetched. Whatever the model returned, it is words only.
+  if (priv) { if (dec.kind === "bug") dec.kind = "answer"; delete dec.photo; delete dec.person; delete dec.image; got = { ...got, files: [] }; }
   // The member's own "bug:" prefix always files a report (unless the request was declined).
-  if (m.hint === "bug" && dec.kind !== "declined") dec.kind = "bug";
+  if (m.hint === "bug" && dec.kind !== "declined" && !priv) dec.kind = "bug";
   let said = dec.reply.trim() || (dec.kind === "bug" ? "Thanks for reporting this — I've passed it to the team." : "");
   if (!said) throw new Error("empty answer");
   const lead = said;

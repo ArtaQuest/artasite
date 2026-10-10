@@ -1,5 +1,5 @@
 /* GENERATED — DO NOT EDIT HERE.
- * Vendored from artalife src/rig/arta.ts @ 816f4f5.
+ * Vendored from artalife src/rig/arta.ts @ d8cfea3.
  * Source of truth: https://github.com/ArtaQuest/artalife.git
  * Re-run: node tools/arta-sync.mjs
  */
@@ -706,6 +706,8 @@ export function homeFloor(floors: Floor[]): Floor | null {
 
 /** How high Arta can step while walking, in world units — about a third of a leg. */
 export const STEP_UP = 34;
+/** A ledge move up to this size (CSS-scale world units) is ridden; beyond it, the rope. */
+export const LIFT_MAX = 60;
 
 export type Frame = {
   sk: Skeleton;
@@ -768,6 +770,12 @@ export class Brain {
   private fellFrom: number | null = null; // hip height where this fall began
   private fallY = 0;                  // integrated height while falling
   private anchor: XY | null = null;   // where the line is hooked
+  /** Where the rope is DRAWN to when that is not the destination (a rappel's hook above). */
+  private hook: XY | null = null;
+  /** A ledge-follow climb: hold the height through the wind-up instead of standing on what is below. */
+  private climb = false;
+  /** A ledge-follow descent: no pendulum sag, a steady lengthening line. */
+  private rappel = false;
   private flyFrom: XY = { x: 0, y: 0 };
   private flyDur = 1;
   private jNow: number[] = new Array(JOINTS).fill(0);
@@ -873,10 +881,44 @@ export class Brain {
    * Only applies while grounded on that ledge — mid-flight, on a rope or on a
    * different surface, the move is none of Arta's business.
    */
-  ride(fromY: number, toY: number) {
-    if (this.act === "fly" || this.anchor) return;
+  ride(fromY: number, toY: number, span?: { x1: number; x2: number }) {
+    if (this.act === "fly" || this.act === "throw" || this.anchor) return;
     if (Math.abs(this.pose.y + RIG.HIP - fromY) > 16) return;
-    this.pose = { ...this.pose, y: this.pose.y + (toY - fromY) };
+    const dy = toY - fromY;
+    /*
+     * A small move (a keyboard, a collapsing URL bar) is a lift: ride it.
+     *
+     * A big one is a drawer opening or closing under Arta's feet, and riding a
+     * 500 px jump in one frame is a teleport. So Arta does what the rope is
+     * for: going UP, it throws the line to the new edge and CLIMBS (held where
+     * it stood during the wind-up, never dropped to the stage first); going
+     * DOWN, the line is already hooked where Arta stood and it RAPPELS to the
+     * lowered edge on a lengthening rope. Both end through the usual landing.
+     */
+    if (Math.abs(dy) <= LIFT_MAX) { this.pose = { ...this.pose, y: this.pose.y + dy }; return; }
+    this.queue.length = 0;
+    this.rootX = null;
+    // Land somewhere ON the new ledge: a ledge that is narrower or elsewhere
+    // (a phone's tab bar → an opened panel) pulls the goal in from its ends.
+    const gx = span ? clamp(this.pose.x, span.x1 + 40, Math.max(span.x1 + 40, span.x2 - 40)) : this.pose.x;
+    const goal = { x: gx, y: toY - RIG.HIP };
+    if (dy < 0) {
+      // Climb: hook at the new edge, a little above the hip's resting height so
+      // the arrival is a short step down onto it rather than a slide.
+      this.climb = true;
+      this.hook = null;
+      this.anchor = { x: goal.x, y: goal.y - 18 };
+      this.enter("throw");
+    } else {
+      // Rappel: the hook stays at the old edge, above the head; Arta descends.
+      this.climb = false;
+      this.hook = { x: this.pose.x, y: fromY - RIG.HEIGHT - 24 };
+      this.anchor = { x: goal.x, y: goal.y - 6 };
+      this.flyFrom = { x: this.pose.x, y: this.pose.y };
+      this.flyDur = clamp(dy / 300, 0.7, 2.2);
+      this.rappel = true;
+      this.enter("fly");
+    }
   }
 
   /** Ask Arta to do something. Queued, never interrupting mid-gesture. */
@@ -954,7 +996,7 @@ export class Brain {
       // point in empty air for the whole 0.42 s wind-up — tied before it was
       // thrown.
       rope: this.anchor && this.act === "fly"
-        ? { from: this.lastDraw.hand, to: this.anchor } : null,
+        ? { from: this.lastDraw.hand, to: this.hook ?? this.anchor } : null,
       airborne: this.act === "fly",
       arrow: this.act === "point" && this.aim
         ? { from: this.lastDraw.hand, to: this.aim, age: this.clock - this.aimAt }
@@ -1192,7 +1234,7 @@ export class Brain {
       case "throw": {
         // wind up, release. The line is drawn from the hand by the renderer.
         want = throwRope(clamp(this.t / 0.42, 0, 1));
-        want.x = this.pose.x; want.y = base.y;
+        want.x = this.pose.x; want.y = this.climb ? this.pose.y : base.y;
         if (this.t >= 0.42) {
           this.flyFrom = { x: this.pose.x, y: this.pose.y };
           const a = this.anchor ?? { x: this.pose.x, y: base.y };
@@ -1210,7 +1252,7 @@ export class Brain {
         // Ease out of the launch and into the arrival, and sag through the
         // middle: a rope is a pendulum, not a zip-line between two pins.
         const e = ease(u);
-        const sag = Math.sin(Math.PI * u) * Math.min(90, this.flyDur * 40);
+        const sag = this.rappel ? 0 : Math.sin(Math.PI * u) * Math.min(90, this.flyDur * 40);
         want = hang(Math.cos(Math.PI * u) * 0.8);
         want.x = lerp(this.flyFrom.x, a.x, e);
         want.y = lerp(this.flyFrom.y, a.y, e) + sag;
@@ -1232,7 +1274,7 @@ export class Brain {
          * through exactly the same contact code as a step off a lip. One
          * implementation, not two.
          */
-        if (u >= 1) this.enter("fall");
+        if (u >= 1) { this.climb = false; this.rappel = false; this.hook = null; this.enter("fall"); }
         break;
       }
       case "land": {
