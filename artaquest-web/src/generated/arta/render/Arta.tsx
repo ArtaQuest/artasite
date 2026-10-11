@@ -1,5 +1,5 @@
 /* GENERATED — DO NOT EDIT HERE.
- * Vendored from artalife src/render/Arta.tsx @ 7de7c9f.
+ * Vendored from artalife src/render/Arta.tsx @ e6b8b78.
  * Source of truth: https://github.com/ArtaQuest/artalife.git
  * Re-run: node tools/arta-sync.mjs
  */
@@ -29,7 +29,7 @@
  * The command bus lives in ../lib/arta — it is not a component.
  */
 import { useEffect, useRef } from "react";
-import { Brain, RIG, SAFE, homeFloor, onArtaCommand, type Act, type Cmd, type Floor, type XY } from "../rig/arta";
+import { Brain, LIFT_MAX, RIG, SAFE, homeFloor, onArtaCommand, type Act, type Cmd, type Floor, type XY } from "../rig/arta";
 
 /** World is 380 tall with the ground at 340 — enough headroom for the jump,
  *  whose raised hands reach about 330 above the sole. */
@@ -262,6 +262,8 @@ export default function Arta({
     let frozenFrom: Floor | null = null;
     let homeLostAt = 0;
     let settled = 0;
+    /** The rope trip for the current home move has already started (see below). */
+    let riding = false;
 
     const setBox = () => {
       if (fill) scale = RIG.HEIGHT / figureFor(el.clientWidth);
@@ -480,14 +482,28 @@ export default function Arta({
          * on where it was (so it neither falls nor is dragged through the
          * animation), and once it has settled the rig is told the whole move —
          * a small one is ridden, a big one is climbed or rappelled on the rope.
+         *
+         * Except that a big one cannot wait for the end. Waiting is ~300 ms of
+         * a desktop drawer's slide, and for all of it Arta did nothing: opening,
+         * frozen while the panel rose; closing, standing at the old lid height
+         * with the panel already gone from under it — on thin air, the most
+         * jarring frame on the site. So as soon as the edge has moved further
+         * than a lift can absorb (on a real drawer, its first frame of travel)
+         * the rope trip starts toward where the edge is NOW, and every later
+         * frame re-aims it (`retarget`) until the edge stops.
          */
         const homeNow = placed ? homeFloor(floors) : null;
         if (homeNow && lastHome) {
           const moved = Math.abs(homeNow.y - lastHome.y) > 0.5;
-          if (moved && frozenY === null) { frozenY = lastHome.y; frozenFrom = lastHome; settled = 0; }
-          else if (frozenY !== null) {
-            settled = moved ? 0 : settled + 1;
-            if (settled >= 2) { brain.ride(frozenY, homeNow.y, homeNow); frozenY = null; }
+          if (moved && frozenY === null) { frozenY = lastHome.y; frozenFrom = lastHome; settled = 0; riding = false; }
+          else if (frozenY !== null) settled = moved ? 0 : settled + 1;
+          if (frozenY !== null) {
+            if (!riding && Math.abs(homeNow.y - frozenY) > LIFT_MAX) riding = brain.ride(frozenY, homeNow.y, homeNow);
+            else if (riding && moved) brain.retarget(homeNow.y, homeNow);
+            if (settled >= 2) {
+              if (!riding) brain.ride(frozenY, homeNow.y, homeNow);
+              frozenY = null; riding = false;
+            }
           }
         }
         lastHome = homeNow;
@@ -499,7 +515,9 @@ export default function Arta({
          * and a frozen ledge Arta is not over is no ledge: it fell to the stage
          * floor mid-transition and had to rope back up.
          */
-        if (frozenY !== null) {
+        // Once on the rope, the live floors are the truth: the line holds Arta,
+        // and the trip ends on wherever the edge has got to.
+        if (frozenY !== null && !riding) {
           const was = frozenFrom ? frozenFrom.solid ?? { x1: frozenFrom.x1, x2: frozenFrom.x2 } : null;
           floors = floors.map((f) => (f.home ? { ...f, y: frozenY as number, ...(was ? { solid: was } : {}) } : f));
         }
