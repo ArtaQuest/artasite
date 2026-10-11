@@ -1,5 +1,5 @@
 /* GENERATED — DO NOT EDIT HERE.
- * Vendored from artalife src/rig/arta.ts @ 7de7c9f.
+ * Vendored from artalife src/rig/arta.ts @ e6b8b78.
  * Source of truth: https://github.com/ArtaQuest/artalife.git
  * Re-run: node tools/arta-sync.mjs
  */
@@ -758,6 +758,18 @@ const STAND_DX = [
   limb(0, 0, -STANCE[0], STANCE[1], RIG.THIGH, RIG.SHIN).ex,
 ] as const;
 
+/** Fraction of the closing step at each end in which a grounded swing foot only lifts / only lowers. */
+const SETTLE_CLEAR = 0.16;
+/** Root travel past a heel strike at which the stop begins (the closing step starts within 4 of the mark). */
+const STRIKE_LEAD = 0.5;
+
+/**
+ * How far the hip still travels forward in the closing step after a walk
+ * stops on a heel strike: from midway between the feet of a full stride to
+ * over the standing stance beside the front one.
+ */
+const SETTLE_GAIN = (WALK.STANCE * WALK.CYCLE) / 2 - (STAND_DX[0] + STAND_DX[1]) / 2;
+
 export class Brain {
   private pose: Pose;
   private act: Act = "idle";
@@ -796,6 +808,10 @@ export class Brain {
   private rootX: number | null = null;
   /** The closing step at the end of a walk; null when not stopping. See `beginSettle`. */
   private settle: Settle | null = null;
+  /** This walk's mark has been moved onto a heel strike (see the walk case). */
+  private snapped = false;
+  /** This walk's mark has been pushed on to finish a step still in the air. */
+  private extended = false;
   /** scratch joints for reading where the feet are, so no frame allocates */
   private jFeet: number[] = new Array(JOINTS).fill(0);
   private vy = 0;                     // vertical speed while falling, world units/s
@@ -914,9 +930,9 @@ export class Brain {
    * Only applies while grounded on that ledge — mid-flight, on a rope or on a
    * different surface, the move is none of Arta's business.
    */
-  ride(fromY: number, toY: number, span?: { x1: number; x2: number }) {
-    if (this.act === "fly" || this.act === "throw" || this.anchor) return;
-    if (Math.abs(this.pose.y + RIG.HIP - fromY) > 16) return;
+  ride(fromY: number, toY: number, span?: { x1: number; x2: number }): boolean {
+    if (this.act === "fly" || this.act === "throw" || this.anchor) return false;
+    if (Math.abs(this.pose.y + RIG.HIP - fromY) > 16) return false;
     const dy = toY - fromY;
     /*
      * A small move (a keyboard, a collapsing URL bar) is a lift: ride it.
@@ -928,7 +944,7 @@ export class Brain {
      * DOWN, the line is already hooked where Arta stood and it RAPPELS to the
      * lowered edge on a lengthening rope. Both end through the usual landing.
      */
-    if (Math.abs(dy) <= LIFT_MAX) { this.pose = { ...this.pose, y: this.pose.y + dy }; return; }
+    if (Math.abs(dy) <= LIFT_MAX) { this.pose = { ...this.pose, y: this.pose.y + dy }; return true; }
     this.queue.length = 0;
     this.rootX = null;
     // Land somewhere ON the new ledge: a ledge that is narrower or elsewhere
@@ -951,6 +967,37 @@ export class Brain {
       this.flyDur = clamp(dy / 300, 0.7, 2.2);
       this.rappel = true;
       this.enter("fly");
+    }
+    return true;
+  }
+
+  /**
+   * The ledge a rope trip is heading for is STILL MOVING — follow it.
+   *
+   * `ride` used to be told about a drawer only once the drawer had stopped,
+   * because only then is the destination known. On desktop that is ~300 ms of
+   * slide, and for all of it Arta did nothing: opening, it stood frozen while
+   * the panel rose behind it; closing, it stood on the lid's old height with
+   * the panel already gone from under it — standing on thin air, the one thing
+   * the rule forbids, and the most visible fault on the site. So the host now
+   * starts the trip on the first frame of travel, toward wherever the edge is
+   * that frame, and hands every later position in here until it settles.
+   *
+   * Only the destination moves. The climb's wind-up and the rappel's hook are
+   * where Arta stood, which has not changed. A rappel that has barely begun is
+   * re-timed for the real distance (early on, `ease` has hardly moved, so the
+   * change is invisible); after that the duration is kept, because re-timing
+   * a descent in progress would jump it.
+   */
+  retarget(toY: number, span?: { x1: number; x2: number }) {
+    if (!this.anchor || !(this.climb || this.rappel)) return;
+    if (this.act !== "throw" && this.act !== "fly") return;
+    const gx = span ? clamp(this.anchor.x, span.x1 + 40, Math.max(span.x1 + 40, span.x2 - 40)) : this.anchor.x;
+    const goalY = toY - RIG.HIP;
+    if (this.climb) { this.anchor = { x: gx, y: goalY - 18 }; return; }
+    this.anchor = { x: gx, y: goalY - 6 };
+    if (this.act === "fly" && this.t < 0.3 * this.flyDur) {
+      this.flyDur = clamp((goalY - this.flyFrom.y) / 300, 0.7, 2.2);
     }
   }
 
@@ -985,6 +1032,8 @@ export class Brain {
     // one would start that walk from wherever the last one was aiming.
     if (act !== "walk") this.rootX = null;
     if (act !== "fall") this.fellFrom = null;
+    // A new mark (or no walk at all) gets its own heel-strike planning.
+    if (act !== "walk" || opts.x !== undefined) { this.snapped = false; this.extended = false; }
     this.act = act;
     this.t = 0;
     if (opts.at) { this.aim = opts.at; this.aimAt = this.clock; }
@@ -1045,8 +1094,17 @@ export class Brain {
     // (double support) either could, and the stance is not symmetric, so take
     // whichever ends the walk with the smaller step and the shorter shift of
     // the hip — the other choice can carry Arta a whole stride past its mark.
+    /*
+     * And the hip must not go BACKWARDS. Pinning the rear foot of a double
+     * support puts the stand pose behind the hip, so the last thing the walk
+     * did was rock the body back over a foot it had already left — measured
+     * on production at 5.6 px on desktop and 9.9 px on an iPhone, the leading
+     * foot dragged back with it. Nobody stops like that: you stop OVER the
+     * foot you just put down. A backward shift costs four times a forward one.
+     */
     const cost = (c: ReturnType<typeof plan>) =>
-      Math.abs(c.hipX1 - hx) + 0.5 * Math.abs(c.sw1 - (c.pin === 0 ? rx : lx));
+      Math.abs(c.hipX1 - hx) + 3 * Math.max(0, (hx - c.hipX1) * f)
+      + 0.5 * Math.abs(c.sw1 - (c.pin === 0 ? rx : lx));
     const a = plan(0), b = plan(1);
     const { pin, pinX, hipX1, sw1 } = Math.abs(liftL - liftR) > 1
       ? (liftL < liftR ? a : b)
@@ -1069,7 +1127,16 @@ export class Brain {
     const trip = Math.abs(st.sw1 - st.sw0);
     // A short shuffle barely leaves the floor; a full half-stride clears it.
     const lift = st.lift0 * (1 - e) + Math.min(WALK.LIFT * 0.7, 3 + trip * 0.2) * Math.sin(Math.PI * u) ** 2;
-    const swX = lerp(st.sw0, st.sw1, e);
+    /*
+     * Up, across, down — in that order. With the swing foot starting from the
+     * ground (a stop on a heel strike always starts in double support) and
+     * travelling as soon as it started rising, its first and last frames were
+     * a toe dragged along the floor. The horizontal trip waits until the foot
+     * is clear and is over before it touches down; the lift already peaks in
+     * the middle, so the arc is unchanged.
+     */
+    const a = st.lift0 > 2 ? 0 : SETTLE_CLEAR;
+    const swX = lerp(st.sw0, st.sw1, ease(clamp((u - a) / (1 - 2 * a), 0, 1)));
     const pinLeg = legIK((st.pinX - hx) * f, ground - hy);
     const swLeg = legIK((swX - hx) * f, ground - lift - hy);
     return P({
@@ -1239,11 +1306,51 @@ export class Brain {
          * error, so the body keeps up and the constant offset moves the feet
          * and the root together, which is no skate at all.
          */
-        const tx = clamp(this.targetX ?? this.pose.x, input.minX, input.maxX);
+        let tx = clamp(this.targetX ?? this.pose.x, input.minX, input.maxX);
         const fresh = this.rootX === null;
         if (this.rootX === null) this.rootX = this.pose.x;
-        const d = tx - this.rootX;
+        let d = tx - this.rootX;
         const dir: Face = d >= 0 ? 1 : -1;
+        /*
+         * STOP ON A HEEL STRIKE.
+         *
+         * The mark is wherever the walk was sent, and the stride does not know
+         * about it, so the root used to arrive at an arbitrary point of the
+         * cycle — often with the front foot still swinging. The closing step
+         * then pinned the foot that was down, the REAR one, and pulled the hip
+         * back over it: the end of every other walk was a backwards rock with
+         * the leading foot dragged back to meet it, visible at full speed on a
+         * phone. A person stops by putting the front foot down and coming up
+         * over it.
+         *
+         * So within the last stride the mark moves (by at most a quarter of a
+         * cycle) to the heel strike nearest the place the closing step would
+         * have ended, and if the root still arrives with a foot in the air
+         * ahead, that step is finished before stopping.
+         */
+        if (!this.settle && !fresh && !this.snapped && Math.abs(d) < WALK.CYCLE * 1.1) {
+          this.snapped = true;
+          const first = ((0.5 - (this.phase % 0.5)) % 0.5) * WALK.CYCLE;   // root travel to the next strike
+          const want = Math.abs(d) - SETTLE_GAIN;
+          let best = first;
+          for (let n = 1; n < 4; n++) {
+            const c = first + (n * WALK.CYCLE) / 2;
+            if (Math.abs(c - want) < Math.abs(best - want)) best = c;
+          }
+          if (best > 6) {
+            this.targetX = this.rootX + dir * (best + STRIKE_LEAD);
+            tx = clamp(this.targetX, input.minX, input.maxX); d = tx - this.rootX;
+          }
+        }
+        if (!this.settle && !fresh && !this.extended && Math.abs(d) < 4 && Math.abs(tx - this.pose.x) < 6) {
+          const pl = this.phase % 1, pr = (this.phase + 0.5) % 1;
+          const p = pl >= WALK.STANCE ? pl : pr >= WALK.STANCE ? pr : -1;
+          if (p >= 0 && foot(p).dx > 0) {
+            this.extended = true;
+            this.targetX = this.rootX + dir * ((1 - p) * WALK.CYCLE + STRIKE_LEAD);
+            tx = clamp(this.targetX, input.minX, input.maxX); d = tx - this.rootX;
+          }
+        }
         /*
          * ARRIVING is a step, not a blend.
          *
