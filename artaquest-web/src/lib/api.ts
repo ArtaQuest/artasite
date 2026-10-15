@@ -1068,10 +1068,13 @@ export function artaReplies(cursor?: number) {
 }
 
 /** Server-injected first-paint identity (window.AQ_USER), present before any fetch. */
-export function currentUser(): { id?: number; name: string; avatar: string; slug?: string; country?: string } | null {
+export function currentUser(): { id?: number; name: string; avatar: string; slug?: string; country?: string; operator?: boolean } | null {
   if (typeof window === "undefined") return null;
-  return (window as unknown as { AQ_USER?: { id?: number; name: string; avatar: string; slug?: string; country?: string } }).AQ_USER ?? null;
+  return (window as unknown as { AQ_USER?: { id?: number; name: string; avatar: string; slug?: string; country?: string; operator?: boolean } }).AQ_USER ?? null;
 }
+/** manage_options, as the server injected it. UI only — every admin surface is ALSO 'admin' in
+ *  Rest::ROUTES, so a member who flips this flag in devtools gets a 403 and no data. */
+export function isOperator(): boolean { return isLoggedIn() && !!currentUser()?.operator; }
 export function isLoggedIn(): boolean {
   if (typeof window === "undefined") return false;
   const v = (window as unknown as { AQ_LOGGED_IN?: boolean }).AQ_LOGGED_IN;
@@ -3258,3 +3261,38 @@ export function castVolunteer(on: boolean, tz: string) {
 export function castIso(meet: number, media_id: number) {
   return post<{ ok: boolean; iso: { uid: number; name: string; bytes: number; url: string }[] }>("/artacast/iso", { meet, media_id });
 }
+
+// ── Outreach (manage_options only — every route is 'admin' in Rest::ROUTES; src/Outreach.php) ──
+// Accounts the platforms suggested to Arash, the include/exclude decision, the phone's queue, and
+// the dashboard. All times are UTC "YYYY-MM-DD HH:MM:SS".
+export type OutreachPlatform = "linkedin" | "facebook" | "instagram" | "x";
+export type OutreachStatus = "pending" | "included" | "excluded";
+export type OutreachAccount = {
+  id: number; platform: OutreachPlatform; handle: string; profile_url: string; full_name: string;
+  tagline: string; bio: string | null; photo: string;
+  followers: number | null; following: number | null; connections: number | null; mutuals: number | null;
+  source: string; status: OutreachStatus; discovered_at: string; updated_at: string;
+  decided_at: string | null; request_sent_at: string | null; accepted_at: string | null;
+  notes: string | null; time_to_accept_s: number | null;
+};
+export type OutreachImportResult = { inserted: number; updated: number; errors: { row: number; error: string }[] };
+export type OutreachStat = {
+  platform: OutreachPlatform; total: number; pending: number; included: number; excluded: number; sent: number; accepted: number;
+  acceptance_rate: number | null; tta_median_s: number | null; tta_mean_s: number | null;
+};
+export type OutreachPlanRow = { platform: OutreachPlatform; daily_cap: number; sent_today: number; remaining_today: number; queued: number; days_to_clear: number | null };
+export const OutreachApi = {
+  list: (p: { platform?: string; status?: string; cursor?: number }) =>
+    get<{ items: OutreachAccount[]; next: number; counts: Record<OutreachStatus, number> }>("/outreach/accounts",
+      Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined && v !== "")) as Record<string, string | number>),
+  decide: (ids: number[], status: OutreachStatus) => post<{ ok: boolean; updated: number }>("/outreach/decide", { ids, status }),
+  notes: (id: number, notes: string) => post<OutreachAccount>(`/outreach/accounts/${id}/notes`, { notes }),
+  stats: () => get<{ platforms: OutreachStat[] }>("/outreach/stats"),
+  plan: () => get<{ platforms: OutreachPlanRow[]; day_starts: string }>("/outreach/plan"),
+  setCaps: (caps: Partial<Record<OutreachPlatform, number>>) => post<{ ok: boolean; caps: Record<OutreachPlatform, number> }>("/outreach/caps", caps),
+  importCsv: (csv: string) => post<OutreachImportResult>("/outreach/import", { csv }),
+  exportCsv: (p: { platform?: string; status?: string }) =>
+    get<{ filename: string; rows: number; csv: string }>("/outreach/export",
+      Object.fromEntries(Object.entries(p).filter(([, v]) => v)) as Record<string, string>),
+  template: () => get<{ filename: string; csv: string }>("/outreach/template"),
+};

@@ -10,6 +10,7 @@ import { openSearch, useWide } from "../lib/rail";
 import { nameClass, nameSize } from "../lib/fmt";
 import { UserMenu } from "./UserMenu";
 import { currentUser, isLoggedIn, localePath } from "../lib/wp";
+import { isOperator } from "../lib/api";
 import { signOut } from "../lib/auth";
 import { getChatState, subscribeChat } from "../lib/chat-store";
 import { cartCount, onCartChange } from "../lib/cart";
@@ -52,6 +53,7 @@ const I = {
   coins: <><ellipse cx="12" cy="6" rx="7" ry="3" /><path d="M5 6v6c0 1.66 3.13 3 7 3s7-1.34 7-3V6" /><path d="M5 12v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6" /></>,
   wallet: <><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18" /><path d="M16 14h2" /></>,
   database: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18M3 14h18M9 4v16" /></>,
+  send: <><path d="M21 3 3 10.5l7 2.5 2.5 7L21 3Z" /><path d="m10 13 4.5-4.5" /></>,
   megaphone: <><path d="M4 10v4a1 1 0 0 0 1 1h3l8 4V5L8 9H5a1 1 0 0 0-1 1Z" /><path d="M18.5 9a3 3 0 0 1 0 6" /></>,
   fingerprint: <><path d="M12 11v2a9 9 0 0 1-2 5.5" /><path d="M8.5 5.5A6 6 0 0 1 18 10v3" /><path d="M6 13v-3a6 6 0 0 1 .8-3" /><path d="M9 11a3 3 0 0 1 6 0v2a12 12 0 0 1-1 5" /><path d="M12 13v1a15 15 0 0 1-1.2 6" /></>,
   download: <><path d="M12 3v12" /><path d="M7 11l5 4 5-4" /><path d="M5 21h14" /></>,
@@ -179,7 +181,7 @@ const FEED_SHELVES = new Set([
   "/2d-games", "/3d-games", "/music",
 ]);
 
-const NAV: { label: string; href: string; icon: IconKey; divider?: boolean; external?: boolean; auth?: boolean }[] = [
+const NAV: { label: string; href: string; icon: IconKey; divider?: boolean; external?: boolean; auth?: boolean; admin?: boolean }[] = [
   { label: "Profile", href: ME_SLUG ? `/u/${ME_SLUG}/` : "/user-account/", icon: "profile", external: true, auth: true },
   // The universal Studio — every submission on the platform is authored here as one reproducible
   // notebook, whatever its kind (2026-07-13 feed reset).
@@ -200,8 +202,11 @@ const NAV: { label: string; href: string; icon: IconKey; divider?: boolean; exte
   // ArtaChat — end-to-end encrypted DMs; keys live on the member's device, the DB holds ciphertext.
   { label: "ArtaChat", href: "/messages/", icon: "mail", external: true, auth: true },
   { label: "Calendar", href: "/calendar/", icon: "calendar", external: true, auth: true },
-  // ArtaCast — the show; a couple asks to appear from here (pages/ArtaCast.tsx).
-  { label: "ArtaCast", href: "/artacast/", icon: "megaphone", external: true },
+  // ArtaCast — the show (pages/ArtaCast.tsx). ADMIN ONLY since 2026-10-15: the row, the route and
+  // every artacast/* endpoint ('admin' in Rest::ROUTES) are operator-only.
+  { label: "ArtaCast", href: "/artacast/", icon: "megaphone", external: true, auth: true, admin: true },
+  // Outreach — the ArtaTask review queue + dashboard (pages/Outreach.tsx). ADMIN ONLY, server-enforced.
+  { label: "Outreach", href: "/artaoutreach/", icon: "send", external: true, auth: true, admin: true },
   { label: "Rankings", href: "/rankings/", icon: "trophy", external: true },
   // UNLISTED, not retired (operator 2026-08-03): /topics/ and /issues/ still resolve and still
   // render. They are reached from where they are actually needed — the seasons and cycles surfaces
@@ -414,7 +419,9 @@ function Sidebar({ active, expanded, onNavigate }: { active: string; expanded: b
   const labelShow = "opacity-100 md:opacity-0 xl:opacity-100";
   // ONE sidebar for both shells (Kaggle shows signed-out visitors the same rail): the
   // member-only (`auth`) rows simply drop out when nobody is signed in.
-  const items = isLoggedIn() ? NAV : NAV.filter((n) => !n.auth);
+  // `admin` rows render only for manage_options (window.AQ_USER.operator); their routes are 'admin'
+  // server-side too, so hiding them is presentation, not the guard.
+  const items = isLoggedIn() ? NAV.filter((n) => !n.admin || isOperator()) : NAV.filter((n) => !n.auth);
   // The account row at the foot needs the viewer; server-injected, so it is static for the page.
   const me = isLoggedIn() ? currentUser() : null;
   return (

@@ -1132,10 +1132,13 @@ final class Extra {
 	 *  so /data and the nightly export do not publish who has a blob or the ciphertext itself.
 	 *  See docs/artatask-sync.md.
 	 *
-	 *  aq_artaoutreach: the artaoutreach plugin's queue of accounts the platforms suggested to
+	 *  aq_cast_requests: ArtaCast became ADMIN ONLY (operator 2026-10-15) — every artacast/* route is
+	 *  'admin', so the couples' requests are no longer published here either.
+	 *
+	 *  aq_artaoutreach: Outreach's queue (Outreach.php) of accounts the platforms suggested to
 	 *  Arash (names, bios, photos, counts of people who never joined ArtaQuest). Admin-only; never
 	 *  public. */
-	const PRIVATE_TABLES = [ 'aq_doc_sources', 'aq_order_ship', 'aq_chats', 'aq_chat_msgs', 'aq_task_sync', 'aq_artaoutreach' ];
+	const PRIVATE_TABLES = [ 'aq_doc_sources', 'aq_order_ship', 'aq_chats', 'aq_chat_msgs', 'aq_task_sync', 'aq_artaoutreach', 'aq_cast_requests' ];
 
 	public static function all_table_names() {
 		global $wpdb;

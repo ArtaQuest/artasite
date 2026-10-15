@@ -564,22 +564,22 @@ final class Rest {
 		[ 'POST', 'book/rules',                    'Booking::set_rule',   'user'   ], // create or update one
 		[ 'POST', 'book/rule-off',                 'Booking::drop_rule',  'user'   ], // stop offering it
 		// ── ArtaCast — a couple asks to appear on the show (src/Cast.php) ─────────
-		[ 'GET',  'artacast/page',                 'Cast::page',          'public' ], // the show, the host, whether hours are open, my request
-		[ 'POST', 'artacast/save',                 'Cast::save',          'user'   ], // create or update my request (the requester writes both sides; the partner their own)
-		[ 'POST', 'artacast/photo',                'Cast::photo',         'user'   ], // {side, image} one portrait, stored like an avatar
-		[ 'POST', 'artacast/invite',               'Cast::invite',        'user'   ], // mint + email the partner's single-use link (hash stored)
-		[ 'POST', 'artacast/accept',               'Cast::accept',        'user'   ], // {k} the partner's click, signed in as themselves — spent atomically
-		[ 'POST', 'artacast/schedule',             'Cast::schedule',      'user'   ], // {start} take a recording slot — through Booking::take, seats the partner
-		[ 'POST', 'artacast/confirm',                 'Cast::confirm',       'user' ], // the host confirms (ok=1) or declines (ok=0) an episode; booking waits for it
-		[ 'POST', 'artacast/withdraw',             'Cast::withdraw',      'user'   ], // the requester takes it back
-		[ 'GET',  'artacast/inbox',                'Cast::inbox',         'user'   ], // host/operator: every live request
-		[ 'POST', 'artacast/host-open',            'Cast::host_open',     'user'   ], // a host: make sure my calendar is open to couples (the 'artacast' booking rule; idempotent)
-		[ 'POST', 'artacast/volunteer',            'Cast::volunteer',     'user'   ], // {on, tz} offer to host episodes, or stop
-		[ 'GET',  'artacast/episode',              'Cast::episode',       'user'   ], // ?meet= → the frame's facts for a recording (guests of the meeting; 404 = not an episode)
-		[ 'POST', 'artacast/recorded',             'Cast::recorded',      'user'   ], // host: the device finished writing an episode — remembered for the inbox
-		[ 'POST', 'artacast/finish',               'Cast::finish',        'user'   ], // host: {meet, media_id, thumb?} the raw is on ArtaCloud — start finishing it on Kaggle (also = retry)
-		[ 'GET',  'artacast/final',                'Cast::final',         'user'   ], // host: ?id= → fresh download links for the finished episode (signed, short-lived)
-		[ 'POST', 'artacast/iso',                  'Cast::iso',           'user'   ], // a guest: {meet, media_id} my own camera track is on my shelf — attach it to the episode
+		[ 'GET',  'artacast/page',                 'Cast::page',          'admin' ], // the show, the host, whether hours are open, my request
+		[ 'POST', 'artacast/save',                 'Cast::save',          'admin'   ], // create or update my request (the requester writes both sides; the partner their own)
+		[ 'POST', 'artacast/photo',                'Cast::photo',         'admin'   ], // {side, image} one portrait, stored like an avatar
+		[ 'POST', 'artacast/invite',               'Cast::invite',        'admin'   ], // mint + email the partner's single-use link (hash stored)
+		[ 'POST', 'artacast/accept',               'Cast::accept',        'admin'   ], // {k} the partner's click, signed in as themselves — spent atomically
+		[ 'POST', 'artacast/schedule',             'Cast::schedule',      'admin'   ], // {start} take a recording slot — through Booking::take, seats the partner
+		[ 'POST', 'artacast/confirm',                 'Cast::confirm',       'admin' ], // the host confirms (ok=1) or declines (ok=0) an episode; booking waits for it
+		[ 'POST', 'artacast/withdraw',             'Cast::withdraw',      'admin'   ], // the requester takes it back
+		[ 'GET',  'artacast/inbox',                'Cast::inbox',         'admin'   ], // host/operator: every live request
+		[ 'POST', 'artacast/host-open',            'Cast::host_open',     'admin'   ], // a host: make sure my calendar is open to couples (the 'artacast' booking rule; idempotent)
+		[ 'POST', 'artacast/volunteer',            'Cast::volunteer',     'admin'   ], // {on, tz} offer to host episodes, or stop
+		[ 'GET',  'artacast/episode',              'Cast::episode',       'admin'   ], // ?meet= → the frame's facts for a recording (guests of the meeting; 404 = not an episode)
+		[ 'POST', 'artacast/recorded',             'Cast::recorded',      'admin'   ], // host: the device finished writing an episode — remembered for the inbox
+		[ 'POST', 'artacast/finish',               'Cast::finish',        'admin'   ], // host: {meet, media_id, thumb?} the raw is on ArtaCloud — start finishing it on Kaggle (also = retry)
+		[ 'GET',  'artacast/final',                'Cast::final',         'admin'   ], // host: ?id= → fresh download links for the finished episode (signed, short-lived)
+		[ 'POST', 'artacast/iso',                  'Cast::iso',           'admin'   ], // a guest: {meet, media_id} my own camera track is on my shelf — attach it to the episode
 		[ 'GET',  'meet/list',                     'Meetings::list_mine', 'user' ], // ?scope=upcoming|past
 		[ 'GET',  'meet/get',                      'Meetings::get',       'user' ], // ?id= → one meeting + its guests
 		[ 'POST', 'meet/create',                   'Meetings::create',    'user' ], // {title, start, minutes, tz, guests[]}
@@ -725,6 +725,24 @@ final class Rest {
 		// wrote `ipynb` with NO published-status guard — the one write the repo's agent rules forbid outright,
 		// because sig(ipynb) is what the author's confirmation ledger row, the DB publish-guard and
 		// integrity_sweep() are all keyed on. Removed with their handlers.
+
+		// ── Outreach (src/Outreach.php) — ADMIN ONLY ─────────────────────
+		// Accounts the platforms suggested to Arash, the include/exclude decision, the phone's send
+		// queue, and the dashboard. Every row is 'admin': a cookie session with manage_options; an API
+		// token is refused even for an operator. The table is in Extra::PRIVATE_TABLES.
+		[ 'GET',  'outreach/accounts',                        'Outreach::list',      'admin' ], // ?platform=&status=&cursor= keyset page + status counts
+		[ 'POST', 'outreach/accounts',                        'Outreach::ingest',    'admin' ], // one record or {accounts:[…]} ≤500 — upsert by platform+handle, never changes status
+		[ 'POST', 'outreach/decide',                          'Outreach::decide',    'admin' ], // {ids[], status} include / exclude / pending; a sent row is final
+		[ 'POST', 'outreach/accounts/(?P<id>[0-9]+)/notes',   'Outreach::notes',     'admin' ], // {notes}
+		[ 'POST', 'outreach/accounts/(?P<id>[0-9]+)/sent',    'Outreach::sent',      'admin' ], // {at?} the phone sent the request (included rows only; idempotent)
+		[ 'POST', 'outreach/accounts/(?P<id>[0-9]+)/accepted','Outreach::accepted',  'admin' ], // {at?} accepted / followed back → time_to_accept_s
+		[ 'GET',  'outreach/queue',                           'Outreach::queue',     'admin' ], // ?platform=&limit= included, not yet sent, oldest decision first
+		[ 'GET',  'outreach/stats',                           'Outreach::stats',     'admin' ], // per platform: counts, acceptance rate, time-to-accept median/mean
+		[ 'GET',  'outreach/plan',                            'Outreach::plan',      'admin' ], // daily caps, sent today, remaining, days to clear the queue
+		[ 'POST', 'outreach/caps',                            'Outreach::set_caps',  'admin' ], // {linkedin?, facebook?, instagram?, x?} 0…100 per day
+		[ 'POST', 'outreach/import',                          'Outreach::import',    'admin' ], // {csv} ≤2 MB, ≤5000 rows, per-row errors
+		[ 'GET',  'outreach/export',                          'Outreach::export',    'admin' ], // ?platform=&status= → {filename, csv} formula-guarded
+		[ 'GET',  'outreach/template',                        'Outreach::template',  'admin' ], // → {filename, csv}
 
 		// ── ArtaTask phone sync (src/TaskSync.php) ───────────────────────────
 		// The five JSON blobs that used to live in Cloudflare Workers KV (TASK_SYNC).

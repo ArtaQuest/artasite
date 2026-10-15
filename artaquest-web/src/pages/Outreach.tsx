@@ -1,0 +1,239 @@
+import { useCallback, useEffect, useState, type ChangeEvent } from "react";
+import {
+  OutreachApi, isOperator,
+  type OutreachAccount, type OutreachImportResult, type OutreachPlanRow, type OutreachPlatform, type OutreachStat, type OutreachStatus,
+} from "../lib/api";
+import { Button, Card, ErrorNote, PageHero, Select, SkeletonGrid, StatusNote, Tabs, Textarea, cx } from "../components/ui";
+import NotFound from "./NotFound";
+
+/**
+ * OUTREACH — the ArtaTask review queue and dashboard (operator 2026-10-15). ADMIN ONLY.
+ *
+ * Accounts LinkedIn, Facebook, Instagram and X suggested to Arash. Each is included in the study
+ * (the phone app later sends a request) or excluded, by hand, here. The page renders NotFound for
+ * anyone without manage_options, and that is presentation only: every outreach/* route is 'admin'
+ * in Rest::ROUTES, so a member who forces the page open gets 403s and no data.
+ */
+
+const PLATFORMS: OutreachPlatform[] = ["linkedin", "facebook", "instagram", "x"];
+const PLATFORM_LABEL: Record<OutreachPlatform, string> = { linkedin: "LinkedIn", facebook: "Facebook", instagram: "Instagram", x: "X" };
+type View = "review" | "results" | "plan";
+
+const n = (v: number | null | undefined) => (v === null || v === undefined ? "—" : v.toLocaleString());
+const local = (utc: string | null) => (utc ? new Date(utc.replace(" ", "T") + "Z").toLocaleString() : "");
+function dur(s: number | null): string {
+  if (s === null) return "—";
+  if (s < 3600) return `${Math.round(s / 60)} min`;
+  if (s < 172800) return `${(s / 3600).toFixed(1)} h`;
+  return `${(s / 86400).toFixed(1)} d`;
+}
+function download(filename: string, csv: string) {
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function Row({ a, picked, onPick, onDecide, onSaved }: {
+  a: OutreachAccount; picked: boolean; onPick: (on: boolean) => void;
+  onDecide: (s: OutreachStatus) => void; onSaved: (a: OutreachAccount) => void;
+}) {
+  const [notes, setNotes] = useState(a.notes ?? "");
+  const [busy, setBusy] = useState(false);
+  const sent = !!a.request_sent_at;
+  const save = async () => {
+    setBusy(true);
+    try { onSaved(await OutreachApi.notes(a.id, notes)); } finally { setBusy(false); }
+  };
+  return (
+    <li className="flex gap-3 border-t border-line px-3 py-3 first:border-t-0">
+      <input type="checkbox" className="mt-1" checked={picked} disabled={sent} onChange={(e) => onPick(e.target.checked)} aria-label={`Select ${a.full_name || a.handle}`} />
+      {a.photo ? <img src={a.photo} alt="" width={48} height={48} loading="lazy" referrerPolicy="no-referrer" className="h-12 w-12 shrink-0 rounded-full object-cover" /> : <span className="h-12 w-12 shrink-0 rounded-full bg-veil/[0.06]" aria-hidden="true" />}
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <span className="font-semibold text-ink">{a.full_name || a.handle}</span>
+          <span className="text-[13px] text-ink-3">{PLATFORM_LABEL[a.platform]} · {a.profile_url ? <a className="hover:text-yang" href={a.profile_url} target="_blank" rel="noopener noreferrer">@{a.handle}</a> : `@${a.handle}`}</span>
+          <span className="text-[12px] text-ink-3">{a.source}</span>
+        </div>
+        {a.tagline && <p className="text-[13px] italic text-ink-2">{a.tagline}</p>}
+        {a.bio && <p className="line-clamp-3 text-[13px] text-ink-3">{a.bio}</p>}
+        <p className="mt-1 text-[12px] text-ink-3">
+          Mutuals {n(a.mutuals)} · Followers {n(a.followers)} · Following {n(a.following)}{a.connections !== null && ` · Connections ${n(a.connections)}`}
+        </p>
+        <p className="text-[12px] text-ink-3">
+          Found {local(a.discovered_at)}{a.decided_at && ` · Decided ${local(a.decided_at)}`}{a.request_sent_at && ` · Sent ${local(a.request_sent_at)}`}{a.accepted_at && ` · Accepted ${local(a.accepted_at)} (${dur(a.time_to_accept_s)})`}
+        </p>
+        <div className="mt-2 flex items-start gap-2">
+          <Textarea rows={1} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes" className="min-h-0 flex-1 text-[13px]" aria-label="Notes" />
+          <Button size="sm" variant="outline" onClick={save} disabled={busy || notes === (a.notes ?? "")}>Save notes</Button>
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1.5">
+        <span className={cx("text-[12px] font-semibold", a.status === "included" ? "text-yang" : "text-ink-3")}>{a.status}</span>
+        {sent ? <span className="text-[12px] text-ink-3">Request sent</span> : <>
+          {a.status !== "included" && <Button size="sm" onClick={() => onDecide("included")}>Include</Button>}
+          {a.status !== "excluded" && <Button size="sm" variant="outline" onClick={() => onDecide("excluded")}>Exclude</Button>}
+        </>}
+      </div>
+    </li>
+  );
+}
+
+function Review() {
+  const [platform, setPlatform] = useState("");
+  const [status, setStatus] = useState<OutreachStatus | "">("pending");
+  const [items, setItems] = useState<OutreachAccount[] | null>(null);
+  const [counts, setCounts] = useState<Record<OutreachStatus, number> | null>(null);
+  const [next, setNext] = useState(0);
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  const [err, setErr] = useState("");
+  const [imp, setImp] = useState<OutreachImportResult | null>(null);
+
+  const load = useCallback(async (cursor = 0) => {
+    setErr("");
+    try {
+      const r = await OutreachApi.list({ platform, status, cursor: cursor || undefined });
+      setItems((prev) => (cursor ? [...(prev ?? []), ...r.items] : r.items));
+      setCounts(r.counts); setNext(r.next);
+      if (!cursor) setPicked(new Set());
+    } catch { setErr("Couldn't load accounts."); }
+  }, [platform, status]);
+  useEffect(() => { void load(0); }, [load]);
+
+  const decide = async (ids: number[], s: OutreachStatus) => {
+    if (!ids.length) return;
+    try { await OutreachApi.decide(ids, s); await load(0); } catch { setErr("Couldn't save that decision."); }
+  };
+  const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    if (f.size > 2 * 1024 * 1024) { setErr("That CSV is larger than 2 MB."); return; }
+    try { setImp(await OutreachApi.importCsv(await f.text())); await load(0); } catch { setErr("Import failed."); }
+  };
+  const exportView = async () => {
+    try { const r = await OutreachApi.exportCsv({ platform, status }); download(r.filename, r.csv); } catch { setErr("Export failed."); }
+  };
+  const template = async () => {
+    try { const r = await OutreachApi.template(); download(r.filename, r.csv); } catch { setErr("Couldn't fetch the template."); }
+  };
+
+  const total = counts ? counts.pending + counts.included + counts.excluded : 0;
+  const statusTabs = [
+    { key: "", label: `All (${total})` },
+    ...(["pending", "included", "excluded"] as OutreachStatus[]).map((s) => ({ key: s, label: `${s[0].toUpperCase()}${s.slice(1)} (${counts?.[s] ?? 0})` })),
+  ];
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-end gap-3">
+        <Tabs tabs={statusTabs} active={status} onChange={(k) => setStatus(k as OutreachStatus | "")} label="Status" />
+        <Select label="Platform" value={platform} onChange={setPlatform} options={[{ value: "", label: "All platforms" }, ...PLATFORMS.map((p) => ({ value: p, label: PLATFORM_LABEL[p] }))]} />
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" disabled={!picked.size} onClick={() => decide([...picked], "included")}>Include selected</Button>
+        <Button size="sm" variant="outline" disabled={!picked.size} onClick={() => decide([...picked], "excluded")}>Exclude selected</Button>
+        <Button size="sm" variant="ghost" disabled={!picked.size} onClick={() => decide([...picked], "pending")}>Back to pending</Button>
+        <span className="flex-1" />
+        <label className="cursor-pointer text-[13px] font-semibold text-ink-2 hover:text-yang">
+          Import CSV<input type="file" accept=".csv,text/csv" className="sr-only" onChange={onFile} />
+        </label>
+        <Button size="sm" variant="ghost" onClick={exportView}>Export this view</Button>
+        <Button size="sm" variant="ghost" onClick={template}>Template</Button>
+      </div>
+      {imp && (
+        <StatusNote className="py-2 text-start">
+          Import: {imp.inserted} inserted, {imp.updated} updated, {imp.errors.length} errors.
+          {imp.errors.slice(0, 50).map((e) => <span key={e.row} className="block">Row {e.row}: {e.error}</span>)}
+        </StatusNote>
+      )}
+      {err && <ErrorNote>{err}</ErrorNote>}
+      {items === null ? <SkeletonGrid count={4} media={false} /> : !items.length ? <StatusNote>Nothing here.</StatusNote> : (
+        <Card className="p-0">
+          <ul>
+            {items.map((a) => (
+              <Row key={a.id} a={a} picked={picked.has(a.id)}
+                onPick={(on) => setPicked((p) => { const s = new Set(p); if (on) s.add(a.id); else s.delete(a.id); return s; })}
+                onDecide={(s) => decide([a.id], s)}
+                onSaved={(u) => setItems((prev) => (prev ?? []).map((x) => (x.id === u.id ? u : x)))} />
+            ))}
+          </ul>
+        </Card>
+      )}
+      {next > 0 && <Button variant="outline" onClick={() => load(next)}>Older</Button>}
+    </div>
+  );
+}
+
+function Results() {
+  const [rows, setRows] = useState<OutreachStat[] | null>(null);
+  useEffect(() => { OutreachApi.stats().then((r) => setRows(r.platforms)).catch(() => setRows([])); }, []);
+  if (rows === null) return <SkeletonGrid count={4} media={false} />;
+  return (
+    <Card className="overflow-x-auto p-0">
+      <table className="w-full text-[13px]">
+        <thead><tr className="text-start text-ink-3">{["Platform", "Pending", "Included", "Excluded", "Sent", "Accepted", "Acceptance rate", "Time to accept (median)", "(mean)"].map((h) => <th key={h} className="px-3 py-2 text-start font-semibold">{h}</th>)}</tr></thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.platform} className="border-t border-line">
+              <td className="px-3 py-2 font-semibold text-ink">{PLATFORM_LABEL[r.platform]}</td>
+              <td className="px-3 py-2">{n(r.pending)}</td><td className="px-3 py-2">{n(r.included)}</td><td className="px-3 py-2">{n(r.excluded)}</td>
+              <td className="px-3 py-2">{n(r.sent)}</td><td className="px-3 py-2">{n(r.accepted)}</td>
+              <td className="px-3 py-2">{r.acceptance_rate === null ? "—" : `${(r.acceptance_rate * 100).toFixed(1)}%`}</td>
+              <td className="px-3 py-2">{dur(r.tta_median_s)}</td><td className="px-3 py-2">{dur(r.tta_mean_s)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
+  );
+}
+
+function Plan() {
+  const [rows, setRows] = useState<OutreachPlanRow[] | null>(null);
+  const [caps, setCaps] = useState<Record<string, string>>({});
+  const [msg, setMsg] = useState("");
+  const load = useCallback(() => OutreachApi.plan().then((r) => {
+    setRows(r.platforms); setCaps(Object.fromEntries(r.platforms.map((p) => [p.platform, String(p.daily_cap)])));
+  }).catch(() => setRows([])), []);
+  useEffect(() => { void load(); }, [load]);
+  const save = async () => {
+    try {
+      await OutreachApi.setCaps(Object.fromEntries(Object.entries(caps).map(([k, v]) => [k, Number(v) || 0])) as Partial<Record<OutreachPlatform, number>>);
+      setMsg("Daily caps saved."); await load();
+    } catch { setMsg("Couldn't save the caps."); }
+  };
+  if (rows === null) return <SkeletonGrid count={4} media={false} />;
+  return (
+    <div className="flex flex-col gap-3">
+      <Card className="overflow-x-auto p-0">
+        <table className="w-full text-[13px]">
+          <thead><tr className="text-ink-3">{["Platform", "Daily cap", "Sent today (UTC)", "Remaining today", "Queued (included, not sent)", "Days to clear"].map((h) => <th key={h} className="px-3 py-2 text-start font-semibold">{h}</th>)}</tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.platform} className="border-t border-line">
+                <td className="px-3 py-2 font-semibold text-ink">{PLATFORM_LABEL[r.platform]}</td>
+                <td className="px-3 py-2"><input type="number" min={0} max={100} value={caps[r.platform] ?? ""} onChange={(e) => setCaps((c) => ({ ...c, [r.platform]: e.target.value }))} className="w-16 rounded border border-line bg-transparent px-1" aria-label={`${PLATFORM_LABEL[r.platform]} daily cap`} /></td>
+                <td className="px-3 py-2">{n(r.sent_today)}</td><td className="px-3 py-2">{n(r.remaining_today)}</td>
+                <td className="px-3 py-2">{n(r.queued)}</td><td className="px-3 py-2">{r.days_to_clear === null ? "—" : r.days_to_clear}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+      <div className="flex items-center gap-3"><Button size="sm" onClick={save}>Save daily caps</Button>{msg && <span className="text-[13px] text-ink-3">{msg}</span>}</div>
+    </div>
+  );
+}
+
+export default function Outreach() {
+  const [view, setView] = useState<View>("review");
+  if (!isOperator()) return <NotFound />;
+  return (
+    <div className="flex flex-col gap-5">
+      <PageHero title="Outreach" lede="Accounts the platforms suggested. Include one to add it to the study (ArtaTask will send the request); exclude to drop it. Nothing is sent from this page." />
+      <Tabs tabs={[{ key: "review", label: "Review" }, { key: "results", label: "Results" }, { key: "plan", label: "Plan" }]} active={view} onChange={(k) => setView(k as View)} label="Outreach" />
+      {view === "review" ? <Review /> : view === "results" ? <Results /> : <Plan />}
+    </div>
+  );
+}

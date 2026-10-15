@@ -494,7 +494,7 @@ add_action( 'template_redirect', 'aq_redirect_legacy_account_tabs', 5 );
  *  they are noindex because an HMAC-bearing URL has no business in an index, not because they are
  *  dead. Never mirror this array into the parse_request redirect map above. */
 function aq_app_noindex_page_slugs() {
-	return array( 'user-account', 'login', 'wallet', 'enroll', 'bursary-application', 'certificate', 'verify', 'studio' );
+	return array( 'user-account', 'login', 'wallet', 'enroll', 'bursary-application', 'certificate', 'verify', 'studio', 'artacast' ); // artacast: ADMIN ONLY since 2026-10-15 — no index, no sitemap, no SEO body
 }
 
 /** Member-only feed surfaces served as SOFT paths (no WP page): the operator console and the
@@ -514,7 +514,10 @@ function aq_app_is_private_soft_path() {
 		|| 'calendar' === $path // ArtaCalendar — a member's own dated things
 		// A member's booking page. Shared by link and noindex: when somebody is free is theirs to
 		// hand out, not something to publish to a search engine.
-		|| 'book' === $path || 0 === strpos( $path, 'book/' );
+		|| 'book' === $path || 0 === strpos( $path, 'book/' )
+		// Outreach — the ArtaTask review queue + dashboard (pages/Outreach.tsx). ADMIN ONLY; the page
+		// renders nothing for anyone else and every outreach/* route is 'admin' server-side.
+		|| 'artaoutreach' === $path; // NOT /outreach: that slug is the legacy 301 anchor to /sponsors
 }
 
 function aq_app_is_dashboard() {
@@ -1689,12 +1692,6 @@ function aq_app_route_seo( $slug ) {
 			'Library',
 			array(
 				'Every file published on ' . $b . ' — music, video, images, datasets, models and papers — each one produced by a Kaggle notebook anyone can re-run. Free to play, download and attach to your own posts.',
-			),
-		),
-		'artacast'    => array(
-			'ArtaCast',
-			array(
-				'ArtaCast is the ' . $b . ' show where the host talks with couples about how they stayed together. Ask to appear: enter a name, one line in your own words, a date and place of birth and a photograph for each of you, invite your partner with a single-use link, watch the thumbnail and the episode frame take shape as you type, and book a recording slot from the host\'s published hours. The recording is an encrypted ArtaMeet video call with the host and both of you on the guest list.',
 			),
 		),
 		'my-library'  => array(

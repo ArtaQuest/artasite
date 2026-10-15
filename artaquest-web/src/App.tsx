@@ -8,6 +8,7 @@ import { I18nGate } from "./components/I18nGate";
 import { IdentityGate } from "./components/IdentityGate";
 import { isLoggedIn, localePath } from "./lib/wp";
 import { dismissBootScreen } from "./lib/boot";
+import { isOperator } from "./lib/api";
 // Pages are lazy-loaded so the initial bundle ships only the shell + router + the current route's
 // chunk, not all 17 pages up-front (the heavy ones — Lesson's YT player, Donate, Wallet — defer
 // until visited). The persistent AppShell stays eager, so only the content area suspends on nav.
@@ -39,7 +40,8 @@ const Messages = lazy(() => import("./pages/Messages")); // ArtaChat — end-to-
 const Meet = lazy(() => import("./pages/Meet")); // ArtaMeet — scheduled meetings on ArtaChat rooms
 const Calendar = lazy(() => import("./pages/Calendar")); // ArtaCalendar — everything dated, in one place
 const Book = lazy(() => import("./pages/Book")); // a member's booking page — take a slot from their week
-const ArtaCast = lazy(() => import("./pages/ArtaCast")); // ArtaCast — a couple asks to appear on the show
+const ArtaCast = lazy(() => import("./pages/ArtaCast")); // ArtaCast — ADMIN ONLY since 2026-10-15 (<AdminOnly>)
+const Outreach = lazy(() => import("./pages/Outreach")); // Outreach — ArtaTask review queue + dashboard, ADMIN ONLY
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ArtaRead = lazy(() => import("./pages/ArtaRead")); // read/translate/listen to ANY PDF, on-device
 const Page = lazy(() => import("./pages/Page"));
@@ -69,6 +71,12 @@ const Lab = lazy(() => import("./pages/Lab")); // run + edit any notebook on-dev
 const Library = lazy(() => import("./pages/Library")); // every published file, attachable to any member's post
 
 // Front page: the feed for members, the marketing landing for visitors.
+/** Operator-only surfaces render NotFound for everyone else. Presentation only — their API routes
+ *  are 'admin' in Rest::ROUTES, so forcing the page open yields 403s and no data. */
+function AdminOnly({ children }: { children: ReactNode }) {
+  return isOperator() ? <>{children}</> : <NotFound />;
+}
+
 function HomeOrLanding() {
   return isLoggedIn() ? <Feed /> : <Landing />;
 }
@@ -126,7 +134,7 @@ const ROUTE_TITLES: Record<string, string> = {
   // Every /book/<handle> too — this is the one URL in the product designed to be handed to a
   // stranger, and a tab reading "Page not found" is the first thing they would see.
   "/book": "Calendar",
-  "/artacast": "ArtaCast",
+  "/artacast": "ArtaCast", "/artaoutreach": "Outreach",
   "/login": "Sign in", "/sponsors": "Sponsors",
   "/fearometer": "ArtaMod",
   "/works": "Home", "/challenges": "Challenges", "/rankings": "Rankings", "/studio": "Your Studio", "/console": "Operator console",
@@ -173,7 +181,7 @@ function stripLang(pathname: string): string {
 const STATIC_ROUTES = new Set([
   "/", "/about", "/wallet", "/faq-contact", "/developers",
   "/my-library", "/library", "/ceo",
-  "/user-account", "/login", "/donate", "/messages", "/meet", "/calendar", "/book", "/artacast",
+  "/user-account", "/login", "/donate", "/messages", "/meet", "/calendar", "/book", "/artacast", "/artaoutreach",
   "/finances",
   "/sponsors", "/offline", "/studio", "/console", "/fearometer",
   "/works", "/challenges", "/rankings", "/topics", "/lab",
@@ -432,8 +440,10 @@ export default function App() {
           <Route path="/book" element={<Navigate to="/calendar/?tab=free" replace />} />
           <Route path="/book/" element={<Navigate to="/calendar/?tab=free" replace />} />
           <Route path="/book/:handle" element={<Book />} />
-          <Route path="/artacast" element={<ArtaCast />} />
-          <Route path="/artacast/" element={<ArtaCast />} />
+          <Route path="/artacast" element={<AdminOnly><ArtaCast /></AdminOnly>} />
+          <Route path="/artacast/" element={<AdminOnly><ArtaCast /></AdminOnly>} />
+          <Route path="/artaoutreach" element={<AdminOnly><Outreach /></AdminOnly>} />
+          <Route path="/artaoutreach/" element={<AdminOnly><Outreach /></AdminOnly>} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/calendar/" element={<Calendar />} />
           <Route path="/meet" element={<Navigate to="/messages/?box=meetings" replace />} />
