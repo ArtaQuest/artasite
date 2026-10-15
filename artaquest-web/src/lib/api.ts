@@ -3265,7 +3265,7 @@ export function castIso(meet: number, media_id: number) {
 // ── Outreach (manage_options only — every route is 'admin' in Rest::ROUTES; src/Outreach.php) ──
 // Accounts the platforms suggested to Arash, the include/exclude decision, the phone's queue, and
 // the dashboard. All times are UTC "YYYY-MM-DD HH:MM:SS".
-export type OutreachPlatform = "linkedin" | "facebook" | "instagram" | "x";
+export type OutreachPlatform = "linkedin" | "facebook" | "instagram" | "x" | "github" | "strava";
 export type OutreachStatus = "pending" | "included" | "excluded";
 export type OutreachAccount = {
   id: number; platform: OutreachPlatform; handle: string; profile_url: string; full_name: string;

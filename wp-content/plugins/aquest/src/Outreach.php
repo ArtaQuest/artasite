@@ -4,7 +4,7 @@ namespace AQ;
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 /**
- * OUTREACH — Arash's review queue for accounts LinkedIn / Facebook / Instagram / X suggested to
+ * OUTREACH — Arash's review queue for accounts LinkedIn / Facebook / Instagram / X / GitHub / Strava suggested to
  * him, plus the ArtaTask dashboard (acceptance rates, time-to-accept, the send plan + daily caps).
  *
  * ADMIN ONLY, server-side: every route in Rest::ROUTES is 'admin' (a cookie session with
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 final class Outreach {
 
 	const TABLE     = 'aq_artaoutreach';
-	const PLATFORMS = [ 'linkedin', 'facebook', 'instagram', 'x' ];
+	const PLATFORMS = [ 'linkedin', 'facebook', 'instagram', 'x', 'github', 'strava' ];
 	const STATUSES  = [ 'pending', 'included', 'excluded' ];
 	const PER_PAGE  = 50;
 	const CSV_MAX   = 2097152; // 2 MB
@@ -25,7 +25,22 @@ final class Outreach {
 	const CSV_IN    = [ 'platform', 'handle', 'profile_url', 'full_name', 'tagline', 'bio', 'photo', 'followers', 'following', 'connections', 'mutuals', 'notes' ];
 	const CSV_OUT   = [ 'id', 'platform', 'handle', 'profile_url', 'full_name', 'tagline', 'bio', 'photo', 'followers', 'following', 'connections', 'mutuals', 'source', 'status', 'discovered_at', 'decided_at', 'request_sent_at', 'accepted_at', 'notes' ];
 	const CAPS_OPT  = 'aq_outreach_caps';
-	const CAPS_DEF  = [ 'linkedin' => 3, 'facebook' => 0, 'instagram' => 0, 'x' => 0 ];
+	const CAPS_DEF  = [ 'linkedin' => 3, 'facebook' => 0, 'instagram' => 0, 'x' => 0, 'github' => 0, 'strava' => 0 ];
+	/** Profile address built from a handle when the record carries none. GitHub and Strava are
+	 *  follow-based: "accepted" there means the person followed back. A Strava handle is the athlete
+	 *  id (or vanity name) from strava.com/athletes/<handle>. */
+	const URL_FMT   = [
+		'linkedin'  => 'https://www.linkedin.com/in/%s/',
+		'facebook'  => 'https://www.facebook.com/%s',
+		'instagram' => 'https://www.instagram.com/%s/',
+		'x'         => 'https://x.com/%s',
+		'github'    => 'https://github.com/%s',
+		'strava'    => 'https://www.strava.com/athletes/%s',
+	];
+
+	public static function profile_url( $platform, $handle ) {
+		return isset( self::URL_FMT[ $platform ] ) && $handle !== '' ? sprintf( self::URL_FMT[ $platform ], rawurlencode( $handle ) ) : '';
+	}
 
 	private static function t() { global $wpdb; return $wpdb->prefix . self::TABLE; }
 	private static function now() { return gmdate( 'Y-m-d H:i:s' ); }
@@ -60,6 +75,7 @@ final class Outreach {
 	public static function clean( array $r ) {
 		$platform = strtolower( trim( (string) ( $r['platform'] ?? '' ) ) );
 		if ( $platform === 'twitter' ) { $platform = 'x'; }
+		if ( $platform === 'gh' ) { $platform = 'github'; }
 		if ( ! in_array( $platform, self::PLATFORMS, true ) ) {
 			return new \WP_Error( 'platform', 'platform must be one of ' . implode( ', ', self::PLATFORMS ) );
 		}
@@ -68,7 +84,7 @@ final class Outreach {
 		return [
 			'platform'    => $platform,
 			'handle'      => $handle,
-			'profile_url' => esc_url_raw( (string) ( $r['profile_url'] ?? '' ) ),
+			'profile_url' => esc_url_raw( (string) ( $r['profile_url'] ?? '' ) ) ?: self::profile_url( $platform, $handle ),
 			'full_name'   => mb_substr( sanitize_text_field( (string) ( $r['full_name'] ?? '' ) ), 0, 255 ),
 			'tagline'     => mb_substr( sanitize_text_field( (string) ( $r['tagline'] ?? '' ) ), 0, 500 ),
 			'bio'         => sanitize_textarea_field( (string) ( $r['bio'] ?? '' ) ),
@@ -254,7 +270,7 @@ final class Outreach {
 		return [ 'platforms' => $out, 'day_starts' => $today . ' UTC' ];
 	}
 
-	/** POST outreach/caps {linkedin?, facebook?, instagram?, x?} — 0…100 per day. */
+	/** POST outreach/caps {linkedin?, facebook?, instagram?, x?, github?, strava?} — 0…100 per day. */
 	public static function set_caps( $req ) {
 		$caps = self::caps();
 		foreach ( self::PLATFORMS as $p ) {
@@ -300,6 +316,8 @@ final class Outreach {
 	public static function template( $req ) {
 		return [ 'filename' => 'outreach-template.csv', 'csv' => self::csv( self::CSV_IN, [
 			[ 'linkedin', 'example-person-1', 'https://www.linkedin.com/in/example-person-1', 'Example Person 1', 'Example tagline', 'Example bio', 'https://example.com/photo1.jpg', '', '', '250', '4', 'optional note' ],
+			[ 'github', 'example-dev-2', '', 'Example Dev 2', 'Example tagline', 'Example bio', '', '120', '80', '', '3', 'profile_url is built from the handle when empty' ],
+			[ 'strava', '12345678', '', 'Example Runner 3', '', '', '', '45', '60', '', '2', 'handle = athlete id' ],
 		] ) ];
 	}
 

@@ -9,14 +9,16 @@ import NotFound from "./NotFound";
 /**
  * OUTREACH — the ArtaTask review queue and dashboard (operator 2026-10-15). ADMIN ONLY.
  *
- * Accounts LinkedIn, Facebook, Instagram and X suggested to Arash. Each is included in the study
+ * Accounts LinkedIn, Facebook, Instagram, X, GitHub and Strava suggested to Arash. Each is included in the study
  * (the phone app later sends a request) or excluded, by hand, here. The page renders NotFound for
  * anyone without manage_options, and that is presentation only: every outreach/* route is 'admin'
  * in Rest::ROUTES, so a member who forces the page open gets 403s and no data.
  */
 
-const PLATFORMS: OutreachPlatform[] = ["linkedin", "facebook", "instagram", "x"];
-const PLATFORM_LABEL: Record<OutreachPlatform, string> = { linkedin: "LinkedIn", facebook: "Facebook", instagram: "Instagram", x: "X" };
+const PLATFORMS: OutreachPlatform[] = ["linkedin", "facebook", "instagram", "x", "github", "strava"];
+const PLATFORM_LABEL: Record<OutreachPlatform, string> = { linkedin: "LinkedIn", facebook: "Facebook", instagram: "Instagram", x: "X", github: "GitHub", strava: "Strava" };
+/** What "accepted" means per platform — GitHub and Strava are follow-based, so it is a follow-back. */
+const ACCEPT_MEANS: Record<OutreachPlatform, string> = { linkedin: "connection accepted", facebook: "friend request accepted", instagram: "followed back", x: "followed back", github: "followed back", strava: "followed back" };
 type View = "review" | "results" | "plan" | "sync";
 
 const n = (v: number | null | undefined) => (v === null || v === undefined ? "—" : v.toLocaleString());
@@ -176,7 +178,7 @@ function Results() {
         <tbody>
           {rows.map((r) => (
             <tr key={r.platform} className="border-t border-line">
-              <td className="px-3 py-2 font-semibold text-ink">{PLATFORM_LABEL[r.platform]}</td>
+              <td className="px-3 py-2"><span className="font-semibold text-ink">{PLATFORM_LABEL[r.platform]}</span><span className="block text-[11px] text-ink-3">accepted = {ACCEPT_MEANS[r.platform]}</span></td>
               <td className="px-3 py-2">{n(r.pending)}</td><td className="px-3 py-2">{n(r.included)}</td><td className="px-3 py-2">{n(r.excluded)}</td>
               <td className="px-3 py-2">{n(r.sent)}</td><td className="px-3 py-2">{n(r.accepted)}</td>
               <td className="px-3 py-2">{r.acceptance_rate === null ? "—" : `${(r.acceptance_rate * 100).toFixed(1)}%`}</td>

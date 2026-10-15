@@ -1,6 +1,6 @@
 # Outreach (admin only)
 
-The ArtaTask review queue and dashboard: accounts LinkedIn, Facebook, Instagram and X suggested to
+The ArtaTask review queue and dashboard: accounts LinkedIn, Facebook, Instagram, X, GitHub and Strava suggested to
 Arash, each included in or excluded from the study by hand. Included accounts are what the ArtaTask
 phone app may later send a connection/follow request to.
 
@@ -45,3 +45,12 @@ operator from a cookie session, **only** reaches `outreach/accounts` (POST), `ou
 `manage_options` (so the phone sign-in requires an admin account), is shown once and stored as
 sha256 like every other token, is rate-limited, and is revocable from Settings. That needs a new
 auth kind in `Rest::can` (e.g. `'admin_device'`), so it is a security decision for the operator.
+
+## Platforms
+
+`linkedin`, `facebook`, `instagram`, `x` (`twitter` accepted as an alias), `github` (`gh` alias), `strava`.
+Daily caps default to 0 for every platform except LinkedIn (3). When a record has no `profile_url`, it
+is built from the handle: `linkedin.com/in/<h>/`, `facebook.com/<h>`, `instagram.com/<h>/`, `x.com/<h>`,
+`github.com/<h>`, `strava.com/athletes/<h>` (a Strava handle is the athlete id or vanity name).
+"Accepted" means a connection or friend request accepted on LinkedIn / Facebook, and a follow-back on
+Instagram, X, GitHub and Strava.
