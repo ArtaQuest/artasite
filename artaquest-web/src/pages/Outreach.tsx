@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import {
-  OutreachApi, isOperator,
+  OutreachApi, isOperator, type ProfileSyncItem,
   type OutreachAccount, type OutreachImportResult, type OutreachPlanRow, type OutreachPlatform, type OutreachStat, type OutreachStatus,
 } from "../lib/api";
 import { Button, Card, ErrorNote, PageHero, Select, SkeletonGrid, StatusNote, Tabs, Textarea, cx } from "../components/ui";
@@ -17,7 +17,7 @@ import NotFound from "./NotFound";
 
 const PLATFORMS: OutreachPlatform[] = ["linkedin", "facebook", "instagram", "x"];
 const PLATFORM_LABEL: Record<OutreachPlatform, string> = { linkedin: "LinkedIn", facebook: "Facebook", instagram: "Instagram", x: "X" };
-type View = "review" | "results" | "plan";
+type View = "review" | "results" | "plan" | "sync";
 
 const n = (v: number | null | undefined) => (v === null || v === undefined ? "—" : v.toLocaleString());
 const local = (utc: string | null) => (utc ? new Date(utc.replace(" ", "T") + "Z").toLocaleString() : "");
@@ -226,14 +226,87 @@ function Plan() {
   );
 }
 
+/** PROFILE SYNC — mirror each member's public profile (full name, /u/ URL) onto their WP user
+ *  record (AQ\ProfileSync). Preview writes nothing; Apply needs an explicit confirm and only
+ *  touches the users that Preview listed, in batches of 200. No logins or emails are shown. */
+function ProfileSync() {
+  const [items, setItems] = useState<ProfileSyncItem[] | null>(null);
+  const [stats, setStats] = useState({ scanned: 0, bots: 0 });
+  const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [msg, setMsg] = useState("");
+  const preview = async () => {
+    setBusy(true); setMsg(""); setConfirming(false);
+    try {
+      const all: ProfileSyncItem[] = []; let scanned = 0, bots = 0; let cursor: number | null = 0;
+      while (cursor !== null) {
+        const r = await OutreachApi.syncPreview(cursor);
+        all.push(...r.items); scanned += r.scanned; bots += r.bots_skipped; cursor = r.next;
+      }
+      setItems(all); setStats({ scanned, bots });
+    } catch { setMsg("Couldn't load the preview."); }
+    setBusy(false);
+  };
+  const apply = async () => {
+    if (!items?.length) return;
+    setBusy(true); setConfirming(false);
+    const tot = { updated: 0, unchanged: 0, skipped: 0, fields: 0 };
+    try {
+      const ids = items.map((i) => i.id);
+      for (let k = 0; k < ids.length; k += 200) {
+        const r = await OutreachApi.syncApply(ids.slice(k, k + 200));
+        tot.updated += r.updated; tot.unchanged += r.unchanged; tot.skipped += r.skipped; tot.fields += r.fields;
+      }
+      setMsg(`Applied: ${tot.updated} users updated (${tot.fields} fields), ${tot.unchanged} already in sync, ${tot.skipped} skipped.`);
+      setItems(null);
+    } catch { setMsg(`Apply stopped partway: ${tot.updated} users updated so far. Run Preview again.`); }
+    setBusy(false);
+  };
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-[13px] text-ink-3">Copies each member's public profile (full name, profile address) onto their WordPress user. A name a member chose themselves is kept. Sign-in names, emails and roles are never changed; bots are skipped.</p>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button size="sm" onClick={preview} disabled={busy}>Preview</Button>
+        {items && items.length > 0 && !confirming && <Button size="sm" onClick={() => setConfirming(true)} disabled={busy}>Apply…</Button>}
+        {confirming && items && (
+          <span className="flex items-center gap-2 text-[13px]">
+            Update {items.length} user{items.length === 1 ? "" : "s"}?
+            <Button size="sm" onClick={apply} disabled={busy}>Confirm apply</Button>
+            <Button size="sm" onClick={() => setConfirming(false)} disabled={busy}>Cancel</Button>
+          </span>
+        )}
+        {msg && <span className="text-[13px] text-ink-3">{msg}</span>}
+      </div>
+      {items && <p className="text-[13px] text-ink-3">{stats.scanned} users scanned, {items.length} would change, {stats.bots} bots skipped.</p>}
+      {items && items.length > 0 && (
+        <Card className="overflow-x-auto p-0">
+          <table className="w-full text-[13px]">
+            <thead><tr className="text-ink-3">{["User", "Field", "Now", "Becomes"].map((h) => <th key={h} className="px-3 py-2 text-start font-semibold">{h}</th>)}</tr></thead>
+            <tbody>
+              {items.flatMap((it) => it.changes.map((c, j) => (
+                <tr key={`${it.id}-${c.field}`} className="border-t border-line">
+                  <td className="px-3 py-2">{j === 0 ? `#${it.id} @${it.handle}` : ""}</td>
+                  <td className="px-3 py-2 font-mono">{c.field}</td>
+                  <td className="px-3 py-2 text-ink-3">{c.old || "—"}</td>
+                  <td className="px-3 py-2 text-ink">{c.new}</td>
+                </tr>
+              )))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 export default function Outreach() {
   const [view, setView] = useState<View>("review");
   if (!isOperator()) return <NotFound />;
   return (
     <div className="flex flex-col gap-5">
       <PageHero title="Outreach" lede="Accounts the platforms suggested. Include one to add it to the study (ArtaTask will send the request); exclude to drop it. Nothing is sent from this page." />
-      <Tabs tabs={[{ key: "review", label: "Review" }, { key: "results", label: "Results" }, { key: "plan", label: "Plan" }]} active={view} onChange={(k) => setView(k as View)} label="Outreach" />
-      {view === "review" ? <Review /> : view === "results" ? <Results /> : <Plan />}
+      <Tabs tabs={[{ key: "review", label: "Review" }, { key: "results", label: "Results" }, { key: "plan", label: "Plan" }, { key: "sync", label: "Profile sync" }]} active={view} onChange={(k) => setView(k as View)} label="Outreach" />
+      {view === "review" ? <Review /> : view === "results" ? <Results /> : view === "plan" ? <Plan /> : <ProfileSync />}
     </div>
   );
 }

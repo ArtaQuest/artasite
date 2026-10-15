@@ -89,4 +89,52 @@ final class ProfileSync {
 		}
 		return is_wp_error( $res ) ? [] : $diff;
 	}
+
+	// ── Outreach → Profile sync panel (REST, 'admin' only — see Rest::ROUTES) ────────────────────
+
+	const PAGE_MAX  = 200; // users scanned per preview page / applied per apply call
+	const APPLY_MAX = 200;
+
+	/** GET outreach/profile-sync?cursor=&limit= — PREVIEW ONLY, writes nothing. Keyset over user ID.
+	 *  Each item: {id, handle, changes:[{field, old, new}]}. Never returns user_login or user_email. */
+	public static function rest_preview( $req ) {
+		global $wpdb;
+		if ( Rest::throttle( 'profile_sync_preview', 120, 60 ) ) { return Rest::err( 'rate_limited', 'Too many preview requests — wait a minute.', 429 ); }
+		$cursor = Rest::pint( $req, 'cursor', 0 );
+		$limit  = max( 1, min( self::PAGE_MAX, Rest::pint( $req, 'limit', 100 ) ?: 100 ) );
+		$ids    = array_map( 'intval', (array) $wpdb->get_col( $wpdb->prepare( "SELECT ID FROM {$wpdb->users} WHERE ID > %d ORDER BY ID ASC LIMIT %d", $cursor, $limit ) ) );
+		$items  = []; $bots = 0;
+		foreach ( $ids as $uid ) {
+			$u = get_userdata( $uid );
+			if ( self::is_bot( $u ) ) { $bots++; continue; }
+			$diff = self::plan( $uid );
+			if ( ! $diff ) { continue; }
+			$ch = [];
+			foreach ( $diff as $f => $p ) { $ch[] = [ 'field' => $f, 'old' => $p[0], 'new' => $p[1] ]; }
+			$items[] = [ 'id' => $uid, 'handle' => (string) $u->user_nicename, 'changes' => $ch ];
+		}
+		return [ 'items' => $items, 'scanned' => count( $ids ), 'bots_skipped' => $bots, 'next' => count( $ids ) >= $limit ? (int) end( $ids ) : null ];
+	}
+
+	/** POST outreach/profile-sync {ids[] ≤200, confirm:true} — applies sync() to the previewed users.
+	 *  Re-plans on the server (current state wins), skips bots, idempotent: a second call reports 0 updated. */
+	public static function rest_apply( $req ) {
+		if ( true !== filter_var( Rest::p( $req, 'confirm', false ), FILTER_VALIDATE_BOOLEAN ) ) {
+			return Rest::err( 'confirm_required', 'Confirm the apply step first.' );
+		}
+		if ( Rest::throttle( 'profile_sync_apply', 30, 60 ) ) { return Rest::err( 'rate_limited', 'Too many apply requests — wait a minute.', 429 ); }
+		$raw = Rest::p( $req, 'ids', [] );
+		$raw = is_array( $raw ) ? $raw : (array) json_decode( (string) $raw, true );
+		$ids = array_values( array_unique( array_filter( array_map( 'intval', $raw ) ) ) );
+		if ( ! $ids ) { return Rest::err( 'no_ids', 'Nothing to apply — run Preview first.' ); }
+		if ( count( $ids ) > self::APPLY_MAX ) { return Rest::err( 'too_many', 'At most ' . self::APPLY_MAX . ' users per call.' ); }
+		$updated = 0; $unchanged = 0; $skipped = 0; $fields = 0;
+		foreach ( $ids as $uid ) {
+			$u = get_userdata( $uid );
+			if ( ! $u || self::is_bot( $u ) ) { $skipped++; continue; }
+			$diff = self::sync( $uid );
+			if ( $diff ) { $updated++; $fields += count( $diff ); } else { $unchanged++; }
+		}
+		return [ 'ok' => true, 'updated' => $updated, 'unchanged' => $unchanged, 'skipped' => $skipped, 'fields' => $fields ];
+	}
 }

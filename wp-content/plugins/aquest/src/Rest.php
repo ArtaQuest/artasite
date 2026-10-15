@@ -743,6 +743,8 @@ final class Rest {
 		[ 'POST', 'outreach/import',                          'Outreach::import',    'admin' ], // {csv} ≤2 MB, ≤5000 rows, per-row errors
 		[ 'GET',  'outreach/export',                          'Outreach::export',    'admin' ], // ?platform=&status= → {filename, csv} formula-guarded
 		[ 'GET',  'outreach/template',                        'Outreach::template',  'admin' ], // → {filename, csv}
+		[ 'GET',  'outreach/profile-sync',                    'ProfileSync::rest_preview', 'admin' ], // ?cursor=&limit≤200 PREVIEW (writes nothing): {items:[{id,handle,changes}], next}
+		[ 'POST', 'outreach/profile-sync',                    'ProfileSync::rest_apply',   'admin' ], // {ids[]≤200, confirm:true} → {updated, unchanged, skipped}
 
 		// ── ArtaTask phone sync (src/TaskSync.php) ───────────────────────────
 		// The five JSON blobs that used to live in Cloudflare Workers KV (TASK_SYNC).

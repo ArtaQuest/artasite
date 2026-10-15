@@ -3281,6 +3281,7 @@ export type OutreachStat = {
   acceptance_rate: number | null; tta_median_s: number | null; tta_mean_s: number | null;
 };
 export type OutreachPlanRow = { platform: OutreachPlatform; daily_cap: number; sent_today: number; remaining_today: number; queued: number; days_to_clear: number | null };
+export type ProfileSyncItem = { id: number; handle: string; changes: { field: string; old: string; new: string }[] };
 export const OutreachApi = {
   list: (p: { platform?: string; status?: string; cursor?: number }) =>
     get<{ items: OutreachAccount[]; next: number; counts: Record<OutreachStatus, number> }>("/outreach/accounts",
@@ -3295,4 +3296,8 @@ export const OutreachApi = {
     get<{ filename: string; rows: number; csv: string }>("/outreach/export",
       Object.fromEntries(Object.entries(p).filter(([, v]) => v)) as Record<string, string>),
   template: () => get<{ filename: string; csv: string }>("/outreach/template"),
+  syncPreview: (cursor = 0) =>
+    get<{ items: ProfileSyncItem[]; scanned: number; bots_skipped: number; next: number | null }>("/outreach/profile-sync", { cursor, limit: 200 }),
+  syncApply: (ids: number[]) =>
+    post<{ ok: boolean; updated: number; unchanged: number; skipped: number; fields: number }>("/outreach/profile-sync", { ids, confirm: true }),
 };
