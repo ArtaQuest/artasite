@@ -1130,8 +1130,12 @@ final class Extra {
 	 *  claim, phone prefs). The column is already ciphertext (TaskSync.php) — the key is
 	 *  AUTH_KEY/AUTH_SALT or AQ_TASK_SYNC_KEY, never a row — and the table is withheld as well
 	 *  so /data and the nightly export do not publish who has a blob or the ciphertext itself.
-	 *  See docs/artatask-sync.md. */
-	const PRIVATE_TABLES = [ 'aq_doc_sources', 'aq_order_ship', 'aq_chats', 'aq_chat_msgs', 'aq_task_sync' ];
+	 *  See docs/artatask-sync.md.
+	 *
+	 *  aq_artatask_review: the artatask-review plugin's queue of accounts the platforms suggested to
+	 *  Arash (names, bios, photos, counts of people who never joined ArtaQuest). Admin-only; never
+	 *  public. */
+	const PRIVATE_TABLES = [ 'aq_doc_sources', 'aq_order_ship', 'aq_chats', 'aq_chat_msgs', 'aq_task_sync', 'aq_artatask_review' ];
 
 	public static function all_table_names() {
 		global $wpdb;
