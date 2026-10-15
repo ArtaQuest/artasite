@@ -1,20 +1,21 @@
 <?php
-namespace ATR;
+namespace ArtaOutreach;
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 /** Admin review page (manage_options). Decisions post to admin-post.php with a nonce. */
 class Admin {
-	const SLUG  = 'artatask-review';
-	const NONCE = 'atr_decide';
+	const SLUG  = 'artaoutreach';
+	const NONCE = 'aor_decide';
 
 	public static function boot() {
 		add_action( 'admin_menu', [ self::class, 'menu' ] );
-		add_action( 'admin_post_atr_decide', [ self::class, 'handle' ] );
+		add_action( 'admin_post_aor_decide', [ self::class, 'handle' ] );
+		Csv::boot();
 	}
 
 	public static function menu() {
-		add_menu_page( 'ArtaTask Review', 'ArtaTask Review', 'manage_options', self::SLUG, [ self::class, 'render' ], 'dashicons-groups', 58 );
+		add_menu_page( 'ArtaOutreach', 'ArtaOutreach', 'manage_options', self::SLUG, [ self::class, 'render' ], 'dashicons-groups', 58 );
 	}
 
 	private static function photo_url( $p ) {
@@ -34,11 +35,11 @@ class Admin {
 	public static function handle() {
 		if ( ! current_user_can( 'manage_options' ) ) { wp_die( 'Forbidden', 403 ); }
 		check_admin_referer( self::NONCE );
-		$action = sanitize_key( $_POST['atr_action'] ?? '' );
-		if ( $action === '' || $action === '-1' ) { $action = sanitize_key( $_POST['atr_action2'] ?? '' ); }
+		$action = sanitize_key( $_POST['aor_action'] ?? '' );
+		if ( $action === '' || $action === '-1' ) { $action = sanitize_key( $_POST['aor_action2'] ?? '' ); }
 		$ids = array_map( 'intval', (array) ( $_POST['ids'] ?? [] ) );
-		if ( isset( $_POST['atr_one'] ) ) {
-			[ $one_action, $one_id ] = array_pad( explode( ':', sanitize_text_field( wp_unslash( $_POST['atr_one'] ) ) ), 2, 0 );
+		if ( isset( $_POST['aor_one'] ) ) {
+			[ $one_action, $one_id ] = array_pad( explode( ':', sanitize_text_field( wp_unslash( $_POST['aor_one'] ) ) ), 2, 0 );
 			$action = sanitize_key( $one_action );
 			$ids    = [ (int) $one_id ];
 		}
@@ -51,7 +52,7 @@ class Admin {
 			$n = 1;
 		}
 		$back = wp_get_referer() ?: admin_url( 'admin.php?page=' . self::SLUG );
-		wp_safe_redirect( add_query_arg( 'atr_done', $n, $back ) );
+		wp_safe_redirect( add_query_arg( 'aor_done', $n, $back ) );
 		exit;
 	}
 
@@ -65,11 +66,12 @@ class Admin {
 		$base     = admin_url( 'admin.php?page=' . self::SLUG );
 		?>
 		<div class="wrap">
-		<h1>ArtaTask Review</h1>
+		<h1>ArtaOutreach</h1>
 		<p>Accounts the platforms suggested. Include one to add it to the study (the phone will send a request); exclude to drop it. Nothing is sent from this page.</p>
-		<?php if ( isset( $_GET['atr_done'] ) ) : ?>
-			<div class="notice notice-success is-dismissible"><p><?php echo (int) $_GET['atr_done']; ?> updated.</p></div>
+		<?php if ( isset( $_GET['aor_done'] ) ) : ?>
+			<div class="notice notice-success is-dismissible"><p><?php echo (int) $_GET['aor_done']; ?> updated.</p></div>
 		<?php endif; ?>
+		<?php Csv::panel( $platform, $status ); ?>
 		<ul class="subsubsub">
 			<?php foreach ( array_merge( [ 'all' => array_sum( $counts ) ], $counts ) as $s => $n ) : ?>
 				<li><a href="<?php echo esc_url( add_query_arg( [ 'status' => $s, 'platform' => $platform ], $base ) ); ?>" <?php echo $s === $status ? 'class="current"' : ''; ?>><?php echo esc_html( ucfirst( $s ) ); ?> <span class="count">(<?php echo (int) $n; ?>)</span></a> |</li>
@@ -87,15 +89,15 @@ class Admin {
 			<?php submit_button( 'Filter', 'secondary', '', false ); ?>
 		</form>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-			<input type="hidden" name="action" value="atr_decide">
+			<input type="hidden" name="action" value="aor_decide">
 			<?php wp_nonce_field( self::NONCE ); ?>
 			<div class="tablenav top"><div class="alignleft actions bulkactions">
-				<select name="atr_action"><option value="-1">Bulk actions</option><option value="include">Include in study</option><option value="exclude">Exclude</option><option value="reset">Back to pending</option></select>
+				<select name="aor_action"><option value="-1">Bulk actions</option><option value="include">Include in study</option><option value="exclude">Exclude</option><option value="reset">Back to pending</option></select>
 				<?php submit_button( 'Apply', 'action', '', false ); ?>
 			</div></div>
 			<table class="wp-list-table widefat fixed striped">
 			<thead><tr>
-				<td class="manage-column column-cb check-column"><input type="checkbox" onclick="document.querySelectorAll('.atr-cb').forEach(c=>c.checked=this.checked)"></td>
+				<td class="manage-column column-cb check-column"><input type="checkbox" onclick="document.querySelectorAll('.aor-cb').forEach(c=>c.checked=this.checked)"></td>
 				<th style="width:56px">Photo</th><th>Name / handle</th><th>Tagline &amp; bio</th>
 				<th style="width:150px">Counts</th><th style="width:90px">Status</th><th style="width:170px">Dates</th><th style="width:150px">Decide</th>
 			</tr></thead><tbody>
@@ -105,14 +107,15 @@ class Admin {
 				$tta = self::fmt_dur( Store::time_to_accept( $r ) );
 				?>
 				<tr>
-					<th class="check-column"><input class="atr-cb" type="checkbox" name="ids[]" value="<?php echo (int) $r['id']; ?>"></th>
+					<th class="check-column"><input class="aor-cb" type="checkbox" name="ids[]" value="<?php echo (int) $r['id']; ?>"></th>
 					<td><?php if ( $img ) : ?><img src="<?php echo esc_url( $img ); ?>" width="48" height="48" style="border-radius:50%;object-fit:cover" alt="" loading="lazy" referrerpolicy="no-referrer"><?php endif; ?></td>
 					<td><strong><?php echo esc_html( $r['full_name'] ?: $r['handle'] ); ?></strong><br>
 						<?php echo esc_html( $r['platform'] === 'x' ? 'X' : ucfirst( $r['platform'] ) ); ?> ·
 						<?php if ( $r['profile_url'] ) : ?><a href="<?php echo esc_url( $r['profile_url'] ); ?>" target="_blank" rel="noopener noreferrer">@<?php echo esc_html( $r['handle'] ); ?></a><?php else : ?>@<?php echo esc_html( $r['handle'] ); ?><?php endif; ?>
 						<br><small><?php echo esc_html( $r['source'] ); ?></small></td>
 					<td><em><?php echo esc_html( $r['tagline'] ); ?></em><br><small><?php echo esc_html( wp_trim_words( (string) $r['bio'], 40 ) ); ?></small>
-						<?php if ( $r['notes'] ) : ?><br><small><b>Notes:</b> <?php echo esc_html( $r['notes'] ); ?></small><?php endif; ?></td>
+						<br><textarea form="aor-notes-<?php echo (int) $r['id']; ?>" name="notes" rows="2" style="width:100%" placeholder="Notes"><?php echo esc_textarea( (string) $r['notes'] ); ?></textarea>
+						<button form="aor-notes-<?php echo (int) $r['id']; ?>" class="button button-small">Save notes</button></td>
 					<td><small>
 						<?php foreach ( [ 'mutuals' => 'Mutuals', 'followers' => 'Followers', 'following' => 'Following', 'connections' => 'Connections' ] as $k => $label ) :
 							if ( $r[ $k ] !== null ) { echo esc_html( $label . ': ' . number_format_i18n( (int) $r[ $k ] ) ) . '<br>'; }
@@ -123,13 +126,19 @@ class Admin {
 						<?php if ( $r['request_sent_at'] ) : ?><br>Sent <?php echo esc_html( get_date_from_gmt( $r['request_sent_at'], 'Y-m-d H:i' ) ); ?><?php endif; ?>
 						<?php if ( $r['accepted_at'] ) : ?><br>Accepted <?php echo esc_html( get_date_from_gmt( $r['accepted_at'], 'Y-m-d H:i' ) . ' (' . $tta . ')' ); ?><?php endif; ?></small></td>
 					<td><?php if ( ! $r['request_sent_at'] ) : ?>
-						<?php if ( $r['status'] !== 'included' ) : ?><button class="button button-primary button-small" name="atr_one" value="include:<?php echo (int) $r['id']; ?>">Include</button><?php endif; ?>
-						<?php if ( $r['status'] !== 'excluded' ) : ?><button class="button button-small" name="atr_one" value="exclude:<?php echo (int) $r['id']; ?>">Exclude</button><?php endif; ?>
+						<?php if ( $r['status'] !== 'included' ) : ?><button class="button button-primary button-small" name="aor_one" value="include:<?php echo (int) $r['id']; ?>">Include</button><?php endif; ?>
+						<?php if ( $r['status'] !== 'excluded' ) : ?><button class="button button-small" name="aor_one" value="exclude:<?php echo (int) $r['id']; ?>">Exclude</button><?php endif; ?>
 						<?php else : ?><small>Request sent</small><?php endif; ?></td>
 				</tr>
 			<?php endforeach; ?>
 			</tbody></table>
 		</form>
+		<?php foreach ( $rows as $r ) : // Notes forms live outside the bulk form (no nesting); fields join via form="". ?>
+			<form id="aor-notes-<?php echo (int) $r['id']; ?>" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<input type="hidden" name="action" value="aor_decide"><input type="hidden" name="aor_action" value="notes">
+				<input type="hidden" name="notes_id" value="<?php echo (int) $r['id']; ?>"><?php wp_nonce_field( self::NONCE, '_wpnonce', true, true ); ?>
+			</form>
+		<?php endforeach; ?>
 		<?php if ( count( $rows ) >= Store::PER_PAGE ) :
 			$last = end( $rows ); ?>
 			<p><a class="button" href="<?php echo esc_url( add_query_arg( [ 'status' => $status, 'platform' => $platform, 'before' => (int) $last['id'] ], $base ) ); ?>">Older →</a></p>

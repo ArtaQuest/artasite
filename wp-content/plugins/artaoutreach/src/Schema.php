@@ -1,12 +1,12 @@
 <?php
-namespace ATR;
+namespace ArtaOutreach;
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 /**
  * One purpose-built table, versioned and installed with dbDelta (never wp_posts/postmeta).
  *
- * wp_aq_artatask_review — one row per (platform, handle) the platforms suggested.
+ * wp_aq_artaoutreach — one row per (platform, handle) the platforms suggested.
  *   status          pending | included | excluded (only Arash moves it off pending)
  *   decided_at      when status last changed by hand
  *   request_sent_at set by the phone after it sent the connection/follow request
@@ -21,8 +21,8 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 class Schema {
 	const VERSION = '1';
-	const OPT     = 'atr_table_version';
-	const TABLE   = 'aq_artatask_review';
+	const OPT     = 'aor_table_version';
+	const TABLE   = 'aq_artaoutreach';
 
 	public static function table() {
 		global $wpdb;

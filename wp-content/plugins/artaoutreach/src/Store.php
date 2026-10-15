@@ -1,5 +1,5 @@
 <?php
-namespace ATR;
+namespace ArtaOutreach;
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
@@ -21,12 +21,12 @@ class Store {
 		$platform = strtolower( trim( (string) ( $r['platform'] ?? '' ) ) );
 		if ( $platform === 'twitter' ) { $platform = 'x'; }
 		if ( ! in_array( $platform, self::PLATFORMS, true ) ) {
-			return new \WP_Error( 'atr_platform', 'platform must be one of ' . implode( ', ', self::PLATFORMS ) );
+			return new \WP_Error( 'aor_platform', 'platform must be one of ' . implode( ', ', self::PLATFORMS ) );
 		}
 		$handle = trim( (string) ( $r['handle'] ?? '' ) );
 		$handle = ltrim( $handle, '@' );
 		if ( $handle === '' || strlen( $handle ) > 191 ) {
-			return new \WP_Error( 'atr_handle', 'handle is required (max 191 chars)' );
+			return new \WP_Error( 'aor_handle', 'handle is required (max 191 chars)' );
 		}
 		return [
 			'platform'    => $platform,
@@ -49,7 +49,7 @@ class Store {
 	 * timestamps and notes are NEVER touched by ingest, so re-discovery cannot undo a decision.
 	 * Returns 'inserted' | 'updated'.
 	 */
-	public static function upsert( array $row, $discovered_at = null ) {
+	public static function upsert( array $row, $discovered_at = null, $present = null ) {
 		global $wpdb;
 		$t   = Schema::table();
 		$now = self::now();
@@ -57,6 +57,8 @@ class Store {
 		if ( $id ) {
 			$upd = $row;
 			unset( $upd['platform'], $upd['handle'] );
+			// Only overwrite fields the caller actually sent; a partial record must not blank the rest.
+			if ( is_array( $present ) ) { $upd = array_intersect_key( $upd, array_flip( $present ) ); }
 			$upd['updated_at'] = $now;
 			$wpdb->update( $t, $upd, [ 'id' => (int) $id ] );
 			return 'updated';
@@ -66,6 +68,12 @@ class Store {
 		$row['updated_at']    = $now;
 		$wpdb->insert( $t, $row );
 		return 'inserted';
+	}
+
+	public static function id_for( $platform, $handle ) {
+		global $wpdb;
+		$t = Schema::table();
+		return (int) $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$t} WHERE platform = %s AND handle = %s", $platform, $handle ) );
 	}
 
 	public static function get( $id ) {
@@ -139,7 +147,7 @@ class Store {
 		} elseif ( $what === 'accepted' ) {
 			$sql = "UPDATE {$t} SET accepted_at = %s, updated_at = %s WHERE id = %d AND request_sent_at IS NOT NULL AND accepted_at IS NULL";
 		} else {
-			return new \WP_Error( 'atr_mark', 'mark must be sent or accepted', [ 'status' => 400 ] );
+			return new \WP_Error( 'aor_mark', 'mark must be sent or accepted', [ 'status' => 400 ] );
 		}
 		$wpdb->query( $wpdb->prepare( $sql, $at, self::now(), (int) $id ) );
 		return self::get( $id );
