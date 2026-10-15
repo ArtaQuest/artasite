@@ -3269,7 +3269,7 @@ export type OutreachPlatform = "linkedin" | "facebook" | "instagram" | "x" | "gi
 export type OutreachStatus = "pending" | "included" | "excluded";
 export type OutreachAccount = {
   id: number; platform: OutreachPlatform; handle: string; profile_url: string; full_name: string;
-  tagline: string; bio: string | null; photo: string;
+  tagline: string; bio: string | null; photo: string; photo_private?: boolean;
   followers: number | null; following: number | null; connections: number | null; mutuals: number | null;
   source: string; status: OutreachStatus; discovered_at: string; updated_at: string;
   decided_at: string | null; request_sent_at: string | null; accepted_at: string | null;
@@ -3292,6 +3292,9 @@ export const OutreachApi = {
   plan: () => get<{ platforms: OutreachPlanRow[]; day_starts: string }>("/outreach/plan"),
   setCaps: (caps: Partial<Record<OutreachPlatform, number>>) => post<{ ok: boolean; caps: Record<OutreachPlatform, number> }>("/outreach/caps", caps),
   importCsv: (csv: string) => post<OutreachImportResult>("/outreach/import", { csv }),
+  importZip: (file: File) => { const fd = new FormData(); fd.append("file", file, file.name); return postForm<OutreachImportResult & { photos: number }>("/outreach/import-zip", fd); },
+  /** Admin-only private photo. An <img> cannot send X-WP-Nonce, so the nonce rides as ?_wpnonce=. */
+  photoUrl: (id: number) => `${BASE}/outreach/photo/${id}?_wpnonce=${encodeURIComponent(restNonce())}`,
   exportCsv: (p: { platform?: string; status?: string }) =>
     get<{ filename: string; rows: number; csv: string }>("/outreach/export",
       Object.fromEntries(Object.entries(p).filter(([, v]) => v)) as Record<string, string>),

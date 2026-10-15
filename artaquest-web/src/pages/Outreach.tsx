@@ -50,7 +50,7 @@ function Row({ a, picked, onPick, onDecide, onSaved }: {
   return (
     <li className="flex gap-3 border-t border-line px-3 py-3 first:border-t-0">
       <input type="checkbox" className="mt-1" checked={picked} disabled={sent} onChange={(e) => onPick(e.target.checked)} aria-label={`Select ${a.full_name || a.handle}`} />
-      {a.photo ? <img src={a.photo} alt="" width={48} height={48} loading="lazy" referrerPolicy="no-referrer" className="h-12 w-12 shrink-0 rounded-full object-cover" /> : <span className="h-12 w-12 shrink-0 rounded-full bg-veil/[0.06]" aria-hidden="true" />}
+      {a.photo ? <img src={a.photo_private ? OutreachApi.photoUrl(a.id) : a.photo} alt="" width={48} height={48} loading="lazy" referrerPolicy="no-referrer" className="h-12 w-12 shrink-0 rounded-full object-cover" /> : <span className="h-12 w-12 shrink-0 rounded-full bg-veil/[0.06]" aria-hidden="true" />}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-2">
           <span className="font-semibold text-ink">{a.full_name || a.handle}</span>
@@ -110,6 +110,12 @@ function Review() {
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
+    setErr("");
+    if (/\.zip$/i.test(f.name)) {
+      if (f.size > 50 * 1024 * 1024) { setErr("That zip is larger than 50 MB."); return; }
+      try { setImp(await OutreachApi.importZip(f)); await load(0); } catch (x) { setErr(x instanceof Error && x.message ? `Import failed: ${x.message}` : "Import failed."); }
+      return;
+    }
     if (f.size > 2 * 1024 * 1024) { setErr("That CSV is larger than 2 MB."); return; }
     try { setImp(await OutreachApi.importCsv(await f.text())); await load(0); } catch { setErr("Import failed."); }
   };
@@ -138,14 +144,14 @@ function Review() {
         <Button size="sm" variant="ghost" disabled={!picked.size} onClick={() => decide([...picked], "pending")}>Back to pending</Button>
         <span className="flex-1" />
         <label className="cursor-pointer text-[13px] font-semibold text-ink-2 hover:text-yang">
-          Import CSV<input type="file" accept=".csv,text/csv" className="sr-only" onChange={onFile} />
+          Import CSV or zip<input type="file" accept=".csv,text/csv,.zip,application/zip" className="sr-only" onChange={onFile} />
         </label>
         <Button size="sm" variant="ghost" onClick={exportView}>Export this view</Button>
         <Button size="sm" variant="ghost" onClick={template}>Template</Button>
       </div>
       {imp && (
         <StatusNote className="py-2 text-start">
-          Import: {imp.inserted} inserted, {imp.updated} updated, {imp.errors.length} errors.
+          Import: {imp.inserted} inserted, {imp.updated} updated{"photos" in imp ? `, ${(imp as { photos: number }).photos} photos stored` : ""}, {imp.errors.length} errors.
           {imp.errors.slice(0, 50).map((e) => <span key={e.row} className="block">Row {e.row}: {e.error}</span>)}
         </StatusNote>
       )}

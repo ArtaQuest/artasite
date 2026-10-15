@@ -741,6 +741,8 @@ final class Rest {
 		[ 'GET',  'outreach/plan',                            'Outreach::plan',      'admin' ], // daily caps, sent today, remaining, days to clear the queue
 		[ 'POST', 'outreach/caps',                            'Outreach::set_caps',  'admin' ], // {linkedin?, facebook?, instagram?, x?} 0…100 per day
 		[ 'POST', 'outreach/import',                          'Outreach::import',    'admin' ], // {csv} ≤2 MB, ≤5000 rows, per-row errors
+		[ 'POST', 'outreach/import-zip',                      'Outreach::import_zip', 'admin' ], // multipart file: .zip = one .csv + jpg/png/webp named in `photo`; ≤50 MB; photos re-encoded, stored privately
+		[ 'GET',  'outreach/photo/(?P<id>[0-9]+)',            'Outreach::photo',     'admin' ], // the row's private photo (image/jpeg, no-store, noindex); <img> passes ?_wpnonce=
 		[ 'GET',  'outreach/export',                          'Outreach::export',    'admin' ], // ?platform=&status= → {filename, csv} formula-guarded
 		[ 'GET',  'outreach/template',                        'Outreach::template',  'admin' ], // → {filename, csv}
 		[ 'GET',  'outreach/profile-sync',                    'ProfileSync::rest_preview', 'admin' ], // ?cursor=&limit≤200 PREVIEW (writes nothing): {items:[{id,handle,changes}], next}

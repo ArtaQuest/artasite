@@ -54,3 +54,15 @@ is built from the handle: `linkedin.com/in/<h>/`, `facebook.com/<h>`, `instagram
 `github.com/<h>`, `strava.com/athletes/<h>` (a Strava handle is the athlete id or vanity name).
 "Accepted" means a connection or friend request accepted on LinkedIn / Facebook, and a follow-back on
 Instagram, X, GitHub and Strava.
+
+## Photos (zip import)
+
+`POST outreach/import-zip` (multipart `file`, admin only) takes a `.zip` with exactly one `.csv` (same
+columns as the CSV import) plus images; the `photo` cell names an image in the zip by file name (any
+folder). Limits: 50 MB zip, 200 MB unpacked, 10 MB and 40 MP per image. Each image is checked by
+content (JPEG, PNG or WebP only), re-encoded to a 512 px JPEG with no EXIF or other metadata, and stored as
+`uploads/aq-outreach-<secret>/<random 128-bit>.jpg`. The row keeps the token `aqo:<name>.jpg`, never a
+URL. The directory secret is the option `aq_outreach_photo_secret` (masked in the public DB explorer).
+Photos are shown only through `GET outreach/photo/{id}` (admin only; `no-store`, `noindex`); the `<img>`
+passes `?_wpnonce=`. A bad or missing photo is reported per row and the row still imports. A replaced
+photo file is deleted. Plain CSV import is unchanged; `photo` there must be an http(s) URL or a token.

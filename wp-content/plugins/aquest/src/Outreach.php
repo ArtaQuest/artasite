@@ -63,6 +63,7 @@ final class Outreach {
 			$r[ $k ] = $r[ $k ] === null ? null : (int) $r[ $k ];
 		}
 		$r['time_to_accept_s'] = self::tta( $r );
+		$r['photo_private']    = (bool) preg_match( self::PHOTO_RE, (string) ( $r['photo'] ?? '' ) );
 		return $r;
 	}
 
@@ -88,13 +89,171 @@ final class Outreach {
 			'full_name'   => mb_substr( sanitize_text_field( (string) ( $r['full_name'] ?? '' ) ), 0, 255 ),
 			'tagline'     => mb_substr( sanitize_text_field( (string) ( $r['tagline'] ?? '' ) ), 0, 500 ),
 			'bio'         => sanitize_textarea_field( (string) ( $r['bio'] ?? '' ) ),
-			'photo'       => mb_substr( sanitize_text_field( (string) ( $r['photo'] ?? '' ) ), 0, 500 ),
+			'photo'       => self::clean_photo( (string) ( $r['photo'] ?? '' ) ),
 			'followers'   => self::count_or_null( $r['followers'] ?? null ),
 			'following'   => self::count_or_null( $r['following'] ?? null ),
 			'connections' => self::count_or_null( $r['connections'] ?? null ),
 			'mutuals'     => self::count_or_null( $r['mutuals'] ?? null ),
 			'source'      => sanitize_key( (string) ( $r['source'] ?? 'suggested' ) ) ?: 'suggested',
 		];
+	}
+
+	// ── Private photos (zip import) ─────────────────────────────────────────────────────────────
+	// A photo imported from a zip is re-encoded to JPEG (EXIF and every other metadata block dropped)
+	// and stored as uploads/aq-outreach-<dir secret>/<128-bit random>.jpg. The row keeps only the
+	// token "aqo:<name>.jpg" — never a URL — and the SPA shows it through the admin-only route
+	// outreach/photo/<id>. The directory secret lives in an option whose name ends in `_secret`, so
+	// the public DB explorer masks it (Extra::REDACT_NAME_RE). Nothing here is in a sitemap or /data.
+
+	const PHOTO_OPT      = 'aq_outreach_photo_secret';
+	const PHOTO_RE       = '/^aqo:[0-9a-f]{32}\.jpg$/';
+	const ZIP_MAX        = 52428800;  // 50 MB upload
+	const ZIP_UNPACK_MAX = 209715200; // 200 MB total uncompressed (zip-bomb guard)
+	const IMG_MAX        = 10485760;  // 10 MB per image, uncompressed
+	const IMG_PIXELS     = 40000000;  // 40 MP decode guard
+	const IMG_EDGE       = 512;       // stored longest edge
+
+	/** A photo cell: a private token we issued, an http(s) URL, or nothing. */
+	public static function clean_photo( $v ) {
+		$v = trim( $v );
+		if ( $v === '' ) { return ''; }
+		if ( preg_match( self::PHOTO_RE, $v ) ) { return $v; }
+		if ( ! preg_match( '#^https?://#i', $v ) ) { return ''; } // a bare name means nothing outside a zip
+		$u = esc_url_raw( $v, [ 'http', 'https' ] );
+		return $u ? mb_substr( $u, 0, 500 ) : '';
+	}
+
+	private static function photo_dir() {
+		$sec = (string) get_option( self::PHOTO_OPT, '' );
+		if ( ! preg_match( '/^[0-9a-f]{32}$/', $sec ) ) {
+			$sec = bin2hex( random_bytes( 16 ) );
+			update_option( self::PHOTO_OPT, $sec, false );
+		}
+		$dir = trailingslashit( wp_upload_dir( null, false )['basedir'] ) . 'aq-outreach-' . $sec;
+		if ( ! is_dir( $dir ) ) {
+			wp_mkdir_p( $dir );
+			@file_put_contents( $dir . '/index.php', "<?php // Silence.\n" );
+			@file_put_contents( $dir . '/.htaccess', "Require all denied\nDeny from all\n" ); // Apache only; names are the real guard
+		}
+		return $dir;
+	}
+
+	public static function photo_path( $token ) {
+		return preg_match( self::PHOTO_RE, (string) $token ) ? self::photo_dir() . '/' . substr( $token, 4 ) : '';
+	}
+
+	/** Verify an image by CONTENT (magic + decoder), re-encode to a metadata-free JPEG, store it.
+	 *  Returns the "aqo:" token or WP_Error. */
+	public static function store_photo( $bytes ) {
+		if ( strlen( $bytes ) === 0 || strlen( $bytes ) > self::IMG_MAX ) { return new \WP_Error( 'photo_size', 'image empty or larger than 10 MB' ); }
+		$mime = ( new \finfo( FILEINFO_MIME_TYPE ) )->buffer( $bytes );
+		if ( ! in_array( $mime, [ 'image/jpeg', 'image/png', 'image/webp' ], true ) ) { return new \WP_Error( 'photo_type', 'only JPEG, PNG or WebP images (found ' . $mime . ')' ); }
+		$info = @getimagesizefromstring( $bytes );
+		if ( ! $info || ! in_array( $info[2], [ IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP ], true ) || $info[0] < 1 || $info[1] < 1 ) {
+			return new \WP_Error( 'photo_decode', 'not a readable image' );
+		}
+		if ( $info[0] * $info[1] > self::IMG_PIXELS ) { return new \WP_Error( 'photo_pixels', 'image dimensions too large' ); }
+		$tmp = wp_tempnam( 'aqo' );
+		file_put_contents( $tmp, $bytes );
+		$out = null;
+		try {
+			if ( function_exists( 'imagecreatefromstring' ) ) {
+				// GD re-encode: decoding to raw pixels and writing a new JPEG carries no EXIF/XMP/ICC.
+				$im = @imagecreatefromstring( $bytes );
+				if ( ! $im ) { return new \WP_Error( 'photo_decode', 'not a readable image' ); }
+				$w = imagesx( $im ); $h = imagesy( $im );
+				$k = min( 1, self::IMG_EDGE / max( $w, $h ) );
+				$nw = max( 1, (int) round( $w * $k ) ); $nh = max( 1, (int) round( $h * $k ) );
+				$dst = imagecreatetruecolor( $nw, $nh );
+				imagefill( $dst, 0, 0, imagecolorallocate( $dst, 255, 255, 255 ) ); // flatten PNG/WebP alpha
+				imagecopyresampled( $dst, $im, 0, 0, 0, 0, $nw, $nh, $w, $h );
+				$name = bin2hex( random_bytes( 16 ) ) . '.jpg';
+				$out  = self::photo_dir() . '/' . $name;
+				$ok   = imagejpeg( $dst, $out, 85 );
+				imagedestroy( $im ); imagedestroy( $dst );
+				if ( ! $ok ) { return new \WP_Error( 'photo_write', 'could not store the image' ); }
+			} else {
+				$ed = wp_get_image_editor( $tmp );
+				if ( is_wp_error( $ed ) ) { return new \WP_Error( 'photo_decode', 'not a readable image' ); }
+				$ed->resize( self::IMG_EDGE, self::IMG_EDGE, false );
+				$ed->set_quality( 85 );
+				$name  = bin2hex( random_bytes( 16 ) ) . '.jpg';
+				$out   = self::photo_dir() . '/' . $name;
+				$saved = $ed->save( $out, 'image/jpeg' ); // WP strips metadata on save (image_strip_meta)
+				if ( is_wp_error( $saved ) ) { return new \WP_Error( 'photo_write', 'could not store the image' ); }
+			}
+			@chmod( $out, 0644 );
+			return 'aqo:' . $name;
+		} finally {
+			@unlink( $tmp );
+		}
+	}
+
+	private static function drop_photo( $token ) {
+		$p = self::photo_path( $token );
+		if ( $p && is_file( $p ) ) { @unlink( $p ); }
+	}
+
+	/** GET outreach/photo/<id> — the row's private photo, to admins only (the route is 'admin').
+	 *  An <img> cannot send X-WP-Nonce, so the SPA passes ?_wpnonce= (core's cookie-auth check). */
+	public static function photo( $req ) {
+		$r = self::row( (int) $req['id'] );
+		$p = $r ? self::photo_path( $r['photo'] ) : '';
+		if ( ! $p || ! is_file( $p ) ) { return new \WP_Error( 'not_found', 'no photo', 404 ); }
+		nocache_headers();
+		header( 'Content-Type: image/jpeg' );
+		header( 'Content-Length: ' . filesize( $p ) );
+		header( 'Cache-Control: private, no-store, max-age=0' );
+		header( 'X-Content-Type-Options: nosniff' );
+		header( 'X-Robots-Tag: noindex, nofollow, noarchive' );
+		header( "Content-Security-Policy: default-src 'none'" );
+		readfile( $p );
+		exit;
+	}
+
+	/** POST outreach/import-zip (multipart `file`) — a .zip with ONE .csv and the images its `photo`
+	 *  column names (by file name, any folder). ≤50 MB, ≤200 MB unpacked, ≤10 MB per image. */
+	public static function import_zip( $req ) {
+		if ( ! class_exists( '\ZipArchive' ) ) { return new \WP_Error( 'zip_unavailable', 'zip support is not installed on this server', 500 ); }
+		$f = $req->get_file_params()['file'] ?? null;
+		if ( ! $f || ! empty( $f['error'] ) || empty( $f['tmp_name'] ) || ! is_file( $f['tmp_name'] ) ) {
+			return new \WP_Error( 'file', 'upload a .zip file', 400 );
+		}
+		if ( (int) $f['size'] > self::ZIP_MAX ) { return new \WP_Error( 'too_large', 'zip larger than 50 MB', 413 ); }
+		$zip = new \ZipArchive();
+		if ( true !== $zip->open( $f['tmp_name'], \ZipArchive::RDONLY ) ) { return new \WP_Error( 'zip', 'not a valid zip', 400 ); }
+		$csv_i = null; $imgs = []; $total = 0;
+		for ( $i = 0; $i < $zip->numFiles; $i++ ) {
+			$st = $zip->statIndex( $i );
+			$n  = (string) $st['name'];
+			if ( substr( $n, -1 ) === '/' || strpos( $n, '__MACOSX/' ) === 0 || basename( $n )[0] === '.' ) { continue; }
+			$total += (int) $st['size'];
+			if ( $total > self::ZIP_UNPACK_MAX ) { $zip->close(); return new \WP_Error( 'too_large', 'zip unpacks to more than 200 MB', 413 ); }
+			$ext = strtolower( pathinfo( $n, PATHINFO_EXTENSION ) );
+			if ( $ext === 'csv' ) {
+				if ( $csv_i !== null ) { $zip->close(); return new \WP_Error( 'zip_csv', 'the zip must contain exactly one .csv', 400 ); }
+				$csv_i = $i;
+			} else {
+				$imgs[ strtolower( basename( $n ) ) ] = [ $i, (int) $st['size'] ];
+			}
+		}
+		if ( $csv_i === null ) { $zip->close(); return new \WP_Error( 'zip_csv', 'the zip must contain exactly one .csv', 400 ); }
+		if ( $zip->statIndex( $csv_i )['size'] > self::CSV_MAX ) { $zip->close(); return new \WP_Error( 'too_large', 'CSV larger than 2 MB', 413 ); }
+		$csv    = (string) $zip->getFromIndex( $csv_i );
+		$photos = 0;
+		$cb = function ( $cell ) use ( $zip, $imgs, &$photos ) {
+			$key = strtolower( basename( str_replace( '\\', '/', $cell ) ) );
+			if ( ! isset( $imgs[ $key ] ) ) { return new \WP_Error( 'photo_missing', 'photo "' . $key . '" is not in the zip' ); }
+			[ $i, $size ] = $imgs[ $key ];
+			if ( $size > self::IMG_MAX ) { return new \WP_Error( 'photo_size', 'photo "' . $key . '" is larger than 10 MB' ); }
+			$t = self::store_photo( (string) $zip->getFromIndex( $i ) );
+			if ( ! is_wp_error( $t ) ) { $photos++; }
+			return $t;
+		};
+		$res = self::import_string( $csv, $cb );
+		$zip->close();
+		$res['photos'] = $photos;
+		return $res;
 	}
 
 	public static function id_for( $platform, $handle ) {
@@ -322,7 +481,7 @@ final class Outreach {
 	}
 
 	/** Parse CSV text → {inserted, updated, errors[{row, error}]}. New rows get source=manual. */
-	public static function import_string( $csv ) {
+	public static function import_string( $csv, $photo_cb = null ) {
 		$res = [ 'inserted' => 0, 'updated' => 0, 'errors' => [] ];
 		$fh  = fopen( 'php://temp', 'r+' );
 		fwrite( $fh, preg_replace( '/^\xEF\xBB\xBF/', '', (string) $csv ) );
@@ -344,9 +503,21 @@ final class Outreach {
 			$rec = array_combine( $head, $cells );
 			$rec = array_map( fn( $v ) => ( strlen( $v ) > 1 && $v[0] === "'" && strpos( "=+-@\t\r", $v[1] ) !== false ) ? substr( $v, 1 ) : $v, $rec );
 			$rec['source'] = 'manual';
+			// Zip import: a photo cell that is a file name (not a URL or a token we issued) is looked up
+			// in the zip, verified and stored privately. A bad photo is reported; the row still imports
+			// and keeps whatever photo it had.
+			$photo_err = null;
+			if ( $photo_cb && isset( $rec['photo'] ) && $rec['photo'] !== '' && ! preg_match( '#^https?://#i', $rec['photo'] ) && ! preg_match( self::PHOTO_RE, $rec['photo'] ) ) {
+				$tok = $photo_cb( $rec['photo'] );
+				if ( is_wp_error( $tok ) ) { $photo_err = $tok->get_error_message(); $rec['photo'] = ''; } else { $rec['photo'] = $tok; }
+			}
 			$row = self::clean( $rec );
 			if ( is_wp_error( $row ) ) { $res['errors'][] = [ 'row' => $line, 'error' => $row->get_error_message() ]; continue; }
+			$old = self::id_for( $row['platform'], $row['handle'] );
+			$old_photo = $old ? (string) self::row( $old )['photo'] : '';
 			$res[ self::upsert( $row, null, array_keys( array_filter( $rec, fn( $v ) => $v !== '' ) ) ) ]++;
+			if ( $old_photo !== '' && $row['photo'] !== '' && $old_photo !== $row['photo'] ) { self::drop_photo( $old_photo ); } // replaced
+			if ( $photo_err !== null ) { $res['errors'][] = [ 'row' => $line, 'error' => $photo_err . ' (row imported without a new photo)' ]; }
 			if ( isset( $rec['notes'] ) && trim( $rec['notes'] ) !== '' ) { self::set_notes( self::id_for( $row['platform'], $row['handle'] ), $rec['notes'] ); }
 		}
 		fclose( $fh );
