@@ -66,3 +66,19 @@ URL. The directory secret is the option `aq_outreach_photo_secret` (masked in th
 Photos are shown only through `GET outreach/photo/{id}` (admin only; `no-store`, `noindex`); the `<img>`
 passes `?_wpnonce=`. A bad or missing photo is reported per row and the row still imports. A replaced
 photo file is deleted. Plain CSV import is unchanged; `photo` there must be an http(s) URL or a token.
+
+## ArtaSearch (the Search tab)
+
+An alumni directory inside Outreach: one row per alumnus (`aq_alumni`, upsert key = lower-cased
+full name + graduation year) with the public LinkedIn, Instagram, Facebook, ResearchGate, YouTube,
+GitHub and X profiles the ArtaSearch scan confirmed as the same person. Admin only, and the table
+is in `Extra::PRIVATE_TABLES`.
+
+- Reads: `GET outreach/alumni`, `outreach/alumni/facets`, `outreach/alumni/export` ('admin').
+- `POST outreach/alumni/to-queue {id, platforms[]}` copies profiles into the Review queue as pending.
+- `POST outreach/alumni/ingest {alumni:[…]}` is the scan box's only way in. It requires the dedicated
+  secret `AQ_ALUMNI_INGEST_TOKEN` in the `X-AQ-Alumni-Token` header (≥32 chars, compared with
+  hash_equals), HTTPS, at most 60 requests an hour per IP, a 2 MB body and 500 rows. It returns 404
+  until the secret is set. Set the secret in wp-admin → AQ Security (vault), or as an env var or
+  wp-config constant.
+- Photos: a GitHub avatar (`github.com/<login>.png`) or the platform's logo. Nothing is scraped.

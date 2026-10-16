@@ -3282,6 +3282,30 @@ export type OutreachStat = {
 };
 export type OutreachPlanRow = { platform: OutreachPlatform; daily_cap: number; sent_today: number; remaining_today: number; queued: number; days_to_clear: number | null };
 export type ProfileSyncItem = { id: number; handle: string; changes: { field: string; old: string; new: string }[] };
+// ── ArtaSearch (the Search tab inside Outreach; src/AlumniSearch.php — every read route is 'admin') ──
+export type AlumniPlatform = "linkedin" | "instagram" | "facebook" | "researchgate" | "youtube" | "github" | "x";
+export type AlumniProfile = { url: string; title: string; evidence: string };
+export type Alumnus = {
+  id: number; full_name: string; grad_year: number; department: string; employer: string; headline: string;
+  city: string; country: string; public_email: string; email_source: string; photo: string; n_profiles: number;
+  profiles: Partial<Record<AlumniPlatform, AlumniProfile>>; updated_at: string;
+};
+export type AlumniFilter = { year?: string; department?: string; country?: string; platform?: string; q?: string };
+export type AlumniFacet = { value: string | number; n: number };
+export type AlumniFacets = {
+  years: AlumniFacet[]; departments: AlumniFacet[]; countries: AlumniFacet[];
+  platforms: Record<AlumniPlatform, number>; total: number; with_any: number; synced_at: string;
+};
+const alumniParams = (p: AlumniFilter & { cursor?: number }) =>
+  Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined && v !== "")) as Record<string, string | number>;
+export const AlumniApi = {
+  list: (p: AlumniFilter & { cursor?: number }) => get<{ items: Alumnus[]; next: number; total: number }>("/outreach/alumni", alumniParams(p)),
+  facets: () => get<AlumniFacets>("/outreach/alumni/facets"),
+  exportCsv: (p: AlumniFilter) => get<{ filename: string; rows: number; csv: string }>("/outreach/alumni/export", alumniParams(p)),
+  toQueue: (id: number, platforms: AlumniPlatform[]) =>
+    post<{ inserted: number; updated: number; skipped: string[] }>("/outreach/alumni/to-queue", { id, platforms }),
+};
+
 export const OutreachApi = {
   list: (p: { platform?: string; status?: string; cursor?: number }) =>
     get<{ items: OutreachAccount[]; next: number; counts: Record<OutreachStatus, number> }>("/outreach/accounts",

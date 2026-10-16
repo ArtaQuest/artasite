@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import {
-  OutreachApi, isOperator, type ProfileSyncItem,
+  AlumniApi, OutreachApi, isOperator, type AlumniFacets, type AlumniFilter, type AlumniPlatform, type Alumnus, type ProfileSyncItem,
   type OutreachAccount, type OutreachImportResult, type OutreachPlanRow, type OutreachPlatform, type OutreachStat, type OutreachStatus,
 } from "../lib/api";
 import { Button, Card, ErrorNote, PageHero, Select, SkeletonGrid, StatusNote, Tabs, Textarea, cx } from "../components/ui";
+import { SocialIcon } from "../components/SocialLinks";
 import NotFound from "./NotFound";
 
 /**
@@ -19,7 +20,7 @@ const PLATFORMS: OutreachPlatform[] = ["linkedin", "facebook", "instagram", "x",
 const PLATFORM_LABEL: Record<OutreachPlatform, string> = { linkedin: "LinkedIn", facebook: "Facebook", instagram: "Instagram", x: "X", github: "GitHub", strava: "Strava" };
 /** What "accepted" means per platform — GitHub and Strava are follow-based, so it is a follow-back. */
 const ACCEPT_MEANS: Record<OutreachPlatform, string> = { linkedin: "connection accepted", facebook: "friend request accepted", instagram: "followed back", x: "followed back", github: "followed back", strava: "followed back" };
-type View = "review" | "results" | "plan" | "sync";
+type View = "review" | "results" | "plan" | "sync" | "search";
 
 const n = (v: number | null | undefined) => (v === null || v === undefined ? "—" : v.toLocaleString());
 const local = (utc: string | null) => (utc ? new Date(utc.replace(" ", "T") + "Z").toLocaleString() : "");
@@ -307,14 +308,117 @@ function ProfileSync() {
   );
 }
 
+
+// ── ArtaSearch — the alumni directory (src/AlumniSearch.php). Rows arrive from the scan box via the
+// key-protected ingest route; this tab only reads, filters, exports and copies a profile to the queue.
+const ALUMNI_PLATFORMS: AlumniPlatform[] = ["linkedin", "instagram", "facebook", "researchgate", "youtube", "github", "x"];
+const ALUMNI_LABEL: Record<AlumniPlatform, string> = { linkedin: "LinkedIn", instagram: "Instagram", facebook: "Facebook", researchgate: "ResearchGate", youtube: "YouTube", github: "GitHub", x: "X" };
+const QUEUEABLE = new Set<AlumniPlatform>(["linkedin", "instagram", "facebook", "github", "x"]);
+
+function AlumniCard({ a }: { a: Alumnus }) {
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  const have = ALUMNI_PLATFORMS.filter((p) => a.profiles[p]);
+  const queueable = have.filter((p) => QUEUEABLE.has(p));
+  const first = have[0];
+  const toQueue = async () => {
+    setBusy(true); setMsg("");
+    try {
+      const r = await AlumniApi.toQueue(a.id, queueable);
+      setMsg(`${r.inserted} added to Review${r.updated ? `, ${r.updated} already there` : ""}`);
+    } catch { setMsg("Couldn't add to the queue."); }
+    setBusy(false);
+  };
+  return (
+    <Card className="flex gap-3 p-3">
+      {a.photo ? (
+        <a href={a.profiles.github?.url} target="_blank" rel="noopener noreferrer" className="shrink-0" aria-label={`${a.full_name} on GitHub`}>
+          <img src={a.photo} alt="" width={56} height={56} loading="lazy" referrerPolicy="no-referrer" className="h-14 w-14 rounded-full object-cover" />
+        </a>
+      ) : first ? (
+        <a href={a.profiles[first]?.url} target="_blank" rel="noopener noreferrer" aria-label={`${a.full_name} on ${ALUMNI_LABEL[first]}`} className="grid h-14 w-14 shrink-0 place-items-center rounded-full border border-line bg-space-1 text-ink-2 hover:text-yang">
+          <SocialIcon k={first} size={26} />
+        </a>
+      ) : <span className="h-14 w-14 shrink-0 rounded-full bg-veil/[0.06]" aria-hidden="true" />}
+      <div className="min-w-0 flex-1">
+        <div className="font-semibold text-ink">{a.full_name}</div>
+        <div className="text-[13px] text-ink-3">{a.department} · {a.grad_year}{(a.city || a.country) && ` · ${[a.city, a.country].filter(Boolean).join(", ")}`}</div>
+        {(a.headline || a.employer) && <p className="line-clamp-2 text-[13px] text-ink-2">{a.headline || a.employer}</p>}
+        {a.public_email && <p className="text-[12px] text-ink-3">{a.public_email} · <a className="hover:text-yang" href={a.email_source} target="_blank" rel="noopener noreferrer">source</a></p>}
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {have.map((p) => (
+            <a key={p} href={a.profiles[p]?.url} target="_blank" rel="noopener noreferrer" title={a.profiles[p]?.title || ALUMNI_LABEL[p]} aria-label={ALUMNI_LABEL[p]}
+              className="grid h-8 w-8 place-items-center rounded-full border border-line bg-space-1 text-ink-2 hover:border-yang hover:text-yang">
+              <SocialIcon k={p} size={16} />
+            </a>
+          ))}
+          {queueable.length > 0 && <Button size="sm" variant="outline" onClick={toQueue} disabled={busy}>Send to queue</Button>}
+          {msg && <span className="text-[12px] text-ink-3">{msg}</span>}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function AlumniSearch() {
+  const [facets, setFacets] = useState<AlumniFacets | null>(null);
+  const [f, setF] = useState<AlumniFilter>({ platform: "any" });
+  const [q, setQ] = useState("");
+  const [items, setItems] = useState<Alumnus[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [next, setNext] = useState(0);
+  const [err, setErr] = useState("");
+  useEffect(() => { AlumniApi.facets().then(setFacets).catch(() => setErr("Couldn't load ArtaSearch.")); }, []);
+  useEffect(() => { const t = setTimeout(() => setF((o) => ({ ...o, q })), 300); return () => clearTimeout(t); }, [q]);
+  const load = useCallback(async (cursor: number) => {
+    try {
+      const r = await AlumniApi.list({ ...f, cursor });
+      setItems((old) => (cursor && old ? [...old, ...r.items] : r.items)); setNext(r.next); setTotal(r.total); setErr("");
+    } catch { setErr("Couldn't load alumni."); }
+  }, [f]);
+  useEffect(() => { setItems(null); load(0); }, [load]);
+  const set = (k: keyof AlumniFilter) => (v: string) => setF((o) => ({ ...o, [k]: v }));
+  const exportCsv = async () => { const r = await AlumniApi.exportCsv(f); download(r.filename, r.csv); };
+  const opt = (all: string, list: { value: string | number; n: number }[] = []) =>
+    [{ value: "", label: all }, ...list.map((x) => ({ value: String(x.value), label: `${x.value} (${x.n})` }))];
+  return (
+    <div className="flex flex-col gap-3">
+      {facets && (
+        <p className="text-[13px] text-ink-3">
+          {facets.total.toLocaleString()} alumni · {facets.with_any.toLocaleString()} with a confirmed profile · {ALUMNI_PLATFORMS.map((p) => `${ALUMNI_LABEL[p]} ${facets.platforms[p] ?? 0}`).join(" · ")}
+          {facets.synced_at && ` · synced ${local(facets.synced_at)}`}
+        </p>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, employer, title" aria-label="Search alumni"
+          className="h-9 min-w-[200px] flex-1 rounded-lg border border-line bg-space-1 px-3 text-[13px] text-ink" />
+        <Select label="Year" value={f.year ?? ""} onChange={set("year")} options={opt("All years", facets?.years)} skipOptions />
+        <Select label="Department" value={f.department ?? ""} onChange={set("department")} options={opt("All departments", facets?.departments)} skipOptions />
+        <Select label="Country" value={f.country ?? ""} onChange={set("country")} options={opt("All countries", facets?.countries)} skipOptions />
+        <Select label="Platform" value={f.platform ?? ""} onChange={set("platform")} skipOptions
+          options={[{ value: "", label: "Everyone" }, { value: "any", label: "Any profile" }, ...ALUMNI_PLATFORMS.map((p) => ({ value: p, label: ALUMNI_LABEL[p] }))]} />
+        <Button size="sm" variant="outline" onClick={exportCsv}>Export CSV</Button>
+      </div>
+      {err && <ErrorNote>{err}</ErrorNote>}
+      {items === null ? <SkeletonGrid /> : items.length === 0 ? <StatusNote>No alumni match. Rows arrive from the ArtaSearch scan.</StatusNote> : (
+        <>
+          <p className="text-[13px] text-ink-3">{total.toLocaleString()} match</p>
+          <div className="grid gap-3 md:grid-cols-2">{items.map((a) => <AlumniCard key={a.id} a={a} />)}</div>
+          {next > 0 && <Button size="sm" variant="outline" onClick={() => load(next)}>Load more</Button>}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Outreach() {
   const [view, setView] = useState<View>("review");
   if (!isOperator()) return <NotFound />;
   return (
     <div className="flex flex-col gap-5">
       <PageHero title="Outreach" lede="Accounts the platforms suggested. Include one to add it to the study (ArtaTask will send the request); exclude to drop it. Nothing is sent from this page." />
-      <Tabs tabs={[{ key: "review", label: "Review" }, { key: "results", label: "Results" }, { key: "plan", label: "Plan" }, { key: "sync", label: "Profile sync" }]} active={view} onChange={(k) => setView(k as View)} label="Outreach" />
-      {view === "review" ? <Review /> : view === "results" ? <Results /> : view === "plan" ? <Plan /> : <ProfileSync />}
+      <Tabs tabs={[{ key: "review", label: "Review" }, { key: "results", label: "Results" }, { key: "plan", label: "Plan" }, { key: "sync", label: "Profile sync" }, { key: "search", label: "Search" }]} active={view} onChange={(k) => setView(k as View)} label="Outreach" />
+      {view === "review" ? <Review /> : view === "results" ? <Results /> : view === "plan" ? <Plan /> : view === "sync" ? <ProfileSync /> : <AlumniSearch />}
     </div>
   );
 }
