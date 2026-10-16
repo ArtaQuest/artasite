@@ -8,7 +8,7 @@ import { I18nGate } from "./components/I18nGate";
 import { IdentityGate } from "./components/IdentityGate";
 import { isLoggedIn, localePath } from "./lib/wp";
 import { dismissBootScreen } from "./lib/boot";
-import { isOperator } from "./lib/api";
+import { canOutreach, isOperator } from "./lib/api";
 // Pages are lazy-loaded so the initial bundle ships only the shell + router + the current route's
 // chunk, not all 17 pages up-front (the heavy ones — Lesson's YT player, Donate, Wallet — defer
 // until visited). The persistent AppShell stays eager, so only the content area suspends on nav.
@@ -73,6 +73,10 @@ const Library = lazy(() => import("./pages/Library")); // every published file, 
 // Front page: the feed for members, the marketing landing for visitors.
 /** Operator-only surfaces render NotFound for everyone else. Presentation only — their API routes
  *  are 'admin' in Rest::ROUTES, so forcing the page open yields 403s and no data. */
+function OutreachOnly({ children }: { children: ReactNode }) {
+  return canOutreach() ? <>{children}</> : <NotFound />;
+}
+
 function AdminOnly({ children }: { children: ReactNode }) {
   return isOperator() ? <>{children}</> : <NotFound />;
 }
@@ -442,8 +446,8 @@ export default function App() {
           <Route path="/book/:handle" element={<Book />} />
           <Route path="/artacast" element={<AdminOnly><ArtaCast /></AdminOnly>} />
           <Route path="/artacast/" element={<AdminOnly><ArtaCast /></AdminOnly>} />
-          <Route path="/artaoutreach" element={<AdminOnly><Outreach /></AdminOnly>} />
-          <Route path="/artaoutreach/" element={<AdminOnly><Outreach /></AdminOnly>} />
+          <Route path="/artaoutreach" element={<OutreachOnly><Outreach /></OutreachOnly>} />
+          <Route path="/artaoutreach/" element={<OutreachOnly><Outreach /></OutreachOnly>} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/calendar/" element={<Calendar />} />
           <Route path="/meet" element={<Navigate to="/messages/?box=meetings" replace />} />

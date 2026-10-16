@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import {
-  AlumniApi, OutreachApi, isOperator, type AlumniFacets, type AlumniFilter, type AlumniPlatform, type Alumnus, type ProfileSyncItem,
+  AlumniApi, OutreachApi, canOutreach, type AlumniFacets, type AlumniFilter, type AlumniPlatform, type Alumnus, type ProfileSyncItem,
   type OutreachAccount, type OutreachImportResult, type OutreachPlanRow, type OutreachPlatform, type OutreachStat, type OutreachStatus,
 } from "../lib/api";
 import { Button, Card, ErrorNote, PageHero, Select, SkeletonGrid, StatusNote, Tabs, Textarea, cx } from "../components/ui";
@@ -413,7 +413,7 @@ function AlumniSearch() {
 
 export default function Outreach() {
   const [view, setView] = useState<View>("review");
-  if (!isOperator()) return <NotFound />;
+  if (!canOutreach()) return <NotFound />;
   return (
     <div className="flex flex-col gap-5">
       <PageHero title="Outreach" lede="Accounts the platforms suggested. Include one to add it to the study (ArtaTask will send the request); exclude to drop it. Nothing is sent from this page." />

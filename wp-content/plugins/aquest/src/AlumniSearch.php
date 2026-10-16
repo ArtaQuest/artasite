@@ -9,7 +9,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * One row per alumnus (name + graduation year) with the public profile links the ArtaSearch scan
  * confirmed as the same person: LinkedIn, Instagram, Facebook, ResearchGate, YouTube, GitHub, X.
  * These are third parties who never joined, so the table is in Extra::PRIVATE_TABLES (never in
- * /data, /schema or the nightly export) and every read route is 'admin' (cookie + manage_options).
+ * /data, /schema or the nightly export) and every read route is 'outreach' (cookie + manage_options, or Outreach::EXTRA_SLUGS).
  *
  * The one write path from outside is POST outreach/alumni/ingest, used by the scan box. It is
  * 'public' in Rest::ROUTES only so the handler runs and can audit, exactly like Vault::rest_titan;
@@ -40,9 +40,11 @@ final class AlumniSearch {
 	private static function t() { global $wpdb; return $wpdb->prefix . self::TABLE; }
 	private static function now() { return gmdate( 'Y-m-d H:i:s' ); }
 
-	/** The upsert key: lower-cased, single-spaced full name. */
-	public static function name_key( $name ) {
-		return mb_substr( mb_strtolower( preg_replace( '/\s+/u', ' ', trim( (string) $name ) ) ), 0, 191 );
+	/** The upsert key: lower-cased, single-spaced full name + '|' + department (namesakes in one class
+	 *  are common — 11 pairs in 2019 alone — and differ by department). With grad_year it is unique. */
+	public static function name_key( $name, $department = '' ) {
+		$n = function ( $v ) { return mb_strtolower( preg_replace( '/\s+/u', ' ', trim( (string) $v ) ) ); };
+		return mb_substr( $n( $name ) . '|' . $n( $department ), 0, 191 );
 	}
 
 	/** A profile URL is kept only when it is https and on that platform's own host. */
@@ -81,7 +83,7 @@ final class AlumniSearch {
 		$src   = $email !== '' ? esc_url_raw( (string) ( $r['public_email_source'] ?? '' ), [ 'https' ] ) : '';
 		$txt   = function ( $k, $n ) use ( $r ) { return mb_substr( sanitize_text_field( (string) ( $r[ $k ] ?? '' ) ), 0, $n ); };
 		return [
-			'name_key'     => self::name_key( $name ),
+			'name_key'     => self::name_key( $name, $r['department'] ?? '' ),
 			'full_name'    => $name,
 			'grad_year'    => $year,
 			'department'   => $txt( 'department', 120 ),

@@ -1068,13 +1068,16 @@ export function artaReplies(cursor?: number) {
 }
 
 /** Server-injected first-paint identity (window.AQ_USER), present before any fetch. */
-export function currentUser(): { id?: number; name: string; avatar: string; slug?: string; country?: string; operator?: boolean } | null {
+export function currentUser(): { id?: number; name: string; avatar: string; slug?: string; country?: string; operator?: boolean; outreach?: boolean } | null {
   if (typeof window === "undefined") return null;
-  return (window as unknown as { AQ_USER?: { id?: number; name: string; avatar: string; slug?: string; country?: string; operator?: boolean } }).AQ_USER ?? null;
+  return (window as unknown as { AQ_USER?: { id?: number; name: string; avatar: string; slug?: string; country?: string; operator?: boolean; outreach?: boolean } }).AQ_USER ?? null;
 }
 /** manage_options, as the server injected it. UI only — every admin surface is ALSO 'admin' in
  *  Rest::ROUTES, so a member who flips this flag in devtools gets a 403 and no data. */
 export function isOperator(): boolean { return isLoggedIn() && !!currentUser()?.operator; }
+/** Outreach (and its ArtaSearch tab): an operator, or an Outreach::EXTRA_SLUGS account. UI only —
+ *  every outreach/* route is 'outreach' in Rest::ROUTES and enforces the same rule server-side. */
+export function canOutreach(): boolean { return isOperator() || (isLoggedIn() && !!currentUser()?.outreach); }
 export function isLoggedIn(): boolean {
   if (typeof window === "undefined") return false;
   const v = (window as unknown as { AQ_LOGGED_IN?: boolean }).AQ_LOGGED_IN;

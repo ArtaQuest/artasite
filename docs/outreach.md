@@ -82,3 +82,10 @@ is in `Extra::PRIVATE_TABLES`.
   until the secret is set. Set the secret in wp-admin → AQ Security (vault), or as an env var or
   wp-config constant.
 - Photos: a GitHub avatar (`github.com/<login>.png`) or the platform's logo. Nothing is scraped.
+
+### Who can open Outreach
+
+Every `outreach/*` route (ArtaSearch included, except the token-checked ingest) uses the
+`'outreach'` auth level: a cookie session (API tokens are refused) whose user has manage_options,
+**or** whose slug is in `Outreach::EXTRA_SLUGS` (`artafather`, the founder's own account). This
+grants Outreach only. ArtaCast and every other admin surface still require manage_options.

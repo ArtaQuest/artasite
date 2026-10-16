@@ -10,7 +10,7 @@ import { openSearch, useWide } from "../lib/rail";
 import { nameClass, nameSize } from "../lib/fmt";
 import { UserMenu } from "./UserMenu";
 import { currentUser, isLoggedIn, localePath } from "../lib/wp";
-import { isOperator } from "../lib/api";
+import { canOutreach, isOperator } from "../lib/api";
 import { signOut } from "../lib/auth";
 import { getChatState, subscribeChat } from "../lib/chat-store";
 import { cartCount, onCartChange } from "../lib/cart";
@@ -181,7 +181,7 @@ const FEED_SHELVES = new Set([
   "/2d-games", "/3d-games", "/music",
 ]);
 
-const NAV: { label: string; href: string; icon: IconKey; divider?: boolean; external?: boolean; auth?: boolean; admin?: boolean }[] = [
+const NAV: { label: string; href: string; icon: IconKey; divider?: boolean; external?: boolean; auth?: boolean; admin?: boolean; outreach?: boolean }[] = [
   { label: "Profile", href: ME_SLUG ? `/u/${ME_SLUG}/` : "/user-account/", icon: "profile", external: true, auth: true },
   // The universal Studio — every submission on the platform is authored here as one reproducible
   // notebook, whatever its kind (2026-07-13 feed reset).
@@ -206,7 +206,7 @@ const NAV: { label: string; href: string; icon: IconKey; divider?: boolean; exte
   // every artacast/* endpoint ('admin' in Rest::ROUTES) are operator-only.
   { label: "ArtaCast", href: "/artacast/", icon: "megaphone", external: true, auth: true, admin: true },
   // Outreach — the ArtaTask review queue + dashboard (pages/Outreach.tsx). ADMIN ONLY, server-enforced.
-  { label: "Outreach", href: "/artaoutreach/", icon: "send", external: true, auth: true, admin: true },
+  { label: "Outreach", href: "/artaoutreach/", icon: "send", external: true, auth: true, outreach: true },
   { label: "Rankings", href: "/rankings/", icon: "trophy", external: true },
   // UNLISTED, not retired (operator 2026-08-03): /topics/ and /issues/ still resolve and still
   // render. They are reached from where they are actually needed — the seasons and cycles surfaces
@@ -421,7 +421,7 @@ function Sidebar({ active, expanded, onNavigate }: { active: string; expanded: b
   // member-only (`auth`) rows simply drop out when nobody is signed in.
   // `admin` rows render only for manage_options (window.AQ_USER.operator); their routes are 'admin'
   // server-side too, so hiding them is presentation, not the guard.
-  const items = isLoggedIn() ? NAV.filter((n) => !n.admin || isOperator()) : NAV.filter((n) => !n.auth);
+  const items = isLoggedIn() ? NAV.filter((n) => (n.outreach ? canOutreach() : !n.admin || isOperator())) : NAV.filter((n) => !n.auth);
   // The account row at the foot needs the viewer; server-injected, so it is static for the page.
   const me = isLoggedIn() ? currentUser() : null;
   return (
