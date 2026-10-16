@@ -1,5 +1,5 @@
 /* GENERATED — DO NOT EDIT HERE.
- * Vendored from artalife src/rig/arta.ts @ e6b8b78.
+ * Vendored from artalife src/rig/arta.ts @ 148b00e.
  * Source of truth: https://github.com/ArtaQuest/artalife.git
  * Re-run: node tools/arta-sync.mjs
  */
@@ -77,12 +77,22 @@ export type XY = { x: number; y: number };
 
 /**
  * Which way Arta faces, as a CONTINUOUS value in [-1, 1] rather than a pair of
- * states. Turning is implemented by negating every joint angle, so a boolean
- * flip moves a foot ~43 CSS px in a single frame — by a wide margin the largest
- * gradient in the whole system, and one no amount of blending can soften
- * because it is discrete. Easing the multiplier through zero instead gives a
- * real turn: the figure narrows to its own profile, passes through edge-on, and
- * opens out the other way, which is what a 2D character does when it turns.
+ * states. A boolean flip moves a foot ~43 CSS px in a single frame — by a wide
+ * margin the largest gradient in the whole system, and one no amount of
+ * blending can soften because it is discrete. Easing it through zero instead
+ * gives a real turn: the figure narrows to its own profile, passes through
+ * edge-on, and opens out the other way, which is what a 2D character does when
+ * it turns.
+ *
+ * `face` is the cosine of the turn: it scales every HORIZONTAL offset from the
+ * hip and leaves heights alone, which is exactly how a flat figure looks while
+ * it rotates about its own vertical axis. At ±1 that is identical to negating
+ * every joint angle (sin(−a) = −sin a, cos(−a) = cos a), so the film and every
+ * settled pose are unchanged. Between the two it is not: multiplying the
+ * ANGLES by a face near 0 straightened every joint, so mid-turn the knees
+ * locked, a raised foot dropped to full leg length, a planted one pushed
+ * through the floor and the figure collapsed into one straight stick for a
+ * frame. Scaling x keeps a bent knee bent and a lifted foot lifted.
  */
 export type Face = number;
 
@@ -155,6 +165,13 @@ function limb(rx: number, ry: number, a1: number, a2: number, l1: number, l2: nu
   return { jx, jy, ex: jx + l2 * Math.sin(r2), ey: jy + l2 * Math.cos(r2) };
 }
 
+/** A limb posed facing +x and then turned: horizontal offsets scale by `f` (see `Face`). */
+function limbF(rx: number, ry: number, a1: number, a2: number, l1: number, l2: number, f: number) {
+  const r1 = rad(a1), r2 = rad(a1 + a2);
+  const jx = rx + f * l1 * Math.sin(r1), jy = ry + l1 * Math.cos(r1);
+  return { jx, jy, ex: jx + f * l2 * Math.sin(r2), ey: jy + l2 * Math.cos(r2) };
+}
+
 export type Skeleton = {
   torso: string; armL: string; legL: string; armR: string; legR: string;
   head: { cx: number; cy: number; r: number };
@@ -171,21 +188,21 @@ const seg = (a: number, b: number, c: number, d: number, e?: number, f?: number)
 export function skeleton(p: Pose): Skeleton {
   const f = p.face;
   const hx = p.x, hy = p.y;
-  const ln = rad(p.lean * f);
-  const nx = hx + RIG.SPINE * p.bre * Math.sin(ln);
+  const ln = rad(p.lean);
+  const nx = hx + f * RIG.SPINE * p.bre * Math.sin(ln);
   const ny = hy - RIG.SPINE * p.bre * Math.cos(ln) * p.sq;
-  const hr = rad((p.lean + p.tilt) * f);
-  const a0 = limb(nx, ny, p.la[0] * f, p.la[1] * f, RIG.UARM, RIG.LARM);
-  const a1 = limb(nx, ny, p.ra[0] * f, p.ra[1] * f, RIG.UARM, RIG.LARM);
-  const l0 = limb(hx, hy, p.ll[0] * f, p.ll[1] * f, RIG.THIGH * p.sq, RIG.SHIN * p.sq);
-  const l1 = limb(hx, hy, p.rl[0] * f, p.rl[1] * f, RIG.THIGH * p.sq, RIG.SHIN * p.sq);
+  const hr = rad(p.lean + p.tilt);
+  const a0 = limbF(nx, ny, p.la[0], p.la[1], RIG.UARM, RIG.LARM, f);
+  const a1 = limbF(nx, ny, p.ra[0], p.ra[1], RIG.UARM, RIG.LARM, f);
+  const l0 = limbF(hx, hy, p.ll[0], p.ll[1], RIG.THIGH * p.sq, RIG.SHIN * p.sq, f);
+  const l1 = limbF(hx, hy, p.rl[0], p.rl[1], RIG.THIGH * p.sq, RIG.SHIN * p.sq, f);
   return {
     torso: seg(hx, hy, nx, ny),
     armL: seg(nx, ny, a0.jx, a0.jy, a0.ex, a0.ey),
     legL: seg(hx, hy, l0.jx, l0.jy, l0.ex, l0.ey),
     armR: seg(nx, ny, a1.jx, a1.jy, a1.ex, a1.ey),
     legR: seg(hx, hy, l1.jx, l1.jy, l1.ex, l1.ey),
-    head: { cx: nx + RIG.NECK * Math.sin(hr), cy: ny - RIG.NECK * Math.cos(hr), r: RIG.HEAD_R },
+    head: { cx: nx + f * RIG.NECK * Math.sin(hr), cy: ny - RIG.NECK * Math.cos(hr), r: RIG.HEAD_R },
     hand: { x: a1.ex, y: a1.ey },
   };
 }
@@ -218,8 +235,9 @@ const grounded = (p: Pose): Pose => ({ ...p, y: RIG.HIP - footDrop(p) });
  * because a hand-tuned offset is only right for the pose it was tuned against.
  */
 export function footDrop(p: Pose): number {
-  const l = limb(0, 0, p.ll[0] * p.face, p.ll[1] * p.face, RIG.THIGH * p.sq, RIG.SHIN * p.sq);
-  const r = limb(0, 0, p.rl[0] * p.face, p.rl[1] * p.face, RIG.THIGH * p.sq, RIG.SHIN * p.sq);
+  // Heights do not depend on the facing (see `Face`), so neither does this.
+  const l = limb(0, 0, p.ll[0], p.ll[1], RIG.THIGH * p.sq, RIG.SHIN * p.sq);
+  const r = limb(0, 0, p.rl[0], p.rl[1], RIG.THIGH * p.sq, RIG.SHIN * p.sq);
   return Math.max(l.ey, r.ey);
 }
 
@@ -483,21 +501,21 @@ export const rest = (): Pose => grounded(P({
 const JOINTS = 22;
 function joints(p: Pose, out: number[]): number[] {
   const f = p.face, hx = p.x, hy = p.y;
-  const ln = rad(p.lean * f);
-  const nx = hx + RIG.SPINE * p.bre * Math.sin(ln);
+  const ln = rad(p.lean);
+  const nx = hx + f * RIG.SPINE * p.bre * Math.sin(ln);
   const ny = hy - RIG.SPINE * p.bre * Math.cos(ln) * p.sq;
-  const hr = rad((p.lean + p.tilt) * f);
+  const hr = rad(p.lean + p.tilt);
   let i = 0;
   const put = (x: number, y: number) => { out[i++] = x; out[i++] = y; };
   put(hx, hy);
   put(nx, ny);
-  put(nx + RIG.NECK * Math.sin(hr), ny - RIG.NECK * Math.cos(hr));
+  put(nx + f * RIG.NECK * Math.sin(hr), ny - RIG.NECK * Math.cos(hr));
   for (const a of [p.la, p.ra]) {
-    const l = limb(nx, ny, a[0] * f, a[1] * f, RIG.UARM, RIG.LARM);
+    const l = limbF(nx, ny, a[0], a[1], RIG.UARM, RIG.LARM, f);
     put(l.jx, l.jy); put(l.ex, l.ey);
   }
   for (const a of [p.ll, p.rl]) {
-    const l = limb(hx, hy, a[0] * f, a[1] * f, RIG.THIGH * p.sq, RIG.SHIN * p.sq);
+    const l = limbF(hx, hy, a[0], a[1], RIG.THIGH * p.sq, RIG.SHIN * p.sq, f);
     put(l.jx, l.jy); put(l.ex, l.ey);
   }
   return out;
@@ -749,6 +767,43 @@ type Settle = {
 };
 
 /**
+ * Turning round before a walk that goes the other way (see `beginPivot`). The
+ * weight goes onto one foot, which stays exactly where it is; the other lifts
+ * and comes in under the hip; only then does the figure turn, about the leg it
+ * stands on, and the walk sets off from mid-stance.
+ */
+type Pivot = {
+  t: number; dur: number;
+  pinX: number;               // the foot that stays, world x
+  sw0: number; lift0: number; // the other foot: where it starts, and how high
+  hip0: XY;
+  f0: Face;                   // facing before the turn (the walk's is `facing`)
+  ph: number;                 // gait phase the walk continues from: this foot at mid-stance
+  lean0: number; lean1: number; tilt0: number;
+  la0: [number, number]; ra0: [number, number];
+};
+
+/** Fraction of the pivot spent shifting the weight and lifting the free foot; the rest is the turn. */
+const PIVOT_SHIFT = 0.5;
+
+/**
+ * Absorbing an arrival (see `beginLand`): the foot that touches first stays
+ * where it touched, the hip carries on down into the knees and comes back up,
+ * and the other foot is set down beside the first in the standing stance.
+ */
+type Landing = {
+  pinX: number; pin: 0 | 1;
+  sw0: number; lift0: number; sw1: number;
+  hip0: XY; hipX1: number;
+  /** how far the hip sinks below standing height, world units */
+  dip: number;
+  down: number; hold: number; up: number;   // seconds
+  hard: number;
+  lean0: number; tilt0: number;
+  la0: [number, number]; ra0: [number, number];
+};
+
+/**
  * Where each standing foot sits relative to the hip, facing +x, solved from the
  * stance. NOT mirror images: both knees bend the same way, so the left foot is
  * ~5 units in front of the hip and the right one ~20 behind.
@@ -808,6 +863,14 @@ export class Brain {
   private rootX: number | null = null;
   /** The closing step at the end of a walk; null when not stopping. See `beginSettle`. */
   private settle: Settle | null = null;
+  /** The turn on the spot before a walk that reverses direction; null otherwise. See `beginPivot`. */
+  private pivot: Pivot | null = null;
+  /** The absorb in progress; null outside `land`. See `beginLand`. */
+  private landing: Landing | null = null;
+  /** The pose at the moment the fall began, so the fall pose is reached gradually from it. */
+  private fallFrom: Pose | null = null;
+  /** This fall is the drop off the end of a rope trip. */
+  private ropeDrop = false;
   /** This walk's mark has been moved onto a heel strike (see the walk case). */
   private snapped = false;
   /** This walk's mark has been pushed on to finish a step still in the air. */
@@ -815,6 +878,7 @@ export class Brain {
   /** scratch joints for reading where the feet are, so no frame allocates */
   private jFeet: number[] = new Array(JOINTS).fill(0);
   private vy = 0;                     // vertical speed while falling, world units/s
+  private vyNow = 0;                  // the hip's vertical speed last tick, world units/s
   private impact = 0;                 // speed at touchdown — how hard to absorb
   private fellFrom: number | null = null; // hip height where this fall began
   private fallY = 0;                  // integrated height while falling
@@ -1028,6 +1092,10 @@ export class Brain {
     // legs in a configuration the stored gait phase knows nothing about, so the
     // next walk has to choose its phase from the feet again (`startPhase`).
     if (this.settle) { this.settle = null; this.rootX = null; }
+    if (this.pivot) { this.pivot = null; this.rootX = null; }
+    this.landing = null;
+    if (act !== "fall") this.fallFrom = null;
+    if (act !== "fall" && act !== "land") this.ropeDrop = false;
     // The integrated walk root belongs to one walk. Carrying it into the next
     // one would start that walk from wherever the last one was aiming.
     if (act !== "walk") this.rootX = null;
@@ -1149,6 +1217,142 @@ export class Brain {
     });
   }
 
+  /**
+   * Begin turning round on the spot, for a walk that sets off the way Arta's
+   * back is facing.
+   *
+   * That walk used to start by flipping `face` at the walk's own tracking
+   * rate, k = 60: about two frames from one profile to the other, through a
+   * figure collapsed into a single straight stick, with both feet swept across
+   * the floor as their mirror images swapped sides — 17–22 px of planted-foot
+   * slide in the first 200 ms on production, on every stroll that changed
+   * direction, and the biggest single per-frame step left in the idle.
+   *
+   * A person turns about the foot they stand on. So: the grounded foot that is
+   * furthest along the NEW direction keeps the weight and does not move; the
+   * hip comes over it while the other foot lifts and comes in beneath; then the
+   * figure turns, and with both feet directly under the hip a turn moves
+   * neither of them. The pose it ends in is the walk at mid-stance on that
+   * foot, so the walk carries on from it with nothing to blend.
+   */
+  private beginPivot(dir: Face, ground: number): Pivot | null {
+    const [lx, ly, rx, ry] = this.feetNow();
+    const hx = this.pose.x;
+    const down = [ground - ly < 1.5, ground - ry < 1.5];
+    const xs = [lx, rx];
+    let pin: 0 | 1 | -1 = -1;
+    for (const k of [0, 1] as const) {
+      if (!down[k] || Math.abs(xs[k] - hx) > 40) continue;
+      if (pin < 0 || (xs[k] - hx) * dir > (xs[pin] - hx) * dir) pin = k;
+    }
+    if (pin < 0) return null;
+    const half = WALK.STANCE / 2;
+    const d = Math.abs((this.targetX ?? hx) - hx);
+    return {
+      t: 0, dur: 0.34, pinX: xs[pin], sw0: xs[1 - pin], lift0: Math.max(0, ground - (pin === 0 ? ry : ly)),
+      hip0: { x: hx, y: this.pose.y }, f0: this.pose.face >= 0 ? 1 : -1,
+      ph: pin === 0 ? half : half + 0.5,
+      lean0: this.pose.lean, lean1: 7 * (0.3 + 0.7 * clamp(d / 90, 0.3, 1)), tilt0: this.pose.tilt,
+      la0: [...this.pose.la], ra0: [...this.pose.ra],
+    };
+  }
+
+  /** The pivot at time `t`; also returns the facing to draw. */
+  private pivotPose(pv: Pivot, ground: number): { pose: Pose; face: number } {
+    const u = clamp(pv.t / pv.dur, 0, 1);
+    const v = clamp(u / PIVOT_SHIFT, 0, 1), e = ease(v);
+    const w = walk(pv.ph);
+    const hx = lerp(pv.hip0.x, pv.pinX, e);
+    const hy = lerp(pv.hip0.y, ground - RIG.HIP + w.y, e);
+    // Up, then across (as in the closing step): a foot that starts on the floor
+    // must not travel until it has left it.
+    const lift = pv.lift0 + (WALK.LIFT - pv.lift0) * ease(clamp(v / 0.6, 0, 1));
+    const a = pv.lift0 > 2 ? 0 : SETTLE_CLEAR;
+    const swX = lerp(pv.sw0, pv.pinX, ease(clamp((v - a) / (1 - a), 0, 1)));
+    const pinLeg = legIK((pv.pinX - hx) * pv.f0, ground - hy);
+    const swLeg = legIK((swX - hx) * pv.f0, ground - lift - hy);
+    const pinIsLeft = pv.ph < 0.5;
+    const pose = P({
+      x: hx, y: hy,
+      lean: lerp(pv.lean0, pv.lean1, ease(u)), tilt: lerp(pv.tilt0, 0, e),
+      la: [lerp(pv.la0[0], w.la[0], e), lerp(pv.la0[1], w.la[1], e)],
+      ra: [lerp(pv.ra0[0], w.ra[0], e), lerp(pv.ra0[1], w.ra[1], e)],
+      ll: pinIsLeft ? pinLeg : swLeg,
+      rl: pinIsLeft ? swLeg : pinLeg,
+    });
+    // The turn itself: the cosine of an angle eased from 0 to 180 degrees.
+    const turn = ease(clamp((u - PIVOT_SHIFT) / (1 - PIVOT_SHIFT), 0, 1));
+    return { pose, face: pv.f0 * Math.cos(Math.PI * turn) };
+  }
+
+  /**
+   * Begin absorbing an arrival.
+   *
+   * The landing used to blend the joint ANGLES toward a fixed fraction of
+   * `crouch` and back, with the hip placed by `footDrop`. Two things were wrong
+   * with that, both visible on every rope trip on the site. The fall pose was
+   * already about as bent as the absorb asked for, so the hip never went lower
+   * than it would stand: a 0.2–0.6 px "dip", a touchdown that cost nothing,
+   * which is what weightless looks like. And blending angles moves the feet at
+   * the end of them, so the foot that touched first slid 6–9 px along the lid
+   * while Arta settled.
+   *
+   * Now the feet are positions, not angles. The first foot down stays where it
+   * touched; the hip carries its downward speed on into the knees, holds,
+   * and rises; the other foot is set down beside the first in the standing
+   * stance; and the legs are solved for that. It ends exactly in the stand
+   * pose, so `idle` has nothing left to move.
+   */
+  private beginLand(ground: number): Landing {
+    const [lx, ly, rx, ry] = this.feetNow();
+    const f = this.facing;
+    const pin: 0 | 1 = ground - ly <= ground - ry ? 0 : 1;
+    const pinX = pin === 0 ? lx : rx;
+    const hipX1 = pinX - STAND_DX[pin] * f;
+    // A drop off the rope is a real drop, however short the last stretch of it
+    // was: the hands let go of the whole body's weight.
+    const hard = clamp(this.impact / 260, this.ropeDrop ? 0.45 : 0.28, 1);
+    return {
+      pin, pinX, sw0: pin === 0 ? rx : lx, lift0: Math.max(0, ground - (pin === 0 ? ry : ly)),
+      sw1: hipX1 + STAND_DX[1 - pin] * f,
+      hip0: { x: this.pose.x, y: this.pose.y }, hipX1,
+      dip: 6 + 20 * hard,
+      down: 0.08 + 0.06 * hard, hold: 0.05, up: 0.22 + 0.2 * hard, hard,
+      lean0: this.pose.lean, tilt0: this.pose.tilt,
+      la0: [...this.pose.la], ra0: [...this.pose.ra],
+    };
+  }
+
+  /** The absorb at time `t` into it; `done` once it is back in the stand pose. */
+  private landPose(L: Landing, t: number, ground: number): { pose: Pose; done: boolean } {
+    const f = this.facing, stand = ground - RIG.HIP, low = stand + L.dip;
+    const dur = L.down + L.hold + L.up;
+    // Down fast (an ease-OUT, so it starts at the speed it arrived with), hold, up slowly.
+    const hy = t < L.down ? lerp(L.hip0.y, low, 1 - (1 - t / L.down) ** 2)
+             : t < L.down + L.hold ? low
+             : lerp(low, stand, ease(clamp((t - L.down - L.hold) / L.up, 0, 1)));
+    const k = clamp((hy - stand) / L.dip, 0, 1);              // how deep in the absorb
+    const ex = ease(clamp(t / (0.7 * dur), 0, 1));
+    const hx = lerp(L.hip0.x, L.hipX1, ex);
+    const trip = Math.abs(L.sw1 - L.sw0);
+    const lift = L.lift0 * (1 - ex) + (trip > 2 ? Math.min(WALK.LIFT * 0.5, 2 + trip * 0.2) * Math.sin(Math.PI * ex) ** 2 : 0);
+    const a = L.lift0 > 2 ? 0 : SETTLE_CLEAR;
+    const swX = lerp(L.sw0, L.sw1, ease(clamp((ex - a) / (1 - 2 * a), 0, 1)));
+    const pinLeg = legIK((L.pinX - hx) * f, ground - hy);
+    const swLeg = legIK((swX - hx) * f, ground - lift - hy);
+    const st = P(), ea = ease(clamp(t / (0.6 * dur), 0, 1)), h = L.hard * k;
+    const pose = P({
+      x: hx, y: hy,
+      // the body folds forward over the knees as they take the weight
+      lean: lerp(L.lean0, 0, ea) + 14 * h, tilt: lerp(L.tilt0, 0, ea) + 6 * h,
+      la: [lerp(L.la0[0], st.la[0], ea) + 26 * h, lerp(L.la0[1], st.la[1], ea)],
+      ra: [lerp(L.ra0[0], st.ra[0], ea) + 20 * h, lerp(L.ra0[1], st.ra[1], ea)],
+      ll: L.pin === 0 ? pinLeg : swLeg,
+      rl: L.pin === 0 ? swLeg : pinLeg,
+    });
+    return { pose, done: t >= dur };
+  }
+
   /** Advance the simulation. dt in SECONDS. Returns the frame to draw.
    *  Integrated at the caller's real frame interval — no fixed internal rate, so
    *  nothing beats against the display refresh. */
@@ -1220,9 +1424,14 @@ export class Brain {
 
     // ── what does Arta want to be doing? ────────────────────────────────────
     let want: Pose;
+    /** Set by an act that steers the turn itself; otherwise the pose turns toward `facing`. */
+    let face: number | null = null;
     // Gravity is not optional. The support under Arta is whatever ledge is
     // beneath its feet right now — a card's bottom frame, or the stage floor.
-    const feet = this.pose.y + RIG.HIP;
+    // The soles. `HIP` below the hip is right for every upright pose; an absorb
+    // has the knees bent and the hip a whole dip lower than that, so it is
+    // measured, or the ledge it is standing on reads as being above its feet.
+    const feet = this.pose.y + (this.act === "land" ? footDrop(this.pose) : RIG.HIP);
     /*
      * Walking steps UP onto a low ledge; falling cannot, and a figure standing
      * still generally should not either, or Arta would levitate onto anything
@@ -1285,6 +1494,10 @@ export class Brain {
     const active = input.busy || (input.look !== null && lookShift > 24);
     this.quietFor = active ? 0 : this.quietFor + dt;
 
+    // The act whose target this frame is tracked toward. An act that ends this
+    // frame still produced this frame's target, so it is tracked at its own rate:
+    // the rope trip's last target used to be chased at the fall's k = 60.
+    const act0 = this.act;
     switch (this.act) {
       case "walk": {
         /*
@@ -1311,6 +1524,20 @@ export class Brain {
         if (this.rootX === null) this.rootX = this.pose.x;
         let d = tx - this.rootX;
         const dir: Face = d >= 0 ? 1 : -1;
+        // Setting off the way Arta's back is facing: turn round on the spot first.
+        if (!this.pivot && fresh && !this.settle && this.pose.face * dir < 0 && Math.abs(d) >= 4) {
+          this.pivot = this.beginPivot(dir, support);
+        }
+        if (this.pivot) {
+          const pv = this.pivot;
+          pv.t += dt;
+          const r = this.pivotPose(pv, support);
+          want = r.pose; face = r.face;
+          this.rootX = want.x;
+          this.facing = dir;
+          if (pv.t >= pv.dur) { this.pivot = null; this.phase = pv.ph; face = null; }
+          break;
+        }
         /*
          * STOP ON A HEEL STRIKE.
          *
@@ -1527,6 +1754,21 @@ export class Brain {
         const e = ease(u);
         const sag = this.rappel ? 0 : Math.sin(Math.PI * u) * Math.min(90, this.flyDur * 40);
         want = hang(Math.cos(Math.PI * u) * 0.8);
+        /*
+         * Reach for the ledge. The legs used to trail in the hang right up to
+         * the release and then swing 30–45 px down under the body in the air,
+         * landing on whichever foot got there first. Over the last third of the
+         * trip they come down under the hip into the standing stance (the body
+         * straightens with them), so what touches the ledge is a foot that was
+         * already pointed at it.
+         */
+        const reach = ease(clamp((u - 0.62) / 0.38, 0, 1));
+        if (reach > 0) {
+          const st = P();
+          want.ll = [lerp(want.ll[0], st.ll[0], reach), lerp(want.ll[1], st.ll[1], reach)];
+          want.rl = [lerp(want.rl[0], st.rl[0], reach), lerp(want.rl[1], st.rl[1], reach)];
+          want.lean = lerp(want.lean, 0, reach); want.tilt = lerp(want.tilt, 0, reach);
+        }
         want.x = lerp(this.flyFrom.x, a.x, e);
         want.y = lerp(this.flyFrom.y, a.y, e) + sag;
         // Land only if the destination is near the ground. If it is high up,
@@ -1547,7 +1789,13 @@ export class Brain {
          * through exactly the same contact code as a step off a lip. One
          * implementation, not two.
          */
-        if (u >= 1) { this.climb = false; this.rappel = false; this.hook = null; this.enter("fall"); }
+        if (u >= 1) {
+          this.climb = false; this.rappel = false; this.hook = null; this.enter("fall"); this.ropeDrop = true;
+          // Letting go keeps whatever vertical speed the body had: still rising
+          // a little at the top of a climb, still sinking at the end of a
+          // rappel. Starting the drop from rest stopped it dead for a frame.
+          this.vy = this.vyNow;
+        }
         break;
       }
       case "land": {
@@ -1575,21 +1823,16 @@ export class Brain {
          * whole reason it exists: a variable crouch has no fixed offset to
          * hand-tune.
          */
-        const hard = clamp(this.impact / 260, 0.28, 1);   // 260 px is a fall worth a full absorb
-        const u = clamp(this.t / (0.26 + 0.26 * hard), 0, 1);
-        const fy = floorUnder(input.floors, this.pose.x, this.pose.y + RIG.HIP, input.ground);
-        // Down fast, HOLD, then up slowly. The hold is not decoration: the pose
-        // chases this target through an ease, and a target that has already
-        // started rising is one the body never catches — every drop absorbed an
-        // identical 8 px whatever it had fallen, which is the weightlessness
-        // this was written to remove. Compression is quick and recovery is
-        // slow, which is also the shape of a real landing.
-        const c = u < 0.2 ? 1 : 1 - ease((u - 0.2) / 0.8);
-        want = blend(P(), blend(P(), crouch(), hard), c);
-        want.x = this.pose.x;
-        // Wherever the absorb has the knees, the feet are on the surface.
-        want.y = fy - footDrop(want);
-        if (u >= 1) { this.anchor = null; this.enter("idle"); }
+        // (260 px is a fall worth a full absorb; see `beginLand` for the rest.)
+        // Down fast, HOLD, then up slowly. The hold is not decoration: a target
+        // that has already started rising is one the body never catches.
+        // Compression is quick and recovery is slow, which is also the shape of
+        // a real landing.
+        const fy = floorUnder(input.floors, this.pose.x, feet, input.ground);
+        if (!this.landing) this.landing = this.beginLand(fy);
+        const r = this.landPose(this.landing, this.t, fy);
+        want = r.pose;
+        if (r.done) { this.anchor = null; this.enter("idle"); want = { ...base, x: want.x }; }
         break;
       }
       case "fall": {
@@ -1632,12 +1875,29 @@ export class Brain {
          * inside the 26 px that counts as unsupported.
          */
         if (this.fellFrom === null) { this.fellFrom = this.pose.y; this.fallY = this.pose.y; }
+        if (!this.fallFrom) this.fallFrom = { ...this.pose, la: [...this.pose.la], ra: [...this.pose.ra], ll: [...this.pose.ll], rl: [...this.pose.rl] };
         this.vy = Math.min(this.vy + 2200 * dt, (budget / dt) * 0.7, 900);
         this.fallY += this.vy * dt;
         const ny = this.fallY;
         const land = floorUnder(input.floors, this.pose.x, feet, input.ground) - RIG.HIP;
-        want = P({ x: this.pose.x, y: Math.min(ny, land), lean: -6, tilt: -8,
-                   la: [128, 18], ra: [-124, -16], ll: [18, -26], rl: [-16, -30] });
+        /*
+         * The fall pose is reached FROM wherever the fall began, over a fifth of
+         * a second, rather than chased at the fall's k = 60. Letting go of the
+         * rope used to swap the hang for this pose in about a frame: the lean
+         * and tilt reversed and the head jumped 3–5 px in one frame against
+         * 1–2 px of travel either side of it — a pop at the exact moment the
+         * eye is following the figure down. Off the rope the legs are already
+         * reaching for the ledge (see `fly`), so they stay under the body and
+         * only the arms come down from the line.
+         */
+        const pose = this.ropeDrop
+          // Both hands come down IN FRONT from the line: the right one is just
+          // past vertical on the rope, and sending it to a back swing took it
+          // the long way round, 256 degrees through the body in 0.2 s.
+          ? P({ la: [96, 18], ra: [84, -16] })
+          : P({ lean: -6, tilt: -8, la: [128, 18], ra: [-124, -16], ll: [18, -26], rl: [-16, -30] });
+        want = blend(this.fallFrom, pose, ease(clamp(this.t / 0.2, 0, 1)));
+        want.x = this.pose.x; want.y = Math.min(ny, land);
         if (ny >= land) {
           // How FAR it fell, not how fast. Speed saturates within a few frames
           // — every drop from 30 px to 400 arrived at the same number — and it
@@ -1795,11 +2055,11 @@ export class Brain {
     // Whatever the act decided, the target facing is the one Arta intends. The
     // pose library's default of 1 must never leak through as a command to turn
     // right, which is precisely what it was doing.
-    want.face = this.facing;
+    want.face = face ?? this.facing;
 
     // ── overlays, applied to whatever the act decided ───────────────────────
     const moving = this.act === "walk" || this.act === "cheer"
-                || this.act === "fly" || this.act === "throw" || this.act === "land";
+                || this.act === "fly" || this.act === "throw" || this.act === "land" || this.act === "fall";
 
     // look at the pointer: head first, a little torso. This one behaviour does
     // more for "alive" than every gesture in the library put together.
@@ -1855,10 +2115,9 @@ export class Brain {
     // correctly from a dropped frame; a fixed per-frame fraction does neither.
     // A walk tracks its cycle almost rigidly (the cycle IS the animation); a
     // gesture arrives softly.
-    // A landing has to arrive before it recovers, so it tracks harder than a
-    // gesture; a walk tracks its own cycle almost rigidly.
-    const k = this.act === "walk" || this.act === "fall" ? 60
-            : this.act === "land" ? 26 : 11;
+    // A landing is solved with its feet pinned, like a walk, so it tracks as
+    // rigidly as one: a leg that lags its solution is a foot that slides.
+    const k = act0 === "walk" || act0 === "fall" || act0 === "land" ? 60 : 11;
     let u = 1 - Math.exp(-k * dt);
     let next = blend(this.pose, want, u);
 
@@ -1887,6 +2146,7 @@ export class Brain {
       next = blend(this.pose, want, u);
       moved = spread(this.jNow, joints(next, this.jNext));
     }
+    this.vyNow = dt > 0 ? (next.y - this.pose.y) / dt : 0;
     this.pose = next;
   }
 }
