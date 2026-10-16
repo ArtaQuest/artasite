@@ -1,5 +1,5 @@
 /* GENERATED — DO NOT EDIT HERE.
- * Vendored from artalife src/rig/arta.ts @ 148b00e.
+ * Vendored from artalife src/rig/arta.ts @ 8438f42.
  * Source of truth: https://github.com/ArtaQuest/artalife.git
  * Re-run: node tools/arta-sync.mjs
  */
@@ -1016,10 +1016,14 @@ export class Brain {
     const gx = span ? clamp(this.pose.x, span.x1 + 40, Math.max(span.x1 + 40, span.x2 - 40)) : this.pose.x;
     const goal = { x: gx, y: toY - RIG.HIP };
     if (dy < 0) {
-      // Climb: hook at the new edge, a little above the hip's resting height so
-      // the arrival is a short step down onto it rather than a slide.
+      // Climb: the line hooks ON the new lid (what the eye needs to see). The
+      // hip still travels to a point a little above its resting height so the
+      // arrival is a short step down onto the ledge rather than a slide — that
+      // destination is `anchor`, not the drawn tip. Drawing to `anchor` put the
+      // tip ~HIP+18 above the lid in empty air for the whole ascent (71 px on
+      // desktop): a rope tied to nothing.
       this.climb = true;
-      this.hook = null;
+      this.hook = { x: goal.x, y: toY };
       this.anchor = { x: goal.x, y: goal.y - 18 };
       this.enter("throw");
     } else {
@@ -1047,8 +1051,9 @@ export class Brain {
    * starts the trip on the first frame of travel, toward wherever the edge is
    * that frame, and hands every later position in here until it settles.
    *
-   * Only the destination moves. The climb's wind-up and the rappel's hook are
-   * where Arta stood, which has not changed. A rappel that has barely begun is
+   * Only the destination (and a climb's drawn hook on that lid) moves. The
+   * climb's wind-up pose and the rappel's hook are where Arta stood, which has
+   * not changed. A rappel that has barely begun is
    * re-timed for the real distance (early on, `ease` has hardly moved, so the
    * change is invisible); after that the duration is kept, because re-timing
    * a descent in progress would jump it.
@@ -1058,7 +1063,11 @@ export class Brain {
     if (this.act !== "throw" && this.act !== "fly") return;
     const gx = span ? clamp(this.anchor.x, span.x1 + 40, Math.max(span.x1 + 40, span.x2 - 40)) : this.anchor.x;
     const goalY = toY - RIG.HIP;
-    if (this.climb) { this.anchor = { x: gx, y: goalY - 18 }; return; }
+    if (this.climb) {
+      this.anchor = { x: gx, y: goalY - 18 };
+      this.hook = { x: gx, y: toY };  // keep the drawn tip on the moving lid
+      return;
+    }
     this.anchor = { x: gx, y: goalY - 6 };
     if (this.act === "fly" && this.t < 0.3 * this.flyDur) {
       this.flyDur = clamp((goalY - this.flyFrom.y) / 300, 0.7, 2.2);
@@ -1393,9 +1402,18 @@ export class Brain {
       act: this.act,
       // Only once it has CAUGHT. Including `throw` drew the line taut to a
       // point in empty air for the whole 0.42 s wind-up — tied before it was
-      // thrown.
-      rope: this.anchor && this.act === "fly"
-        ? { from: this.lastDraw.hand, to: this.hook ?? this.anchor } : null,
+      // thrown. A rappel is hooked before the drop, so its line is full length
+      // from frame one; a climb's catch grows the tip from the hand to the hook
+      // over the first ~0.14 s, otherwise a 400–600 px rope appears in one frame.
+      rope: this.anchor && this.act === "fly" ? (() => {
+        const from = this.lastDraw.hand;
+        const tip = this.hook ?? this.anchor!;
+        const grow = this.rappel ? 1 : clamp(this.t / 0.14, 0, 1);
+        return {
+          from,
+          to: grow >= 1 ? tip : { x: from.x + (tip.x - from.x) * grow, y: from.y + (tip.y - from.y) * grow },
+        };
+      })() : null,
       airborne: this.act === "fly",
       arrow: this.act === "point" && this.aim
         ? { from: this.lastDraw.hand, to: this.aim, age: this.clock - this.aimAt }
