@@ -77,11 +77,11 @@ is in `Extra::PRIVATE_TABLES`.
 - Reads: `GET outreach/alumni`, `outreach/alumni/facets`, `outreach/alumni/export` ('admin').
 - `POST outreach/alumni/to-queue {id, platforms[]}` copies profiles into the Review queue as pending.
 - `POST outreach/alumni/ingest {alumni:[…]}` is the scan box's only way in. It requires the dedicated
-- Full replace per year: a request may carry `prune:{year, keep:[{full_name, department}]}` (alone or after the year's batches); rows of that year whose key is not in `keep` are deleted. Refused if it would delete more than max(50, half) of the year's rows.
   secret `AQ_ALUMNI_INGEST_TOKEN` in the `X-AQ-Alumni-Token` header (≥32 chars, compared with
   hash_equals), HTTPS, at most 60 requests an hour per IP, a 2 MB body and 500 rows. It returns 404
   until the secret is set. Set the secret in wp-admin → AQ Security (vault), or as an env var or
   wp-config constant.
+- Full replace per year: a request may carry `prune:{year, keep:[{full_name, department}]}` (alone or after the year's batches); rows of that year whose key is not in `keep` are deleted. Refused if it would delete more than max(50, half) of the year's rows.
 - Photos: a GitHub avatar (`github.com/<login>.png`) or the platform's logo. Nothing is scraped.
 
 ### Who can open Outreach
