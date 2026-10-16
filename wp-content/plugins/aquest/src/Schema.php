@@ -1434,7 +1434,7 @@ final class Schema {
 				'accepted_at' => 'when it was accepted / followed back (UTC); minus request_sent_at = time to accept',
 			] ],
 			'aq_alumni'         => [ 'desc' => 'ArtaSearch: Bilkent alumni and the public profiles confirmed as the same person (admin only, a tab inside Outreach). WITHHELD from /data, /schema and the nightly export (Extra::PRIVATE_TABLES) — these are third parties who never joined.', 'cols' => [
-				'name_key' => 'lower-cased full name; with grad_year the upsert key',
+				'name_key' => 'lower-cased full name | department; with grad_year the upsert key',
 				'profiles' => 'JSON {platform: {url, title, evidence}} — only same-person matches',
 				'platforms' => 'comma-wrapped platform list for filtering',
 			] ],
