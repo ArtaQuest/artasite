@@ -282,7 +282,7 @@ final class AlumniSearch {
 				$keys = [];
 				foreach ( $keep as $k ) {
 					if ( is_array( $k ) && ( $k['full_name'] ?? '' ) !== '' ) {
-						$keys[ self::name_key( mb_substr( sanitize_text_field( (string) $k['full_name'] ), 0, 255 ), (string) ( $k['department'] ?? '' ) ) ] = 1; // same normalisation as clean()
+						$keys[ self::name_key( mb_substr( sanitize_text_field( (string) $k['full_name'] ), 0, 255 ), mb_substr( sanitize_text_field( (string) ( $k['department'] ?? '' ) ), 0, 120 ) ) ] = 1; // same normalisation as clean()
 					}
 				}
 				$have = $wpdb->get_results( $wpdb->prepare( 'SELECT id, name_key FROM ' . self::t() . ' WHERE grad_year = %d', $py ), ARRAY_A );
