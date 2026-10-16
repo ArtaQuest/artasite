@@ -254,6 +254,7 @@ final class AlumniSearch {
 		if ( strlen( (string) $req->get_body() ) > self::BODY_MAX ) { return $reply( [ 'error' => 'too_large', 'message' => 'body over 2 MB' ], 413 ); }
 		$body = (array) $req->get_json_params();
 		$list = isset( $body['alumni'] ) && is_array( $body['alumni'] ) ? array_values( $body['alumni'] ) : null;
+		if ( $list === null && isset( $body['prune'] ) ) { $list = []; }
 		if ( $list === null ) { return $reply( [ 'error' => 'alumni', 'message' => '{alumni:[…]} required' ], 400 ); }
 		if ( count( $list ) > self::ROWS_MAX ) { return $reply( [ 'error' => 'too_many', 'message' => 'max 500 rows per request' ], 413 ); }
 		// One shot (1.25.2): rows written under the 1.25.0 name-only key carry no '|' — drop them so the
@@ -269,7 +270,35 @@ final class AlumniSearch {
 			if ( is_wp_error( $row ) ) { $out['errors'][] = [ 'row' => $i, 'error' => $row->get_error_message() ]; continue; }
 			$out[ self::upsert( $row ) ]++;
 		}
-		$audit( "ok:{$out['inserted']}+{$out['updated']}" );
+		// Full replace per year (1.25.3): {prune:{year:Y, keep:[{full_name,department},…]}} deletes that year's
+		// rows whose key is not in keep. Sent once, after every batch of the year has been upserted.
+		if ( isset( $body['prune'] ) && is_array( $body['prune'] ) ) {
+			$py   = (int) ( $body['prune']['year'] ?? 0 );
+			$keep = isset( $body['prune']['keep'] ) && is_array( $body['prune']['keep'] ) ? $body['prune']['keep'] : [];
+			if ( $py < 1986 || $py > 2100 || count( $keep ) < 1 || count( $keep ) > 5000 ) {
+				$out['errors'][] = [ 'row' => 'prune', 'error' => 'prune needs a year and 1-5000 keep entries' ];
+			} else {
+				global $wpdb;
+				$keys = [];
+				foreach ( $keep as $k ) {
+					if ( is_array( $k ) && ( $k['full_name'] ?? '' ) !== '' ) {
+						$keys[ self::name_key( sanitize_text_field( (string) $k['full_name'] ), sanitize_text_field( (string) ( $k['department'] ?? '' ) ) ) ] = 1;
+					}
+				}
+				$have = $wpdb->get_results( $wpdb->prepare( 'SELECT id, name_key FROM ' . self::t() . ' WHERE grad_year = %d', $py ), ARRAY_A );
+				$drop = [];
+				foreach ( (array) $have as $h ) { if ( ! isset( $keys[ $h['name_key'] ] ) ) { $drop[] = (int) $h['id']; } }
+				if ( $keys && count( $drop ) <= max( 50, (int) ( 0.5 * count( (array) $have ) ) ) ) { // guard against a bad keep list wiping a year
+					foreach ( array_chunk( $drop, 200 ) as $ch ) {
+						$wpdb->query( 'DELETE FROM ' . self::t() . ' WHERE id IN (' . implode( ',', array_map( 'intval', $ch ) ) . ')' );
+					}
+					$out['pruned'] = count( $drop );
+				} else {
+					$out['errors'][] = [ 'row' => 'prune', 'error' => 'refused: would delete ' . count( $drop ) . ' of ' . count( (array) $have ) ];
+				}
+			}
+		}
+		$audit( "ok:{$out['inserted']}+{$out['updated']}" . ( isset( $out['pruned'] ) ? "-{$out['pruned']}" : '' ) );
 		return $reply( $out, 200 );
 	}
 }
