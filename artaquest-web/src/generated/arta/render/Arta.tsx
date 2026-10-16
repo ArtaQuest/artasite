@@ -1,5 +1,5 @@
 /* GENERATED — DO NOT EDIT HERE.
- * Vendored from artalife src/render/Arta.tsx @ e6b8b78.
+ * Vendored from artalife src/render/Arta.tsx @ 148b00e.
  * Source of truth: https://github.com/ArtaQuest/artalife.git
  * Re-run: node tools/arta-sync.mjs
  */
