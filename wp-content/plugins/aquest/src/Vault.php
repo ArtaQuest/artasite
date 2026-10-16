@@ -83,6 +83,7 @@ final class Vault {
 		// GET /wp-json/aq/v1/secret/titan — the ONLY secret served over HTTP, token-gated (see Vault::rest_titan).
 		'TITAN_PASSWORD'             => [ 'Titan mail password (arash@ / support@artaquest.org) — served to ArtaMail only, via GET /aq/v1/secret/titan', 180, true ],
 		'AQ_ARTAMAIL_TOKEN'          => [ 'Bearer token ArtaMail presents to GET /aq/v1/secret/titan (its ONLY route), constant-time compared — >=32 chars; this is NOT the Titan password', 180, true ],
+		'AQ_ALUMNI_INGEST_TOKEN'     => [ 'Header X-AQ-Alumni-Token the ArtaSearch scan box presents to POST /aq/v1/outreach/alumni/ingest (its ONLY route), constant-time compared — >=32 chars; the route answers 404 while unset', 180, true ],
 		'AQ_CASHOUT_FROZEN'          => [ 'OPS FLAG — freezes coin cash-outs while set', 0 ],
 		'AQ_ALLOW_PASSWORD_LOGIN'    => [ 'RECOVERY FLAG — re-enables password logins. Must stay UNSET (the DB is public).', 0 ],
 	];

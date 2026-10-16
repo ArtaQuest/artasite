@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.85.0';
+	const VERSION = '1.86.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -1277,6 +1277,31 @@ final class Schema {
 				UNIQUE KEY platform_handle (platform, handle),
 				KEY status_id (status, id),
 				KEY platform_status_id (platform, status, id)",
+			// 1.86.0 — ArtaSearch (AlumniSearch.php): one row per alumnus, upserted on (name_key, grad_year)
+			// by the scan box. Third-party data: withheld via Extra::PRIVATE_TABLES; reads are 'admin'.
+			'aq_alumni' => "
+				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+				name_key VARCHAR(191) NOT NULL DEFAULT '',
+				full_name VARCHAR(255) NOT NULL DEFAULT '',
+				grad_year SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+				department VARCHAR(120) NOT NULL DEFAULT '',
+				employer VARCHAR(255) NOT NULL DEFAULT '',
+				headline VARCHAR(300) NOT NULL DEFAULT '',
+				city VARCHAR(120) NOT NULL DEFAULT '',
+				country VARCHAR(120) NOT NULL DEFAULT '',
+				public_email VARCHAR(255) NOT NULL DEFAULT '',
+				email_source VARCHAR(500) NOT NULL DEFAULT '',
+				photo VARCHAR(500) NOT NULL DEFAULT '',
+				profiles TEXT NULL,
+				n_profiles TINYINT UNSIGNED NOT NULL DEFAULT 0,
+				platforms VARCHAR(120) NOT NULL DEFAULT '',
+				created_at DATETIME NOT NULL,
+				updated_at DATETIME NOT NULL,
+				PRIMARY KEY  (id),
+				UNIQUE KEY name_year (name_key, grad_year),
+				KEY grad_year (grad_year),
+				KEY department (department),
+				KEY country (country)",
 			'aq_arash_request_events' => "
 				id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 				user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
@@ -1407,6 +1432,11 @@ final class Schema {
 				'status' => 'pending | included | excluded — only a human moves it off pending',
 				'request_sent_at' => 'when the phone sent the connection/follow request (UTC)',
 				'accepted_at' => 'when it was accepted / followed back (UTC); minus request_sent_at = time to accept',
+			] ],
+			'aq_alumni'         => [ 'desc' => 'ArtaSearch: Bilkent alumni and the public profiles confirmed as the same person (admin only, a tab inside Outreach). WITHHELD from /data, /schema and the nightly export (Extra::PRIVATE_TABLES) — these are third parties who never joined.', 'cols' => [
+				'name_key' => 'lower-cased full name; with grad_year the upsert key',
+				'profiles' => 'JSON {platform: {url, title, evidence}} — only same-person matches',
+				'platforms' => 'comma-wrapped platform list for filtering',
 			] ],
 			'aq_task_sync'      => [ 'desc' => 'ArtaTask phone sync (followers, following, mutuals, session claim, prefs, requestStatus). WITHHELD from /data and the nightly export (Extra::PRIVATE_TABLES). The payload is libsodium ciphertext; the key lives in wp-config / AQ_TASK_SYNC_KEY, never in the row. Replaces Cloudflare Workers KV.', 'cols' => [
 				'blob_name' => 'one of strava_followers.json, strava_following.json, mutual_connections.json, session_claim.json, prefs.json, requestStatus.json',

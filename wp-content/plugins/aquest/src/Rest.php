@@ -744,6 +744,14 @@ final class Rest {
 		[ 'POST', 'outreach/import-zip',                      'Outreach::import_zip', 'admin' ], // multipart file: .zip = one .csv + jpg/png/webp named in `photo`; ≤50 MB; photos re-encoded, stored privately
 		[ 'GET',  'outreach/photo/(?P<id>[0-9]+)',            'Outreach::photo',     'admin' ], // the row's private photo (image/jpeg, no-store, noindex); <img> passes ?_wpnonce=
 		[ 'GET',  'outreach/export',                          'Outreach::export',    'admin' ], // ?platform=&status= → {filename, csv} formula-guarded
+		// ArtaSearch — the alumni directory, a tab inside Outreach (src/AlumniSearch.php). Reads are 'admin'.
+		// ingest is 'public' ONLY so the handler can audit (the Vault::rest_titan pattern): it enforces the
+		// dedicated AQ_ALUMNI_INGEST_TOKEN (X-AQ-Alumni-Token, hash_equals), HTTPS, 60/h/IP, 2 MB, 500 rows; 404 while unset.
+		[ 'GET',  'outreach/alumni',                          'AlumniSearch::list',     'admin' ], // ?year=&department=&country=&platform=&q=&cursor=
+		[ 'GET',  'outreach/alumni/facets',                   'AlumniSearch::facets',   'admin' ], // unique values per filterable column (≤1000) + platform counts
+		[ 'GET',  'outreach/alumni/export',                   'AlumniSearch::export',   'admin' ], // same filters → {filename, rows, csv} formula-guarded
+		[ 'POST', 'outreach/alumni/to-queue',                 'AlumniSearch::to_queue', 'admin' ], // {id, platforms[]} → aq_artaoutreach as pending
+		[ 'POST', 'outreach/alumni/ingest',                   'AlumniSearch::ingest',   'public' ], // the scan box; dedicated secret enforced in the handler
 		[ 'GET',  'outreach/template',                        'Outreach::template',  'admin' ], // → {filename, csv}
 		[ 'GET',  'outreach/profile-sync',                    'ProfileSync::rest_preview', 'admin' ], // ?cursor=&limit≤200 PREVIEW (writes nothing): {items:[{id,handle,changes}], next}
 		[ 'POST', 'outreach/profile-sync',                    'ProfileSync::rest_apply',   'admin' ], // {ids[]≤200, confirm:true} → {updated, unchanged, skipped}

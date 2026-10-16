@@ -125,7 +125,7 @@ $check('aq_cast_requests.story',$r['story'],true);
 $check('aq_cast_requests.a_name',$r['a_name'],false);
 $check('aq_cast_requests.meet_id',$r['meet_id'],false);
 // Tables WITHHELD entirely — the DM metadata graph plus the two older promises.
-foreach(['aq_chats','aq_chat_msgs','aq_doc_sources','aq_order_ship','aq_artaoutreach','aq_cast_requests'] as $t){
+foreach(['aq_chats','aq_chat_msgs','aq_doc_sources','aq_order_ship','aq_artaoutreach','aq_cast_requests','aq_alumni'] as $t){
   $in=in_array($t,Extra::PRIVATE_TABLES,true); $n++; if(!$in)$fails++;
   printf("%s  %-46s withheld=%s want=Y\n", $in?'PASS':'FAIL', "PRIVATE_TABLES has $t", $in?'Y':'N'); }
 // ...and the tables that must NOT be withheld, or the product itself is gone.
