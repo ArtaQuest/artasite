@@ -282,13 +282,13 @@ final class AlumniSearch {
 				$keys = [];
 				foreach ( $keep as $k ) {
 					if ( is_array( $k ) && ( $k['full_name'] ?? '' ) !== '' ) {
-						$keys[ self::name_key( sanitize_text_field( (string) $k['full_name'] ), sanitize_text_field( (string) ( $k['department'] ?? '' ) ) ) ] = 1;
+						$keys[ self::name_key( mb_substr( sanitize_text_field( (string) $k['full_name'] ), 0, 255 ), (string) ( $k['department'] ?? '' ) ) ] = 1; // same normalisation as clean()
 					}
 				}
 				$have = $wpdb->get_results( $wpdb->prepare( 'SELECT id, name_key FROM ' . self::t() . ' WHERE grad_year = %d', $py ), ARRAY_A );
 				$drop = [];
 				foreach ( (array) $have as $h ) { if ( ! isset( $keys[ $h['name_key'] ] ) ) { $drop[] = (int) $h['id']; } }
-				if ( $keys && count( $drop ) <= max( 50, (int) ( 0.5 * count( (array) $have ) ) ) ) { // guard against a bad keep list wiping a year
+				if ( $keys && count( $drop ) <= max( 10, (int) ( 0.1 * count( (array) $have ) ) ) ) { // guard: a bad keep list may remove at most 10% of a year (min 10)
 					foreach ( array_chunk( $drop, 200 ) as $ch ) {
 						$wpdb->query( 'DELETE FROM ' . self::t() . ' WHERE id IN (' . implode( ',', array_map( 'intval', $ch ) ) . ')' );
 					}
