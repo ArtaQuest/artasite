@@ -256,7 +256,14 @@ final class AlumniSearch {
 		$list = isset( $body['alumni'] ) && is_array( $body['alumni'] ) ? array_values( $body['alumni'] ) : null;
 		if ( $list === null ) { return $reply( [ 'error' => 'alumni', 'message' => '{alumni:[…]} required' ], 400 ); }
 		if ( count( $list ) > self::ROWS_MAX ) { return $reply( [ 'error' => 'too_many', 'message' => 'max 500 rows per request' ], 413 ); }
+		// One shot (1.25.2): rows written under the 1.25.0 name-only key carry no '|' — drop them so the
+		// name|department key does not leave stale duplicates. The scan box re-sends the full set.
 		$out = [ 'inserted' => 0, 'updated' => 0, 'errors' => [] ];
+		if ( get_option( 'aq_alumni_key_v2' ) !== '1' ) {
+			global $wpdb;
+			$out['purged_v1'] = (int) $wpdb->query( 'DELETE FROM ' . self::t() . " WHERE name_key NOT LIKE '%|%'" );
+			update_option( 'aq_alumni_key_v2', '1', false );
+		}
 		foreach ( $list as $i => $r ) {
 			$row = is_array( $r ) ? self::clean( $r ) : new \WP_Error( 'item', 'not an object' );
 			if ( is_wp_error( $row ) ) { $out['errors'][] = [ 'row' => $i, 'error' => $row->get_error_message() ]; continue; }
