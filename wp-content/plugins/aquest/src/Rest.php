@@ -8,7 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *   - method : 'GET' (public, cacheable) or 'POST' (mutation, session required)
  *   - path   : under /wp-json/aq/v1/ ; `(?P<name>…)` segments arrive as request params
  *   - handler: 'Domain::method' — a static method($req) returning array|WP_Error
- *   - auth   : 'public' | 'user' | 'admin' | 'worker'
+ *   - auth   : 'public' | 'user' | 'admin' | 'worker' | 'outreach' (admin, or an Outreach::EXTRA_SLUGS account; cookie only)
  *
  * 'user' means a signed-in browser session (cookie + X-WP-Nonce) — OR a personal access
  * token (Authorization: Bearer aq_…), but tokens reach only the Api::TOKEN_ROUTES
@@ -730,31 +730,31 @@ final class Rest {
 		// Accounts the platforms suggested to Arash, the include/exclude decision, the phone's send
 		// queue, and the dashboard. Every row is 'admin': a cookie session with manage_options; an API
 		// token is refused even for an operator. The table is in Extra::PRIVATE_TABLES.
-		[ 'GET',  'outreach/accounts',                        'Outreach::list',      'admin' ], // ?platform=&status=&cursor= keyset page + status counts
-		[ 'POST', 'outreach/accounts',                        'Outreach::ingest',    'admin' ], // one record or {accounts:[…]} ≤500 — upsert by platform+handle, never changes status
-		[ 'POST', 'outreach/decide',                          'Outreach::decide',    'admin' ], // {ids[], status} include / exclude / pending; a sent row is final
-		[ 'POST', 'outreach/accounts/(?P<id>[0-9]+)/notes',   'Outreach::notes',     'admin' ], // {notes}
-		[ 'POST', 'outreach/accounts/(?P<id>[0-9]+)/sent',    'Outreach::sent',      'admin' ], // {at?} the phone sent the request (included rows only; idempotent)
-		[ 'POST', 'outreach/accounts/(?P<id>[0-9]+)/accepted','Outreach::accepted',  'admin' ], // {at?} accepted / followed back → time_to_accept_s
-		[ 'GET',  'outreach/queue',                           'Outreach::queue',     'admin' ], // ?platform=&limit= included, not yet sent, oldest decision first
-		[ 'GET',  'outreach/stats',                           'Outreach::stats',     'admin' ], // per platform: counts, acceptance rate, time-to-accept median/mean
-		[ 'GET',  'outreach/plan',                            'Outreach::plan',      'admin' ], // daily caps, sent today, remaining, days to clear the queue
-		[ 'POST', 'outreach/caps',                            'Outreach::set_caps',  'admin' ], // {linkedin?, facebook?, instagram?, x?} 0…100 per day
-		[ 'POST', 'outreach/import',                          'Outreach::import',    'admin' ], // {csv} ≤2 MB, ≤5000 rows, per-row errors
-		[ 'POST', 'outreach/import-zip',                      'Outreach::import_zip', 'admin' ], // multipart file: .zip = one .csv + jpg/png/webp named in `photo`; ≤50 MB; photos re-encoded, stored privately
-		[ 'GET',  'outreach/photo/(?P<id>[0-9]+)',            'Outreach::photo',     'admin' ], // the row's private photo (image/jpeg, no-store, noindex); <img> passes ?_wpnonce=
-		[ 'GET',  'outreach/export',                          'Outreach::export',    'admin' ], // ?platform=&status= → {filename, csv} formula-guarded
+		[ 'GET',  'outreach/accounts',                        'Outreach::list',      'outreach' ], // ?platform=&status=&cursor= keyset page + status counts
+		[ 'POST', 'outreach/accounts',                        'Outreach::ingest',    'outreach' ], // one record or {accounts:[…]} ≤500 — upsert by platform+handle, never changes status
+		[ 'POST', 'outreach/decide',                          'Outreach::decide',    'outreach' ], // {ids[], status} include / exclude / pending; a sent row is final
+		[ 'POST', 'outreach/accounts/(?P<id>[0-9]+)/notes',   'Outreach::notes',     'outreach' ], // {notes}
+		[ 'POST', 'outreach/accounts/(?P<id>[0-9]+)/sent',    'Outreach::sent',      'outreach' ], // {at?} the phone sent the request (included rows only; idempotent)
+		[ 'POST', 'outreach/accounts/(?P<id>[0-9]+)/accepted','Outreach::accepted',  'outreach' ], // {at?} accepted / followed back → time_to_accept_s
+		[ 'GET',  'outreach/queue',                           'Outreach::queue',     'outreach' ], // ?platform=&limit= included, not yet sent, oldest decision first
+		[ 'GET',  'outreach/stats',                           'Outreach::stats',     'outreach' ], // per platform: counts, acceptance rate, time-to-accept median/mean
+		[ 'GET',  'outreach/plan',                            'Outreach::plan',      'outreach' ], // daily caps, sent today, remaining, days to clear the queue
+		[ 'POST', 'outreach/caps',                            'Outreach::set_caps',  'outreach' ], // {linkedin?, facebook?, instagram?, x?} 0…100 per day
+		[ 'POST', 'outreach/import',                          'Outreach::import',    'outreach' ], // {csv} ≤2 MB, ≤5000 rows, per-row errors
+		[ 'POST', 'outreach/import-zip',                      'Outreach::import_zip', 'outreach' ], // multipart file: .zip = one .csv + jpg/png/webp named in `photo`; ≤50 MB; photos re-encoded, stored privately
+		[ 'GET',  'outreach/photo/(?P<id>[0-9]+)',            'Outreach::photo',     'outreach' ], // the row's private photo (image/jpeg, no-store, noindex); <img> passes ?_wpnonce=
+		[ 'GET',  'outreach/export',                          'Outreach::export',    'outreach' ], // ?platform=&status= → {filename, csv} formula-guarded
 		// ArtaSearch — the alumni directory, a tab inside Outreach (src/AlumniSearch.php). Reads are 'admin'.
 		// ingest is 'public' ONLY so the handler can audit (the Vault::rest_titan pattern): it enforces the
 		// dedicated AQ_ALUMNI_INGEST_TOKEN (X-AQ-Alumni-Token, hash_equals), HTTPS, 60/h/IP, 2 MB, 500 rows; 404 while unset.
-		[ 'GET',  'outreach/alumni',                          'AlumniSearch::list',     'admin' ], // ?year=&department=&country=&platform=&q=&cursor=
-		[ 'GET',  'outreach/alumni/facets',                   'AlumniSearch::facets',   'admin' ], // unique values per filterable column (≤1000) + platform counts
-		[ 'GET',  'outreach/alumni/export',                   'AlumniSearch::export',   'admin' ], // same filters → {filename, rows, csv} formula-guarded
-		[ 'POST', 'outreach/alumni/to-queue',                 'AlumniSearch::to_queue', 'admin' ], // {id, platforms[]} → aq_artaoutreach as pending
+		[ 'GET',  'outreach/alumni',                          'AlumniSearch::list',     'outreach' ], // ?year=&department=&country=&platform=&q=&cursor=
+		[ 'GET',  'outreach/alumni/facets',                   'AlumniSearch::facets',   'outreach' ], // unique values per filterable column (≤1000) + platform counts
+		[ 'GET',  'outreach/alumni/export',                   'AlumniSearch::export',   'outreach' ], // same filters → {filename, rows, csv} formula-guarded
+		[ 'POST', 'outreach/alumni/to-queue',                 'AlumniSearch::to_queue', 'outreach' ], // {id, platforms[]} → aq_artaoutreach as pending
 		[ 'POST', 'outreach/alumni/ingest',                   'AlumniSearch::ingest',   'public' ], // the scan box; dedicated secret enforced in the handler
-		[ 'GET',  'outreach/template',                        'Outreach::template',  'admin' ], // → {filename, csv}
-		[ 'GET',  'outreach/profile-sync',                    'ProfileSync::rest_preview', 'admin' ], // ?cursor=&limit≤200 PREVIEW (writes nothing): {items:[{id,handle,changes}], next}
-		[ 'POST', 'outreach/profile-sync',                    'ProfileSync::rest_apply',   'admin' ], // {ids[]≤200, confirm:true} → {updated, unchanged, skipped}
+		[ 'GET',  'outreach/template',                        'Outreach::template',  'outreach' ], // → {filename, csv}
+		[ 'GET',  'outreach/profile-sync',                    'ProfileSync::rest_preview', 'outreach' ], // ?cursor=&limit≤200 PREVIEW (writes nothing): {items:[{id,handle,changes}], next}
+		[ 'POST', 'outreach/profile-sync',                    'ProfileSync::rest_apply',   'outreach' ], // {ids[]≤200, confirm:true} → {updated, unchanged, skipped}
 
 		// ── ArtaTask phone sync (src/TaskSync.php) ───────────────────────────
 		// The five JSON blobs that used to live in Cloudflare Workers KV (TASK_SYNC).
@@ -803,6 +803,7 @@ final class Rest {
 	private static function can( $auth, $path = '', $method = '' ) {
 		if ( $auth === 'public' ) { return true; }
 		if ( $auth === 'admin' )  { return ! Api::via_token() && current_user_can( 'manage_options' ); }
+		if ( $auth === 'outreach' ) { return ! Api::via_token() && Outreach::allowed( get_current_user_id() ); }
 		if ( $auth === 'worker' ) { return self::worker_ok(); }
 		if ( $auth === 'arta' )   { return Arta::token_ok(); } // the Arta brain's scoped token, nothing else
 		if ( ! is_user_logged_in() ) { return false; } // 'user'

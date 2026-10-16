@@ -38,6 +38,19 @@ final class Outreach {
 		'strava'    => 'https://www.strava.com/athletes/%s',
 	];
 
+	/** Accounts that may use Outreach (and its ArtaSearch tab) WITHOUT manage_options — the founder's
+	 *  own account (operator 2026-10-16: "reach the ArtaSearch tab signed in as artafather"). Matched on
+	 *  the user's slug (user_nicename, unique). Grants Outreach only — no other admin surface. */
+	const EXTRA_SLUGS = [ 'artafather' ];
+
+	public static function allowed( $uid ) {
+		$uid = (int) $uid;
+		if ( $uid <= 0 ) { return false; }
+		if ( user_can( $uid, 'manage_options' ) ) { return true; }
+		$u = get_userdata( $uid );
+		return $u && in_array( (string) $u->user_nicename, self::EXTRA_SLUGS, true );
+	}
+
 	public static function profile_url( $platform, $handle ) {
 		return isset( self::URL_FMT[ $platform ] ) && $handle !== '' ? sprintf( self::URL_FMT[ $platform ], rawurlencode( $handle ) ) : '';
 	}
