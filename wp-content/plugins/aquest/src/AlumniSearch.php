@@ -83,7 +83,7 @@ final class AlumniSearch {
 		$src   = $email !== '' ? esc_url_raw( (string) ( $r['public_email_source'] ?? '' ), [ 'https' ] ) : '';
 		$txt   = function ( $k, $n ) use ( $r ) { return mb_substr( sanitize_text_field( (string) ( $r[ $k ] ?? '' ) ), 0, $n ); };
 		return [
-			'name_key'     => self::name_key( $name, $r['department'] ?? '' ),
+			'name_key'     => self::name_key( $name, $txt( 'department', 120 ) ), // key from the stored (sanitised, 120-char) department, exactly what the prune keep-list builds
 			'full_name'    => $name,
 			'grad_year'    => $year,
 			'department'   => $txt( 'department', 120 ),
