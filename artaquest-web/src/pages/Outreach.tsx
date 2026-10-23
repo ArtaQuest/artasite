@@ -350,6 +350,17 @@ function AlumniRow({ a }: { a: Alumnus }) {
   const have = ALUMNI_PLATFORMS.filter((p) => a.profiles[p]);
   const queueable = have.filter((p) => QUEUEABLE.has(p));
   const emails = alumniEmails(a);
+  const [followedAt, setFollowedAt] = useState<string | null>(a.followed_at ?? null);
+  const [fBusy, setFBusy] = useState(false);
+  // Follow: open every social link in its own tab SYNCHRONOUSLY inside the click (pop-up blockers allow user-initiated opens;
+  // a browser may still ask once to allow several pop-ups), then remember it server-side for this admin. Unfollow only flips back.
+  const toggleFollow = () => {
+    const follow = !followedAt;
+    if (follow) for (const p of have) { const u = a.profiles[p]?.url; if (u) window.open(u, "_blank", "noopener,noreferrer"); }
+    const prev = followedAt;
+    setFollowedAt(follow ? new Date().toISOString().slice(0, 19).replace("T", " ") : null); setFBusy(true);
+    AlumniApi.follow(a.id, follow).then((r) => setFollowedAt(r.followed_at)).catch(() => { setFollowedAt(prev); setMsg("Couldn't save follow state."); }).finally(() => setFBusy(false));
+  };
   const toQueue = async () => {
     setBusy(true); setMsg("");
     try {
@@ -378,6 +389,11 @@ function AlumniRow({ a }: { a: Alumnus }) {
             <a href={`mailto:${emails[0].email}`} className={ICON_BTN} aria-label={`Email ${a.full_name}`}
               title={emails[0].email + (emails.length > 1 ? ` (+${emails.length - 1} more in details)` : "")}>{MAIL_ICON}</a>
           )}
+          <button type="button" onClick={toggleFollow} disabled={fBusy} aria-pressed={!!followedAt}
+            title={followedAt ? `Followed ${followedAt} UTC — click to mark as not followed` : have.length ? `Open all ${have.length} social link(s) in new tabs and mark as followed` : "Mark as followed"}
+            className={`ml-1 h-7 rounded-full px-3 text-[12px] font-semibold ${followedAt ? "border border-line bg-veil/5 text-ink-3 hover:text-ink" : "bg-yang text-on-accent hover:bg-yin hover:text-white"}`}>
+            {followedAt ? "Unfollow" : "Follow"}
+          </button>
         </div>
       </div>
       {open && (
@@ -412,6 +428,7 @@ function AlumniRow({ a }: { a: Alumnus }) {
             <div className="flex flex-wrap items-center gap-2 pt-1">
               {queueable.length > 0 && <Button size="sm" variant="outline" onClick={toQueue} disabled={busy}>Send to queue</Button>}
               {msg && <span>{msg}</span>}
+              {followedAt && <span>Followed {followedAt} UTC ·</span>}
               <span>Updated {a.updated_at} UTC</span>
             </div>
           </div>
@@ -460,6 +477,8 @@ function AlumniSearch() {
         <Select label="Year" value={f.year ?? ""} onChange={set("year")} options={opt("All years", facets?.years)} skipOptions />
         <Select label="Department" value={f.department ?? ""} onChange={set("department")} options={opt("All departments", facets?.departments)} skipOptions />
         <Select label="Country" value={f.country ?? ""} onChange={set("country")} options={opt("All countries", facets?.countries)} skipOptions />
+        <Select label="Followed" value={f.followed ?? ""} onChange={set("followed")} skipOptions
+          options={[{ value: "", label: "Followed or not" }, { value: "1", label: "Followed" }, { value: "0", label: "Not followed" }]} />
         <Button size="sm" variant="outline" onClick={exportCsv}>Export CSV</Button>
       </div>
       <fieldset className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink-2">

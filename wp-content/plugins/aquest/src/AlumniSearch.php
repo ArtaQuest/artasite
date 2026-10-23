@@ -141,7 +141,29 @@ final class AlumniSearch {
 			'photo_meta' => is_array( $pm = json_decode( (string) ( $r['photo_meta'] ?? '' ), true ) ) ? array_intersect_key( $pm, array_flip( [ 'platform', 'profile_url', 'fetched_at' ] ) ) : null,
 			'emails' => is_array( $em = json_decode( (string) ( $r['emails'] ?? '' ), true ) ) ? $em : [],
 			'profiles' => is_array( $p ) ? $p : [], 'updated_at' => $r['updated_at'],
+			'followed_at' => self::follows()[ (int) $r['id'] ] ?? null,
 		];
+	}
+
+	// 1.25.12 Follow (Arash 2026-10-23): per admin user, in user meta (survives reloads and devices): {alumni id: followed_at UTC}.
+	const FOLLOW_META = 'aq_alumni_follows';
+
+	/** The current user's followed rows: [id => 'Y-m-d H:i:s' UTC]. */
+	private static function follows() {
+		$m = get_user_meta( get_current_user_id(), self::FOLLOW_META, true );
+		return is_array( $m ) ? $m : [];
+	}
+
+	/** POST outreach/alumni/follow {id, follow: bool} -> {id, followed_at|null}. Unfollow only flips the state. */
+	public static function follow( $req ) {
+		global $wpdb;
+		$id = Rest::pint( $req, 'id' );
+		if ( ! $id || ! $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . self::t() . ' WHERE id = %d', $id ) ) ) { return new \WP_Error( 'not_found', 'no such person', 404 ); }
+		$m = self::follows();
+		if ( rest_sanitize_boolean( Rest::p( $req, 'follow', true ) ) ) { $m[ $id ] = $m[ $id ] ?? gmdate( 'Y-m-d H:i:s' ); }
+		else { unset( $m[ $id ] ); }
+		update_user_meta( get_current_user_id(), self::FOLLOW_META, $m );
+		return [ 'id' => $id, 'followed_at' => $m[ $id ] ?? null ];
 	}
 
 	/** WHERE clause + args from ?year=&department=&platform=&platforms=a,b,email&country=&q= */
@@ -165,6 +187,13 @@ final class AlumniSearch {
 				else { $or[] = 'platforms LIKE %s'; $a[] = '%,' . $k . ',%'; }
 			}
 			$w[] = '(' . implode( ' OR ', $or ) . ')';
+		}
+		// ?followed=1 / 0: only people the current admin follows / does not follow (1.25.12)
+		$fo = (string) Rest::p( $req, 'followed' );
+		if ( $fo === '1' || $fo === '0' ) {
+			$ids = array_map( 'intval', array_keys( self::follows() ) );
+			if ( $fo === '1' ) { $w[] = $ids ? 'id IN (' . implode( ',', $ids ) . ')' : '1=0'; }
+			elseif ( $ids ) { $w[] = 'id NOT IN (' . implode( ',', $ids ) . ')'; }
 		}
 		if ( ( $q = trim( sanitize_text_field( (string) Rest::p( $req, 'q' ) ) ) ) !== '' ) {
 			$like = '%' . $wpdb->esc_like( mb_substr( $q, 0, 100 ) ) . '%';

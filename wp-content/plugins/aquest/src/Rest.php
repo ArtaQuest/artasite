@@ -752,6 +752,7 @@ final class Rest {
 		[ 'GET',  'outreach/alumni/export',                   'AlumniSearch::export',   'outreach' ], // same filters → {filename, rows, csv} formula-guarded
 		[ 'GET',  'outreach/alumni/photo/(?P<id>[0-9]+)',     'AlumniSearch::photo',    'outreach' ], // 1.25.9: the stored picture (image/jpeg, no-store, noindex); <img> passes ?_wpnonce=
 		[ 'POST', 'outreach/alumni/to-queue',                 'AlumniSearch::to_queue', 'outreach' ], // {id, platforms[]} → aq_artaoutreach as pending
+		[ 'POST', 'outreach/alumni/follow',                   'AlumniSearch::follow',   'outreach' ], // 1.25.12 {id, follow} → per-user followed state (user meta)
 		[ 'POST', 'outreach/alumni/ingest',                   'AlumniSearch::ingest',   'public' ], // the scan box; dedicated secret enforced in the handler
 		[ 'GET',  'outreach/template',                        'Outreach::template',  'outreach' ], // → {filename, csv}
 		[ 'GET',  'outreach/profile-sync',                    'ProfileSync::rest_preview', 'outreach' ], // ?cursor=&limit≤200 PREVIEW (writes nothing): {items:[{id,handle,changes}], next}

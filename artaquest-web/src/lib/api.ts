@@ -3297,10 +3297,12 @@ export type Alumnus = {
   photo_meta?: { platform: AlumniPlatform; profile_url: string; fetched_at: string } | null;
   /** 1.25.7: confident-only — the roster's own address (source "roster") or a high-confidence address with the https page it was published on */
   emails?: AlumniEmail[];
+  /** 1.25.12: when the signed-in admin followed this person (UTC), else null */
+  followed_at?: string | null;
   profiles: Partial<Record<AlumniPlatform, AlumniProfile>>; updated_at: string;
 };
 /** platforms: comma list of AlumniPlatform | "email"; a row matches when it has ANY of them (absent = everyone). */
-export type AlumniFilter = { year?: string; department?: string; country?: string; platform?: string; platforms?: string; q?: string };
+export type AlumniFilter = { year?: string; department?: string; country?: string; platform?: string; platforms?: string; followed?: string; q?: string };
 export type AlumniFacet = { value: string | number; n: number };
 export type AlumniFacets = {
   years: AlumniFacet[]; departments: AlumniFacet[]; countries: AlumniFacet[];
@@ -3313,6 +3315,7 @@ export const AlumniApi = {
   facets: () => get<AlumniFacets>("/outreach/alumni/facets"),
   photoUrl: (id: number) => `${BASE}/outreach/alumni/photo/${id}?_wpnonce=${encodeURIComponent(restNonce())}`,
   exportCsv: (p: AlumniFilter) => get<{ filename: string; rows: number; csv: string }>("/outreach/alumni/export", alumniParams(p)),
+  follow: (id: number, follow: boolean) => post<{ id: number; followed_at: string | null }>("/outreach/alumni/follow", { id, follow }),
   toQueue: (id: number, platforms: AlumniPlatform[]) =>
     post<{ inserted: number; updated: number; skipped: string[] }>("/outreach/alumni/to-queue", { id, platforms }),
 };
