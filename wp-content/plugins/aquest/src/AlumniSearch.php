@@ -176,17 +176,13 @@ final class AlumniSearch {
 		$pf = sanitize_key( (string) Rest::p( $req, 'platform' ) );
 		if ( $pf === 'any' ) { $w[] = 'n_profiles > 0'; }
 		elseif ( in_array( $pf, self::PLATFORMS, true ) ) { $w[] = 'platforms LIKE %s'; $a[] = '%,' . $pf . ',%'; }
-		// 1.25.11 multi-select (Arash 2026-10-23): ?platforms=linkedin,instagram,email -> rows with ANY of them (OR).
-		// Absent/empty, or every option selected = no filter (everyone).
+		// 1.25.13 multi-select (Arash 2026-10-23): ?platforms=linkedin,instagram,email -> rows with ALL of them (AND).
+		// Absent/empty = no filter (everyone). (1.25.11 was ANY/OR.)
 		$sel = array_values( array_unique( array_filter( array_map( 'sanitize_key', explode( ',', (string) Rest::p( $req, 'platforms' ) ) ) ) ) );
 		$sel = array_values( array_intersect( $sel, array_merge( self::PLATFORMS, [ 'email' ] ) ) );
-		if ( $sel && count( $sel ) < count( self::PLATFORMS ) + 1 ) {
-			$or = [];
-			foreach ( $sel as $k ) {
-				if ( $k === 'email' ) { $or[] = self::HAS_EMAIL; }
-				else { $or[] = 'platforms LIKE %s'; $a[] = '%,' . $k . ',%'; }
-			}
-			$w[] = '(' . implode( ' OR ', $or ) . ')';
+		foreach ( $sel as $k ) {
+			if ( $k === 'email' ) { $w[] = self::HAS_EMAIL; }
+			else { $w[] = 'platforms LIKE %s'; $a[] = '%,' . $k . ',%'; }
 		}
 		// ?followed=1 / 0: only people the current admin follows / does not follow (1.25.12)
 		$fo = (string) Rest::p( $req, 'followed' );

@@ -441,9 +441,10 @@ function AlumniRow({ a }: { a: Alumnus }) {
 function AlumniSearch() {
   const [facets, setFacets] = useState<AlumniFacets | null>(null);
   const [f, setF] = useState<AlumniFilter>({});
-  // Arash 2026-10-23: multi-select platform filter; a person matches when they have ANY selected one. Default = all (no filter).
-  const [pfs, setPfs] = useState<string[]>(PF_FILTER.map((x) => x.k));
-  useEffect(() => { setF((o) => ({ ...o, platforms: pfs.length === 0 || pfs.length === PF_FILTER.length ? undefined : pfs.join(",") })); }, [pfs]);
+  // Arash 2026-10-23 (1.25.13): multi-select platform filter; a person matches only when they have EVERY selected one (AND).
+  // Default = none ticked = no filter (everyone).
+  const [pfs, setPfs] = useState<string[]>([]);
+  useEffect(() => { setF((o) => ({ ...o, platforms: pfs.length === 0 ? undefined : pfs.join(",") })); }, [pfs]);
   const togglePf = (k: string) => setPfs((o) => (o.includes(k) ? o.filter((x) => x !== k) : [...o, k]));
   const [q, setQ] = useState("");
   const [items, setItems] = useState<Alumnus[] | null>(null);
@@ -482,8 +483,8 @@ function AlumniSearch() {
         <Button size="sm" variant="outline" onClick={exportCsv}>Export CSV</Button>
       </div>
       <fieldset className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink-2">
-        <legend className="sr-only">Has any of these</legend>
-        <span className="mr-1 text-ink-3">Has any of:</span>
+        <legend className="sr-only">Has all of these</legend>
+        <span className="mr-1 text-ink-3">Has all of:</span>
         {PF_FILTER.map(({ k, label }) => {
           const on = pfs.includes(k);
           const n = k === "email" ? facets?.with_email : facets?.platforms[k as AlumniPlatform];
@@ -495,9 +496,11 @@ function AlumniSearch() {
             </label>
           );
         })}
-        <button type="button" className="ml-1 text-ink-3 hover:text-yang" onClick={() => setPfs(pfs.length === PF_FILTER.length ? [] : PF_FILTER.map((x) => x.k))}>
-          {pfs.length === PF_FILTER.length ? "Clear" : "All"}
-        </button>
+        {pfs.length > 0 && (
+          <button type="button" className="ml-1 text-ink-3 hover:text-yang" onClick={() => setPfs([])}>
+            Clear
+          </button>
+        )}
         {pfs.length === 0 && <span className="text-ink-3">(none ticked = everyone)</span>}
       </fieldset>
       {err && <ErrorNote>{err}</ErrorNote>}
