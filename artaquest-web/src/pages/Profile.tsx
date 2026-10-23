@@ -57,21 +57,40 @@ const ICON_BALLOON = <svg {...META_SVG}><path d="M12 3a6 6 0 0 0-6 6c0 3.7 2.9 7
 const ICON_CALENDAR = <svg {...META_SVG}><rect x="3.5" y="5" width="17" height="15.5" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" /></svg>;
 const ICON_CLOCK = <svg {...META_SVG}><circle cx="12" cy="12" r="8.25" /><path d="M12 8v4.25l2.75 1.6" /></svg>;
 
-/** Header placeholder while the profile payload loads — holds the layout, no jumps. */
+/** Header placeholder while the profile payload loads — the SAME card, rows and spacing as the real
+ *  header below (cover band, overlapping avatar + action column, name, @handle, socials row, two bio
+ *  lines, meta row), so the posts section does not move when the profile arrives. The old compact
+ *  placeholder (circle + three bars, ~190px on a phone) was replaced by a ~345px header, pushing the
+ *  posts down 157px: Lighthouse mobile CLS 0.10 on /u/artafather/ (2026-10-23). Heights are the
+ *  rendered rows of a full profile at 412px and 1350px; a sparse profile is shorter, which is a
+ *  smaller move than the old one in the other direction. */
 function HeaderSkeleton() {
+  const bar = "animate-pulse rounded bg-veil/[0.08]";
   return (
-    <div className="flex flex-wrap items-center gap-4" aria-hidden>
-      <div className="h-24 w-24 shrink-0 animate-pulse rounded-full bg-veil/[0.08]" />
-      {/* WRAP rather than switch on the viewport, and cap the bars. `sm:flex-row` put these beside
-          the 96px circle from a 640px WINDOW onward, but the shell's content column is only ~366px
-          at 1024 and ~410px at 1100, and the bars are fixed widths — 96 + 16 + 288 (w-72) is wider
-          than the column, so the placeholder for a page about to load overflowed it (operator
-          2026-08-21). The block asks for 18rem and takes its own line when the column cannot hold
-          both; max-w-full keeps each bar inside whatever width it lands in. */}
-      <div className="min-w-0 flex-[1_1_18rem]">
-        <div className="h-6 w-48 max-w-full animate-pulse rounded bg-veil/[0.08]" />
-        <div className="mt-3 h-4 w-72 max-w-full animate-pulse rounded bg-veil/[0.06]" />
-        <div className="mt-2 h-4 w-40 max-w-full animate-pulse rounded bg-veil/[0.06]" />
+    <div className="overflow-hidden rounded-card border border-line bg-space-2" aria-hidden>
+      <div className="h-16 w-full animate-pulse bg-veil/[0.06] sm:h-28" />
+      <div className="px-3 pb-3.5 sm:px-6 sm:pb-4">
+        <div className="relative z-10 -mt-8 flex items-start justify-between gap-3 sm:-mt-11 sm:gap-4">
+          <div className="h-16 w-16 shrink-0 rounded-full bg-space-2 ring-[3px] ring-space-2 sm:h-[6.5rem] sm:w-[6.5rem]">
+            <div className="h-full w-full animate-pulse rounded-full bg-veil/[0.08]" />
+          </div>
+          <div className="mt-10 flex min-w-0 flex-col items-end gap-1 sm:mt-[3.25rem] sm:flex-row sm:items-center sm:gap-x-3">
+            <div className={`order-2 h-[21px] w-36 max-w-full sm:order-1 sm:h-[22px] ${bar}`} />
+            <div className="order-1 h-9 w-[118px] animate-pulse rounded-pill bg-veil/[0.08] sm:order-2 sm:h-10" />
+          </div>
+        </div>
+        <div className="mt-2.5 sm:mt-3">
+          <div className={`h-[23px] w-48 max-w-full sm:h-7 ${bar}`} />
+          <div className="mt-0.5 flex h-[19px] items-center sm:h-5"><div className={`h-4 w-28 ${bar}`} /></div>
+        </div>
+        <div className="mt-2 flex h-[38px] items-center gap-2">
+          {Array.from({ length: 4 }, (_, i) => <div key={i} className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-veil/[0.08]" />)}
+        </div>
+        <div className="mt-2.5 flex h-[39px] flex-col justify-around sm:mt-3 sm:h-11">
+          <div className={`h-3.5 w-64 max-w-full ${bar}`} />
+          <div className={`h-3.5 w-40 max-w-full ${bar}`} />
+        </div>
+        <div className="mt-2.5 h-[43px] sm:mt-3 sm:h-5"><div className={`h-4 w-72 max-w-full ${bar}`} /></div>
       </div>
     </div>
   );
