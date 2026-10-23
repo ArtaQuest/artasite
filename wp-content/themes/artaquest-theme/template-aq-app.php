@@ -251,6 +251,10 @@ $aq_html_dir  = ( $aq_i18n && 'rtl' === $aq_i18n['dir'] ) ? 'rtl' : 'ltr';
 		// SEO fallback (crawler / no-JS) when present — kept in the DOM for crawlers but hidden
 		// from people behind the branded loader below. React replaces it on mount.
 		echo $aq_seo ? $aq_seo : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped — server-rendered SEO fallback (shortcode/the_content, already sanitised)
+		// The site footer under any route that has an SEO body (aq_app_seo_footer: links + founder line).
+		if ( ( $aq_seo || $aq_article ) && function_exists( 'aq_app_seo_footer' ) ) {
+			echo aq_app_seo_footer(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped — built with esc_url/esc_html
+		}
 	?></div>
 	<?php // Branded first-paint loader — covers the canvas (and any SEO fallback) with the Aquest
 	// A-in-ring mark + wordmark + an indeterminate gold→blue bar until React mounts and fades it

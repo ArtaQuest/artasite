@@ -399,7 +399,15 @@ add_action(
 			// The roster + the reasoning live on aq_social_profiles() above — the ONE PHP copy that
 			// templates/footer/index.php now reads from too, so the schema and the rendered footer
 			// can no longer disagree about which accounts exist.
-			'sameAs'           => array_values( aq_social_profiles() ),
+			//
+			// 2026-10-23: the schema NO LONGER reads aq_social_profiles(). Those four are Arash's
+			// PERSONAL accounts (instagram.com/artafather, linkedin.com/in/artafather…), and the same
+			// LinkedIn and X URLs are also the #founder Person's sameAs — so two different entities
+			// claimed the same accounts, which is how a knowledge graph merges an organisation into a
+			// person (or splits him off his own profile). The footer still shows those icons (an
+			// operator choice about the visible UI); the Organization's sameAs is limited to what is
+			// actually the Foundation's: its GitHub organisation.
+			'sameAs'           => array( 'https://github.com/ArtaQuest' ),
 		);
 		// Organization logo — the version-controlled brand mark (theme asset). NOT get_theme_mod(
 		// 'custom_logo'): that still points at a deleted `artayab-*` attachment (404) from before the

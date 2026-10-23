@@ -37,7 +37,12 @@ export function SiteFooter({ className = "" }: { className?: string }) {
         &copy; {year} ArtaQuest &middot;{" "}
         <a href="https://ised-isde.canada.ca/cc/lgcy/fdrlCrpDtls.html?corpId=17948328" target="_blank" rel="noopener noreferrer"
           className="-my-2 inline-flex min-h-[40px] items-center underline underline-offset-2 transition-colors hover:text-yang">registered</a>{" "}
-        not-for-profit
+        not-for-profit &middot; founded by{" "}
+        {/* UNPREFIXED on purpose: the English profile is the canonical original every locale copy
+            points at, and this is the one sitewide link naming him (mirrored in the crawler layer by
+            aq_app_seo_footer in aq-app.php — change one, change both). */}
+        <a href="https://artaquest.com/u/artafather/"
+          className="-my-2 inline-flex min-h-[40px] items-center underline underline-offset-2 transition-colors hover:text-yang">Arash Ashrafnejad</a>
       </p>
     </div>
   );

@@ -144,7 +144,9 @@ add_filter( 'robots_txt', function ( $output ) {
 	$bots   = array( 'GPTBot', 'ChatGPT-User', 'OAI-SearchBot', 'ClaudeBot', 'Claude-Web', 'anthropic-ai', 'PerplexityBot', 'Perplexity-User', 'Google-Extended', 'Applebot-Extended', 'CCBot', 'Amazonbot', 'Bytespider', 'Meta-ExternalAgent' );
 	$extra   = "\n# ArtaQuest welcomes AI assistants — see " . $home . "llms.txt for a curated map.\n";
 	foreach ( $bots as $b ) {
-		$extra .= "User-agent: $b\nAllow: /\n\n";
+		// A named group REPLACES the `*` group for that bot (RFC 9309), so a bare "Allow: /" also
+		// opened /wp-admin/ to it. Repeat the admin rule so welcoming a bot does not unfence the admin.
+		$extra .= "User-agent: $b\nAllow: /\nDisallow: /wp-admin/\nAllow: /wp-admin/admin-ajax.php\n\n";
 	}
 	return $output . $extra;
 }, 10, 1 );
@@ -615,6 +617,33 @@ function aq_profile_works( $uid, $limit = 50 ) {
 }
 
 /**
+ * The site footer, in the crawler / no-JS layer. The React footer (components/Footer.tsx →
+ * SiteFooter) is JS-only, so the server body of most routes had NO way out: /about/ carried one
+ * link, a profile only its works. Same links and the same founder line as SiteFooter, so the
+ * crawled HTML and the rendered page agree. The founder link is UNPREFIXED: his English profile
+ * is the canonical original every locale copy points at.
+ */
+function aq_app_seo_footer() {
+	$links = array(
+		'/works/'                => 'The Feed',
+		'/about/'                => 'About',
+		'/donate/'               => 'Donations',
+		'/data/'                 => 'Data',
+		'/faq-contact/'          => 'FAQ',
+		'/code-of-conduct/'      => 'Code of Conduct',
+		'/privacy-policy/'       => 'Privacy Policy',
+		'/terms-and-conditions/' => 'Terms & Conditions',
+	);
+	$html = '<footer><nav aria-label="Quick links"><ul>';
+	foreach ( $links as $path => $label ) {
+		$html .= '<li><a href="' . esc_url( home_url( $path ) ) . '">' . esc_html( $label ) . '</a></li>';
+	}
+	$html .= '</ul></nav><p>&copy; ' . esc_html( gmdate( 'Y' ) ) . ' ArtaQuest · registered not-for-profit · founded by <a href="'
+		. esc_url( aq_unprefixed_url( home_url( '/u/artafather/' ) ) ) . '">Arash Ashrafnejad</a></p></footer>';
+	return $html;
+}
+
+/**
  * The "necessary SEO content" for the current route: server-rendered HTML placed inside
  * #aq-app-root as the crawler + no-JS fallback (React renders over it on load). The
  * route's schema.org JSON-LD is emitted separately by the template (captured from wp_head).
@@ -746,13 +775,15 @@ function aq_app_seo_html() {
 				: esc_html( $kg_author );
 			$html .= '<p>' . sprintf( esc_html( aq_seo_tr( 'By %s on Kaggle' ) ), $aq_by ) . '</p>';
 			if ( $au ) {
-				$aq_sub = '<a href="' . esc_url( home_url( '/u/' . $au->user_nicename . '/' ) ) . '">' . esc_html( $au->display_name ) . '</a>';
+				// Anchor = aq_profile_name(), the name the profile's own <title>/h1 use (often a full name
+				// where display_name is a first name or handle), so the internal link says who it is.
+				$aq_sub = '<a href="' . esc_url( aq_unprefixed_url( home_url( '/u/' . $au->user_nicename . '/' ) ) ) . '">' . esc_html( aq_profile_name( $au ) ) . '</a>';
 				$html  .= '<p>' . sprintf( esc_html( aq_seo_tr( 'Brought to ArtaQuest by %s' ) ), $aq_sub ) . '</p>';
 			}
 		} elseif ( $au ) {
 			// Kaggle reported neither an author nor an owner, so this credits the ArtaQuest member.
 			// It must NOT say "on Kaggle" — that is the misattribution the byline comment above guards.
-			$aq_sub = '<a href="' . esc_url( home_url( '/u/' . $au->user_nicename . '/' ) ) . '">' . esc_html( $au->display_name ) . '</a>';
+			$aq_sub = '<a href="' . esc_url( aq_unprefixed_url( home_url( '/u/' . $au->user_nicename . '/' ) ) ) . '">' . esc_html( aq_profile_name( $au ) ) . '</a>';
 			$html  .= '<p>' . sprintf( esc_html( aq_seo_tr( 'By %s' ) ), $aq_sub ) . '</p>';
 		}
 		$abs = trim( wp_strip_all_tags( (string) $nb->abstract ) );
@@ -1374,7 +1405,6 @@ function aq_app_head_meta() {
 	if ( $puser ) {
 		$pname   = aq_profile_name( $puser );
 		$pbio    = trim( wp_strip_all_tags( (string) get_user_meta( $puser->ID, 'description', true ) ) );
-		$pworks  = aq_profile_works( $puser->ID, 50 );
 		$person  = array(
 			'@type' => 'Person',
 			'name'  => $pname,
@@ -1404,6 +1434,12 @@ function aq_app_head_meta() {
 		// values are host-locked at save time (AQ\Auth::LINKS), so nothing arbitrary reaches here.
 		if ( class_exists( 'AQ\\Auth' ) ) {
 			$plinks = array_values( AQ\Auth::links( $puser->ID ) );
+			// The founder's node is the sitewide #founder entity, whose sameAs is deliberately limited to
+			// the accounts verified to be him (aq_founder_same_as). This block shares that @id, so
+			// emitting all ~23 handles here re-added the unverified/dead ones the head graph removed.
+			if ( function_exists( 'aq_is_founder' ) && aq_is_founder( $puser ) && function_exists( 'aq_founder_same_as' ) ) {
+				$plinks = aq_founder_same_as();
+			}
 			if ( $plinks ) { $person['sameAs'] = $plinks; }
 			// knowsLanguage — schema.org's own property for exactly this, emitted as BCP-47 codes
 			// because that is what the vocabulary asks for and what a consumer can act on, where the
@@ -1413,16 +1449,10 @@ function aq_app_head_meta() {
 				if ( $plangs ) { $person['knowsLanguage'] = array_values( $plangs ); }
 			}
 		}
-		if ( $pworks ) {
-			// What they are known FOR. Named works are the strongest thing tying a person to a subject,
-			// and each is a real indexable URL on this site rather than an assertion about them.
-			$person['knowsAbout'] = array_values( array_filter( array_map( function ( $w ) {
-				return trim( (string) $w->title );
-			}, $pworks ) ) );
-			$person['mainEntityOfPage'] = array_map( function ( $w ) {
-				return array( '@type' => 'CreativeWork', 'name' => (string) $w->title, 'url' => aq_notebook_url( $w ) );
-			}, array_slice( $pworks, 0, 10 ) );
-		}
+		// (knowsAbout/mainEntityOfPage REMOVED 2026-10-23. knowsAbout listed WORK TITLES — "STEEL" —
+		// as subjects of expertise, and mainEntityOfPage claimed the person is the main entity of each
+		// notebook page, contradicting that page's own main entity. The works are linked in the body
+		// and each work names its author; that is the correct direction for the edge.)
 		$tags[] = '<script type="application/ld+json">' . wp_json_encode( array(
 			'@context'   => 'https://schema.org',
 			'@type'      => 'ProfilePage',
@@ -1793,26 +1823,30 @@ add_action( 'parse_request', function () {
 		array_shift( $segs );
 	}
 	$seg = strtolower( (string) $segs[0] );
+	// Every target is a FINAL URL (2026-10-23 SEO audit). /playlists/, /books/, /animations/,
+	// /illustrations/ and /games/ themselves 301 onward, and /papers/ is a noindexed meta-refresh to
+	// /articles/, so these hops were 2–3-step chains; Google follows a chain but drops signal on
+	// each hop and reports the intermediate URLs as "Page with redirect".
 	$map = array(
 		// The old learning arena → the feed kinds.
-		'courses'          => '/playlists/', // hub, detail AND the /courses/<slug>/<id> player
-		'video'            => '/playlists/',
-		'lesson'           => '/playlists/',
+		'courses'          => '/articles/', // hub, detail AND the /courses/<slug>/<id> player
+		'video'            => '/articles/',
+		'lesson'           => '/articles/',
 		// 'library' is NOT a legacy segment any more (operator 2026-07-28): /library/ is THE Library —
 		// every published file, attachable to any member's post, and the headline surface of the
 		// Kaggle reset. It sat in this map, so the one nav entry pointing at it 301'd to /books/ and
 		// on to /articles/: the surface could not be opened, shared, bookmarked or crawled.
-		'read'             => '/books/',
-		'films'            => '/animations/',
-		'film'             => '/animations/',
-		'watch'            => '/animations/',
-		'illustration'     => '/illustrations/',
-		'artaillustration' => '/illustrations/',
-		'research'         => '/papers/',
-		'artascience'      => '/papers/',
+		'read'             => '/articles/',
+		'films'            => '/2d-animations/',
+		'film'             => '/2d-animations/',
+		'watch'            => '/2d-animations/',
+		'illustration'     => '/2d-illustrations/',
+		'artaillustration' => '/2d-illustrations/',
+		'research'         => '/articles/',
+		'artascience'      => '/articles/',
 		'competitions'     => '/datasets/',
 		'competition'      => '/datasets/',
-		'game'             => '/games/', // the /games/ hub itself stays live
+		'game'             => '/2d-games/',
 		// Retired audio surfaces → the music hub (every kind funnels to its own hub).
 		'listen'           => '/music/',
 		'artasound'        => '/music/',
@@ -1830,7 +1864,7 @@ add_action( 'parse_request', function () {
 		'cycles'           => '/works/',
 		'shop'             => '/works/',
 		'discussions'      => '/works/', // forum retired 2026-07-14 — every post carries its own board
-		'arena'            => '/games/', // arena retired 2026-07-14 — games live fully inside the feed
+		'arena'            => '/2d-games/', // arena retired 2026-07-14 — games live fully inside the feed
 		// Transactional renames.
 		'enroll'           => '/wallet/',
 		'cart'             => '/wallet/',
@@ -1955,6 +1989,30 @@ add_filter( 'wp_robots', function ( $robots ) {
  * (no matching rewrite post-cutover), so raw is_404() over-reports — it would noindex real pages and
  * suppress their canonical. Single source of truth for "really nothing here".
  */
+/**
+ * Internal search results and the legacy blog archives (category/tag/date/author) are not landing
+ * pages: ?s= is an unbounded URL space of near-empty results, and the archives are rendered by the
+ * pre-SPA classic templates with no canonical. Both were 200 + indexable. noindex,follow keeps
+ * their links crawlable while keeping them out of the index. Header too, because the classic
+ * templates are not the app template and a header covers whatever template ends up rendering.
+ */
+function aq_app_is_noindex_listing() {
+	return is_search() || is_category() || is_tag() || is_date() || is_author();
+}
+add_filter( 'wp_robots', function ( $robots ) {
+	if ( aq_app_is_noindex_listing() ) {
+		$robots['noindex'] = true;
+		$robots['follow']  = true;
+		unset( $robots['max-image-preview'], $robots['max-snippet'], $robots['max-video-preview'] );
+	}
+	return $robots;
+}, 20 );
+add_action( 'template_redirect', function () {
+	if ( aq_app_is_noindex_listing() && ! headers_sent() ) {
+		header( 'X-Robots-Tag: noindex, follow' );
+	}
+}, 0 );
+
 function aq_app_is_genuine_404() {
 	// The soft-404 guards (dead lesson/thread/profile id) force a 404 STATUS via status_header()
 	// without flipping WP's is_404() conditional (the underlying page is real, only the query-param
