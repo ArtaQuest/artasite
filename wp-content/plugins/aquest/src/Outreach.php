@@ -159,7 +159,9 @@ final class Outreach {
 	 *  Returns the "aqo:" token or WP_Error. */
 	public static function store_photo( $bytes ) {
 		if ( strlen( $bytes ) === 0 || strlen( $bytes ) > self::IMG_MAX ) { return new \WP_Error( 'photo_size', 'image empty or larger than 10 MB' ); }
-		$mime = ( new \finfo( FILEINFO_MIME_TYPE ) )->buffer( $bytes );
+		// REST/ingest requests (ArtaSearch photos, 1.25.10) do not load wp-admin's file helpers; wp_tempnam lives there.
+		if ( ! function_exists( 'wp_tempnam' ) ) { require_once ABSPATH . 'wp-admin/includes/file.php'; }
+		$mime = class_exists( '\finfo' ) ? ( new \finfo( FILEINFO_MIME_TYPE ) )->buffer( $bytes ) : ( ( $gi = @getimagesizefromstring( $bytes ) ) ? $gi['mime'] : '' );
 		if ( ! in_array( $mime, [ 'image/jpeg', 'image/png', 'image/webp' ], true ) ) { return new \WP_Error( 'photo_type', 'only JPEG, PNG or WebP images (found ' . $mime . ')' ); }
 		$info = @getimagesizefromstring( $bytes );
 		if ( ! $info || ! in_array( $info[2], [ IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP ], true ) || $info[0] < 1 || $info[1] < 1 ) {
