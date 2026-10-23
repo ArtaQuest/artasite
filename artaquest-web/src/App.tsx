@@ -1,7 +1,6 @@
 import { Component, lazy, Suspense, useEffect, useRef, type ReactNode } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
-import { ArtaChatDock } from "./components/ArtaChatDock";
 import { ArtaTTS } from "./components/ArtaTTS";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { I18nGate } from "./components/I18nGate";
@@ -60,6 +59,10 @@ const ConsolePage = lazy(() => import("./pages/Studio")); // legacy operator con
 // ── The Notebook Feed (2026-07-13) — the whole platform is these three surfaces now.
 //    Every legacy content surface (courses, library, challenges, competitions, research, games,
 //    shop, topics …) is retired; its route 301s into the matching feed shelf below.
+// The ArtaChat dock is members-only, so visitors (every cached, crawlable page) must not download it:
+// statically imported it dragged the call panel, WebRTC, E2EE and the private-chat UI into the entry
+// bundle. Lazy + its own null Suspense, so it simply appears a beat later for a signed-in member.
+const ArtaChatDock = lazy(() => import("./components/ArtaChatDock").then((m) => ({ default: m.ArtaChatDock })));
 const Feed = lazy(() => import("./pages/Feed"));
 const ChallengesPage = lazy(() => import("./pages/ChallengesPage"));
 const Rankings = lazy(() => import("./pages/Rankings"));
@@ -586,7 +589,7 @@ export default function App() {
       {/* The ArtaChat dock, bottom-right, members only (the chat routes are 'user'-auth server-side, so
           hiding it for visitors is presentation, not the guard). Its lid is Arta's home ledge. The
           private assistant stays retired: the dock's Arta row opens the public @artabot composer. */}
-      {isLoggedIn() && <ArtaChatDock />}
+      {isLoggedIn() && <Suspense fallback={null}><ArtaChatDock /></Suspense>}
       <ArtaTTS />
       <OfflineBanner />
       </I18nGate>

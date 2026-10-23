@@ -193,6 +193,85 @@ function aq_app_assets() {
 }
 
 /**
+ * Route-chunk preloads for the first paint (perf, 2026-10-23).
+ *
+ * Without these the browser discovers the work in series: HTML → the entry bundle (end of <body>) →
+ * execute → React Router resolves the route → only THEN fetch the route's lazy chunk → its own
+ * imports → the API. Each hop is a full round-trip on a phone. The manifest already knows which
+ * chunk each page lives in, so the shell names them up front as <link rel="modulepreload">: they
+ * download in parallel with the entry and are parsed by the time the router asks for them.
+ *
+ * Only the high-traffic, crawlable routes are mapped; anything else returns just the entry, i.e.
+ * exactly the old behaviour. Returns asset paths relative to app/ (entry first, deduped).
+ *
+ * @return string[]
+ */
+function aq_app_route_preloads() {
+	$assets = aq_app_assets();
+	if ( '' === $assets['js'] ) {
+		return array();
+	}
+	$out           = array( $assets['js'] );
+	$manifest_path = get_theme_file_path( 'app/.vite/manifest.json' );
+	$data          = file_exists( $manifest_path ) ? json_decode( (string) file_get_contents( $manifest_path ), true ) : null; // phpcs:ignore WordPress.WP.AlternativeFunctions
+	if ( ! is_array( $data ) ) {
+		return $out;
+	}
+	$path = (string) wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ?? '/' ), PHP_URL_PATH ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+	$path = trim( $path, '/' );
+	$path = '' === $path ? '/' : '/' . $path . '/';
+	$hubs = implode( '|', array_map( 'preg_quote', array_merge( array( 'works' ), array_keys( aq_feed_hubs() ) ) ) );
+	$pick = function ( $p ) use ( $hubs ) {
+		if ( '/' === $p ) {
+			// Visitors get the Landing (its hero is the LCP; the embedded feed below it lazy-loads on its own,
+			// so it must not compete with the hero for bandwidth); members get the Feed.
+			return is_user_logged_in() ? array( 'src/pages/Feed.tsx' ) : array( 'src/pages/Landing.tsx' );
+		}
+		if ( preg_match( '#^/nb/\d+/(?:[^/]+/)?$#', $p ) ) {
+			return array( 'src/pages/NotebookPage.tsx' );
+		}
+		if ( preg_match( '#^/u/[^/]+/$#', $p ) ) {
+			return array( 'src/pages/Profile.tsx' );
+		}
+		if ( '/about/' === $p ) {
+			return array( 'src/pages/About.tsx' );
+		}
+		if ( preg_match( '#^/(?:' . $hubs . ')/$#', $p ) ) {
+			return array( 'src/pages/Feed.tsx' );
+		}
+		return null;
+	};
+	$mods = $pick( $path );
+	// Not matched as-is: try again without a locale prefix (/de/about/ → /about/). Tried second so the
+	// notebook route /nb/<id>/ is never mistaken for the Norwegian Bokmål locale "nb".
+	if ( null === $mods && preg_match( '#^/([a-z]{2,3}(?:-[a-z]{2,4})?)(/.*)$#i', $path, $m )
+		&& class_exists( '\\AQ\\I18n' ) && \AQ\I18n::is_locale( $m[1] ) ) {
+		$mods = $pick( $m[2] );
+	}
+	if ( ! $mods ) {
+		return $out;
+	}
+	// Walk each page's static imports (not dynamic ones) — the chunks React needs before it can render.
+	$seen  = array( 'index.html' => true );
+	$queue = $mods;
+	while ( $queue ) {
+		$key = array_shift( $queue );
+		if ( isset( $seen[ $key ] ) || empty( $data[ $key ]['file'] ) ) {
+			continue;
+		}
+		$seen[ $key ] = true;
+		$out[]        = $data[ $key ]['file'];
+		foreach ( (array) ( $data[ $key ]['imports'] ?? array() ) as $imp ) {
+			$queue[] = $imp;
+		}
+		if ( count( $out ) > 12 ) {
+			break; // a sanity cap: preloading half the app would compete with the entry itself
+		}
+	}
+	return array_values( array_unique( $out ) );
+}
+
+/**
  * The Notebook Feed kind hubs (2026-07-13 redesign): route slug → [ nav label, kind blurb ].
  * The route slug doubles as the aq_notebooks.kind value's plural; aq_feed_kind_for() maps a
  * hub slug to its singular kind. Single source of truth for titles, crawler bodies, the sitemap
