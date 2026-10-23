@@ -540,6 +540,12 @@ add_filter( 'document_title_parts', function ( $parts ) {
 		$parts['title'] = aq_profile_name( $pu );
 		return $parts;
 	}
+	// /u/<no-such-member>/ answers 404 but titled itself just "ArtaQuest" (the empty title part
+	// collapses to the site name), so a browser tab, a share and a crawler all saw the brand rather
+	// than "not found". Say what it is.
+	if ( get_query_var( 'aq_profile' ) ) {
+		$parts['title'] = __( 'Member not found', 'artaquest' );
+	}
 	return $parts;
 } );
 
@@ -1035,6 +1041,24 @@ function aq_app_seo_html() {
 				$html .= '<li><a href="' . esc_url( home_url( $aq_path ) ) . '">' . esc_html( $aq_label ) . '</a></li>';
 			}
 			$html .= '</ul></nav>';
+			// THE LATEST WORKS, as crawlable links. The home page is the strongest page on the site and
+			// it linked to the hubs but to no work at all, so a new notebook was two hops from the front
+			// door (home → hub → work) and inherited the least of its weight. Twelve newest, title + kind,
+			// the same rows the /works/ hub lists. Guarded like the hubs: the table may be absent.
+			global $wpdb;
+			$aq_nt = $wpdb->prefix . 'aq_notebooks';
+			if ( (string) $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $aq_nt ) ) === $aq_nt ) {
+				$aq_latest = $wpdb->get_results( "SELECT id, slug, title, kind FROM {$aq_nt} WHERE status = 'published' ORDER BY id DESC LIMIT 12" );
+				if ( $aq_latest ) {
+					$html .= '<h2>' . esc_html( aq_seo_tr( 'Latest works' ) ) . '</h2><ul>';
+					foreach ( $aq_latest as $aq_w ) {
+						$aq_k   = function_exists( 'aq_kind_label' ) ? aq_kind_label( (string) $aq_w->kind ) : '';
+						$html  .= '<li><a href="' . esc_url( aq_notebook_url( $aq_w ) ) . '">' . esc_html( (string) $aq_w->title ) . '</a>'
+							. ( $aq_k ? ' <span>' . esc_html( $aq_k ) . '</span>' : '' ) . '</li>';
+					}
+					$html .= '</ul><p><a href="' . esc_url( home_url( '/works/' ) ) . '">' . esc_html( aq_seo_tr( 'Everything on the Feed' ) ) . '</a></p>';
+				}
+			}
 		}
 		// FAQ answers live only in React — emit the real Q&A as a definition list so the long-tail
 		// answers ("how do I earn the certificate", "what is Arta Coin"…) are crawlable + index-rich,
