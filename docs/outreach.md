@@ -70,18 +70,27 @@ photo file is deleted. Plain CSV import is unchanged; `photo` there must be an h
 ## ArtaSearch (the Search tab)
 
 An alumni directory inside Outreach: one row per alumnus (`aq_alumni`, upsert key = lower-cased
-full name + graduation year) with the public LinkedIn, Instagram, Facebook, ResearchGate, YouTube,
+full name + department, with the graduation year) with the public LinkedIn, Instagram, Facebook, ResearchGate, YouTube,
 GitHub and X profiles the ArtaSearch scan confirmed as the same person. Admin only, and the table
 is in `Extra::PRIVATE_TABLES`.
 
 - Reads: `GET outreach/alumni`, `outreach/alumni/facets`, `outreach/alumni/export` ('admin').
+  Order (1.25.6): youngest class first, then department, then name — the same order the scan works
+  in. The list's `cursor` is an opaque offset (0 = first page); the year facet is listed newest first.
+- Scope (2026-10-23): the scan now works from the operator's final roster, limited to Electrical and
+  Electronics Engineering, Computer Engineering, Mechanical Engineering, Architecture, Molecular
+  Biology and Genetics, Mathematics and Chemistry, youngest class (2030) to oldest. Rows from the
+  earlier scan stay until their year is re-synced (the scan box holds prune while the new run fills in).
+- Not ingested (held for the operator's decision): the scan's roster e-mails, its lower-confidence
+  "found" e-mails and its X candidates. Only `public_email` with the https page it was published on
+  is accepted, as before.
 - `POST outreach/alumni/to-queue {id, platforms[]}` copies profiles into the Review queue as pending.
 - `POST outreach/alumni/ingest {alumni:[…]}` is the scan box's only way in. It requires the dedicated
   secret `AQ_ALUMNI_INGEST_TOKEN` in the `X-AQ-Alumni-Token` header (≥32 chars, compared with
   hash_equals), HTTPS, at most 60 requests an hour per IP, a 2 MB body and 500 rows. It returns 404
   until the secret is set. Set the secret in wp-admin → AQ Security (vault), or as an env var or
   wp-config constant.
-- Full replace per year: a request may carry `prune:{year, keep:[{full_name, department}]}` (alone or after the year's batches); rows of that year whose key is not in `keep` are deleted. Refused if it would delete more than max(50, half) of the year's rows.
+- Full replace per year: a request may carry `prune:{year, keep:[{full_name, department}]}` (alone or after the year's batches); rows of that year whose key is not in `keep` are deleted. Refused if it would delete more than max(10, 10%) of the year's rows.
 - Photos: a GitHub avatar (`github.com/<login>.png`) or the platform's logo. Nothing is scraped.
 
 ### Who can open Outreach

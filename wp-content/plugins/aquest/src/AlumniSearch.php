@@ -139,15 +139,18 @@ final class AlumniSearch {
 		return [ implode( ' AND ', $w ), $a ];
 	}
 
-	/** GET outreach/alumni — keyset page (?cursor= is the last id) + the filtered total. */
+	/** The scan's final-roster order (2026-10-23): youngest class first, then department, then name. */
+	const ORDER = 'grad_year DESC, department ASC, full_name ASC, id ASC';
+
+	/** GET outreach/alumni — youngest first (self::ORDER); ?cursor= is an opaque offset (0 = first page) + the filtered total. */
 	public static function list( $req ) {
 		global $wpdb;
 		[ $w, $a ] = self::where( $req );
 		$total  = (int) $wpdb->get_var( $a ? $wpdb->prepare( 'SELECT COUNT(*) FROM ' . self::t() . " WHERE {$w}", $a ) : 'SELECT COUNT(*) FROM ' . self::t() . " WHERE {$w}" );
-		$cursor = Rest::pint( $req, 'cursor' );
-		$sql    = 'SELECT * FROM ' . self::t() . " WHERE {$w} AND id > %d ORDER BY id ASC LIMIT %d";
-		$rows   = (array) $wpdb->get_results( $wpdb->prepare( $sql, array_merge( $a, [ $cursor, self::PER_PAGE ] ) ), ARRAY_A );
-		$next   = count( $rows ) === self::PER_PAGE ? (int) end( $rows )['id'] : 0;
+		$cursor = max( 0, Rest::pint( $req, 'cursor' ) );
+		$sql    = 'SELECT * FROM ' . self::t() . " WHERE {$w} ORDER BY " . self::ORDER . ' LIMIT %d OFFSET %d';
+		$rows   = (array) $wpdb->get_results( $wpdb->prepare( $sql, array_merge( $a, [ self::PER_PAGE, $cursor ] ) ), ARRAY_A );
+		$next   = count( $rows ) === self::PER_PAGE ? $cursor + self::PER_PAGE : 0;
 		return [ 'items' => array_map( [ self::class, 'out' ], $rows ), 'next' => $next, 'total' => $total ];
 	}
 
@@ -157,7 +160,7 @@ final class AlumniSearch {
 		$t = self::t(); $out = [];
 		foreach ( [ 'grad_year' => 'years', 'department' => 'departments', 'country' => 'countries' ] as $col => $key ) {
 			$out[ $key ] = array_map( function ( $r ) use ( $col ) { return [ 'value' => $col === 'grad_year' ? (int) $r['v'] : $r['v'], 'n' => (int) $r['n'] ]; },
-				(array) $wpdb->get_results( "SELECT {$col} AS v, COUNT(*) AS n FROM {$t} WHERE {$col} <> '' AND {$col} IS NOT NULL GROUP BY {$col} ORDER BY {$col} LIMIT " . self::FACET_MAX, ARRAY_A ) );
+				(array) $wpdb->get_results( "SELECT {$col} AS v, COUNT(*) AS n FROM {$t} WHERE {$col} <> '' AND {$col} IS NOT NULL GROUP BY {$col} ORDER BY {$col}" . ( $col === 'grad_year' ? ' DESC' : '' ) . " LIMIT " . self::FACET_MAX, ARRAY_A ) );
 		}
 		$out['platforms'] = [];
 		foreach ( self::PLATFORMS as $pf ) {
@@ -173,7 +176,7 @@ final class AlumniSearch {
 	public static function export( $req ) {
 		global $wpdb;
 		[ $w, $a ] = self::where( $req );
-		$sql  = 'SELECT * FROM ' . self::t() . " WHERE {$w} ORDER BY grad_year, full_name LIMIT 100000";
+		$sql  = 'SELECT * FROM ' . self::t() . " WHERE {$w} ORDER BY " . self::ORDER . ' LIMIT 100000';
 		$rows = (array) $wpdb->get_results( $a ? $wpdb->prepare( $sql, $a ) : $sql, ARRAY_A );
 		$cols = array_merge( [ 'full_name', 'grad_year', 'department', 'employer', 'headline', 'city', 'country', 'public_email', 'email_source' ], array_map( function ( $p ) { return $p . '_url'; }, self::PLATFORMS ) );
 		$cell = function ( $v ) {
