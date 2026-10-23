@@ -13,8 +13,9 @@ export const LEGAL: { label: string; href: string }[] = [
 /**
  * The official ArtaQuest accounts — the SAME four as /u/artafather's profile icons (operator
  * 2026-10-08: "also show the same four for the artasite footer (for artafather)"). Instagram,
- * Facebook, LinkedIn, X, in that order, linking to artafather. MIRRORED as Organization `sameAs`
- * in aq-seo-schema.php (`aq_social_profiles`): change one and you must change the other. Prefer
+ * Facebook, LinkedIn, X, in that order, linking to artafather. Mirrored by `aq_social_profiles`
+ * in aq-seo-schema.php (the PHP footer). NOT the Organization `sameAs` any more (2026-10-23): these
+ * are his personal accounts, which belong to the #founder Person, not to the Foundation. Prefer
  * reading from the artafather account on the PHP side so a reorder there stays in sync; this SPA
  * copy is the fallback the footer paints before/without that.
  */
