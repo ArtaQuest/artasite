@@ -69,6 +69,7 @@ final class AlumniSearch {
 			if ( ! in_array( $pf, self::PLATFORMS, true ) || ! is_array( $p ) ) { continue; }
 			$url = self::clean_url( $pf, $p['url'] ?? '' );
 			if ( $url === '' ) { continue; }
+			if ( stripos( (string) ( $p['evidence'] ?? '' ), 'recheck' ) === 0 || ( $p['status'] ?? '' ) === 'recheck' ) { continue; } // 1.25.7: confirmed matches only
 			$profiles[ $pf ] = [
 				'url'      => $url,
 				'title'    => mb_substr( sanitize_text_field( (string) ( $p['title'] ?? '' ) ), 0, 300 ),
@@ -83,6 +84,7 @@ final class AlumniSearch {
 		$src   = $email !== '' ? esc_url_raw( (string) ( $r['public_email_source'] ?? '' ), [ 'https' ] ) : '';
 		$txt   = function ( $k, $n ) use ( $r ) { return mb_substr( sanitize_text_field( (string) ( $r[ $k ] ?? '' ) ), 0, $n ); };
 		return [
+			'emails'       => wp_json_encode( self::clean_emails( $r['emails'] ?? [] ) ),
 			'name_key'     => self::name_key( $name, $txt( 'department', 120 ) ), // key from the stored (sanitised, 120-char) department, exactly what the prune keep-list builds
 			'full_name'    => $name,
 			'grad_year'    => $year,
@@ -98,6 +100,28 @@ final class AlumniSearch {
 			'n_profiles'   => count( $profiles ),
 			'platforms'    => $profiles ? ',' . implode( ',', array_keys( $profiles ) ) . ',' : '',
 		];
+	}
+
+	/**
+	 * 1.25.7 (operator 2026-10-23: "emails and as much data found confidently only"). At most 5 entries
+	 * {email, source, confidence}: the roster's own address (source 'roster', confidence 'roster') or an
+	 * address the scan rated HIGH (it carries the person's name and was published on the matched person's
+	 * own page) with that https page as the source. Anything else — medium/low guesses — is dropped here too.
+	 */
+	public static function clean_emails( $list ) {
+		$out = [];
+		foreach ( is_array( $list ) ? array_slice( array_values( $list ), 0, 5 ) : [] as $e ) {
+			if ( ! is_array( $e ) ) { continue; }
+			$email = sanitize_email( (string) ( $e['email'] ?? '' ) );
+			$conf  = sanitize_key( (string) ( $e['confidence'] ?? '' ) );
+			$src   = (string) ( $e['source'] ?? '' );
+			if ( $email === '' || ! is_email( $email ) || isset( $out[ strtolower( $email ) ] ) ) { continue; }
+			if ( $conf === 'roster' && $src === 'roster' ) { $src = 'roster'; }
+			elseif ( $conf === 'high' ) { $src = esc_url_raw( $src, [ 'https' ] ); if ( $src === '' || strlen( $src ) > 500 ) { continue; } }
+			else { continue; }
+			$out[ strtolower( $email ) ] = [ 'email' => $email, 'source' => $src, 'confidence' => $conf ];
+		}
+		return array_values( $out );
 	}
 
 	/** Insert or update on (name_key, grad_year). Returns 'inserted' | 'updated'. */
@@ -118,6 +142,7 @@ final class AlumniSearch {
 			'department' => $r['department'], 'employer' => $r['employer'], 'headline' => $r['headline'],
 			'city' => $r['city'], 'country' => $r['country'], 'public_email' => $r['public_email'],
 			'email_source' => $r['email_source'], 'photo' => $r['photo'], 'n_profiles' => (int) $r['n_profiles'],
+			'emails' => is_array( $em = json_decode( (string) ( $r['emails'] ?? '' ), true ) ) ? $em : [],
 			'profiles' => is_array( $p ) ? $p : [], 'updated_at' => $r['updated_at'],
 		];
 	}
@@ -178,7 +203,7 @@ final class AlumniSearch {
 		[ $w, $a ] = self::where( $req );
 		$sql  = 'SELECT * FROM ' . self::t() . " WHERE {$w} ORDER BY " . self::ORDER . ' LIMIT 100000';
 		$rows = (array) $wpdb->get_results( $a ? $wpdb->prepare( $sql, $a ) : $sql, ARRAY_A );
-		$cols = array_merge( [ 'full_name', 'grad_year', 'department', 'employer', 'headline', 'city', 'country', 'public_email', 'email_source' ], array_map( function ( $p ) { return $p . '_url'; }, self::PLATFORMS ) );
+		$cols = array_merge( [ 'full_name', 'grad_year', 'department', 'employer', 'headline', 'city', 'country', 'public_email', 'email_source', 'emails' ], array_map( function ( $p ) { return $p . '_url'; }, self::PLATFORMS ) );
 		$cell = function ( $v ) {
 			$v = (string) $v;
 			if ( $v !== '' && strpbrk( $v[0], "=+-@\t\r" ) !== false ) { $v = "'" . $v; }
@@ -188,6 +213,8 @@ final class AlumniSearch {
 		foreach ( $rows as $r ) {
 			$p = json_decode( (string) $r['profiles'], true ) ?: [];
 			$vals = [];
+			$em = json_decode( (string) ( $r['emails'] ?? '' ), true ) ?: [];
+			$r['emails'] = implode( '; ', array_map( function ( $e ) { return ( $e['email'] ?? '' ) . ' (' . ( $e['source'] ?? '' ) . ')'; }, is_array( $em ) ? $em : [] ) );
 			foreach ( $cols as $c ) { $vals[] = $cell( substr( $c, -4 ) === '_url' ? ( $p[ substr( $c, 0, -4 ) ]['url'] ?? '' ) : ( $r[ $c ] ?? '' ) ); }
 			$lines[] = implode( ',', $vals );
 		}

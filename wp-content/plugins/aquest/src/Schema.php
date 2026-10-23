@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.86.0';
+	const VERSION = '1.87.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -1291,6 +1291,7 @@ final class Schema {
 				country VARCHAR(120) NOT NULL DEFAULT '',
 				public_email VARCHAR(255) NOT NULL DEFAULT '',
 				email_source VARCHAR(500) NOT NULL DEFAULT '',
+				emails TEXT NULL,
 				photo VARCHAR(500) NOT NULL DEFAULT '',
 				profiles TEXT NULL,
 				n_profiles TINYINT UNSIGNED NOT NULL DEFAULT 0,
@@ -1436,6 +1437,7 @@ final class Schema {
 			'aq_alumni'         => [ 'desc' => 'ArtaSearch: Bilkent alumni and the public profiles confirmed as the same person (admin only, a tab inside Outreach). WITHHELD from /data, /schema and the nightly export (Extra::PRIVATE_TABLES) — these are third parties who never joined.', 'cols' => [
 				'name_key' => 'lower-cased full name | department; with grad_year the upsert key',
 				'profiles' => 'JSON {platform: {url, title, evidence}} — only same-person matches',
+				'emails' => "JSON [{email, source, confidence}] — 1.87.0: the roster's own address (source 'roster') and high-confidence published addresses (source = the https page); nothing weaker",
 				'platforms' => 'comma-wrapped platform list for filtering',
 			] ],
 			'aq_task_sync'      => [ 'desc' => 'ArtaTask phone sync (followers, following, mutuals, session claim, prefs, requestStatus). WITHHELD from /data and the nightly export (Extra::PRIVATE_TABLES). The payload is libsodium ciphertext; the key lives in wp-config / AQ_TASK_SYNC_KEY, never in the row. Replaces Cloudflare Workers KV.', 'cols' => [
@@ -1598,6 +1600,10 @@ final class Schema {
 			if ( ! self::column_exists( "{$p}aq_courses", $col ) ) {
 				$wpdb->query( "ALTER TABLE {$p}aq_courses ADD COLUMN $def" );
 			}
+		}
+		// 1.87.0 — ArtaSearch confident-only emails (AlumniSearch::clean). dbDelta should add it; explicit for the same reason as above.
+		if ( self::table_exists( "{$p}aq_alumni" ) && ! self::column_exists( "{$p}aq_alumni", 'emails' ) ) {
+			$wpdb->query( "ALTER TABLE {$p}aq_alumni ADD COLUMN emails TEXT NULL" );
 		}
 		// 1.70.0 — a proposed new time for a meeting, and who proposed it. One pending proposal per
 		// meeting is deliberate: two people trading times is a conversation, and they have one.

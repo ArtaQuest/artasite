@@ -344,7 +344,12 @@ function AlumniCard({ a }: { a: Alumnus }) {
         <div className="font-semibold text-ink">{a.full_name}</div>
         <div className="text-[13px] text-ink-3">{a.department} · {a.grad_year}{(a.city || a.country) && ` · ${[a.city, a.country].filter(Boolean).join(", ")}`}</div>
         {(a.headline || a.employer) && <p className="line-clamp-2 text-[13px] text-ink-2">{a.headline || a.employer}</p>}
-        {a.public_email && <p className="text-[12px] text-ink-3">{a.public_email} · <a className="hover:text-yang" href={a.email_source} target="_blank" rel="noopener noreferrer">source</a></p>}
+        {a.emails && a.emails.length > 0 ? a.emails.map((e) => (
+          <p key={e.email} className="text-[12px] text-ink-3">
+            {e.email} · {e.source === "roster" ? <span title="Given in the alumni roster">roster</span>
+              : <a className="hover:text-yang" href={e.source} target="_blank" rel="noopener noreferrer" title="Published on this page (high confidence: carries the name, on the person's own page)">source</a>}
+          </p>
+        )) : a.public_email && <p className="text-[12px] text-ink-3">{a.public_email} · <a className="hover:text-yang" href={a.email_source} target="_blank" rel="noopener noreferrer">source</a></p>}
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {have.map((p) => (
             <a key={p} href={a.profiles[p]?.url} target="_blank" rel="noopener noreferrer" title={a.profiles[p]?.title || ALUMNI_LABEL[p]} aria-label={ALUMNI_LABEL[p]}

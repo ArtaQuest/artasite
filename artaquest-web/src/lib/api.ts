@@ -3288,9 +3288,12 @@ export type ProfileSyncItem = { id: number; handle: string; changes: { field: st
 // ── ArtaSearch (the Search tab inside Outreach; src/AlumniSearch.php — every read route is 'admin') ──
 export type AlumniPlatform = "linkedin" | "instagram" | "facebook" | "researchgate" | "youtube" | "github" | "x";
 export type AlumniProfile = { url: string; title: string; evidence: string };
+export type AlumniEmail = { email: string; source: string; confidence: "roster" | "high" };
 export type Alumnus = {
   id: number; full_name: string; grad_year: number; department: string; employer: string; headline: string;
   city: string; country: string; public_email: string; email_source: string; photo: string; n_profiles: number;
+  /** 1.25.7: confident-only — the roster's own address (source "roster") or a high-confidence address with the https page it was published on */
+  emails?: AlumniEmail[];
   profiles: Partial<Record<AlumniPlatform, AlumniProfile>>; updated_at: string;
 };
 export type AlumniFilter = { year?: string; department?: string; country?: string; platform?: string; q?: string };

@@ -81,9 +81,13 @@ is in `Extra::PRIVATE_TABLES`.
   Electronics Engineering, Computer Engineering, Mechanical Engineering, Architecture, Molecular
   Biology and Genetics, Mathematics and Chemistry, youngest class (2030) to oldest. Rows from the
   earlier scan stay until their year is re-synced (the scan box holds prune while the new run fills in).
-- Not ingested (held for the operator's decision): the scan's roster e-mails, its lower-confidence
-  "found" e-mails and its X candidates. Only `public_email` with the https page it was published on
-  is accepted, as before.
+- Confident data only (operator 2026-10-23, 1.25.7): `emails` holds at most 5 addresses, each with
+  its source — the alumni roster's own address (source `roster`) or an address the scan rated HIGH
+  (it carries the person's name and was published on the matched person's own page: a kept profile,
+  the kept GitHub account, or their own full-name website), with that https page as the source.
+  Medium/low e-mails and every unconfirmed X candidate stay on the scan box; profiles are
+  confirmed matches only (accounts held for re-check are not sent, and the server drops them too).
+  `public_email` remains for older rows.
 - `POST outreach/alumni/to-queue {id, platforms[]}` copies profiles into the Review queue as pending.
 - `POST outreach/alumni/ingest {alumni:[…]}` is the scan box's only way in. It requires the dedicated
   secret `AQ_ALUMNI_INGEST_TOKEN` in the `X-AQ-Alumni-Token` header (≥32 chars, compared with
