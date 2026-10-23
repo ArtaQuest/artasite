@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.87.0';
+	const VERSION = '1.88.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -1293,6 +1293,7 @@ final class Schema {
 				email_source VARCHAR(500) NOT NULL DEFAULT '',
 				emails TEXT NULL,
 				photo VARCHAR(500) NOT NULL DEFAULT '',
+				photo_meta TEXT NULL,
 				profiles TEXT NULL,
 				n_profiles TINYINT UNSIGNED NOT NULL DEFAULT 0,
 				platforms VARCHAR(120) NOT NULL DEFAULT '',
@@ -1439,6 +1440,8 @@ final class Schema {
 				'profiles' => 'JSON {platform: {url, title, evidence}} — only same-person matches',
 				'emails' => "JSON [{email, source, confidence}] — 1.87.0: the roster's own address (source 'roster') and high-confidence published addresses (source = the https page); nothing weaker",
 				'platforms' => 'comma-wrapped platform list for filtering',
+				'photo' => '1.88.0: private token "aqo:<random>.jpg" (Outreach photo store) — never a URL; served by the admin-only outreach/alumni/photo/<id>',
+				'photo_meta' => 'JSON {sha1, platform, profile_url, fetched_at} — the HIGH-confidence matched account the picture was downloaded from',
 			] ],
 			'aq_task_sync'      => [ 'desc' => 'ArtaTask phone sync (followers, following, mutuals, session claim, prefs, requestStatus). WITHHELD from /data and the nightly export (Extra::PRIVATE_TABLES). The payload is libsodium ciphertext; the key lives in wp-config / AQ_TASK_SYNC_KEY, never in the row. Replaces Cloudflare Workers KV.', 'cols' => [
 				'blob_name' => 'one of strava_followers.json, strava_following.json, mutual_connections.json, session_claim.json, prefs.json, requestStatus.json',
@@ -1600,6 +1603,10 @@ final class Schema {
 			if ( ! self::column_exists( "{$p}aq_courses", $col ) ) {
 				$wpdb->query( "ALTER TABLE {$p}aq_courses ADD COLUMN $def" );
 			}
+		}
+		// 1.88.0 — ArtaSearch photos: source platform / profile URL / fetch date of the stored picture.
+		if ( self::table_exists( "{$p}aq_alumni" ) && ! self::column_exists( "{$p}aq_alumni", 'photo_meta' ) ) {
+			$wpdb->query( "ALTER TABLE {$p}aq_alumni ADD COLUMN photo_meta TEXT NULL" );
 		}
 		// 1.87.0 — ArtaSearch confident-only emails (AlumniSearch::clean). dbDelta should add it; explicit for the same reason as above.
 		if ( self::table_exists( "{$p}aq_alumni" ) && ! self::column_exists( "{$p}aq_alumni", 'emails' ) ) {

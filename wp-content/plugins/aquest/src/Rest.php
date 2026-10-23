@@ -750,6 +750,7 @@ final class Rest {
 		[ 'GET',  'outreach/alumni',                          'AlumniSearch::list',     'outreach' ], // ?year=&department=&country=&platform=&q=&cursor=
 		[ 'GET',  'outreach/alumni/facets',                   'AlumniSearch::facets',   'outreach' ], // unique values per filterable column (≤1000) + platform counts
 		[ 'GET',  'outreach/alumni/export',                   'AlumniSearch::export',   'outreach' ], // same filters → {filename, rows, csv} formula-guarded
+		[ 'GET',  'outreach/alumni/photo/(?P<id>[0-9]+)',     'AlumniSearch::photo',    'outreach' ], // 1.25.9: the stored picture (image/jpeg, no-store, noindex); <img> passes ?_wpnonce=
 		[ 'POST', 'outreach/alumni/to-queue',                 'AlumniSearch::to_queue', 'outreach' ], // {id, platforms[]} → aq_artaoutreach as pending
 		[ 'POST', 'outreach/alumni/ingest',                   'AlumniSearch::ingest',   'public' ], // the scan box; dedicated secret enforced in the handler
 		[ 'GET',  'outreach/template',                        'Outreach::template',  'outreach' ], // → {filename, csv}

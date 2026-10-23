@@ -3292,6 +3292,9 @@ export type AlumniEmail = { email: string; source: string; confidence: "roster" 
 export type Alumnus = {
   id: number; full_name: string; grad_year: number; department: string; employer: string; headline: string;
   city: string; country: string; public_email: string; email_source: string; photo: string; n_profiles: number;
+  /** 1.25.9: the picture is stored on the site (never a CDN URL); show it through AlumniApi.photoUrl(id) */
+  photo_private?: boolean;
+  photo_meta?: { platform: AlumniPlatform; profile_url: string; fetched_at: string } | null;
   /** 1.25.7: confident-only — the roster's own address (source "roster") or a high-confidence address with the https page it was published on */
   emails?: AlumniEmail[];
   profiles: Partial<Record<AlumniPlatform, AlumniProfile>>; updated_at: string;
@@ -3307,6 +3310,7 @@ const alumniParams = (p: AlumniFilter & { cursor?: number }) =>
 export const AlumniApi = {
   list: (p: AlumniFilter & { cursor?: number }) => get<{ items: Alumnus[]; next: number; total: number }>("/outreach/alumni", alumniParams(p)),
   facets: () => get<AlumniFacets>("/outreach/alumni/facets"),
+  photoUrl: (id: number) => `${BASE}/outreach/alumni/photo/${id}?_wpnonce=${encodeURIComponent(restNonce())}`,
   exportCsv: (p: AlumniFilter) => get<{ filename: string; rows: number; csv: string }>("/outreach/alumni/export", alumniParams(p)),
   toQueue: (id: number, platforms: AlumniPlatform[]) =>
     post<{ inserted: number; updated: number; skipped: string[] }>("/outreach/alumni/to-queue", { id, platforms }),

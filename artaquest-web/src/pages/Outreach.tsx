@@ -315,12 +315,24 @@ const ALUMNI_PLATFORMS: AlumniPlatform[] = ["linkedin", "instagram", "facebook",
 const ALUMNI_LABEL: Record<AlumniPlatform, string> = { linkedin: "LinkedIn", instagram: "Instagram", facebook: "Facebook", researchgate: "ResearchGate", youtube: "YouTube", github: "GitHub", x: "X" };
 const QUEUEABLE = new Set<AlumniPlatform>(["linkedin", "instagram", "facebook", "github", "x"]);
 
+/** 1.25.9: the stored picture of a HIGH-confidence matched account (Instagram > LinkedIn > Facebook > GitHub), else initials. */
+function AlumniPhoto({ a, size }: { a: Alumnus; size: number }) {
+  const [bad, setBad] = useState(false);
+  const initials = a.full_name.split(/\s+/).filter(Boolean).map((w) => w[0]).filter((_, i, l) => i === 0 || i === l.length - 1).join("").toUpperCase();
+  if (a.photo_private && !bad) {
+    return <img src={AlumniApi.photoUrl(a.id)} alt="" width={size} height={size} loading="lazy" referrerPolicy="no-referrer" onError={() => setBad(true)}
+      style={{ width: size, height: size }} className="rounded-full object-cover" />;
+  }
+  return <span aria-hidden="true" style={{ width: size, height: size, fontSize: Math.round(size / 2.8) }}
+    className="grid place-items-center rounded-full border border-line bg-space-1 font-semibold text-ink-2">{initials}</span>;
+}
+
 function AlumniCard({ a }: { a: Alumnus }) {
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
   const have = ALUMNI_PLATFORMS.filter((p) => a.profiles[p]);
   const queueable = have.filter((p) => QUEUEABLE.has(p));
-  const first = have[0];
   const toQueue = async () => {
     setBusy(true); setMsg("");
     try {
@@ -331,17 +343,11 @@ function AlumniCard({ a }: { a: Alumnus }) {
   };
   return (
     <Card className="flex gap-3 p-3">
-      {a.photo ? (
-        <a href={a.profiles.github?.url} target="_blank" rel="noopener noreferrer" className="shrink-0" aria-label={`${a.full_name} on GitHub`}>
-          <img src={a.photo} alt="" width={56} height={56} loading="lazy" referrerPolicy="no-referrer" className="h-14 w-14 rounded-full object-cover" />
-        </a>
-      ) : first ? (
-        <a href={a.profiles[first]?.url} target="_blank" rel="noopener noreferrer" aria-label={`${a.full_name} on ${ALUMNI_LABEL[first]}`} className="grid h-14 w-14 shrink-0 place-items-center rounded-full border border-line bg-space-1 text-ink-2 hover:text-yang">
-          <SocialIcon k={first} size={26} />
-        </a>
-      ) : <span className="h-14 w-14 shrink-0 rounded-full bg-veil/[0.06]" aria-hidden="true" />}
+      <button type="button" onClick={() => setOpen((o) => !o)} className="shrink-0 self-start" aria-expanded={open} aria-label={`${a.full_name}: ${open ? "hide" : "show"} details`}>
+        <AlumniPhoto a={a} size={open ? 96 : 56} />
+      </button>
       <div className="min-w-0 flex-1">
-        <div className="font-semibold text-ink">{a.full_name}</div>
+        <button type="button" onClick={() => setOpen((o) => !o)} className="text-left font-semibold text-ink hover:text-yang" aria-expanded={open}>{a.full_name}</button>
         <div className="text-[13px] text-ink-3">{a.department} · {a.grad_year}{(a.city || a.country) && ` · ${[a.city, a.country].filter(Boolean).join(", ")}`}</div>
         {(a.headline || a.employer) && <p className="line-clamp-2 text-[13px] text-ink-2">{a.headline || a.employer}</p>}
         {a.emails && a.emails.length > 0 ? a.emails.map((e) => (
@@ -360,6 +366,20 @@ function AlumniCard({ a }: { a: Alumnus }) {
           {queueable.length > 0 && <Button size="sm" variant="outline" onClick={toQueue} disabled={busy}>Send to queue</Button>}
           {msg && <span className="text-[12px] text-ink-3">{msg}</span>}
         </div>
+        {open && (
+          <div className="mt-2 space-y-1 border-t border-line pt-2 text-[12px] text-ink-3">
+            <p>
+              Photo: {a.photo_private && a.photo_meta ? <>from <a className="hover:text-yang" href={a.photo_meta.profile_url} target="_blank" rel="noopener noreferrer">{ALUMNI_LABEL[a.photo_meta.platform] ?? a.photo_meta.platform}</a> · fetched {a.photo_meta.fetched_at}</> : "none found (initials shown)"}
+            </p>
+            {have.map((p) => (
+              <p key={p}>
+                {ALUMNI_LABEL[p]}: <a className="hover:text-yang" href={a.profiles[p]?.url} target="_blank" rel="noopener noreferrer">{a.profiles[p]?.title || a.profiles[p]?.url}</a>
+                {a.profiles[p]?.evidence && <span> · {a.profiles[p]?.evidence}</span>}
+              </p>
+            ))}
+            <p>Updated {a.updated_at} UTC</p>
+          </div>
+        )}
       </div>
     </Card>
   );

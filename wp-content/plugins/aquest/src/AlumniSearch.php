@@ -76,10 +76,6 @@ final class AlumniSearch {
 				'evidence' => mb_substr( sanitize_text_field( (string) ( $p['evidence'] ?? '' ) ), 0, 120 ),
 			];
 		}
-		$photo = '';
-		if ( isset( $profiles['github'] ) && preg_match( '~^https://github\.com/([A-Za-z0-9-]{1,39})/?$~', $profiles['github']['url'], $m ) ) {
-			$photo = 'https://github.com/' . $m[1] . '.png?size=96';
-		}
 		$email = sanitize_email( (string) ( $r['public_email'] ?? '' ) );
 		$src   = $email !== '' ? esc_url_raw( (string) ( $r['public_email_source'] ?? '' ), [ 'https' ] ) : '';
 		$txt   = function ( $k, $n ) use ( $r ) { return mb_substr( sanitize_text_field( (string) ( $r[ $k ] ?? '' ) ), 0, $n ); };
@@ -95,7 +91,6 @@ final class AlumniSearch {
 			'country'      => $txt( 'country', 120 ),
 			'public_email' => $src !== '' ? $email : '', // an email is kept only with the page it was published on
 			'email_source' => $src !== '' ? mb_substr( $src, 0, 500 ) : '',
-			'photo'        => $photo,
 			'profiles'     => wp_json_encode( (object) $profiles ),
 			'n_profiles'   => count( $profiles ),
 			'platforms'    => $profiles ? ',' . implode( ',', array_keys( $profiles ) ) . ',' : '',
@@ -141,7 +136,9 @@ final class AlumniSearch {
 			'id' => (int) $r['id'], 'full_name' => $r['full_name'], 'grad_year' => (int) $r['grad_year'],
 			'department' => $r['department'], 'employer' => $r['employer'], 'headline' => $r['headline'],
 			'city' => $r['city'], 'country' => $r['country'], 'public_email' => $r['public_email'],
-			'email_source' => $r['email_source'], 'photo' => $r['photo'], 'n_profiles' => (int) $r['n_profiles'],
+			'email_source' => $r['email_source'], 'photo' => preg_match( Outreach::PHOTO_RE, (string) $r['photo'] ) ? 'private' : '', 'n_profiles' => (int) $r['n_profiles'],
+			'photo_private' => (bool) preg_match( Outreach::PHOTO_RE, (string) $r['photo'] ),
+			'photo_meta' => is_array( $pm = json_decode( (string) ( $r['photo_meta'] ?? '' ), true ) ) ? array_intersect_key( $pm, array_flip( [ 'platform', 'profile_url', 'fetched_at' ] ) ) : null,
 			'emails' => is_array( $em = json_decode( (string) ( $r['emails'] ?? '' ), true ) ) ? $em : [],
 			'profiles' => is_array( $p ) ? $p : [], 'updated_at' => $r['updated_at'],
 		];
@@ -240,13 +237,85 @@ final class AlumniSearch {
 			if ( ! in_array( $pf, Outreach::PLATFORMS, true ) || $handle === '' ) { $out['skipped'][] = $pf; continue; }
 			$clean = Outreach::clean( [
 				'platform' => $pf, 'handle' => $handle, 'profile_url' => $info['url'], 'full_name' => $row['full_name'],
-				'tagline' => trim( $row['department'] . ' · Bilkent ' . $row['grad_year'] ), 'photo' => $pf === 'github' ? $row['photo'] : '',
+				'tagline' => trim( $row['department'] . ' · Bilkent ' . $row['grad_year'] ), 'photo' => '',
 				'source' => 'artasearch',
 			] );
 			if ( is_wp_error( $clean ) ) { $out['skipped'][] = $pf; continue; }
 			$out[ Outreach::upsert( $clean, null, [] ) ]++;
 		}
 		return $out;
+	}
+
+	// ── Photos (1.25.9, operator 2026-10-23) ─────────────────────────────────────────────────────
+	// The scan box downloads the picture of a HIGH-confidence matched account (Instagram > LinkedIn >
+	// Facebook > GitHub) at collection time and sends it base64 with {sha1, platform, profile_url,
+	// fetched_at}. It is stored like an Outreach zip photo (Outreach::store_photo: content-checked,
+	// re-encoded, metadata-free JPEG in the secret uploads dir; the row keeps only an "aqo:" token) and
+	// served to admins only by outreach/alumni/photo/<id>. CDN URLs are never stored or hotlinked.
+	const PHOTO_PLATFORMS = [ 'instagram', 'linkedin', 'facebook', 'github' ];
+	const PHOTO_B64_MAX   = 1048576; // 1 MB of base64 per photo
+
+	/** Apply one ingest record's photo to row $id. 'kept' | 'stored' | 'cleared' | 'need' | WP_Error. */
+	private static function photo_apply( $id, array $r, array $profiles ) {
+		global $wpdb;
+		$cur  = $wpdb->get_row( $wpdb->prepare( 'SELECT photo, photo_meta FROM ' . self::t() . ' WHERE id = %d', $id ), ARRAY_A ) ?: [ 'photo' => '', 'photo_meta' => '' ];
+		$meta = json_decode( (string) $cur['photo_meta'], true ) ?: [];
+		$p    = $r['photo'] ?? null;
+		$drop = function () use ( $cur ) { if ( preg_match( Outreach::PHOTO_RE, (string) $cur['photo'] ) ) { $f = Outreach::photo_path( $cur['photo'] ); if ( $f && is_file( $f ) ) { @unlink( $f ); } } };
+		if ( ! is_array( $p ) ) { // no photo in the record: the scan box has none (or the account was removed) -> clear
+			if ( $cur['photo'] === '' && ! $meta ) { return 'kept'; }
+			$drop(); $wpdb->update( self::t(), [ 'photo' => '', 'photo_meta' => null ], [ 'id' => $id ] ); return 'cleared';
+		}
+		$pf  = sanitize_key( (string) ( $p['platform'] ?? '' ) );
+		$sha = strtolower( (string) ( $p['sha1'] ?? '' ) );
+		$url = in_array( $pf, self::PHOTO_PLATFORMS, true ) ? self::clean_url( $pf, $p['profile_url'] ?? '' ) : '';
+		if ( $url === '' || ! preg_match( '/^[0-9a-f]{40}$/', $sha ) ) { return new \WP_Error( 'photo', 'photo needs platform, profile_url and sha1' ); }
+		$norm = function ( $u ) { return rtrim( strtolower( rawurldecode( (string) $u ) ), '/' ); };
+		if ( ! isset( $profiles[ $pf ] ) || $norm( $profiles[ $pf ]['url'] ) !== $norm( $url ) ) { return new \WP_Error( 'photo', 'photo must come from the row\'s matched ' . $pf . ' account' ); }
+		$have = preg_match( Outreach::PHOTO_RE, (string) $cur['photo'] ) && is_file( Outreach::photo_path( $cur['photo'] ) );
+		if ( $have && ( $meta['sha1'] ?? '' ) === $sha && $norm( $meta['profile_url'] ?? '' ) === $norm( $url ) ) { return 'kept'; }
+		$b64 = (string) ( $p['b64'] ?? '' );
+		if ( $b64 === '' ) { return 'need'; }
+		if ( strlen( $b64 ) > self::PHOTO_B64_MAX ) { return new \WP_Error( 'photo', 'photo over 1 MB' ); }
+		$bytes = base64_decode( $b64, true );
+		if ( $bytes === false || sha1( $bytes ) !== $sha ) { return new \WP_Error( 'photo', 'photo bytes do not match sha1' ); }
+		$tok = Outreach::store_photo( $bytes );
+		if ( is_wp_error( $tok ) ) { return $tok; }
+		$drop();
+		$fa = preg_match( '/^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}(:\d{2})?)?$/', (string) ( $p['fetched_at'] ?? '' ) ) ? (string) $p['fetched_at'] : gmdate( 'Y-m-d' );
+		$wpdb->update( self::t(), [ 'photo' => $tok, 'photo_meta' => wp_json_encode( [ 'sha1' => $sha, 'platform' => $pf, 'profile_url' => $url, 'fetched_at' => $fa ] ) ], [ 'id' => $id ] );
+		return 'stored';
+	}
+
+	/** GET outreach/alumni/photo/<id> — the stored picture, admins only (route 'outreach'); <img> passes ?_wpnonce=. */
+	public static function photo( $req ) {
+		global $wpdb;
+		$tok = (string) $wpdb->get_var( $wpdb->prepare( 'SELECT photo FROM ' . self::t() . ' WHERE id = %d', (int) $req['id'] ) );
+		$f   = Outreach::photo_path( $tok );
+		if ( ! $f || ! is_file( $f ) ) { return new \WP_Error( 'not_found', 'no photo', 404 ); }
+		nocache_headers();
+		header( 'Content-Type: image/jpeg' );
+		header( 'Content-Length: ' . filesize( $f ) );
+		header( 'Cache-Control: private, no-store, max-age=0' );
+		header( 'X-Content-Type-Options: nosniff' );
+		header( 'X-Robots-Tag: noindex, nofollow, noarchive' );
+		header( "Content-Security-Policy: default-src 'none'" );
+		readfile( $f );
+		exit;
+	}
+
+	/** Delete rows by id, with their stored photos. */
+	private static function delete_ids( array $ids ) {
+		global $wpdb;
+		$n = 0;
+		foreach ( array_chunk( array_values( array_unique( array_filter( array_map( 'intval', $ids ) ) ) ), 200 ) as $ch ) {
+			$in = implode( ',', $ch );
+			foreach ( (array) $wpdb->get_col( 'SELECT photo FROM ' . self::t() . " WHERE id IN ({$in})" ) as $tok ) {
+				$f = Outreach::photo_path( $tok ); if ( $f && is_file( $f ) ) { @unlink( $f ); }
+			}
+			$n += (int) $wpdb->query( 'DELETE FROM ' . self::t() . " WHERE id IN ({$in})" );
+		}
+		return $n;
 	}
 
 	/** The account handle from a profile URL's first meaningful path segment ('' when unknown). */
@@ -284,7 +353,7 @@ final class AlumniSearch {
 		if ( strlen( (string) $req->get_body() ) > self::BODY_MAX ) { return $reply( [ 'error' => 'too_large', 'message' => 'body over 2 MB' ], 413 ); }
 		$body = (array) $req->get_json_params();
 		$list = isset( $body['alumni'] ) && is_array( $body['alumni'] ) ? array_values( $body['alumni'] ) : null;
-		if ( $list === null && ( isset( $body['prune'] ) || isset( $body['verify'] ) ) ) { $list = []; }
+		if ( $list === null && ( isset( $body['prune'] ) || isset( $body['verify'] ) || isset( $body['dump'] ) || isset( $body['delete'] ) ) ) { $list = []; }
 		if ( $list === null ) { return $reply( [ 'error' => 'alumni', 'message' => '{alumni:[…]} required' ], 400 ); }
 		if ( count( $list ) > self::ROWS_MAX ) { return $reply( [ 'error' => 'too_many', 'message' => 'max 500 rows per request' ], 413 ); }
 		// One shot (1.25.2): rows written under the 1.25.0 name-only key carry no '|' — drop them so the
@@ -299,6 +368,11 @@ final class AlumniSearch {
 			$row = is_array( $r ) ? self::clean( $r ) : new \WP_Error( 'item', 'not an object' );
 			if ( is_wp_error( $row ) ) { $out['errors'][] = [ 'row' => $i, 'error' => $row->get_error_message() ]; continue; }
 			$out[ self::upsert( $row ) ]++;
+			global $wpdb;
+			$rid = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . self::t() . ' WHERE name_key = %s AND grad_year = %d', $row['name_key'], $row['grad_year'] ) );
+			$ph  = $rid ? self::photo_apply( $rid, $r, json_decode( $row['profiles'], true ) ?: [] ) : 'kept';
+			if ( is_wp_error( $ph ) ) { $out['errors'][] = [ 'row' => $i, 'error' => $ph->get_error_message() ]; }
+			else { $out[ 'photo_' . $ph ] = ( $out[ 'photo_' . $ph ] ?? 0 ) + 1; if ( $ph === 'need' ) { $out['need_photo'][] = $i; } }
 		}
 		// Read-back (1.25.8): {verify:[{full_name,department,grad_year},…]} (max 500) answers what the site now stores for those
 		// keys — platforms + profile URLs and email count only — so the scan box can confirm a sync landed. Same token as ingest.
@@ -308,7 +382,8 @@ final class AlumniSearch {
 			foreach ( array_slice( $body['verify'], 0, self::ROWS_MAX ) as $k ) {
 				if ( ! is_array( $k ) || ( $k['full_name'] ?? '' ) === '' ) { continue; }
 				$nk  = self::name_key( mb_substr( sanitize_text_field( (string) $k['full_name'] ), 0, 255 ), mb_substr( sanitize_text_field( (string) ( $k['department'] ?? '' ) ), 0, 120 ) );
-				$got = $wpdb->get_row( $wpdb->prepare( 'SELECT profiles, emails, updated_at FROM ' . self::t() . ' WHERE name_key = %s AND grad_year = %d', $nk, (int) ( $k['grad_year'] ?? 0 ) ), ARRAY_A );
+				$got = $wpdb->get_row( $wpdb->prepare( 'SELECT profiles, emails, photo, photo_meta, updated_at FROM ' . self::t() . ' WHERE name_key = %s AND grad_year = %d', $nk, (int) ( $k['grad_year'] ?? 0 ) ), ARRAY_A );
+				$pm  = $got ? ( json_decode( (string) $got['photo_meta'], true ) ?: null ) : null;
 				$pf  = $got ? ( json_decode( (string) $got['profiles'], true ) ?: [] ) : [];
 				$em  = $got ? ( json_decode( (string) ( $got['emails'] ?? '' ), true ) ?: [] ) : [];
 				$out['verify'][] = [
@@ -316,9 +391,28 @@ final class AlumniSearch {
 					'found'      => (bool) $got,
 					'profiles'   => array_map( function ( $p ) { return (string) ( $p['url'] ?? '' ); }, is_array( $pf ) ? $pf : [] ),
 					'n_emails'   => is_array( $em ) ? count( $em ) : 0,
+					'photo'      => $pm && is_file( Outreach::photo_path( (string) $got['photo'] ) ) ? [ 'sha1' => $pm['sha1'] ?? '', 'platform' => $pm['platform'] ?? '' ] : null,
 					'updated_at' => $got ? $got['updated_at'] : null,
 				];
 			}
+		}
+		// Backup read (1.25.9): {dump:{offset,limit<=500}} -> every column except the photo token, plus row counts per year.
+		if ( isset( $body['dump'] ) && is_array( $body['dump'] ) ) {
+			global $wpdb;
+			$off = max( 0, (int) ( $body['dump']['offset'] ?? 0 ) ); $lim = min( self::ROWS_MAX, max( 1, (int) ( $body['dump']['limit'] ?? self::ROWS_MAX ) ) );
+			$rows = (array) $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . self::t() . ' ORDER BY id ASC LIMIT %d OFFSET %d', $lim, $off ), ARRAY_A );
+			foreach ( $rows as &$dr ) { $dr['photo'] = preg_match( Outreach::PHOTO_RE, (string) $dr['photo'] ) ? 'private' : (string) $dr['photo']; }
+			unset( $dr );
+			$out['dump']  = $rows;
+			$out['total'] = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . self::t() );
+			$out['years'] = array_map( function ( $y ) { return [ 'year' => (int) $y['grad_year'], 'n' => (int) $y['n'] ]; }, (array) $wpdb->get_results( 'SELECT grad_year, COUNT(*) AS n FROM ' . self::t() . ' GROUP BY grad_year ORDER BY grad_year DESC', ARRAY_A ) );
+		}
+		// Explicit removal (1.25.9, operator 2026-10-23 "I don't want to see the old data"): {delete:{ids:[…<=500], confirm:'delete-rows'}}.
+		if ( isset( $body['delete'] ) && is_array( $body['delete'] ) ) {
+			$ids = isset( $body['delete']['ids'] ) && is_array( $body['delete']['ids'] ) ? $body['delete']['ids'] : [];
+			if ( ( $body['delete']['confirm'] ?? '' ) !== 'delete-rows' || count( $ids ) < 1 || count( $ids ) > self::ROWS_MAX ) {
+				$out['errors'][] = [ 'row' => 'delete', 'error' => 'delete needs confirm:"delete-rows" and 1-500 ids' ];
+			} else { $out['deleted'] = self::delete_ids( $ids ); }
 		}
 		// Full replace per year (1.25.3): {prune:{year:Y, keep:[{full_name,department},…]}} deletes that year's
 		// rows whose key is not in keep. Sent once, after every batch of the year has been upserted.
@@ -339,9 +433,7 @@ final class AlumniSearch {
 				$drop = [];
 				foreach ( (array) $have as $h ) { if ( ! isset( $keys[ $h['name_key'] ] ) ) { $drop[] = (int) $h['id']; } }
 				if ( $keys && count( $drop ) <= max( 10, (int) ( 0.1 * count( (array) $have ) ) ) ) { // guard: a bad keep list may remove at most 10% of a year (min 10)
-					foreach ( array_chunk( $drop, 200 ) as $ch ) {
-						$wpdb->query( 'DELETE FROM ' . self::t() . ' WHERE id IN (' . implode( ',', array_map( 'intval', $ch ) ) . ')' );
-					}
+					self::delete_ids( $drop ); // 1.25.9: drops stored photos too
 					$out['pruned'] = count( $drop );
 				} else {
 					$out['errors'][] = [ 'row' => 'prune', 'error' => 'refused: would delete ' . count( $drop ) . ' of ' . count( (array) $have ) ];
