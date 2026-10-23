@@ -328,6 +328,10 @@ function AlumniPhoto({ a, size }: { a: Alumnus; size: number }) {
 }
 
 const MAIL_ICON = <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></svg>;
+const PF_FILTER: { k: AlumniPlatform | "email"; label: string }[] = [
+  { k: "linkedin", label: "LinkedIn" }, { k: "instagram", label: "Instagram" }, { k: "x", label: "X" }, { k: "facebook", label: "Facebook" },
+  { k: "github", label: "GitHub" }, { k: "youtube", label: "YouTube" }, { k: "researchgate", label: "ResearchGate" }, { k: "email", label: "Email" },
+];
 const ICON_BTN = "grid h-7 w-7 place-items-center rounded-full border border-line bg-space-1 text-ink-2 hover:border-yang hover:text-yang";
 
 /** The person's emails, best first: the confident-only list (1.25.7) or the older single public_email. */
@@ -419,7 +423,11 @@ function AlumniRow({ a }: { a: Alumnus }) {
 
 function AlumniSearch() {
   const [facets, setFacets] = useState<AlumniFacets | null>(null);
-  const [f, setF] = useState<AlumniFilter>({ platform: "any" });
+  const [f, setF] = useState<AlumniFilter>({});
+  // Arash 2026-10-23: multi-select platform filter; a person matches when they have ANY selected one. Default = all (no filter).
+  const [pfs, setPfs] = useState<string[]>(PF_FILTER.map((x) => x.k));
+  useEffect(() => { setF((o) => ({ ...o, platforms: pfs.length === 0 || pfs.length === PF_FILTER.length ? undefined : pfs.join(",") })); }, [pfs]);
+  const togglePf = (k: string) => setPfs((o) => (o.includes(k) ? o.filter((x) => x !== k) : [...o, k]));
   const [q, setQ] = useState("");
   const [items, setItems] = useState<Alumnus[] | null>(null);
   const [total, setTotal] = useState(0);
@@ -452,10 +460,27 @@ function AlumniSearch() {
         <Select label="Year" value={f.year ?? ""} onChange={set("year")} options={opt("All years", facets?.years)} skipOptions />
         <Select label="Department" value={f.department ?? ""} onChange={set("department")} options={opt("All departments", facets?.departments)} skipOptions />
         <Select label="Country" value={f.country ?? ""} onChange={set("country")} options={opt("All countries", facets?.countries)} skipOptions />
-        <Select label="Platform" value={f.platform ?? ""} onChange={set("platform")} skipOptions
-          options={[{ value: "", label: "Everyone" }, { value: "any", label: "Any profile" }, ...ALUMNI_PLATFORMS.map((p) => ({ value: p, label: ALUMNI_LABEL[p] }))]} />
         <Button size="sm" variant="outline" onClick={exportCsv}>Export CSV</Button>
       </div>
+      <fieldset className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink-2">
+        <legend className="sr-only">Has any of these</legend>
+        <span className="mr-1 text-ink-3">Has any of:</span>
+        {PF_FILTER.map(({ k, label }) => {
+          const on = pfs.includes(k);
+          const n = k === "email" ? facets?.with_email : facets?.platforms[k as AlumniPlatform];
+          return (
+            <label key={k} className={`flex cursor-pointer items-center gap-1 rounded-full border px-2 py-1 ${on ? "border-yang text-ink" : "border-line text-ink-3"}`}>
+              <input type="checkbox" className="sr-only" checked={on} onChange={() => togglePf(k)} />
+              {k === "email" ? MAIL_ICON : <SocialIcon k={k} size={13} />}
+              <span>{label}{n !== undefined && ` (${n})`}</span>
+            </label>
+          );
+        })}
+        <button type="button" className="ml-1 text-ink-3 hover:text-yang" onClick={() => setPfs(pfs.length === PF_FILTER.length ? [] : PF_FILTER.map((x) => x.k))}>
+          {pfs.length === PF_FILTER.length ? "Clear" : "All"}
+        </button>
+        {pfs.length === 0 && <span className="text-ink-3">(none ticked = everyone)</span>}
+      </fieldset>
       {err && <ErrorNote>{err}</ErrorNote>}
       {items === null ? <SkeletonGrid /> : items.length === 0 ? <StatusNote>No alumni match. Rows arrive from the ArtaSearch scan.</StatusNote> : (
         <>

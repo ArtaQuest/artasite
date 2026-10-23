@@ -3299,11 +3299,12 @@ export type Alumnus = {
   emails?: AlumniEmail[];
   profiles: Partial<Record<AlumniPlatform, AlumniProfile>>; updated_at: string;
 };
-export type AlumniFilter = { year?: string; department?: string; country?: string; platform?: string; q?: string };
+/** platforms: comma list of AlumniPlatform | "email"; a row matches when it has ANY of them (absent = everyone). */
+export type AlumniFilter = { year?: string; department?: string; country?: string; platform?: string; platforms?: string; q?: string };
 export type AlumniFacet = { value: string | number; n: number };
 export type AlumniFacets = {
   years: AlumniFacet[]; departments: AlumniFacet[]; countries: AlumniFacet[];
-  platforms: Record<AlumniPlatform, number>; total: number; with_any: number; synced_at: string;
+  platforms: Record<AlumniPlatform, number>; total: number; with_any: number; with_email?: number; synced_at: string;
 };
 const alumniParams = (p: AlumniFilter & { cursor?: number }) =>
   Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined && v !== "")) as Record<string, string | number>;

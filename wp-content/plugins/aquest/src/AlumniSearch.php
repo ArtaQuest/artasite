@@ -144,7 +144,7 @@ final class AlumniSearch {
 		];
 	}
 
-	/** WHERE clause + args from ?year=&department=&platform=&country=&q= */
+	/** WHERE clause + args from ?year=&department=&platform=&platforms=a,b,email&country=&q= */
 	private static function where( $req ) {
 		global $wpdb;
 		$w = [ '1=1' ]; $a = [];
@@ -154,12 +154,27 @@ final class AlumniSearch {
 		$pf = sanitize_key( (string) Rest::p( $req, 'platform' ) );
 		if ( $pf === 'any' ) { $w[] = 'n_profiles > 0'; }
 		elseif ( in_array( $pf, self::PLATFORMS, true ) ) { $w[] = 'platforms LIKE %s'; $a[] = '%,' . $pf . ',%'; }
+		// 1.25.11 multi-select (Arash 2026-10-23): ?platforms=linkedin,instagram,email -> rows with ANY of them (OR).
+		// Absent/empty, or every option selected = no filter (everyone).
+		$sel = array_values( array_unique( array_filter( array_map( 'sanitize_key', explode( ',', (string) Rest::p( $req, 'platforms' ) ) ) ) ) );
+		$sel = array_values( array_intersect( $sel, array_merge( self::PLATFORMS, [ 'email' ] ) ) );
+		if ( $sel && count( $sel ) < count( self::PLATFORMS ) + 1 ) {
+			$or = [];
+			foreach ( $sel as $k ) {
+				if ( $k === 'email' ) { $or[] = self::HAS_EMAIL; }
+				else { $or[] = 'platforms LIKE %s'; $a[] = '%,' . $k . ',%'; }
+			}
+			$w[] = '(' . implode( ' OR ', $or ) . ')';
+		}
 		if ( ( $q = trim( sanitize_text_field( (string) Rest::p( $req, 'q' ) ) ) ) !== '' ) {
 			$like = '%' . $wpdb->esc_like( mb_substr( $q, 0, 100 ) ) . '%';
 			$w[] = '(full_name LIKE %s OR employer LIKE %s OR headline LIKE %s)'; array_push( $a, $like, $like, $like );
 		}
 		return [ implode( ' AND ', $w ), $a ];
 	}
+
+	/** A row with at least one confident email (1.87.0 emails JSON, or the older single public_email). */
+	const HAS_EMAIL = "((emails IS NOT NULL AND emails NOT IN ('', '[]')) OR public_email <> '')";
 
 	/** The scan's final-roster order (2026-10-23): youngest class first, then department, then name. */
 	const ORDER = 'grad_year DESC, department ASC, full_name ASC, id ASC';
@@ -188,6 +203,7 @@ final class AlumniSearch {
 		foreach ( self::PLATFORMS as $pf ) {
 			$out['platforms'][ $pf ] = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$t} WHERE platforms LIKE %s", '%,' . $pf . ',%' ) );
 		}
+		$out['with_email'] = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$t} WHERE " . self::HAS_EMAIL );
 		$out['total']     = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$t}" );
 		$out['with_any']  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$t} WHERE n_profiles > 0" );
 		$out['synced_at'] = (string) $wpdb->get_var( "SELECT MAX(updated_at) FROM {$t}" );
