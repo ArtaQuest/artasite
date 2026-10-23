@@ -128,6 +128,10 @@ if ( ! $aq_dash ) {
 	$aq_seo_head = preg_replace( '#<script\b(?![^>]*application/ld\+json)[^>]*>.*?</script>#is', '', (string) $aq_seo_head );
 	$aq_seo_head = preg_replace( '#<title\b[^>]*>.*?</title>#is', '', (string) $aq_seo_head );
 	$aq_seo_head = preg_replace( '#<link\b[^>]*\brel=["\']?(?:icon|apple-touch-icon|shortcut icon)["\']?[^>]*>#i', '', (string) $aq_seo_head );
+	// Resource hints from wp_head (WP.com/Jetpack: fonts.wp.com, s0.wp.com, i.ytimg.com, gravatar …) point at
+	// origins the SPA shell never loads from, so each one was a wasted DNS/TLS handshake on a phone. The
+	// hints the shell does need (Google Fonts) are emitted explicitly below.
+	$aq_seo_head = preg_replace( '#<link\b[^>]*\brel=["\']?(?:preconnect|dns-prefetch)["\']?[^>]*>\s*#i', '', (string) $aq_seo_head );
 
 	// THE WEBFONTS, RE-EMITTED HERE. The stylesheet strip above is deliberate — a theme stylesheet
 	// would clobber the SPA — but it also removed the ONLY font link the site has (functions.php),
@@ -211,6 +215,12 @@ $aq_html_dir  = ( $aq_i18n && 'rtl' === $aq_i18n['dir'] ) ? 'rtl' : 'ltr';
 	<link rel="apple-touch-icon" sizes="180x180" href="<?php echo esc_url( get_theme_file_uri( 'assets/favicon-180.png' ) . $aq_fav_v ); ?>">
 	<?php if ( $aq_dash ) : ?><meta name="robots" content="noindex"><?php endif; ?>
 	<title><?php echo esc_html( $aq_title ); ?></title>
+	<?php // Route-chunk preloads (aq_app_route_preloads): the entry plus the current page's lazy chunk and
+	// its imports, fetched in parallel instead of discovered one round-trip at a time. Placed ahead of the
+	// long SEO head (133 hreflang links) so the browser's preload scanner sees them first. ?>
+	<?php if ( ! $aq_dash && function_exists( 'aq_app_route_preloads' ) ) : foreach ( aq_app_route_preloads() as $aq_pre ) : ?>
+	<link rel="modulepreload" href="<?php echo esc_url( get_theme_file_uri( 'app/' . $aq_pre ) ); ?>">
+	<?php endforeach; endif; ?>
 	<?php echo $aq_jsonld; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped — schema.org JSON-LD from wp_head emitters ?>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -229,7 +239,12 @@ $aq_html_dir  = ( $aq_i18n && 'rtl' === $aq_i18n['dir'] ) ? 'rtl' : 'ltr';
 		              .  '&family=Noto+Naskh+Arabic:wght@400;700';
 	}
 	?>
-	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?<?php echo esc_attr( $aq_font_fams ); ?>&amp;display=swap">
+	<?php // NON-render-blocking, like the bundle CSS below: a cross-origin stylesheet in <head> held the
+	// first paint (even the branded boot screen) for a DNS+TLS+fetch to fonts.googleapis.com on every cold
+	// visit. display=swap already promised a fallback-face first paint; this lets it actually happen. ?>
+	<?php $aq_font_href = 'https://fonts.googleapis.com/css2?' . $aq_font_fams . '&display=swap'; ?>
+	<link rel="preload" as="style" href="<?php echo esc_url( $aq_font_href ); ?>" onload="this.onload=null;this.rel='stylesheet'">
+	<noscript><link rel="stylesheet" href="<?php echo esc_url( $aq_font_href ); ?>"></noscript>
 	<?php // The SPA's bundle CSS loads NON-render-blocking (preload → flip to stylesheet on load): the
 	// branded #aq-boot-screen below — styled by the critical inline CSS above — covers the canvas until
 	// React paints the route, so the stylesheet arriving a beat later is invisible, and the browser no

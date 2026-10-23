@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { localePath } from "../lib/wp";
 import { listNotebooks, normalizeNbKind, searchMembers, type MemberCard } from "../lib/api";
-import { NB_KIND_META } from "./nbview";
+import { NB_KIND_META } from "./nb-kind-meta";
 import { Avatar } from "./ui";
 import { ArtaAvatar } from "./arta";
 import { Link } from "react-router-dom";

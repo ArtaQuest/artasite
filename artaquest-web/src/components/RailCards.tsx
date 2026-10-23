@@ -18,7 +18,7 @@ import {
 } from "../lib/api";
 import { Avatar, cx } from "./ui";
 import { nameClass, closesIn, timeAgo, isFresh } from "../lib/fmt";
-import { NB_KIND_META } from "./nbview";
+import { NB_KIND_META } from "./nb-kind-meta";
 import { isLoggedIn } from "../lib/auth";
 import { localePath } from "../lib/wp";
 

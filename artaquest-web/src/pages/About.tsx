@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { Button, Card } from "../components/ui";
 import { localePath } from "../lib/wp";
-import founderPhoto from "../assets/founder.jpg";
+import founderPhoto from "../assets/founder.webp"; // WebP q82: 30 KB vs the 90 KB JPEG, same 540×938
 import founderAvatar from "../assets/founder-avatar.jpg";
 
 /**
@@ -175,7 +175,9 @@ export default function About() {
                     src={founderPhoto}
                     width={540}
                     height={938}
-                    loading="lazy"
+                    /* NOT lazy: on a phone this portrait is the first thing in the viewport after the
+                       heading — Lighthouse's LCP element — and loading="lazy" held it until layout. */
+                    fetchPriority="high"
                     decoding="async"
                     alt="ArtaQuest's founder, Arash Ashrafnejad, running a 10 km road race in the rain, bib number 2490."
                     className="w-full rounded-card border border-line object-cover shadow-card transition-opacity hover:opacity-90"
