@@ -327,12 +327,25 @@ function AlumniPhoto({ a, size }: { a: Alumnus; size: number }) {
     className="grid place-items-center rounded-full border border-line bg-space-1 font-semibold text-ink-2">{initials}</span>;
 }
 
-function AlumniCard({ a }: { a: Alumnus }) {
+const MAIL_ICON = <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></svg>;
+const ICON_BTN = "grid h-7 w-7 place-items-center rounded-full border border-line bg-space-1 text-ink-2 hover:border-yang hover:text-yang";
+
+/** The person's emails, best first: the confident-only list (1.25.7) or the older single public_email. */
+function alumniEmails(a: Alumnus): { email: string; source: string; confidence: string }[] {
+  if (a.emails && a.emails.length > 0) return a.emails.map((e) => ({ email: e.email, source: e.source, confidence: e.confidence ?? "" }));
+  return a.public_email ? [{ email: a.public_email, source: a.email_source ?? "", confidence: "high" }] : [];
+}
+
+/** Arash 2026-10-23: the LIST stays minimal — one row per person: name, department, year, social icon links and an
+ *  envelope icon (mailto: the first email; all of them in the detail). No picture in the list. Clicking the row opens the
+ *  detail panel: the stored photo (Instagram > LinkedIn > Facebook > GitHub, initials otherwise) and every detail. */
+function AlumniRow({ a }: { a: Alumnus }) {
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const have = ALUMNI_PLATFORMS.filter((p) => a.profiles[p]);
   const queueable = have.filter((p) => QUEUEABLE.has(p));
+  const emails = alumniEmails(a);
   const toQueue = async () => {
     setBusy(true); setMsg("");
     try {
@@ -341,47 +354,66 @@ function AlumniCard({ a }: { a: Alumnus }) {
     } catch { setMsg("Couldn't add to the queue."); }
     setBusy(false);
   };
+  const srcLink = (s: string) => s === "roster" ? <span title="Given in the alumni roster">roster</span>
+    : s ? <a className="hover:text-yang" href={s} target="_blank" rel="noopener noreferrer">source</a> : <span>source unknown</span>;
   return (
-    <Card className="flex gap-3 p-3">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="shrink-0 self-start" aria-expanded={open} aria-label={`${a.full_name}: ${open ? "hide" : "show"} details`}>
-        <AlumniPhoto a={a} size={open ? 96 : 56} />
-      </button>
-      <div className="min-w-0 flex-1">
-        <button type="button" onClick={() => setOpen((o) => !o)} className="text-left font-semibold text-ink hover:text-yang" aria-expanded={open}>{a.full_name}</button>
-        <div className="text-[13px] text-ink-3">{a.department} · {a.grad_year}{(a.city || a.country) && ` · ${[a.city, a.country].filter(Boolean).join(", ")}`}</div>
-        {(a.headline || a.employer) && <p className="line-clamp-2 text-[13px] text-ink-2">{a.headline || a.employer}</p>}
-        {a.emails && a.emails.length > 0 ? a.emails.map((e) => (
-          <p key={e.email} className="text-[12px] text-ink-3">
-            {e.email} · {e.source === "roster" ? <span title="Given in the alumni roster">roster</span>
-              : <a className="hover:text-yang" href={e.source} target="_blank" rel="noopener noreferrer" title="Published on this page (high confidence: carries the name, on the person's own page)">source</a>}
-          </p>
-        )) : a.public_email && <p className="text-[12px] text-ink-3">{a.public_email} · <a className="hover:text-yang" href={a.email_source} target="_blank" rel="noopener noreferrer">source</a></p>}
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+    <li className="border-b border-line last:border-b-0">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={`${a.full_name}: ${open ? "hide" : "show"} details`}
+          className="min-w-0 flex-1 text-left">
+          <span className="font-semibold text-ink hover:text-yang">{a.full_name}</span>
+          <span className="ml-2 text-[13px] text-ink-3">{a.department} · {a.grad_year}</span>
+        </button>
+        <div className="flex flex-wrap items-center gap-1.5">
           {have.map((p) => (
-            <a key={p} href={a.profiles[p]?.url} target="_blank" rel="noopener noreferrer" title={a.profiles[p]?.title || ALUMNI_LABEL[p]} aria-label={ALUMNI_LABEL[p]}
-              className="grid h-8 w-8 place-items-center rounded-full border border-line bg-space-1 text-ink-2 hover:border-yang hover:text-yang">
-              <SocialIcon k={p} size={16} />
+            <a key={p} href={a.profiles[p]?.url} target="_blank" rel="noopener noreferrer" title={ALUMNI_LABEL[p]} aria-label={`${a.full_name} on ${ALUMNI_LABEL[p]}`} className={ICON_BTN}>
+              <SocialIcon k={p} size={14} />
             </a>
           ))}
-          {queueable.length > 0 && <Button size="sm" variant="outline" onClick={toQueue} disabled={busy}>Send to queue</Button>}
-          {msg && <span className="text-[12px] text-ink-3">{msg}</span>}
+          {emails.length > 0 && (
+            <a href={`mailto:${emails[0].email}`} className={ICON_BTN} aria-label={`Email ${a.full_name}`}
+              title={emails[0].email + (emails.length > 1 ? ` (+${emails.length - 1} more in details)` : "")}>{MAIL_ICON}</a>
+          )}
         </div>
-        {open && (
-          <div className="mt-2 space-y-1 border-t border-line pt-2 text-[12px] text-ink-3">
-            <p>
-              Photo: {a.photo_private && a.photo_meta ? <>from <a className="hover:text-yang" href={a.photo_meta.profile_url} target="_blank" rel="noopener noreferrer">{ALUMNI_LABEL[a.photo_meta.platform] ?? a.photo_meta.platform}</a> · fetched {a.photo_meta.fetched_at}</> : "none found (initials shown)"}
+      </div>
+      {open && (
+        <div className="flex flex-col gap-3 border-t border-line bg-space-1 px-3 py-3 text-[12px] text-ink-3 sm:flex-row">
+          <div className="shrink-0">
+            <AlumniPhoto a={a} size={96} />
+            <p className="mt-1 max-w-[96px]">
+              {a.photo_private && a.photo_meta
+                ? <>Photo: <a className="hover:text-yang" href={a.photo_meta.profile_url} target="_blank" rel="noopener noreferrer">{ALUMNI_LABEL[a.photo_meta.platform] ?? a.photo_meta.platform}</a>, fetched {a.photo_meta.fetched_at}</>
+                : "No photo found (initials)"}
             </p>
+          </div>
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="text-[13px] text-ink">{a.full_name} · {a.department} · {a.grad_year}</p>
+            {(a.headline || a.employer) && <p className="text-ink-2">{[a.headline, a.employer].filter(Boolean).join(" · ")}</p>}
+            {(a.city || a.country) && <p>{[a.city, a.country].filter(Boolean).join(", ")}</p>}
+            <p className="pt-1 font-semibold text-ink-2">Accounts</p>
+            {have.length === 0 && <p>None confirmed.</p>}
             {have.map((p) => (
               <p key={p}>
                 {ALUMNI_LABEL[p]}: <a className="hover:text-yang" href={a.profiles[p]?.url} target="_blank" rel="noopener noreferrer">{a.profiles[p]?.title || a.profiles[p]?.url}</a>
-                {a.profiles[p]?.evidence && <span> · {a.profiles[p]?.evidence}</span>}
+                {" · confidence: high"}{a.profiles[p]?.evidence && <span> · evidence: {a.profiles[p]?.evidence}</span>}
               </p>
             ))}
-            <p>Updated {a.updated_at} UTC</p>
+            <p className="pt-1 font-semibold text-ink-2">Emails</p>
+            {emails.length === 0 && <p>None confirmed.</p>}
+            {emails.map((e) => (
+              <p key={e.email}>
+                <a className="hover:text-yang" href={`mailto:${e.email}`}>{e.email}</a> · {srcLink(e.source)}{e.confidence && ` · confidence: ${e.confidence}`}
+              </p>
+            ))}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              {queueable.length > 0 && <Button size="sm" variant="outline" onClick={toQueue} disabled={busy}>Send to queue</Button>}
+              {msg && <span>{msg}</span>}
+              <span>Updated {a.updated_at} UTC</span>
+            </div>
           </div>
-        )}
-      </div>
-    </Card>
+        </div>
+      )}
+    </li>
   );
 }
 
@@ -428,7 +460,7 @@ function AlumniSearch() {
       {items === null ? <SkeletonGrid /> : items.length === 0 ? <StatusNote>No alumni match. Rows arrive from the ArtaSearch scan.</StatusNote> : (
         <>
           <p className="text-[13px] text-ink-3">{total.toLocaleString()} match</p>
-          <div className="grid gap-3 md:grid-cols-2">{items.map((a) => <AlumniCard key={a.id} a={a} />)}</div>
+          <Card className="p-0"><ul aria-label="Alumni">{items.map((a) => <AlumniRow key={a.id} a={a} />)}</ul></Card>
           {next > 0 && <Button size="sm" variant="outline" onClick={() => load(next)}>Load more</Button>}
         </>
       )}
