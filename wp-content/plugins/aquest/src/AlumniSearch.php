@@ -387,7 +387,14 @@ final class AlumniSearch {
 		if ( strlen( $want ) < 32 ) { return $reply( [ 'error' => 'not_found' ], 404 ); } // closed until configured
 		$https = is_ssl() || ( isset( $_SERVER['HTTP_X_FORWARDED_PROTO'] ) && strtolower( (string) $_SERVER['HTTP_X_FORWARDED_PROTO'] ) === 'https' );
 		if ( ! $https && ! ( defined( 'WP_DEBUG' ) && WP_DEBUG ) ) { $audit( 'fail:insecure' ); return $reply( [ 'error' => 'https_required' ], 403 ); }
-		if ( Rest::throttle( 'alumni_ingest', 60, HOUR_IN_SECONDS ) ) { $audit( 'fail:rate' ); return $reply( [ 'error' => 'rate_limited' ], 429 ); }
+		if ( Rest::throttle( 'alumni_ingest', 60, HOUR_IN_SECONDS ) ) {
+			// 1.25.14: the throttle is a fixed clock-hour window, so tell the scan box exactly when it reopens.
+			$audit( 'fail:rate' );
+			$ra  = HOUR_IN_SECONDS - ( time() % HOUR_IN_SECONDS );
+			$res = $reply( [ 'error' => 'rate_limited', 'retry_after' => $ra ], 429 );
+			$res->header( 'Retry-After', (string) $ra );
+			return $res;
+		}
 		$got = (string) $req->get_header( 'x_aq_alumni_token' );
 		if ( $got === '' ) { $audit( 'fail:no-token' ); return $reply( [ 'error' => 'unauthorized' ], 401 ); }
 		if ( ! hash_equals( $want, $got ) ) { $audit( 'fail:bad-token' ); return $reply( [ 'error' => 'forbidden' ], 403 ); }
