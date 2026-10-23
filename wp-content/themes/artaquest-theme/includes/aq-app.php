@@ -1121,6 +1121,43 @@ function aq_seo_tr( $s = null, $prime = null ) {
 }
 
 /**
+ * Localised document title for a /xx/ page, keyed the way the CLIENT wrote the mesh rows.
+ *
+ * Why aq_seo_tr( wp_get_document_title() ) never hit: WordPress returns the title texturized and
+ * entity-encoded ("About &#8211; ArtaQuest"), but lib/i18n.ts keys rows by the DOM text — the
+ * section before " – ArtaQuest" (addTitle) and the decoded og:title ("About – ArtaQuest"). md5 of
+ * the encoded string matches neither, so all ~133 locales served an English <title> even though
+ * the translations were sitting in the cache. Lookup order mirrors what the client renders:
+ * section + suffix (applyTitle), then the whole decoded title, then the raw string (unchanged).
+ * Call with $prime=true once (aq_app_head_meta does) so the lookups share one batched query.
+ * Profiles are excluded via $skip: their title is a person's name and the canonical is English.
+ */
+function aq_seo_title_tr( $title, $prime = false, $skip = null ) {
+	static $no = false;
+	if ( null !== $skip ) {
+		$no = (bool) $skip;
+	}
+	$title = (string) $title;
+	$txt   = html_entity_decode( $title, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+	$sect  = preg_match( '/^(.+?)(\s+\S\s+ArtaQuest)$/u', $txt, $m ) ? $m : null;
+	if ( $prime ) {
+		aq_seo_tr( null, array_filter( array( $title, $txt, $sect ? $sect[1] : '' ) ) );
+		return null;
+	}
+	if ( $no ) {
+		return $title;
+	}
+	if ( $sect ) {
+		$t = aq_seo_tr( $sect[1] );
+		if ( $t !== $sect[1] ) {
+			return $t . $sect[2];
+		}
+	}
+	$t = aq_seo_tr( $txt );
+	return $t !== $txt ? $t : aq_seo_tr( $title );
+}
+
+/**
  * hreflang alternates for the full locale mesh. Given the current page's canonical $url (which
  * already carries the active locale's /xx/ prefix), strip the prefix to the bare English path and
  * re-emit one <link rel="alternate"> per registered locale + an x-default pointing at English.
@@ -1277,9 +1314,17 @@ function aq_app_head_meta() {
 	// its localised meta to crawlers + non-JS clients, not English. No-op in English / when uncached.
 	// Translate BEFORE truncating: the cache is keyed by the FULL source string (md5), so a string
 	// truncated first can never hit it — every non-English meta description silently fell back to English.
-	aq_seo_tr( null, array( $title, $desc ) );
-	$title = aq_seo_tr( $title );
-	$desc  = aq_seo_tr( $desc );
+	// The client keys a description row by the meta content it READ, i.e. the already-truncated
+	// "…157 chars…" form, so look that key up too (a full-string hit still wins).
+	$desc_cut = ( $desc !== '' && mb_strlen( $desc ) > 160 ) ? rtrim( mb_substr( $desc, 0, 157 ) ) . '…' : $desc;
+	aq_seo_tr( null, array( $title, $desc, $desc_cut ) );
+	aq_seo_title_tr( $title, true, (bool) $puser );
+	$title = aq_seo_title_tr( $title );
+	$desc_tr = aq_seo_tr( $desc );
+	if ( $desc_tr === $desc && ! $puser ) {
+		$desc_tr = aq_seo_tr( $desc_cut );
+	}
+	$desc = $desc_tr;
 	if ( $desc !== '' && mb_strlen( $desc ) > 160 ) {
 		$desc = rtrim( mb_substr( $desc, 0, 157 ) ) . '…';
 	}

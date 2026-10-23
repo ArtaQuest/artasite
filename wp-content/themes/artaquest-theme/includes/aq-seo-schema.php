@@ -370,7 +370,7 @@ add_action(
 		$home  = home_url( '/' );
 		$nodes = array();
 
-		// ── Site-wide: Organization + WebSite (sitelinks search box) ──
+		// ── Site-wide: Organization + WebSite ──
 		// Typed as an NGO with its legal entity — ArtaQuest is run by the registered Canadian
 		// not-for-profit "ArtaQuest Foundation" (matters for donors + grant-givers searching, and
 		// for the knowledge panel). `name` stays the product brand "ArtaQuest" (brand-name is a flagged
@@ -446,16 +446,22 @@ add_action(
 			'name'             => 'ArtaQuest',
 			'publisher'        => array( '@id' => $home . '#org' ),
 			'inLanguage'       => aq_seo_bcp47(),
-			'potentialAction'  => array(
-				'@type'       => 'SearchAction',
-				'target'      => array( '@type' => 'EntryPoint', 'urlTemplate' => $home . '?s={search_term_string}' ),
-				'query-input' => 'required name=search_term_string',
-			),
+			// (potentialAction SearchAction REMOVED 2026-10-23: Google retired the sitelinks search box
+			// in Nov 2024, and its target /?s= results are noindexed since PR #109.)
 		);
 
 
 		// ── Public profile (/u/<slug>/) → ProfilePage + Person ──
 		$slug = get_query_var( 'aq_profile' );
+		// One ProfilePage per page. aq_app_head_meta() (aq-app.php) emits the complete ProfilePage
+		// block for every profile it resolves — same Person @id plus sameAs/knowsLanguage — so this
+		// graph used to add a SECOND, thinner ProfilePage for the same URL (Rich Results flags
+		// duplicate ProfilePage items). Defer to that block whenever it will be printed; keep this
+		// one only as the fallback for a request that path does not handle.
+		if ( $slug && function_exists( 'aq_app_is_app_page' ) && function_exists( 'aq_profile_user' )
+			&& aq_app_is_app_page() && ! aq_app_is_dashboard() && aq_profile_user( $slug ) ) {
+			$slug = '';
+		}
 		if ( $slug ) {
 			$u = get_user_by( 'login', sanitize_title( $slug ) );
 			if ( ! $u ) {

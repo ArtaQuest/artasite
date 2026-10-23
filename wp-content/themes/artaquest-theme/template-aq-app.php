@@ -157,7 +157,7 @@ if ( ! $aq_dash ) {
 // guard matters because the $aq_dash branch never runs wp_head at all.
 $aq_title = $aq_dash
 	? get_bloginfo( 'name' )
-	: ( function_exists( 'aq_seo_tr' ) ? aq_seo_tr( wp_get_document_title() ) : wp_get_document_title() );
+	: ( function_exists( 'aq_seo_title_tr' ) ? aq_seo_title_tr( wp_get_document_title() ) : wp_get_document_title() );
 ?><!doctype html>
 <?php
 // Set lang/dir straight from the i18n router so every one of the ~130 languages
