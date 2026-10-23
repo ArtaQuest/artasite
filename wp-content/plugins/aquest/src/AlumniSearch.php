@@ -284,7 +284,7 @@ final class AlumniSearch {
 		if ( strlen( (string) $req->get_body() ) > self::BODY_MAX ) { return $reply( [ 'error' => 'too_large', 'message' => 'body over 2 MB' ], 413 ); }
 		$body = (array) $req->get_json_params();
 		$list = isset( $body['alumni'] ) && is_array( $body['alumni'] ) ? array_values( $body['alumni'] ) : null;
-		if ( $list === null && isset( $body['prune'] ) ) { $list = []; }
+		if ( $list === null && ( isset( $body['prune'] ) || isset( $body['verify'] ) ) ) { $list = []; }
 		if ( $list === null ) { return $reply( [ 'error' => 'alumni', 'message' => '{alumni:[…]} required' ], 400 ); }
 		if ( count( $list ) > self::ROWS_MAX ) { return $reply( [ 'error' => 'too_many', 'message' => 'max 500 rows per request' ], 413 ); }
 		// One shot (1.25.2): rows written under the 1.25.0 name-only key carry no '|' — drop them so the
@@ -299,6 +299,26 @@ final class AlumniSearch {
 			$row = is_array( $r ) ? self::clean( $r ) : new \WP_Error( 'item', 'not an object' );
 			if ( is_wp_error( $row ) ) { $out['errors'][] = [ 'row' => $i, 'error' => $row->get_error_message() ]; continue; }
 			$out[ self::upsert( $row ) ]++;
+		}
+		// Read-back (1.25.8): {verify:[{full_name,department,grad_year},…]} (max 500) answers what the site now stores for those
+		// keys — platforms + profile URLs and email count only — so the scan box can confirm a sync landed. Same token as ingest.
+		if ( isset( $body['verify'] ) && is_array( $body['verify'] ) ) {
+			global $wpdb;
+			$out['verify'] = [];
+			foreach ( array_slice( $body['verify'], 0, self::ROWS_MAX ) as $k ) {
+				if ( ! is_array( $k ) || ( $k['full_name'] ?? '' ) === '' ) { continue; }
+				$nk  = self::name_key( mb_substr( sanitize_text_field( (string) $k['full_name'] ), 0, 255 ), mb_substr( sanitize_text_field( (string) ( $k['department'] ?? '' ) ), 0, 120 ) );
+				$got = $wpdb->get_row( $wpdb->prepare( 'SELECT profiles, emails, updated_at FROM ' . self::t() . ' WHERE name_key = %s AND grad_year = %d', $nk, (int) ( $k['grad_year'] ?? 0 ) ), ARRAY_A );
+				$pf  = $got ? ( json_decode( (string) $got['profiles'], true ) ?: [] ) : [];
+				$em  = $got ? ( json_decode( (string) ( $got['emails'] ?? '' ), true ) ?: [] ) : [];
+				$out['verify'][] = [
+					'key'        => $nk,
+					'found'      => (bool) $got,
+					'profiles'   => array_map( function ( $p ) { return (string) ( $p['url'] ?? '' ); }, is_array( $pf ) ? $pf : [] ),
+					'n_emails'   => is_array( $em ) ? count( $em ) : 0,
+					'updated_at' => $got ? $got['updated_at'] : null,
+				];
+			}
 		}
 		// Full replace per year (1.25.3): {prune:{year:Y, keep:[{full_name,department},…]}} deletes that year's
 		// rows whose key is not in keep. Sent once, after every batch of the year has been upserted.
