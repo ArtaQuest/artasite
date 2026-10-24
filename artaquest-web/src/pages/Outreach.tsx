@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
 import {
   AlumniApi, OutreachApi, canOutreach, type AlumniFacets, type AlumniFilter, type AlumniPlatform, type Alumnus, type ProfileSyncItem,
   type OutreachAccount, type OutreachImportResult, type OutreachPlanRow, type OutreachPlatform, type OutreachStat, type OutreachStatus,
@@ -352,14 +352,28 @@ function AlumniRow({ a }: { a: Alumnus }) {
   const emails = alumniEmails(a);
   const [followedAt, setFollowedAt] = useState<string | null>(a.followed_at ?? null);
   const [fBusy, setFBusy] = useState(false);
-  // Follow: open every social link in its own tab SYNCHRONOUSLY inside the click (pop-up blockers allow user-initiated opens;
-  // a browser may still ask once to allow several pop-ups), then remember it server-side for this admin. Unfollow only flips back.
-  const toggleFollow = () => {
+  const [fMsg, setFMsg] = useState("");
+  // Follow (1.25.15, Arash 2026-10-24): open every social link in its own tab SYNCHRONOUSLY inside the click, and keep this
+  // page where it is. Tested in Chrome: script cannot make a tab open in the background — synthetic ⌘/Ctrl-clicks on
+  // anchors are ignored and window.focus() cannot take focus back — but window.open() honours the modifier of the REAL
+  // click, so ⌘-click (macOS) / Ctrl-click Follow opens them all behind this page. A plain click opens them in front.
+  // Chrome lets one click open ONE pop-up unless pop-ups are allowed for artaquest.com, hence the hint below.
+  const toggleFollow = (e: ReactMouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
     const follow = !followedAt;
-    if (follow) for (const p of have) { const u = a.profiles[p]?.url; if (u) window.open(u, "_blank", "noopener,noreferrer"); }
+    if (follow) {
+      const urls = have.map((p) => a.profiles[p]?.url).filter((u): u is string => !!u);
+      const x = window.scrollX, y = window.scrollY;
+      for (const u of urls) window.open(u, "_blank", "noopener,noreferrer");
+      window.focus();
+      if (window.scrollX !== x || window.scrollY !== y) window.scrollTo(x, y);
+      const bg = e.metaKey || e.ctrlKey;
+      if (urls.length > 1) setFMsg(`Opened ${urls.length} links${bg ? " behind this page" : ""}. Only one tab? Allow pop-ups for artaquest.com (address-bar icon) once.${bg ? "" : " Tip: ⌘/Ctrl-click Follow to keep this page in front."}`);
+      else setFMsg(urls.length === 1 && !bg ? "Tip: ⌘/Ctrl-click Follow to open links behind this page." : "");
+    } else setFMsg("");
     const prev = followedAt;
     setFollowedAt(follow ? new Date().toISOString().slice(0, 19).replace("T", " ") : null); setFBusy(true);
-    AlumniApi.follow(a.id, follow).then((r) => setFollowedAt(r.followed_at)).catch(() => { setFollowedAt(prev); setMsg("Couldn't save follow state."); }).finally(() => setFBusy(false));
+    AlumniApi.follow(a.id, follow).then((r) => setFollowedAt(r.followed_at)).catch(() => { setFollowedAt(prev); setFMsg("Couldn't save follow state."); }).finally(() => setFBusy(false));
   };
   const toQueue = async () => {
     setBusy(true); setMsg("");
@@ -390,12 +404,13 @@ function AlumniRow({ a }: { a: Alumnus }) {
               title={emails[0].email + (emails.length > 1 ? ` (+${emails.length - 1} more in details)` : "")}>{MAIL_ICON}</a>
           )}
           <button type="button" onClick={toggleFollow} disabled={fBusy} aria-pressed={!!followedAt}
-            title={followedAt ? `Followed ${followedAt} UTC — click to mark as not followed` : have.length ? `Open all ${have.length} social link(s) in new tabs and mark as followed` : "Mark as followed"}
+            title={followedAt ? `Followed ${followedAt} UTC — click to mark as not followed` : have.length ? `Open all ${have.length} social link(s) in new tabs and mark as followed (⌘/Ctrl-click: open them behind this page)` : "Mark as followed"}
             className={`ml-1 h-7 rounded-full px-3 text-[12px] font-semibold ${followedAt ? "border border-line bg-veil/5 text-ink-3 hover:text-ink" : "bg-yang text-on-accent hover:bg-yin hover:text-white"}`}>
             {followedAt ? "Unfollow" : "Follow"}
           </button>
         </div>
       </div>
+      {fMsg && <p className="px-3 pb-2 text-[12px] text-ink-3" role="status">{fMsg}</p>}
       {open && (
         <div className="flex flex-col gap-3 border-t border-line bg-space-1 px-3 py-3 text-[12px] text-ink-3 sm:flex-row">
           <div className="shrink-0">
