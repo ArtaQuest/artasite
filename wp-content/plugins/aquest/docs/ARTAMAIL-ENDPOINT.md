@@ -5,16 +5,16 @@ live e2e test) reads the Titan mailbox password at runtime, so the password live
 (never in GitHub Actions secrets, never in Cloudflare KV).
 
 ## What it does
-- Returns **only** `{"password": "<TITAN_PASSWORD>"}` — the arash@ / support@artaquest.org Titan
+- Returns **only** `{"password": "<MAIL_TITAN_PASSWORD>"}` — the arash@ / support@artaquest.org Titan
   password. There is deliberately **no** generic `secret/{name}` route.
 - Handler: `AQ\Vault::rest_titan()` in `src/Vault.php`. Route registered in `src/Rest.php`
   (`[ 'GET', 'secret/titan', 'Vault::rest_titan', 'public' ]` — `public` so failed attempts are
   audited, with all gating inside the handler).
 
 ## Auth & hardening
-- **Token** (not the password): `AQ_ARTAMAIL_TOKEN` (a Vault registry entry, ≥32 chars), presented as
+- **Token** (not the password): `BOT_ARTAMAIL_TOKEN` (a Vault registry entry, ≥32 chars), presented as
   `Authorization: Bearer <token>` or `X-AQ-ArtaMail: <token>`, compared with `hash_equals`. Mirrors
-  the existing `AQ_WORKER_TOKEN` / `AQ_ARTA_REPLY_TOKEN` machine-token pattern.
+  the existing `BOT_WORKER_TOKEN` / `BOT_ARTA_TOKEN` machine-token pattern.
 - **HTTPS required** (`is_ssl()` or `X-Forwarded-Proto: https`); plain HTTP allowed only under local
   `WP_DEBUG`.
 - **`Cache-Control: no-store`** on every response (handler returns a `WP_REST_Response`, so the
@@ -28,8 +28,8 @@ live e2e test) reads the Titan mailbox password at runtime, so the password live
 `429` rate limited.
 
 ## Operator setup (wp-admin → ArtaQuest Security)
-1. Set **`TITAN_PASSWORD`** = the arash@/support@ Titan mailbox password (write-only here).
-2. Set **`AQ_ARTAMAIL_TOKEN`** = a random ≥32-char token (this is what ArtaMail presents; NOT the
+1. Set **`MAIL_TITAN_PASSWORD`** = the arash@/support@ Titan mailbox password (write-only here).
+2. Set **`BOT_ARTAMAIL_TOKEN`** = a random ≥32-char token (this is what ArtaMail presents; NOT the
    Titan password).
 
 ## Tests

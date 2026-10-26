@@ -41,14 +41,14 @@ is not retained, so a purged member's rows go with the account.
 
 Meeting-room E2E does not fit: those keys never reach the server, and AccountSync
 needs the plaintext back. The worker-token AES-GCM used for relay screenshots does
-not fit either: the phone does not hold `AQ_WORKER_TOKEN`.
+not fit either: the phone does not hold `BOT_WORKER_TOKEN`.
 
 The envelope matches the vault (`Vault.php`): libsodium `crypto_secretbox`, key
 material only in wp-config / the environment / the vault file.
 
 - Default key (envelope version `0x01`): `SHA-256(AUTH_KEY + "|" + AUTH_SALT + "|aq-task-sync-v1")`. `AUTH_KEY` and `AUTH_SALT` already live in `wp-config.php`, which is outside the database. Both must be at least 32 characters, same rule as the vault.
-- Optional dedicated key (envelope version `0x02`): set `AQ_TASK_SYNC_KEY` in the vault, the environment, or wp-config. Writes switch to this key as soon as it is set. Reads of older rows still use the version byte, so turning the dedicated key on does not make existing blobs unreadable.
-- Unsetting `AQ_TASK_SYNC_KEY` later leaves version-`0x02` rows unreadable until the phone PUTs them again. Prefer setting it before the first upload if you want a key you can rotate without rotating `AUTH_KEY` (which also invalidates WordPress cookies).
+- Optional dedicated key (envelope version `0x02`): set `TASK_SYNC_KEY` in the vault, the environment, or wp-config. Writes switch to this key as soon as it is set. Reads of older rows still use the version byte, so turning the dedicated key on does not make existing blobs unreadable.
+- Unsetting `TASK_SYNC_KEY` later leaves version-`0x02` rows unreadable until the phone PUTs them again. Prefer setting it before the first upload if you want a key you can rotate without rotating `AUTH_KEY` (which also invalidates WordPress cookies).
 
 `GET` of a row the current key cannot open returns `409` `undecryptable`. The phone should PUT its local file again.
 

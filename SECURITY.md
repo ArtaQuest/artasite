@@ -51,10 +51,17 @@ Two conclusions are in the code now, and both should stay there:
   the redaction buys the time to rotate, and nothing more.
 - **ArtaTask phone sync is ciphertext, and the table is not in the explorer.** `aq_task_sync`
   holds follower / following / mutual / session-claim / prefs blobs for the phone. The key is
-  derived from `AUTH_KEY`/`AUTH_SALT` or `AQ_TASK_SYNC_KEY` (wp-config, env, or the vault file —
+  derived from `AUTH_KEY`/`AUTH_SALT` or `TASK_SYNC_KEY` (wp-config, env, or the vault file —
   never a row). The table is in `Extra::PRIVATE_TABLES`, so `/data` and the nightly export skip
   it entirely. This replaced Cloudflare Workers KV; nothing on this path reads KV. See
   `docs/artatask-sync.md`.
+
+## Secrets
+
+Every secret and setting production reads — purpose, who uses it, where to get and rotate it (with
+the scopes it needs), its rotation tier and what breaks without it — is in
+[`docs/SECRETS.md`](docs/SECRETS.md), generated from `wp-content/plugins/aquest/src/SecretRegistry.php`.
+Manage values in wp-admin → AQ Security; never in the database.
 
 ## Hardening already in place
 

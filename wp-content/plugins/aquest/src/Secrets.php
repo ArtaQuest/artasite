@@ -26,14 +26,14 @@ final class Secrets {
 
 	/**
 	 * A secret from the vault (authoritative), env, or a wp-config constant. $default ('') when unset.
-	 * Names were simplified on 2026-10-26 (Vault::ALIASES): asking for a new OR an old name finds the
+	 * Names were simplified on 2026-10-26 (SecretRegistry::ALIASES): asking for a new OR an old name finds the
 	 * value wherever it was stored under either, so a wp-config constant or env var with the old
 	 * name keeps working and nothing has to be re-entered.
 	 */
 	public static function get( $name, $default = '' ) {
 		$v = Vault::get( $name ); // the vault resolves old names itself
 		if ( $v !== '' ) { return $v; }
-		foreach ( Vault::names( $name ) as $n ) {
+		foreach ( SecretRegistry::names( $name ) as $n ) {
 			$v = self::outside( $n );
 			if ( $v !== '' ) { return $v; }
 		}
@@ -60,7 +60,7 @@ final class Secrets {
 	/** Where a secret currently resolves from ('' when unset) — shown on the AQ Security page. */
 	public static function source( $name ) {
 		if ( Vault::get( $name ) !== '' ) { return 'vault'; }
-		foreach ( Vault::names( $name ) as $n ) {
+		foreach ( SecretRegistry::names( $name ) as $n ) {
 			$env = getenv( $n );
 			if ( ( is_string( $env ) && $env !== '' ) || ! empty( $_SERVER[ $n ] ) ) { return 'environment'; }
 			if ( defined( $n ) && constant( $n ) !== '' && constant( $n ) !== null ) { return 'wp-config'; }

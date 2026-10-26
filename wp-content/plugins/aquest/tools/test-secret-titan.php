@@ -65,6 +65,7 @@ namespace AQ {
 		}
 	}
 
+	require __DIR__ . '/../src/SecretRegistry.php';
 	require __DIR__ . '/../src/Vault.php';
 
 	$fail = 0;
@@ -85,8 +86,8 @@ namespace AQ {
 	};
 
 	// Registry carries both new entries.
-	$ok( array_key_exists( 'MAIL_TITAN_PASSWORD', Vault::REGISTRY ), 'registry has MAIL_TITAN_PASSWORD' );
-	$ok( array_key_exists( 'BOT_ARTAMAIL_TOKEN', Vault::REGISTRY ), 'registry has BOT_ARTAMAIL_TOKEN' );
+	$ok( array_key_exists( 'MAIL_TITAN_PASSWORD', SecretRegistry::KEYS ), 'registry has MAIL_TITAN_PASSWORD' );
+	$ok( array_key_exists( 'BOT_ARTAMAIL_TOKEN', SecretRegistry::KEYS ), 'registry has BOT_ARTAMAIL_TOKEN' );
 
 	// 1) No token → 401
 	$GLOBALS['aq_secrets'] = [ 'BOT_ARTAMAIL_TOKEN' => $GOOD, 'MAIL_TITAN_PASSWORD' => $PW ];

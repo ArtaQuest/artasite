@@ -30,7 +30,7 @@ member posts "@arta …"  ──►  WordPress: aq_mentions row (queued)       [
               GitHub: issue (dedup by fingerprint + title, per-member and global daily caps)
 ```
 
-All calls to the site are `POST` with `X-Arta-Token` (= `AQ_ARTA_REPLY_TOKEN`), so no edge cache can hold
+All calls to the site are `POST` with `X-Arta-Token` (= `BOT_ARTA_TOKEN`), so no edge cache can hold
 them. The brain only ever sees public data (the post, its thread, public handles and names).
 
 ## Pace (so the account is used like a person would, not hammered)
@@ -67,7 +67,7 @@ logged; `check` prints names only.
 
 | Setting | What |
 |---|---|
-| `ARTA_REPLY_TOKEN` | = the site's `AQ_ARTA_REPLY_TOKEN` (≥ 32 chars) |
+| `ARTA_REPLY_TOKEN` | = the site's `BOT_ARTA_TOKEN` (≥ 32 chars) |
 | `GITHUB_ISSUES_TOKEN` | fine-grained PAT, `ArtaQuest/artasite` only, Issues: read & write |
 | `ARTA_CHAT_URL` | the chat page (operator setting, not in the repo) |
 | `ARTA_SEL_INPUT` / `ARTA_SEL_SEND` / `ARTA_SEL_ANSWER` | that page's selectors (`calibrate`) |

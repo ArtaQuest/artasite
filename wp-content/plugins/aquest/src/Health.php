@@ -351,14 +351,13 @@ final class Health {
 		// is JSON on a platform whose database is public, and a shape is a search key.
 		$missing  = [];
 		$optional = 0;
-		foreach ( Vault::REGISTRY as $name => $spec ) {
-			$policy = isset( $spec[1] ) ? (int) $spec[1] : 0;
-			$opt    = $spec[2] ?? false;
-			if ( $policy === 0 ) { continue; } // an ops FLAG, not a credential
+		foreach ( array_keys( SecretRegistry::KEYS ) as $name ) {
+			$sp = SecretRegistry::spec( $name );
+			if ( $sp['days'] === 0 ) { continue; } // an identifier, endpoint or flag — not a credential
 			if ( Secrets::has( $name ) ) { continue; }
-			if ( $opt === true ) { $optional++; continue; }
-			if ( is_string( $opt ) && Secrets::has( $opt ) ) { continue; } // an alternative satisfies it
-			if ( is_string( $opt ) ) { $optional++; continue; }
+			if ( $sp['need'] === 'optional' ) { $optional++; continue; }
+			if ( $sp['alt'] !== '' && Secrets::has( $sp['alt'] ) ) { continue; } // an alternative satisfies it
+			if ( $sp['alt'] !== '' ) { $optional++; continue; }
 			$missing[] = $name;
 		}
 		$out[] = $missing

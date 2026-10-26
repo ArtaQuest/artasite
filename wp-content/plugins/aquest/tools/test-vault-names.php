@@ -22,6 +22,7 @@ namespace AQ {
 		public static function accept_vault_change( $why ) { self::$log[] = $why; }
 		public static function note( $l ) { self::$log[] = $l; }
 	}
+	require __DIR__ . '/../src/SecretRegistry.php';
 	require __DIR__ . '/../src/Vault.php';
 	require __DIR__ . '/../src/Secrets.php';
 
@@ -62,8 +63,34 @@ namespace AQ {
 	$ok( $m['STRIPE_SECRET_KEY']['max_days'] === 90 && $m['CLOUDFLARE_API_TOKEN']['max_days'] === 90, 'critical credentials on 90 days' );
 	$ok( $m['CLOUDFLARE_ACCOUNT_ID']['max_days'] === 0 && $m['R2_BUCKET']['max_days'] === 0, 'account ID and bucket have no rotation' );
 	$ok( $m['MAIL_TITAN_PASSWORD']['compromised'] === true, 'compromised flag survives the rename' );
-	foreach ( Vault::REGISTRY as $n => $spec ) { if ( count( $spec ) !== 4 || ! is_string( $spec[3] ) ) { $ok( false, "registry row $n has a group" ); } }
-	foreach ( Vault::ALIASES as $n => $olds ) { if ( ! isset( Vault::REGISTRY[ $n ] ) ) { $ok( false, "alias target $n is registered" ); } }
+	// Registry shape: every key fully defined, in a known group and tier, with no AQ_ prefix.
+	$bad = [];
+	foreach ( SecretRegistry::KEYS as $n => $k ) {
+		if ( count( $k ) !== 7 || ! isset( SecretRegistry::GROUPS[ $k[0] ] ) || ! isset( SecretRegistry::ROTATE[ $k[1] ] ) ) { $bad[] = "$n: shape/group/tier"; }
+		if ( ! in_array( $k[2], [ 'required', 'optional' ], true ) && ! isset( SecretRegistry::KEYS[ $k[2] ] ) ) { $bad[] = "$n: alternative {$k[2]} unknown"; }
+		if ( strpos( $n, 'AQ_' ) === 0 ) { $bad[] = "$n: AQ_ prefix"; }
+		foreach ( [ 3, 4, 5, 6 ] as $i ) { if ( trim( (string) $k[ $i ] ) === '' ) { $bad[] = "$n: empty field $i"; } }
+		if ( $k[1] !== 'none' && strpos( $n, 'FLAG_' ) === 0 ) { $bad[] = "$n: a flag cannot rotate"; }
+	}
+	foreach ( SecretRegistry::ALIASES as $n => $olds ) {
+		if ( ! isset( SecretRegistry::KEYS[ $n ] ) ) { $bad[] = "alias target $n not registered"; }
+		foreach ( $olds as $o ) { if ( isset( SecretRegistry::KEYS[ $o ] ) ) { $bad[] = "old name $o still registered"; } }
+	}
+	foreach ( SecretRegistry::RETIRED as $n => $why ) { if ( isset( SecretRegistry::KEYS[ $n ] ) ) { $bad[] = "retired $n still registered"; } }
+	$ok( ! $bad, 'registry is complete and consistent' . ( $bad ? ': ' . implode( '; ', $bad ) : '' ) );
+	$crit = array_keys( array_filter( SecretRegistry::KEYS, fn( $k ) => $k[1] === 'critical' ) );
+	sort( $crit );
+	$ok( $crit === [ 'CLOUDFLARE_API_TOKEN', 'MAIL_ACS_CONNECTION', 'MAIL_SMTP_PASSWORD', 'MAIL_TITAN_PASSWORD', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET' ], 'only the 8 critical credentials rotate every 90 days' );
+
+	// 2b. forget_unused removes exactly the unused rows (on a copy, then restored).
+	$snap = file_get_contents( Vault::path() );
+
+	$gone = Vault::forget_unused();
+	sort( $gone );
+	$ok( $gone === [ 'HF_TOKEN', 'SMTP_PASS' ], 'forget_unused removes only unused rows (got ' . implode( ',', $gone ) . ')' );
+	$ok( Secrets::get( 'R2_ACCESS_KEY_ID' ) === 'r2-access-key-id-value' && Secrets::get( 'MAIL_SMTP_PASSWORD' ) === 'new-smtp', 'live values untouched by the purge' );
+	file_put_contents( Vault::path(), $snap );
+	( function () { self::$cache = null; self::$plain = []; } )->bindTo( null, Vault::class )();
 
 	// 3. Migration: ciphertext moved, metadata kept, logged, idempotent.
 	$before = json_decode( substr( file_get_contents( Vault::path() ), strpos( file_get_contents( Vault::path() ), "\n" ) + 1 ), true )['secrets'];
