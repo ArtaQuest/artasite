@@ -123,10 +123,10 @@ final class Relay {
 	public static function endpoint( $tier = '' ) {
 		$t = strtoupper( preg_replace( '/[^a-z]/', '', strtolower( (string) $tier ) ) );
 		if ( $t !== '' ) {
-			$per = (string) Secrets::get( 'AQ_TURN_URL_' . $t );
+			$per = (string) Secrets::get( 'ARTA_RELAY_URL_' . $t );
 			if ( $per !== '' ) { return $per; }
 		}
-		return (string) Secrets::get( 'AQ_TURN_URL' );
+		return (string) Secrets::get( 'ARTA_RELAY_URL' );
 	}
 
 	/**
@@ -311,7 +311,7 @@ final class Relay {
 	 * has no shell on. Stolen, either is worth this one turn, which the member already had.
 	 */
 	public static function mint_token( $id, $ttl = 1800 ) {
-		$secret = (string) Secrets::get( 'AQ_TURN_SECRET' );
+		$secret = (string) Secrets::get( 'ARTA_RELAY_SECRET' );
 		if ( $secret === '' ) { return ''; }
 		$exp = time() + max( 60, (int) $ttl );
 		return $id . '.' . $exp . '.' . hash_hmac( 'sha256', $id . '.' . $exp, $secret );
@@ -320,7 +320,7 @@ final class Relay {
 	/** Verify one. Constant-time, expiry-checked, and bound to the job it names — a token lifted from
 	 *  one turn cannot complete another. */
 	public static function verify_token( $id, $token ) {
-		$secret = (string) Secrets::get( 'AQ_TURN_SECRET' );
+		$secret = (string) Secrets::get( 'ARTA_RELAY_SECRET' );
 		$parts  = explode( '.', (string) $token );
 		if ( $secret === '' || count( $parts ) !== 3 ) { return false; }
 		if ( (int) $parts[0] !== (int) $id || (int) $parts[1] < time() ) { return false; }
@@ -372,8 +372,8 @@ final class Relay {
 		$url = '';
 		if ( $tools ) {
 			$t   = strtoupper( preg_replace( '/[^a-z]/', '', strtolower( (string) $tier ) ) );
-			$url = $t !== '' ? (string) Secrets::get( 'AQ_TURN_URL_TOOLS_' . $t ) : '';
-			if ( $url === '' ) { $url = (string) Secrets::get( 'AQ_TURN_URL_TOOLS' ); }
+			$url = $t !== '' ? (string) Secrets::get( 'ARTA_TOOLS_URL_' . $t ) : '';
+			if ( $url === '' ) { $url = (string) Secrets::get( 'ARTA_TOOLS_URL' ); }
 		}
 		if ( $url === '' ) { $url = self::endpoint( $tier ); $tools = false; }
 		if ( $url === '' ) { return; }                       // no endpoint: a poller will claim it
@@ -407,7 +407,7 @@ final class Relay {
 			// credential — on a machine it has no shell on. Stolen, either buys what the member already had.
 			$body['job_token']         = self::mint_token( $id );
 			$body['payload']['bearer'] = self::mint_token( $id );
-			$body['payload']['broker'] = rtrim( (string) Secrets::get( 'AQ_BROKER_URL' ), '/' );
+			$body['payload']['broker'] = rtrim( (string) Secrets::get( 'ARTA_BROKER_URL' ), '/' );
 		}
 		wp_remote_post( $url, [
 			// BLOCKING, with a short budget — and that is not a contradiction of "never wait for the
@@ -421,7 +421,7 @@ final class Relay {
 			'headers'  => array_filter( [
 				'Content-Type' => 'application/json',
 				// The tools container is never given the shared secret; it authenticates by signature.
-				'X-AQ-Worker'  => $tools ? null : (string) Secrets::get( 'AQ_WORKER_TOKEN' ),
+				'X-AQ-Worker'  => $tools ? null : (string) Secrets::get( 'BOT_WORKER_TOKEN' ),
 			] ),
 			'body'     => wp_json_encode( $body ),
 		] );
@@ -429,14 +429,14 @@ final class Relay {
 
 	/**
 	 * Encrypt one screenshot for transit through the (public) job table. AES-256-GCM with a key
-	 * derived from the shared worker token (Secrets::get('AQ_WORKER_TOKEN') — a secret, never in the
+	 * derived from the shared worker token (Secrets::get('BOT_WORKER_TOKEN') — a secret, never in the
 	 * DB), so the ciphertext in the payload is unreadable to anyone reading /data, while the laptop
 	 * relay (which holds the same token) can decrypt it. Input is the block's base64 data; output is
 	 * base64( iv(12) · tag(16) · ciphertext ) — the exact layout the Node daemon expects. Returns
 	 * null when no token / no GCM cipher (caller then degrades to the API).
 	 */
 	private static function enc_image( $b64 ) {
-		$token = (string) Secrets::get( 'AQ_WORKER_TOKEN' );
+		$token = (string) Secrets::get( 'BOT_WORKER_TOKEN' );
 		if ( $token === '' || ! function_exists( 'openssl_encrypt' ) || ! in_array( 'aes-256-gcm', openssl_get_cipher_methods(), true ) ) { return null; }
 		$bytes = base64_decode( $b64, true );
 		if ( $bytes === false || $bytes === '' ) { return null; }
@@ -451,7 +451,7 @@ final class Relay {
 	/** The inverse of enc_image — used only at push time, so the plaintext exists for the length of one
 	 *  outbound HTTPS request and never in a row. Returns null when it cannot be read. */
 	private static function dec_image( $b64 ) {
-		$token = (string) Secrets::get( 'AQ_WORKER_TOKEN' );
+		$token = (string) Secrets::get( 'BOT_WORKER_TOKEN' );
 		$buf   = base64_decode( $b64, true );
 		if ( $token === '' || $buf === false || strlen( $buf ) < 29 || ! function_exists( 'openssl_decrypt' ) ) { return null; }
 		$key = hash( 'sha256', $token, true );

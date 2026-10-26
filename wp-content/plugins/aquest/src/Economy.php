@@ -1238,11 +1238,11 @@ final class Economy {
 
 	/** Cash-out sends real money out via Stripe Connect transfers (see sell() / payout_status()). The
 	 *  rail exists once Stripe is configured; an operator can still freeze it in an emergency by setting
-	 *  the AQ_CASHOUT_FROZEN env. While disabled, sell() refuses WITHOUT ever debiting coins, so coins
+	 *  the FLAG_CASHOUT_FROZEN env. While disabled, sell() refuses WITHOUT ever debiting coins, so coins
 	 *  are never taken when no money can be sent — they stay fully gold-backed and redeemable the moment
 	 *  this returns true. */
 	public static function cashout_enabled() {
-		return Stripe::enabled() && Secrets::get( 'AQ_CASHOUT_FROZEN' ) === '';
+		return Stripe::enabled() && Secrets::get( 'FLAG_CASHOUT_FROZEN' ) === '';
 	}
 
 	/** The member's stored Stripe Connect account id (set once they begin onboarding), or ''. */

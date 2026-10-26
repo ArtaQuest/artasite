@@ -31,7 +31,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *      credential-shaped NAMES holding a long high-entropy value, which is the only half that can
  *      see an issuer we never listed (the host's own integration token is exactly that shape).
  *   6. ROTATION ALARMS — vault keys past their policy age, keys flagged compromised, and the
- *      AQ_ALLOW_PASSWORD_LOGIN escape hatch being set all raise alarms (see Vault).
+ *      FLAG_ALLOW_PASSWORD_LOGIN escape hatch being set all raise alarms (see Vault).
  *   7. PASSWORD-PROBE TRAP — password logins are disabled (Auth::harden); anyone *attempting*
  *      one against an administrator account is probing with scraped material → alert.
  */
@@ -244,7 +244,7 @@ final class Watchdog {
 
 	/** Observe-only authenticate filter: an attempted PASSWORD login on an admin = a probe. */
 	public static function password_probe( $user, $username, $password ) {
-		if ( $password !== '' && $username !== '' && ! Secrets::has( 'AQ_ALLOW_PASSWORD_LOGIN' ) ) {
+		if ( $password !== '' && $username !== '' && ! Secrets::has( 'FLAG_ALLOW_PASSWORD_LOGIN' ) ) {
 			$u = get_user_by( 'login', $username ) ?: get_user_by( 'email', $username );
 			if ( $u && user_can( $u, 'manage_options' ) ) {
 				$ip = (string) ( $_SERVER['REMOTE_ADDR'] ?? '?' );
@@ -298,6 +298,7 @@ final class Watchdog {
 	}
 
 	public static function run() {
+		Vault::migrate_names(); // BEFORE the vault-file check — a logged rename advances its own baseline
 		self::check_traps();   // BEFORE plant — detect tampering before the trap is refreshed
 		self::plant_traps();   // create any never-planted / replant any deleted trap
 		self::check_admins();
@@ -375,7 +376,7 @@ final class Watchdog {
 						"Rows id {$old['lo']}–{$old['hi']} no longer match the security checkpoint "
 						. "(count {$old['count']}→{$row['c']}, sum {$old['sum']}→{$row['s']}).\n"
 						. 'Ledger rows are never legitimately edited or deleted — this is direct DB tampering with the money/points record. '
-						. 'Freeze cash-outs (AQ_CASHOUT_FROZEN) and audit immediately.', true );
+						. 'Freeze cash-outs (FLAG_CASHOUT_FROZEN) and audit immediately.', true );
 				}
 			}
 			// Advance the window to the current tail and record the new checkpoint.
@@ -386,6 +387,17 @@ final class Watchdog {
 				: [ 'c' => 0, 's' => '0' ];
 			self::$state['ledgers'][ $table ] = [ 'lo' => $lo, 'hi' => $hi, 'count' => (int) $new['c'], 'sum' => (string) $new['s'] ];
 		}
+	}
+
+	/**
+	 * A vault-file change made by OUR code (Vault::migrate_names): log it, then advance the baseline
+	 * so the next sweep does not report it as an unexplained edit. Only callable from PHP running on
+	 * this site — nothing in the database can reach it.
+	 */
+	public static function accept_vault_change( $why ) {
+		self::state();
+		self::$state['baselines']['vault'] = file_exists( Vault::path() ) ? md5_file( Vault::path() ) : 'absent';
+		self::note( $why ); // note() saves
 	}
 
 	/** The vault file itself is integrity-watched: any change alerts (rotations announce themselves). */
@@ -419,6 +431,13 @@ final class Watchdog {
 	/** Bits per character above which a long token reads as random rather than typed. Hex sits near
 	 *  3.9, base64 near 5.5; slugs, versions, paths and prose sit below. */
 	const LEAK_MIN_ENTROPY = 3.4;
+
+	/** Options the sweep KNOWS are ours and safe, each with the reason. Not credentials anyone can use:
+	 *  - aq_outreach_photo_secret: a random directory NAME (Outreach::photo_dir), generated here, that
+	 *    keeps private outreach photos at an unguessable path. It is masked in /data and the nightly
+	 *    export by its `_secret` name (Extra::REDACT_NAME_RE), so it is never public. Its 32 hex
+	 *    characters are exactly what the entropy rule flags, which is why it alarmed from 2026-10-15. */
+	const LEAK_ACK = [ 'aq_outreach_photo_secret' ];
 
 	/** The public DB must hold NOTHING credential-shaped. Sweep wp_options for key-like values. */
 	private static function scan_leaks() {
@@ -484,6 +503,7 @@ final class Watchdog {
 		// (trap_probe). They must stay visible and must never be reported here — an alarm about our
 		// own bait would train the operator to ignore the one alarm that means a live intrusion.
 		foreach ( self::TRAPS as $decoy_name ) { unset( $why[ $decoy_name ] ); }
+		foreach ( self::LEAK_ACK as $ack ) { unset( $why[ $ack ] ); }
 		// A transient holding a TRAP's value is our own decoy echoing around — fine. A transient
 		// holding anything ELSE credential-shaped is a leak like any other, and the most likely one:
 		// caching is exactly how a live token ends up in wp_options by accident. The old rule skipped
@@ -514,7 +534,8 @@ final class Watchdog {
 		$new = array_values( array_diff( $names, (array) $known ) );
 
 		if ( $new ) {
-			self::alert( 'leak_' . md5( implode( ',', $new ) ), 'Possible SECRET stored in the public database',
+			// The option NAMES (never values) go in the subject, so the audit-log line says which rows.
+			self::alert( 'leak_' . md5( implode( ',', $new ) ), 'Possible SECRET stored in the public database: ' . implode( ', ', array_slice( $new, 0, 5 ) ),
 				"These wp_options rows contain credential-shaped values:\n - "
 				. implode( "\n - ", array_map( fn( $n ) => $n . ' — ' . $why[ $n ], $new ) ) . "\n"
 				. ( $truncated ? 'The sweep also hit its ' . self::LEAK_SCAN_LIMIT . "-row cap, so this list is INCOMPLETE.\n" : '' )
@@ -584,13 +605,14 @@ final class Watchdog {
 
 	/** Rotation alarms from the vault metadata + the password-login escape hatch. */
 	private static function check_rotation() {
-		if ( Secrets::has( 'AQ_ALLOW_PASSWORD_LOGIN' ) ) {
-			self::alert( 'pw_hatch', 'AQ_ALLOW_PASSWORD_LOGIN is SET — password logins are live',
+		if ( Secrets::has( 'FLAG_ALLOW_PASSWORD_LOGIN' ) ) {
+			self::alert( 'pw_hatch', 'FLAG_ALLOW_PASSWORD_LOGIN is SET — password logins are live',
 				'The recovery escape hatch is enabled, which makes the PUBLIC password hashes in /data a usable attack '
 				. 'surface. Unset it the moment recovery is done.', true );
 		}
 		$due = [];
 		foreach ( Vault::meta() as $name => $m ) {
+			if ( ! empty( $m['unused'] ) ) { continue; } // nothing reads it — listed under "Unused", never alarms
 			if ( $m['compromised'] ) {
 				self::alert( 'rot_comp_' . $name, "Rotate `{$name}` NOW — flagged compromised",
 					"`{$name}` is marked compromised (e.g. it appeared in a transcript or log). Rotate it at the issuer, "

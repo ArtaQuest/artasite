@@ -195,7 +195,7 @@ namespace {
 	};
 	$mk( 9000, 'arta', 'Arta', true ); $mk( 4, 'dee', 'Dee' ); $mk( 1, 'ada', 'Ada' ); $mk( 2, 'bob', 'Bob' ); $mk( 3, 'cy', 'Cy' );
 	$GLOBALS['T_OPTS']['aq_artabot_uid'] = 9000;
-	$GLOBALS['T_SECRETS'] = [ 'AQ_ARTA_REPLY_TOKEN' => str_repeat( 't', 40 ) ];
+	$GLOBALS['T_SECRETS'] = [ 'BOT_ARTA_TOKEN' => str_repeat( 't', 40 ) ];
 	$post = function ( $uid, $body, $parent = 0 ) { return \AQ\Data::insert( 'aq_posts', [ 'author_id' => $uid, 'body' => $body, 'parent_id' => $parent, 'created' => time() ] ); };
 	$count = fn( $where = '1=1' ) => (int) $pdo->query( "SELECT COUNT(*) FROM wp_aq_mentions WHERE $where" )->fetchColumn();
 
@@ -421,7 +421,7 @@ namespace {
 	$_SERVER['HTTP_X_ARTA_TOKEN'] = str_repeat( 't', 40 ); t_ok( Arta::token_ok(), 'token accepted via X-Arta-Token' );
 	$_SERVER['HTTP_X_ARTA_TOKEN'] = 'wrong'; t_ok( ! Arta::token_ok(), 'wrong token refused' );
 	unset( $_SERVER['HTTP_X_ARTA_TOKEN'] ); $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer ' . str_repeat( 't', 40 ); t_ok( Arta::token_ok(), 'token accepted via Bearer' );
-	$GLOBALS['T_SECRETS']['AQ_ARTA_REPLY_TOKEN'] = 'short'; t_ok( ! Arta::token_ok(), 'a short configured token disables the API' );
+	$GLOBALS['T_SECRETS']['BOT_ARTA_TOKEN'] = 'short'; t_ok( ! Arta::token_ok(), 'a short configured token disables the API' );
 
 	echo "\n" . ( $fails ? "✗ $fails FAILED" : '✓ ALL PASS' ) . "  $passes/" . ( $passes + $fails ) . " assertions\n";
 	exit( $fails ? 1 : 0 );

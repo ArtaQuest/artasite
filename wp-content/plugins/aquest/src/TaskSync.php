@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * Envelope (not meeting-room E2E, and not Relay's worker-token AES-GCM):
  *   Rooms.php seals chat with keys that never reach the server, so the server could not
  *   hand the plaintext back to AccountSync. Relay::enc_image seals a screenshot for a
- *   laptop that shares AQ_WORKER_TOKEN; the phone does not hold that token, and a social
+ *   laptop that shares BOT_WORKER_TOKEN; the phone does not hold that token, and a social
  *   graph must not be wrapped in the worker credential. Vault.php already seals secrets
  *   at rest with libsodium secretbox and a key derived from wp-config AUTH_KEY/AUTH_SALT
  *   (outside the database). This is that envelope, with its own context string so a vault
@@ -23,8 +23,8 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *
  *   stored = base64( version || nonce(24) || secretbox(plaintext) )
  *   version 0x01 — key = sha256(AUTH_KEY | AUTH_SALT | "aq-task-sync-v1")
- *   version 0x02 — key = sha256("aq-task-sync-v2|" + AQ_TASK_SYNC_KEY) when that secret is set
- *   Writes use 0x02 once AQ_TASK_SYNC_KEY is set, and 0x01 otherwise. Reads pick the key
+ *   version 0x02 — key = sha256("aq-task-sync-v2|" + TASK_SYNC_KEY) when that secret is set
+ *   Writes use 0x02 once TASK_SYNC_KEY is set, and 0x01 otherwise. Reads pick the key
  *   from the version byte, so setting the dedicated key later does not strand existing rows.
  *
  * Rows mirror the KV key shape u:<wp user id>:<filename>. The HTTP path does not take a
@@ -268,7 +268,7 @@ final class TaskSync {
 	}
 
 	private static function explicit_key() {
-		$raw = Secrets::get( 'AQ_TASK_SYNC_KEY' );
+		$raw = Secrets::get( 'TASK_SYNC_KEY' );
 		if ( $raw === '' ) { return ''; }
 		return hash( 'sha256', 'aq-task-sync-v2|' . $raw, true );
 	}
@@ -291,7 +291,7 @@ final class TaskSync {
 		if ( self::available() ) { return null; }
 		return Rest::err(
 			'sync_unavailable',
-			'Phone sync encryption is not available on this site (needs libsodium, and wp-config AUTH_KEY / AUTH_SALT or AQ_TASK_SYNC_KEY).',
+			'Phone sync encryption is not available on this site (needs libsodium, and wp-config AUTH_KEY / AUTH_SALT or TASK_SYNC_KEY).',
 			503
 		);
 	}

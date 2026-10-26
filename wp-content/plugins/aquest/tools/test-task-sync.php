@@ -4,7 +4,7 @@
  *
  * No WordPress, no database, no network. Proves the envelope round-trips, that the
  * plaintext is not recoverable from the stored bytes without the key, that a
- * dedicated AQ_TASK_SYNC_KEY does not strand rows sealed with the wp-config salts,
+ * dedicated TASK_SYNC_KEY does not strand rows sealed with the wp-config salts,
  * and that requestStatus.json is allow-listed for LI/IG/FB research ingest.
  *
  * Run: php wp-content/plugins/aquest/tools/test-task-sync.php
@@ -45,7 +45,7 @@ $b = TaskSync::seal( $plain );
 $ok( $a !== '' && $b !== '' && $a !== $b, 'two seals of the same plaintext differ (fresh nonce)' );
 $ok( TaskSync::open( $a ) === $plain, 'open returns the plaintext' );
 $raw = base64_decode( $a, true );
-$ok( is_string( $raw ) && $raw !== '' && $raw[0] === "\x01", 'unset AQ_TASK_SYNC_KEY seals version 0x01' );
+$ok( is_string( $raw ) && $raw !== '' && $raw[0] === "\x01", 'unset TASK_SYNC_KEY seals version 0x01' );
 $ok( strpos( $a, $marker ) === false && strpos( (string) $raw, $marker ) === false, 'plaintext marker is absent from the envelope' );
 
 $tampered = $raw;
@@ -55,14 +55,14 @@ $ok( TaskSync::open( '' ) === null && TaskSync::open( '!!!!' ) === null, 'empty 
 $ok( TaskSync::open( base64_encode( "\x09" . substr( $raw, 1 ) ) ) === null, 'unknown version byte does not open' );
 
 $v1 = $a;
-$GLOBALS['aq_task_sync_test_secrets']['AQ_TASK_SYNC_KEY'] = str_repeat( 'dedicated-sync-key-', 4 );
-$ok( TaskSync::open( $v1 ) === $plain, 'setting AQ_TASK_SYNC_KEY still opens a version 0x01 row' );
+$GLOBALS['aq_task_sync_test_secrets']['TASK_SYNC_KEY'] = str_repeat( 'dedicated-sync-key-', 4 );
+$ok( TaskSync::open( $v1 ) === $plain, 'setting TASK_SYNC_KEY still opens a version 0x01 row' );
 $v2 = TaskSync::seal( $plain );
 $v2raw = base64_decode( $v2, true );
 $ok( is_string( $v2raw ) && $v2raw !== '' && $v2raw[0] === "\x02", 'dedicated key seals version 0x02' );
 $ok( TaskSync::open( $v2 ) === $plain, 'version 0x02 opens with the dedicated key' );
-unset( $GLOBALS['aq_task_sync_test_secrets']['AQ_TASK_SYNC_KEY'] );
-$ok( TaskSync::open( $v2 ) === null, 'dropping AQ_TASK_SYNC_KEY makes version 0x02 unreadable' );
+unset( $GLOBALS['aq_task_sync_test_secrets']['TASK_SYNC_KEY'] );
+$ok( TaskSync::open( $v2 ) === null, 'dropping TASK_SYNC_KEY makes version 0x02 unreadable' );
 $ok( TaskSync::open( $v1 ) === $plain, 'version 0x01 still opens after the dedicated key is removed' );
 
 foreach ( [

@@ -85,11 +85,11 @@ namespace AQ {
 	};
 
 	// Registry carries both new entries.
-	$ok( array_key_exists( 'TITAN_PASSWORD', Vault::REGISTRY ), 'registry has TITAN_PASSWORD' );
-	$ok( array_key_exists( 'AQ_ARTAMAIL_TOKEN', Vault::REGISTRY ), 'registry has AQ_ARTAMAIL_TOKEN' );
+	$ok( array_key_exists( 'MAIL_TITAN_PASSWORD', Vault::REGISTRY ), 'registry has MAIL_TITAN_PASSWORD' );
+	$ok( array_key_exists( 'BOT_ARTAMAIL_TOKEN', Vault::REGISTRY ), 'registry has BOT_ARTAMAIL_TOKEN' );
 
 	// 1) No token → 401
-	$GLOBALS['aq_secrets'] = [ 'AQ_ARTAMAIL_TOKEN' => $GOOD, 'TITAN_PASSWORD' => $PW ];
+	$GLOBALS['aq_secrets'] = [ 'BOT_ARTAMAIL_TOKEN' => $GOOD, 'MAIL_TITAN_PASSWORD' => $PW ];
 	$reset( '10.0.0.1' );
 	$r = Vault::rest_titan( null );
 	$ok( $r->get_status() === 401, 'no token → 401', 'got ' . $r->get_status() );
@@ -104,11 +104,11 @@ namespace AQ {
 
 	// 2b) Too-short configured token is rejected even if it matches → 403
 	$reset( '10.0.0.6' );
-	$GLOBALS['aq_secrets'] = [ 'AQ_ARTAMAIL_TOKEN' => 'short', 'TITAN_PASSWORD' => $PW ];
+	$GLOBALS['aq_secrets'] = [ 'BOT_ARTAMAIL_TOKEN' => 'short', 'MAIL_TITAN_PASSWORD' => $PW ];
 	$_SERVER['HTTP_X_AQ_ARTAMAIL'] = 'short';
 	$r = Vault::rest_titan( null );
 	$ok( $r->get_status() === 403, 'too-short token → 403', 'got ' . $r->get_status() );
-	$GLOBALS['aq_secrets'] = [ 'AQ_ARTAMAIL_TOKEN' => $GOOD, 'TITAN_PASSWORD' => $PW ];
+	$GLOBALS['aq_secrets'] = [ 'BOT_ARTAMAIL_TOKEN' => $GOOD, 'MAIL_TITAN_PASSWORD' => $PW ];
 
 	// 3) Good token (X-AQ-ArtaMail header) → 200 with the password, no-store
 	$reset( '10.0.0.3' );
@@ -126,12 +126,12 @@ namespace AQ {
 
 	// 4) Secret unset → 404 (valid token)
 	$reset( '10.0.0.4' );
-	$GLOBALS['aq_secrets'] = [ 'AQ_ARTAMAIL_TOKEN' => $GOOD, 'TITAN_PASSWORD' => '' ];
+	$GLOBALS['aq_secrets'] = [ 'BOT_ARTAMAIL_TOKEN' => $GOOD, 'MAIL_TITAN_PASSWORD' => '' ];
 	$_SERVER['HTTP_X_AQ_ARTAMAIL'] = $GOOD;
 	$r = Vault::rest_titan( null );
 	$ok( $r->get_status() === 404, 'unset secret → 404', 'got ' . $r->get_status() );
 	$ok( ( $r->get_data()['error'] ?? '' ) === 'not_found', 'unset secret → error=not_found' );
-	$GLOBALS['aq_secrets'] = [ 'AQ_ARTAMAIL_TOKEN' => $GOOD, 'TITAN_PASSWORD' => $PW ];
+	$GLOBALS['aq_secrets'] = [ 'BOT_ARTAMAIL_TOKEN' => $GOOD, 'MAIL_TITAN_PASSWORD' => $PW ];
 
 	// 5) Rate limit → 11th call from one IP is 429
 	$reset( '10.0.0.5' );

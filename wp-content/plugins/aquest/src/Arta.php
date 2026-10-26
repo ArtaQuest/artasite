@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *   2. If the author and the platform are under the rate limits, the row is `queued`. That row IS
  *      the queue: nothing is pushed anywhere. Arta's brain (/arta-brain, a daemon on the operator's
  *      Azure VM that answers on a flat-rate subscription) PULLS it through `arta/pending` every few
- *      seconds with the scoped AQ_ARTA_REPLY_TOKEN. Nothing is paid per reply, nothing listens on
+ *      seconds with the scoped BOT_ARTA_TOKEN. Nothing is paid per reply, nothing listens on
  *      the internet, and when the brain is down, paused or at its own cap the mention simply
  *      waits (up to MAX_AGE) and is answered when it is back.
  *   3. The brain CLAIMS the row (atomic queued → working), decides what it is (a question, a bug
@@ -445,7 +445,7 @@ final class Arta {
 
 	/** The brain API is open only when a long-enough token is set (token_ok refuses otherwise). */
 	public static function configured() {
-		return strlen( (string) Secrets::get( 'AQ_ARTA_REPLY_TOKEN' ) ) >= 32;
+		return strlen( (string) Secrets::get( 'BOT_ARTA_TOKEN' ) ) >= 32;
 	}
 
 	/** Seconds since the brain last polled, or -1 if it never has. */
@@ -693,12 +693,12 @@ final class Arta {
 	}
 
 	// ═════════════════════════════════════════════════════════════════════════════════════════════
-	// REST — the brain's side (auth 'arta': X-Arta-Token / Bearer = AQ_ARTA_REPLY_TOKEN)
+	// REST — the brain's side (auth 'arta': X-Arta-Token / Bearer = BOT_ARTA_TOKEN)
 	// ═════════════════════════════════════════════════════════════════════════════════════════════
 
 	/** Constant-time check of the brain's token. Closed by default: unset token = no access. */
 	public static function token_ok() {
-		$want = (string) Secrets::get( 'AQ_ARTA_REPLY_TOKEN' );
+		$want = (string) Secrets::get( 'BOT_ARTA_TOKEN' );
 		if ( strlen( $want ) < 32 ) { return false; }
 		$got = isset( $_SERVER['HTTP_X_ARTA_TOKEN'] ) ? (string) $_SERVER['HTTP_X_ARTA_TOKEN'] : '';
 		if ( $got === '' && isset( $_SERVER['HTTP_AUTHORIZATION'] ) && preg_match( '/^Bearer\s+(\S+)$/', (string) $_SERVER['HTTP_AUTHORIZATION'], $mm ) ) {

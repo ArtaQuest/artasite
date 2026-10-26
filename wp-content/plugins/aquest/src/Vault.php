@@ -29,64 +29,203 @@ final class Vault {
 	const GUARD = "<?php http_response_code(404); exit; // ArtaQuest vault — managed from wp-admin → ArtaQuest Security ?>\n";
 
 	/**
-	 * Every secret the platform reads (grep Secrets::get to extend), with a one-line purpose
-	 * and a rotation policy in days (0 = an ops FLAG, not a credential — no rotation clock). An
-	 * optional 3rd element marks a credential that is NOT required: `true` = standalone-optional,
-	 * or the NAME of another secret that satisfies the same need (an alternative) — so an unset
-	 * optional reads "optional", never an alarming "missing", and never counts as needing attention.
+	 * Every secret the platform reads (grep Secrets::get to extend), GROUPED BY PURPOSE:
+	 *   NAME => [ one-line description, rotation policy in days, optional, group ]
+	 *
+	 * ROTATION POLICY (operator 2026-10-26: "only rotate every 90 days the absolute important ones"):
+	 *   90  — a credential that moves money, sends mail as us, or writes our storage/DNS account
+	 *   180 — a lower-risk token (one route, one bot, one integration)
+	 *   365 — a narrow token that only publishes our own public work
+	 *   0   — NOT a credential: an identifier, hostname, address, port, publishable key or flag.
+	 *         No rotation clock, never "rotation due", never counted as a missing credential.
+	 * OPTIONAL: `true` = not required; a NAME = another secret that satisfies the same need.
+	 *
+	 * NAMES WERE SIMPLIFIED on 2026-10-26 (MAIL_*, CLOUDFLARE_*, R2_*, CALLS_*, BOT_*, ARTA_*, FLAG_*).
+	 * The old names in ALIASES still resolve everywhere (vault, env, wp-config), and migrate_names()
+	 * moves a vault entry to its new name — the same ciphertext, so no value is re-entered.
 	 */
 	const REGISTRY = [
-		// (The old paid model-API key was removed 2026-06-13 — ArtaMod and ID verification run on the
-		//  operator's model relay only; no per-call model API key is held here.)
-		// @artabot, the public assistant (src/Arta.php). The brain (arta-brain/) pulls mentions from the site
-		// with this token. Optional: unset = mentions are recorded and wait; nothing answers them.
-		'AQ_ARTA_REPLY_TOKEN'        => [ 'Token the Arta brain presents (X-Arta-Token) to claim mentions and post replies as @artabot — ≥32 chars, same value as the brain setting ARTA_REPLY_TOKEN', 180, true ],
-		// Transactional email at sign-up scale. When both are set, Mailer sends through Azure
-		// Communication Services and falls back to SMTP only if ACS refuses.
-		'AQ_ACS_EMAIL_CONNECTION'    => [ 'Azure Communication Services connection string (endpoint=…;accesskey=…) — primary sender for all platform email', 180, true ],
-		'AQ_ACS_EMAIL_SENDER'        => [ 'ACS verified sender address, e.g. DoNotReply@mail.artaquest.org (a custom domain verified in ACS)', 0, true ],
-		'STRIPE_SECRET_KEY'          => [ 'Stripe LIVE secret key — coin purchases, donations, cash-outs', 180 ],
-		'STRIPE_PUBLISHABLE_KEY'     => [ 'Stripe publishable key (public-side; rotates with the secret)', 180 ],
-		'STRIPE_WEBHOOK_SECRET'      => [ 'Stripe webhook signing secret (whsec_…)', 180 ],
-		'GOOGLE_OAUTH_CLIENT_ID'     => [ 'Google sign-in OAuth client id', 365 ],
-		'GOOGLE_OAUTH_CLIENT_SECRET' => [ 'Google sign-in OAuth client secret', 180 ],
-		'GOOGLE_OAUTH_REFRESH_TOKEN' => [ 'Google OAuth refresh token (Calendar/Meet for Outreach groups)', 180 ],
-		// The alternative is RECIPROCAL: either credential satisfies the video view monitor. Declaring it
-		// only on the API key made the pair one-directional, so configuring just the key still read as a
-		// missing REQUIRED credential — a permanent false alarm on a fully-working setup.
-		'YOUTUBE_SA_JSON'            => [ 'YouTube service-account JSON — primary auth for the video view monitor', 90, 'YOUTUBE_API_KEY' ],
-		'YOUTUBE_API_KEY'            => [ 'YouTube Data API key — optional alternative to the service account', 180, 'YOUTUBE_SA_JSON' ],
-		'AQ_WORKER_TOKEN'            => [ 'ArtaDev autonomous-worker shared token (X-AQ-Worker)', 90 ],
-		'AQ_TASK_SYNC_KEY'           => [ 'Optional dedicated key for ArtaTask phone-sync blobs (aq_task_sync). When unset, the key is derived from AUTH_KEY/AUTH_SALT. See docs/artatask-sync.md', 365, true ],
-		// (HuggingFace PURGED 2026-08-02 — operator: "purge all the HF accounts or dependencies. we use
-		//  Kaggle exclusively for datasets so no need for buckets." HF_TOKEN…HF_TOKEN_5 were the ZeroGPU
-		//  quota-rotation pool for the studio relays, and HF_S3_KEY/HF_S3_SECRET were an object-storage
-		//  bucket NOTHING in this repo ever read. All six are gone; revoke them at HuggingFace too, since
-		//  deleting a registry row does not invalidate a credential. Nothing on Kaggle replaces the pool:
-		//  Kaggle serves DATA, not on-demand GPU inference. The platform's heavy data now lives in public
-		//  Kaggle datasets under the `artafather` account, which needs no credential to READ — see
-		//  KAGGLE_TOKEN below, which only signs our own pushes.)
-		'SMTP_PASS'                  => [ 'SMTP password / app password for support@artaquest.org — switches all mail to authenticated SMTP (Mailer)', 180, true ],
-		'SMTP_HOST'                  => [ 'SMTP relay host — optional, defaults smtp.gmail.com when SMTP_PASS is set', 365, true ],
-		'SMTP_PORT'                  => [ 'SMTP port — optional, defaults 587 (STARTTLS); 465 = SSL', 365, true ],
-		'SMTP_USER'                  => [ 'SMTP username — optional, defaults support@artaquest.org', 365, true ],
-		'GITHUB_GIST_TOKEN'          => [ 'GitHub token with the `gist` scope — mirrors each submitted notebook to a public gist (our source-code CDN). This is what makes the one-click Colab link possible: Colab opens notebooks from Drive, GitHub, a gist or an upload, never from a plain URL. Dormant without it — submissions still work, the Colab rung falls back to download-and-open.', 365, true ],
-		'KAGGLE_TOKEN'               => [ 'Kaggle API token — optional. Reading a member notebook needs NO credential (kernels/pull and kernels/output are public); this only signs the platform own journal-article kernel pushes and keeps us on the friendly side of rate limits', 180, true ],
-		'ZENODO_TOKEN'               => [ 'Zenodo personal access token (deposit:write + deposit:actions) — mints permanent DOIs for Research articles via analysis/zenodo_deposit.py', 180, true ],
-		// ONE Kaggle credential, ONE name (operator 2026-07-27). KAGGLE_TOKEN above is the only Kaggle
-		// secret: it pushes every published notebook as a kernel (Kaggle.php) AND authenticates the
-		// datasets trending card (Extra::mkt_kaggle). AUTH IS BEARER, NOT BASIC — a KGAT_… token
-		// answers 200 under `Authorization: Bearer <token>` on both kernels/push and datasets/list,
-		// and 401s under Basic. The legacy KAGGLE_USERNAME + KAGGLE_KEY pair was retired the same
-		// day; the token is push-scoped, so kernels/status and kernels/output stay 403.
-		// ArtaMail (the native macOS campaign sender) reads the Titan mailbox password at runtime via
-		// GET /wp-json/aq/v1/secret/titan — the ONLY secret served over HTTP, token-gated (see Vault::rest_titan).
-		'TITAN_PASSWORD'             => [ 'Titan mail password (arash@ / support@artaquest.org) — served to ArtaMail only, via GET /aq/v1/secret/titan', 180, true ],
-		'AQ_ARTAMAIL_TOKEN'          => [ 'Bearer token ArtaMail presents to GET /aq/v1/secret/titan (its ONLY route), constant-time compared — >=32 chars; this is NOT the Titan password', 180, true ],
-		'AQ_ALUMNI_INGEST_TOKEN'     => [ 'Header X-AQ-Alumni-Token the ArtaSearch scan box presents to POST /aq/v1/outreach/alumni/ingest (its ONLY route), constant-time compared — >=32 chars; the route answers 404 while unset', 180, true ],
-		'AQ_CASHOUT_FROZEN'          => [ 'OPS FLAG — freezes coin cash-outs while set', 0 ],
-		'AQ_ALLOW_PASSWORD_LOGIN'    => [ 'RECOVERY FLAG — re-enables password logins. Must stay UNSET (the DB is public).', 0 ],
+		// ── Payments ──────────────────────────────────────────────────────────────────────────
+		'STRIPE_SECRET_KEY'            => [ 'Stripe LIVE secret key (sk_live_…) — coin purchases, donations, cash-outs', 90, false, 'Payments' ],
+		'STRIPE_WEBHOOK_SECRET'        => [ 'Stripe webhook signing secret (whsec_…) — proves a payment event came from Stripe', 90, false, 'Payments' ],
+		'STRIPE_PUBLISHABLE_KEY'       => [ 'Stripe publishable key (pk_live_…) — public by design, shown to browsers; replace it when the secret key is rolled', 0, false, 'Payments' ],
+
+		// ── Email ─────────────────────────────────────────────────────────────────────────────
+		// ACS is the primary sender; SMTP is the fallback when ACS refuses. Either one delivers mail.
+		'MAIL_ACS_CONNECTION'          => [ 'Azure Communication Services connection string (endpoint=…;accesskey=…) — primary sender for all platform email', 90, 'MAIL_SMTP_PASSWORD', 'Email' ],
+		'MAIL_ACS_SENDER'              => [ 'ACS verified sender address, e.g. DoNotReply@mail.artaquest.org', 0, true, 'Email' ],
+		'MAIL_SMTP_PASSWORD'           => [ 'SMTP password / app password for the support@ mailbox — fallback sender when ACS refuses', 90, 'MAIL_ACS_CONNECTION', 'Email' ],
+		'MAIL_SMTP_HOST'               => [ 'SMTP host — default smtp.gmail.com', 0, true, 'Email' ],
+		'MAIL_SMTP_PORT'               => [ 'SMTP port — default 587 (STARTTLS); 465 = SSL', 0, true, 'Email' ],
+		'MAIL_SMTP_USER'               => [ 'SMTP username — default support@artaquest.org', 0, true, 'Email' ],
+		'MAIL_TITAN_PASSWORD'          => [ 'Titan mailbox password (arash@ / support@) — handed only to ArtaMail via GET /aq/v1/secret/titan', 90, true, 'Email' ],
+		'MAIL_ALERTS_TO'               => [ 'Where security and ops alerts are emailed — default the site admin email', 0, true, 'Email' ],
+
+		// ── Cloudflare: media storage (R2) ────────────────────────────────────────────────────
+		// All four of CLOUDFLARE_ACCOUNT_ID + R2_BUCKET + R2_ACCESS_KEY_ID + R2_SECRET_ACCESS_KEY switch
+		// uploads to R2 (Media::r2_ready); with any one missing, files stay on this server.
+		'CLOUDFLARE_ACCOUNT_ID'        => [ 'Cloudflare account ID (32 hex) that owns the R2 bucket', 0, true, 'Cloudflare' ],
+		'R2_BUCKET'                    => [ 'R2 bucket name for media, e.g. artaquest-media', 0, true, 'Cloudflare' ],
+		'R2_ACCESS_KEY_ID'             => [ 'R2 S3 access key ID — from an R2 API token with Object Read & Write on the media bucket only. Rotates with the secret below', 90, true, 'Cloudflare' ],
+		'R2_SECRET_ACCESS_KEY'         => [ 'R2 S3 secret access key — the secret half of R2_ACCESS_KEY_ID', 90, true, 'Cloudflare' ],
+		'MEDIA_CDN_URL'                => [ 'Public base URL media is served from (the bucket public URL or its custom domain), no trailing slash', 0, true, 'Cloudflare' ],
+		'CLOUDFLARE_API_TOKEN'         => [ 'Cloudflare API token, Account › Workers R2 Storage: Edit (bucket usage + CORS), optionally Account Analytics: Read', 90, true, 'Cloudflare' ],
+
+		// ── Calls (WebRTC relay for room calls) ───────────────────────────────────────────────
+		// Either a Cloudflare Realtime TURN key OR a static TURN server. Neither = STUN only.
+		'CALLS_TURN_KEY_ID'            => [ 'Cloudflare Realtime TURN key ID — call relay for devices STUN cannot join', 0, true, 'Calls' ],
+		'CALLS_TURN_KEY_TOKEN'         => [ 'Cloudflare Realtime TURN key API token (pairs with CALLS_TURN_KEY_ID)', 180, true, 'Calls' ],
+		'CALLS_TURN_URLS'              => [ 'Static TURN server URLs, comma-separated — alternative to the Cloudflare TURN key', 0, true, 'Calls' ],
+		'CALLS_TURN_USER'              => [ 'Static TURN username', 0, true, 'Calls' ],
+		'CALLS_TURN_PASSWORD'          => [ 'Static TURN password', 180, true, 'Calls' ],
+
+		// ── Google & YouTube ──────────────────────────────────────────────────────────────────
+		'GOOGLE_SIGNIN_CLIENT_ID'      => [ 'Google sign-in OAuth client ID — public, embedded in the sign-in button', 0, false, 'Google & YouTube' ],
+		'YOUTUBE_SERVICE_ACCOUNT_JSON' => [ 'YouTube service-account JSON — primary auth for the video view monitor', 180, 'YOUTUBE_API_KEY', 'Google & YouTube' ],
+		'YOUTUBE_API_KEY'              => [ 'YouTube Data API key — alternative to the service account (read-only, public data)', 365, 'YOUTUBE_SERVICE_ACCOUNT_JSON', 'Google & YouTube' ],
+
+		// ── Integrations ──────────────────────────────────────────────────────────────────────
+		'KAGGLE_TOKEN'                 => [ 'Kaggle API token (KGAT_…) — dataset cards and reading public kernels', 365, true, 'Integrations' ],
+		'KAGGLE_API_KEY'               => [ 'Kaggle legacy API key — needed to PUSH notebooks as kernels (HTTP Basic with KAGGLE_USERNAME)', 180, true, 'Integrations' ],
+		'KAGGLE_USERNAME'              => [ 'Kaggle account the API key belongs to — default artafather', 0, true, 'Integrations' ],
+		'GITHUB_GIST_TOKEN'            => [ 'GitHub token with only the `gist` scope — mirrors submitted notebooks to public gists (one-click Colab)', 365, true, 'Integrations' ],
+		'ZENODO_TOKEN'                 => [ 'Zenodo token (deposit:write + deposit:actions) — mints DOIs for Research articles', 365, true, 'Integrations' ],
+
+		// ── Bot tokens (we mint these; each unlocks ONE route) ────────────────────────────────
+		'BOT_ARTA_TOKEN'               => [ 'Token the @artabot brain sends (X-Arta-Token) to claim mentions and reply — ≥32 chars, same value as the brain ARTA_REPLY_TOKEN', 180, true, 'Bot tokens' ],
+		'BOT_ARTAMAIL_TOKEN'           => [ 'Token ArtaMail sends to GET /aq/v1/secret/titan (its only route) — ≥32 chars, not the Titan password', 180, true, 'Bot tokens' ],
+		'BOT_ARTASEARCH_TOKEN'         => [ 'Token the ArtaSearch scan box sends (X-AQ-Alumni-Token) to POST /aq/v1/outreach/alumni/ingest — ≥32 chars', 180, true, 'Bot tokens' ],
+		'BOT_WORKER_TOKEN'             => [ 'Token the ArtaDev ticket worker sends (X-AQ-Worker). Unset = worker routes closed', 180, true, 'Bot tokens' ],
+
+		// ── Arta relay (where an Arta turn is pushed — endpoints, not credentials) ────────────
+		'ARTA_RELAY_URL'               => [ 'Default Arta turn endpoint (plain chat turns)', 0, true, 'Arta relay' ],
+		'ARTA_TOOLS_URL'               => [ 'Default Arta TOOLS endpoint (member tool turns) when a tier has none of its own', 0, true, 'Arta relay' ],
+		'ARTA_TOOLS_URL_LOW'           => [ 'Arta tools endpoint for the Low tier', 0, true, 'Arta relay' ],
+		'ARTA_TOOLS_URL_MEDIUM'        => [ 'Arta tools endpoint for the Medium tier', 0, true, 'Arta relay' ],
+		'ARTA_TOOLS_URL_HIGH'          => [ 'Arta tools endpoint for the High tier', 0, true, 'Arta relay' ],
+		'ARTA_TOOLS_URL_XHIGH'         => [ 'Arta tools endpoint for the X-High tier', 0, true, 'Arta relay' ],
+		'ARTA_TOOLS_URL_MAX'           => [ 'Arta tools endpoint for the Max tier', 0, true, 'Arta relay' ],
+		'ARTA_TOOLS_URL_WORKFLOW'      => [ 'Arta tools endpoint for multi-agent Workflow turns', 0, true, 'Arta relay' ],
+		'ARTA_BROKER_URL'              => [ 'Arta broker endpoint (optional)', 0, true, 'Arta relay' ],
+		'ARTA_SHELL_URL'               => [ 'ArtaShell endpoint (the member terminal)', 0, true, 'Arta relay' ],
+		'ARTA_RELAY_SECRET'            => [ 'Shared HMAC secret that signs relay + shell job tokens', 180, true, 'Arta relay' ],
+
+		// ── Encryption ────────────────────────────────────────────────────────────────────────
+		'TASK_SYNC_KEY'                => [ 'Optional dedicated key for ArtaTask phone-sync blobs. Do NOT rotate on a clock: changing it strands rows until phones re-upload (docs/artatask-sync.md)', 0, true, 'Encryption' ],
+
+		// ── Flags (set = on; not credentials) ─────────────────────────────────────────────────
+		'FLAG_CASHOUT_FROZEN'          => [ 'FLAG — set to freeze coin cash-outs', 0, true, 'Flags' ],
+		'FLAG_ALLOW_PASSWORD_LOGIN'    => [ 'RECOVERY FLAG — re-enables password logins. Must stay UNSET (the DB is public)', 0, true, 'Flags' ],
 	];
+
+	/** NEW NAME => [ old names ]. Every old name keeps resolving (vault, environment, wp-config). */
+	const ALIASES = [
+		'MAIL_ACS_CONNECTION'          => [ 'AQ_ACS_EMAIL_CONNECTION' ],
+		'MAIL_ACS_SENDER'              => [ 'AQ_ACS_EMAIL_SENDER' ],
+		'MAIL_SMTP_PASSWORD'           => [ 'SMTP_PASS' ],
+		'MAIL_SMTP_HOST'               => [ 'SMTP_HOST' ],
+		'MAIL_SMTP_PORT'               => [ 'SMTP_PORT' ],
+		'MAIL_SMTP_USER'               => [ 'SMTP_USER' ],
+		'MAIL_TITAN_PASSWORD'          => [ 'TITAN_PASSWORD' ],
+		'MAIL_ALERTS_TO'               => [ 'OPERATOR_EMAIL' ],
+		'CLOUDFLARE_ACCOUNT_ID'        => [ 'AQ_R2_ACCOUNT' ],
+		'R2_BUCKET'                    => [ 'AQ_R2_BUCKET' ],
+		'R2_ACCESS_KEY_ID'             => [ 'AQ_R2_KEY' ],
+		'R2_SECRET_ACCESS_KEY'         => [ 'AQ_R2_SECRET' ],
+		'MEDIA_CDN_URL'                => [ 'AQ_MEDIA_CDN' ],
+		'CLOUDFLARE_API_TOKEN'         => [ 'AQ_CF_API_TOKEN' ],
+		'CALLS_TURN_KEY_ID'            => [ 'AQ_CF_TURN_KEY_ID' ],
+		'CALLS_TURN_KEY_TOKEN'         => [ 'AQ_CF_TURN_KEY_TOKEN' ],
+		'CALLS_TURN_URLS'              => [ 'AQ_TURN_URLS' ],
+		'CALLS_TURN_USER'              => [ 'AQ_TURN_USER' ],
+		'CALLS_TURN_PASSWORD'          => [ 'AQ_TURN_PASS' ],
+		'GOOGLE_SIGNIN_CLIENT_ID'      => [ 'GOOGLE_OAUTH_CLIENT_ID' ],
+		'YOUTUBE_SERVICE_ACCOUNT_JSON' => [ 'YOUTUBE_SA_JSON' ],
+		'KAGGLE_API_KEY'               => [ 'KAGGLE_KEY' ],
+		'BOT_ARTA_TOKEN'               => [ 'AQ_ARTA_REPLY_TOKEN' ],
+		'BOT_ARTAMAIL_TOKEN'           => [ 'AQ_ARTAMAIL_TOKEN' ],
+		'BOT_ARTASEARCH_TOKEN'         => [ 'AQ_ALUMNI_INGEST_TOKEN' ],
+		'BOT_WORKER_TOKEN'             => [ 'AQ_WORKER_TOKEN' ],
+		'ARTA_RELAY_URL'               => [ 'AQ_TURN_URL' ],
+		'ARTA_TOOLS_URL'               => [ 'AQ_TURN_URL_TOOLS' ],
+		'ARTA_SHELL_URL'               => [ 'AQ_SHELL_URL' ],
+		'ARTA_BROKER_URL'              => [ 'AQ_BROKER_URL' ],
+		'ARTA_RELAY_SECRET'            => [ 'AQ_TURN_SECRET' ],
+		'TASK_SYNC_KEY'                => [ 'AQ_TASK_SYNC_KEY' ],
+		'FLAG_CASHOUT_FROZEN'          => [ 'AQ_CASHOUT_FROZEN' ],
+		'FLAG_ALLOW_PASSWORD_LOGIN'    => [ 'AQ_ALLOW_PASSWORD_LOGIN' ],
+	];
+
+	/** Per-tier relay names are built at runtime (Relay: ARTA_RELAY_URL_<TIER>, ARTA_TOOLS_URL_<TIER>). */
+	const ALIAS_PREFIXES = [ 'ARTA_TOOLS_URL_' => 'AQ_TURN_URL_TOOLS_', 'ARTA_RELAY_URL_' => 'AQ_TURN_URL_' ];
+
+	/** Names NO code reads any more. A stored value is listed under "Unused — safe to forget", never alarms. */
+	const RETIRED = [
+		'GOOGLE_OAUTH_CLIENT_SECRET' => 'No server code reads it: Google sign-in needs only the client ID, and the Calendar/Meet integration that used it is gone.',
+		'GOOGLE_OAUTH_REFRESH_TOKEN' => 'No server code reads it (the Calendar/Meet integration is gone). Revoke it at myaccount.google.com → Security → Third-party access.',
+		'HF_TOKEN'                   => 'HuggingFace was purged on 2026-08-02. Revoke the token at huggingface.co too.',
+		'RECAPTCHA_SECRET'           => 'No code reads it — sign-in is email code + Google + passkeys, with no reCAPTCHA check.',
+	];
+
+	/** [ canonical, ...old names ] for any name, old or new. */
+	public static function names( $name ) {
+		$name = (string) $name;
+		static $rev = null;
+		if ( $rev === null ) {
+			$rev = [];
+			foreach ( self::ALIASES as $canon => $olds ) { foreach ( $olds as $o ) { $rev[ $o ] = $canon; } }
+		}
+		$canon = $rev[ $name ] ?? $name;
+		if ( ! isset( $rev[ $name ] ) ) {
+			foreach ( self::ALIAS_PREFIXES as $new => $old ) {
+				// longest old prefix first is guaranteed by the ordering above (TOOLS_ before URL_)
+				if ( strpos( $name, $old ) === 0 && strlen( $name ) > strlen( $old ) ) { $canon = $new . substr( $name, strlen( $old ) ); break; }
+			}
+		}
+		$out = [ $canon ];
+		foreach ( self::ALIASES[ $canon ] ?? [] as $o ) { $out[] = $o; }
+		foreach ( self::ALIAS_PREFIXES as $new => $old ) {
+			if ( strpos( $canon, $new ) === 0 && strlen( $canon ) > strlen( $new ) ) { $out[] = $old . substr( $canon, strlen( $new ) ); }
+		}
+		return array_values( array_unique( $out ) );
+	}
+
+	/** The vault row a name resolves to (new name first, then each old name) → [ stored name, row ] or [ '', null ]. */
+	private static function row( $name ) {
+		$all = self::load()['secrets'];
+		foreach ( self::names( $name ) as $n ) {
+			if ( isset( $all[ $n ] ) && ! empty( $all[ $n ]['ct'] ) ) { return [ $n, $all[ $n ] ]; }
+		}
+		$canon = self::names( $name )[0];
+		return isset( $all[ $canon ] ) ? [ $canon, $all[ $canon ] ] : [ '', null ];
+	}
+
+	/**
+	 * Move vault entries stored under an OLD name to the NEW one. The ciphertext is copied as-is (the
+	 * encryption key does not depend on the name), with its rotated-at, tail and compromised flag, so
+	 * no value is decrypted, re-entered or written anywhere else. When both names hold a value the new
+	 * one wins and the old one is left alone, listed as unused. Logged to the Watchdog audit log
+	 * (names only), and the vault-file baseline is advanced so the move does not read as tampering.
+	 */
+	public static function migrate_names() {
+		$data = self::load();
+		if ( empty( $data['secrets'] ) || ! is_array( $data['secrets'] ) ) { return 0; }
+		$moved = [];
+		foreach ( array_keys( $data['secrets'] ) as $stored ) {
+			$canon = self::names( $stored )[0];
+			if ( $canon === $stored ) { continue; }
+			if ( isset( $data['secrets'][ $canon ] ) && ! empty( $data['secrets'][ $canon ]['ct'] ) ) { continue; }
+			$data['secrets'][ $canon ] = $data['secrets'][ $stored ];
+			unset( $data['secrets'][ $stored ] );
+			$moved[] = $stored . ' → ' . $canon;
+		}
+		if ( ! $moved ) { return 0; }
+		if ( ! self::persist( $data ) ) { return 0; }
+		if ( class_exists( '\\AQ\\Watchdog' ) ) {
+			Watchdog::accept_vault_change( 'Vault: renamed ' . count( $moved ) . ' secret(s) to their new names — ' . implode( ', ', $moved ) );
+		}
+		return count( $moved );
+	}
 
 	private static $cache = null;    // parsed vault file (this request)
 	private static $plain = [];      // per-request decrypted values
@@ -132,7 +271,7 @@ final class Vault {
 	public static function get( $name ) {
 		if ( array_key_exists( $name, self::$plain ) ) { return self::$plain[ $name ]; }
 		$out = '';
-		$row = self::load()['secrets'][ $name ] ?? null;
+		[ , $row ] = self::row( $name ); // the new name first, then each old one
 		if ( $row && ! empty( $row['ct'] ) && self::available() ) {
 			$blob = base64_decode( (string) $row['ct'], true );
 			if ( $blob !== false && strlen( $blob ) > SODIUM_CRYPTO_SECRETBOX_NONCEBYTES ) {
@@ -156,6 +295,8 @@ final class Vault {
 		$nonce = random_bytes( SODIUM_CRYPTO_SECRETBOX_NONCEBYTES );
 		$ct    = sodium_crypto_secretbox( (string) $value, $nonce, self::key() );
 		$data  = self::load();
+		$name  = self::names( $name )[0];               // always store under the NEW name
+		foreach ( array_slice( self::names( $name ), 1 ) as $old ) { unset( $data['secrets'][ $old ] ); } // superseded by this value
 		$data['secrets'][ $name ] = [
 			'ct'          => base64_encode( $nonce . $ct ),
 			'tail'        => strlen( $value ) > 8 ? substr( $value, -4 ) : '', // masked preview only
@@ -174,6 +315,8 @@ final class Vault {
 	/** Flag a secret as known-leaked → Watchdog alarms daily until it is rotated. */
 	public static function mark_compromised( $name, $flag = true ) {
 		$data = self::load();
+		[ $stored ] = self::row( $name );
+		$name = $stored !== '' ? $stored : self::names( $name )[0];
 		if ( ! isset( $data['secrets'][ $name ] ) ) {
 			$data['secrets'][ $name ] = [ 'ct' => '', 'tail' => '', 'rotated' => 0, 'compromised' => 0 ];
 		}
@@ -181,20 +324,37 @@ final class Vault {
 		return self::persist( $data );
 	}
 
-	/** Metadata for every known secret (registry ∪ vault), with live source resolution. Never values. */
+	/**
+	 * Metadata for every known secret (registry ∪ vault), with live source resolution. Never values.
+	 * A vault row stored under an OLD name is reported under its NEW name. A row no code reads
+	 * (RETIRED, or an old-name copy shadowed by a newer value) comes back with `unused` set, so the
+	 * page lists it under "Unused — safe to forget" and nothing alarms on it.
+	 */
 	public static function meta() {
-		$names = array_unique( array_merge( array_keys( self::REGISTRY ), array_keys( self::load()['secrets'] ) ) );
-		sort( $names );
+		$stored = self::load()['secrets'];
+		$names  = array_keys( self::REGISTRY );
+		$unused = [];
+		foreach ( array_keys( $stored ) as $n ) {
+			if ( isset( self::RETIRED[ $n ] ) ) { $unused[ $n ] = self::RETIRED[ $n ]; continue; }
+			$canon = self::names( $n )[0];
+			if ( $canon !== $n ) {
+				[ $resolved ] = self::row( $canon );
+				if ( $resolved !== $n ) { $unused[ $n ] = 'Old name of ' . $canon . ', which holds its own value — this copy is no longer read.'; continue; }
+			}
+			$names[] = $canon;
+		}
+		$names = array_values( array_unique( $names ) );
 		$out = [];
 		foreach ( $names as $name ) {
-			$row  = self::load()['secrets'][ $name ] ?? null;
-			$reg  = self::REGISTRY[ $name ] ?? [ '(custom secret)', 90 ];
+			[ , $row ] = self::row( $name );
+			$reg  = self::REGISTRY[ $name ] ?? [ '(custom secret — not in the registry; Forget it if nothing outside this site uses it)', 365, true, 'Other' ];
 			$opt  = $reg[2] ?? false;                          // false | true | "ALT_SECRET_NAME"
 			$alt  = is_string( $opt ) ? $opt : '';
 			$out[ $name ] = [
 				'desc'        => $reg[0],
 				'max_days'    => (int) $reg[1],
 				'optional'    => $opt !== false,
+				'group'       => $reg[3] ?? 'Other',
 				'alt'         => $alt,                          // the secret that covers this one, if any
 				'covered'     => $alt !== '' && Secrets::has( $alt ), // alternative is configured
 				'in_vault'    => $row && ! empty( $row['ct'] ),
@@ -203,6 +363,15 @@ final class Vault {
 				'compromised' => (int) ( $row['compromised'] ?? 0 ) === 1,
 				'source'      => Secrets::source( $name ),
 				'set'         => Secrets::has( $name ),
+				'unused'      => '',
+			];
+		}
+		foreach ( $unused as $name => $why ) {
+			$row = $stored[ $name ];
+			$out[ $name ] = [
+				'desc' => $why, 'max_days' => 0, 'optional' => true, 'group' => 'Unused', 'alt' => '', 'covered' => false,
+				'in_vault' => ! empty( $row['ct'] ), 'tail' => $row['tail'] ?? '', 'rotated' => (int) ( $row['rotated'] ?? 0 ),
+				'compromised' => false, 'source' => 'vault', 'set' => ! empty( $row['ct'] ), 'unused' => $why,
 			];
 		}
 		return $out;
@@ -227,7 +396,7 @@ final class Vault {
 	}
 
 	/**
-	 * Serve ONLY the Titan password, to a holder of AQ_ARTAMAIL_TOKEN. HTTPS required (plain HTTP
+	 * Serve ONLY the Titan password, to a holder of BOT_ARTAMAIL_TOKEN. HTTPS required (plain HTTP
 	 * allowed only for local WP_DEBUG dev); response is Cache-Control: no-store; 10 requests/hour/IP;
 	 * every hit audited (timestamp via Watchdog, IP, result — never the value). 401 missing token,
 	 * 403 bad token / insecure, 404 when the secret is not configured, 429 when rate-limited.
@@ -257,7 +426,7 @@ final class Vault {
 		}
 
 		// Dedicated token, constant-time compared. Missing -> 401, present-but-wrong -> 403.
-		$want = (string) Secrets::get( 'AQ_ARTAMAIL_TOKEN' );
+		$want = (string) Secrets::get( 'BOT_ARTAMAIL_TOKEN' );
 		$got  = self::presented_token();
 		if ( $got === '' ) {
 			$audit( 'fail:no-token' );
@@ -269,7 +438,7 @@ final class Vault {
 		}
 
 		// The secret itself — 404 when an operator has not set it yet.
-		$password = (string) Secrets::get( 'TITAN_PASSWORD' );
+		$password = (string) Secrets::get( 'MAIL_TITAN_PASSWORD' );
 		if ( $password === '' ) {
 			$audit( 'fail:unset' );
 			return $reply( [ 'error' => 'not_found', 'message' => 'Titan password is not configured.' ], 404 );
@@ -345,7 +514,7 @@ final class Vault {
 			if ( $m['in_vault'] && $m['rotated'] > 0 && $now - $m['rotated'] > $m['max_days'] * DAY_IN_SECONDS ) { $overdue++; }
 		}
 		$wd = Watchdog::summary();
-		$attention = $missing + $overdue + $compromised + $wd['crit_7d'] + ( Secrets::has( 'AQ_ALLOW_PASSWORD_LOGIN' ) ? 1 : 0 );
+		$attention = $missing + $overdue + $compromised + $wd['crit_7d'] + ( Secrets::has( 'FLAG_ALLOW_PASSWORD_LOGIN' ) ? 1 : 0 );
 
 		echo '<div class="wrap aq-sec">';
 		echo self::styles();
@@ -376,7 +545,24 @@ final class Vault {
 		// ── Secrets table ────────────────────────────────────────────────
 		echo '<h2 class="aq-h">Secrets</h2>';
 		echo '<table class="aq-table"><thead><tr><th>Secret</th><th>Status</th><th>Source</th><th>Rotation</th><th class="aq-act-col">Manage</th></tr></thead><tbody>';
-		foreach ( $meta as $name => $m ) {
+		// Grouped by purpose, in registry order; anything unregistered last; unused in its own section.
+		$order = [];
+		foreach ( self::REGISTRY as $r ) { $order[ $r[3] ?? 'Other' ] = count( $order ); }
+		$order['Other'] = count( $order );
+		$unused = array_filter( $meta, fn( $m ) => $m['unused'] !== '' );
+		$listed = array_filter( $meta, fn( $m ) => $m['unused'] === '' );
+		$pos    = array_flip( array_keys( self::REGISTRY ) );
+		uksort( $listed, function ( $a, $b ) use ( $listed, $order, $pos ) {
+			$ga = $order[ $listed[ $a ]['group'] ] ?? 99; $gb = $order[ $listed[ $b ]['group'] ] ?? 99;
+			if ( $ga !== $gb ) { return $ga <=> $gb; }
+			return ( $pos[ $a ] ?? 999 ) <=> ( $pos[ $b ] ?? 999 ) ?: strcmp( $a, $b );
+		} );
+		$group = null;
+		foreach ( $listed as $name => $m ) {
+			if ( $m['group'] !== $group ) {
+				$group = $m['group'];
+				echo '<tr class="aq-group"><td colspan="5">' . esc_html( $group ) . '</td></tr>';
+			}
 			$is_flag = $m['max_days'] === 0;
 			// status pill — optional/alternative credentials never read as an alarming "missing"
 			if ( $m['compromised'] ) { $status = self::pill( 'compromised', 'bad' ); }
@@ -386,7 +572,7 @@ final class Vault {
 			else { $status = self::pill( 'set', 'ok' ) . ( $m['tail'] !== '' ? ' <code class="aq-tail">…' . esc_html( $m['tail'] ) . '</code>' : '' ); }
 			// rotation cell
 			if ( $is_flag ) {
-				$rot = '<span class="aq-muted">flag — no rotation</span>';
+				$rot = '<span class="aq-muted">' . ( strpos( $name, 'FLAG_' ) === 0 ? 'flag' : 'not a credential' ) . ' — no rotation</span>';
 			} elseif ( ! $m['set'] && $m['optional'] ) {
 				$rot = '<span class="aq-muted">not required' . ( $m['covered'] ? ' — covered by ' . esc_html( $m['alt'] ) : '' ) . '</span>';
 			} elseif ( $m['in_vault'] && $m['rotated'] ) {
@@ -415,6 +601,18 @@ final class Vault {
 			echo '<div class="aq-more">' . $more . '</div></td></tr>';
 		}
 		echo '</tbody></table>';
+
+		// Unused — stored values no code reads any more. Nothing alarms on them; Forget removes the row.
+		if ( $unused ) {
+			echo '<h2 class="aq-h">Unused — safe to forget <span class="aq-sub">stored values that no code reads any more</span></h2>';
+			echo '<table class="aq-table"><tbody>';
+			foreach ( $unused as $name => $m ) {
+				echo '<tr><td><code class="aq-name">' . esc_html( $name ) . '</code><div class="aq-desc">' . esc_html( $m['unused'] ) . '</div></td>'
+					. '<td>' . ( $m['rotated'] ? '<span class="aq-muted">stored ' . esc_html( gmdate( 'Y-m-d', $m['rotated'] ) ) . '</span>' : '' ) . '</td>'
+					. '<td class="aq-act">' . self::inline_action( $name, 'forget', 'Forget' , true ) . '</td></tr>';
+			}
+			echo '</tbody></table>';
+		}
 
 		// add-custom
 		echo '<form method="post" class="aq-add">' . wp_nonce_field( 'aq_vault', '_wpnonce', true, false )
@@ -468,6 +666,7 @@ final class Vault {
 		.aq-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#6a7280;background:#f6f7f8;padding:9px 12px;border-bottom:1px solid #dcdfe4}
 		.aq-table td{padding:11px 12px;border-bottom:1px solid #eef0f2;vertical-align:top}
 		.aq-table tr:last-child td{border-bottom:0}
+		.aq-table tr.aq-group td{background:#f6f7f8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#0C1E32;padding:7px 12px}
 		.aq-name{font-size:13px;font-weight:600;background:none;padding:0;color:#0C1E32}
 		.aq-desc{font-size:12px;color:#6a7280;margin-top:3px;max-width:320px}
 		.aq-tail{background:#f0f2f4;border-radius:4px;padding:1px 5px;font-size:12px}

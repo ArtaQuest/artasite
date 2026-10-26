@@ -43,22 +43,22 @@ class Kaggle {
 	 * THE CREDENTIAL, IN THE FORM KAGGLE ACTUALLY HONOURS. Probed live on production 2026-09-08 with
 	 * the Vault's KGAT_ token: kernels/push 401, kernels/list 401 (as Bearer AND as a Basic password),
 	 * kernels/pull of our own kernel 403. The classic username + API key pair over HTTP Basic is what
-	 * every write needs (the python client has never sent anything else). So: when KAGGLE_KEY is in
+	 * every write needs (the python client has never sent anything else). So: when KAGGLE_API_KEY is in
 	 * the Vault, Basic with KAGGLE_USERNAME (else OWNER) and that key; otherwise the token, which still
 	 * reads public kernels. Pushes from the token path are expected to fail and are reported as such.
 	 */
 	private static function auth_header() {
-		$key = (string) Secrets::get( 'KAGGLE_KEY' );
+		$key = (string) Secrets::get( 'KAGGLE_API_KEY' );
 		if ( '' !== $key ) { return 'Basic ' . base64_encode( self::owner() . ':' . $key ); }
 		return 'Bearer ' . self::token();
 	}
 
-	public static function ready() { return '' !== self::token() || '' !== (string) Secrets::get( 'KAGGLE_KEY' ); }
+	public static function ready() { return '' !== self::token() || '' !== (string) Secrets::get( 'KAGGLE_API_KEY' ); }
 
 	/** The account our kernels land under: the Vault's KAGGLE_USERNAME when the key pair is set. */
 	public static function owner() {
 		$u = trim( (string) Secrets::get( 'KAGGLE_USERNAME' ) );
-		return '' !== $u && '' !== (string) Secrets::get( 'KAGGLE_KEY' ) ? $u : self::OWNER;
+		return '' !== $u && '' !== (string) Secrets::get( 'KAGGLE_API_KEY' ) ? $u : self::OWNER;
 	}
 
 	/** Human-facing kernel page. */

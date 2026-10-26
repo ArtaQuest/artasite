@@ -60,7 +60,7 @@ final class Shell {
 	 *  page says so instead of handing out a command that times out. Configure it and the shell offers
 	 *  itself again, by itself. Member homes are untouched throughout — they live on the file share, not
 	 *  on the machine that was switched off. */
-	public static function endpoint() { $u = Secrets::get( 'AQ_SHELL_URL' ); return is_string( $u ) ? trim( $u ) : ''; }
+	public static function endpoint() { $u = Secrets::get( 'ARTA_SHELL_URL' ); return is_string( $u ) ? trim( $u ) : ''; }
 
 	/** Can a member open a shell at all right now? (The browser terminal.) */
 	public static function ready() { return self::endpoint() !== ''; }
@@ -232,7 +232,7 @@ final class Shell {
 			return Rest::err( 'insufficient_coins', 'Your balance is below the floor — top up to open a terminal', 402 );
 		}
 		if ( Rest::throttle( 'shellopen', 20, 3600 ) ) { return Rest::err( 'rate_limited', 'Too many terminals — give it a minute', 429 ); }
-		$secret = (string) Secrets::get( 'AQ_TURN_SECRET' );
+		$secret = (string) Secrets::get( 'ARTA_RELAY_SECRET' );
 		if ( $secret === '' ) { return Rest::err( 'unavailable', 'Terminals are not configured', 503 ); }
 		$exp    = time() + self::TICKET_TTL;
 		$ticket = $unix . '.' . $exp . '.' . hash_hmac( 'sha256', $unix . '.' . $exp, $secret );
@@ -260,7 +260,7 @@ final class Shell {
 	 */
 	public static function close( $req ) {
 		$parts  = explode( '.', (string) Rest::p( $req, 'ticket', '' ) );
-		$secret = (string) Secrets::get( 'AQ_TURN_SECRET' );
+		$secret = (string) Secrets::get( 'ARTA_RELAY_SECRET' );
 		if ( $secret === '' || count( $parts ) !== 3 ) { return Rest::err( 'unauthorised', 'bad ticket', 401 ); }
 		[ $unix, $exp, $mac ] = $parts;
 		// Expiry is NOT checked here, deliberately: a ticket is minted for the START of a session and a

@@ -367,8 +367,8 @@ final class Health {
 
 		// The documented recovery flag. Password logins on a platform whose password hashes are
 		// public is the one setting that must never be left on after an incident.
-		$out[] = Secrets::has( 'AQ_ALLOW_PASSWORD_LOGIN' )
-			? self::c( 'ops.password_login', 'ops', 'Password logins', self::FAIL, 'AQ_ALLOW_PASSWORD_LOGIN is SET — password sign-in is open while the hashes are public', 'unset it in the vault' )
+		$out[] = Secrets::has( 'FLAG_ALLOW_PASSWORD_LOGIN' )
+			? self::c( 'ops.password_login', 'ops', 'Password logins', self::FAIL, 'FLAG_ALLOW_PASSWORD_LOGIN is SET — password sign-in is open while the hashes are public', 'unset it in the vault' )
 			: self::c( 'ops.password_login', 'ops', 'Password logins', self::OK, 'disabled — email code and Google only', '' );
 
 		return $out;

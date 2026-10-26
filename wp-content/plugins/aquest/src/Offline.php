@@ -757,7 +757,7 @@ final class Offline {
 		// is not ours, it authenticates nothing of ours, and rotating it is not a thing we could do.
 		// The InnerTube protocol requires the key that MATCHES the impersonated client, so it cannot
 		// be swapped for one of our own credentials; our actual YouTube credentials are
-		// YOUTUBE_SA_JSON / YOUTUBE_API_KEY in the Vault, read through Secrets::get and never inline.
+		// YOUTUBE_SERVICE_ACCOUNT_JSON / YOUTUBE_API_KEY in the Vault, read through Secrets::get and never inline.
 		//
 		// It is spelled out because it is indistinguishable from a leaked Google key at a glance, and
 		// the CI secret gate is deliberately allowed to skip exactly this one literal (see main.yml).

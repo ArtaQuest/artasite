@@ -249,7 +249,7 @@ final class Integrity {
 			. "Shortfall {$shortfall} mg, of which {$authorised} mg is the authorised unbacked tranche, so "
 			. ( $shortfall - $authorised ) . " mg is UNEXPLAINED.\n"
 			. 'Coins were minted that no value backs: either the coin ledger / backing counter was tampered with directly, '
-			. 'or a minting bug fired. FREEZE cash-outs (set AQ_CASHOUT_FROZEN) and audit the coin ledger now.', true );
+			. 'or a minting bug fired. FREEZE cash-outs (set FLAG_CASHOUT_FROZEN) and audit the coin ledger now.', true );
 	}
 
 	// ── 7. LEDGER REF WIDTH — the idempotency keys must fit the columns that hold them ──────

@@ -3,7 +3,7 @@
  * Plugin Name: ArtaQuest
  * Description: The entire ArtaQuest platform — LMS, economy, social, i18n, funds — in one
  *              lean, dependency-free plugin. Replaces MasterStudy LMS + WooCommerce.
- * Version:     1.25.15
+ * Version:     1.25.16
  * Author:      ArtaQuest Foundation
  * License:     GNU AGPLv3
  * License URI: https://www.gnu.org/licenses/agpl-3.0.html
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 // disagree will send the next person chasing a production divergence that is not there: the
 // header is what get_plugin_data() reads, AQ_VERSION is what /version reports and what the
 // integrity sweep keys on. Bump them together, always.
-define( 'AQ_VERSION', '1.25.15' );
+define( 'AQ_VERSION', '1.25.16' );
 define( 'AQ_DIR', __DIR__ );
 define( 'AQ_URL', plugins_url( '', __FILE__ ) );
 
@@ -414,6 +414,7 @@ add_action( 'plugins_loaded', function () {
 	if ( ! wp_next_scheduled( 'aq_watchdog' ) ) { wp_schedule_event( time() + 90, 'hourly', 'aq_watchdog' ); }
 } );
 add_action( 'admin_menu', [ 'AQ\\Vault', 'admin_menu' ] );
+add_action( 'admin_init', [ 'AQ\\Vault', 'migrate_names' ], 5 ); // old secret names → new (2026-10-26), logged
 add_action( 'admin_init', [ 'AQ\\Vault', 'handle_actions' ] );
 
 /** ArtaAI — the operator's platform-wide AI monitor + control surface (wp-admin read-out; the full
@@ -494,7 +495,7 @@ add_action( 'template_redirect', function () {
 add_action( 'template_redirect', [ 'AQ\\Media', 'uploads_fallback' ], 1 );
 
 /** Public DB ⇒ stored password material must be inert: disable password + application-password
- *  logins (auth is delegated to email codes + Google). Recovery: AQ_ALLOW_PASSWORD_LOGIN in wp-config. */
+ *  logins (auth is delegated to email codes + Google). Recovery: FLAG_ALLOW_PASSWORD_LOGIN in wp-config. */
 add_action( 'init', [ 'AQ\\Auth', 'harden' ] );
 
 /** Serve the PWA service worker (/sw.js) + manifest (/manifest.webmanifest) at the site ROOT so the

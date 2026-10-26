@@ -321,7 +321,7 @@ final class Rest {
 		[ 'POST', 'tickets/(?P<id>[0-9]+)/reopen',  'Tickets::reopen',       'user'   ],
 		// ── @artabot — the public assistant (src/Arta.php). There is no private channel: a member
 		//    mentions @artabot in a post or comment and the reply lands in that thread. The routes below are
-		//    the Arta brain's side (a daemon that PULLS from here), authenticated by AQ_ARTA_REPLY_TOKEN ('arta' auth). They are
+		//    the Arta brain's side (a daemon that PULLS from here), authenticated by BOT_ARTA_TOKEN ('arta' auth). They are
 		//    all POST so no edge or page cache can ever store a response. ──
 		[ 'GET',  'share-card/(?P<id>[0-9]+)/(?P<fmt>og|feed|story)', 'ShareCard::rest', 'public' ], // per-post share images (OG + Instagram)
 		[ 'GET',  'arta/status',                   'Arta::public_status',    'public' ],
@@ -641,7 +641,7 @@ final class Rest {
 		[ 'POST', 'chat/ttl',                      'Chat::set_ttl',    'user'   ], // disappearing-message timer; expiry hard-deletes rows + blobs
 		[ 'POST', 'chat/unsend',                   'Chat::unsend',     'user'   ], // sender hard-deletes one of their rows (+ its attachment) from the public record
 
-		// The autonomous worker (tools/ticket-agent/) — authenticated by AQ_WORKER_TOKEN.
+		// The autonomous worker (tools/ticket-agent/) — authenticated by BOT_WORKER_TOKEN.
 		[ 'GET',  'agent/queue',                   'Tickets::agent_queue',   'worker' ],
 		[ 'POST', 'agent/tickets/(?P<id>[0-9]+)/message', 'Tickets::agent_message', 'worker' ],
 		[ 'POST', 'agent/tickets/(?P<id>[0-9]+)/status',  'Tickets::agent_status',  'worker' ],
@@ -746,7 +746,7 @@ final class Rest {
 		[ 'GET',  'outreach/export',                          'Outreach::export',    'outreach' ], // ?platform=&status= → {filename, csv} formula-guarded
 		// ArtaSearch — the alumni directory, a tab inside Outreach (src/AlumniSearch.php). Reads are 'admin'.
 		// ingest is 'public' ONLY so the handler can audit (the Vault::rest_titan pattern): it enforces the
-		// dedicated AQ_ALUMNI_INGEST_TOKEN (X-AQ-Alumni-Token, hash_equals), HTTPS, 60/h/IP, 2 MB, 500 rows; 404 while unset.
+		// dedicated BOT_ARTASEARCH_TOKEN (X-AQ-Alumni-Token, hash_equals), HTTPS, 60/h/IP, 2 MB, 500 rows; 404 while unset.
 		[ 'GET',  'outreach/alumni',                          'AlumniSearch::list',     'outreach' ], // ?year=&department=&country=&platform=&q=&cursor=
 		[ 'GET',  'outreach/alumni/facets',                   'AlumniSearch::facets',   'outreach' ], // unique values per filterable column (≤1000) + platform counts
 		[ 'GET',  'outreach/alumni/export',                   'AlumniSearch::export',   'outreach' ], // same filters → {filename, rows, csv} formula-guarded
@@ -772,7 +772,7 @@ final class Rest {
 		// ── ArtaMail Titan secret (src/Vault.php) ────────────────────────────
 		// The ONE operational secret served over HTTP: the Titan mailbox password, to ArtaMail and its
 		// live e2e only. 'public' here so the handler runs for every caller and can AUDIT failed attempts;
-		// it then enforces the dedicated AQ_ARTAMAIL_TOKEN, HTTPS, Cache-Control: no-store, a 10/hour/IP
+		// it then enforces the dedicated BOT_ARTAMAIL_TOKEN, HTTPS, Cache-Control: no-store, a 10/hour/IP
 		// rate limit and the 404-when-unset. There is deliberately NO generic secret/{name} route.
 		[ 'GET',    'secret/titan',                      'Vault::rest_titan', 'public' ],
 		// Arash acceptance research (public /data tables; sync token can read plot series).
@@ -816,10 +816,10 @@ final class Rest {
 
 	/**
 	 * The autonomous ticket worker authenticates with a shared secret in the X-AQ-Worker header
-	 * (constant-time compared). Closed by default — an unset AQ_WORKER_TOKEN means no worker access.
+	 * (constant-time compared). Closed by default — an unset BOT_WORKER_TOKEN means no worker access.
 	 */
 	private static function worker_ok() {
-		$want = Secrets::get( 'AQ_WORKER_TOKEN' );
+		$want = Secrets::get( 'BOT_WORKER_TOKEN' );
 		if ( $want === '' ) { return false; }
 		$got = isset( $_SERVER['HTTP_X_AQ_WORKER'] ) ? (string) $_SERVER['HTTP_X_AQ_WORKER'] : '';
 		return $got !== '' && hash_equals( $want, $got );

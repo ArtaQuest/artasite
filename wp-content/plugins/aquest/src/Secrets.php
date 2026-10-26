@@ -24,10 +24,24 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Secrets {
 
-	/** A secret from the vault (authoritative), env, or a wp-config constant. $default ('') when unset. */
+	/**
+	 * A secret from the vault (authoritative), env, or a wp-config constant. $default ('') when unset.
+	 * Names were simplified on 2026-10-26 (Vault::ALIASES): asking for a new OR an old name finds the
+	 * value wherever it was stored under either, so a wp-config constant or env var with the old
+	 * name keeps working and nothing has to be re-entered.
+	 */
 	public static function get( $name, $default = '' ) {
-		$v = Vault::get( $name );
+		$v = Vault::get( $name ); // the vault resolves old names itself
 		if ( $v !== '' ) { return $v; }
+		foreach ( Vault::names( $name ) as $n ) {
+			$v = self::outside( $n );
+			if ( $v !== '' ) { return $v; }
+		}
+		return $default;
+	}
+
+	/** One exact name from the environment or a wp-config constant ('' when unset). */
+	private static function outside( $name ) {
 		$env = getenv( $name );
 		if ( is_string( $env ) && $env !== '' ) { return $env; }
 		if ( isset( $_SERVER[ $name ] ) && $_SERVER[ $name ] !== '' ) { return (string) $_SERVER[ $name ]; }
@@ -35,7 +49,7 @@ final class Secrets {
 			$v = constant( $name );
 			if ( $v !== '' && $v !== null ) { return (string) $v; }
 		}
-		return $default;
+		return '';
 	}
 
 	/** True when a non-empty secret is configured in the vault / environment / wp-config. */
@@ -46,9 +60,11 @@ final class Secrets {
 	/** Where a secret currently resolves from ('' when unset) — shown on the AQ Security page. */
 	public static function source( $name ) {
 		if ( Vault::get( $name ) !== '' ) { return 'vault'; }
-		$env = getenv( $name );
-		if ( ( is_string( $env ) && $env !== '' ) || ! empty( $_SERVER[ $name ] ) ) { return 'environment'; }
-		if ( defined( $name ) && constant( $name ) !== '' && constant( $name ) !== null ) { return 'wp-config'; }
+		foreach ( Vault::names( $name ) as $n ) {
+			$env = getenv( $n );
+			if ( ( is_string( $env ) && $env !== '' ) || ! empty( $_SERVER[ $n ] ) ) { return 'environment'; }
+			if ( defined( $n ) && constant( $n ) !== '' && constant( $n ) !== null ) { return 'wp-config'; }
+		}
 		return '';
 	}
 }

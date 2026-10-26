@@ -63,7 +63,7 @@ final class Media {
 	//
 	// DORMANT UNTIL CONFIGURED — the same discipline the crawlers use. With no credentials in the
 	// Vault, files are stored on this origin and served from uploads/, exactly as before; the moment
-	// AQ_R2_* is set, new uploads go to R2 and are served from AQ_MEDIA_CDN. Nothing half-configured
+	// AQ_R2_* is set, new uploads go to R2 and are served from MEDIA_CDN_URL. Nothing half-configured
 	// ever runs: r2_ready() requires the whole set.
 
 	/**
@@ -71,7 +71,7 @@ final class Media {
 	 *
 	 * A LOWER BOUND, deliberately: it counts only operations this code issues. Public reads through
 	 * the r2.dev domain never touch PHP and cannot be counted here — those need Cloudflare's
-	 * analytics API, which the current AQ_CF_API_TOKEN is not authorised for ("not authorized for
+	 * analytics API, which the current CLOUDFLARE_API_TOKEN is not authorised for ("not authorized for
 	 * that account" on r2OperationsAdaptiveGroups). usage() says so rather than implying the number
 	 * is complete.
 	 */
@@ -85,10 +85,10 @@ final class Media {
 	 * r2() signs an empty one because every other call it makes is object-level. Returns [code, body].
 	 */
 	private static function r2_query( $method, $key, $query ) {
-		$account = Secrets::get( 'AQ_R2_ACCOUNT' );
-		$bucket  = Secrets::get( 'AQ_R2_BUCKET' );
-		$ak      = Secrets::get( 'AQ_R2_KEY' );
-		$sk      = Secrets::get( 'AQ_R2_SECRET' );
+		$account = Secrets::get( 'CLOUDFLARE_ACCOUNT_ID' );
+		$bucket  = Secrets::get( 'R2_BUCKET' );
+		$ak      = Secrets::get( 'R2_ACCESS_KEY_ID' );
+		$sk      = Secrets::get( 'R2_SECRET_ACCESS_KEY' );
 		$host    = $account . '.r2.cloudflarestorage.com';
 		$path    = '/' . rawurlencode( $bucket ) . ( '' !== $key ? '/' . str_replace( '%2F', '/', rawurlencode( $key ) ) : '' );
 		$now     = gmdate( 'Ymd\THis\Z' );
@@ -130,7 +130,7 @@ final class Media {
 	}
 
 	public static function r2_ready() {
-		foreach ( [ 'AQ_R2_ACCOUNT', 'AQ_R2_BUCKET', 'AQ_R2_KEY', 'AQ_R2_SECRET' ] as $k ) {
+		foreach ( [ 'CLOUDFLARE_ACCOUNT_ID', 'R2_BUCKET', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY' ] as $k ) {
 			if ( ! Secrets::get( $k ) ) { return false; }
 		}
 		return true;
@@ -138,7 +138,7 @@ final class Media {
 
 	/** Public base for media URLs: the CDN when set, else this origin's uploads directory. */
 	public static function cdn_base() {
-		$cdn = trim( (string) Secrets::get( 'AQ_MEDIA_CDN' ) );
+		$cdn = trim( (string) Secrets::get( 'MEDIA_CDN_URL' ) );
 		if ( $cdn ) { return untrailingslashit( $cdn ); }
 		[ , $base ] = self::dir();
 		return untrailingslashit( $base );
@@ -150,10 +150,10 @@ final class Media {
 	 * $body may be a string or a path to stream (PUT of a large file must not be read into memory).
 	 */
 	private static function r2( $method, $key, $bodyFile = '', $mime = 'application/octet-stream', $amz = [] ) {
-		$account = Secrets::get( 'AQ_R2_ACCOUNT' );
-		$bucket  = Secrets::get( 'AQ_R2_BUCKET' );
-		$ak      = Secrets::get( 'AQ_R2_KEY' );
-		$sk      = Secrets::get( 'AQ_R2_SECRET' );
+		$account = Secrets::get( 'CLOUDFLARE_ACCOUNT_ID' );
+		$bucket  = Secrets::get( 'R2_BUCKET' );
+		$ak      = Secrets::get( 'R2_ACCESS_KEY_ID' );
+		$sk      = Secrets::get( 'R2_SECRET_ACCESS_KEY' );
 		$host    = $account . '.r2.cloudflarestorage.com';
 		$path    = '/' . rawurlencode( $bucket ) . '/' . str_replace( '%2F', '/', rawurlencode( $key ) );
 		$now     = gmdate( 'Ymd\THis\Z' );
@@ -921,16 +921,16 @@ final class Media {
 	 * `bytes`/`objects` come from Cloudflare and are AUTHORITATIVE. `class_a`/`class_b` are local
 	 * counters and are a LOWER BOUND: public reads through r2.dev never reach PHP, so they cannot be
 	 * counted here. `ops_complete` is false to say exactly that — reading true operation counts needs
-	 * a token with Account Analytics:Read, which AQ_CF_API_TOKEN does not currently carry.
+	 * a token with Account Analytics:Read, which CLOUDFLARE_API_TOKEN does not currently carry.
 	 */
 	public static function usage( $fresh = false ) {
 		$cached = get_transient( 'aq_cdn_usage' );
 		if ( ! $fresh && is_array( $cached ) ) { return $cached; }
 		if ( ! self::r2_ready() ) { return [ 'ok' => false, 'why' => 'cdn_not_configured' ]; }
 
-		$token   = Secrets::get( 'AQ_CF_API_TOKEN' );
-		$account = Secrets::get( 'AQ_R2_ACCOUNT' );
-		$bucket  = Secrets::get( 'AQ_R2_BUCKET' );
+		$token   = Secrets::get( 'CLOUDFLARE_API_TOKEN' );
+		$account = Secrets::get( 'CLOUDFLARE_ACCOUNT_ID' );
+		$bucket  = Secrets::get( 'R2_BUCKET' );
 		$bytes = null; $objects = null;
 		if ( $token && $account && $bucket ) {
 			$res = wp_remote_get( "https://api.cloudflare.com/client/v4/accounts/{$account}/r2/buckets/{$bucket}/usage",
@@ -1058,7 +1058,7 @@ final class Media {
 			if ( $dry ) { echo "would recache {$key}\n"; $done++; continue; }
 			$mime = wp_check_filetype( $key )['type'] ?: 'application/octet-stream';
 			[ $code ] = self::r2( 'PUT', $key, '', $mime, [
-				'x-amz-copy-source'        => '/' . Secrets::get( 'AQ_R2_BUCKET' ) . '/' . str_replace( '%2F', '/', rawurlencode( $key ) ),
+				'x-amz-copy-source'        => '/' . Secrets::get( 'R2_BUCKET' ) . '/' . str_replace( '%2F', '/', rawurlencode( $key ) ),
 				'x-amz-metadata-directive' => 'REPLACE',
 				'cache-control'            => self::CACHE_CONTROL,
 				'content-type'             => $mime,
@@ -1086,10 +1086,10 @@ final class Media {
 	 * with nothing in any log. Re-run this after any bucket change.
 	 */
 	public static function ensure_cors() {
-		$token   = Secrets::get( 'AQ_CF_API_TOKEN' );
-		$account = Secrets::get( 'AQ_R2_ACCOUNT' );
-		$bucket  = Secrets::get( 'AQ_R2_BUCKET' );
-		if ( ! $token || ! $account || ! $bucket ) { echo "CORS: missing AQ_CF_API_TOKEN/account/bucket\n"; return false; }
+		$token   = Secrets::get( 'CLOUDFLARE_API_TOKEN' );
+		$account = Secrets::get( 'CLOUDFLARE_ACCOUNT_ID' );
+		$bucket  = Secrets::get( 'R2_BUCKET' );
+		if ( ! $token || ! $account || ! $bucket ) { echo "CORS: missing CLOUDFLARE_API_TOKEN/account/bucket\n"; return false; }
 
 		$body = wp_json_encode( [ 'rules' => [ [
 			'allowed' => [
