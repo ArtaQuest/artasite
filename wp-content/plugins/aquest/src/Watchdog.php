@@ -610,17 +610,18 @@ final class Watchdog {
 				'The recovery escape hatch is enabled, which makes the PUBLIC password hashes in /data a usable attack '
 				. 'surface. Unset it the moment recovery is done.', true );
 		}
+		$meta = Vault::meta();
+		foreach ( $meta as $name => $m ) {
+			if ( ! empty( $m['unused'] ) || ! $m['compromised'] ) { continue; } // unused rows never alarm
+			self::alert( 'rot_comp_' . $name, "Rotate `{$name}` NOW — flagged compromised",
+				"`{$name}` is marked compromised (e.g. it appeared in a transcript or log). Rotate it at the issuer, "
+				. 'then save the new value in wp-admin → AQ Security. This alarm repeats until the flag clears (rotating clears it).', true );
+		}
+		// The SAME rule the AQ Security "Rotation due" card counts (Vault::tally), so the two never disagree.
 		$due = [];
-		foreach ( Vault::meta() as $name => $m ) {
-			if ( ! empty( $m['unused'] ) ) { continue; } // nothing reads it — listed under "Unused", never alarms
-			if ( $m['compromised'] ) {
-				self::alert( 'rot_comp_' . $name, "Rotate `{$name}` NOW — flagged compromised",
-					"`{$name}` is marked compromised (e.g. it appeared in a transcript or log). Rotate it at the issuer, "
-					. 'then save the new value in wp-admin → AQ Security. This alarm repeats until the flag clears (rotating clears it).', true );
-			} elseif ( $m['in_vault'] && $m['max_days'] > 0 && $m['rotated'] > 0
-				&& time() - $m['rotated'] > $m['max_days'] * DAY_IN_SECONDS ) {
-				$due[] = $name . ' (' . (int) floor( ( time() - $m['rotated'] ) / DAY_IN_SECONDS ) . "d old, policy {$m['max_days']}d)";
-			}
+		foreach ( Vault::tally( $meta, time() )['overdue_names'] as $name ) {
+			$m = $meta[ $name ];
+			$due[] = $name . ' (' . (int) floor( ( time() - $m['rotated'] ) / DAY_IN_SECONDS ) . "d old, policy {$m['max_days']}d)";
 		}
 		if ( $due ) {
 			self::alert( 'rot_due', 'Secrets due for rotation: ' . count( $due ),

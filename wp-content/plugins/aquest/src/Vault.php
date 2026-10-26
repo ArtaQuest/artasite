@@ -169,6 +169,36 @@ final class Vault {
 	}
 
 	/**
+	 * Headline numbers for the AQ Security cards, from meta() (so they use the CURRENT names and the
+	 * registry's tiers — the same rule Watchdog::check_rotation alarms on). Unused rows never count.
+	 *   in_vault    — configured values stored encrypted in the vault
+	 *   set         — configured values from any source (vault, env, wp-config)
+	 *   missing     — required keys unset, plus either/or pairs with neither side set (counted once)
+	 *   overdue     — vault values older than their tier's rotation clock (identifiers/flags never)
+	 *   compromised — values flagged leaked
+	 */
+	public static function tally( array $meta, $now ) {
+		$t = [ 'in_vault' => 0, 'set' => 0, 'missing' => 0, 'overdue' => 0, 'compromised' => 0, 'overdue_names' => [], 'missing_names' => [] ];
+		foreach ( $meta as $name => $m ) {
+			if ( ( $m['unused'] ?? '' ) !== '' ) { continue; }
+			if ( $m['in_vault'] ) { $t['in_vault']++; }
+			if ( $m['set'] ) { $t['set']++; }
+			if ( $m['compromised'] ) { $t['compromised']++; }
+			if ( ! $m['set'] ) {
+				$alt = (string) ( $m['alt'] ?? '' );
+				if ( ! $m['optional'] || ( $alt !== '' && ! $m['covered'] && strcmp( $name, $alt ) < 0 ) ) {
+					$t['missing']++; $t['missing_names'][] = $alt !== '' ? "$name or $alt" : $name;
+				}
+			}
+			if ( $m['in_vault'] && $m['max_days'] > 0 && $m['rotated'] > 0 && ! $m['compromised']
+				&& $now - $m['rotated'] > $m['max_days'] * DAY_IN_SECONDS ) {
+				$t['overdue']++; $t['overdue_names'][] = $name;
+			}
+		}
+		return $t;
+	}
+
+	/**
 	 * Remove every vault row that no code reads (meta() marks them `unused`). Names only are returned
 	 * for the audit log; nothing registered, and nothing a current name resolves to, is touched.
 	 */
@@ -369,15 +399,8 @@ final class Vault {
 		$now  = time();
 
 		// ── Roll up the headline numbers for the status cards ────────────
-		// Required credentials only (flags AND optional/alternative secrets excluded from the headline counts).
-		$secrets = array_filter( $meta, fn( $m ) => $m['max_days'] > 0 && ! $m['optional'] );
-		$in_vault = $missing = $overdue = $compromised = 0;
-		foreach ( $secrets as $m ) {
-			if ( $m['in_vault'] ) { $in_vault++; }
-			if ( ! $m['set'] ) { $missing++; }
-			if ( $m['compromised'] ) { $compromised++; }
-			if ( $m['in_vault'] && $m['rotated'] > 0 && $now - $m['rotated'] > $m['max_days'] * DAY_IN_SECONDS ) { $overdue++; }
-		}
+		$t = self::tally( $meta, $now );
+		[ $in_vault, $set_total, $missing, $overdue, $compromised ] = [ $t['in_vault'], $t['set'], $t['missing'], $t['overdue'], $t['compromised'] ];
 		$wd = Watchdog::summary();
 		$attention = $missing + $overdue + $compromised + $wd['crit_7d'] + ( Secrets::has( 'FLAG_ALLOW_PASSWORD_LOGIN' ) ? 1 : 0 );
 
@@ -397,7 +420,7 @@ final class Vault {
 
 		// Status cards
 		echo '<div class="aq-cards">';
-		echo self::card( 'In vault', $in_vault . '<span class="aq-of">/' . count( $secrets ) . '</span>', 'encrypted secrets', $in_vault >= count( $secrets ) ? 'ok' : 'info' );
+		echo self::card( 'In vault', $in_vault . '<span class="aq-of">/' . $set_total . '</span>', 'of the configured values', $in_vault >= $set_total ? 'ok' : 'info' );
 		echo self::card( 'Missing', (string) $missing, 'unconfigured', $missing ? 'bad' : 'ok' );
 		echo self::card( 'Rotation due', (string) ( $overdue + $compromised ), $compromised ? $compromised . ' compromised' : 'past policy age', ( $overdue + $compromised ) ? 'bad' : 'ok' );
 		echo self::card( 'Traps armed', $wd['traps_armed'] . '<span class="aq-of">/' . $wd['traps_total'] . '</span>', 'DB honeypots', $wd['traps_armed'] >= $wd['traps_total'] ? 'ok' : 'bad' );
