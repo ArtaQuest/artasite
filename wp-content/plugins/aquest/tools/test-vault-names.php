@@ -113,6 +113,18 @@ namespace AQ {
 	$after = json_decode( substr( file_get_contents( Vault::path() ), strpos( file_get_contents( Vault::path() ), "\n" ) + 1 ), true )['secrets'];
 	$ok( isset( $after['CLOUDFLARE_API_TOKEN'] ) && ! isset( $after['AQ_CF_API_TOKEN'] ), 'set() with an old name writes the new name' );
 
+	// 5. AQ Security cards count with the NEW names and every tier (1.25.17 counted only required keys,
+	//    so a renamed vault showed "In vault 2/2" and missed MAIL_SMTP_PASSWORD overdue at 137 d).
+	$t = Vault::tally( Vault::meta(), time() );
+	sort( $t['overdue_names'] );
+	$ok( $t['overdue_names'] === [ 'MAIL_SMTP_PASSWORD', 'R2_ACCESS_KEY_ID', 'STRIPE_SECRET_KEY' ], 'overdue = every in-vault credential past its clock, alternatives included (got ' . implode( ',', $t['overdue_names'] ) . ')' );
+	$ok( $t['in_vault'] === 7, 'in-vault card counts every renamed row (7 live rows; the 2 unused excluded) (got ' . $t['in_vault'] . ')' );
+	$ok( $t['compromised'] === 1, 'compromised counted once, and not again as overdue' );
+	$ok( ! in_array( 'MEDIA_CDN_URL', $t['overdue_names'], true ) && ! in_array( 'ARTA_TOOLS_URL_HIGH', $t['overdue_names'], true ), 'identifiers and endpoints never overdue' );
+	$ok( in_array( 'YOUTUBE_API_KEY or YOUTUBE_SERVICE_ACCOUNT_JSON', $t['missing_names'], true ) && ! in_array( 'YOUTUBE_SERVICE_ACCOUNT_JSON or YOUTUBE_API_KEY', $t['missing_names'], true ), 'an either/or pair with neither set is missing once' );
+	$ok( ! preg_grep( '/MAIL_ACS_CONNECTION|MAIL_SMTP_PASSWORD/', $t['missing_names'] ), 'a pair covered by its alternative is not missing' );
+	$ok( ! array_intersect( [ 'SMTP_PASS', 'HF_TOKEN' ], $t['overdue_names'] ), 'unused rows never count' );
+
 	@unlink( Vault::path() ); @rmdir( WP_CONTENT_DIR );
 	echo $fail ? "FAILED: $fail\n" : "vault names: all assertions passed\n";
 	exit( $fail ? 1 : 0 );
