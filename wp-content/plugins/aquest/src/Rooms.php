@@ -776,8 +776,8 @@ final class Rooms {
 	 * STUN alone joins most pairs of devices; the pairs it cannot (symmetric NAT, a carrier's CGNAT,
 	 * an office that allows nothing but 443) need a TURN RELAY, which forwards the encrypted packets
 	 * and can read none of them. The relay is configured in the Vault, never here, in one of two
-	 * shapes: a static relay (`AQ_TURN_URLS` comma-separated, `AQ_TURN_USER`, `AQ_TURN_PASS`) or a
-	 * Cloudflare Realtime TURN key (`AQ_CF_TURN_KEY_ID`, `AQ_CF_TURN_KEY_TOKEN`), from which
+	 * shapes: a static relay (`CALLS_TURN_URLS` comma-separated, `CALLS_TURN_USER`, `CALLS_TURN_PASSWORD`) or a
+	 * Cloudflare Realtime TURN key (`CALLS_TURN_KEY_ID`, `CALLS_TURN_KEY_TOKEN`), from which
 	 * short-lived credentials are minted and cached for everybody. With neither, the answer is the
 	 * STUN list and `relay:false`, and the call surface words a failed connection accordingly.
 	 */
@@ -789,15 +789,15 @@ final class Rooms {
 			[ 'urls' => [ 'stun:stun.cloudflare.com:3478' ] ],
 		];
 		$turn = [];
-		$urls = trim( (string) Secrets::get( 'AQ_TURN_URLS' ) );
+		$urls = trim( (string) Secrets::get( 'CALLS_TURN_URLS' ) );
 		if ( $urls !== '' ) {
 			$list = array_values( array_filter( array_map( 'trim', explode( ',', $urls ) ) ) );
 			if ( $list ) {
-				$turn[] = [ 'urls' => $list, 'username' => (string) Secrets::get( 'AQ_TURN_USER' ), 'credential' => (string) Secrets::get( 'AQ_TURN_PASS' ) ];
+				$turn[] = [ 'urls' => $list, 'username' => (string) Secrets::get( 'CALLS_TURN_USER' ), 'credential' => (string) Secrets::get( 'CALLS_TURN_PASSWORD' ) ];
 			}
 		}
-		$kid = trim( (string) Secrets::get( 'AQ_CF_TURN_KEY_ID' ) );
-		$tok = trim( (string) Secrets::get( 'AQ_CF_TURN_KEY_TOKEN' ) );
+		$kid = trim( (string) Secrets::get( 'CALLS_TURN_KEY_ID' ) );
+		$tok = trim( (string) Secrets::get( 'CALLS_TURN_KEY_TOKEN' ) );
 		if ( $kid !== '' && $tok !== '' ) {
 			$cached = get_transient( 'aq_turn_cf' );
 			if ( is_array( $cached ) && ! empty( $cached['urls'] ) ) {

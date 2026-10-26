@@ -90,7 +90,7 @@ is in `Extra::PRIVATE_TABLES`.
   `public_email` remains for older rows.
 - `POST outreach/alumni/to-queue {id, platforms[]}` copies profiles into the Review queue as pending.
 - `POST outreach/alumni/ingest {alumni:[…]}` is the scan box's only way in. It requires the dedicated
-  secret `AQ_ALUMNI_INGEST_TOKEN` in the `X-AQ-Alumni-Token` header (≥32 chars, compared with
+  secret `BOT_ARTASEARCH_TOKEN` in the `X-AQ-Alumni-Token` header (≥32 chars, compared with
   hash_equals), HTTPS, at most 60 requests an hour per IP, a 2 MB body and 500 rows. It returns 404
   until the secret is set. Set the secret in wp-admin → AQ Security (vault), or as an env var or
   wp-config constant.

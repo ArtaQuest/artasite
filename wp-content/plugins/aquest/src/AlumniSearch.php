@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *
  * The one write path from outside is POST outreach/alumni/ingest, used by the scan box. It is
  * 'public' in Rest::ROUTES only so the handler runs and can audit, exactly like Vault::rest_titan;
- * the handler then enforces a DEDICATED secret AQ_ALUMNI_INGEST_TOKEN (≥32 chars, header
+ * the handler then enforces a DEDICATED secret BOT_ARTASEARCH_TOKEN (≥32 chars, header
  * X-AQ-Alumni-Token, constant-time compare), HTTPS, a 60/hour/IP rate limit, a 2 MB body and 500
  * rows per request, and answers 404 while the secret is unset. Nothing here discovers or contacts
  * anyone; "send to queue" only copies a profile into aq_artaoutreach as pending for human review.
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 final class AlumniSearch {
 
 	const TABLE     = 'aq_alumni';
-	const TOKEN     = 'AQ_ALUMNI_INGEST_TOKEN';
+	const TOKEN     = 'BOT_ARTASEARCH_TOKEN';
 	const PLATFORMS = [ 'linkedin', 'instagram', 'facebook', 'researchgate', 'youtube', 'github', 'x' ];
 	const HOSTS     = [
 		'linkedin'     => 'linkedin.com',

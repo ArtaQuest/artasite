@@ -1443,9 +1443,9 @@ final class Schema {
 				'photo' => '1.88.0: private token "aqo:<random>.jpg" (Outreach photo store) — never a URL; served by the admin-only outreach/alumni/photo/<id>',
 				'photo_meta' => 'JSON {sha1, platform, profile_url, fetched_at} — the HIGH-confidence matched account the picture was downloaded from',
 			] ],
-			'aq_task_sync'      => [ 'desc' => 'ArtaTask phone sync (followers, following, mutuals, session claim, prefs, requestStatus). WITHHELD from /data and the nightly export (Extra::PRIVATE_TABLES). The payload is libsodium ciphertext; the key lives in wp-config / AQ_TASK_SYNC_KEY, never in the row. Replaces Cloudflare Workers KV.', 'cols' => [
+			'aq_task_sync'      => [ 'desc' => 'ArtaTask phone sync (followers, following, mutuals, session claim, prefs, requestStatus). WITHHELD from /data and the nightly export (Extra::PRIVATE_TABLES). The payload is libsodium ciphertext; the key lives in wp-config / TASK_SYNC_KEY, never in the row. Replaces Cloudflare Workers KV.', 'cols' => [
 				'blob_name' => 'one of strava_followers.json, strava_following.json, mutual_connections.json, session_claim.json, prefs.json, requestStatus.json',
-				'ciphertext' => 'base64( version || nonce || secretbox ). Not plaintext. Version 0x01 is derived from AUTH_KEY/AUTH_SALT; 0x02 is AQ_TASK_SYNC_KEY',
+				'ciphertext' => 'base64( version || nonce || secretbox ). Not plaintext. Version 0x01 is derived from AUTH_KEY/AUTH_SALT; 0x02 is TASK_SYNC_KEY',
 				'bytes' => 'length of the sealed plaintext JSON',
 			] ],
 			'aq_arash_request_events' => [ 'desc' => 'Arash LinkedIn/Instagram/Facebook request-check observations (append-only). Public under /data for research publication. Source of truth for acceptance-rate plots; on-device JSON is cache only.', 'cols' => [

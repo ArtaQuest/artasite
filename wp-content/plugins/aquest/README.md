@@ -47,7 +47,7 @@ env vars or `wp-config.php` constants:
 | `STRIPE_SECRET_KEY` (`sk_…`) | server-side API key — enables all payments |
 | `STRIPE_PUBLISHABLE_KEY` (`pk_…`) | browser-safe key; its prefix decides live/test mode |
 | `STRIPE_WEBHOOK_SECRET` (`whsec_…`) | verifies inbound webhooks (HMAC-SHA256) |
-| `AQ_CASHOUT_FROZEN` (optional) | set to any value to freeze cash-out in an emergency (no payouts; sell() refuses without debiting) |
+| `FLAG_CASHOUT_FROZEN` (optional) | set to any value to freeze cash-out in an emergency (no payouts; sell() refuses without debiting) |
 
 **Money in (buy coins / donate)** → hosted Stripe Checkout (`Stripe::create_session`). The browser is
 redirected; on return the session is verified (`GET /stripe-verify`) and the webhook is the reliable

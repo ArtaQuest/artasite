@@ -351,14 +351,13 @@ final class Health {
 		// is JSON on a platform whose database is public, and a shape is a search key.
 		$missing  = [];
 		$optional = 0;
-		foreach ( Vault::REGISTRY as $name => $spec ) {
-			$policy = isset( $spec[1] ) ? (int) $spec[1] : 0;
-			$opt    = $spec[2] ?? false;
-			if ( $policy === 0 ) { continue; } // an ops FLAG, not a credential
+		foreach ( array_keys( SecretRegistry::KEYS ) as $name ) {
+			$sp = SecretRegistry::spec( $name );
+			if ( $sp['days'] === 0 ) { continue; } // an identifier, endpoint or flag — not a credential
 			if ( Secrets::has( $name ) ) { continue; }
-			if ( $opt === true ) { $optional++; continue; }
-			if ( is_string( $opt ) && Secrets::has( $opt ) ) { continue; } // an alternative satisfies it
-			if ( is_string( $opt ) ) { $optional++; continue; }
+			if ( $sp['need'] === 'optional' ) { $optional++; continue; }
+			if ( $sp['alt'] !== '' && Secrets::has( $sp['alt'] ) ) { continue; } // an alternative satisfies it
+			if ( $sp['alt'] !== '' ) { $optional++; continue; }
 			$missing[] = $name;
 		}
 		$out[] = $missing
@@ -367,8 +366,8 @@ final class Health {
 
 		// The documented recovery flag. Password logins on a platform whose password hashes are
 		// public is the one setting that must never be left on after an incident.
-		$out[] = Secrets::has( 'AQ_ALLOW_PASSWORD_LOGIN' )
-			? self::c( 'ops.password_login', 'ops', 'Password logins', self::FAIL, 'AQ_ALLOW_PASSWORD_LOGIN is SET — password sign-in is open while the hashes are public', 'unset it in the vault' )
+		$out[] = Secrets::has( 'FLAG_ALLOW_PASSWORD_LOGIN' )
+			? self::c( 'ops.password_login', 'ops', 'Password logins', self::FAIL, 'FLAG_ALLOW_PASSWORD_LOGIN is SET — password sign-in is open while the hashes are public', 'unset it in the vault' )
 			: self::c( 'ops.password_login', 'ops', 'Password logins', self::OK, 'disabled — email code and Google only', '' );
 
 		return $out;

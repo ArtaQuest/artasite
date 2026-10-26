@@ -27,7 +27,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * bounded: a daily compaction (compact_stats, riding the aq_video_sync cron) folds buckets older
  * than KEEP_HOURLY_DAYS back to one per UTC day — the original daily-archive shape — and the
  * read-side rate math normalises by actual elapsed hours, so mixed granularity reads cleanly.
- * Credentials come from a service account (YOUTUBE_SA_JSON, OAuth) or a plain
+ * Credentials come from a service account (YOUTUBE_SERVICE_ACCOUNT_JSON, OAuth) or a plain
  * Data-API key (YOUTUBE_API_KEY); all of this no-ops gracefully when neither is configured.
  */
 final class YouTube {
@@ -53,10 +53,10 @@ final class YouTube {
 	/** A plain Data-API key (AIza…), if one is configured. */
 	public static function api_key() { return Secrets::get( 'YOUTUBE_API_KEY' ); }
 
-	/** Parsed service-account credentials (YOUTUBE_SA_JSON), or null. The DB is public, so this is
+	/** Parsed service-account credentials (YOUTUBE_SERVICE_ACCOUNT_JSON), or null. The DB is public, so this is
 	 *  read only from an env var / wp-config constant via Secrets — never stored or echoed. */
 	public static function sa() {
-		$raw = Secrets::get( 'YOUTUBE_SA_JSON' );
+		$raw = Secrets::get( 'YOUTUBE_SERVICE_ACCOUNT_JSON' );
 		if ( $raw === '' ) { return null; }
 		$j = json_decode( $raw, true );
 		return ( is_array( $j ) && ! empty( $j['client_email'] ) && ! empty( $j['private_key'] ) ) ? $j : null;
@@ -1546,7 +1546,7 @@ final class YouTube {
 	 * first (bounded by CALLS_PER_RUN per invocation). Admin-only.
 	 */
 	public static function admin_refresh( $req ) {
-		if ( ! self::enabled() ) { return Rest::err( 'no_key', 'No YouTube credentials (YOUTUBE_SA_JSON or YOUTUBE_API_KEY) are set on this environment.', 503 ); }
+		if ( ! self::enabled() ) { return Rest::err( 'no_key', 'No YouTube credentials (YOUTUBE_SERVICE_ACCOUNT_JSON or YOUTUBE_API_KEY) are set on this environment.', 503 ); }
 		self::sync_registry();
 		if ( Rest::pint( $req, 'all', 0 ) ) {
 			global $wpdb;

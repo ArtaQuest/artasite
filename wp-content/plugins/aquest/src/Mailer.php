@@ -11,7 +11,7 @@ namespace AQ;
  * option (copy only — never secrets; the DB is public).
  *
  * Delivery: by default mail rides the host's relay (WP.com Atomic) with the forced From.
- * When SMTP_PASS (+ optionally SMTP_HOST/PORT/USER) is present via Secrets::get — i.e. set
+ * When MAIL_SMTP_PASSWORD (+ optionally MAIL_SMTP_HOST/PORT/USER) is present via Secrets::get — i.e. set
  * in the AQ Security vault — phpmailer switches to authenticated SMTP as support@artaquest.org,
  * which keeps strict SPF/DKIM/DMARC happy. Timeout is bounded; a mail failure never blocks
  * the caller (wp_mail returns false, callers already treat email as best-effort).
@@ -405,13 +405,13 @@ class Mailer {
 
 	/** @param \PHPMailer\PHPMailer\PHPMailer $m */
 	public static function smtp( $m ) {
-		$pass = Secrets::get( 'SMTP_PASS' );
+		$pass = Secrets::get( 'MAIL_SMTP_PASSWORD' );
 		if ( $pass === '' ) { return; } // no creds → host relay with the forced From
 		$m->isSMTP();
-		$m->Host       = Secrets::get( 'SMTP_HOST' ) ?: 'smtp.gmail.com';
-		$m->Port       = (int) ( Secrets::get( 'SMTP_PORT' ) ?: 587 );
+		$m->Host       = Secrets::get( 'MAIL_SMTP_HOST' ) ?: 'smtp.gmail.com';
+		$m->Port       = (int) ( Secrets::get( 'MAIL_SMTP_PORT' ) ?: 587 );
 		$m->SMTPAuth   = true;
-		$m->Username   = Secrets::get( 'SMTP_USER' ) ?: self::FROM_EMAIL;
+		$m->Username   = Secrets::get( 'MAIL_SMTP_USER' ) ?: self::FROM_EMAIL;
 		$m->Password   = $pass;
 		$m->SMTPSecure = $m->Port === 465 ? 'ssl' : 'tls';
 		$m->Timeout    = 10; // bounded — a dead relay must never hang a request
@@ -419,9 +419,9 @@ class Mailer {
 
 	// ── Sending ──────────────────────────────────────────────────────────────
 
-	/** Operator alert address — vault/env OPERATOR_EMAIL, else the site admin email. */
+	/** Operator alert address — vault/env MAIL_ALERTS_TO, else the site admin email. */
 	public static function operator() {
-		return Secrets::get( 'OPERATOR_EMAIL' ) ?: get_option( 'admin_email' );
+		return Secrets::get( 'MAIL_ALERTS_TO' ) ?: get_option( 'admin_email' );
 	}
 
 	/** Send one templated email. Returns wp_mail's bool; unknown keys are a no-op (false). */
@@ -455,7 +455,7 @@ class Mailer {
 
 	// ── Azure Communication Services Email (REST, HMAC-signed — no SDK) ─────────────────────
 
-	/** [endpoint, access key] from AQ_ACS_EMAIL_CONNECTION ("endpoint=https://….communication.azure.com/;accesskey=…"). */
+	/** [endpoint, access key] from MAIL_ACS_CONNECTION ("endpoint=https://….communication.azure.com/;accesskey=…"). */
 	public static function acs_parse( $conn ) {
 		$ep = ''; $key = '';
 		foreach ( explode( ';', (string) $conn ) as $part ) {
@@ -469,7 +469,7 @@ class Mailer {
 	}
 
 	public static function acs_configured() {
-		return self::acs_parse( Secrets::get( 'AQ_ACS_EMAIL_CONNECTION' ) ) !== null && is_email( (string) Secrets::get( 'AQ_ACS_EMAIL_SENDER' ) );
+		return self::acs_parse( Secrets::get( 'MAIL_ACS_CONNECTION' ) ) !== null && is_email( (string) Secrets::get( 'MAIL_ACS_SENDER' ) );
 	}
 
 	/**
@@ -491,13 +491,13 @@ class Mailer {
 
 	/** Send one message through ACS. True only on 202 Accepted; anything else falls back to SMTP. */
 	public static function acs_send( $to, $subject, $html ) {
-		$cfg = self::acs_parse( Secrets::get( 'AQ_ACS_EMAIL_CONNECTION' ) );
+		$cfg = self::acs_parse( Secrets::get( 'MAIL_ACS_CONNECTION' ) );
 		if ( ! $cfg ) { return false; }
 		[ $ep, $key ] = $cfg;
 		$host = (string) wp_parse_url( $ep, PHP_URL_HOST );
 		$pq   = '/emails:send?api-version=2023-03-31';
 		$body = wp_json_encode( [
-			'senderAddress' => (string) Secrets::get( 'AQ_ACS_EMAIL_SENDER' ),
+			'senderAddress' => (string) Secrets::get( 'MAIL_ACS_SENDER' ),
 			'recipients'    => [ 'to' => [ [ 'address' => (string) $to ] ] ],
 			'content'       => [
 				'subject'   => (string) $subject,
@@ -693,7 +693,7 @@ class Mailer {
 
 	public static function render_page() {
 		if ( ! current_user_can( 'manage_options' ) ) { return; }
-		$smtp = Secrets::get( 'SMTP_PASS' ) !== '';
+		$smtp = Secrets::get( 'MAIL_SMTP_PASSWORD' ) !== '';
 		echo '<div class="wrap aq-mail">' . self::styles();
 		echo '<div class="aq-hero"><div class="aq-mark">A</div><div><div class="aq-title">ArtaQuest Emails</div>'
 			. '<div class="aq-tag">Every email the platform sends — one sender, one template, editable wording</div></div>'
@@ -703,8 +703,8 @@ class Mailer {
 			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( (string) wp_unslash( $_GET['aq_msg'] ) ) . '</p></div>';
 		}
 		echo '<p class="aq-lead">All mail goes out as <strong>' . esc_html( self::FROM_NAME ) . ' &lt;' . esc_html( self::FROM_EMAIL ) . '&gt;</strong> '
-			. '(WordPress-core notices included). To deliver through the real support@ mailbox, add <code>SMTP_PASS</code> '
-			. '(and optionally <code>SMTP_HOST</code>/<code>SMTP_PORT</code>/<code>SMTP_USER</code>) in <a href="' . esc_url( admin_url( 'admin.php?page=aq-security' ) ) . '">AQ Security</a> — '
+			. '(WordPress-core notices included). To deliver through the real support@ mailbox, add <code>MAIL_SMTP_PASSWORD</code> '
+			. '(and optionally <code>MAIL_SMTP_HOST</code>/<code>MAIL_SMTP_PORT</code>/<code>MAIL_SMTP_USER</code>) in <a href="' . esc_url( admin_url( 'admin.php?page=aq-security' ) ) . '">AQ Security</a> — '
 			. 'never in the database, it is public. Bodies are plain text: <code>{{placeholders}}</code> are filled per send, URLs become links, '
 			. 'blank lines start new paragraphs. The gold chip and blue buttons come from the shared template automatically.</p>';
 		foreach ( self::TEMPLATES as $key => $def ) {

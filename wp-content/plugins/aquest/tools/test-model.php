@@ -345,11 +345,11 @@ $had_secret = Secrets::has( 'STRIPE_SECRET_KEY' );
 if ( ! $had_secret ) { putenv( 'STRIPE_SECRET_KEY=sk_test_harness' ); }
 
 // (a) Frozen kill-switch → refuse, never debit (the mirror of buy(): no money out → no coins out).
-putenv( 'AQ_CASHOUT_FROZEN=1' );
+putenv( 'FLAG_CASHOUT_FROZEN=1' );
 $b = Economy::coin_balance( $su );
 aqt_eq( 'frozen cash-out refused', aqt_err( Economy::sell( aqt_req( [ 'coins' => 5 ] ) ) ), 'cashout_unavailable' );
 aqt_eq( 'frozen cash-out debits nothing', Economy::coin_balance( $su ), $b );
-putenv( 'AQ_CASHOUT_FROZEN' );
+putenv( 'FLAG_CASHOUT_FROZEN' );
 
 // (b) Enabled but not onboarded → needs_onboarding, never debit.
 delete_user_meta( $su, 'aq_stripe_account' );

@@ -879,7 +879,7 @@ final class Extra {
 		'aq_meets'      => [ 'title' => 'meeting title', 'agenda' => 'meeting agenda' ],
 		// aq_notifications is NOT here — it is decided row by row, by `type`. See NOTIFY_PRIVATE.
 		// A public reset key is inert while password login is disabled, but it would become a takeover
-		// vector the moment the AQ_ALLOW_PASSWORD_LOGIN escape hatch were set — so it stays masked.
+		// vector the moment the FLAG_ALLOW_PASSWORD_LOGIN escape hatch were set — so it stays masked.
 		//
 		// user_email: THE ACCOUNT IDENTIFIER, not a research artefact. Sign-in is an emailed one-time
 		// code, so the address is half of every member's credential — and `?table=wp_users` handed the
@@ -1128,7 +1128,7 @@ final class Extra {
 	 *
 	 *  aq_task_sync: ArtaTask phone sync (Strava followers / following / mutuals, the session
 	 *  claim, phone prefs). The column is already ciphertext (TaskSync.php) — the key is
-	 *  AUTH_KEY/AUTH_SALT or AQ_TASK_SYNC_KEY, never a row — and the table is withheld as well
+	 *  AUTH_KEY/AUTH_SALT or TASK_SYNC_KEY, never a row — and the table is withheld as well
 	 *  so /data and the nightly export do not publish who has a blob or the ciphertext itself.
 	 *  See docs/artatask-sync.md.
 	 *
@@ -2504,7 +2504,7 @@ final class Extra {
 	/** Dataset — Kaggle's "hottest" board (the operator's pick). [] without the credential.
 	 *  ONE Kaggle credential, ONE name (operator 2026-07-27): the Vault's KAGGLE_TOKEN as a Bearer
 	 *  header, the same secret Kaggle.php pushes kernels with — verified 200 on datasets/list. The
-	 *  legacy KAGGLE_USERNAME + KAGGLE_KEY Basic pair this used to read is retired. */
+	 *  legacy KAGGLE_USERNAME + KAGGLE_API_KEY Basic pair this used to read is retired. */
 	private static function mkt_kaggle() {
 		$token = (string) Secrets::get( 'KAGGLE_TOKEN' );
 		if ( '' === $token ) { return []; }
@@ -3965,7 +3965,7 @@ final class Extra {
 			'publishable_prefix' => $pk === '' ? '' : substr( $pk, 0, 8 ), // public-by-design; prefix only
 			// Cash-out (outbound payouts via Connect transfers): live when Stripe is on and not frozen.
 			'cashout_enabled'    => Economy::cashout_enabled(),
-			'cashout_frozen'     => Secrets::has( 'AQ_CASHOUT_FROZEN' ),
+			'cashout_frozen'     => Secrets::has( 'FLAG_CASHOUT_FROZEN' ),
 			// Webhook events to subscribe to at the Stripe endpoint, so ops can confirm coverage. This
 			// list is the handler's own switch, verbatim: an endpoint missing charge.refunded silently
 			// breaks the Refund Policy's promise, and the health check is where that has to be visible.

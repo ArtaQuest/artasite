@@ -209,7 +209,7 @@ final class Auth {
 		// rejected. (Learned the hard way: pinning the server to the Vault while the page still
 		// carried the option broke exactly this.)
 		$ids   = array_values( array_unique( array_filter( [
-			trim( (string) Secrets::get( 'GOOGLE_OAUTH_CLIENT_ID' ) ),
+			trim( (string) Secrets::get( 'GOOGLE_SIGNIN_CLIENT_ID' ) ),
 			(string) get_option( 'aq_google_client_id', '' ),
 		] ) ) );
 		$token = (string) Rest::p( $req, 'credential', '' );
@@ -928,7 +928,7 @@ final class Auth {
 	 * usable credential — otherwise reading the DB would mean account/site takeover. We therefore
 	 * reject every password login (the passwordless flow sets the cookie directly, bypassing this)
 	 * and disable application passwords entirely. Recovery escape hatch: define a truthy
-	 * `AQ_ALLOW_PASSWORD_LOGIN` in wp-config.php (env/constant, never the DB).
+	 * `FLAG_ALLOW_PASSWORD_LOGIN` in wp-config.php (env/constant, never the DB).
 	 */
 	public static function harden() {
 		add_filter( 'authenticate', [ self::class, 'block_password_login' ], 30, 3 );
@@ -944,7 +944,7 @@ final class Auth {
 	}
 
 	public static function block_password_login( $user, $username, $password ) {
-		if ( ! empty( $password ) && ! Secrets::has( 'AQ_ALLOW_PASSWORD_LOGIN' ) ) {
+		if ( ! empty( $password ) && ! Secrets::has( 'FLAG_ALLOW_PASSWORD_LOGIN' ) ) {
 			return new \WP_Error( 'password_login_disabled', 'Sign in with your email code or Google — passwords are disabled.' );
 		}
 		return $user;

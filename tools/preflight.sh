@@ -272,6 +272,19 @@ if [ -f wp-content/plugins/aquest/tools/test-arta.php ]; then
   else printf '%s\n' "$out" | grep -E '^FAIL' | sed 's/^/    /'; fail "test-arta.php failed"; mark; fi
 else skip "test-arta.php missing"; fi
 
+# Secret names were simplified (Vault::ALIASES): old names must keep resolving, the vault migration
+# must move ciphertext without touching a value, and the audit log must never see one.
+step "Secret names — aliases, migration, rotation tiers"
+if [ -f wp-content/plugins/aquest/tools/test-vault-names.php ]; then
+  if out=$("$PHP" wp-content/plugins/aquest/tools/test-vault-names.php 2>&1); then ok "$(printf '%s' "$out" | tail -1)"
+  else printf '%s\n' "$out" | grep -E '^FAIL' | sed 's/^/    /'; fail "test-vault-names.php failed"; mark; fi
+else skip "test-vault-names.php missing"; fi
+step "docs/SECRETS.md matches the secret registry"
+if [ -f wp-content/plugins/aquest/tools/secrets-doc.php ]; then
+  if out=$("$PHP" wp-content/plugins/aquest/tools/secrets-doc.php --check 2>&1); then ok "$out"
+  else printf '%s\n' "$out" | sed 's/^/    /'; fail "regenerate docs/SECRETS.md"; mark; fi
+else skip "secrets-doc.php missing"; fi
+
 # The platform names no AI vendor or model outside a short, reasoned allow-list.
 step "No AI vendor names outside the allow-list"
 if [ -x tools/vendor-names-gate.sh ]; then
