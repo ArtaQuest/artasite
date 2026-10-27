@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node ../tools/gen-contrast-ramp.mjs --check && node scripts/gen-topic-art-index.mjs && node scripts/check-chart-layout.mjs && tsc -b && node scripts/copy-espeak.mjs && vite build && node scripts/gen-precache.mjs",
+    "build": "node ../tools/gen-contrast-ramp.mjs --check && node scripts/gen-topic-art-index.mjs && node scripts/check-chart-layout.mjs && node scripts/check-alumni-format.mjs && tsc -b && node scripts/copy-espeak.mjs && vite build && node scripts/gen-precache.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

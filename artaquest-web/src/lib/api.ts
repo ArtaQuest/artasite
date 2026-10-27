@@ -3292,6 +3292,8 @@ export type AlumniEmail = { email: string; source: string; confidence: "roster" 
 export type Alumnus = {
   id: number; full_name: string; grad_year: number; department: string; employer: string; headline: string;
   city: string; country: string; public_email: string; email_source: string; photo: string; n_profiles: number;
+  /** 1.25.19: the location the person states on their own public profile, and the platform it was read from ('' = none; fall back to city/country) */
+  location?: string; location_source?: string;
   /** 1.25.9: the picture is stored on the site (never a CDN URL); show it through AlumniApi.photoUrl(id) */
   photo_private?: boolean;
   photo_meta?: { platform: AlumniPlatform; profile_url: string; fetched_at: string } | null;
@@ -3301,8 +3303,8 @@ export type Alumnus = {
   followed_at?: string | null;
   profiles: Partial<Record<AlumniPlatform, AlumniProfile>>; updated_at: string;
 };
-/** platforms: comma list of AlumniPlatform | "email"; a row matches when it has ANY of them (absent = everyone). */
-export type AlumniFilter = { year?: string; department?: string; country?: string; platform?: string; platforms?: string; followed?: string; q?: string };
+/** platforms: comma list of AlumniPlatform | "email"; a row matches when it has ALL of them (1.25.13; absent = everyone). location: free text against location/city/country (1.25.19). */
+export type AlumniFilter = { year?: string; department?: string; country?: string; location?: string; platform?: string; platforms?: string; followed?: string; q?: string };
 export type AlumniFacet = { value: string | number; n: number };
 export type AlumniFacets = {
   years: AlumniFacet[]; departments: AlumniFacet[]; countries: AlumniFacet[];

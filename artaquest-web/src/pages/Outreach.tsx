@@ -6,6 +6,7 @@ import {
 import { Button, Card, ErrorNote, PageHero, Select, SkeletonGrid, StatusNote, Tabs, Textarea, cx } from "../components/ui";
 import { SocialIcon } from "../components/SocialLinks";
 import NotFound from "./NotFound";
+import { cleanHeadline, evidenceChips, istanbulTime, profileHandle, relTime } from "../lib/alumni-format";
 
 /**
  * OUTREACH — the ArtaTask review queue and dashboard (operator 2026-10-15). ADMIN ONLY.
@@ -340,10 +341,40 @@ function alumniEmails(a: Alumnus): { email: string; source: string; confidence: 
   return a.public_email ? [{ email: a.public_email, source: a.email_source ?? "", confidence: "high" }] : [];
 }
 
+const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yang";
+const PIN_ICON = <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" /></svg>;
+const COPY_ICON = <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>;
+const CHECK_ICON = <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>;
+
+/** A small icon button that copies text and confirms with a tick for 1.5 s. */
+function CopyButton({ text, label }: { text: string; label: string }) {
+  const [done, setDone] = useState(false);
+  const copy = () => {
+    navigator.clipboard?.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); }).catch(() => {});
+  };
+  return (
+    <button type="button" onClick={copy} aria-label={done ? "Copied" : label} title={done ? "Copied" : label}
+      className={cx("grid h-7 w-7 shrink-0 place-items-center rounded-md text-ink-3 hover:bg-veil/5 hover:text-ink", FOCUS)}>
+      {done ? CHECK_ICON : COPY_ICON}
+    </button>
+  );
+}
+
+/** "Followed 3 days ago" with the exact Istanbul time on hover. */
+function When({ label, at }: { label: string; at: string | null | undefined }) {
+  const rel = relTime(at);
+  if (!rel) return null;
+  return <span title={istanbulTime(at)}>{label} {rel}</span>;
+}
+
 /** Arash 2026-10-23: the LIST stays minimal — one row per person: name, department, year, social icon links and an
  *  envelope icon (mailto: the first email; all of them in the detail). No picture in the list. Clicking the row opens the
- *  detail panel: the stored photo (Instagram > LinkedIn > Facebook > GitHub, initials otherwise) and every detail. */
-function AlumniRow({ a }: { a: Alumnus }) {
+ *  detail panel: the stored photo (Instagram > LinkedIn > Facebook > GitHub, initials otherwise) and every detail.
+ *  1.25.19 (Arash 2026-10-27 "also improve the UI"): the detail panel reads like a profile card — clean header (name,
+ *  department · class of, short headline, self-stated location), one row per account (icon, platform, handle, evidence
+ *  chips with the raw code on hover, copy), relative times with Istanbul time on hover, no repeated "confidence: high"
+ *  (only HIGH is ever stored), and one action bar (Follow/Unfollow + Send to queue). */
+export function AlumniRow({ a }: { a: Alumnus }) {
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
@@ -358,7 +389,7 @@ function AlumniRow({ a }: { a: Alumnus }) {
   // anchors are ignored and window.focus() cannot take focus back — but window.open() honours the modifier of the REAL
   // click, so ⌘-click (macOS) / Ctrl-click Follow opens them all behind this page. A plain click opens them in front.
   // Chrome lets one click open ONE pop-up unless pop-ups are allowed for artaquest.com, hence the hint below.
-  const toggleFollow = (e: ReactMouseEvent<HTMLButtonElement>) => {
+  const toggleFollow = (e: ReactMouseEvent<HTMLElement>) => {
     e.preventDefault();
     const follow = !followedAt;
     if (follow) {
@@ -383,69 +414,131 @@ function AlumniRow({ a }: { a: Alumnus }) {
     } catch { setMsg("Couldn't add to the queue."); }
     setBusy(false);
   };
-  const srcLink = (s: string) => s === "roster" ? <span title="Given in the alumni roster">roster</span>
-    : s ? <a className="hover:text-yang" href={s} target="_blank" rel="noopener noreferrer">source</a> : <span>source unknown</span>;
+  const followTitle = followedAt
+    ? `Followed ${istanbulTime(followedAt) || followedAt} — click to mark as not followed`
+    : have.length ? `Open all ${have.length} social link(s) in new tabs and mark as followed (⌘/Ctrl-click: open them behind this page)` : "Mark as followed";
+  const followBtn = (extra = "") => (
+    <button type="button" onClick={toggleFollow} disabled={fBusy} aria-pressed={!!followedAt} title={followTitle}
+      className={cx("h-7 rounded-full px-3 text-[12px] font-semibold disabled:opacity-60", FOCUS, extra,
+        followedAt ? "border border-line bg-veil/5 text-ink-3 hover:text-ink" : "bg-yang text-on-accent hover:bg-yin hover:text-white")}>
+      {followedAt ? "Unfollow" : "Follow"}
+    </button>
+  );
+  const headline = cleanHeadline(a.full_name, a.headline, a.employer);
+  const location = (a.location || "").trim() || [a.city, a.country].filter(Boolean).join(", ");
+  const locFrom = (a.location || "").trim() && a.location_source ? `Stated on ${ALUMNI_LABEL[a.location_source as AlumniPlatform] ?? a.location_source}` : "From the matched profile";
+  const panelId = `alumni-detail-${a.id}`;
   return (
     <li className="border-b border-line last:border-b-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
-        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={`${a.full_name}: ${open ? "hide" : "show"} details`}
-          className="min-w-0 flex-1 text-left">
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls={panelId} aria-label={`${a.full_name}: ${open ? "hide" : "show"} details`}
+          className={cx("min-w-0 flex-1 rounded text-left", FOCUS)}>
           <span className="font-semibold text-ink hover:text-yang">{a.full_name}</span>
           <span className="ml-2 text-[13px] text-ink-3">{a.department} · {a.grad_year}</span>
         </button>
         <div className="flex flex-wrap items-center gap-1.5">
           {have.map((p) => (
-            <a key={p} href={a.profiles[p]?.url} target="_blank" rel="noopener noreferrer" title={ALUMNI_LABEL[p]} aria-label={`${a.full_name} on ${ALUMNI_LABEL[p]}`} className={ICON_BTN}>
+            <a key={p} href={a.profiles[p]?.url} target="_blank" rel="noopener noreferrer" title={ALUMNI_LABEL[p]} aria-label={`${a.full_name} on ${ALUMNI_LABEL[p]}`} className={cx(ICON_BTN, FOCUS)}>
               <SocialIcon k={p} size={14} />
             </a>
           ))}
           {emails.length > 0 && (
-            <a href={`mailto:${emails[0].email}`} className={ICON_BTN} aria-label={`Email ${a.full_name}`}
+            <a href={`mailto:${emails[0].email}`} className={cx(ICON_BTN, FOCUS)} aria-label={`Email ${a.full_name}`}
               title={emails[0].email + (emails.length > 1 ? ` (+${emails.length - 1} more in details)` : "")}>{MAIL_ICON}</a>
           )}
-          <button type="button" onClick={toggleFollow} disabled={fBusy} aria-pressed={!!followedAt}
-            title={followedAt ? `Followed ${followedAt} UTC — click to mark as not followed` : have.length ? `Open all ${have.length} social link(s) in new tabs and mark as followed (⌘/Ctrl-click: open them behind this page)` : "Mark as followed"}
-            className={`ml-1 h-7 rounded-full px-3 text-[12px] font-semibold ${followedAt ? "border border-line bg-veil/5 text-ink-3 hover:text-ink" : "bg-yang text-on-accent hover:bg-yin hover:text-white"}`}>
-            {followedAt ? "Unfollow" : "Follow"}
-          </button>
+          {followBtn("ml-1")}
         </div>
       </div>
       {fMsg && <p className="px-3 pb-2 text-[12px] text-ink-3" role="status">{fMsg}</p>}
       {open && (
-        <div className="flex flex-col gap-3 border-t border-line bg-space-1 px-3 py-3 text-[12px] text-ink-3 sm:flex-row">
-          <div className="shrink-0">
-            <AlumniPhoto a={a} size={96} />
-            <p className="mt-1 max-w-[96px]">
-              {a.photo_private && a.photo_meta
-                ? <>Photo: <a className="hover:text-yang" href={a.photo_meta.profile_url} target="_blank" rel="noopener noreferrer">{ALUMNI_LABEL[a.photo_meta.platform] ?? a.photo_meta.platform}</a>, fetched {a.photo_meta.fetched_at}</>
-                : "No photo found (initials)"}
-            </p>
-          </div>
-          <div className="min-w-0 flex-1 space-y-1">
-            <p className="text-[13px] text-ink">{a.full_name} · {a.department} · {a.grad_year}</p>
-            {(a.headline || a.employer) && <p className="text-ink-2">{[a.headline, a.employer].filter(Boolean).join(" · ")}</p>}
-            {(a.city || a.country) && <p>{[a.city, a.country].filter(Boolean).join(", ")}</p>}
-            <p className="pt-1 font-semibold text-ink-2">Accounts</p>
-            {have.length === 0 && <p>None confirmed.</p>}
-            {have.map((p) => (
-              <p key={p}>
-                {ALUMNI_LABEL[p]}: <a className="hover:text-yang" href={a.profiles[p]?.url} target="_blank" rel="noopener noreferrer">{a.profiles[p]?.title || a.profiles[p]?.url}</a>
-                {" · confidence: high"}{a.profiles[p]?.evidence && <span> · evidence: {a.profiles[p]?.evidence}</span>}
-              </p>
-            ))}
-            <p className="pt-1 font-semibold text-ink-2">Emails</p>
-            {emails.length === 0 && <p>None confirmed.</p>}
-            {emails.map((e) => (
-              <p key={e.email}>
-                <a className="hover:text-yang" href={`mailto:${e.email}`}>{e.email}</a> · {srcLink(e.source)}{e.confidence && ` · confidence: ${e.confidence}`}
-              </p>
-            ))}
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              {queueable.length > 0 && <Button size="sm" variant="outline" onClick={toQueue} disabled={busy}>Send to queue</Button>}
-              {msg && <span>{msg}</span>}
-              {followedAt && <span>Followed {followedAt} UTC ·</span>}
-              <span>Updated {a.updated_at} UTC</span>
+        <div id={panelId} className="border-t border-line bg-space-1 px-3 py-4 text-[13px] sm:px-4">
+          <div className="flex items-start gap-4">
+            <div className="shrink-0 text-center">
+              <span className="block sm:hidden"><AlumniPhoto a={a} size={64} /></span>
+              <span className="hidden sm:block"><AlumniPhoto a={a} size={88} /></span>
+              {a.photo_private && a.photo_meta && (
+                <a href={a.photo_meta.profile_url} target="_blank" rel="noopener noreferrer"
+                  title={`Photo from ${ALUMNI_LABEL[a.photo_meta.platform] ?? a.photo_meta.platform}${istanbulTime(a.photo_meta.fetched_at) ? `, fetched ${istanbulTime(a.photo_meta.fetched_at)}` : ""}`}
+                  className={cx("mt-1 inline-block rounded text-[11px] text-ink-3 hover:text-yang", FOCUS)}>
+                  via {ALUMNI_LABEL[a.photo_meta.platform] ?? a.photo_meta.platform}
+                </a>
+              )}
             </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-[17px] font-semibold leading-tight text-ink">{a.full_name}</h3>
+              <p className="mt-0.5 text-ink-2">{a.department}{a.department && a.grad_year ? " · " : ""}{a.grad_year ? `Class of ${a.grad_year}` : ""}</p>
+              {headline && <p className="mt-1 break-words text-ink" title={a.headline || undefined}>{headline}</p>}
+              {location && (
+                <p className="mt-1 flex items-center gap-1 text-ink-3" title={locFrom}>
+                  {PIN_ICON}<span>{location}</span><span className="sr-only"> ({locFrom})</span>
+                </p>
+              )}
+            </div>
+          </div>
+
+          <section className="mt-4" aria-label="Accounts">
+            <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-3">Accounts{have.length > 0 && ` · ${have.length}`}</h4>
+            {have.length === 0 ? <p className="text-ink-3">No confirmed accounts yet.</p> : (
+              <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line">
+                {have.map((p) => {
+                  const pr = a.profiles[p]!;
+                  const chips = evidenceChips(pr.evidence);
+                  return (
+                    <li key={p} className="flex flex-col gap-1.5 px-3 py-2 sm:flex-row sm:items-center sm:gap-3">
+                      <div className="flex min-w-0 items-center gap-2 sm:w-[46%] sm:shrink-0">
+                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-line text-ink-2"><SocialIcon k={p} size={14} /></span>
+                        <span className="w-[78px] shrink-0 text-[12px] text-ink-3">{ALUMNI_LABEL[p]}</span>
+                        <a href={pr.url} target="_blank" rel="noopener noreferrer" title={pr.title ? `${pr.title}\n${pr.url}` : pr.url}
+                          className={cx("min-w-0 truncate rounded font-medium text-ink hover:text-yang hover:underline", FOCUS)}>
+                          {profileHandle(p, pr.url)}<span className="sr-only"> (opens in a new tab)</span>
+                        </a>
+                        <span className="ml-auto sm:hidden"><CopyButton text={pr.url} label={`Copy ${ALUMNI_LABEL[p]} link`} /></span>
+                      </div>
+                      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 pl-9 sm:pl-0" title={pr.evidence ? `Evidence code: ${pr.evidence}` : undefined}>
+                        {chips.map((c) => (
+                          <span key={c} className="rounded-full border border-line bg-veil/5 px-2 py-0.5 text-[11px] text-ink-2">{c}</span>
+                        ))}
+                      </div>
+                      <span className="hidden sm:block"><CopyButton text={pr.url} label={`Copy ${ALUMNI_LABEL[p]} link`} /></span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          {emails.length > 0 && (
+            <section className="mt-3" aria-label="Emails">
+              <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-3">Email{emails.length > 1 && `s · ${emails.length}`}</h4>
+              <ul className="space-y-1">
+                {emails.map((e) => (
+                  <li key={e.email} className="flex flex-wrap items-center gap-2">
+                    <span className="text-ink-3">{MAIL_ICON}</span>
+                    <a className={cx("rounded font-medium text-ink hover:text-yang hover:underline", FOCUS)} href={`mailto:${e.email}`}>{e.email}</a>
+                    {e.source === "roster"
+                      ? <span className="rounded-full border border-line px-2 py-0.5 text-[11px] text-ink-3" title="Given in the alumni roster">from roster</span>
+                      : e.source
+                        ? <a className={cx("rounded-full border border-line px-2 py-0.5 text-[11px] text-ink-3 hover:text-yang", FOCUS)} href={e.source} target="_blank" rel="noopener noreferrer" title={e.source}>
+                            published on {(() => { try { return new URL(e.source).hostname.replace(/^www\./, ""); } catch { return "source"; } })()}
+                          </a>
+                        : null}
+                    <CopyButton text={e.email} label="Copy email" />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-3">
+            <Button size="sm" variant={followedAt ? "subtle" : "primary"} onClick={toggleFollow} disabled={fBusy} aria-pressed={!!followedAt} title={followTitle} className={FOCUS}>
+              {followedAt ? "Unfollow" : "Follow"}
+            </Button>
+            {queueable.length > 0 && <Button size="sm" variant="outline" onClick={toQueue} disabled={busy} className={FOCUS}>{busy ? "Sending…" : "Send to queue"}</Button>}
+            {msg && <span className="text-[12px] text-ink-2" role="status">{msg}</span>}
+            <span className="flex flex-wrap gap-x-2 text-[12px] text-ink-3 sm:ml-auto">
+              {followedAt && <><When label="Followed" at={followedAt} /><span aria-hidden>·</span></>}
+              <When label="Updated" at={a.updated_at} />
+            </span>
           </div>
         </div>
       )}
@@ -468,6 +561,9 @@ function AlumniSearch() {
   const [err, setErr] = useState("");
   useEffect(() => { AlumniApi.facets().then(setFacets).catch(() => setErr("Couldn't load ArtaSearch.")); }, []);
   useEffect(() => { const t = setTimeout(() => setF((o) => ({ ...o, q })), 300); return () => clearTimeout(t); }, [q]);
+  // 1.25.19: free-text location filter (self-stated location, city or country).
+  const [loc, setLoc] = useState("");
+  useEffect(() => { const t = setTimeout(() => setF((o) => ((o.location ?? "") === loc.trim() ? o : { ...o, location: loc.trim() || undefined })), 300); return () => clearTimeout(t); }, [loc]);
   const load = useCallback(async (cursor: number) => {
     try {
       const r = await AlumniApi.list({ ...f, cursor });
@@ -493,6 +589,8 @@ function AlumniSearch() {
         <Select label="Year" value={f.year ?? ""} onChange={set("year")} options={opt("All years", facets?.years)} skipOptions />
         <Select label="Department" value={f.department ?? ""} onChange={set("department")} options={opt("All departments", facets?.departments)} skipOptions />
         <Select label="Country" value={f.country ?? ""} onChange={set("country")} options={opt("All countries", facets?.countries)} skipOptions />
+        <input value={loc} onChange={(e) => setLoc(e.target.value)} placeholder="Location" aria-label="Filter by location"
+          className="h-9 w-[150px] rounded-lg border border-line bg-space-1 px-3 text-[13px] text-ink" />
         <Select label="Followed" value={f.followed ?? ""} onChange={set("followed")} skipOptions
           options={[{ value: "", label: "Followed or not" }, { value: "1", label: "Followed" }, { value: "0", label: "Not followed" }]} />
         <Button size="sm" variant="outline" onClick={exportCsv}>Export CSV</Button>

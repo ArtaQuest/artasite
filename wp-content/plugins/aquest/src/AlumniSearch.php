@@ -79,7 +79,14 @@ final class AlumniSearch {
 		$email = sanitize_email( (string) ( $r['public_email'] ?? '' ) );
 		$src   = $email !== '' ? esc_url_raw( (string) ( $r['public_email_source'] ?? '' ), [ 'https' ] ) : '';
 		$txt   = function ( $k, $n ) use ( $r ) { return mb_substr( sanitize_text_field( (string) ( $r[ $k ] ?? '' ) ), 0, $n ); };
-		return [
+		// 1.25.19 (Arash 2026-10-27): the location the person states on their own public profile + which platform it came from.
+		// Only written when the record carries the key, so an older scan box that does not send it never blanks a stored value.
+		$loc = [];
+		if ( array_key_exists( 'location', $r ) ) {
+			$loc['location']        = $txt( 'location', 200 );
+			$loc['location_source'] = $loc['location'] !== '' ? mb_substr( sanitize_key( (string) ( $r['location_source'] ?? '' ) ), 0, 40 ) : '';
+		}
+		return $loc + [
 			'emails'       => wp_json_encode( self::clean_emails( $r['emails'] ?? [] ) ),
 			'name_key'     => self::name_key( $name, $txt( 'department', 120 ) ), // key from the stored (sanitised, 120-char) department, exactly what the prune keep-list builds
 			'full_name'    => $name,
@@ -136,6 +143,7 @@ final class AlumniSearch {
 			'id' => (int) $r['id'], 'full_name' => $r['full_name'], 'grad_year' => (int) $r['grad_year'],
 			'department' => $r['department'], 'employer' => $r['employer'], 'headline' => $r['headline'],
 			'city' => $r['city'], 'country' => $r['country'], 'public_email' => $r['public_email'],
+			'location' => (string) ( $r['location'] ?? '' ), 'location_source' => (string) ( $r['location_source'] ?? '' ),
 			'email_source' => $r['email_source'], 'photo' => preg_match( Outreach::PHOTO_RE, (string) $r['photo'] ) ? 'private' : '', 'n_profiles' => (int) $r['n_profiles'],
 			'photo_private' => (bool) preg_match( Outreach::PHOTO_RE, (string) $r['photo'] ),
 			'photo_meta' => is_array( $pm = json_decode( (string) ( $r['photo_meta'] ?? '' ), true ) ) ? array_intersect_key( $pm, array_flip( [ 'platform', 'profile_url', 'fetched_at' ] ) ) : null,
@@ -166,13 +174,18 @@ final class AlumniSearch {
 		return [ 'id' => $id, 'followed_at' => $m[ $id ] ?? null ];
 	}
 
-	/** WHERE clause + args from ?year=&department=&platform=&platforms=a,b,email&country=&q= */
+	/** WHERE clause + args from ?year=&department=&platform=&platforms=a,b,email&country=&location=&q= */
 	private static function where( $req ) {
 		global $wpdb;
 		$w = [ '1=1' ]; $a = [];
 		if ( $y = Rest::pint( $req, 'year' ) ) { $w[] = 'grad_year = %d'; $a[] = $y; }
 		if ( ( $d = sanitize_text_field( (string) Rest::p( $req, 'department' ) ) ) !== '' ) { $w[] = 'department = %s'; $a[] = $d; }
 		if ( ( $c = sanitize_text_field( (string) Rest::p( $req, 'country' ) ) ) !== '' ) { $w[] = 'country = %s'; $a[] = $c; }
+		// ?location= (1.25.19): free text against the self-stated location, city and country.
+		if ( ( $lq = trim( sanitize_text_field( (string) Rest::p( $req, 'location' ) ) ) ) !== '' ) {
+			$ll = '%' . $wpdb->esc_like( mb_substr( $lq, 0, 100 ) ) . '%';
+			$w[] = '(location LIKE %s OR city LIKE %s OR country LIKE %s)'; array_push( $a, $ll, $ll, $ll );
+		}
 		$pf = sanitize_key( (string) Rest::p( $req, 'platform' ) );
 		if ( $pf === 'any' ) { $w[] = 'n_profiles > 0'; }
 		elseif ( in_array( $pf, self::PLATFORMS, true ) ) { $w[] = 'platforms LIKE %s'; $a[] = '%,' . $pf . ',%'; }
@@ -241,7 +254,7 @@ final class AlumniSearch {
 		[ $w, $a ] = self::where( $req );
 		$sql  = 'SELECT * FROM ' . self::t() . " WHERE {$w} ORDER BY " . self::ORDER . ' LIMIT 100000';
 		$rows = (array) $wpdb->get_results( $a ? $wpdb->prepare( $sql, $a ) : $sql, ARRAY_A );
-		$cols = array_merge( [ 'full_name', 'grad_year', 'department', 'employer', 'headline', 'city', 'country', 'public_email', 'email_source', 'emails' ], array_map( function ( $p ) { return $p . '_url'; }, self::PLATFORMS ) );
+		$cols = array_merge( [ 'full_name', 'grad_year', 'department', 'employer', 'headline', 'city', 'country', 'location', 'location_source', 'public_email', 'email_source', 'emails' ], array_map( function ( $p ) { return $p . '_url'; }, self::PLATFORMS ) );
 		$cell = function ( $v ) {
 			$v = (string) $v;
 			if ( $v !== '' && strpbrk( $v[0], "=+-@\t\r" ) !== false ) { $v = "'" . $v; }
@@ -430,7 +443,7 @@ final class AlumniSearch {
 			foreach ( array_slice( $body['verify'], 0, self::ROWS_MAX ) as $k ) {
 				if ( ! is_array( $k ) || ( $k['full_name'] ?? '' ) === '' ) { continue; }
 				$nk  = self::name_key( mb_substr( sanitize_text_field( (string) $k['full_name'] ), 0, 255 ), mb_substr( sanitize_text_field( (string) ( $k['department'] ?? '' ) ), 0, 120 ) );
-				$got = $wpdb->get_row( $wpdb->prepare( 'SELECT profiles, emails, photo, photo_meta, updated_at FROM ' . self::t() . ' WHERE name_key = %s AND grad_year = %d', $nk, (int) ( $k['grad_year'] ?? 0 ) ), ARRAY_A );
+				$got = $wpdb->get_row( $wpdb->prepare( 'SELECT profiles, emails, photo, photo_meta, location, updated_at FROM ' . self::t() . ' WHERE name_key = %s AND grad_year = %d', $nk, (int) ( $k['grad_year'] ?? 0 ) ), ARRAY_A );
 				$pm  = $got ? ( json_decode( (string) $got['photo_meta'], true ) ?: null ) : null;
 				$pf  = $got ? ( json_decode( (string) $got['profiles'], true ) ?: [] ) : [];
 				$em  = $got ? ( json_decode( (string) ( $got['emails'] ?? '' ), true ) ?: [] ) : [];
@@ -440,6 +453,7 @@ final class AlumniSearch {
 					'profiles'   => array_map( function ( $p ) { return (string) ( $p['url'] ?? '' ); }, is_array( $pf ) ? $pf : [] ),
 					'n_emails'   => is_array( $em ) ? count( $em ) : 0,
 					'photo'      => $pm && is_file( Outreach::photo_path( (string) $got['photo'] ) ) ? [ 'sha1' => $pm['sha1'] ?? '', 'platform' => $pm['platform'] ?? '' ] : null,
+					'location'   => $got ? (string) ( $got['location'] ?? '' ) : null,
 					'updated_at' => $got ? $got['updated_at'] : null,
 				];
 			}
