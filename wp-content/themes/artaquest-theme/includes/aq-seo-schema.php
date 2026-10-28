@@ -110,6 +110,43 @@ function aq_founder_same_as() {
 	return $out;
 }
 
+/**
+ * The invisible facts about the founder that belong on his ONE Person entity, wherever that entity
+ * is described (the sitewide #founder node, his profile's ProfilePage). One function so the nodes
+ * that share the @id can never disagree. Everything here is already public on his profile or the
+ * About page — nothing is invented: his handles (alternateName), his university (his profile bio
+ * reads "Bilkent EE'19"), and the fields his About page is about (knowsAbout). The portrait is the
+ * picture his profile shows, never a Gravatar.
+ *
+ * @return array property => value, ready to merge into a Person node.
+ */
+function aq_founder_facts() {
+	static $facts = null;
+	if ( null !== $facts ) { return $facts; }
+	$facts = array(
+		'alumniOf'  => array(
+			'@type'  => 'CollegeOrUniversity',
+			'name'   => 'Bilkent University',
+			'sameAs' => 'https://en.wikipedia.org/wiki/Bilkent_University',
+		),
+		'knowsAbout' => array( 'Artificial intelligence', 'Machine learning', 'Reproducible research', 'Science education' ),
+	);
+	$u = get_user_by( 'slug', 'artafather' );
+	if ( $u ) {
+		$alts = array();
+		foreach ( array( (string) $u->display_name, (string) $u->user_nicename ) as $a ) {
+			$a = trim( $a );
+			if ( '' !== $a && 'Arash Ashrafnejad' !== $a && ! in_array( $a, $alts, true ) ) { $alts[] = $a; }
+		}
+		if ( $alts ) { $facts['alternateName'] = $alts; }
+		if ( class_exists( '\\AQ\\Verify' ) ) {
+			$img = \AQ\Verify::avatar_url( (int) $u->ID, 512 );
+			if ( $img ) { $facts['image'] = $img; }
+		}
+	}
+	return $facts;
+}
+
 function aq_social_profiles() {
 	// Prefer the first four of /u/artafather's ordered socials (operator 2026-10-08: "also show
 	// the same four for the artasite footer (for artafather)"). Falls back to the hard-coded
@@ -254,6 +291,23 @@ function aq_seo_work_author( $n, $author, $url ) {
 	$kg    = is_array( $facts ) ? trim( (string) ( $facts['author'] ?? '' ) ) : '';
 	$owner = isset( $n->kg_owner ) ? trim( (string) $n->kg_owner ) : '';
 	if ( '' === $kg && '' !== $owner ) { $kg = $owner; }
+	// A work whose Kaggle author IS the founder (his Kaggle handle is one of the verified accounts on
+	// his own profile) names the one founder entity — same @id, name and profile URL as everywhere
+	// else — so the byline on every one of his works points at /u/artafather/. Only on an exact
+	// handle match: a submitter is never promoted to author (see above).
+	if ( '' !== $owner && function_exists( 'aq_founder_same_as' ) ) {
+		foreach ( aq_founder_same_as() as $link ) {
+			if ( 0 === strcasecmp( rtrim( (string) $link, '/' ), 'https://www.kaggle.com/' . rawurlencode( $owner ) ) ) {
+				return array(
+					'@type'  => 'Person',
+					'@id'    => home_url( '/' ) . '#founder',
+					'name'   => 'Arash Ashrafnejad',
+					'url'    => aq_unprefixed_url( home_url( '/u/artafather/' ) ),
+					'sameAs' => (string) $link,
+				);
+			}
+		}
+	}
 	if ( '' !== $kg ) {
 		return array(
 			'@type' => 'Person',
@@ -434,6 +488,7 @@ add_action(
 			'worksFor' => array( '@id' => $home . '#org' ),
 			'url'      => aq_unprefixed_url( home_url( '/u/artafather/' ) ),
 		);
+		$founder_node = array_merge( $founder_node, aq_founder_facts() );
 		$founder_links = aq_founder_same_as();
 		if ( $founder_links ) {
 			$founder_node['sameAs'] = $founder_links;
@@ -497,6 +552,7 @@ add_action(
 					$person['@id']      = $home . '#founder';
 					$person['jobTitle'] = 'Founder';
 					$person['worksFor'] = array( '@id' => $home . '#org' );
+					$person = array_merge( $person, aq_founder_facts() );
 				}
 				$nodes[] = array(
 					'@type'      => 'ProfilePage',
