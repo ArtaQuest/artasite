@@ -704,9 +704,9 @@ function aq_profile_works( $uid, $limit = 50 ) {
 /**
  * The site footer, in the crawler / no-JS layer. The React footer (components/Footer.tsx →
  * SiteFooter) is JS-only, so the server body of most routes had NO way out: /about/ carried one
- * link, a profile only its works. Same links and the same founder line as SiteFooter, so the
- * crawled HTML and the rendered page agree. The founder link is UNPREFIXED: his English profile
- * is the canonical original every locale copy points at.
+ * link, a profile only its works. Same links as SiteFooter, so the crawled HTML and the rendered
+ * page agree. No founder name here (operator 2026-10-28: he does not want his name in the footer);
+ * the profile is reached through the About page, bylines and structured data instead.
  */
 function aq_app_seo_footer() {
 	$links = array(
@@ -723,8 +723,7 @@ function aq_app_seo_footer() {
 	foreach ( $links as $path => $label ) {
 		$html .= '<li><a href="' . esc_url( home_url( $path ) ) . '">' . esc_html( $label ) . '</a></li>';
 	}
-	$html .= '</ul></nav><p>&copy; ' . esc_html( gmdate( 'Y' ) ) . ' ArtaQuest · registered not-for-profit · founded by <a href="'
-		. esc_url( aq_unprefixed_url( home_url( '/u/artafather/' ) ) ) . '">Arash Ashrafnejad</a></p></footer>';
+	$html .= '</ul></nav><p>&copy; ' . esc_html( gmdate( 'Y' ) ) . ' ArtaQuest · registered not-for-profit</p></footer>';
 	return $html;
 }
 
@@ -1275,7 +1274,15 @@ function aq_app_head_meta() {
 			// LEAD WITH THE NAME even when there is a bio. The description is the snippet under a
 			// search result, and a bio rarely repeats the person's own name — so the one query this
 			// page exists to answer had no match in the only prose the crawler was given.
-			if ( '' !== $desc ) {
+			// A bio is often two lines ("Nerd-in-Chief 🤓\nBilkent EE'19"); a newline in a snippet prints
+			// as a raw break in some surfaces, so fold the lines into one.
+			$desc = trim( (string) preg_replace( '/\s*\R\s*/u', ' · ', $desc ) );
+			if ( function_exists( 'aq_is_founder' ) && aq_is_founder( $u ) ) {
+				// The founder's snippet says who he is for the one query this page exists to answer:
+				// his name, his role, what the Foundation is, then his own words.
+				$desc = $pname . ', founder of ' . get_bloginfo( 'name' ) . ', the not-for-profit notebook feed for the arts and sciences'
+					. ( '' !== $desc ? ' — ' . $desc : '.' );
+			} elseif ( '' !== $desc ) {
 				$desc = $pname . ' on ' . get_bloginfo( 'name' ) . ' — ' . $desc;
 			} else {
 				$n     = count( aq_profile_works( $u->ID, 51 ) );
@@ -1565,17 +1572,29 @@ function aq_app_head_meta() {
 			$person['@id']      = home_url( '/' ) . '#founder';
 			$person['jobTitle'] = 'Founder';
 			$person['worksFor'] = array( '@id' => home_url( '/' ) . '#org' );
+			if ( function_exists( 'aq_founder_facts' ) ) { $person = array_merge( $person, aq_founder_facts() ); }
 		} else {
 			$person['@id'] = $person['url'] . '#person';
 		}
-		if ( $puser->display_name && $puser->display_name !== $pname ) {
+		if ( empty( $person['alternateName'] ) && $puser->display_name && $puser->display_name !== $pname ) {
 			$person['alternateName'] = (string) $puser->display_name;
 		}
-		if ( '' !== $pbio ) { $person['description'] = $pbio; }
+		if ( '' !== $pbio ) { $person['description'] = trim( (string) preg_replace( '/\s*\R\s*/u', ' · ', $pbio ) ); }
 		// Same resolver as og:image above — the picture the page actually shows, and never a
 		// Gravatar hash of the member's email address.
 		$avatar = class_exists( '\AQ\Verify' ) ? \AQ\Verify::avatar_url( $puser->ID, 512 ) : '';
 		if ( $avatar ) { $person['image'] = $avatar; }
+		// Profile-page dates (Google's ProfilePage documentation: dateCreated / dateModified). Created =
+		// when the account was made; modified = the latest thing the profile gained, i.e. their newest
+		// published work. Omitted rather than guessed when unknown.
+		$pdates = array();
+		if ( ! empty( $puser->user_registered ) && ( $ts_reg = strtotime( $puser->user_registered . ' UTC' ) ) ) {
+			$pdates['dateCreated'] = gmdate( 'c', $ts_reg );
+		}
+		$pw_latest = aq_profile_works( $puser->ID, 1 );
+		if ( $pw_latest && function_exists( 'aq_notebook_published_ts' ) && ( $ts_pub = aq_notebook_published_ts( $pw_latest[0] ) ) ) {
+			$pdates['dateModified'] = gmdate( 'c', $ts_pub );
+		}
 		// sameAs — the member's own profiles elsewhere. This is the strongest thing a page can say
 		// about WHICH person it means: a name is ambiguous and a set of accounts is not, and it is
 		// how a search engine reconciles this page with the ones it already knows about. Their
@@ -1601,13 +1620,14 @@ function aq_app_head_meta() {
 		// as subjects of expertise, and mainEntityOfPage claimed the person is the main entity of each
 		// notebook page, contradicting that page's own main entity. The works are linked in the body
 		// and each work names its author; that is the correct direction for the edge.)
-		$tags[] = '<script type="application/ld+json">' . wp_json_encode( array(
+		$tags[] = '<script type="application/ld+json">' . wp_json_encode( array_merge( array(
 			'@context'   => 'https://schema.org',
 			'@type'      => 'ProfilePage',
 			'url'        => $person['url'],
 			'name'       => $pname,
+		), $pdates, array(
 			'mainEntity' => $person,
-		) ) . '</script>';
+		) ) ) . '</script>';
 	}
 
 	// Highwire citation_* meta on a published PAPER notebook — the tags Google Scholar reads to index
