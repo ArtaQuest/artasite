@@ -443,7 +443,7 @@ final class AlumniSearch {
 		if ( strlen( (string) $req->get_body() ) > self::BODY_MAX ) { return $reply( [ 'error' => 'too_large', 'message' => 'body over 2 MB' ], 413 ); }
 		$body = (array) $req->get_json_params();
 		$list = isset( $body['alumni'] ) && is_array( $body['alumni'] ) ? array_values( $body['alumni'] ) : null;
-		if ( $list === null && ( isset( $body['prune'] ) || isset( $body['verify'] ) || isset( $body['dump'] ) || isset( $body['delete'] ) ) ) { $list = []; }
+		if ( $list === null && ( isset( $body['prune'] ) || isset( $body['verify'] ) || isset( $body['dump'] ) || isset( $body['delete'] ) || isset( $body['gpa'] ) ) ) { $list = []; }
 		if ( $list === null ) { return $reply( [ 'error' => 'alumni', 'message' => '{alumni:[…]} required' ], 400 ); }
 		if ( count( $list ) > self::ROWS_MAX ) { return $reply( [ 'error' => 'too_many', 'message' => 'max 500 rows per request' ], 413 ); }
 		// One shot (1.25.2): rows written under the 1.25.0 name-only key carry no '|' — drop them so the
@@ -486,6 +486,21 @@ final class AlumniSearch {
 					'gpa'        => $got ? self::gpa_out( $got['gpa'] ?? null ) : null,
 					'updated_at' => $got ? $got['updated_at'] : null,
 				];
+			}
+		}
+		// GPA-only update (1.25.20): {gpa:[{full_name,department,grad_year,gpa|null},…]} (max 500) sets ONLY the estimated GPA of the rows with
+		// those keys (a number 0-4.5, else NULL) and touches nothing else, not even updated_at, so a backfill never needs the whole record.
+		if ( isset( $body['gpa'] ) && is_array( $body['gpa'] ) ) {
+			global $wpdb;
+			$out['gpa_updated'] = 0; $out['gpa_missing'] = 0;
+			foreach ( array_slice( $body['gpa'], 0, self::ROWS_MAX ) as $k ) {
+				if ( ! is_array( $k ) || ( $k['full_name'] ?? '' ) === '' ) { continue; }
+				$nk = self::name_key( mb_substr( sanitize_text_field( (string) $k['full_name'] ), 0, 255 ), mb_substr( sanitize_text_field( (string) ( $k['department'] ?? '' ) ), 0, 120 ) );
+				$id = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . self::t() . ' WHERE name_key = %s AND grad_year = %d', $nk, (int) ( $k['grad_year'] ?? 0 ) ) );
+				if ( ! $id ) { $out['gpa_missing']++; continue; }
+				$g = $k['gpa'] ?? null;
+				$wpdb->update( self::t(), [ 'gpa' => ( is_numeric( $g ) && (float) $g >= 0 && (float) $g <= 4.5 ) ? round( (float) $g, 2 ) : null ], [ 'id' => $id ] );
+				$out['gpa_updated']++;
 			}
 		}
 		// Backup read (1.25.9): {dump:{offset,limit<=500}} -> every column except the photo token, plus row counts per year.
