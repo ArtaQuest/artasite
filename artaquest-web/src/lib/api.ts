@@ -3294,6 +3294,8 @@ export type Alumnus = {
   city: string; country: string; public_email: string; email_source: string; photo: string; n_profiles: number;
   /** 1.25.19: the location the person states on their own public profile, and the platform it was read from ('' = none; fall back to city/country) */
   location?: string; location_source?: string;
+  /** 1.25.20: ESTIMATED GPA from the scan box's roster (0-4.5, two decimals; null = none). An estimate, never official. Admin-only. */
+  gpa?: number | null;
   /** 1.25.9: the picture is stored on the site (never a CDN URL); show it through AlumniApi.photoUrl(id) */
   photo_private?: boolean;
   photo_meta?: { platform: AlumniPlatform; profile_url: string; fetched_at: string } | null;
@@ -3304,11 +3306,13 @@ export type Alumnus = {
   profiles: Partial<Record<AlumniPlatform, AlumniProfile>>; updated_at: string;
 };
 /** platforms: comma list of AlumniPlatform | "email"; a row matches when it has ALL of them (1.25.13; absent = everyone). location: free text against location/city/country (1.25.19). */
-export type AlumniFilter = { year?: string; department?: string; country?: string; location?: string; platform?: string; platforms?: string; followed?: string; q?: string };
+export type AlumniFilter = { year?: string; department?: string; country?: string; location?: string; platform?: string; platforms?: string; followed?: string; q?: string; sort?: AlumniSort };
+/** 1.25.20: list order. The default (no sort sent) is gpa_desc = highest estimated GPA first, people without one last. */
+export type AlumniSort = "gpa_desc" | "gpa_asc" | "class" | "name";
 export type AlumniFacet = { value: string | number; n: number };
 export type AlumniFacets = {
   years: AlumniFacet[]; departments: AlumniFacet[]; countries: AlumniFacet[];
-  platforms: Record<AlumniPlatform, number>; total: number; with_any: number; with_email?: number; synced_at: string;
+  platforms: Record<AlumniPlatform, number>; total: number; with_any: number; with_email?: number; with_gpa?: number; synced_at: string;
 };
 const alumniParams = (p: AlumniFilter & { cursor?: number }) =>
   Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined && v !== "")) as Record<string, string | number>;

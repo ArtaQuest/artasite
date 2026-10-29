@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.89.0';
+	const VERSION = '1.90.0';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -1291,6 +1291,7 @@ final class Schema {
 				country VARCHAR(120) NOT NULL DEFAULT '',
 				location VARCHAR(200) NOT NULL DEFAULT '',
 				location_source VARCHAR(40) NOT NULL DEFAULT '',
+				gpa DECIMAL(3,2) NULL DEFAULT NULL,
 				public_email VARCHAR(255) NOT NULL DEFAULT '',
 				email_source VARCHAR(500) NOT NULL DEFAULT '',
 				emails TEXT NULL,
@@ -1446,6 +1447,7 @@ final class Schema {
 				'photo_meta' => 'JSON {sha1, platform, profile_url, fetched_at} — the HIGH-confidence matched account the picture was downloaded from',
 				'location' => "1.89.0: the location the person states on their own public profile (e.g. 'İstanbul, Türkiye'); '' = none sent (the UI falls back to city/country)",
 				'location_source' => "1.89.0: which platform's profile the location was read from (e.g. 'linkedin')",
+				'gpa' => '1.90.0: ESTIMATED GPA from the scan box\'s roster (0-4.5, two decimals), NULL = none; an estimate, never an official figure. Admin-only; sorted high to low by default',
 			] ],
 			'aq_task_sync'      => [ 'desc' => 'ArtaTask phone sync (followers, following, mutuals, session claim, prefs, requestStatus). WITHHELD from /data and the nightly export (Extra::PRIVATE_TABLES). The payload is libsodium ciphertext; the key lives in wp-config / TASK_SYNC_KEY, never in the row. Replaces Cloudflare Workers KV.', 'cols' => [
 				'blob_name' => 'one of strava_followers.json, strava_following.json, mutual_connections.json, session_claim.json, prefs.json, requestStatus.json',
@@ -1620,6 +1622,10 @@ final class Schema {
 			if ( self::table_exists( "{$p}aq_alumni" ) && ! self::column_exists( "{$p}aq_alumni", $col ) ) {
 				$wpdb->query( "ALTER TABLE {$p}aq_alumni ADD COLUMN $def" );
 			}
+		}
+		// 1.90.0 — ArtaSearch estimated GPA (AlumniSearch::clean). Explicit for the same SQLite reason.
+		if ( self::table_exists( "{$p}aq_alumni" ) && ! self::column_exists( "{$p}aq_alumni", 'gpa' ) ) {
+			$wpdb->query( "ALTER TABLE {$p}aq_alumni ADD COLUMN gpa DECIMAL(3,2) NULL DEFAULT NULL" );
 		}
 		// 1.87.0 — ArtaSearch confident-only emails (AlumniSearch::clean). dbDelta should add it; explicit for the same reason as above.
 		if ( self::table_exists( "{$p}aq_alumni" ) && ! self::column_exists( "{$p}aq_alumni", 'emails' ) ) {

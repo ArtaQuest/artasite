@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
 import {
-  AlumniApi, OutreachApi, canOutreach, type AlumniFacets, type AlumniFilter, type AlumniPlatform, type Alumnus, type ProfileSyncItem,
+  AlumniApi, OutreachApi, canOutreach, type AlumniFacets, type AlumniFilter, type AlumniPlatform, type AlumniSort, type Alumnus, type ProfileSyncItem,
   type OutreachAccount, type OutreachImportResult, type OutreachPlanRow, type OutreachPlatform, type OutreachStat, type OutreachStatus,
 } from "../lib/api";
 import { Button, Card, ErrorNote, PageHero, Select, SkeletonGrid, StatusNote, Tabs, Textarea, cx } from "../components/ui";
 import { SocialIcon } from "../components/SocialLinks";
 import NotFound from "./NotFound";
-import { cleanHeadline, evidenceChips, istanbulTime, profileHandle, relTime } from "../lib/alumni-format";
+import { cleanHeadline, ESTIMATE_NOTE, evidenceChips, gpaLabel, istanbulTime, profileHandle, relTime } from "../lib/alumni-format";
 
 /**
  * OUTREACH — the ArtaTask review queue and dashboard (operator 2026-10-15). ADMIN ONLY.
@@ -424,6 +424,7 @@ export function AlumniRow({ a }: { a: Alumnus }) {
       {followedAt ? "Unfollow" : "Follow"}
     </button>
   );
+  const gpa = gpaLabel(a.gpa);
   const headline = cleanHeadline(a.full_name, a.headline, a.employer);
   const location = (a.location || "").trim() || [a.city, a.country].filter(Boolean).join(", ");
   const locFrom = (a.location || "").trim() && a.location_source ? `Stated on ${ALUMNI_LABEL[a.location_source as AlumniPlatform] ?? a.location_source}` : "From the matched profile";
@@ -436,6 +437,11 @@ export function AlumniRow({ a }: { a: Alumnus }) {
           <span className="font-semibold text-ink hover:text-yang">{a.full_name}</span>
           <span className="ml-2 text-[13px] text-ink-3">{a.department} · {a.grad_year}</span>
         </button>
+        {gpa && (
+          <span className="shrink-0 whitespace-nowrap text-[11px] tabular-nums text-ink-3" title={ESTIMATE_NOTE} aria-label={`Estimated GPA ${gpa} (${ESTIMATE_NOTE.toLowerCase()})`}>
+            Est. GPA <span className="text-ink-2">{gpa}</span>
+          </span>
+        )}
         <div className="flex flex-wrap items-center gap-1.5">
           {have.map((p) => (
             <a key={p} href={a.profiles[p]?.url} target="_blank" rel="noopener noreferrer" title={ALUMNI_LABEL[p]} aria-label={`${a.full_name} on ${ALUMNI_LABEL[p]}`} className={cx(ICON_BTN, FOCUS)}>
@@ -467,6 +473,7 @@ export function AlumniRow({ a }: { a: Alumnus }) {
             <div className="min-w-0 flex-1">
               <h3 className="text-[17px] font-semibold leading-tight text-ink">{a.full_name}</h3>
               <p className="mt-0.5 text-ink-2">{a.department}{a.department && a.grad_year ? " · " : ""}{a.grad_year ? `Class of ${a.grad_year}` : ""}</p>
+              {gpa && <p className="mt-1 text-ink-3" title={ESTIMATE_NOTE}>Est. GPA <span className="tabular-nums text-ink-2">{gpa}</span> <span className="text-[11px]">· estimate from roster, not official</span></p>}
               {headline && <p className="mt-1 break-words text-ink" title={a.headline || undefined}>{headline}</p>}
               {location && (
                 <p className="mt-1 flex items-center gap-1 text-ink-3" title={locFrom}>
@@ -591,6 +598,8 @@ function AlumniSearch() {
         <Select label="Country" value={f.country ?? ""} onChange={set("country")} options={opt("All countries", facets?.countries)} skipOptions />
         <input value={loc} onChange={(e) => setLoc(e.target.value)} placeholder="Location" aria-label="Filter by location"
           className="h-9 w-[150px] rounded-lg border border-line bg-space-1 px-3 text-[13px] text-ink" />
+        <Select label="Sort" value={f.sort ?? "gpa_desc"} onChange={(v) => setF((o) => ({ ...o, sort: v as AlumniSort }))} skipOptions
+          options={[{ value: "gpa_desc", label: "Est. GPA: high to low" }, { value: "gpa_asc", label: "Est. GPA: low to high" }, { value: "class", label: "Class: newest first" }, { value: "name", label: "Name A–Z" }]} />
         <Select label="Followed" value={f.followed ?? ""} onChange={set("followed")} skipOptions
           options={[{ value: "", label: "Followed or not" }, { value: "1", label: "Followed" }, { value: "0", label: "Not followed" }]} />
         <Button size="sm" variant="outline" onClick={exportCsv}>Export CSV</Button>

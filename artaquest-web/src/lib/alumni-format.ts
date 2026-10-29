@@ -119,3 +119,12 @@ export function istanbulTime(s: string | null | undefined): string {
   if (!d) return "";
   return new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Istanbul", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(d) + " (Istanbul time)";
 }
+
+/** Estimated GPA for display: two decimals, or "" when there is none (null, undefined, NaN, out of range). It is an estimate from the
+ *  roster, never an official figure — callers label it "Est. GPA" with the tooltip ESTIMATE_NOTE. */
+export function gpaLabel(g: number | string | null | undefined): string {
+  if (g === null || g === undefined || g === "") return "";
+  const n = typeof g === "number" ? g : Number(g);
+  return Number.isFinite(n) && n >= 0 && n <= 4.5 ? n.toFixed(2) : "";
+}
+export const ESTIMATE_NOTE = "Estimate from roster";

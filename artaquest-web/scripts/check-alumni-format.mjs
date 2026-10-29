@@ -53,5 +53,11 @@ eq(f.relTime("2026-10-24", now), "4 days ago", "relTime date only");
 eq(f.istanbulTime("2026-10-24 10:05:35"), "24 Oct 2026, 13:05 (Istanbul time)", "istanbulTime");
 eq(f.relTime(null, now), "", "relTime null");
 
+eq(f.gpaLabel(3.6), "3.60", "gpaLabel pads to two decimals");
+eq(f.gpaLabel("2.28"), "2.28", "gpaLabel string from the API");
+eq(f.gpaLabel(3.825), "3.83", "gpaLabel rounds");
+eq([f.gpaLabel(null), f.gpaLabel(undefined), f.gpaLabel(""), f.gpaLabel(NaN), f.gpaLabel(-1), f.gpaLabel(9)], ["", "", "", "", "", ""], "gpaLabel none/invalid -> empty");
+eq(f.ESTIMATE_NOTE, "Estimate from roster", "estimate tooltip");
+
 if (fail) { console.error(`${fail} alumni-format check(s) failed`); process.exit(1); }
 console.log("alumni-format: all checks pass");

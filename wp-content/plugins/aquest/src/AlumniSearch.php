@@ -86,7 +86,14 @@ final class AlumniSearch {
 			$loc['location']        = $txt( 'location', 200 );
 			$loc['location_source'] = $loc['location'] !== '' ? mb_substr( sanitize_key( (string) ( $r['location_source'] ?? '' ) ), 0, 40 ) : '';
 		}
-		return $loc + [
+		// 1.25.20 (Arash 2026-10-29): the ESTIMATED GPA from the scan box's roster (never an official figure). Only written when the
+		// record carries the key (older payloads never blank it); anything that is not a number from 0 to 4.5 is stored as NULL.
+		$gp = [];
+		if ( array_key_exists( 'gpa', $r ) ) {
+			$g = $r['gpa'];
+			$gp['gpa'] = ( is_numeric( $g ) && (float) $g >= 0 && (float) $g <= 4.5 ) ? round( (float) $g, 2 ) : null;
+		}
+		return $loc + $gp + [
 			'emails'       => wp_json_encode( self::clean_emails( $r['emails'] ?? [] ) ),
 			'name_key'     => self::name_key( $name, $txt( 'department', 120 ) ), // key from the stored (sanitised, 120-char) department, exactly what the prune keep-list builds
 			'full_name'    => $name,
@@ -137,6 +144,11 @@ final class AlumniSearch {
 		return 'inserted';
 	}
 
+	/** The stored estimated GPA as a float with two decimals, or null (MySQL returns a string, SQLite a float). */
+	public static function gpa_out( $v ) {
+		return ( $v === null || $v === '' || ! is_numeric( $v ) ) ? null : round( (float) $v, 2 );
+	}
+
 	private static function out( $r ) {
 		$p = json_decode( (string) $r['profiles'], true );
 		return [
@@ -144,6 +156,7 @@ final class AlumniSearch {
 			'department' => $r['department'], 'employer' => $r['employer'], 'headline' => $r['headline'],
 			'city' => $r['city'], 'country' => $r['country'], 'public_email' => $r['public_email'],
 			'location' => (string) ( $r['location'] ?? '' ), 'location_source' => (string) ( $r['location_source'] ?? '' ),
+			'gpa' => self::gpa_out( $r['gpa'] ?? null ),
 			'email_source' => $r['email_source'], 'photo' => preg_match( Outreach::PHOTO_RE, (string) $r['photo'] ) ? 'private' : '', 'n_profiles' => (int) $r['n_profiles'],
 			'photo_private' => (bool) preg_match( Outreach::PHOTO_RE, (string) $r['photo'] ),
 			'photo_meta' => is_array( $pm = json_decode( (string) ( $r['photo_meta'] ?? '' ), true ) ) ? array_intersect_key( $pm, array_flip( [ 'platform', 'profile_url', 'fetched_at' ] ) ) : null,
@@ -217,13 +230,28 @@ final class AlumniSearch {
 	/** The scan's final-roster order (2026-10-23): youngest class first, then department, then name. */
 	const ORDER = 'grad_year DESC, department ASC, full_name ASC, id ASC';
 
-	/** GET outreach/alumni — youngest first (self::ORDER); ?cursor= is an opaque offset (0 = first page) + the filtered total. */
+	/** ?sort= (1.25.20, Arash 2026-10-29): the DEFAULT is estimated GPA high to low with people who have none last; the id tie-break keeps
+	 *  the cursor (an offset) stable. 'class' is the previous order. */
+	const ORDERS = [
+		'gpa_desc' => '(gpa IS NULL) ASC, gpa DESC, grad_year DESC, department ASC, full_name ASC, id ASC',
+		'gpa_asc'  => '(gpa IS NULL) ASC, gpa ASC, grad_year DESC, department ASC, full_name ASC, id ASC',
+		'class'    => self::ORDER,
+		'name'     => 'full_name ASC, grad_year DESC, department ASC, id ASC',
+	];
+
+	/** The ORDER BY for ?sort= (unknown or absent = gpa_desc). Only ever one of the constants above, never user text. */
+	public static function order( $req ) {
+		$s = sanitize_key( (string) Rest::p( $req, 'sort' ) );
+		return self::ORDERS[ $s ] ?? self::ORDERS['gpa_desc'];
+	}
+
+	/** GET outreach/alumni — highest estimated GPA first by default (?sort=gpa_desc|gpa_asc|class|name, self::ORDERS); ?cursor= is an opaque offset (0 = first page) + the filtered total. */
 	public static function list( $req ) {
 		global $wpdb;
 		[ $w, $a ] = self::where( $req );
 		$total  = (int) $wpdb->get_var( $a ? $wpdb->prepare( 'SELECT COUNT(*) FROM ' . self::t() . " WHERE {$w}", $a ) : 'SELECT COUNT(*) FROM ' . self::t() . " WHERE {$w}" );
 		$cursor = max( 0, Rest::pint( $req, 'cursor' ) );
-		$sql    = 'SELECT * FROM ' . self::t() . " WHERE {$w} ORDER BY " . self::ORDER . ' LIMIT %d OFFSET %d';
+		$sql    = 'SELECT * FROM ' . self::t() . " WHERE {$w} ORDER BY " . self::order( $req ) . ' LIMIT %d OFFSET %d';
 		$rows   = (array) $wpdb->get_results( $wpdb->prepare( $sql, array_merge( $a, [ self::PER_PAGE, $cursor ] ) ), ARRAY_A );
 		$next   = count( $rows ) === self::PER_PAGE ? $cursor + self::PER_PAGE : 0;
 		return [ 'items' => array_map( [ self::class, 'out' ], $rows ), 'next' => $next, 'total' => $total ];
@@ -244,6 +272,7 @@ final class AlumniSearch {
 		$out['with_email'] = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$t} WHERE " . self::HAS_EMAIL );
 		$out['total']     = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$t}" );
 		$out['with_any']  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$t} WHERE n_profiles > 0" );
+		$out['with_gpa']  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$t} WHERE gpa IS NOT NULL" );
 		$out['synced_at'] = (string) $wpdb->get_var( "SELECT MAX(updated_at) FROM {$t}" );
 		return $out;
 	}
@@ -252,9 +281,9 @@ final class AlumniSearch {
 	public static function export( $req ) {
 		global $wpdb;
 		[ $w, $a ] = self::where( $req );
-		$sql  = 'SELECT * FROM ' . self::t() . " WHERE {$w} ORDER BY " . self::ORDER . ' LIMIT 100000';
+		$sql  = 'SELECT * FROM ' . self::t() . " WHERE {$w} ORDER BY " . self::order( $req ) . ' LIMIT 100000';
 		$rows = (array) $wpdb->get_results( $a ? $wpdb->prepare( $sql, $a ) : $sql, ARRAY_A );
-		$cols = array_merge( [ 'full_name', 'grad_year', 'department', 'employer', 'headline', 'city', 'country', 'location', 'location_source', 'public_email', 'email_source', 'emails' ], array_map( function ( $p ) { return $p . '_url'; }, self::PLATFORMS ) );
+		$cols = array_merge( [ 'full_name', 'grad_year', 'department', 'employer', 'headline', 'city', 'country', 'location', 'location_source', 'gpa', 'public_email', 'email_source', 'emails' ], array_map( function ( $p ) { return $p . '_url'; }, self::PLATFORMS ) );
 		$cell = function ( $v ) {
 			$v = (string) $v;
 			if ( $v !== '' && strpbrk( $v[0], "=+-@\t\r" ) !== false ) { $v = "'" . $v; }
@@ -443,7 +472,7 @@ final class AlumniSearch {
 			foreach ( array_slice( $body['verify'], 0, self::ROWS_MAX ) as $k ) {
 				if ( ! is_array( $k ) || ( $k['full_name'] ?? '' ) === '' ) { continue; }
 				$nk  = self::name_key( mb_substr( sanitize_text_field( (string) $k['full_name'] ), 0, 255 ), mb_substr( sanitize_text_field( (string) ( $k['department'] ?? '' ) ), 0, 120 ) );
-				$got = $wpdb->get_row( $wpdb->prepare( 'SELECT profiles, emails, photo, photo_meta, location, updated_at FROM ' . self::t() . ' WHERE name_key = %s AND grad_year = %d', $nk, (int) ( $k['grad_year'] ?? 0 ) ), ARRAY_A );
+				$got = $wpdb->get_row( $wpdb->prepare( 'SELECT profiles, emails, photo, photo_meta, location, gpa, updated_at FROM ' . self::t() . ' WHERE name_key = %s AND grad_year = %d', $nk, (int) ( $k['grad_year'] ?? 0 ) ), ARRAY_A );
 				$pm  = $got ? ( json_decode( (string) $got['photo_meta'], true ) ?: null ) : null;
 				$pf  = $got ? ( json_decode( (string) $got['profiles'], true ) ?: [] ) : [];
 				$em  = $got ? ( json_decode( (string) ( $got['emails'] ?? '' ), true ) ?: [] ) : [];
@@ -454,6 +483,7 @@ final class AlumniSearch {
 					'n_emails'   => is_array( $em ) ? count( $em ) : 0,
 					'photo'      => $pm && is_file( Outreach::photo_path( (string) $got['photo'] ) ) ? [ 'sha1' => $pm['sha1'] ?? '', 'platform' => $pm['platform'] ?? '' ] : null,
 					'location'   => $got ? (string) ( $got['location'] ?? '' ) : null,
+					'gpa'        => $got ? self::gpa_out( $got['gpa'] ?? null ) : null,
 					'updated_at' => $got ? $got['updated_at'] : null,
 				];
 			}
