@@ -3306,13 +3306,14 @@ export type Alumnus = {
   profiles: Partial<Record<AlumniPlatform, AlumniProfile>>; updated_at: string;
 };
 /** platforms: comma list of AlumniPlatform | "email"; a row matches when it has ALL of them (1.25.13; absent = everyone). location: free text against location/city/country (1.25.19). */
-export type AlumniFilter = { year?: string; department?: string; country?: string; location?: string; platform?: string; platforms?: string; followed?: string; q?: string; sort?: AlumniSort };
+export type AlumniFilter = { year?: string; department?: string; country?: string; location?: string; platform?: string; platforms?: string; followed?: string; q?: string; sort?: AlumniSort;
+  /** 1.25.22: "1" = also list people without an estimated GPA (hidden by default; the rows are never deleted) */ with_no_gpa?: string };
 /** 1.25.20: list order. The default (no sort sent) is gpa_desc = highest estimated GPA first, people without one last. */
 export type AlumniSort = "gpa_desc" | "gpa_asc" | "class" | "name";
 export type AlumniFacet = { value: string | number; n: number };
 export type AlumniFacets = {
   years: AlumniFacet[]; departments: AlumniFacet[]; countries: AlumniFacet[];
-  platforms: Record<AlumniPlatform, number>; total: number; with_any: number; with_email?: number; with_gpa?: number; synced_at: string;
+  platforms: Record<AlumniPlatform, number>; total: number; with_any: number; with_email?: number; with_gpa?: number; /** 1.25.22: people hidden for having no estimated GPA yet */ without_gpa?: number; synced_at: string;
 };
 const alumniParams = (p: AlumniFilter & { cursor?: number }) =>
   Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined && v !== "")) as Record<string, string | number>;

@@ -604,6 +604,12 @@ function AlumniSearch() {
           options={[{ value: "", label: "Followed or not" }, { value: "1", label: "Followed" }, { value: "0", label: "Not followed" }]} />
         <Button size="sm" variant="outline" onClick={exportCsv}>Export CSV</Button>
       </div>
+      {(facets?.without_gpa ?? 0) > 0 && (
+        <label className="flex w-fit cursor-pointer items-center gap-2 text-[12px] text-ink-3">
+          <input type="checkbox" checked={f.with_no_gpa === "1"} onChange={(e) => setF((o) => ({ ...o, with_no_gpa: e.target.checked ? "1" : undefined }))} />
+          Show people without GPA ({facets?.without_gpa?.toLocaleString()}); hidden by default
+        </label>
+      )}
       <fieldset className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink-2">
         <legend className="sr-only">Has all of these</legend>
         <span className="mr-1 text-ink-3">Has all of:</span>

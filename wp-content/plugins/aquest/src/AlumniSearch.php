@@ -191,6 +191,9 @@ final class AlumniSearch {
 	private static function where( $req ) {
 		global $wpdb;
 		$w = [ '1=1' ]; $a = [];
+		// 1.25.22 (Arash 2026-10-29: "every person must show Est. GPA, or else not be in the list"): people without an estimated GPA are
+		// HIDDEN by default (rows stay in the table, nothing is deleted). ?with_no_gpa=1 shows them too (the tab's small toggle).
+		if ( (string) Rest::p( $req, 'with_no_gpa' ) !== '1' ) { $w[] = 'gpa IS NOT NULL'; }
 		if ( $y = Rest::pint( $req, 'year' ) ) { $w[] = 'grad_year = %d'; $a[] = $y; }
 		if ( ( $d = sanitize_text_field( (string) Rest::p( $req, 'department' ) ) ) !== '' ) { $w[] = 'department = %s'; $a[] = $d; }
 		if ( ( $c = sanitize_text_field( (string) Rest::p( $req, 'country' ) ) ) !== '' ) { $w[] = 'country = %s'; $a[] = $c; }
@@ -263,16 +266,17 @@ final class AlumniSearch {
 		$t = self::t(); $out = [];
 		foreach ( [ 'grad_year' => 'years', 'department' => 'departments', 'country' => 'countries' ] as $col => $key ) {
 			$out[ $key ] = array_map( function ( $r ) use ( $col ) { return [ 'value' => $col === 'grad_year' ? (int) $r['v'] : $r['v'], 'n' => (int) $r['n'] ]; },
-				(array) $wpdb->get_results( "SELECT {$col} AS v, COUNT(*) AS n FROM {$t} WHERE {$col} <> '' AND {$col} IS NOT NULL GROUP BY {$col} ORDER BY {$col}" . ( $col === 'grad_year' ? ' DESC' : '' ) . " LIMIT " . self::FACET_MAX, ARRAY_A ) );
+				(array) $wpdb->get_results( "SELECT {$col} AS v, COUNT(*) AS n FROM {$t} WHERE {$col} <> '' AND {$col} IS NOT NULL AND gpa IS NOT NULL GROUP BY {$col} ORDER BY {$col}" . ( $col === 'grad_year' ? ' DESC' : '' ) . " LIMIT " . self::FACET_MAX, ARRAY_A ) );
 		}
 		$out['platforms'] = [];
 		foreach ( self::PLATFORMS as $pf ) {
-			$out['platforms'][ $pf ] = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$t} WHERE platforms LIKE %s", '%,' . $pf . ',%' ) );
+			$out['platforms'][ $pf ] = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$t} WHERE gpa IS NOT NULL AND platforms LIKE %s", '%,' . $pf . ',%' ) );
 		}
-		$out['with_email'] = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$t} WHERE " . self::HAS_EMAIL );
-		$out['total']     = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$t}" );
-		$out['with_any']  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$t} WHERE n_profiles > 0" );
-		$out['with_gpa']  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$t} WHERE gpa IS NOT NULL" );
+		$out['with_email'] = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$t} WHERE gpa IS NOT NULL AND " . self::HAS_EMAIL );
+		$out['total']     = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$t} WHERE gpa IS NOT NULL" );   // the visible list (people with an estimated GPA)
+		$out['with_any']  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$t} WHERE gpa IS NOT NULL AND n_profiles > 0" );
+		$out['with_gpa']  = $out['total'];
+		$out['without_gpa'] = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$t} WHERE gpa IS NULL" );   // hidden unless ?with_no_gpa=1
 		$out['synced_at'] = (string) $wpdb->get_var( "SELECT MAX(updated_at) FROM {$t}" );
 		return $out;
 	}
