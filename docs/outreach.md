@@ -104,7 +104,7 @@ Every `outreach/*` route (ArtaSearch included, except the token-checked ingest) 
 **or** whose slug is in `Outreach::EXTRA_SLUGS` (`artafather`, the founder's own account). This
 grants Outreach only. ArtaCast and every other admin surface still require manage_options.
 
-## ArtaSearch: LinkedIn Follow (1.25.23)
+## ArtaSearch: LinkedIn Follow (1.25.23–1.25.24)
 
 LinkedIn has its own Follow button on each ArtaSearch row and detail panel, separate from the shared Follow.
 Neither button automates anything: Follow opens the profile URL(s) in the admin's own browser and records the
