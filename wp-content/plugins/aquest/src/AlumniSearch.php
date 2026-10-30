@@ -186,8 +186,39 @@ final class AlumniSearch {
 	const LI_WINDOW_S    = 7 * DAY_IN_SECONDS;
 
 	private static function li_follows() {
-		$m = get_user_meta( get_current_user_id(), self::LI_FOLLOW_META, true );
+		$uid = get_current_user_id();
+		self::li_backfill( $uid );
+		$m = get_user_meta( $uid, self::LI_FOLLOW_META, true );
 		return is_array( $m ) ? $m : [];
+	}
+
+	// 1.25.25 (Arash 2026-10-30: "the ones that previously were followed should also have the linkedin followed"):
+	// ONE-TIME per admin user. Every pre-split shared follow (followed before 1.25.24 went live) of a row that has a LinkedIn
+	// profile is copied into aq_alumni_li_follows with the SAME followed_at. Never written to the log, so it never counts
+	// against the weekly cap. Guarded by a per-user flag (the follow state itself is per user); idempotent (keeps existing).
+	const LI_BACKFILL_FLAG = 'aq_alumni_li_backfill_v1';
+	const SPLIT_LIVE_UTC   = '2026-10-30 17:30:00';
+	private static $li_bf_done = [];
+
+	private static function li_backfill( $uid ) {
+		global $wpdb;
+		if ( $uid <= 0 || isset( self::$li_bf_done[ $uid ] ) ) { return; }
+		self::$li_bf_done[ $uid ] = true;
+		if ( get_user_meta( $uid, self::LI_BACKFILL_FLAG, true ) ) { return; }
+		$legacy = array_filter( self::follows(), function ( $t ) { return is_string( $t ) && $t < self::SPLIT_LIVE_UTC; } );
+		$m = get_user_meta( $uid, self::LI_FOLLOW_META, true ); $m = is_array( $m ) ? $m : [];
+		$n = 0;
+		if ( $legacy ) {
+			$ids  = implode( ',', array_map( 'intval', array_keys( $legacy ) ) );
+			$rows = (array) $wpdb->get_results( 'SELECT id, profiles FROM ' . self::t() . " WHERE id IN ({$ids})", ARRAY_A );
+			foreach ( $rows as $r ) {
+				$pr = json_decode( (string) $r['profiles'], true );
+				$id = (int) $r['id'];
+				if ( ! isset( $m[ $id ] ) && self::is_linkedin_url( (string) ( $pr['linkedin']['url'] ?? '' ) ) ) { $m[ $id ] = $legacy[ $id ]; $n++; }
+			}
+			if ( $n ) { update_user_meta( $uid, self::LI_FOLLOW_META, $m ); }
+		}
+		update_user_meta( $uid, self::LI_BACKFILL_FLAG, gmdate( 'Y-m-d H:i:s' ) . ' n=' . $n );
 	}
 
 	/** https URL on linkedin.com or a locale subdomain (tr.linkedin.com, www.), any path (/in/, /pub/). */

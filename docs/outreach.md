@@ -113,3 +113,6 @@ The LinkedIn Follow opens only the LinkedIn profile and records it in `aq_alumni
 per-admin rolling 7-day quota (`aq_alumni_li_follow_log`; unfollow does not refund). The server refuses a new
 LinkedIn follow past the cap with 429 `li_weekly_cap`. The cap is the site option `aq_alumni_li_weekly_cap`
 (default 80, 0..500, filter of the same name), readable/settable via GET/POST `outreach/alumni/linkedin-quota`.
+1.25.25: one-time per-admin backfill — every shared follow saved before 1.25.24 went live (2026-10-30 17:30 UTC) on a row
+with a LinkedIn profile is copied into `aq_alumni_li_follows` with the same time. Not logged, so it never uses quota.
+Flag: user meta `aq_alumni_li_backfill_v1` ("<UTC time> n=<count>").
