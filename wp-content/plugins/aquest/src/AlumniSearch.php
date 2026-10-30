@@ -163,6 +163,7 @@ final class AlumniSearch {
 			'emails' => is_array( $em = json_decode( (string) ( $r['emails'] ?? '' ), true ) ) ? $em : [],
 			'profiles' => is_array( $p ) ? $p : [], 'updated_at' => $r['updated_at'],
 			'followed_at' => self::follows()[ (int) $r['id'] ] ?? null,
+			'li_followed_at' => self::li_follows()[ (int) $r['id'] ] ?? null,
 		];
 	}
 
@@ -175,13 +176,93 @@ final class AlumniSearch {
 		return is_array( $m ) ? $m : [];
 	}
 
-	/** POST outreach/alumni/follow {id, follow: bool} -> {id, followed_at|null}. Unfollow only flips the state. */
+	// 1.25.23 LinkedIn Follow (Arash 2026-10-30: "linkedin to have its own separate follow button since it has lower weekly limit").
+	// LinkedIn gets its own per-user state and a ROLLING 7-day quota; the shared Follow no longer opens or counts LinkedIn.
+	// Nothing is automated: the button only opens the public profile URL in the admin's own browser and records the click.
+	const LI_FOLLOW_META = 'aq_alumni_li_follows';      // {alumni id: followed_at UTC}
+	const LI_LOG_META    = 'aq_alumni_li_follow_log';   // [UTC 'Y-m-d H:i:s', ...] every LinkedIn follow click, last 7 days (unfollow does NOT refund)
+	const LI_CAP_OPTION  = 'aq_alumni_li_weekly_cap';   // site option; default below, 0 = LinkedIn follows off
+	const LI_CAP_DEFAULT = 80;
+	const LI_WINDOW_S    = 7 * DAY_IN_SECONDS;
+
+	private static function li_follows() {
+		$m = get_user_meta( get_current_user_id(), self::LI_FOLLOW_META, true );
+		return is_array( $m ) ? $m : [];
+	}
+
+	/** https URL on linkedin.com or a locale subdomain (tr.linkedin.com, www.), any path (/in/, /pub/). */
+	public static function is_linkedin_url( $u ) {
+		$h = strtolower( (string) wp_parse_url( $u, PHP_URL_HOST ) );
+		return in_array( strtolower( (string) wp_parse_url( $u, PHP_URL_SCHEME ) ), [ 'http', 'https' ], true )
+			&& (bool) preg_match( '/(^|\.)linkedin\.com$/', $h );
+	}
+
+	/** The LinkedIn weekly cap: the option if set, else the default; `aq_alumni_li_weekly_cap` filter last. Clamped 0..500. */
+	public static function li_cap() {
+		$v = get_option( self::LI_CAP_OPTION, '' );
+		$c = ( $v === '' || $v === false ) ? self::LI_CAP_DEFAULT : (int) $v;
+		return max( 0, min( 500, (int) apply_filters( 'aq_alumni_li_weekly_cap', $c ) ) );
+	}
+
+	/** This user's LinkedIn follow clicks inside the rolling window (pruned). */
+	private static function li_log() {
+		$l   = get_user_meta( get_current_user_id(), self::LI_LOG_META, true );
+		$cut = gmdate( 'Y-m-d H:i:s', time() - self::LI_WINDOW_S );
+		return array_values( array_filter( is_array( $l ) ? $l : [], function ( $t ) use ( $cut ) { return is_string( $t ) && $t > $cut; } ) );
+	}
+
+	/** {cap, used, remaining, resets_at|null} — resets_at = when the oldest click in the window falls out (UTC). */
+	private static function li_quota( $log = null ) {
+		$log = $log ?? self::li_log();
+		sort( $log );
+		$cap = self::li_cap(); $used = count( $log );
+		return [ 'cap' => $cap, 'used' => $used, 'remaining' => max( 0, $cap - $used ),
+			'resets_at' => $log ? gmdate( 'Y-m-d H:i:s', strtotime( $log[0] . ' UTC' ) + self::LI_WINDOW_S ) : null ];
+	}
+
+	/** GET outreach/alumni/linkedin-quota -> {cap, used, remaining, resets_at}. */
+	public static function li_quota_rest( $req ) { return self::li_quota(); }
+
+	/** POST outreach/alumni/linkedin-quota {cap} -> quota. Sets the site-wide LinkedIn weekly cap (0..500). */
+	public static function li_cap_rest( $req ) {
+		update_option( self::LI_CAP_OPTION, (string) max( 0, min( 500, Rest::pint( $req, 'cap' ) ) ), false );
+		return self::li_quota();
+	}
+
+	/** POST outreach/alumni/follow {id, follow: bool, platform?: 'linkedin'} -> {id, followed_at|null, li_followed_at|null, quota?}.
+	 *  Without platform: the shared (non-LinkedIn) follow state, unchanged since 1.25.12. Unfollow only flips the state.
+	 *  platform=linkedin: needs a LinkedIn profile on the row; a NEW follow is refused with 429 once the weekly quota is used. */
 	public static function follow( $req ) {
 		global $wpdb;
 		$id = Rest::pint( $req, 'id' );
-		if ( ! $id || ! $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . self::t() . ' WHERE id = %d', $id ) ) ) { return new \WP_Error( 'not_found', 'no such person', 404 ); }
+		$row = $id ? $wpdb->get_row( $wpdb->prepare( 'SELECT id, profiles FROM ' . self::t() . ' WHERE id = %d', $id ), ARRAY_A ) : null;
+		if ( ! $row ) { return new \WP_Error( 'not_found', 'no such person', 404 ); }
+		$on = rest_sanitize_boolean( Rest::p( $req, 'follow', true ) );
+		if ( sanitize_key( (string) Rest::p( $req, 'platform' ) ) === 'linkedin' ) {
+			$pr = json_decode( (string) $row['profiles'], true );
+			if ( ! self::is_linkedin_url( (string) ( $pr['linkedin']['url'] ?? '' ) ) ) { return new \WP_Error( 'no_linkedin', 'this person has no LinkedIn profile', 400 ); }
+			// Serialize this user's LinkedIn follows (two fast clicks / two tabs must not both take the last slot):
+			// a MySQL named lock around the read-modify-write of the two user-meta rows; the meta cache is dropped so we read fresh.
+			$uid  = get_current_user_id();
+			$lock = 'aq_li_follow_' . $uid;
+			if ( ! (int) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 5)', $lock ) ) ) { return new \WP_Error( 'busy', 'try again', 503 ); }
+			try {
+				wp_cache_delete( $uid, 'user_meta' );
+				$m = self::li_follows(); $log = self::li_log();
+				if ( $on && ! isset( $m[ $id ] ) ) {
+					$q = self::li_quota( $log );
+					if ( $q['remaining'] <= 0 ) { return new \WP_Error( 'li_weekly_cap', 'LinkedIn weekly follow limit reached', [ 'status' => 429, 'quota' => $q ] ); }
+					$m[ $id ] = $log[] = gmdate( 'Y-m-d H:i:s' );
+				} elseif ( ! $on ) { unset( $m[ $id ] ); }
+				update_user_meta( $uid, self::LI_FOLLOW_META, $m );
+				update_user_meta( $uid, self::LI_LOG_META, array_slice( $log, -1000 ) ); // pruned to 7 days by li_log(); hard bound too
+				return [ 'id' => $id, 'li_followed_at' => $m[ $id ] ?? null, 'quota' => self::li_quota( $log ) ];
+			} finally {
+				$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) );
+			}
+		}
 		$m = self::follows();
-		if ( rest_sanitize_boolean( Rest::p( $req, 'follow', true ) ) ) { $m[ $id ] = $m[ $id ] ?? gmdate( 'Y-m-d H:i:s' ); }
+		if ( $on ) { $m[ $id ] = $m[ $id ] ?? gmdate( 'Y-m-d H:i:s' ); }
 		else { unset( $m[ $id ] ); }
 		update_user_meta( get_current_user_id(), self::FOLLOW_META, $m );
 		return [ 'id' => $id, 'followed_at' => $m[ $id ] ?? null ];
@@ -216,7 +297,7 @@ final class AlumniSearch {
 		// ?followed=1 / 0: only people the current admin follows / does not follow (1.25.12)
 		$fo = (string) Rest::p( $req, 'followed' );
 		if ( $fo === '1' || $fo === '0' ) {
-			$ids = array_map( 'intval', array_keys( self::follows() ) );
+			$ids = array_values( array_unique( array_map( 'intval', array_merge( array_keys( self::follows() ), array_keys( self::li_follows() ) ) ) ) ); // 1.25.23: either button counts
 			if ( $fo === '1' ) { $w[] = $ids ? 'id IN (' . implode( ',', $ids ) . ')' : '1=0'; }
 			elseif ( $ids ) { $w[] = 'id NOT IN (' . implode( ',', $ids ) . ')'; }
 		}

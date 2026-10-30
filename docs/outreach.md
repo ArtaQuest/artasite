@@ -103,3 +103,13 @@ Every `outreach/*` route (ArtaSearch included, except the token-checked ingest) 
 `'outreach'` auth level: a cookie session (API tokens are refused) whose user has manage_options,
 **or** whose slug is in `Outreach::EXTRA_SLUGS` (`artafather`, the founder's own account). This
 grants Outreach only. ArtaCast and every other admin surface still require manage_options.
+
+## ArtaSearch: LinkedIn Follow (1.25.23–1.25.24)
+
+LinkedIn has its own Follow button on each ArtaSearch row and detail panel, separate from the shared Follow.
+Neither button automates anything: Follow opens the profile URL(s) in the admin's own browser and records the
+click in user meta. The shared Follow now opens every matched platform EXCEPT LinkedIn (`aq_alumni_follows`).
+The LinkedIn Follow opens only the LinkedIn profile and records it in `aq_alumni_li_follows`, counted against a
+per-admin rolling 7-day quota (`aq_alumni_li_follow_log`; unfollow does not refund). The server refuses a new
+LinkedIn follow past the cap with 429 `li_weekly_cap`. The cap is the site option `aq_alumni_li_weekly_cap`
+(default 80, 0..500, filter of the same name), readable/settable via GET/POST `outreach/alumni/linkedin-quota`.

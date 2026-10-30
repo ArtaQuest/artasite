@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
 import {
-  AlumniApi, OutreachApi, canOutreach, type AlumniFacets, type AlumniFilter, type AlumniPlatform, type AlumniSort, type Alumnus, type ProfileSyncItem,
+  AlumniApi, ApiError, OutreachApi, canOutreach, type AlumniFacets, type AlumniFilter, type AlumniPlatform, type AlumniSort, type Alumnus, type LinkedInQuota, type ProfileSyncItem,
   type OutreachAccount, type OutreachImportResult, type OutreachPlanRow, type OutreachPlatform, type OutreachStat, type OutreachStatus,
 } from "../lib/api";
 import { Button, Card, ErrorNote, PageHero, Select, SkeletonGrid, StatusNote, Tabs, Textarea, cx } from "../components/ui";
@@ -232,7 +232,30 @@ function Plan() {
         </table>
       </Card>
       <div className="flex items-center gap-3"><Button size="sm" onClick={save}>Save daily caps</Button>{msg && <span className="text-[13px] text-ink-3">{msg}</span>}</div>
+      <LinkedInWeeklyCap />
     </div>
+  );
+}
+
+/** 1.25.23: the ArtaSearch LinkedIn Follow button's own weekly cap (rolling 7 days, per admin; site-wide setting). */
+function LinkedInWeeklyCap() {
+  const q = useLinkedInQuota();
+  const [v, setV] = useState("");
+  const [msg, setMsg] = useState("");
+  useEffect(() => { if (q && v === "") setV(String(q.cap)); }, [q, v]);
+  const save = async () => {
+    try { setLiQuota(await AlumniApi.setLinkedInCap(Math.max(0, Math.min(500, Number(v) || 0)))); setMsg("LinkedIn weekly cap saved."); }
+    catch { setMsg("Couldn't save the LinkedIn cap."); }
+  };
+  return (
+    <Card className="flex flex-wrap items-center gap-3 p-3 text-[13px]">
+      <label className="flex items-center gap-2 font-semibold text-ink">
+        ArtaSearch LinkedIn Follow — weekly cap
+        <input type="number" min={0} max={500} value={v} onChange={(e) => setV(e.target.value)} className="w-16 rounded border border-line bg-transparent px-1" />
+      </label>
+      {q && <span className="text-ink-3">Used {n(q.used)} in the last 7 days · {n(q.remaining)} left{q.resets_at ? ` · next slot ${istanbulTime(q.resets_at)}` : ""}</span>}
+      <Button size="sm" onClick={save}>Save LinkedIn cap</Button>{msg && <span className="text-ink-3" role="status">{msg}</span>}
+    </Card>
   );
 }
 
@@ -367,6 +390,22 @@ function When({ label, at }: { label: string; at: string | null | undefined }) {
   return <span title={istanbulTime(at)}>{label} {rel}</span>;
 }
 
+/** 1.25.23 (Arash 2026-10-30): LinkedIn has its own Follow button and a lower WEEKLY quota (rolling 7 days, server-enforced,
+ *  set in Rest outreach/alumni/linkedin-quota). One module-level copy so every row's counter updates together. */
+let liQuota: LinkedInQuota | null = null;
+const liSubs = new Set<() => void>();
+let liLoading = false;
+const setLiQuota = (q: LinkedInQuota) => { liQuota = q; liSubs.forEach((f) => f()); };
+function useLinkedInQuota(): LinkedInQuota | null {
+  const q = useSyncExternalStore((f) => { liSubs.add(f); return () => { liSubs.delete(f); }; }, () => liQuota);
+  useEffect(() => {
+    if (liQuota || liLoading) return;
+    liLoading = true;
+    AlumniApi.linkedInQuota().then(setLiQuota).catch(() => {}).finally(() => { liLoading = false; });
+  }, []);
+  return q;
+}
+
 /** Arash 2026-10-23: the LIST stays minimal — one row per person: name, department, year, social icon links and an
  *  envelope icon (mailto: the first email; all of them in the detail). No picture in the list. Clicking the row opens the
  *  detail panel: the stored photo (Instagram > LinkedIn > Facebook > GitHub, initials otherwise) and every detail.
@@ -379,11 +418,17 @@ export function AlumniRow({ a }: { a: Alumnus }) {
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const have = ALUMNI_PLATFORMS.filter((p) => a.profiles[p]);
+  const others = have.filter((p) => p !== "linkedin"); // 1.25.23: the shared Follow never opens or counts LinkedIn
   const queueable = have.filter((p) => QUEUEABLE.has(p));
   const emails = alumniEmails(a);
   const [followedAt, setFollowedAt] = useState<string | null>(a.followed_at ?? null);
   const [fBusy, setFBusy] = useState(false);
   const [fMsg, setFMsg] = useState("");
+  const liUrl = (() => { const u = a.profiles.linkedin?.url; try { return u && /^https?:$/.test(new URL(u).protocol) && /(^|\.)linkedin\.com$/i.test(new URL(u).hostname) ? u : undefined; } catch { return undefined; } })();
+  const [liAt, setLiAt] = useState<string | null>(a.li_followed_at ?? null);
+  const [liBusy, setLiBusy] = useState(false);
+  const quota = useLinkedInQuota();
+  const liBlocked = !liAt && !!quota && quota.remaining <= 0;
   // Follow (1.25.15, Arash 2026-10-24): open every social link in its own tab SYNCHRONOUSLY inside the click, and keep this
   // page where it is. Tested in Chrome: script cannot make a tab open in the background — synthetic ⌘/Ctrl-clicks on
   // anchors are ignored and window.focus() cannot take focus back — but window.open() honours the modifier of the REAL
@@ -393,7 +438,7 @@ export function AlumniRow({ a }: { a: Alumnus }) {
     e.preventDefault();
     const follow = !followedAt;
     if (follow) {
-      const urls = have.map((p) => a.profiles[p]?.url).filter((u): u is string => !!u);
+      const urls = others.map((p) => a.profiles[p]?.url).filter((u): u is string => !!u);
       const x = window.scrollX, y = window.scrollY;
       for (const u of urls) window.open(u, "_blank", "noopener,noreferrer");
       window.focus();
@@ -406,6 +451,40 @@ export function AlumniRow({ a }: { a: Alumnus }) {
     setFollowedAt(follow ? new Date().toISOString().slice(0, 19).replace("T", " ") : null); setFBusy(true);
     AlumniApi.follow(a.id, follow).then((r) => setFollowedAt(r.followed_at)).catch(() => { setFollowedAt(prev); setFMsg("Couldn't save follow state."); }).finally(() => setFBusy(false));
   };
+  // LinkedIn Follow: opens ONLY the LinkedIn profile in the admin's own browser (they follow/connect by hand) and records it
+  // against the weekly quota. The server refuses a new follow past the cap (429); unfollow only flips the state, no refund.
+  const toggleLinkedIn = (e: ReactMouseEvent<HTMLElement>) => {
+    e.preventDefault();
+    const follow = !liAt;
+    if (follow && liBlocked) { setFMsg(`LinkedIn weekly limit reached (${quota!.cap}/week).${quota!.resets_at ? ` Next slot ${istanbulTime(quota!.resets_at)}.` : ""}`); return; }
+    if (follow && liUrl) window.open(liUrl, "_blank", "noopener,noreferrer");
+    const prev = liAt;
+    setLiAt(follow ? new Date().toISOString().slice(0, 19).replace("T", " ") : null); setLiBusy(true);
+    AlumniApi.followLinkedIn(a.id, follow)
+      .then((r) => { setLiAt(r.li_followed_at); setLiQuota(r.quota); })
+      .catch((err: unknown) => {
+        setLiAt(prev);
+        const q = err instanceof ApiError ? (err.data as { data?: { quota?: LinkedInQuota } })?.data?.quota : undefined;
+        if (q) setLiQuota(q);
+        setFMsg(err instanceof ApiError && err.status === 429 ? "LinkedIn weekly limit reached — not marked as followed." : "Couldn't save LinkedIn follow state.");
+      })
+      .finally(() => setLiBusy(false));
+  };
+  const liTitle = liAt
+    ? `Followed on LinkedIn ${istanbulTime(liAt) || liAt} — click to mark as not followed`
+    : liBlocked ? `LinkedIn weekly limit reached (${quota!.cap} per 7 days)` : "Open the LinkedIn profile in a new tab and count it against the LinkedIn weekly limit";
+  const liLeft = quota ? `${quota.remaining}/${quota.cap} left this week` : "";
+  const liBtn = (extra = "") => liUrl ? (
+    <span className={cx("inline-flex items-center gap-1", extra)}>
+      <button type="button" onClick={toggleLinkedIn} disabled={liBusy || liBlocked} aria-pressed={!!liAt} title={liTitle}
+        aria-label={`${liAt ? "Unfollow" : "Follow"} ${a.full_name} on LinkedIn${quota ? ` (${quota.remaining} of ${quota.cap} LinkedIn follows left this week)` : ""}`}
+        className={cx("inline-flex h-7 items-center gap-1 rounded-full px-3 text-[12px] font-semibold disabled:opacity-60", FOCUS,
+          liAt ? "border border-line bg-veil/5 text-ink-3 hover:text-ink" : "bg-yang text-on-accent hover:bg-yin hover:text-white")}>
+        <SocialIcon k="linkedin" size={12} />{liAt ? "Unfollow" : "Follow"}
+      </button>
+      {liLeft && <span className="whitespace-nowrap text-[11px] tabular-nums text-ink-3" title="LinkedIn follows in the last 7 days (rolling)">{liLeft}</span>}
+    </span>
+  ) : null;
   const toQueue = async () => {
     setBusy(true); setMsg("");
     try {
@@ -416,9 +495,10 @@ export function AlumniRow({ a }: { a: Alumnus }) {
   };
   const followTitle = followedAt
     ? `Followed ${istanbulTime(followedAt) || followedAt} — click to mark as not followed`
-    : have.length ? `Open all ${have.length} social link(s) in new tabs and mark as followed (⌘/Ctrl-click: open them behind this page)` : "Mark as followed";
+    : others.length ? `Open all ${others.length} non-LinkedIn link(s) in new tabs and mark as followed (⌘/Ctrl-click: open them behind this page)` : "Mark as followed";
   const followBtn = (extra = "") => (
     <button type="button" onClick={toggleFollow} disabled={fBusy} aria-pressed={!!followedAt} title={followTitle}
+      aria-label={`${followedAt ? "Unfollow" : "Follow"} ${a.full_name}${liUrl ? " (all platforms except LinkedIn)" : ""}`}
       className={cx("h-7 rounded-full px-3 text-[12px] font-semibold disabled:opacity-60", FOCUS, extra,
         followedAt ? "border border-line bg-veil/5 text-ink-3 hover:text-ink" : "bg-yang text-on-accent hover:bg-yin hover:text-white")}>
       {followedAt ? "Unfollow" : "Follow"}
@@ -452,7 +532,8 @@ export function AlumniRow({ a }: { a: Alumnus }) {
             <a href={`mailto:${emails[0].email}`} className={cx(ICON_BTN, FOCUS)} aria-label={`Email ${a.full_name}`}
               title={emails[0].email + (emails.length > 1 ? ` (+${emails.length - 1} more in details)` : "")}>{MAIL_ICON}</a>
           )}
-          {followBtn("ml-1")}
+          {(others.length > 0 || !liUrl) && followBtn("ml-1")}
+          {liBtn("ml-1")}
         </div>
       </div>
       {fMsg && <p className="px-3 pb-2 text-[12px] text-ink-3" role="status">{fMsg}</p>}
@@ -537,13 +618,15 @@ export function AlumniRow({ a }: { a: Alumnus }) {
           )}
 
           <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-3">
-            <Button size="sm" variant={followedAt ? "subtle" : "primary"} onClick={toggleFollow} disabled={fBusy} aria-pressed={!!followedAt} title={followTitle} className={FOCUS}>
+            {(others.length > 0 || !liUrl) && <Button size="sm" variant={followedAt ? "subtle" : "primary"} onClick={toggleFollow} disabled={fBusy} aria-pressed={!!followedAt} title={followTitle} className={FOCUS}>
               {followedAt ? "Unfollow" : "Follow"}
-            </Button>
+            </Button>}
+            {liBtn()}
             {queueable.length > 0 && <Button size="sm" variant="outline" onClick={toQueue} disabled={busy} className={FOCUS}>{busy ? "Sending…" : "Send to queue"}</Button>}
             {msg && <span className="text-[12px] text-ink-2" role="status">{msg}</span>}
             <span className="flex flex-wrap gap-x-2 text-[12px] text-ink-3 sm:ml-auto">
               {followedAt && <><When label="Followed" at={followedAt} /><span aria-hidden>·</span></>}
+              {liAt && <><When label="LinkedIn followed" at={liAt} /><span aria-hidden>·</span></>}
               <When label="Updated" at={a.updated_at} />
             </span>
           </div>

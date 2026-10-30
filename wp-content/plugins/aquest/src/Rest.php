@@ -752,7 +752,9 @@ final class Rest {
 		[ 'GET',  'outreach/alumni/export',                   'AlumniSearch::export',   'outreach' ], // same filters → {filename, rows, csv} formula-guarded
 		[ 'GET',  'outreach/alumni/photo/(?P<id>[0-9]+)',     'AlumniSearch::photo',    'outreach' ], // 1.25.9: the stored picture (image/jpeg, no-store, noindex); <img> passes ?_wpnonce=
 		[ 'POST', 'outreach/alumni/to-queue',                 'AlumniSearch::to_queue', 'outreach' ], // {id, platforms[]} → aq_artaoutreach as pending
-		[ 'POST', 'outreach/alumni/follow',                   'AlumniSearch::follow',   'outreach' ], // 1.25.12 {id, follow} → per-user followed state (user meta)
+		[ 'POST', 'outreach/alumni/follow',                   'AlumniSearch::follow',   'outreach' ], // 1.25.12 {id, follow, platform?=linkedin} → per-user followed state (user meta)
+		[ 'GET',  'outreach/alumni/linkedin-quota',           'AlumniSearch::li_quota_rest', 'outreach' ], // 1.25.23 → {cap, used, remaining, resets_at} rolling 7 days, per user
+		[ 'POST', 'outreach/alumni/linkedin-quota',           'AlumniSearch::li_cap_rest',   'outreach' ], // 1.25.23 {cap 0..500} → sets the site-wide LinkedIn weekly cap
 		[ 'POST', 'outreach/alumni/ingest',                   'AlumniSearch::ingest',   'public' ], // the scan box; dedicated secret enforced in the handler
 		[ 'GET',  'outreach/template',                        'Outreach::template',  'outreach' ], // → {filename, csv}
 		[ 'GET',  'outreach/profile-sync',                    'ProfileSync::rest_preview', 'outreach' ], // ?cursor=&limit≤200 PREVIEW (writes nothing): {items:[{id,handle,changes}], next}

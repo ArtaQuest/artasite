@@ -3303,9 +3303,13 @@ export type Alumnus = {
   emails?: AlumniEmail[];
   /** 1.25.12: when the signed-in admin followed this person (UTC), else null */
   followed_at?: string | null;
+  /** 1.25.23: when the signed-in admin followed this person on LinkedIn (separate button + weekly quota), else null */
+  li_followed_at?: string | null;
   profiles: Partial<Record<AlumniPlatform, AlumniProfile>>; updated_at: string;
 };
 /** platforms: comma list of AlumniPlatform | "email"; a row matches when it has ALL of them (1.25.13; absent = everyone). location: free text against location/city/country (1.25.19). */
+/** 1.25.23: the signed-in admin's LinkedIn follow quota over a rolling 7 days (UTC times). */
+export type LinkedInQuota = { cap: number; used: number; remaining: number; resets_at: string | null };
 export type AlumniFilter = { year?: string; department?: string; country?: string; location?: string; platform?: string; platforms?: string; followed?: string; q?: string; sort?: AlumniSort;
   /** 1.25.22: "1" = also list people without an estimated GPA (hidden by default; the rows are never deleted) */ with_no_gpa?: string };
 /** 1.25.20: list order. The default (no sort sent) is gpa_desc = highest estimated GPA first, people without one last. */
@@ -3323,6 +3327,11 @@ export const AlumniApi = {
   photoUrl: (id: number) => `${BASE}/outreach/alumni/photo/${id}?_wpnonce=${encodeURIComponent(restNonce())}`,
   exportCsv: (p: AlumniFilter) => get<{ filename: string; rows: number; csv: string }>("/outreach/alumni/export", alumniParams(p)),
   follow: (id: number, follow: boolean) => post<{ id: number; followed_at: string | null }>("/outreach/alumni/follow", { id, follow }),
+  /** 1.25.23: LinkedIn's own follow state; a new follow past the weekly cap throws ApiError 429 (code li_weekly_cap). */
+  followLinkedIn: (id: number, follow: boolean) =>
+    post<{ id: number; li_followed_at: string | null; quota: LinkedInQuota }>("/outreach/alumni/follow", { id, follow, platform: "linkedin" }),
+  linkedInQuota: () => get<LinkedInQuota>("/outreach/alumni/linkedin-quota"),
+  setLinkedInCap: (cap: number) => post<LinkedInQuota>("/outreach/alumni/linkedin-quota", { cap }),
   toQueue: (id: number, platforms: AlumniPlatform[]) =>
     post<{ inserted: number; updated: number; skipped: string[] }>("/outreach/alumni/to-queue", { id, platforms }),
 };
