@@ -1,337 +1,27 @@
-import { useCallback, useEffect, useState, useSyncExternalStore, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent } from "react";
 import {
-  AlumniApi, ApiError, OutreachApi, canOutreach, type AlumniFacets, type AlumniFilter, type AlumniPlatform, type AlumniSort, type Alumnus, type LinkedInQuota, type ProfileSyncItem,
-  type OutreachAccount, type OutreachImportResult, type OutreachPlanRow, type OutreachPlatform, type OutreachStat, type OutreachStatus,
+  AlumniApi, ApiError, canOutreach, type AlumniFacets, type AlumniFilter, type AlumniPlatform, type AlumniSort, type Alumnus, type LinkedInQuota,
 } from "../lib/api";
-import { Button, Card, ErrorNote, PageHero, Select, SkeletonGrid, StatusNote, Tabs, Textarea, cx } from "../components/ui";
+import { Button, Card, ErrorNote, PageHero, Select, SkeletonGrid, cx } from "../components/ui";
 import { SocialIcon } from "../components/SocialLinks";
 import NotFound from "./NotFound";
 import { cleanHeadline, ESTIMATE_NOTE, evidenceChips, gpaLabel, istanbulTime, profileHandle, relTime } from "../lib/alumni-format";
 
 /**
- * OUTREACH — the ArtaTask review queue and dashboard (operator 2026-10-15). ADMIN ONLY.
- *
- * Accounts LinkedIn, Facebook, Instagram, X, GitHub and Strava suggested to Arash. Each is included in the study
- * (the phone app later sends a request) or excluded, by hand, here. The page renders NotFound for
+ * OUTREACH — ArtaSearch alumni search only (1.25.27; the Review/Results/Plan/Profile-sync tabs were removed from the
+ * UI, their routes and data are untouched). ADMIN ONLY. The page renders NotFound for
  * anyone without manage_options, and that is presentation only: every outreach/* route is 'admin'
  * in Rest::ROUTES, so a member who forces the page open gets 403s and no data.
  */
 
-const PLATFORMS: OutreachPlatform[] = ["linkedin", "facebook", "instagram", "x", "github", "strava"];
-const PLATFORM_LABEL: Record<OutreachPlatform, string> = { linkedin: "LinkedIn", facebook: "Facebook", instagram: "Instagram", x: "X", github: "GitHub", strava: "Strava" };
-/** What "accepted" means per platform — GitHub and Strava are follow-based, so it is a follow-back. */
-const ACCEPT_MEANS: Record<OutreachPlatform, string> = { linkedin: "connection accepted", facebook: "friend request accepted", instagram: "followed back", x: "followed back", github: "followed back", strava: "followed back" };
-type View = "review" | "results" | "plan" | "sync" | "search";
 
-const n = (v: number | null | undefined) => (v === null || v === undefined ? "—" : v.toLocaleString());
 const local = (utc: string | null) => (utc ? new Date(utc.replace(" ", "T") + "Z").toLocaleString() : "");
-function dur(s: number | null): string {
-  if (s === null) return "—";
-  if (s < 3600) return `${Math.round(s / 60)} min`;
-  if (s < 172800) return `${(s / 3600).toFixed(1)} h`;
-  return `${(s / 86400).toFixed(1)} d`;
-}
 function download(filename: string, csv: string) {
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
   const a = document.createElement("a");
   a.href = url; a.download = filename; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-
-function Row({ a, picked, onPick, onDecide, onSaved }: {
-  a: OutreachAccount; picked: boolean; onPick: (on: boolean) => void;
-  onDecide: (s: OutreachStatus) => void; onSaved: (a: OutreachAccount) => void;
-}) {
-  const [notes, setNotes] = useState(a.notes ?? "");
-  const [busy, setBusy] = useState(false);
-  const sent = !!a.request_sent_at;
-  const save = async () => {
-    setBusy(true);
-    try { onSaved(await OutreachApi.notes(a.id, notes)); } finally { setBusy(false); }
-  };
-  return (
-    <li className="flex gap-3 border-t border-line px-3 py-3 first:border-t-0">
-      <input type="checkbox" className="mt-1" checked={picked} disabled={sent} onChange={(e) => onPick(e.target.checked)} aria-label={`Select ${a.full_name || a.handle}`} />
-      {a.photo ? <img src={a.photo_private ? OutreachApi.photoUrl(a.id) : a.photo} alt="" width={48} height={48} loading="lazy" referrerPolicy="no-referrer" className="h-12 w-12 shrink-0 rounded-full object-cover" /> : <span className="h-12 w-12 shrink-0 rounded-full bg-veil/[0.06]" aria-hidden="true" />}
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-x-2">
-          <span className="font-semibold text-ink">{a.full_name || a.handle}</span>
-          <span className="text-[13px] text-ink-3">{PLATFORM_LABEL[a.platform]} · {a.profile_url ? <a className="hover:text-yang" href={a.profile_url} target="_blank" rel="noopener noreferrer">@{a.handle}</a> : `@${a.handle}`}</span>
-          <span className="text-[12px] text-ink-3">{a.source}</span>
-        </div>
-        {a.tagline && <p className="text-[13px] italic text-ink-2">{a.tagline}</p>}
-        {a.bio && <p className="line-clamp-3 text-[13px] text-ink-3">{a.bio}</p>}
-        <p className="mt-1 text-[12px] text-ink-3">
-          Mutuals {n(a.mutuals)} · Followers {n(a.followers)} · Following {n(a.following)}{a.connections !== null && ` · Connections ${n(a.connections)}`}
-        </p>
-        <p className="text-[12px] text-ink-3">
-          Found {local(a.discovered_at)}{a.decided_at && ` · Decided ${local(a.decided_at)}`}{a.request_sent_at && ` · Sent ${local(a.request_sent_at)}`}{a.accepted_at && ` · Accepted ${local(a.accepted_at)} (${dur(a.time_to_accept_s)})`}
-        </p>
-        <div className="mt-2 flex items-start gap-2">
-          <Textarea rows={1} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes" className="min-h-0 flex-1 text-[13px]" aria-label="Notes" />
-          <Button size="sm" variant="outline" onClick={save} disabled={busy || notes === (a.notes ?? "")}>Save notes</Button>
-        </div>
-      </div>
-      <div className="flex shrink-0 flex-col items-end gap-1.5">
-        <span className={cx("text-[12px] font-semibold", a.status === "included" ? "text-yang" : "text-ink-3")}>{a.status}</span>
-        {sent ? <span className="text-[12px] text-ink-3">Request sent</span> : <>
-          {a.status !== "included" && <Button size="sm" onClick={() => onDecide("included")}>Include</Button>}
-          {a.status !== "excluded" && <Button size="sm" variant="outline" onClick={() => onDecide("excluded")}>Exclude</Button>}
-        </>}
-      </div>
-    </li>
-  );
-}
-
-function Review() {
-  const [platform, setPlatform] = useState("");
-  const [status, setStatus] = useState<OutreachStatus | "">("pending");
-  const [items, setItems] = useState<OutreachAccount[] | null>(null);
-  const [counts, setCounts] = useState<Record<OutreachStatus, number> | null>(null);
-  const [next, setNext] = useState(0);
-  const [picked, setPicked] = useState<Set<number>>(new Set());
-  const [err, setErr] = useState("");
-  const [imp, setImp] = useState<OutreachImportResult | null>(null);
-
-  const load = useCallback(async (cursor = 0) => {
-    setErr("");
-    try {
-      const r = await OutreachApi.list({ platform, status, cursor: cursor || undefined });
-      setItems((prev) => (cursor ? [...(prev ?? []), ...r.items] : r.items));
-      setCounts(r.counts); setNext(r.next);
-      if (!cursor) setPicked(new Set());
-    } catch { setErr("Couldn't load accounts."); }
-  }, [platform, status]);
-  useEffect(() => { void load(0); }, [load]);
-
-  const decide = async (ids: number[], s: OutreachStatus) => {
-    if (!ids.length) return;
-    try { await OutreachApi.decide(ids, s); await load(0); } catch { setErr("Couldn't save that decision."); }
-  };
-  const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    e.target.value = "";
-    if (!f) return;
-    setErr("");
-    if (/\.zip$/i.test(f.name)) {
-      if (f.size > 50 * 1024 * 1024) { setErr("That zip is larger than 50 MB."); return; }
-      try { setImp(await OutreachApi.importZip(f)); await load(0); } catch (x) { setErr(x instanceof Error && x.message ? `Import failed: ${x.message}` : "Import failed."); }
-      return;
-    }
-    if (f.size > 2 * 1024 * 1024) { setErr("That CSV is larger than 2 MB."); return; }
-    try { setImp(await OutreachApi.importCsv(await f.text())); await load(0); } catch { setErr("Import failed."); }
-  };
-  const exportView = async () => {
-    try { const r = await OutreachApi.exportCsv({ platform, status }); download(r.filename, r.csv); } catch { setErr("Export failed."); }
-  };
-  const template = async () => {
-    try { const r = await OutreachApi.template(); download(r.filename, r.csv); } catch { setErr("Couldn't fetch the template."); }
-  };
-
-  const total = counts ? counts.pending + counts.included + counts.excluded : 0;
-  const statusTabs = [
-    { key: "", label: `All (${total})` },
-    ...(["pending", "included", "excluded"] as OutreachStatus[]).map((s) => ({ key: s, label: `${s[0].toUpperCase()}${s.slice(1)} (${counts?.[s] ?? 0})` })),
-  ];
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <Tabs tabs={statusTabs} active={status} onChange={(k) => setStatus(k as OutreachStatus | "")} label="Status" />
-        <Select label="Platform" value={platform} onChange={setPlatform} options={[{ value: "", label: "All platforms" }, ...PLATFORMS.map((p) => ({ value: p, label: PLATFORM_LABEL[p] }))]} />
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" disabled={!picked.size} onClick={() => decide([...picked], "included")}>Include selected</Button>
-        <Button size="sm" variant="outline" disabled={!picked.size} onClick={() => decide([...picked], "excluded")}>Exclude selected</Button>
-        <Button size="sm" variant="ghost" disabled={!picked.size} onClick={() => decide([...picked], "pending")}>Back to pending</Button>
-        <span className="flex-1" />
-        <label className="cursor-pointer text-[13px] font-semibold text-ink-2 hover:text-yang">
-          Import CSV or zip<input type="file" accept=".csv,text/csv,.zip,application/zip" className="sr-only" onChange={onFile} />
-        </label>
-        <Button size="sm" variant="ghost" onClick={exportView}>Export this view</Button>
-        <Button size="sm" variant="ghost" onClick={template}>Template</Button>
-      </div>
-      {imp && (
-        <StatusNote className="py-2 text-start">
-          Import: {imp.inserted} inserted, {imp.updated} updated{"photos" in imp ? `, ${(imp as { photos: number }).photos} photos stored` : ""}, {imp.errors.length} errors.
-          {imp.errors.slice(0, 50).map((e) => <span key={e.row} className="block">Row {e.row}: {e.error}</span>)}
-        </StatusNote>
-      )}
-      {err && <ErrorNote>{err}</ErrorNote>}
-      {items === null ? <SkeletonGrid count={4} media={false} /> : !items.length ? <StatusNote>Nothing here.</StatusNote> : (
-        <Card className="p-0">
-          <ul>
-            {items.map((a) => (
-              <Row key={a.id} a={a} picked={picked.has(a.id)}
-                onPick={(on) => setPicked((p) => { const s = new Set(p); if (on) s.add(a.id); else s.delete(a.id); return s; })}
-                onDecide={(s) => decide([a.id], s)}
-                onSaved={(u) => setItems((prev) => (prev ?? []).map((x) => (x.id === u.id ? u : x)))} />
-            ))}
-          </ul>
-        </Card>
-      )}
-      {next > 0 && <Button variant="outline" onClick={() => load(next)}>Older</Button>}
-    </div>
-  );
-}
-
-function Results() {
-  const [rows, setRows] = useState<OutreachStat[] | null>(null);
-  useEffect(() => { OutreachApi.stats().then((r) => setRows(r.platforms)).catch(() => setRows([])); }, []);
-  if (rows === null) return <SkeletonGrid count={4} media={false} />;
-  return (
-    <Card className="overflow-x-auto p-0">
-      <table className="w-full text-[13px]">
-        <thead><tr className="text-start text-ink-3">{["Platform", "Pending", "Included", "Excluded", "Sent", "Accepted", "Acceptance rate", "Time to accept (median)", "(mean)"].map((h) => <th key={h} className="px-3 py-2 text-start font-semibold">{h}</th>)}</tr></thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.platform} className="border-t border-line">
-              <td className="px-3 py-2"><span className="font-semibold text-ink">{PLATFORM_LABEL[r.platform]}</span><span className="block text-[11px] text-ink-3">accepted = {ACCEPT_MEANS[r.platform]}</span></td>
-              <td className="px-3 py-2">{n(r.pending)}</td><td className="px-3 py-2">{n(r.included)}</td><td className="px-3 py-2">{n(r.excluded)}</td>
-              <td className="px-3 py-2">{n(r.sent)}</td><td className="px-3 py-2">{n(r.accepted)}</td>
-              <td className="px-3 py-2">{r.acceptance_rate === null ? "—" : `${(r.acceptance_rate * 100).toFixed(1)}%`}</td>
-              <td className="px-3 py-2">{dur(r.tta_median_s)}</td><td className="px-3 py-2">{dur(r.tta_mean_s)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </Card>
-  );
-}
-
-function Plan() {
-  const [rows, setRows] = useState<OutreachPlanRow[] | null>(null);
-  const [caps, setCaps] = useState<Record<string, string>>({});
-  const [msg, setMsg] = useState("");
-  const load = useCallback(() => OutreachApi.plan().then((r) => {
-    setRows(r.platforms); setCaps(Object.fromEntries(r.platforms.map((p) => [p.platform, String(p.daily_cap)])));
-  }).catch(() => setRows([])), []);
-  useEffect(() => { void load(); }, [load]);
-  const save = async () => {
-    try {
-      await OutreachApi.setCaps(Object.fromEntries(Object.entries(caps).map(([k, v]) => [k, Number(v) || 0])) as Partial<Record<OutreachPlatform, number>>);
-      setMsg("Daily caps saved."); await load();
-    } catch { setMsg("Couldn't save the caps."); }
-  };
-  if (rows === null) return <SkeletonGrid count={4} media={false} />;
-  return (
-    <div className="flex flex-col gap-3">
-      <Card className="overflow-x-auto p-0">
-        <table className="w-full text-[13px]">
-          <thead><tr className="text-ink-3">{["Platform", "Daily cap", "Sent today (UTC)", "Remaining today", "Queued (included, not sent)", "Days to clear"].map((h) => <th key={h} className="px-3 py-2 text-start font-semibold">{h}</th>)}</tr></thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.platform} className="border-t border-line">
-                <td className="px-3 py-2 font-semibold text-ink">{PLATFORM_LABEL[r.platform]}</td>
-                <td className="px-3 py-2"><input type="number" min={0} max={100} value={caps[r.platform] ?? ""} onChange={(e) => setCaps((c) => ({ ...c, [r.platform]: e.target.value }))} className="w-16 rounded border border-line bg-transparent px-1" aria-label={`${PLATFORM_LABEL[r.platform]} daily cap`} /></td>
-                <td className="px-3 py-2">{n(r.sent_today)}</td><td className="px-3 py-2">{n(r.remaining_today)}</td>
-                <td className="px-3 py-2">{n(r.queued)}</td><td className="px-3 py-2">{r.days_to_clear === null ? "—" : r.days_to_clear}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-      <div className="flex items-center gap-3"><Button size="sm" onClick={save}>Save daily caps</Button>{msg && <span className="text-[13px] text-ink-3">{msg}</span>}</div>
-      <LinkedInWeeklyCap />
-    </div>
-  );
-}
-
-/** 1.25.23: the ArtaSearch LinkedIn Follow button's own weekly cap (rolling 7 days, per admin; site-wide setting). */
-function LinkedInWeeklyCap() {
-  const q = useLinkedInQuota();
-  const [v, setV] = useState("");
-  const [msg, setMsg] = useState("");
-  useEffect(() => { if (q && v === "") setV(String(q.cap)); }, [q, v]);
-  const save = async () => {
-    try { setLiQuota(await AlumniApi.setLinkedInCap(Math.max(0, Math.min(500, Number(v) || 0)))); setMsg("LinkedIn weekly cap saved."); }
-    catch { setMsg("Couldn't save the LinkedIn cap."); }
-  };
-  return (
-    <Card className="flex flex-wrap items-center gap-3 p-3 text-[13px]">
-      <label className="flex items-center gap-2 font-semibold text-ink">
-        ArtaSearch LinkedIn Follow — weekly cap
-        <input type="number" min={0} max={500} value={v} onChange={(e) => setV(e.target.value)} className="w-16 rounded border border-line bg-transparent px-1" />
-      </label>
-      {q && <span className="text-ink-3">Used {n(q.used)} in the last 7 days · {n(q.remaining)} left{q.resets_at ? ` · next slot ${istanbulTime(q.resets_at)}` : ""}</span>}
-      <Button size="sm" onClick={save}>Save LinkedIn cap</Button>{msg && <span className="text-ink-3" role="status">{msg}</span>}
-    </Card>
-  );
-}
-
-/** PROFILE SYNC — mirror each member's public profile (full name, /u/ URL) onto their WP user
- *  record (AQ\ProfileSync). Preview writes nothing; Apply needs an explicit confirm and only
- *  touches the users that Preview listed, in batches of 200. No logins or emails are shown. */
-function ProfileSync() {
-  const [items, setItems] = useState<ProfileSyncItem[] | null>(null);
-  const [stats, setStats] = useState({ scanned: 0, bots: 0 });
-  const [busy, setBusy] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [msg, setMsg] = useState("");
-  const preview = async () => {
-    setBusy(true); setMsg(""); setConfirming(false);
-    try {
-      const all: ProfileSyncItem[] = []; let scanned = 0, bots = 0; let cursor: number | null = 0;
-      while (cursor !== null) {
-        const r = await OutreachApi.syncPreview(cursor);
-        all.push(...r.items); scanned += r.scanned; bots += r.bots_skipped; cursor = r.next;
-      }
-      setItems(all); setStats({ scanned, bots });
-    } catch { setMsg("Couldn't load the preview."); }
-    setBusy(false);
-  };
-  const apply = async () => {
-    if (!items?.length) return;
-    setBusy(true); setConfirming(false);
-    const tot = { updated: 0, unchanged: 0, skipped: 0, fields: 0 };
-    try {
-      const ids = items.map((i) => i.id);
-      for (let k = 0; k < ids.length; k += 200) {
-        const r = await OutreachApi.syncApply(ids.slice(k, k + 200));
-        tot.updated += r.updated; tot.unchanged += r.unchanged; tot.skipped += r.skipped; tot.fields += r.fields;
-      }
-      setMsg(`Applied: ${tot.updated} users updated (${tot.fields} fields), ${tot.unchanged} already in sync, ${tot.skipped} skipped.`);
-      setItems(null);
-    } catch { setMsg(`Apply stopped partway: ${tot.updated} users updated so far. Run Preview again.`); }
-    setBusy(false);
-  };
-  return (
-    <div className="flex flex-col gap-3">
-      <p className="text-[13px] text-ink-3">Copies each member's public profile (full name, profile address) onto their WordPress user. A name a member chose themselves is kept. Sign-in names, emails and roles are never changed; bots are skipped.</p>
-      <div className="flex flex-wrap items-center gap-3">
-        <Button size="sm" onClick={preview} disabled={busy}>Preview</Button>
-        {items && items.length > 0 && !confirming && <Button size="sm" onClick={() => setConfirming(true)} disabled={busy}>Apply…</Button>}
-        {confirming && items && (
-          <span className="flex items-center gap-2 text-[13px]">
-            Update {items.length} user{items.length === 1 ? "" : "s"}?
-            <Button size="sm" onClick={apply} disabled={busy}>Confirm apply</Button>
-            <Button size="sm" onClick={() => setConfirming(false)} disabled={busy}>Cancel</Button>
-          </span>
-        )}
-        {msg && <span className="text-[13px] text-ink-3">{msg}</span>}
-      </div>
-      {items && <p className="text-[13px] text-ink-3">{stats.scanned} users scanned, {items.length} would change, {stats.bots} bots skipped.</p>}
-      {items && items.length > 0 && (
-        <Card className="overflow-x-auto p-0">
-          <table className="w-full text-[13px]">
-            <thead><tr className="text-ink-3">{["User", "Field", "Now", "Becomes"].map((h) => <th key={h} className="px-3 py-2 text-start font-semibold">{h}</th>)}</tr></thead>
-            <tbody>
-              {items.flatMap((it) => it.changes.map((c, j) => (
-                <tr key={`${it.id}-${c.field}`} className="border-t border-line">
-                  <td className="px-3 py-2">{j === 0 ? `#${it.id} @${it.handle}` : ""}</td>
-                  <td className="px-3 py-2 font-mono">{c.field}</td>
-                  <td className="px-3 py-2 text-ink-3">{c.old || "—"}</td>
-                  <td className="px-3 py-2 text-ink">{c.new}</td>
-                </tr>
-              )))}
-            </tbody>
-          </table>
-        </Card>
-      )}
-    </div>
-  );
-}
-
 
 // ── ArtaSearch — the alumni directory (src/AlumniSearch.php). Rows arrive from the scan box via the
 // key-protected ingest route; this tab only reads, filters, exports and copies a profile to the queue.
@@ -636,90 +326,113 @@ export function AlumniRow({ a }: { a: Alumnus }) {
   );
 }
 
+
+const INPUT = "h-10 w-full rounded-lg border border-line bg-space-1 px-3 text-[14px] text-ink placeholder:text-ink-3 " + FOCUS;
+
+/** 1.25.27 (Arash 2026-11-03: "the outreach should be just the search tab. simplify and improve the UI/UX"). */
 function AlumniSearch() {
   const [facets, setFacets] = useState<AlumniFacets | null>(null);
   const [f, setF] = useState<AlumniFilter>({});
-  // Arash 2026-10-23 (1.25.13): multi-select platform filter; a person matches only when they have EVERY selected one (AND).
-  // Default = none ticked = no filter (everyone).
+  // Multi-select platform filter; a person matches only when they have EVERY selected one (AND). None ticked = everyone.
   const [pfs, setPfs] = useState<string[]>([]);
   useEffect(() => { setF((o) => ({ ...o, platforms: pfs.length === 0 ? undefined : pfs.join(",") })); }, [pfs]);
   const togglePf = (k: string) => setPfs((o) => (o.includes(k) ? o.filter((x) => x !== k) : [...o, k]));
   const [q, setQ] = useState("");
+  const [loc, setLoc] = useState("");
   const [items, setItems] = useState<Alumnus[] | null>(null);
   const [total, setTotal] = useState(0);
   const [next, setNext] = useState(0);
+  const [more, setMore] = useState(false);
   const [err, setErr] = useState("");
+  const [showMore, setShowMore] = useState(false);
   useEffect(() => { AlumniApi.facets().then(setFacets).catch(() => setErr("Couldn't load ArtaSearch.")); }, []);
-  useEffect(() => { const t = setTimeout(() => setF((o) => ({ ...o, q })), 300); return () => clearTimeout(t); }, [q]);
-  // 1.25.19: free-text location filter (self-stated location, city or country).
-  const [loc, setLoc] = useState("");
+  useEffect(() => { const t = setTimeout(() => setF((o) => ((o.q ?? "") === q ? o : { ...o, q })), 300); return () => clearTimeout(t); }, [q]);
   useEffect(() => { const t = setTimeout(() => setF((o) => ((o.location ?? "") === loc.trim() ? o : { ...o, location: loc.trim() || undefined })), 300); return () => clearTimeout(t); }, [loc]);
   const load = useCallback(async (cursor: number) => {
+    if (cursor) setMore(true);
     try {
       const r = await AlumniApi.list({ ...f, cursor });
       setItems((old) => (cursor && old ? [...old, ...r.items] : r.items)); setNext(r.next); setTotal(r.total); setErr("");
-    } catch { setErr("Couldn't load alumni."); }
+    } catch { setErr("Couldn't load alumni. Check your connection and try again."); if (!cursor) setItems([]); }
+    finally { setMore(false); }
   }, [f]);
   useEffect(() => { setItems(null); load(0); }, [load]);
-  const set = (k: keyof AlumniFilter) => (v: string) => setF((o) => ({ ...o, [k]: v }));
-  const exportCsv = async () => { const r = await AlumniApi.exportCsv(f); download(r.filename, r.csv); };
+  const set = (k: keyof AlumniFilter) => (v: string) => setF((o) => ({ ...o, [k]: v || undefined }));
+  const exportCsv = async () => { try { const r = await AlumniApi.exportCsv(f); download(r.filename, r.csv); } catch { setErr("Couldn't export CSV."); } };
   const opt = (all: string, list: { value: string | number; n: number }[] = []) =>
     [{ value: "", label: all }, ...list.map((x) => ({ value: String(x.value), label: `${x.value} (${x.n})` }))];
+  const active = !!(q || loc || f.year || f.department || f.country || f.followed || f.with_no_gpa || pfs.length);
+  const reset = () => { setQ(""); setLoc(""); setPfs([]); setF({ sort: f.sort }); };
   return (
-    <div className="flex flex-col gap-3">
-      {facets && (
-        <p className="text-[13px] text-ink-3">
-          {facets.total.toLocaleString()} alumni · {facets.with_any.toLocaleString()} with a confirmed profile · {ALUMNI_PLATFORMS.map((p) => `${ALUMNI_LABEL[p]} ${facets.platforms[p] ?? 0}`).join(" · ")}
-          {facets.synced_at && ` · synced ${local(facets.synced_at)}`}
-        </p>
-      )}
-      <div className="flex flex-wrap items-center gap-2">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, employer, title" aria-label="Search alumni"
-          className="h-9 min-w-[200px] flex-1 rounded-lg border border-line bg-space-1 px-3 text-[13px] text-ink" />
-        <Select label="Year" value={f.year ?? ""} onChange={set("year")} options={opt("All years", facets?.years)} skipOptions />
-        <Select label="Department" value={f.department ?? ""} onChange={set("department")} options={opt("All departments", facets?.departments)} skipOptions />
-        <Select label="Country" value={f.country ?? ""} onChange={set("country")} options={opt("All countries", facets?.countries)} skipOptions />
-        <input value={loc} onChange={(e) => setLoc(e.target.value)} placeholder="Location" aria-label="Filter by location"
-          className="h-9 w-[150px] rounded-lg border border-line bg-space-1 px-3 text-[13px] text-ink" />
-        <Select label="Sort" value={f.sort ?? "gpa_desc"} onChange={(v) => setF((o) => ({ ...o, sort: v as AlumniSort }))} skipOptions
-          options={[{ value: "gpa_desc", label: "Est. GPA: high to low" }, { value: "gpa_asc", label: "Est. GPA: low to high" }, { value: "class", label: "Class: newest first" }, { value: "name", label: "Name A–Z" }]} />
-        <Select label="Followed" value={f.followed ?? ""} onChange={set("followed")} skipOptions
-          options={[{ value: "", label: "Followed or not" }, { value: "1", label: "Followed" }, { value: "0", label: "Not followed" }]} />
-        <Button size="sm" variant="outline" onClick={exportCsv}>Export CSV</Button>
-      </div>
-      {(facets?.without_gpa ?? 0) > 0 && (
-        <label className="flex w-fit cursor-pointer items-center gap-2 text-[12px] text-ink-3">
-          <input type="checkbox" checked={f.with_no_gpa === "1"} onChange={(e) => setF((o) => ({ ...o, with_no_gpa: e.target.checked ? "1" : undefined }))} />
-          Show people without GPA ({facets?.without_gpa?.toLocaleString()}); hidden by default
-        </label>
-      )}
-      <fieldset className="flex flex-wrap items-center gap-1.5 text-[12px] text-ink-2">
-        <legend className="sr-only">Has all of these</legend>
-        <span className="mr-1 text-ink-3">Has all of:</span>
-        {PF_FILTER.map(({ k, label }) => {
-          const on = pfs.includes(k);
-          const n = k === "email" ? facets?.with_email : facets?.platforms[k as AlumniPlatform];
-          return (
-            <label key={k} className={`flex cursor-pointer items-center gap-1 rounded-full border px-2 py-1 ${on ? "border-yang text-ink" : "border-line text-ink-3"}`}>
-              <input type="checkbox" className="sr-only" checked={on} onChange={() => togglePf(k)} />
-              {k === "email" ? MAIL_ICON : <SocialIcon k={k} size={13} />}
-              <span>{label}{n !== undefined && ` (${n})`}</span>
-            </label>
-          );
-        })}
-        {pfs.length > 0 && (
-          <button type="button" className="ml-1 text-ink-3 hover:text-yang" onClick={() => setPfs([])}>
-            Clear
+    <div className="flex flex-col gap-4">
+      <Card className="flex flex-col gap-3 p-4">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name, employer or title" aria-label="Search alumni" className={INPUT} />
+          <input value={loc} onChange={(e) => setLoc(e.target.value)} placeholder="City or country" aria-label="Filter by location" className={cx(INPUT, "sm:w-[200px]")} />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select label="Year" value={f.year ?? ""} onChange={set("year")} options={opt("All years", facets?.years)} skipOptions />
+          <Select label="Department" value={f.department ?? ""} onChange={set("department")} options={opt("All departments", facets?.departments)} skipOptions />
+          <Select label="Followed" value={f.followed ?? ""} onChange={set("followed")} skipOptions
+            options={[{ value: "", label: "Followed or not" }, { value: "1", label: "Followed" }, { value: "0", label: "Not followed" }]} />
+          <Select label="Sort" value={f.sort ?? "gpa_desc"} onChange={(v) => setF((o) => ({ ...o, sort: v as AlumniSort }))} skipOptions
+            options={[{ value: "gpa_desc", label: "Est. GPA: high to low" }, { value: "gpa_asc", label: "Est. GPA: low to high" }, { value: "class", label: "Class: newest first" }, { value: "name", label: "Name A–Z" }]} />
+          <button type="button" onClick={() => setShowMore((v) => !v)} aria-expanded={showMore} className={cx("text-[13px] text-ink-3 hover:text-yang", FOCUS)}>
+            {showMore ? "Fewer filters" : "More filters"}
           </button>
+          <span className="ml-auto flex items-center gap-2">
+            {active && <Button size="sm" variant="ghost" onClick={reset}>Clear all</Button>}
+            <Button size="sm" variant="outline" onClick={exportCsv}>Export CSV</Button>
+          </span>
+        </div>
+        {showMore && (
+          <div className="flex flex-wrap items-center gap-3">
+            <Select label="Country" value={f.country ?? ""} onChange={set("country")} options={opt("All countries", facets?.countries)} skipOptions />
+            {(facets?.without_gpa ?? 0) > 0 && (
+              <label className="flex cursor-pointer items-center gap-2 text-[13px] text-ink-2">
+                <input type="checkbox" checked={f.with_no_gpa === "1"} onChange={(e) => setF((o) => ({ ...o, with_no_gpa: e.target.checked ? "1" : undefined }))} />
+                Include people without a GPA ({facets?.without_gpa?.toLocaleString()})
+              </label>
+            )}
+          </div>
         )}
-        {pfs.length === 0 && <span className="text-ink-3">(none ticked = everyone)</span>}
-      </fieldset>
+        <fieldset className="flex flex-wrap items-center gap-1.5 text-[12px]">
+          <legend className="sr-only">Has all of these accounts</legend>
+          <span className="mr-1 text-ink-3">Has:</span>
+          {PF_FILTER.map(({ k, label }) => {
+            const on = pfs.includes(k);
+            const c = k === "email" ? facets?.with_email : facets?.platforms[k as AlumniPlatform];
+            return (
+              <label key={k} className={cx("flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 transition-colors focus-within:outline-2 focus-within:outline-yang",
+                on ? "border-yang bg-yang/10 text-ink" : "border-line text-ink-3 hover:text-ink")}>
+                <input type="checkbox" className="sr-only" checked={on} onChange={() => togglePf(k)} />
+                {k === "email" ? MAIL_ICON : <SocialIcon k={k} size={13} />}
+                <span>{label}{c !== undefined && <span className="tabular-nums text-ink-3"> {c.toLocaleString()}</span>}</span>
+              </label>
+            );
+          })}
+        </fieldset>
+      </Card>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 text-[13px] text-ink-3" aria-live="polite">
+        <span>{items === null ? "Searching…" : `${total.toLocaleString()} ${total === 1 ? "person" : "people"}${active ? " match" : ""}`}</span>
+        {facets && <span>{facets.total.toLocaleString()} alumni · {facets.with_any.toLocaleString()} with a confirmed profile{facets.synced_at && ` · updated ${local(facets.synced_at)}`}</span>}
+      </div>
       {err && <ErrorNote>{err}</ErrorNote>}
-      {items === null ? <SkeletonGrid /> : items.length === 0 ? <StatusNote>No alumni match. Rows arrive from the ArtaSearch scan.</StatusNote> : (
+      {items === null ? <SkeletonGrid /> : items.length === 0 ? (
+        !err && <Card className="flex flex-col items-center gap-2 p-8 text-center">
+          <p className="text-[15px] font-semibold text-ink">No one matches these filters</p>
+          <p className="text-[13px] text-ink-3">{active ? "Try removing a filter or a search word." : "Rows appear here as the ArtaSearch scan confirms profiles."}</p>
+          {active && <Button size="sm" variant="outline" onClick={reset}>Clear all filters</Button>}
+        </Card>
+      ) : (
         <>
-          <p className="text-[13px] text-ink-3">{total.toLocaleString()} match</p>
           <Card className="p-0"><ul aria-label="Alumni">{items.map((a) => <AlumniRow key={a.id} a={a} />)}</ul></Card>
-          {next > 0 && <Button size="sm" variant="outline" onClick={() => load(next)}>Load more</Button>}
+          {next > 0 && (
+            <div className="flex flex-col items-center gap-1">
+              <Button size="sm" variant="outline" onClick={() => load(next)} disabled={more}>{more ? "Loading…" : "Load more"}</Button>
+              <span className="text-[12px] text-ink-3">Showing {items.length.toLocaleString()} of {total.toLocaleString()}</span>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -727,13 +440,11 @@ function AlumniSearch() {
 }
 
 export default function Outreach() {
-  const [view, setView] = useState<View>("review");
   if (!canOutreach()) return <NotFound />;
   return (
     <div className="flex flex-col gap-5">
-      <PageHero title="Outreach" lede="Accounts the platforms suggested. Include one to add it to the study (ArtaTask will send the request); exclude to drop it. Nothing is sent from this page." />
-      <Tabs tabs={[{ key: "review", label: "Review" }, { key: "results", label: "Results" }, { key: "plan", label: "Plan" }, { key: "sync", label: "Profile sync" }, { key: "search", label: "Search" }]} active={view} onChange={(k) => setView(k as View)} label="Outreach" />
-      {view === "review" ? <Review /> : view === "results" ? <Results /> : view === "plan" ? <Plan /> : view === "sync" ? <ProfileSync /> : <AlumniSearch />}
+      <PageHero title="Outreach" lede="Find Bilkent alumni and open their confirmed profiles. Follow opens the links in your own browser; nothing is sent from this page." />
+      <AlumniSearch />
     </div>
   );
 }
