@@ -428,7 +428,8 @@ export function AlumniRow({ a }: { a: Alumnus }) {
   const [liAt, setLiAt] = useState<string | null>(a.li_followed_at ?? null);
   const [liBusy, setLiBusy] = useState(false);
   const quota = useLinkedInQuota();
-  const liBlocked = !liAt && !!quota && quota.remaining <= 0;
+  // 1.25.26: no hard LinkedIn limit — the weekly number is a soft counter only, the button never deactivates.
+  const liOver = !liAt && !!quota && quota.remaining <= 0;
   // Follow (1.25.15, Arash 2026-10-24): open every social link in its own tab SYNCHRONOUSLY inside the click, and keep this
   // page where it is. Tested in Chrome: script cannot make a tab open in the background — synthetic ⌘/Ctrl-clicks on
   // anchors are ignored and window.focus() cannot take focus back — but window.open() honours the modifier of the REAL
@@ -452,11 +453,10 @@ export function AlumniRow({ a }: { a: Alumnus }) {
     AlumniApi.follow(a.id, follow).then((r) => setFollowedAt(r.followed_at)).catch(() => { setFollowedAt(prev); setFMsg("Couldn't save follow state."); }).finally(() => setFBusy(false));
   };
   // LinkedIn Follow: opens ONLY the LinkedIn profile in the admin's own browser (they follow/connect by hand) and records it
-  // against the weekly quota. The server refuses a new follow past the cap (429); unfollow only flips the state, no refund.
+  // toward the weekly counter (soft, never blocks since 1.25.26); unfollow only flips the state, no refund.
   const toggleLinkedIn = (e: ReactMouseEvent<HTMLElement>) => {
     e.preventDefault();
     const follow = !liAt;
-    if (follow && liBlocked) { setFMsg(`LinkedIn weekly limit reached (${quota!.cap}/week).${quota!.resets_at ? ` Next slot ${istanbulTime(quota!.resets_at)}.` : ""}`); return; }
     if (follow && liUrl) window.open(liUrl, "_blank", "noopener,noreferrer");
     const prev = liAt;
     setLiAt(follow ? new Date().toISOString().slice(0, 19).replace("T", " ") : null); setLiBusy(true);
@@ -466,17 +466,17 @@ export function AlumniRow({ a }: { a: Alumnus }) {
         setLiAt(prev);
         const q = err instanceof ApiError ? (err.data as { data?: { quota?: LinkedInQuota } })?.data?.quota : undefined;
         if (q) setLiQuota(q);
-        setFMsg(err instanceof ApiError && err.status === 429 ? "LinkedIn weekly limit reached — not marked as followed." : "Couldn't save LinkedIn follow state.");
+        setFMsg("Couldn't save LinkedIn follow state.");
       })
       .finally(() => setLiBusy(false));
   };
   const liTitle = liAt
     ? `Followed on LinkedIn ${istanbulTime(liAt) || liAt} — click to mark as not followed`
-    : liBlocked ? `LinkedIn weekly limit reached (${quota!.cap} per 7 days)` : "Open the LinkedIn profile in a new tab and count it against the LinkedIn weekly limit";
+    : liOver ? `Open the LinkedIn profile in a new tab (past the ${quota!.cap}-per-7-days guide, still allowed)` : "Open the LinkedIn profile in a new tab and count it toward the LinkedIn weekly counter";
   const liLeft = quota ? `${quota.remaining}/${quota.cap} left this week` : "";
   const liBtn = (extra = "") => liUrl ? (
     <span className={cx("inline-flex items-center gap-1", extra)}>
-      <button type="button" onClick={toggleLinkedIn} disabled={liBusy || liBlocked} aria-pressed={!!liAt} title={liTitle}
+      <button type="button" onClick={toggleLinkedIn} disabled={liBusy} aria-pressed={!!liAt} title={liTitle}
         aria-label={`${liAt ? "Unfollow" : "Follow"} ${a.full_name} on LinkedIn${quota ? ` (${quota.remaining} of ${quota.cap} LinkedIn follows left this week)` : ""}`}
         className={cx("inline-flex h-7 items-center gap-1 rounded-full px-3 text-[12px] font-semibold disabled:opacity-60", FOCUS,
           liAt ? "border border-line bg-veil/5 text-ink-3 hover:text-ink" : "bg-yang text-on-accent hover:bg-yin hover:text-white")}>

@@ -262,7 +262,7 @@ final class AlumniSearch {
 
 	/** POST outreach/alumni/follow {id, follow: bool, platform?: 'linkedin'} -> {id, followed_at|null, li_followed_at|null, quota?}.
 	 *  Without platform: the shared (non-LinkedIn) follow state, unchanged since 1.25.12. Unfollow only flips the state.
-	 *  platform=linkedin: needs a LinkedIn profile on the row; a NEW follow is refused with 429 once the weekly quota is used. */
+	 *  platform=linkedin: needs a LinkedIn profile on the row; never refused (1.25.26: the weekly number is a soft counter only). */
 	public static function follow( $req ) {
 		global $wpdb;
 		$id = Rest::pint( $req, 'id' );
@@ -281,8 +281,8 @@ final class AlumniSearch {
 				wp_cache_delete( $uid, 'user_meta' );
 				$m = self::li_follows(); $log = self::li_log();
 				if ( $on && ! isset( $m[ $id ] ) ) {
-					$q = self::li_quota( $log );
-					if ( $q['remaining'] <= 0 ) { return new \WP_Error( 'li_weekly_cap', 'LinkedIn weekly follow limit reached', [ 'status' => 429, 'quota' => $q ] ); }
+					// 1.25.26 (Arash 2026-11-03: "there shouldn't be any hard limit on the linkedin button. remove the deactivation"):
+					// no refusal past the weekly number any more; the click is still logged so the counter stays as a soft display.
 					$m[ $id ] = $log[] = gmdate( 'Y-m-d H:i:s' );
 				} elseif ( ! $on ) { unset( $m[ $id ] ); }
 				update_user_meta( $uid, self::LI_FOLLOW_META, $m );
