@@ -8,8 +8,8 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *
  * Threat model: the DB is open by design (Extra::db), so "secrecy of data" is not a defence.
  * What we defend is INTEGRITY (nobody writes to our DB or takes the site over without us
- * noticing) and CREDENTIALS (secrets never sit in the DB; the ones in the vault rotate on a
- * clock). Every baseline this class compares against lives in a gitignored FILE
+ * noticing) and CREDENTIALS (secrets never sit in the DB; major ones rotate together annually
+ * on the T2 tax filing date — reminded outside this page, not by age alarms here). Every baseline this class compares against lives in a gitignored FILE
  * (wp-content/aq-watchdog-state.php) — an attacker with full DB write access still cannot
  * forge a baseline, suppress a throttle, or silence an alarm, because none of that state is
  * in the database.
@@ -603,7 +603,7 @@ final class Watchdog {
 		return $h;
 	}
 
-	/** Rotation alarms from the vault metadata + the password-login escape hatch. */
+	/** Compromised-secret + password-login hatch alarms (no age-based rotation due). */
 	private static function check_rotation() {
 		if ( Secrets::has( 'FLAG_ALLOW_PASSWORD_LOGIN' ) ) {
 			self::alert( 'pw_hatch', 'FLAG_ALLOW_PASSWORD_LOGIN is SET — password logins are live',
@@ -617,7 +617,7 @@ final class Watchdog {
 				"`{$name}` is marked compromised (e.g. it appeared in a transcript or log). Rotate it at the issuer, "
 				. 'then save the new value in wp-admin → AQ Security. This alarm repeats until the flag clears (rotating clears it).', true );
 		}
-		// The SAME rule the AQ Security "Rotation due" card counts (Vault::tally), so the two never disagree.
+		// Same rule as Vault::tally overdue (age clock is off → empty). Compromised is handled above.
 		$due = [];
 		foreach ( Vault::tally( $meta, time() )['overdue_names'] as $name ) {
 			$m = $meta[ $name ];
@@ -662,7 +662,7 @@ final class Watchdog {
 	public static function render_status() {
 		$s = self::state();
 		echo '<h2 class="aq-h">Watchdog <span class="aq-sub">— hourly tamper sweep, alerts to ' . esc_html( Mailer::operator() ) . ' + every admin\'s bell</span></h2>';
-		echo '<p class="aq-lead">Honeytrap canaries in the public DB (use + write tripwires), administrator-roster &amp; critical-option baselines, append-only ledger proofs, vault-file integrity, a secret-leak scan of the public DB, and rotation alarms. Every baseline lives in a file <em>outside</em> the database, so a DB attacker can\'t forge or silence it.</p>';
+		echo '<p class="aq-lead">Honeytrap canaries in the public DB (use + write tripwires), administrator-roster &amp; critical-option baselines, append-only ledger proofs, vault-file integrity, a secret-leak scan of the public DB, and compromised-secret alarms. Every baseline lives in a file <em>outside</em> the database, so a DB attacker can\'t forge or silence it.</p>';
 
 		echo '<div class="aq-actions">';
 		echo self::ctl( 'runcheck', 'Run checks now', true );

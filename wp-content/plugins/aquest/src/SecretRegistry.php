@@ -11,7 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *                                get/rotate it at the issuer, what breaks without it, old names.
  *   Secrets                    — RESOLUTION: Secrets::get('NAME') → vault, then env, then wp-config.
  *   Vault                      — STORAGE: the encrypted vault file + the wp-admin → AQ Security page.
- *   Watchdog                   — ALARMS: rotation due, compromised, vault-file tamper, leaks, traps.
+ *   Watchdog                   — ALARMS: compromised, vault-file tamper, leaks, traps (no age-based rotation due).
  * docs/SECRETS.md is GENERATED from this file (php wp-content/plugins/aquest/tools/secrets-doc.php
  * --write) and preflight fails when the two disagree, so the page, the code and the doc never drift.
  *
@@ -19,16 +19,20 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * a cron job, or a route an outside bot calls). A local script reads its own environment variable
  * and is not listed. No "AQ_" prefix (operator 2026-10-26: redundant).
  *
- * TIER → rotation clock (operator 2026-10-26: "only rotate every 90 days the absolute important ones"):
- *   critical 90 d  — moves money, sends mail as us, or writes our storage/Cloudflare account
- *   standard 180 d — one bot, one route, or one integration
- *   low      365 d — a narrow token that only publishes our own public work, or reads public data
- *   none     —      not a credential: an identifier, address, endpoint, publishable key or flag
+ * TIER → importance label (operator 2026-11-06: ONE yearly reminder for all major keys on the T2
+ * tax filing date, typically 30 June; no per-key age alarms in AQ Security / Watchdog):
+ *   critical — moves money, sends mail as us, or writes our storage/Cloudflare account
+ *   standard — one bot, one route, or one integration
+ *   low      — a narrow token that only publishes our own public work, or reads public data
+ *   none     — not a credential: an identifier, address, endpoint, publishable key or flag
+ * ROTATE days are all 0: the vault page and Watchdog never flag "rotation due" from age.
+ * Rotate the major credentials together when the Foundation T2 is due; the reminder lives
+ * outside this page (external yearly reminder). Still rotate immediately if a value may be leaked.
  * NEED: 'required' (Health fails without it) · 'optional' · or ANOTHER NAME that covers the same need.
  */
 final class SecretRegistry {
 
-	const ROTATE = [ 'critical' => 90, 'standard' => 180, 'low' => 365, 'none' => 0 ];
+	const ROTATE = [ 'critical' => 0, 'standard' => 0, 'low' => 0, 'none' => 0 ]; // age clock off; annual T2 reminder is outside the vault
 
 	/** Order = page order. GROUP => one line about the group. */
 	const GROUPS = [

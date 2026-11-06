@@ -60,7 +60,8 @@ namespace AQ {
 	$ok( ! isset( $m['AQ_MEDIA_CDN'] ), 'old name not listed separately' );
 	$ok( ( $m['HF_TOKEN']['unused'] ?? '' ) !== '', 'retired HF_TOKEN listed as unused' );
 	$ok( ( $m['SMTP_PASS']['unused'] ?? '' ) !== '', 'shadowed old SMTP_PASS listed as unused' );
-	$ok( $m['STRIPE_SECRET_KEY']['max_days'] === 90 && $m['CLOUDFLARE_API_TOKEN']['max_days'] === 90, 'critical credentials on 90 days' );
+	$ok( $m['STRIPE_SECRET_KEY']['max_days'] === 0 && $m['CLOUDFLARE_API_TOKEN']['max_days'] === 0, 'critical credentials have no age clock (annual T2 reminder is outside the vault)' );
+	$ok( $m['STRIPE_SECRET_KEY']['tier'] === 'critical' && $m['CLOUDFLARE_API_TOKEN']['tier'] === 'critical', 'critical tier label kept' );
 	$ok( $m['CLOUDFLARE_ACCOUNT_ID']['max_days'] === 0 && $m['R2_BUCKET']['max_days'] === 0, 'account ID and bucket have no rotation' );
 	$ok( $m['MAIL_TITAN_PASSWORD']['compromised'] === true, 'compromised flag survives the rename' );
 	// Registry shape: every key fully defined, in a known group and tier, with no AQ_ prefix.
@@ -80,7 +81,7 @@ namespace AQ {
 	$ok( ! $bad, 'registry is complete and consistent' . ( $bad ? ': ' . implode( '; ', $bad ) : '' ) );
 	$crit = array_keys( array_filter( SecretRegistry::KEYS, fn( $k ) => $k[1] === 'critical' ) );
 	sort( $crit );
-	$ok( $crit === [ 'CLOUDFLARE_API_TOKEN', 'MAIL_ACS_CONNECTION', 'MAIL_SMTP_PASSWORD', 'MAIL_TITAN_PASSWORD', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET' ], 'only the 8 critical credentials rotate every 90 days' );
+	$ok( $crit === [ 'CLOUDFLARE_API_TOKEN', 'MAIL_ACS_CONNECTION', 'MAIL_SMTP_PASSWORD', 'MAIL_TITAN_PASSWORD', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET' ], 'exactly the 8 major credentials stay on the critical tier' );
 
 	// 2b. forget_unused removes exactly the unused rows (on a copy, then restored).
 	$snap = file_get_contents( Vault::path() );
@@ -113,13 +114,14 @@ namespace AQ {
 	$after = json_decode( substr( file_get_contents( Vault::path() ), strpos( file_get_contents( Vault::path() ), "\n" ) + 1 ), true )['secrets'];
 	$ok( isset( $after['CLOUDFLARE_API_TOKEN'] ) && ! isset( $after['AQ_CF_API_TOKEN'] ), 'set() with an old name writes the new name' );
 
-	// 5. AQ Security cards count with the NEW names and every tier (1.25.17 counted only required keys,
-	//    so a renamed vault showed "In vault 2/2" and missed MAIL_SMTP_PASSWORD overdue at 137 d).
+	// 5. AQ Security cards count with the NEW names; age never makes a key "rotation due"
+	//    (operator 2026-11-06: one yearly reminder on the T2 filing date, outside the vault).
 	$t = Vault::tally( Vault::meta(), time() );
 	sort( $t['overdue_names'] );
-	$ok( $t['overdue_names'] === [ 'MAIL_SMTP_PASSWORD', 'R2_ACCESS_KEY_ID', 'STRIPE_SECRET_KEY' ], 'overdue = every in-vault credential past its clock, alternatives included (got ' . implode( ',', $t['overdue_names'] ) . ')' );
+	$ok( $t['overdue_names'] === [], 'no age-based rotation due (got ' . implode( ',', $t['overdue_names'] ) . ')' );
+	$ok( $t['overdue'] === 0, 'overdue count is 0' );
 	$ok( $t['in_vault'] === 7, 'in-vault card counts every renamed row (7 live rows; the 2 unused excluded) (got ' . $t['in_vault'] . ')' );
-	$ok( $t['compromised'] === 1, 'compromised counted once, and not again as overdue' );
+	$ok( $t['compromised'] === 1, 'compromised still counted' );
 	$ok( ! in_array( 'MEDIA_CDN_URL', $t['overdue_names'], true ) && ! in_array( 'ARTA_TOOLS_URL_HIGH', $t['overdue_names'], true ), 'identifiers and endpoints never overdue' );
 	$ok( in_array( 'YOUTUBE_API_KEY or YOUTUBE_SERVICE_ACCOUNT_JSON', $t['missing_names'], true ) && ! in_array( 'YOUTUBE_SERVICE_ACCOUNT_JSON or YOUTUBE_API_KEY', $t['missing_names'], true ), 'an either/or pair with neither set is missing once' );
 	$ok( ! preg_grep( '/MAIL_ACS_CONNECTION|MAIL_SMTP_PASSWORD/', $t['missing_names'] ), 'a pair covered by its alternative is not missing' );
