@@ -24,7 +24,8 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *
  * The admin page is WRITE-ONLY for values: it shows existence, source, age and the last 4
  * characters — never a full secret. Rotation metadata (rotated-at, compromised flag) lives in
- * the vault file too, and Watchdog::check_rotation raises the alarms when a key is overdue.
+ * the vault file too. Age never raises a rotation-due alarm (annual T2 reminder is outside this page);
+ * Watchdog::check_rotation still alarms on compromised flags and the password-login hatch.
  */
 final class Vault {
 
@@ -174,7 +175,7 @@ final class Vault {
 	 *   in_vault    — configured values stored encrypted in the vault
 	 *   set         — configured values from any source (vault, env, wp-config)
 	 *   missing     — required keys unset, plus either/or pairs with neither side set (counted once)
-	 *   overdue     — vault values older than their tier's rotation clock (identifiers/flags never)
+	 *   overdue     — always 0 for age (rotation clock off); kept for API shape / compromised exclusivity
 	 *   compromised — values flagged leaked
 	 */
 	public static function tally( array $meta, $now ) {
@@ -422,7 +423,7 @@ final class Vault {
 		echo '<div class="aq-cards">';
 		echo self::card( 'In vault', $in_vault . '<span class="aq-of">/' . $set_total . '</span>', 'of the configured values', $in_vault >= $set_total ? 'ok' : 'info' );
 		echo self::card( 'Missing', (string) $missing, 'unconfigured', $missing ? 'bad' : 'ok' );
-		echo self::card( 'Rotation due', (string) ( $overdue + $compromised ), $compromised ? $compromised . ' compromised' : 'past policy age', ( $overdue + $compromised ) ? 'bad' : 'ok' );
+		echo self::card( 'Compromised', (string) $compromised, $compromised ? 'flagged leaked — rotate now' : 'no age alarms; annual T2 reminder is outside this page', $compromised ? 'bad' : 'ok' );
 		echo self::card( 'Traps armed', $wd['traps_armed'] . '<span class="aq-of">/' . $wd['traps_total'] . '</span>', 'DB honeypots', $wd['traps_armed'] >= $wd['traps_total'] ? 'ok' : 'bad' );
 		echo self::card( 'Alarms (7d)', (string) $wd['crit_7d'], 'critical events', $wd['crit_7d'] ? 'bad' : 'ok' );
 		echo self::card( 'Last sweep', $wd['last_run'] ? esc_html( human_time_diff( $wd['last_run'] ) ) : '—', $wd['last_run'] ? 'ago' : 'never run', $wd['last_run'] && $now - $wd['last_run'] < 2 * HOUR_IN_SECONDS ? 'ok' : 'info' );
@@ -452,7 +453,7 @@ final class Vault {
 				$gdesc = SecretRegistry::GROUPS[ $group ] ?? '';
 				echo '<tr class="aq-group"><td colspan="5">' . esc_html( $group ) . ( $gdesc !== '' ? ' <span class="aq-gdesc">— ' . esc_html( $gdesc ) . '</span>' : '' ) . '</td></tr>';
 			}
-			$is_flag = $m['max_days'] === 0;
+			$is_flag = ( $m['tier'] ?? '' ) === 'none';
 			// status pill — optional/alternative credentials never read as an alarming "missing"
 			if ( $m['compromised'] ) { $status = self::pill( 'compromised', 'bad' ); }
 			elseif ( ! $m['set'] ) {
@@ -466,12 +467,10 @@ final class Vault {
 				$rot = '<span class="aq-muted">not required' . ( $m['covered'] ? ' — covered by ' . esc_html( $m['alt'] ) : '' ) . '</span>';
 			} elseif ( $m['in_vault'] && $m['rotated'] ) {
 				$age = (int) floor( ( $now - $m['rotated'] ) / DAY_IN_SECONDS );
-				$due = $age > $m['max_days'];
-				$rot = '<span class="' . ( $due ? 'aq-bad' : 'aq-muted' ) . '">' . esc_html( gmdate( 'Y-m-d', $m['rotated'] ) ) . ' · ' . $age . 'd';
-				$rot .= $due ? ' · overdue (>' . (int) $m['max_days'] . 'd)' : ' · ' . esc_html( $m['tier'] ) . ', every ' . (int) $m['max_days'] . 'd';
-				$rot .= '</span>';
+				$rot = '<span class="aq-muted">' . esc_html( gmdate( 'Y-m-d', $m['rotated'] ) ) . ' · ' . $age . 'd'
+					. ' · ' . esc_html( $m['tier'] ) . ', annual (T2 filing date)</span>';
 			} elseif ( $m['set'] ) {
-				$rot = '<span class="aq-warn">untracked — import to start the clock</span>';
+				$rot = '<span class="aq-warn">untracked — import to record when it was set</span>';
 			} else {
 				$rot = '<span class="aq-muted">—</span>';
 			}

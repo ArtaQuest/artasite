@@ -14,30 +14,35 @@ require __DIR__ . '/../src/SecretRegistry.php';
 $root = dirname( __DIR__, 4 );
 $path = $root . '/docs/SECRETS.md';
 $md   = function ( $s ) { return str_replace( [ '|', "\n" ], [ '\\|', ' ' ], (string) $s ); };
-$rot  = function ( $tier ) { $d = SecretRegistry::ROTATE[ $tier ]; return $d ? "every {$d} days ({$tier})" : 'no rotation'; };
+$rot  = function ( $tier ) {
+	if ( $tier === 'none' ) { return 'no rotation'; }
+	return 'annual, on the T2 tax filing date (typically 30 June); reminded outside AQ Security (' . $tier . ')';
+};
 $old  = function ( $n ) { $o = SecretRegistry::ALIASES[ $n ] ?? []; return $o ? implode( ', ', array_map( fn( $x ) => "`$x`", $o ) ) : '—'; };
 
 $o  = "# Secrets and settings\n\n";
 $o .= "<!-- GENERATED from wp-content/plugins/aquest/src/SecretRegistry.php by tools/secrets-doc.php --write. Do not edit by hand; preflight fails when this file is stale. -->\n\n";
-$o .= "Every secret and setting that production artaquest.com reads, grouped by purpose. The same definitions drive the **wp-admin → AQ Security** page (descriptions, groups, rotation clock) and the `ops.secrets` health check.\n\n";
+$o .= "Every secret and setting that production artaquest.com reads, grouped by purpose. The same definitions drive the **wp-admin → AQ Security** page (descriptions, groups) and the `ops.secrets` health check.\n\n";
 $o .= "## How it works\n\n";
 $o .= "- **Define** — `src/SecretRegistry.php`: name, group, tier, purpose, who reads it, where to get or rotate it, what breaks without it, and its old names.\n";
 $o .= "- **Resolve** — `Secrets::get('NAME')` reads the encrypted vault first, then the environment, then a `wp-config.php` constant. Asking for an old name, or storing under one, still works.\n";
 $o .= "- **Store** — `src/Vault.php`: the encrypted vault file (`wp-content/aq-vault.php`, libsodium, keyed from `AUTH_KEY`/`AUTH_SALT`) and the AQ Security page. Values are write-only: the page shows set/unset, source, age and the last 4 characters, never a value. The database is public, so a secret never goes in it.\n";
-$o .= "- **Watch** — `src/Watchdog.php`: rotation due, compromised flags, vault-file changes, the leak sweep of public options, honeypot traps, and the audit log.\n\n";
+$o .= "- **Watch** — `src/Watchdog.php`: compromised flags, vault-file changes, the leak sweep of public options, honeypot traps, and the audit log (no age-based rotation-due alarms).\n\n";
 $o .= "**Adding a key:** add it to `SecretRegistry::KEYS`, read it with `Secrets::get`, run `tools/secrets-doc.php --write`. Only list a name that production code reads — a local script reads its own environment variable. No `AQ_` prefix.\n\n";
-$o .= "## Rotation policy\n\n| Tier | Clock | For |\n|---|---|---|\n";
-$o .= "| critical | 90 days | moves money, sends mail as us, or writes our storage/Cloudflare account |\n";
-$o .= "| standard | 180 days | one bot, one route, or one integration |\n";
-$o .= "| low | 365 days | a narrow token that only publishes our own public work or reads public data |\n";
+$o .= "## Rotation policy\n\n";
+$o .= "Major credentials (Stripe secret + webhook secret, ACS connection, SMTP password, Titan password, both R2 keys, Cloudflare API token) rotate **once a year, together, on the Foundation T2 tax filing date** (typically **30 June**, six months after the 31 December year end). The reminder lives **outside** AQ Security (an external yearly reminder) — this page and Watchdog do **not** raise staggered 90-day (or other interval) rotation-due alarms from age.\n\n";
+$o .= "| Tier | Clock | For |\n|---|---|---|\n";
+$o .= "| critical | annual (T2 filing date) | moves money, sends mail as us, or writes our storage/Cloudflare account |\n";
+$o .= "| standard | annual (same reminder) | one bot, one route, or one integration |\n";
+$o .= "| low | annual (same reminder) | a narrow token that only publishes our own public work or reads public data |\n";
 $o .= "| none | — | not a credential: identifiers, addresses, endpoints, publishable keys, flags |\n\n";
-$o .= "Rotate on the clock, and immediately when a value may have been exposed (use **Flag leaked** on the page first). To rotate: create the new value at the issuer, paste it into **Rotate** on AQ Security, check the feature works, then revoke the old value at the issuer.\n\n";
+$o .= "Still rotate **immediately** when a value may have been exposed (use **Flag leaked** on the page first). To rotate: create the new value at the issuer, paste it into **Rotate** on AQ Security, check the feature works, then revoke the old value at the issuer.\n\n";
 $o .= "**Need:** `required` = the health check fails without it; `optional` = the feature is off without it; a NAME = either this or that one is enough.\n\n";
 
 $o .= "## Summary\n\n| Name | Group | Tier | Rotation | Need | Old name |\n|---|---|---|---|---|---|\n";
 foreach ( SecretRegistry::KEYS as $n => $k ) {
 	$sp = SecretRegistry::spec( $n );
-	$o .= "| `$n` | {$sp['group']} | {$sp['tier']} | " . ( $sp['days'] ? $sp['days'] . ' d' : '—' ) . ' | ' . ( $sp['alt'] ? 'or `' . $sp['alt'] . '`' : $sp['need'] ) . ' | ' . $old( $n ) . " |\n";
+	$o .= "| `$n` | {$sp['group']} | {$sp['tier']} | " . ( $sp['tier'] === 'none' ? '—' : 'annual' ) . ' | ' . ( $sp['alt'] ? 'or `' . $sp['alt'] . '`' : $sp['need'] ) . ' | ' . $old( $n ) . " |\n";
 }
 $o .= "\n";
 
