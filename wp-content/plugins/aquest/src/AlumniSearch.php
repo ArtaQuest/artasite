@@ -7,7 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * ARTASEARCH — the alumni directory inside Outreach (operator 2026-10-16). ADMIN ONLY.
  *
  * One row per alumnus (name + graduation year) with the public profile links the ArtaSearch scan
- * confirmed as the same person: LinkedIn, Instagram, Facebook, ResearchGate, YouTube, GitHub, X.
+ * confirmed as the same person: LinkedIn, Instagram, Facebook, ResearchGate, YouTube, GitHub, X, Strava.
  * These are third parties who never joined, so the table is in Extra::PRIVATE_TABLES (never in
  * /data, /schema or the nightly export) and every read route is 'outreach' (cookie + manage_options, or Outreach::EXTRA_SLUGS).
  *
@@ -22,7 +22,7 @@ final class AlumniSearch {
 
 	const TABLE     = 'aq_alumni';
 	const TOKEN     = 'BOT_ARTASEARCH_TOKEN';
-	const PLATFORMS = [ 'linkedin', 'instagram', 'facebook', 'researchgate', 'youtube', 'github', 'x' ];
+	const PLATFORMS = [ 'linkedin', 'instagram', 'facebook', 'researchgate', 'youtube', 'github', 'x', 'strava' ];
 	const HOSTS     = [
 		'linkedin'     => 'linkedin.com',
 		'instagram'    => 'instagram.com',
@@ -31,6 +31,7 @@ final class AlumniSearch {
 		'youtube'      => 'youtube.com',
 		'github'       => 'github.com',
 		'x'            => 'x.com',
+		'strava'       => 'strava.com',
 	];
 	const BODY_MAX  = 2097152; // 2 MB
 	const ROWS_MAX  = 500;

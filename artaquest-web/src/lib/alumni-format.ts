@@ -9,7 +9,7 @@ export function fold(s: string): string {
   return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ı/g, "i").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-const SITE_SUFFIX = /\s*(?:[|·•\-–—]\s*)(?:LinkedIn|Instagram(?: photos and videos)?|Facebook|GitHub|YouTube|X|Twitter|ResearchGate)\s*$/i;
+const SITE_SUFFIX = /\s*(?:[|·•\-–—]\s*)(?:LinkedIn|Instagram(?: photos and videos)?|Facebook|GitHub|YouTube|X|Twitter|ResearchGate|Strava)\s*$/i;
 
 /**
  * The short headline from a stored profile title + employer:
@@ -50,6 +50,7 @@ export function profileHandle(platform: string, url: string): string {
       if (seg[0] === "c" || seg[0] === "user") return seg[1] ? `@${seg[1]}` : host;
       if (seg[0] === "channel" && seg[1]) return `youtube.com/channel/${seg[1].length > 14 ? seg[1].slice(0, 12) + "…" : seg[1]}`;
       return `${host}/${seg.join("/")}`;
+    case "strava": return seg[0] === "athletes" && seg[1] ? `strava.com/athletes/${seg[1]}` : `${host}/${seg.join("/")}`;
     case "researchgate": return seg[0] === "profile" && seg[1] ? `researchgate.net/profile/${seg[1]}` : `${host}/${seg.join("/")}`;
     default: return `${host}${seg.length ? "/" + seg.join("/") : ""}`;
   }
