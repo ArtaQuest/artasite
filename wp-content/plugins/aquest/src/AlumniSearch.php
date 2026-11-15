@@ -138,12 +138,46 @@ final class AlumniSearch {
 	/** Insert or update on (name_key, grad_year). Returns 'inserted' | 'updated'. */
 	public static function upsert( array $row ) {
 		global $wpdb;
-		$id = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . self::t() . ' WHERE name_key = %s AND grad_year = %d', $row['name_key'], $row['grad_year'] ) );
+		$cur = $wpdb->get_row( $wpdb->prepare( 'SELECT id, profiles FROM ' . self::t() . ' WHERE name_key = %s AND grad_year = %d', $row['name_key'], $row['grad_year'] ), ARRAY_A );
+		$id  = $cur ? (int) $cur['id'] : 0;
 		$row['updated_at'] = self::now();
-		if ( $id ) { $wpdb->update( self::t(), $row, [ 'id' => $id ] ); return 'updated'; }
+		if ( $id ) {
+			$wpdb->update( self::t(), $row, [ 'id' => $id ] );
+			if ( self::refollow_needed( (string) $cur['profiles'], (string) ( $row['profiles'] ?? '' ) ) ) { self::unfollow_everywhere( $id ); }
+			return 'updated';
+		}
 		$row['created_at'] = $row['updated_at'];
 		$wpdb->insert( self::t(), $row );
 		return 'inserted';
+	}
+
+	// 1.25.31 (Arash 2026-11-15: "if a bluesky or strava account is found on someone, then it should be toggled back so they can be
+	// followed again"). When an ingest gives an existing row a NEW Bluesky or Strava URL, the shared Follow (aq_alumni_follows) is
+	// cleared for that row for every admin, so the person shows under "not followed" again. LinkedIn's own follow state is untouched.
+	const REFOLLOW_PLATFORMS = [ 'bluesky', 'strava' ];
+
+	/** True when $new_json has a Bluesky/Strava URL that $old_json did not have (pure; tested in tools/test-alumni-refollow.php). */
+	public static function refollow_needed( $old_json, $new_json ) {
+		$o = json_decode( (string) $old_json, true ); $o = is_array( $o ) ? $o : [];
+		$n = json_decode( (string) $new_json, true ); $n = is_array( $n ) ? $n : [];
+		$k = static function ( $u ) { return strtolower( rtrim( preg_replace( '~^https?://(www\.)?~i', '', (string) $u ), '/' ) ); };
+		foreach ( self::REFOLLOW_PLATFORMS as $pf ) {
+			$nu = is_array( $n[ $pf ] ?? null ) ? (string) ( $n[ $pf ]['url'] ?? '' ) : '';
+			if ( $nu === '' ) { continue; }
+			$ou = is_array( $o[ $pf ] ?? null ) ? (string) ( $o[ $pf ]['url'] ?? '' ) : '';
+			if ( $k( $nu ) !== $k( $ou ) ) { return true; }
+		}
+		return false;
+	}
+
+	/** Remove alumni row $id from every admin's shared Follow map. */
+	private static function unfollow_everywhere( $id ) {
+		global $wpdb;
+		$uids = (array) $wpdb->get_col( $wpdb->prepare( "SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key = %s", self::FOLLOW_META ) );
+		foreach ( $uids as $uid ) {
+			$m = get_user_meta( (int) $uid, self::FOLLOW_META, true );
+			if ( is_array( $m ) && isset( $m[ $id ] ) ) { unset( $m[ $id ] ); update_user_meta( (int) $uid, self::FOLLOW_META, $m ); }
+		}
 	}
 
 	/** The stored estimated GPA as a float with two decimals, or null (MySQL returns a string, SQLite a float). */
