@@ -25,8 +25,8 @@ function download(filename: string, csv: string) {
 
 // ── ArtaSearch — the alumni directory (src/AlumniSearch.php). Rows arrive from the scan box via the
 // key-protected ingest route; this tab only reads, filters, exports and copies a profile to the queue.
-const ALUMNI_PLATFORMS: AlumniPlatform[] = ["linkedin", "instagram", "facebook", "researchgate", "youtube", "github", "x", "strava"];
-const ALUMNI_LABEL: Record<AlumniPlatform, string> = { linkedin: "LinkedIn", instagram: "Instagram", facebook: "Facebook", researchgate: "ResearchGate", youtube: "YouTube", github: "GitHub", x: "X", strava: "Strava" };
+const ALUMNI_PLATFORMS: AlumniPlatform[] = ["linkedin", "instagram", "facebook", "researchgate", "youtube", "github", "x", "strava", "bluesky"];
+const ALUMNI_LABEL: Record<AlumniPlatform, string> = { linkedin: "LinkedIn", instagram: "Instagram", facebook: "Facebook", researchgate: "ResearchGate", youtube: "YouTube", github: "GitHub", x: "X", strava: "Strava", bluesky: "Bluesky" };
 const QUEUEABLE = new Set<AlumniPlatform>(["linkedin", "instagram", "facebook", "github", "x"]);
 
 /** 1.25.9: the stored picture of a HIGH-confidence matched account (Instagram > LinkedIn > Facebook > GitHub), else initials. */
@@ -44,7 +44,7 @@ function AlumniPhoto({ a, size }: { a: Alumnus; size: number }) {
 const MAIL_ICON = <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></svg>;
 const PF_FILTER: { k: AlumniPlatform | "email"; label: string }[] = [
   { k: "linkedin", label: "LinkedIn" }, { k: "instagram", label: "Instagram" }, { k: "x", label: "X" }, { k: "facebook", label: "Facebook" },
-  { k: "github", label: "GitHub" }, { k: "youtube", label: "YouTube" }, { k: "researchgate", label: "ResearchGate" }, { k: "strava", label: "Strava" }, { k: "email", label: "Email" },
+  { k: "github", label: "GitHub" }, { k: "youtube", label: "YouTube" }, { k: "researchgate", label: "ResearchGate" }, { k: "strava", label: "Strava" }, { k: "bluesky", label: "Bluesky" }, { k: "email", label: "Email" },
 ];
 const ICON_BTN = "grid h-7 w-7 place-items-center rounded-full border border-line bg-space-1 text-ink-2 hover:border-yang hover:text-yang";
 
