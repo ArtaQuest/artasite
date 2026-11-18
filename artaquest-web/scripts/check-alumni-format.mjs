@@ -78,5 +78,11 @@ eq(f.gpaFollowScoreLabel(null, true), "∞ (0 followers)", "gpaFollowScoreLabel 
 eq(f.gpaFollowScoreLabel(null), "", "gpaFollowScoreLabel blank");
 eq(f.profileHandle("threads", "https://www.threads.net/@foo"), "threads.net/@foo", "handle: generic threads");
 
+eq(f.profileCounts({ followers: 12345, following: 0, connections: null }), { followers: "12.3K", following: "0", connections: "" }, "profileCounts: blank stays blank, real 0 stays 0");
+eq(f.profileCounts(undefined), { followers: "", following: "", connections: "" }, "profileCounts: no profile");
+eq(f.compactNumber(0.256, false), "0.26", "compactNumber: ratio");
+eq(f.compactNumber(null, true), "∞", "compactNumber: infinite");
+eq(f.compactNumber(null, false), "", "compactNumber: blank");
+
 if (fail) { console.error(`${fail} alumni-format check(s) failed`); process.exit(1); }
 console.log("alumni-format: all checks pass");

@@ -179,3 +179,14 @@ export function gpaFollowScoreLabel(score: number | string | null | undefined, i
   if (!Number.isFinite(v) || v < 0) return "";
   return v.toFixed(2);
 }
+
+/** The three public counts of one account, formatted; "" = the profile did not publish that number (never 0). */
+export function profileCounts(pr: { followers?: number | string | null; following?: number | string | null; connections?: number | string | null } | null | undefined):
+  { followers: string; following: string; connections: string } {
+  return { followers: formatCount(pr?.followers), following: formatCount(pr?.following), connections: formatCount(pr?.connections) };
+}
+
+/** A short ratio/score for a stat tile: "∞" when flagged infinite, "" when blank. The full wording stays in the tooltip. */
+export function compactNumber(v: number | string | null | undefined, inf?: boolean): string {
+  return inf ? "∞" : followRatioLabel(v, false);
+}
