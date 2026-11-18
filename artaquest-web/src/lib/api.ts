@@ -3286,7 +3286,7 @@ export type OutreachStat = {
 export type OutreachPlanRow = { platform: OutreachPlatform; daily_cap: number; sent_today: number; remaining_today: number; queued: number; days_to_clear: number | null };
 export type ProfileSyncItem = { id: number; handle: string; changes: { field: string; old: string; new: string }[] };
 // ── ArtaSearch (the Search tab inside Outreach; src/AlumniSearch.php — every read route is 'admin') ──
-export type AlumniPlatform = "linkedin" | "instagram" | "facebook" | "researchgate" | "youtube" | "github" | "x" | "strava" | "bluesky";
+export type AlumniPlatform = "linkedin" | "instagram" | "facebook" | "researchgate" | "youtube" | "github" | "x" | "strava" | "bluesky" | "spotify" | "tiktok";
 export type AlumniProfile = { url: string; title: string; evidence: string };
 export type AlumniEmail = { email: string; source: string; confidence: "roster" | "high" };
 export type Alumnus = {

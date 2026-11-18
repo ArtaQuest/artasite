@@ -13,6 +13,9 @@ $t( 'new bluesky -> refollow', AlumniSearch::refollow_needed( $j( $li ), $j( $li
 $t( 'new strava -> refollow', AlumniSearch::refollow_needed( $j( $li ), $j( $li + [ 'strava' => [ 'url' => 'https://www.strava.com/athletes/1' ] ] ) ) );
 $t( 'same bluesky (slash/www) -> no', ! AlumniSearch::refollow_needed( $j( [ 'bluesky' => [ 'url' => 'https://bsky.app/profile/a.bsky.social/' ] ] ), $j( [ 'bluesky' => [ 'url' => 'https://bsky.app/profile/a.bsky.social' ] ] ) ) );
 $t( 'changed strava -> refollow', AlumniSearch::refollow_needed( $j( [ 'strava' => [ 'url' => 'https://www.strava.com/athletes/1' ] ] ), $j( [ 'strava' => [ 'url' => 'https://www.strava.com/athletes/2' ] ] ) ) );
+$t( 'new spotify -> refollow', AlumniSearch::refollow_needed( $j( $li ), $j( $li + [ 'spotify' => [ 'url' => 'https://open.spotify.com/user/a' ] ] ) ) );
+$t( 'new tiktok -> refollow', AlumniSearch::refollow_needed( $j( $li ), $j( $li + [ 'tiktok' => [ 'url' => 'https://www.tiktok.com/@a' ] ] ) ) );
+$t( 'same spotify (slash/www) -> no', ! AlumniSearch::refollow_needed( $j( [ 'spotify' => [ 'url' => 'https://open.spotify.com/user/a/' ] ] ), $j( [ 'spotify' => [ 'url' => 'https://open.spotify.com/user/a' ] ] ) ) );
 $t( 'new linkedin/x only -> no', ! AlumniSearch::refollow_needed( $j( [] ), $j( $li + [ 'x' => [ 'url' => 'https://x.com/a' ] ] ) ) );
 $t( 'bluesky removed -> no', ! AlumniSearch::refollow_needed( $j( [ 'bluesky' => [ 'url' => 'https://bsky.app/profile/a' ] ] ), $j( $li ) ) );
 $t( 'garbage old json -> new bluesky refollows', AlumniSearch::refollow_needed( 'null', $j( [ 'bluesky' => [ 'url' => 'https://bsky.app/profile/a' ] ] ) ) );

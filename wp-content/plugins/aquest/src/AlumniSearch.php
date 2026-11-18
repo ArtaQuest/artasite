@@ -7,7 +7,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * ARTASEARCH — the alumni directory inside Outreach (operator 2026-10-16). ADMIN ONLY.
  *
  * One row per alumnus (name + graduation year) with the public profile links the ArtaSearch scan
- * confirmed as the same person: LinkedIn, Instagram, Facebook, ResearchGate, YouTube, GitHub, X, Strava, Bluesky.
+ * confirmed as the same person: LinkedIn, Instagram, Facebook, ResearchGate, YouTube, GitHub, X, Strava, Bluesky, Spotify, TikTok.
  * These are third parties who never joined, so the table is in Extra::PRIVATE_TABLES (never in
  * /data, /schema or the nightly export) and every read route is 'outreach' (cookie + manage_options, or Outreach::EXTRA_SLUGS).
  *
@@ -22,7 +22,7 @@ final class AlumniSearch {
 
 	const TABLE     = 'aq_alumni';
 	const TOKEN     = 'BOT_ARTASEARCH_TOKEN';
-	const PLATFORMS = [ 'linkedin', 'instagram', 'facebook', 'researchgate', 'youtube', 'github', 'x', 'strava', 'bluesky' ];
+	const PLATFORMS = [ 'linkedin', 'instagram', 'facebook', 'researchgate', 'youtube', 'github', 'x', 'strava', 'bluesky', 'spotify', 'tiktok' ];
 	const HOSTS     = [
 		'linkedin'     => 'linkedin.com',
 		'instagram'    => 'instagram.com',
@@ -33,6 +33,8 @@ final class AlumniSearch {
 		'x'            => 'x.com',
 		'strava'       => 'strava.com',
 		'bluesky'      => 'bsky.app', // https://bsky.app/profile/<handle>; the handle may be a custom domain
+		'spotify'      => 'spotify.com', // https://open.spotify.com/user/<id> (open. is a subdomain)
+		'tiktok'       => 'tiktok.com', // https://www.tiktok.com/@<handle>; profile roots only from the scan box
 	];
 	const BODY_MAX  = 2097152; // 2 MB
 	const ROWS_MAX  = 500;
@@ -152,9 +154,9 @@ final class AlumniSearch {
 	}
 
 	// 1.25.31 (Arash 2026-11-15: "if a bluesky or strava account is found on someone, then it should be toggled back so they can be
-	// followed again"). When an ingest gives an existing row a NEW Bluesky or Strava URL, the shared Follow (aq_alumni_follows) is
+	// followed again"). 1.25.32: the same rule applies to a newly found Spotify or TikTok account. When an ingest gives an existing row a NEW Bluesky, Strava, Spotify or TikTok URL, the shared Follow (aq_alumni_follows) is
 	// cleared for that row for every admin, so the person shows under "not followed" again. LinkedIn's own follow state is untouched.
-	const REFOLLOW_PLATFORMS = [ 'bluesky', 'strava' ];
+	const REFOLLOW_PLATFORMS = [ 'bluesky', 'strava', 'spotify', 'tiktok' ];
 
 	/** True when $new_json has a Bluesky/Strava URL that $old_json did not have (pure; tested in tools/test-alumni-refollow.php). */
 	public static function refollow_needed( $old_json, $new_json ) {

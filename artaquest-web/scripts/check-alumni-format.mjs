@@ -37,6 +37,9 @@ eq(f.profileHandle("instagram", "https://www.instagram.com/aysedemir.ee/"), "@ay
 eq(f.profileHandle("youtube", "https://www.youtube.com/@ayse"), "@ayse", "handle: youtube @");
 eq(f.profileHandle("facebook", "https://www.facebook.com/profile.php?id=1000123"), "facebook.com/profile.php?id=1000123", "handle: facebook id");
 eq(f.profileHandle("researchgate", "https://www.researchgate.net/profile/Ali-Veli"), "researchgate.net/profile/Ali-Veli", "handle: researchgate");
+eq(f.profileHandle("spotify", "https://open.spotify.com/user/artafather"), "spotify.com/user/artafather", "handle: spotify");
+eq(f.profileHandle("tiktok", "https://www.tiktok.com/@artafather"), "@artafather", "handle: tiktok");
+eq(f.profileHandle("bluesky", "https://bsky.app/profile/artafather.bsky.social"), "@artafather.bsky.social", "handle: bluesky");
 
 eq(f.evidenceChips("anchor:bilkent+field+distinct-name"), ["Bilkent on profile", "Dept matches", "Distinctive name"], "evidence: anchor");
 eq(f.evidenceChips("corroborated:distinct-name+fullname-handle+xname-exact"),
