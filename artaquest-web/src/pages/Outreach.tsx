@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useState, type MouseEvent as ReactMouseEvent } from "react";
 import {
-  AlumniApi, ApiError, canOutreach, type AlumniFacets, type AlumniFilter, type AlumniPlatform, type AlumniSort, type Alumnus, type LinkedInQuota,
+  AlumniApi, canOutreach, type AlumniFacets, type AlumniFilter, type AlumniPlatform, type AlumniSort, type Alumnus,
 } from "../lib/api";
 import { Button, Card, ErrorNote, PageHero, SkeletonGrid, cx } from "../components/ui";
 import { SocialIcon } from "../components/SocialLinks";
@@ -89,22 +89,6 @@ function When({ label, at }: { label: string; at: string | null | undefined }) {
   return <span title={istanbulTime(at)}>{label} {rel}</span>;
 }
 
-/** 1.25.23 (Arash 2026-10-30): LinkedIn has its own Follow button and a lower WEEKLY quota (rolling 7 days, server-enforced,
- *  set in Rest outreach/alumni/linkedin-quota). One module-level copy so every row's counter updates together. */
-let liQuota: LinkedInQuota | null = null;
-const liSubs = new Set<() => void>();
-let liLoading = false;
-const setLiQuota = (q: LinkedInQuota) => { liQuota = q; liSubs.forEach((f) => f()); };
-function useLinkedInQuota(): LinkedInQuota | null {
-  const q = useSyncExternalStore((f) => { liSubs.add(f); return () => { liSubs.delete(f); }; }, () => liQuota);
-  useEffect(() => {
-    if (liQuota || liLoading) return;
-    liLoading = true;
-    AlumniApi.linkedInQuota().then(setLiQuota).catch(() => {}).finally(() => { liLoading = false; });
-  }, []);
-  return q;
-}
-
 /** Arash 2026-10-23: the LIST stays minimal — one row per person: name, department, year, social icon links and an
  *  envelope icon (mailto: the first email; all of them in the detail). No picture in the list. Clicking the row opens the
  *  detail panel: the stored photo (Instagram > LinkedIn > Facebook > GitHub, initials otherwise) and every detail.
@@ -129,9 +113,6 @@ export function AlumniRow({ a }: { a: Alumnus }) {
   const liUrl = (() => { const u = a.profiles.linkedin?.url; try { return u && /^https?:$/.test(new URL(u).protocol) && /(^|\.)linkedin\.com$/i.test(new URL(u).hostname) ? u : undefined; } catch { return undefined; } })();
   const [liAt, setLiAt] = useState<string | null>(a.li_followed_at ?? null);
   const [liBusy, setLiBusy] = useState(false);
-  const quota = useLinkedInQuota();
-  // 1.25.26: no hard LinkedIn limit — the weekly number is a soft counter only, the button never deactivates.
-  const liOver = !liAt && !!quota && quota.remaining <= 0;
   // Follow (1.25.15, Arash 2026-10-24): open every social link in its own tab SYNCHRONOUSLY inside the click, and keep this
   // page where it is. Tested in Chrome: script cannot make a tab open in the background — synthetic ⌘/Ctrl-clicks on
   // anchors are ignored and window.focus() cannot take focus back — but window.open() honours the modifier of the REAL
@@ -154,8 +135,8 @@ export function AlumniRow({ a }: { a: Alumnus }) {
     setFollowedAt(follow ? new Date().toISOString().slice(0, 19).replace("T", " ") : null); setFBusy(true);
     AlumniApi.follow(a.id, follow).then((r) => setFollowedAt(r.followed_at)).catch(() => { setFollowedAt(prev); setFMsg("Couldn't save follow state."); }).finally(() => setFBusy(false));
   };
-  // LinkedIn Follow: opens ONLY the LinkedIn profile in the admin's own browser (they follow/connect by hand) and records it
-  // toward the weekly counter (soft, never blocks since 1.25.26); unfollow only flips the state, no refund.
+  // LinkedIn Follow: opens ONLY the LinkedIn profile in the admin's own browser (they follow/connect by hand).
+  // 1.25.36: no weekly-cap counter, banner, or disabled state in the UI (the follow itself is unchanged).
   const toggleLinkedIn = (e: ReactMouseEvent<HTMLElement>) => {
     e.preventDefault();
     const follow = !liAt;
@@ -163,29 +144,20 @@ export function AlumniRow({ a }: { a: Alumnus }) {
     const prev = liAt;
     setLiAt(follow ? new Date().toISOString().slice(0, 19).replace("T", " ") : null); setLiBusy(true);
     AlumniApi.followLinkedIn(a.id, follow)
-      .then((r) => { setLiAt(r.li_followed_at); setLiQuota(r.quota); })
-      .catch((err: unknown) => {
-        setLiAt(prev);
-        const q = err instanceof ApiError ? (err.data as { data?: { quota?: LinkedInQuota } })?.data?.quota : undefined;
-        if (q) setLiQuota(q);
-        setFMsg("Couldn't save LinkedIn follow state.");
-      })
+      .then((r) => setLiAt(r.li_followed_at))
+      .catch(() => { setLiAt(prev); setFMsg("Couldn't save LinkedIn follow state."); })
       .finally(() => setLiBusy(false));
   };
   const liTitle = liAt
     ? `Followed on LinkedIn ${istanbulTime(liAt) || liAt} — click to mark as not followed`
-    : liOver ? `Open the LinkedIn profile in a new tab (past the ${quota!.cap}-per-7-days guide, still allowed)` : "Open the LinkedIn profile in a new tab and count it toward the LinkedIn weekly counter";
-  const liLeft = quota ? `${quota.remaining}/${quota.cap} left this week` : "";
+    : "Open the LinkedIn profile in a new tab";
   const liBtn = (extra = "") => liUrl ? (
-    <span className={cx("inline-flex items-center gap-1", extra)}>
-      <button type="button" onClick={toggleLinkedIn} disabled={liBusy} aria-pressed={!!liAt} title={liTitle}
-        aria-label={`${liAt ? "Unfollow" : "Follow"} ${a.full_name} on LinkedIn${quota ? ` (${quota.remaining} of ${quota.cap} LinkedIn follows left this week)` : ""}`}
-        className={cx("inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-[13px] font-semibold disabled:opacity-60 sm:h-8 sm:px-3 sm:text-[12px]", FOCUS,
-          liAt ? "border border-line bg-veil/5 text-ink-3 hover:text-ink" : "bg-yang text-on-accent hover:bg-yin hover:text-white")}>
-        <SocialIcon k="linkedin" size={12} />{liAt ? "Unfollow" : "Follow"}
-      </button>
-      {liLeft && <span className="whitespace-nowrap text-[11px] tabular-nums text-ink-3" title="LinkedIn follows in the last 7 days (rolling)">{liLeft}</span>}
-    </span>
+    <button type="button" onClick={toggleLinkedIn} disabled={liBusy} aria-pressed={!!liAt} title={liTitle}
+      aria-label={`${liAt ? "Unfollow" : "Follow"} ${a.full_name} on LinkedIn`}
+      className={cx("inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full px-4 text-[13px] font-semibold disabled:opacity-60 sm:h-8 sm:px-3 sm:text-[12px]", FOCUS, extra,
+        liAt ? "border border-line bg-veil/5 text-ink-3 hover:text-ink" : "bg-yang text-on-accent hover:bg-yin hover:text-white")}>
+      <SocialIcon k="linkedin" size={12} />{liAt ? "Unfollow" : "Follow"}
+    </button>
   ) : null;
   const toQueue = async () => {
     setBusy(true); setMsg("");
@@ -201,7 +173,7 @@ export function AlumniRow({ a }: { a: Alumnus }) {
   const followBtn = (extra = "") => (
     <button type="button" onClick={toggleFollow} disabled={fBusy} aria-pressed={!!followedAt} title={followTitle}
       aria-label={`${followedAt ? "Unfollow" : "Follow"} ${a.full_name}${liUrl ? " (all platforms except LinkedIn)" : ""}`}
-      className={cx("h-9 rounded-full px-4 text-[13px] font-semibold disabled:opacity-60 sm:h-8 sm:px-3 sm:text-[12px]", FOCUS, extra,
+      className={cx("h-10 shrink-0 rounded-full px-4 text-[13px] font-semibold disabled:opacity-60 sm:h-8 sm:px-3 sm:text-[12px]", FOCUS, extra,
         followedAt ? "border border-line bg-veil/5 text-ink-3 hover:text-ink" : "bg-yang text-on-accent hover:bg-yin hover:text-white")}>
       {followedAt ? "Unfollow" : "Follow"}
     </button>
@@ -224,7 +196,7 @@ export function AlumniRow({ a }: { a: Alumnus }) {
   ];
   const gridCols = showConn ? "sm:grid-cols-[minmax(0,1fr)_repeat(3,5rem)]" : "sm:grid-cols-[minmax(0,1fr)_repeat(2,5rem)]";
   return (
-    <li className="overflow-hidden rounded-card border border-line bg-space-2 shadow-card [contain-intrinsic-size:auto_520px] [content-visibility:auto]">
+    <li className="min-w-0 overflow-hidden rounded-card border border-line bg-space-2 shadow-card [contain-intrinsic-size:auto_520px] [content-visibility:auto]">
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls={panelId} aria-label={`${a.full_name}: ${open ? "hide" : "show"} details`}
         className={cx("flex w-full items-start gap-2 px-3 pt-3 text-left sm:px-4", FOCUS)}>
         <span className="min-w-0 flex-1">
@@ -238,11 +210,11 @@ export function AlumniRow({ a }: { a: Alumnus }) {
         <span aria-hidden className={cx("mt-1 shrink-0 text-ink-3 transition-transform", open && "rotate-180")}>{CHEVRON}</span>
       </button>
 
-      <dl className="mx-3 mt-3 grid grid-cols-5 gap-1.5 sm:mx-4 sm:gap-2" aria-label={`${a.full_name}: totals`}>
+      <dl className="mx-3 mt-3 grid grid-cols-5 gap-1 sm:mx-4 sm:gap-2" aria-label={`${a.full_name}: totals`}>
         {totals.map((t) => (
           <div key={t.label} title={t.title} className={cx("min-w-0 rounded-lg border px-0.5 py-1.5 text-center sm:px-2", t.hot && t.value ? "border-yang/50 bg-yang/10" : "border-line bg-space-1")}>
-            <dt className="text-[10px] font-medium leading-tight text-ink-3 sm:text-[11px]">{t.label}</dt>
-            <dd className={cx("truncate text-[14px] font-semibold tabular-nums sm:text-[15px]", t.value ? "text-ink" : "font-normal text-ink-3")}>
+            <dt className="truncate text-[9px] font-medium leading-tight text-ink-3 sm:text-[11px]">{t.label}</dt>
+            <dd className={cx("truncate text-[13px] font-semibold tabular-nums sm:text-[15px]", t.value ? "text-ink" : "font-normal text-ink-3")}>
               {t.value || <><span aria-hidden>—</span><span className="sr-only">not available</span></>}
             </dd>
           </div>
@@ -294,15 +266,15 @@ export function AlumniRow({ a }: { a: Alumnus }) {
         )}
       </section>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line px-3 py-2.5 sm:px-4">
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line px-3 py-2.5 scroll-mb-[calc(var(--aq-bottom-bar)+4.75rem)] sm:px-4 md:scroll-mb-0">
         {(others.length > 0 || !liUrl) && followBtn()}
         {liBtn()}
         {emails.length > 0 && (
-          <a href={`mailto:${emails[0].email}`} className={cx(ICON_BTN, "!h-9 !w-9 sm:!h-8 sm:!w-8", FOCUS)} aria-label={`Email ${a.full_name}`}
+          <a href={`mailto:${emails[0].email}`} className={cx(ICON_BTN, "!h-10 !w-10 sm:!h-8 sm:!w-8", FOCUS)} aria-label={`Email ${a.full_name}`}
             title={emails[0].email + (emails.length > 1 ? ` (+${emails.length - 1} more in details)` : "")}>{MAIL_ICON}</a>
         )}
         <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls={panelId}
-          className={cx("ml-auto inline-flex h-9 items-center gap-1 rounded-full px-3 text-[12px] font-semibold text-ink-2 hover:text-yang sm:h-8", FOCUS)}>
+          className={cx("ml-auto inline-flex h-10 items-center gap-1 rounded-full px-3 text-[12px] font-semibold text-ink-2 hover:text-yang sm:h-8", FOCUS)}>
           {open ? "Hide details" : "Details"}<span aria-hidden className={cx("transition-transform", open && "rotate-180")}>{CHEVRON}</span>
         </button>
       </div>
@@ -479,12 +451,14 @@ function AlumniSearch() {
     ...pfs.map((k) => ({ key: `pf-${k}`, label: `Has ${k === "email" ? "email" : platformLabel(k)}`, clear: () => togglePf(k) })),
   ];
   const sort = f.sort ?? "gpa_desc";
+  // Preferred order first, then any other platform the API reports — generic, no hard-coded allow-list.
+  // Only offer a chip when someone actually has that account (or the filter is already on).
   const platformKeys = [...ALUMNI_PLATFORMS, ...Object.keys(facets?.platforms ?? {}).filter((k) => !ALUMNI_PLATFORMS.includes(k))]
-    .filter((k) => !facets || (facets.platforms[k] ?? 0) > 0 || pfs.includes(k) || ALUMNI_PLATFORMS.includes(k));
+    .filter((k) => !facets || (facets.platforms[k] ?? 0) > 0 || pfs.includes(k));
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-w-0 flex-col gap-3">
       <Card className="flex flex-col gap-3 p-3 sm:p-4">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
           <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or employer" aria-label="Search alumni" className={cx(INPUT, "col-span-2")} />
           <label className="flex min-w-0 items-center gap-2 text-[13px] font-medium text-ink-3"><span className="hidden shrink-0 sm:inline">Sort</span>
             <select value={sort} aria-label="Sort by" className={SELECT}
@@ -514,13 +488,14 @@ function AlumniSearch() {
 
         {panel && <div className="fixed inset-0 z-[69] bg-black/50 sm:hidden" onClick={() => setPanel(false)} aria-hidden />}
         <div id="outreach-filters" hidden={!panel} role="group" aria-label="Filters"
-          className="max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-[70] max-sm:max-h-[85dvh] max-sm:overflow-y-auto max-sm:rounded-t-2xl max-sm:border-t max-sm:border-line max-sm:bg-space-2 max-sm:p-4 max-sm:pb-[max(1rem,env(safe-area-inset-bottom))] max-sm:shadow-2xl sm:border-t sm:border-line sm:pt-3">
-          <div className="mb-3 flex items-center justify-between sm:hidden">
+          className="max-sm:fixed max-sm:inset-x-0 max-sm:bottom-[var(--aq-bottom-bar)] max-sm:z-[70] max-sm:flex max-sm:max-h-[min(85dvh,calc(100dvh-var(--aq-bottom-bar)))] max-sm:flex-col max-sm:overflow-hidden max-sm:rounded-t-2xl max-sm:border-t max-sm:border-line max-sm:bg-space-2 max-sm:p-4 max-sm:shadow-2xl sm:border-t sm:border-line sm:pt-3">
+          <div className="mb-3 flex shrink-0 items-center justify-between sm:hidden">
             <h2 className="text-[16px] font-semibold text-ink">Filters</h2>
             <button type="button" onClick={() => setPanel(false)} aria-label="Close filters" className={cx("grid h-10 w-10 place-items-center rounded-full text-ink-2 hover:bg-veil/5", FOCUS)}>
               <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
             </button>
           </div>
+          <div className="max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto max-sm:overscroll-contain">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <label className="flex min-w-0 flex-col gap-1 text-[12px] text-ink-3">Class
               <select value={f.year ?? ""} onChange={(e) => set("year")(e.target.value)} className={SELECT}>{opt("All years", facets?.years).map((o) => <option key={o.value} value={o.value} data-ay-skip="1">{o.label}</option>)}</select>
@@ -562,9 +537,10 @@ function AlumniSearch() {
               Include people without a GPA ({facets?.without_gpa?.toLocaleString()})
             </label>
           )}
-          <div className="mt-4 flex items-center gap-2 sm:hidden">
-            <Button variant="outline" onClick={reset} disabled={!active} className="flex-1">Clear all</Button>
-            <Button onClick={() => setPanel(false)} className="flex-[2]">{items === null ? "Show results" : `Show ${total.toLocaleString()} ${total === 1 ? "person" : "people"}`}</Button>
+          </div>
+          <div className="mt-3 flex shrink-0 items-center gap-2 border-t border-line pt-3 sm:hidden">
+            <Button variant="outline" onClick={reset} disabled={!active} className="min-h-11 flex-1">Clear all</Button>
+            <Button onClick={() => setPanel(false)} className="min-h-11 flex-[2]">{items === null ? "Show results" : `Show ${total.toLocaleString()} ${total === 1 ? "person" : "people"}`}</Button>
           </div>
         </div>
 
@@ -600,7 +576,7 @@ function AlumniSearch() {
         </Card>
       ) : (
         <>
-          <ul aria-label="Alumni" className="flex flex-col gap-3">{items.map((a) => <AlumniRow key={a.id} a={a} />)}</ul>
+          <ul aria-label="Alumni" className="flex min-w-0 flex-col gap-3">{items.map((a) => <AlumniRow key={a.id} a={a} />)}</ul>
           {next > 0 && (
             <div className="flex flex-col items-center gap-1">
               <Button size="sm" variant="outline" onClick={() => load(next)} disabled={more} className="min-h-10">{more ? "Loading…" : "Load more"}</Button>
@@ -616,7 +592,7 @@ function AlumniSearch() {
 export default function Outreach() {
   if (!canOutreach()) return <NotFound />;
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex min-w-0 flex-col gap-5 pb-[calc(var(--aq-bottom-bar)+4.75rem)] md:pb-0">
       <PageHero title="Outreach" lede="Find Bilkent alumni and open their confirmed profiles. Follow opens the links in your own browser; nothing is sent from this page." />
       <AlumniSearch />
     </div>

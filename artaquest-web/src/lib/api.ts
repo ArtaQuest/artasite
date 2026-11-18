@@ -3316,7 +3316,7 @@ export type Alumnus = {
   emails?: AlumniEmail[];
   /** 1.25.12: when the signed-in admin followed this person (UTC), else null */
   followed_at?: string | null;
-  /** 1.25.23: when the signed-in admin followed this person on LinkedIn (separate button + weekly quota), else null */
+  /** 1.25.23: when the signed-in admin followed this person on LinkedIn (separate button), else null */
   li_followed_at?: string | null;
   profiles: Partial<Record<string, AlumniProfile>>; updated_at: string;
 };
@@ -3342,7 +3342,7 @@ export const AlumniApi = {
   photoUrl: (id: number) => `${BASE}/outreach/alumni/photo/${id}?_wpnonce=${encodeURIComponent(restNonce())}`,
   exportCsv: (p: AlumniFilter) => get<{ filename: string; rows: number; csv: string }>("/outreach/alumni/export", alumniParams(p)),
   follow: (id: number, follow: boolean) => post<{ id: number; followed_at: string | null }>("/outreach/alumni/follow", { id, follow }),
-  /** 1.25.23: LinkedIn's own follow state; a new follow past the weekly cap throws ApiError 429 (code li_weekly_cap). */
+  /** 1.25.23: LinkedIn's own follow state. 1.25.26 dropped the hard weekly cap (no 429); 1.25.36 dropped the counter from the UI. */
   followLinkedIn: (id: number, follow: boolean) =>
     post<{ id: number; li_followed_at: string | null; quota: LinkedInQuota }>("/outreach/alumni/follow", { id, follow, platform: "linkedin" }),
   linkedInQuota: () => get<LinkedInQuota>("/outreach/alumni/linkedin-quota"),
