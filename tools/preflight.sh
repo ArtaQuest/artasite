@@ -299,7 +299,10 @@ if [ ! -d artaquest-web/node_modules ]; then
   # after it failed too for want of node_modules, and the log said only "npm ci failed" — so nothing
   # distinguished a broken lockfile from a registry hiccup, and the same lockfile installed cleanly
   # on the laptop seconds later. The output is printed ONLY on failure, so a green run stays quiet.
-  if ! npm_out=$( cd artaquest-web && npm ci --no-audit --fund=false 2>&1 ); then
+  # onnxruntime-node's postinstall tries to download a Linux CUDA tarball (nvcc missing
+  # → assumes CUDA 12) that 404s on GitHub runners and blocked the 1.25.32 artifact.
+  # CPU ONNX is enough for this build. See ONNXRUNTIME_NODE_INSTALL_CUDA=skip.
+  if ! npm_out=$( cd artaquest-web && ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm ci --no-audit --fund=false 2>&1 ); then
     printf '%s\n' "$npm_out" | tail -30 | sed 's/^/    /'
     fail "npm ci failed"; mark
   fi
