@@ -170,3 +170,12 @@ export function platformLabel(p: string): string {
   if (PLATFORM_LABELS[p]) return PLATFORM_LABELS[p];
   return p.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+/** GPA × following/followers for display. Inf (0 followers, known following, GPA present) is flagged; blanks stay empty. */
+export function gpaFollowScoreLabel(score: number | string | null | undefined, inf?: boolean): string {
+  if (inf) return "∞ (0 followers)";
+  if (score === null || score === undefined || score === "") return "";
+  const v = typeof score === "number" ? score : Number(score);
+  if (!Number.isFinite(v) || v < 0) return "";
+  return v.toFixed(2);
+}

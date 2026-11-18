@@ -5,7 +5,7 @@ import {
 import { Button, Card, ErrorNote, PageHero, Select, SkeletonGrid, cx } from "../components/ui";
 import { SocialIcon } from "../components/SocialLinks";
 import NotFound from "./NotFound";
-import { cleanHeadline, ESTIMATE_NOTE, evidenceChips, followRatioLabel, formatCount, gpaLabel, istanbulTime, platformLabel, profileHandle, relTime } from "../lib/alumni-format";
+import { cleanHeadline, ESTIMATE_NOTE, evidenceChips, followRatioLabel, formatCount, gpaFollowScoreLabel, gpaLabel, istanbulTime, platformLabel, profileHandle, relTime } from "../lib/alumni-format";
 
 /**
  * OUTREACH — ArtaSearch alumni search only (1.25.27; the Review/Results/Plan/Profile-sync tabs were removed from the
@@ -233,6 +233,11 @@ export function AlumniRow({ a }: { a: Alumnus }) {
             {followRatioLabel(a.follow_ratio, a.follow_ratio_inf)}
           </span>
         )}
+        {gpaFollowScoreLabel(a.gpa_follow_score, a.gpa_follow_score_inf) && (
+          <span className="shrink-0 whitespace-nowrap text-[11px] tabular-nums text-ink-3" title="Estimated GPA × following/followers. Blank if either side is missing; a 0-follower account with a known following count is shown as ∞ and flagged.">
+            score {gpaFollowScoreLabel(a.gpa_follow_score, a.gpa_follow_score_inf)}
+          </span>
+        )}
         <div className="flex flex-wrap items-center gap-1.5">
           {have.map((p) => {
             const pr = a.profiles[p];
@@ -427,6 +432,7 @@ function AlumniSearch() {
               { value: "followers_max_desc", label: "Followers: max, high to low" },
               { value: "following_total_desc", label: "Following: total, high to low" },
               { value: "follow_ratio_desc", label: "Following/followers ratio: high to low" },
+              { value: "gpa_follow_score_desc", label: "Est. GPA × following/followers: high to low" },
               { value: "followers_platform", label: "Followers: by platform" },
             ]} />
           {f.sort === "followers_platform" && (

@@ -249,6 +249,8 @@ final class AlumniSearch {
 			'following_total' => self::count_or_null( $r['following_total'] ?? null ),
 			'follow_ratio' => ( isset( $r['follow_ratio'] ) && is_numeric( $r['follow_ratio'] ) ) ? round( (float) $r['follow_ratio'], 6 ) : null,
 			'follow_ratio_inf' => ! empty( $r['follow_ratio_inf'] ),
+			'gpa_follow_score' => ( self::gpa_out( $r['gpa'] ?? null ) !== null && isset( $r['follow_ratio'] ) && is_numeric( $r['follow_ratio'] ) ) ? round( ( (float) self::gpa_out( $r['gpa'] ) ) * (float) $r['follow_ratio'], 6 ) : null,
+			'gpa_follow_score_inf' => ( self::gpa_out( $r['gpa'] ?? null ) !== null && ! empty( $r['follow_ratio_inf'] ) ),
 			'email_source' => $r['email_source'], 'photo' => preg_match( Outreach::PHOTO_RE, (string) $r['photo'] ) ? 'private' : '', 'n_profiles' => (int) $r['n_profiles'],
 			'photo_private' => (bool) preg_match( Outreach::PHOTO_RE, (string) $r['photo'] ),
 			'photo_meta' => is_array( $pm = json_decode( (string) ( $r['photo_meta'] ?? '' ), true ) ) ? array_intersect_key( $pm, array_flip( [ 'platform', 'profile_url', 'fetched_at' ] ) ) : null,
@@ -450,6 +452,9 @@ final class AlumniSearch {
 		'followers_max_desc'   => '(followers_max IS NULL) ASC, followers_max DESC, grad_year DESC, department ASC, full_name ASC, id ASC',
 		'following_total_desc' => '(following_total IS NULL) ASC, following_total DESC, grad_year DESC, department ASC, full_name ASC, id ASC',
 		'follow_ratio_desc'    => '(CASE WHEN follow_ratio IS NULL AND IFNULL(follow_ratio_inf,0)=0 THEN 1 ELSE 0 END) ASC, follow_ratio_inf DESC, follow_ratio DESC, grad_year DESC, department ASC, full_name ASC, id ASC',
+		// 1.25.34: GPA × (following/followers). Blanks last. followers=0 with a known following
+		// count is flagged and sorts as maximum (then higher GPA first); finite scores high to low.
+		'gpa_follow_score_desc' => '(CASE WHEN gpa IS NULL OR (follow_ratio IS NULL AND IFNULL(follow_ratio_inf,0)=0) THEN 1 ELSE 0 END) ASC, IFNULL(follow_ratio_inf,0) DESC, (gpa * follow_ratio) DESC, gpa DESC, grad_year DESC, department ASC, full_name ASC, id ASC',
 	];
 
 	/** The ORDER BY for ?sort= (unknown or absent = gpa_desc). Only ever one of the constants above

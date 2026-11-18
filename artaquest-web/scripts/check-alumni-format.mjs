@@ -73,6 +73,9 @@ eq(f.followRatioLabel(null), "", "ratio blank");
 eq(f.platformLabel("tiktok"), "TikTok", "platformLabel known");
 eq(f.platformLabel("letterboxd"), "Letterboxd", "platformLabel extra");
 eq(f.platformLabel("some_new_site"), "Some New Site", "platformLabel generic");
+eq(f.gpaFollowScoreLabel(3.6 * 0.5), "1.80", "gpaFollowScoreLabel");
+eq(f.gpaFollowScoreLabel(null, true), "∞ (0 followers)", "gpaFollowScoreLabel inf");
+eq(f.gpaFollowScoreLabel(null), "", "gpaFollowScoreLabel blank");
 eq(f.profileHandle("threads", "https://www.threads.net/@foo"), "threads.net/@foo", "handle: generic threads");
 
 if (fail) { console.error(`${fail} alumni-format check(s) failed`); process.exit(1); }

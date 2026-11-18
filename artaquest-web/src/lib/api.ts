@@ -3305,6 +3305,10 @@ export type Alumnus = {
   follow_ratio?: number | null;
   /** true when followers_total is 0 and following_total is known (sorts as max, flagged in the UI). */
   follow_ratio_inf?: boolean;
+  /** 1.25.34: estimated GPA × following/followers ratio; null when either side is blank. */
+  gpa_follow_score?: number | null;
+  /** true when the ratio is flagged infinite and a GPA is present (sorts as max). */
+  gpa_follow_score_inf?: boolean;
   /** 1.25.9: the picture is stored on the site (never a CDN URL); show it through AlumniApi.photoUrl(id) */
   photo_private?: boolean;
   photo_meta?: { platform: AlumniPlatform; profile_url: string; fetched_at: string } | null;
@@ -3324,7 +3328,7 @@ export type AlumniFilter = { year?: string; department?: string; country?: strin
   /** 1.25.22: "1" = also list people without an estimated GPA (hidden by default; the rows are never deleted) */ with_no_gpa?: string };
 /** 1.25.20: list order. The default (no sort sent) is gpa_desc = highest estimated GPA first, people without one last.
  *  1.25.33 adds follower/following totals and following/followers ratio (high to low). */
-export type AlumniSort = "gpa_desc" | "gpa_asc" | "class" | "name" | "followers_total_desc" | "followers_max_desc" | "following_total_desc" | "follow_ratio_desc" | "followers_platform";
+export type AlumniSort = "gpa_desc" | "gpa_asc" | "class" | "name" | "followers_total_desc" | "followers_max_desc" | "following_total_desc" | "follow_ratio_desc" | "gpa_follow_score_desc" | "followers_platform";
 export type AlumniFacet = { value: string | number; n: number };
 export type AlumniFacets = {
   years: AlumniFacet[]; departments: AlumniFacet[]; countries: AlumniFacet[];
