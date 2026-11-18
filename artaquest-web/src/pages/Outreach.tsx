@@ -5,7 +5,7 @@ import {
 import { Button, Card, ErrorNote, PageHero, Select, SkeletonGrid, cx } from "../components/ui";
 import { SocialIcon } from "../components/SocialLinks";
 import NotFound from "./NotFound";
-import { cleanHeadline, ESTIMATE_NOTE, evidenceChips, gpaLabel, istanbulTime, profileHandle, relTime } from "../lib/alumni-format";
+import { cleanHeadline, ESTIMATE_NOTE, evidenceChips, followRatioLabel, formatCount, gpaLabel, istanbulTime, platformLabel, profileHandle, relTime } from "../lib/alumni-format";
 
 /**
  * OUTREACH — ArtaSearch alumni search only (1.25.27; the Review/Results/Plan/Profile-sync tabs were removed from the
@@ -26,7 +26,6 @@ function download(filename: string, csv: string) {
 // ── ArtaSearch — the alumni directory (src/AlumniSearch.php). Rows arrive from the scan box via the
 // key-protected ingest route; this tab only reads, filters, exports and copies a profile to the queue.
 const ALUMNI_PLATFORMS: AlumniPlatform[] = ["linkedin", "instagram", "facebook", "researchgate", "youtube", "github", "x", "strava", "bluesky", "spotify", "tiktok"];
-const ALUMNI_LABEL: Record<AlumniPlatform, string> = { linkedin: "LinkedIn", instagram: "Instagram", facebook: "Facebook", researchgate: "ResearchGate", youtube: "YouTube", github: "GitHub", x: "X", strava: "Strava", bluesky: "Bluesky", spotify: "Spotify", tiktok: "TikTok" };
 const QUEUEABLE = new Set<AlumniPlatform>(["linkedin", "instagram", "facebook", "github", "x"]);
 
 /** 1.25.9: the stored picture of a HIGH-confidence matched account (Instagram > LinkedIn > Facebook > GitHub), else initials. */
@@ -42,10 +41,19 @@ function AlumniPhoto({ a, size }: { a: Alumnus; size: number }) {
 }
 
 const MAIL_ICON = <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></svg>;
-const PF_FILTER: { k: AlumniPlatform | "email"; label: string }[] = [
-  { k: "linkedin", label: "LinkedIn" }, { k: "instagram", label: "Instagram" }, { k: "x", label: "X" }, { k: "facebook", label: "Facebook" },
-  { k: "github", label: "GitHub" }, { k: "youtube", label: "YouTube" }, { k: "researchgate", label: "ResearchGate" }, { k: "strava", label: "Strava" }, { k: "bluesky", label: "Bluesky" }, { k: "spotify", label: "Spotify" }, { k: "tiktok", label: "TikTok" }, { k: "email", label: "Email" },
-];
+function faviconFor(url: string): string {
+  try { return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(url).hostname)}&sz=64`; }
+  catch { return ""; }
+}
+function PlatformGlyph({ k, url, size = 14 }: { k: string; url?: string; size?: number }) {
+  // SocialIcon already draws a globe when the brand path is missing; decorate with the host favicon
+  // for unknown platforms so a new domain is recognizable without a code push.
+  const known = ["linkedin","instagram","facebook","researchgate","youtube","github","x","strava","bluesky","spotify","tiktok","threads","reddit","medium","pinterest","twitch","snapchat","mastodon","kaggle","leetcode","behance","dribbble","letterboxd","goodreads"];
+  if (known.includes(k) || !url) return <SocialIcon k={k} size={size} />;
+  const src = faviconFor(url);
+  if (!src) return <SocialIcon k={k} size={size} />;
+  return <img src={src} alt="" width={size} height={size} className="rounded-sm" />;
+}
 const ICON_BTN = "grid h-7 w-7 place-items-center rounded-full border border-line bg-space-1 text-ink-2 hover:border-yang hover:text-yang";
 
 /** The person's emails, best first: the confident-only list (1.25.7) or the older single public_email. */
@@ -107,7 +115,10 @@ export function AlumniRow({ a }: { a: Alumnus }) {
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
-  const have = ALUMNI_PLATFORMS.filter((p) => a.profiles[p]);
+  const have = [
+    ...ALUMNI_PLATFORMS.filter((p) => a.profiles[p]),
+    ...Object.keys(a.profiles).filter((p) => !ALUMNI_PLATFORMS.includes(p as typeof ALUMNI_PLATFORMS[number])),
+  ];
   const others = have.filter((p) => p !== "linkedin"); // 1.25.23: the shared Follow never opens or counts LinkedIn
   const queueable = have.filter((p) => QUEUEABLE.has(p));
   const emails = alumniEmails(a);
@@ -197,7 +208,7 @@ export function AlumniRow({ a }: { a: Alumnus }) {
   const gpa = gpaLabel(a.gpa);
   const headline = cleanHeadline(a.full_name, a.headline, a.employer);
   const location = (a.location || "").trim() || [a.city, a.country].filter(Boolean).join(", ");
-  const locFrom = (a.location || "").trim() && a.location_source ? `Stated on ${ALUMNI_LABEL[a.location_source as AlumniPlatform] ?? a.location_source}` : "From the matched profile";
+  const locFrom = (a.location || "").trim() && a.location_source ? `Stated on ${platformLabel(a.location_source)}` : "From the matched profile";
   const panelId = `alumni-detail-${a.id}`;
   return (
     <li className="border-b border-line last:border-b-0">
@@ -212,12 +223,28 @@ export function AlumniRow({ a }: { a: Alumnus }) {
             Est. GPA <span className="text-ink-2">{gpa}</span>
           </span>
         )}
+        {formatCount(a.followers_total) && (
+          <span className="shrink-0 whitespace-nowrap text-[11px] tabular-nums text-ink-3" title="Sum of public follower counts (platforms with no published count are omitted, not treated as zero)">
+            {formatCount(a.followers_total)} followers
+          </span>
+        )}
+        {followRatioLabel(a.follow_ratio, a.follow_ratio_inf) && (
+          <span className="shrink-0 whitespace-nowrap text-[11px] tabular-nums text-ink-3" title="Following ÷ followers. A 0-follower account with a known following count is shown as ∞ and flagged.">
+            {followRatioLabel(a.follow_ratio, a.follow_ratio_inf)}
+          </span>
+        )}
         <div className="flex flex-wrap items-center gap-1.5">
-          {have.map((p) => (
-            <a key={p} href={a.profiles[p]?.url} target="_blank" rel="noopener noreferrer" title={ALUMNI_LABEL[p]} aria-label={`${a.full_name} on ${ALUMNI_LABEL[p]}`} className={cx(ICON_BTN, FOCUS)}>
-              <SocialIcon k={p} size={14} />
+          {have.map((p) => {
+            const pr = a.profiles[p];
+            const fol = formatCount(pr?.followers); const fing = formatCount(pr?.following); const con = formatCount(pr?.connections);
+            const bits = [fol && `${fol} followers`, fing && `${fing} following`, con && `${con} connections`].filter(Boolean).join(" · ");
+            const title = bits ? `${platformLabel(p)} · ${bits}` : platformLabel(p);
+            return (
+            <a key={p} href={pr?.url} target="_blank" rel="noopener noreferrer" title={title} aria-label={`${a.full_name} on ${platformLabel(p)}${bits ? `, ${bits}` : ""}`} className={cx(ICON_BTN, FOCUS)}>
+              <PlatformGlyph k={p} url={pr?.url} size={14} />
             </a>
-          ))}
+            );
+          })}
           {emails.length > 0 && (
             <a href={`mailto:${emails[0].email}`} className={cx(ICON_BTN, FOCUS)} aria-label={`Email ${a.full_name}`}
               title={emails[0].email + (emails.length > 1 ? ` (+${emails.length - 1} more in details)` : "")}>{MAIL_ICON}</a>
@@ -235,9 +262,9 @@ export function AlumniRow({ a }: { a: Alumnus }) {
               <span className="hidden sm:block"><AlumniPhoto a={a} size={88} /></span>
               {a.photo_private && a.photo_meta && (
                 <a href={a.photo_meta.profile_url} target="_blank" rel="noopener noreferrer"
-                  title={`Photo from ${ALUMNI_LABEL[a.photo_meta.platform] ?? a.photo_meta.platform}${istanbulTime(a.photo_meta.fetched_at) ? `, fetched ${istanbulTime(a.photo_meta.fetched_at)}` : ""}`}
+                  title={`Photo from ${platformLabel(a.photo_meta.platform)}${istanbulTime(a.photo_meta.fetched_at) ? `, fetched ${istanbulTime(a.photo_meta.fetched_at)}` : ""}`}
                   className={cx("mt-1 inline-block rounded text-[11px] text-ink-3 hover:text-yang", FOCUS)}>
-                  via {ALUMNI_LABEL[a.photo_meta.platform] ?? a.photo_meta.platform}
+                  via {platformLabel(a.photo_meta.platform)}
                 </a>
               )}
             </div>
@@ -245,6 +272,14 @@ export function AlumniRow({ a }: { a: Alumnus }) {
               <h3 className="text-[17px] font-semibold leading-tight text-ink">{a.full_name}</h3>
               <p className="mt-0.5 text-ink-2">{a.department}{a.department && a.grad_year ? " · " : ""}{a.grad_year ? `Class of ${a.grad_year}` : ""}</p>
               {gpa && <p className="mt-1 text-ink-3" title={ESTIMATE_NOTE}>Est. GPA <span className="tabular-nums text-ink-2">{gpa}</span> <span className="text-[11px]">· estimate from roster, not official</span></p>}
+              {(formatCount(a.followers_total) || formatCount(a.following_total) || followRatioLabel(a.follow_ratio, a.follow_ratio_inf)) && (
+                <p className="mt-1 text-ink-3 tabular-nums">
+                  {formatCount(a.followers_total) && <>{formatCount(a.followers_total)} followers</>}
+                  {formatCount(a.following_total) && <>{formatCount(a.followers_total) ? " · " : ""}{formatCount(a.following_total)} following</>}
+                  {followRatioLabel(a.follow_ratio, a.follow_ratio_inf) && <>{` · ratio ${followRatioLabel(a.follow_ratio, a.follow_ratio_inf)}`}</>}
+                  <span className="text-[11px]"> · public counts only, never guessed</span>
+                </p>
+              )}
               {headline && <p className="mt-1 break-words text-ink" title={a.headline || undefined}>{headline}</p>}
               {location && (
                 <p className="mt-1 flex items-center gap-1 text-ink-3" title={locFrom}>
@@ -264,20 +299,27 @@ export function AlumniRow({ a }: { a: Alumnus }) {
                   return (
                     <li key={p} className="flex flex-col gap-1.5 px-3 py-2 sm:flex-row sm:items-center sm:gap-3">
                       <div className="flex min-w-0 items-center gap-2 sm:w-[46%] sm:shrink-0">
-                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-line text-ink-2"><SocialIcon k={p} size={14} /></span>
-                        <span className="w-[78px] shrink-0 text-[12px] text-ink-3">{ALUMNI_LABEL[p]}</span>
+                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-line text-ink-2"><PlatformGlyph k={p} url={pr.url} size={14} /></span>
+                        <span className="w-[78px] shrink-0 text-[12px] text-ink-3">{platformLabel(p)}</span>
                         <a href={pr.url} target="_blank" rel="noopener noreferrer" title={pr.title ? `${pr.title}\n${pr.url}` : pr.url}
                           className={cx("min-w-0 truncate rounded font-medium text-ink hover:text-yang hover:underline", FOCUS)}>
                           {profileHandle(p, pr.url)}<span className="sr-only"> (opens in a new tab)</span>
                         </a>
-                        <span className="ml-auto sm:hidden"><CopyButton text={pr.url} label={`Copy ${ALUMNI_LABEL[p]} link`} /></span>
+                        <span className="ml-auto sm:hidden"><CopyButton text={pr.url} label={`Copy ${platformLabel(p)} link`} /></span>
                       </div>
                       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 pl-9 sm:pl-0" title={pr.evidence ? `Evidence code: ${pr.evidence}` : undefined}>
+                        {(() => {
+                          const fol = formatCount(pr.followers); const fing = formatCount(pr.following); const con = formatCount(pr.connections);
+                          const bits = [fol && `${fol} followers`, fing && `${fing} following`, con && `${con} connections`].filter(Boolean) as string[];
+                          return bits.map((b) => (
+                            <span key={b} className="rounded-full border border-line bg-veil/5 px-2 py-0.5 text-[11px] tabular-nums text-ink-2" title={pr.counts_at ? `As of ${pr.counts_at}${pr.counts_source ? ` · ${pr.counts_source}` : ""}` : "Public count; blank if the profile did not show one"}>{b}</span>
+                          ));
+                        })()}
                         {chips.map((c) => (
                           <span key={c} className="rounded-full border border-line bg-veil/5 px-2 py-0.5 text-[11px] text-ink-2">{c}</span>
                         ))}
                       </div>
-                      <span className="hidden sm:block"><CopyButton text={pr.url} label={`Copy ${ALUMNI_LABEL[p]} link`} /></span>
+                      <span className="hidden sm:block"><CopyButton text={pr.url} label={`Copy ${platformLabel(p)} link`} /></span>
                     </li>
                   );
                 })}
@@ -375,8 +417,22 @@ function AlumniSearch() {
           <Select label="Department" value={f.department ?? ""} onChange={set("department")} options={opt("All departments", facets?.departments)} skipOptions />
           <Select label="Followed" value={f.followed ?? ""} onChange={set("followed")} skipOptions
             options={[{ value: "", label: "Followed or not" }, { value: "1", label: "Followed" }, { value: "0", label: "Not followed" }]} />
-          <Select label="Sort" value={f.sort ?? "gpa_desc"} onChange={(v) => setF((o) => ({ ...o, sort: v as AlumniSort }))} skipOptions
-            options={[{ value: "gpa_desc", label: "Est. GPA: high to low" }, { value: "gpa_asc", label: "Est. GPA: low to high" }, { value: "class", label: "Class: newest first" }, { value: "name", label: "Name A–Z" }]} />
+          <Select label="Sort" value={f.sort ?? "gpa_desc"} onChange={(v) => setF((o) => ({ ...o, sort: v as AlumniSort, sort_platform: v === "followers_platform" ? o.sort_platform : undefined }))} skipOptions
+            options={[
+              { value: "gpa_desc", label: "Est. GPA: high to low" },
+              { value: "gpa_asc", label: "Est. GPA: low to high" },
+              { value: "class", label: "Class: newest first" },
+              { value: "name", label: "Name A–Z" },
+              { value: "followers_total_desc", label: "Followers: total, high to low" },
+              { value: "followers_max_desc", label: "Followers: max, high to low" },
+              { value: "following_total_desc", label: "Following: total, high to low" },
+              { value: "follow_ratio_desc", label: "Following/followers ratio: high to low" },
+              { value: "followers_platform", label: "Followers: by platform" },
+            ]} />
+          {f.sort === "followers_platform" && (
+            <Select label="Platform" value={f.sort_platform ?? ""} onChange={(v) => setF((o) => ({ ...o, sort_platform: v || undefined }))} skipOptions
+              options={[{ value: "", label: "Choose a platform" }, ...Object.keys(facets?.platforms ?? {}).map((k) => ({ value: k, label: platformLabel(k) }))]} />
+          )}
           <button type="button" onClick={() => setShowMore((v) => !v)} aria-expanded={showMore} className={cx("text-[13px] text-ink-3 hover:text-yang", FOCUS)}>
             {showMore ? "Fewer filters" : "More filters"}
           </button>
@@ -399,14 +455,15 @@ function AlumniSearch() {
         <fieldset className="flex flex-wrap items-center gap-1.5 text-[12px]">
           <legend className="sr-only">Has all of these accounts</legend>
           <span className="mr-1 text-ink-3">Has:</span>
-          {PF_FILTER.map(({ k, label }) => {
+          {([...ALUMNI_PLATFORMS, ...Object.keys(facets?.platforms ?? {}).filter((k) => !ALUMNI_PLATFORMS.includes(k)), "email"] as const).map((k) => {
             const on = pfs.includes(k);
-            const c = k === "email" ? facets?.with_email : facets?.platforms[k as AlumniPlatform];
+            const label = k === "email" ? "Email" : platformLabel(k);
+            const c = k === "email" ? facets?.with_email : facets?.platforms[k];
             return (
               <label key={k} className={cx("flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 transition-colors focus-within:outline-2 focus-within:outline-yang",
                 on ? "border-yang bg-yang/10 text-ink" : "border-line text-ink-3 hover:text-ink")}>
                 <input type="checkbox" className="sr-only" checked={on} onChange={() => togglePf(k)} />
-                {k === "email" ? MAIL_ICON : <SocialIcon k={k} size={13} />}
+                {k === "email" ? MAIL_ICON : <PlatformGlyph k={k} size={13} />}
                 <span>{label}{c !== undefined && <span className="tabular-nums text-ink-3"> {c.toLocaleString()}</span>}</span>
               </label>
             );

@@ -132,3 +132,41 @@ export function gpaLabel(g: number | string | null | undefined): string {
   return Number.isFinite(n) && n >= 0 && n <= 4.5 ? n.toFixed(2) : "";
 }
 export const ESTIMATE_NOTE = "Estimate from roster";
+
+
+/** A public follower/following count for display. Empty when the value is missing — never shows 0 for a blank. */
+export function formatCount(n: number | string | null | undefined): string {
+  if (n === null || n === undefined || n === "") return "";
+  const v = typeof n === "number" ? n : Number(n);
+  if (!Number.isFinite(v) || v < 0) return "";
+  if (v < 10000) return Math.round(v).toLocaleString("en-US");
+  const fmt = (d: number, s: string) => {
+    const x = v / d;
+    const t = x >= 100 ? Math.round(x).toString() : (Math.round(x * 10) / 10).toString().replace(/\.0$/, "");
+    return t + s;
+  };
+  if (v < 1e6) return fmt(1e3, "K");
+  if (v < 1e9) return fmt(1e6, "M");
+  return fmt(1e9, "B");
+}
+
+/** following/followers ratio label. Inf (0 followers, known following) is flagged; blanks stay empty. */
+export function followRatioLabel(ratio: number | string | null | undefined, inf?: boolean): string {
+  if (inf) return "∞ (0 followers)";
+  if (ratio === null || ratio === undefined || ratio === "") return "";
+  const v = typeof ratio === "number" ? ratio : Number(ratio);
+  if (!Number.isFinite(v) || v < 0) return "";
+  return v.toFixed(2);
+}
+
+const PLATFORM_LABELS: Record<string, string> = {
+  linkedin: "LinkedIn", instagram: "Instagram", facebook: "Facebook", researchgate: "ResearchGate",
+  youtube: "YouTube", github: "GitHub", x: "X", strava: "Strava", bluesky: "Bluesky", spotify: "Spotify",
+  tiktok: "TikTok", threads: "Threads", reddit: "Reddit", medium: "Medium", pinterest: "Pinterest",
+  twitch: "Twitch", snapchat: "Snapchat", mastodon: "Mastodon", kaggle: "Kaggle", leetcode: "LeetCode",
+  behance: "Behance", dribbble: "Dribbble", letterboxd: "Letterboxd", goodreads: "Goodreads",
+};
+export function platformLabel(p: string): string {
+  if (PLATFORM_LABELS[p]) return PLATFORM_LABELS[p];
+  return p.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}

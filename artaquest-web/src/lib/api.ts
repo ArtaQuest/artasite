@@ -3286,8 +3286,9 @@ export type OutreachStat = {
 export type OutreachPlanRow = { platform: OutreachPlatform; daily_cap: number; sent_today: number; remaining_today: number; queued: number; days_to_clear: number | null };
 export type ProfileSyncItem = { id: number; handle: string; changes: { field: string; old: string; new: string }[] };
 // ── ArtaSearch (the Search tab inside Outreach; src/AlumniSearch.php — every read route is 'admin') ──
-export type AlumniPlatform = "linkedin" | "instagram" | "facebook" | "researchgate" | "youtube" | "github" | "x" | "strava" | "bluesky" | "spotify" | "tiktok";
-export type AlumniProfile = { url: string; title: string; evidence: string };
+/** Known keys plus any auto-registered platform the scan box sends (1.25.33). */
+export type AlumniPlatform = "linkedin" | "instagram" | "facebook" | "researchgate" | "youtube" | "github" | "x" | "strava" | "bluesky" | "spotify" | "tiktok" | (string & {});
+export type AlumniProfile = { url: string; title: string; evidence: string; followers?: number | null; following?: number | null; connections?: number | null; counts_at?: string | null; counts_source?: string | null };
 export type AlumniEmail = { email: string; source: string; confidence: "roster" | "high" };
 export type Alumnus = {
   id: number; full_name: string; grad_year: number; department: string; employer: string; headline: string;
@@ -3296,6 +3297,14 @@ export type Alumnus = {
   location?: string; location_source?: string;
   /** 1.25.20: ESTIMATED GPA from the scan box's roster (0-4.5, two decimals; null = none). An estimate, never official. Admin-only. */
   gpa?: number | null;
+  /** 1.25.33: sums/max of public follower counts that were actually published (missing ≠ 0). */
+  followers_total?: number | null;
+  followers_max?: number | null;
+  following_total?: number | null;
+  /** following_total / followers_total when followers_total > 0; null if blank. */
+  follow_ratio?: number | null;
+  /** true when followers_total is 0 and following_total is known (sorts as max, flagged in the UI). */
+  follow_ratio_inf?: boolean;
   /** 1.25.9: the picture is stored on the site (never a CDN URL); show it through AlumniApi.photoUrl(id) */
   photo_private?: boolean;
   photo_meta?: { platform: AlumniPlatform; profile_url: string; fetched_at: string } | null;
@@ -3305,19 +3314,21 @@ export type Alumnus = {
   followed_at?: string | null;
   /** 1.25.23: when the signed-in admin followed this person on LinkedIn (separate button + weekly quota), else null */
   li_followed_at?: string | null;
-  profiles: Partial<Record<AlumniPlatform, AlumniProfile>>; updated_at: string;
+  profiles: Partial<Record<string, AlumniProfile>>; updated_at: string;
 };
 /** platforms: comma list of AlumniPlatform | "email"; a row matches when it has ALL of them (1.25.13; absent = everyone). location: free text against location/city/country (1.25.19). */
 /** 1.25.23: the signed-in admin's LinkedIn follow quota over a rolling 7 days (UTC times). */
 export type LinkedInQuota = { cap: number; used: number; remaining: number; resets_at: string | null };
 export type AlumniFilter = { year?: string; department?: string; country?: string; location?: string; platform?: string; platforms?: string; followed?: string; q?: string; sort?: AlumniSort;
+  /** 1.25.33: platform key used when sort=followers_platform */ sort_platform?: string;
   /** 1.25.22: "1" = also list people without an estimated GPA (hidden by default; the rows are never deleted) */ with_no_gpa?: string };
-/** 1.25.20: list order. The default (no sort sent) is gpa_desc = highest estimated GPA first, people without one last. */
-export type AlumniSort = "gpa_desc" | "gpa_asc" | "class" | "name";
+/** 1.25.20: list order. The default (no sort sent) is gpa_desc = highest estimated GPA first, people without one last.
+ *  1.25.33 adds follower/following totals and following/followers ratio (high to low). */
+export type AlumniSort = "gpa_desc" | "gpa_asc" | "class" | "name" | "followers_total_desc" | "followers_max_desc" | "following_total_desc" | "follow_ratio_desc" | "followers_platform";
 export type AlumniFacet = { value: string | number; n: number };
 export type AlumniFacets = {
   years: AlumniFacet[]; departments: AlumniFacet[]; countries: AlumniFacet[];
-  platforms: Record<AlumniPlatform, number>; total: number; with_any: number; with_email?: number; with_gpa?: number; /** 1.25.22: people hidden for having no estimated GPA yet */ without_gpa?: number; synced_at: string;
+  platforms: Record<string, number>; total: number; with_any: number; with_email?: number; with_gpa?: number; /** 1.25.22: people hidden for having no estimated GPA yet */ without_gpa?: number; synced_at: string;
 };
 const alumniParams = (p: AlumniFilter & { cursor?: number }) =>
   Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined && v !== "")) as Record<string, string | number>;

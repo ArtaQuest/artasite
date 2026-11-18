@@ -51,14 +51,52 @@ final class AlumniSearch {
 		return mb_substr( $n( $name ) . '|' . $n( $department ), 0, 191 );
 	}
 
-	/** A profile URL is kept only when it is https and on that platform's own host. */
+	/** A profile URL is kept only when it is https. Known platforms must be on that platform's own
+	 *  host; any other well-formed platform key (auto-registered by the scan box) may use any host. */
 	public static function clean_url( $platform, $url ) {
 		$url = esc_url_raw( trim( (string) $url ), [ 'https' ] );
 		if ( $url === '' || strlen( $url ) > 500 ) { return ''; }
 		$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+		if ( $host === '' || strpos( $host, '.' ) === false ) { return ''; }
 		$want = self::HOSTS[ $platform ] ?? '';
+		if ( $want === '' ) { return $url; } // generic / future platform
 		if ( $platform === 'x' && ( $host === 'twitter.com' || substr( $host, -12 ) === '.twitter.com' ) ) { return $url; }
 		return ( $host === $want || substr( $host, -( strlen( $want ) + 1 ) ) === '.' . $want ) ? $url : '';
+	}
+
+	/**
+	 * Person-level follower/following totals from the profiles that actually have a public count.
+	 * Missing counts are not treated as zero. LinkedIn connections are not followers.
+	 * follow_ratio = following_total / followers_total when followers_total > 0.
+	 * followers_total = 0 with a known following_total is flagged follow_ratio_inf (sorts as max).
+	 * Both sides blank -> ratio blank (sorts last).
+	 */
+	public static function tally_counts( array $profiles ) {
+		$fols = []; $fings = [];
+		foreach ( $profiles as $p ) {
+			if ( ! is_array( $p ) ) { continue; }
+			if ( array_key_exists( 'followers', $p ) && is_int( $p['followers'] ) && $p['followers'] >= 0 ) { $fols[] = $p['followers']; }
+			if ( array_key_exists( 'following', $p ) && is_int( $p['following'] ) && $p['following'] >= 0 ) { $fings[] = $p['following']; }
+		}
+		$ft = $fols ? array_sum( $fols ) : null;
+		$fg = $fings ? array_sum( $fings ) : null;
+		$inf = ( $ft === 0 && $fg !== null ) ? 1 : 0;
+		$ratio = ( $ft && $ft > 0 && $fg !== null ) ? round( $fg / $ft, 6 ) : null;
+		return [
+			'followers_total'   => $ft,
+			'followers_max'     => $fols ? max( $fols ) : null,
+			'following_total'   => $fg,
+			'follow_ratio'      => $ratio,
+			'follow_ratio_inf'  => $inf,
+		];
+	}
+
+	/** A public count: a whole number >= 0, or null (blank — never guessed, never coerced from junk). */
+	public static function count_or_null( $v ) {
+		if ( $v === null || $v === '' ) { return null; }
+		if ( is_int( $v ) && $v >= 0 && $v <= 1000000000000 ) { return $v; }
+		if ( is_numeric( $v ) && (string) (int) $v === (string) $v && (int) $v >= 0 && (int) $v <= 1000000000000 ) { return (int) $v; }
+		return null;
 	}
 
 	/** One ingest record → a row, or WP_Error. */
@@ -70,15 +108,25 @@ final class AlumniSearch {
 		$profiles = [];
 		foreach ( (array) ( $r['profiles'] ?? [] ) as $pf => $p ) {
 			$pf = sanitize_key( (string) $pf );
-			if ( ! in_array( $pf, self::PLATFORMS, true ) || ! is_array( $p ) ) { continue; }
+			if ( $pf === '' || strlen( $pf ) > 40 || ! is_array( $p ) ) { continue; }
 			$url = self::clean_url( $pf, $p['url'] ?? '' );
 			if ( $url === '' ) { continue; }
 			if ( stripos( (string) ( $p['evidence'] ?? '' ), 'recheck' ) === 0 || ( $p['status'] ?? '' ) === 'recheck' ) { continue; } // 1.25.7: confirmed matches only
-			$profiles[ $pf ] = [
+			$rec = [
 				'url'      => $url,
 				'title'    => mb_substr( sanitize_text_field( (string) ( $p['title'] ?? '' ) ), 0, 300 ),
 				'evidence' => mb_substr( sanitize_text_field( (string) ( $p['evidence'] ?? '' ) ), 0, 120 ),
 			];
+			foreach ( [ 'followers', 'following', 'connections' ] as $ck ) {
+				if ( array_key_exists( $ck, $p ) ) { $rec[ $ck ] = self::count_or_null( $p[ $ck ] ); }
+			}
+			if ( ! empty( $p['counts_at'] ) ) {
+				$ts = strtotime( (string) $p['counts_at'] );
+				if ( $ts ) { $rec['counts_at'] = gmdate( 'Y-m-d\TH:i:s\Z', $ts ); }
+			}
+			$src = (string) ( $p['counts_source'] ?? '' );
+			if ( in_array( $src, [ 'snippet', 'page', 'page+snippet' ], true ) ) { $rec['counts_source'] = $src; }
+			$profiles[ $pf ] = $rec;
 		}
 		$email = sanitize_email( (string) ( $r['public_email'] ?? '' ) );
 		$src   = $email !== '' ? esc_url_raw( (string) ( $r['public_email_source'] ?? '' ), [ 'https' ] ) : '';
@@ -97,7 +145,8 @@ final class AlumniSearch {
 			$g = $r['gpa'];
 			$gp['gpa'] = ( is_numeric( $g ) && (float) $g >= 0 && (float) $g <= 4.5 ) ? round( (float) $g, 2 ) : null;
 		}
-		return $loc + $gp + [
+		$tally = self::tally_counts( $profiles );
+		return $loc + $gp + $tally + [
 			'emails'       => wp_json_encode( self::clean_emails( $r['emails'] ?? [] ) ),
 			'name_key'     => self::name_key( $name, $txt( 'department', 120 ) ), // key from the stored (sanitised, 120-char) department, exactly what the prune keep-list builds
 			'full_name'    => $name,
@@ -195,6 +244,11 @@ final class AlumniSearch {
 			'city' => $r['city'], 'country' => $r['country'], 'public_email' => $r['public_email'],
 			'location' => (string) ( $r['location'] ?? '' ), 'location_source' => (string) ( $r['location_source'] ?? '' ),
 			'gpa' => self::gpa_out( $r['gpa'] ?? null ),
+			'followers_total' => self::count_or_null( $r['followers_total'] ?? null ),
+			'followers_max' => self::count_or_null( $r['followers_max'] ?? null ),
+			'following_total' => self::count_or_null( $r['following_total'] ?? null ),
+			'follow_ratio' => ( isset( $r['follow_ratio'] ) && is_numeric( $r['follow_ratio'] ) ) ? round( (float) $r['follow_ratio'], 6 ) : null,
+			'follow_ratio_inf' => ! empty( $r['follow_ratio_inf'] ),
 			'email_source' => $r['email_source'], 'photo' => preg_match( Outreach::PHOTO_RE, (string) $r['photo'] ) ? 'private' : '', 'n_profiles' => (int) $r['n_profiles'],
 			'photo_private' => (bool) preg_match( Outreach::PHOTO_RE, (string) $r['photo'] ),
 			'photo_meta' => is_array( $pm = json_decode( (string) ( $r['photo_meta'] ?? '' ), true ) ) ? array_intersect_key( $pm, array_flip( [ 'platform', 'profile_url', 'fetched_at' ] ) ) : null,
@@ -354,11 +408,11 @@ final class AlumniSearch {
 		}
 		$pf = sanitize_key( (string) Rest::p( $req, 'platform' ) );
 		if ( $pf === 'any' ) { $w[] = 'n_profiles > 0'; }
-		elseif ( in_array( $pf, self::PLATFORMS, true ) ) { $w[] = 'platforms LIKE %s'; $a[] = '%,' . $pf . ',%'; }
+		elseif ( $pf !== '' && $pf !== 'email' && preg_match( '/^[a-z0-9_]{1,40}$/', $pf ) ) { $w[] = 'platforms LIKE %s'; $a[] = '%,' . $pf . ',%'; }
 		// 1.25.13 multi-select (Arash 2026-10-23): ?platforms=linkedin,instagram,email -> rows with ALL of them (AND).
-		// Absent/empty = no filter (everyone). (1.25.11 was ANY/OR.)
+		// Absent/empty = no filter (everyone). (1.25.11 was ANY/OR.) 1.25.33: any sanitised platform key, not only the shipped list.
 		$sel = array_values( array_unique( array_filter( array_map( 'sanitize_key', explode( ',', (string) Rest::p( $req, 'platforms' ) ) ) ) ) );
-		$sel = array_values( array_intersect( $sel, array_merge( self::PLATFORMS, [ 'email' ] ) ) );
+		$sel = array_values( array_filter( $sel, function ( $k ) { return $k === 'email' || preg_match( '/^[a-z0-9_]{1,40}$/', $k ); } ) );
 		foreach ( $sel as $k ) {
 			if ( $k === 'email' ) { $w[] = self::HAS_EMAIL; }
 			else { $w[] = 'platforms LIKE %s'; $a[] = '%,' . $k . ',%'; }
@@ -390,11 +444,26 @@ final class AlumniSearch {
 		'gpa_asc'  => '(gpa IS NULL) ASC, gpa ASC, grad_year DESC, department ASC, full_name ASC, id ASC',
 		'class'    => self::ORDER,
 		'name'     => 'full_name ASC, grad_year DESC, department ASC, id ASC',
+		// 1.25.33: blanks last (NULL counts). follow_ratio_desc: 0-followers with a known following
+		// count sort first as maximum (follow_ratio_inf=1) and are flagged in the API; other blanks last.
+		'followers_total_desc' => '(followers_total IS NULL) ASC, followers_total DESC, grad_year DESC, department ASC, full_name ASC, id ASC',
+		'followers_max_desc'   => '(followers_max IS NULL) ASC, followers_max DESC, grad_year DESC, department ASC, full_name ASC, id ASC',
+		'following_total_desc' => '(following_total IS NULL) ASC, following_total DESC, grad_year DESC, department ASC, full_name ASC, id ASC',
+		'follow_ratio_desc'    => '(CASE WHEN follow_ratio IS NULL AND IFNULL(follow_ratio_inf,0)=0 THEN 1 ELSE 0 END) ASC, follow_ratio_inf DESC, follow_ratio DESC, grad_year DESC, department ASC, full_name ASC, id ASC',
 	];
 
-	/** The ORDER BY for ?sort= (unknown or absent = gpa_desc). Only ever one of the constants above, never user text. */
+	/** The ORDER BY for ?sort= (unknown or absent = gpa_desc). Only ever one of the constants above
+	 *  (or a sanitised per-platform JSON path for followers_platform), never raw user text. */
 	public static function order( $req ) {
 		$s = sanitize_key( (string) Rest::p( $req, 'sort' ) );
+		if ( $s === 'followers_platform' ) {
+			$pf = sanitize_key( (string) Rest::p( $req, 'sort_platform' ) );
+			if ( preg_match( '/^[a-z0-9_]{1,40}$/', (string) $pf ) ) {
+				$path = '$.' . $pf . '.followers';
+				return "(JSON_EXTRACT(profiles, '{$path}') IS NULL) ASC, CAST(JSON_EXTRACT(profiles, '{$path}') AS UNSIGNED) DESC, grad_year DESC, department ASC, full_name ASC, id ASC";
+			}
+			$s = 'followers_total_desc';
+		}
 		return self::ORDERS[ $s ] ?? self::ORDERS['gpa_desc'];
 	}
 
@@ -419,8 +488,17 @@ final class AlumniSearch {
 				(array) $wpdb->get_results( "SELECT {$col} AS v, COUNT(*) AS n FROM {$t} WHERE {$col} <> '' AND {$col} IS NOT NULL AND gpa IS NOT NULL GROUP BY {$col} ORDER BY {$col}" . ( $col === 'grad_year' ? ' DESC' : '' ) . " LIMIT " . self::FACET_MAX, ARRAY_A ) );
 		}
 		$out['platforms'] = [];
-		foreach ( self::PLATFORMS as $pf ) {
-			$out['platforms'][ $pf ] = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$t} WHERE gpa IS NOT NULL AND platforms LIKE %s", '%,' . $pf . ',%' ) );
+		$seen = [];
+		foreach ( (array) $wpdb->get_col( "SELECT platforms FROM {$t} WHERE gpa IS NOT NULL AND platforms <> ''" ) as $csv ) {
+			foreach ( array_filter( explode( ',', (string) $csv ) ) as $pf ) {
+				$pf = sanitize_key( $pf );
+				if ( $pf === '' ) { continue; }
+				$seen[ $pf ] = ( $seen[ $pf ] ?? 0 ) + 1;
+			}
+		}
+		foreach ( array_merge( self::PLATFORMS, array_keys( $seen ) ) as $pf ) {
+			if ( isset( $out['platforms'][ $pf ] ) ) { continue; }
+			$out['platforms'][ $pf ] = (int) ( $seen[ $pf ] ?? 0 );
 		}
 		$out['with_email'] = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$t} WHERE gpa IS NOT NULL AND " . self::HAS_EMAIL );
 		$out['total']     = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$t} WHERE gpa IS NOT NULL" );   // the visible list (people with an estimated GPA)
@@ -437,7 +515,14 @@ final class AlumniSearch {
 		[ $w, $a ] = self::where( $req );
 		$sql  = 'SELECT * FROM ' . self::t() . " WHERE {$w} ORDER BY " . self::order( $req ) . ' LIMIT 100000';
 		$rows = (array) $wpdb->get_results( $a ? $wpdb->prepare( $sql, $a ) : $sql, ARRAY_A );
-		$cols = array_merge( [ 'full_name', 'grad_year', 'department', 'employer', 'headline', 'city', 'country', 'location', 'location_source', 'gpa', 'public_email', 'email_source', 'emails' ], array_map( function ( $p ) { return $p . '_url'; }, self::PLATFORMS ) );
+		$pfs = self::PLATFORMS;
+		foreach ( $rows as $r ) {
+			foreach ( array_keys( json_decode( (string) $r['profiles'], true ) ?: [] ) as $pf ) {
+				$pf = sanitize_key( $pf );
+				if ( $pf && ! in_array( $pf, $pfs, true ) ) { $pfs[] = $pf; }
+			}
+		}
+		$cols = array_merge( [ 'full_name', 'grad_year', 'department', 'employer', 'headline', 'city', 'country', 'location', 'location_source', 'gpa', 'followers_total', 'followers_max', 'following_total', 'follow_ratio', 'public_email', 'email_source', 'emails' ], array_merge( ... array_map( function ( $p ) { return [ $p . '_url', $p . '_followers', $p . '_following' ]; }, $pfs ) ) );
 		$cell = function ( $v ) {
 			$v = (string) $v;
 			if ( $v !== '' && strpbrk( $v[0], "=+-@\t\r" ) !== false ) { $v = "'" . $v; }
@@ -449,7 +534,12 @@ final class AlumniSearch {
 			$vals = [];
 			$em = json_decode( (string) ( $r['emails'] ?? '' ), true ) ?: [];
 			$r['emails'] = implode( '; ', array_map( function ( $e ) { return ( $e['email'] ?? '' ) . ' (' . ( $e['source'] ?? '' ) . ')'; }, is_array( $em ) ? $em : [] ) );
-			foreach ( $cols as $c ) { $vals[] = $cell( substr( $c, -4 ) === '_url' ? ( $p[ substr( $c, 0, -4 ) ]['url'] ?? '' ) : ( $r[ $c ] ?? '' ) ); }
+			foreach ( $cols as $c ) {
+				if ( substr( $c, -4 ) === '_url' ) { $vals[] = $cell( $p[ substr( $c, 0, -4 ) ]['url'] ?? '' ); }
+				elseif ( substr( $c, -10 ) === '_followers' ) { $vals[] = $cell( $p[ substr( $c, 0, -10 ) ]['followers'] ?? '' ); }
+				elseif ( substr( $c, -10 ) === '_following' ) { $vals[] = $cell( $p[ substr( $c, 0, -10 ) ]['following'] ?? '' ); }
+				else { $vals[] = $cell( $r[ $c ] ?? '' ); }
+			}
 			$lines[] = implode( ',', $vals );
 		}
 		return [ 'filename' => 'artasearch-' . gmdate( 'Ymd' ) . '.csv', 'rows' => count( $rows ), 'csv' => "\xEF\xBB\xBF" . implode( "\r\n", $lines ) . "\r\n" ];

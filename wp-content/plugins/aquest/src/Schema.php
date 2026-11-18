@@ -1299,7 +1299,12 @@ final class Schema {
 				photo_meta TEXT NULL,
 				profiles TEXT NULL,
 				n_profiles TINYINT UNSIGNED NOT NULL DEFAULT 0,
-				platforms VARCHAR(120) NOT NULL DEFAULT '',
+				platforms VARCHAR(500) NOT NULL DEFAULT '',
+				followers_total INT NULL DEFAULT NULL,
+				followers_max INT NULL DEFAULT NULL,
+				following_total INT NULL DEFAULT NULL,
+				follow_ratio DOUBLE NULL DEFAULT NULL,
+				follow_ratio_inf TINYINT UNSIGNED NOT NULL DEFAULT 0,
 				created_at DATETIME NOT NULL,
 				updated_at DATETIME NOT NULL,
 				PRIMARY KEY  (id),
@@ -1630,6 +1635,22 @@ final class Schema {
 		// 1.87.0 — ArtaSearch confident-only emails (AlumniSearch::clean). dbDelta should add it; explicit for the same reason as above.
 		if ( self::table_exists( "{$p}aq_alumni" ) && ! self::column_exists( "{$p}aq_alumni", 'emails' ) ) {
 			$wpdb->query( "ALTER TABLE {$p}aq_alumni ADD COLUMN emails TEXT NULL" );
+		}
+		// 1.25.33 — public follower/following sort keys (AlumniSearch::tally_counts) and room for
+		// dynamically registered platform keys in `platforms`. Explicit ADD for the same SQLite reason.
+		foreach ( [
+			'followers_total'  => 'followers_total INT NULL DEFAULT NULL',
+			'followers_max'    => 'followers_max INT NULL DEFAULT NULL',
+			'following_total'  => 'following_total INT NULL DEFAULT NULL',
+			'follow_ratio'     => 'follow_ratio DOUBLE NULL DEFAULT NULL',
+			'follow_ratio_inf' => 'follow_ratio_inf TINYINT UNSIGNED NOT NULL DEFAULT 0',
+		] as $col => $def ) {
+			if ( self::table_exists( "{$p}aq_alumni" ) && ! self::column_exists( "{$p}aq_alumni", $col ) ) {
+				$wpdb->query( "ALTER TABLE {$p}aq_alumni ADD COLUMN $def" );
+			}
+		}
+		if ( self::table_exists( "{$p}aq_alumni" ) && self::column_exists( "{$p}aq_alumni", 'platforms' ) ) {
+			$wpdb->query( "ALTER TABLE {$p}aq_alumni MODIFY platforms VARCHAR(500) NOT NULL DEFAULT ''" );
 		}
 		// 1.70.0 — a proposed new time for a meeting, and who proposed it. One pending proposal per
 		// meeting is deliberate: two people trading times is a conversation, and they have one.

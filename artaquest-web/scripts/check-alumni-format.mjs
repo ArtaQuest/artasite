@@ -62,5 +62,18 @@ eq(f.gpaLabel(3.825), "3.83", "gpaLabel rounds");
 eq([f.gpaLabel(null), f.gpaLabel(undefined), f.gpaLabel(""), f.gpaLabel(NaN), f.gpaLabel(-1), f.gpaLabel(9)], ["", "", "", "", "", ""], "gpaLabel none/invalid -> empty");
 eq(f.ESTIMATE_NOTE, "Estimate from roster", "estimate tooltip");
 
+eq(f.formatCount(1234), "1,234", "formatCount thousands");
+eq(f.formatCount(12400), "12.4K", "formatCount K");
+eq(f.formatCount(2.1e6), "2.1M", "formatCount M");
+eq(f.formatCount(null), "", "formatCount blank");
+eq(f.formatCount(0), "0", "formatCount zero is a real public zero, not a blank");
+eq(f.followRatioLabel(2.4), "2.40", "ratio");
+eq(f.followRatioLabel(null, true), "∞ (0 followers)", "ratio inf flag");
+eq(f.followRatioLabel(null), "", "ratio blank");
+eq(f.platformLabel("tiktok"), "TikTok", "platformLabel known");
+eq(f.platformLabel("letterboxd"), "Letterboxd", "platformLabel extra");
+eq(f.platformLabel("some_new_site"), "Some New Site", "platformLabel generic");
+eq(f.profileHandle("threads", "https://www.threads.net/@foo"), "threads.net/@foo", "handle: generic threads");
+
 if (fail) { console.error(`${fail} alumni-format check(s) failed`); process.exit(1); }
 console.log("alumni-format: all checks pass");
