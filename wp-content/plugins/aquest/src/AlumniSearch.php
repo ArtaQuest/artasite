@@ -186,19 +186,22 @@ final class AlumniSearch {
 		return array_values( $out );
 	}
 
-	/** Insert or update on (name_key, grad_year). Returns 'inserted' | 'updated'. */
+	/** Insert or update on (name_key, grad_year). Returns 'inserted' | 'updated', or WP_Error if the write failed.
+	 *  1.25.35: never report success when $wpdb->insert/update returns false (missing columns, etc.). */
 	public static function upsert( array $row ) {
 		global $wpdb;
 		$cur = $wpdb->get_row( $wpdb->prepare( 'SELECT id, profiles FROM ' . self::t() . ' WHERE name_key = %s AND grad_year = %d', $row['name_key'], $row['grad_year'] ), ARRAY_A );
 		$id  = $cur ? (int) $cur['id'] : 0;
 		$row['updated_at'] = self::now();
 		if ( $id ) {
-			$wpdb->update( self::t(), $row, [ 'id' => $id ] );
+			$ok = $wpdb->update( self::t(), $row, [ 'id' => $id ] );
+			if ( $ok === false ) { return new \WP_Error( 'upsert', 'update failed: ' . ( $wpdb->last_error ?: 'unknown' ) ); }
 			if ( self::refollow_needed( (string) $cur['profiles'], (string) ( $row['profiles'] ?? '' ) ) ) { self::unfollow_everywhere( $id ); }
 			return 'updated';
 		}
 		$row['created_at'] = $row['updated_at'];
-		$wpdb->insert( self::t(), $row );
+		$ok = $wpdb->insert( self::t(), $row );
+		if ( $ok === false ) { return new \WP_Error( 'upsert', 'insert failed: ' . ( $wpdb->last_error ?: 'unknown' ) ); }
 		return 'inserted';
 	}
 
@@ -706,7 +709,9 @@ final class AlumniSearch {
 		foreach ( $list as $i => $r ) {
 			$row = is_array( $r ) ? self::clean( $r ) : new \WP_Error( 'item', 'not an object' );
 			if ( is_wp_error( $row ) ) { $out['errors'][] = [ 'row' => $i, 'error' => $row->get_error_message() ]; continue; }
-			$out[ self::upsert( $row ) ]++;
+			$which = self::upsert( $row );
+			if ( is_wp_error( $which ) ) { $out['errors'][] = [ 'row' => $i, 'error' => $which->get_error_message() ]; continue; }
+			$out[ $which ]++;
 			global $wpdb;
 			$rid = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . self::t() . ' WHERE name_key = %s AND grad_year = %d', $row['name_key'], $row['grad_year'] ) );
 			$ph  = $rid ? self::photo_apply( $rid, $r, json_decode( $row['profiles'], true ) ?: [] ) : 'kept';

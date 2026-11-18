@@ -13,7 +13,9 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  */
 final class Schema {
 
-	const VERSION = '1.90.0';
+	/** Bump this whenever migrate() gains new DDL so existing installs actually run it.
+	 *  1.25.33 added follower/following columns but left this at 1.90.0, so production never got them and every ingest upsert failed silently. */
+	const VERSION = '1.90.1';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
