@@ -196,7 +196,8 @@ final class AlumniSearch {
 		if ( $id ) {
 			$ok = $wpdb->update( self::t(), $row, [ 'id' => $id ] );
 			if ( $ok === false ) { return new \WP_Error( 'upsert', 'update failed: ' . ( $wpdb->last_error ?: 'unknown' ) ); }
-			if ( self::refollow_needed( (string) $cur['profiles'], (string) ( $row['profiles'] ?? '' ) ) ) { self::unfollow_everywhere( $id ); }
+			$reset = self::refollow_platforms( (string) $cur['profiles'], (string) ( $row['profiles'] ?? '' ) );
+			if ( $reset ) { self::unfollow_platforms_everywhere( $id, $reset ); }
 			return 'updated';
 		}
 		$row['created_at'] = $row['updated_at'];
@@ -206,31 +207,47 @@ final class AlumniSearch {
 	}
 
 	// 1.25.31 (Arash 2026-11-15: "if a bluesky or strava account is found on someone, then it should be toggled back so they can be
-	// followed again"). 1.25.32: the same rule applies to a newly found Spotify or TikTok account. When an ingest gives an existing row a NEW Bluesky, Strava, Spotify or TikTok URL, the shared Follow (aq_alumni_follows) is
-	// cleared for that row for every admin, so the person shows under "not followed" again. LinkedIn's own follow state is untouched.
+	// followed again"). 1.25.32: the same rule applies to a newly found Spotify or TikTok account.
+	// 1.25.37: only the newly found platform's own follow state is cleared (follow is per platform, not shared).
 	const REFOLLOW_PLATFORMS = [ 'bluesky', 'strava', 'spotify', 'tiktok' ];
 
-	/** True when $new_json has a Bluesky/Strava URL that $old_json did not have (pure; tested in tools/test-alumni-refollow.php). */
-	public static function refollow_needed( $old_json, $new_json ) {
+	/** Platforms in REFOLLOW_PLATFORMS whose URL is new or changed in $new_json (pure; tested in tools/test-alumni-refollow.php). */
+	public static function refollow_platforms( $old_json, $new_json ) {
 		$o = json_decode( (string) $old_json, true ); $o = is_array( $o ) ? $o : [];
 		$n = json_decode( (string) $new_json, true ); $n = is_array( $n ) ? $n : [];
 		$k = static function ( $u ) { return strtolower( rtrim( preg_replace( '~^https?://(www\.)?~i', '', (string) $u ), '/' ) ); };
+		$out = [];
 		foreach ( self::REFOLLOW_PLATFORMS as $pf ) {
 			$nu = is_array( $n[ $pf ] ?? null ) ? (string) ( $n[ $pf ]['url'] ?? '' ) : '';
 			if ( $nu === '' ) { continue; }
 			$ou = is_array( $o[ $pf ] ?? null ) ? (string) ( $o[ $pf ]['url'] ?? '' ) : '';
-			if ( $k( $nu ) !== $k( $ou ) ) { return true; }
+			if ( $k( $nu ) !== $k( $ou ) ) { $out[] = $pf; }
 		}
-		return false;
+		return $out;
 	}
 
-	/** Remove alumni row $id from every admin's shared Follow map. */
-	private static function unfollow_everywhere( $id ) {
+	/** True when $new_json has a Bluesky/Strava/Spotify/TikTok URL that $old_json did not have. */
+	public static function refollow_needed( $old_json, $new_json ) {
+		return (bool) self::refollow_platforms( $old_json, $new_json );
+	}
+
+	/** Remove the given platforms' follow state for alumni row $id from every admin (1.25.37 per-platform map). */
+	private static function unfollow_platforms_everywhere( $id, array $platforms ) {
 		global $wpdb;
-		$uids = (array) $wpdb->get_col( $wpdb->prepare( "SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key = %s", self::FOLLOW_META ) );
+		$platforms = array_values( array_filter( $platforms, function ( $pf ) { return (bool) preg_match( '/^[a-z0-9_]{1,40}$/', (string) $pf ); } ) );
+		if ( ! $platforms ) { return; }
+		$uids = (array) $wpdb->get_col( $wpdb->prepare( "SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key = %s", self::PF_FOLLOW_META ) );
 		foreach ( $uids as $uid ) {
-			$m = get_user_meta( (int) $uid, self::FOLLOW_META, true );
-			if ( is_array( $m ) && isset( $m[ $id ] ) ) { unset( $m[ $id ] ); update_user_meta( (int) $uid, self::FOLLOW_META, $m ); }
+			$m = get_user_meta( (int) $uid, self::PF_FOLLOW_META, true );
+			if ( ! is_array( $m ) || ! isset( $m[ $id ] ) || ! is_array( $m[ $id ] ) ) { continue; }
+			$changed = false;
+			foreach ( $platforms as $pf ) {
+				if ( isset( $m[ $id ][ $pf ] ) ) { unset( $m[ $id ][ $pf ] ); $changed = true; }
+			}
+			if ( $changed ) {
+				if ( ! $m[ $id ] ) { unset( $m[ $id ] ); }
+				update_user_meta( (int) $uid, self::PF_FOLLOW_META, $m );
+			}
 		}
 	}
 
@@ -241,7 +258,7 @@ final class AlumniSearch {
 
 	private static function out( $r ) {
 		$p = json_decode( (string) $r['profiles'], true );
-		return [
+		$out = [
 			'id' => (int) $r['id'], 'full_name' => $r['full_name'], 'grad_year' => (int) $r['grad_year'],
 			'department' => $r['department'], 'employer' => $r['employer'], 'headline' => $r['headline'],
 			'city' => $r['city'], 'country' => $r['country'], 'public_email' => $r['public_email'],
@@ -259,18 +276,128 @@ final class AlumniSearch {
 			'photo_meta' => is_array( $pm = json_decode( (string) ( $r['photo_meta'] ?? '' ), true ) ) ? array_intersect_key( $pm, array_flip( [ 'platform', 'profile_url', 'fetched_at' ] ) ) : null,
 			'emails' => is_array( $em = json_decode( (string) ( $r['emails'] ?? '' ), true ) ) ? $em : [],
 			'profiles' => is_array( $p ) ? $p : [], 'updated_at' => $r['updated_at'],
-			'followed_at' => self::follows()[ (int) $r['id'] ] ?? null,
-			'li_followed_at' => self::li_follows()[ (int) $r['id'] ] ?? null,
+			'follows' => self::pf_follows()[ (int) $r['id'] ] ?? (object) [],
+			'followed_at' => self::followed_at_for( (int) $r['id'], self::$view_pf ),
+			'li_followed_at' => self::followed_at_for( (int) $r['id'], 'linkedin' ),
 		];
+		if ( self::$view_pf !== '' && is_array( $p ) && isset( $p[ self::$view_pf ] ) && is_array( $p[ self::$view_pf ] ) ) {
+			$tally = self::tally_counts( [ self::$view_pf => $p[ self::$view_pf ] ] );
+			$out['followers_total']  = $tally['followers_total'];
+			$out['followers_max']    = $tally['followers_max'];
+			$out['following_total']  = $tally['following_total'];
+			$out['follow_ratio']     = $tally['follow_ratio'];
+			$out['follow_ratio_inf'] = ! empty( $tally['follow_ratio_inf'] );
+			$gpa = $out['gpa'];
+			$out['gpa_follow_score'] = ( $gpa !== null && $tally['follow_ratio'] !== null ) ? round( ( (float) $gpa ) * (float) $tally['follow_ratio'], 6 ) : null;
+			$out['gpa_follow_score_inf'] = ( $gpa !== null && ! empty( $tally['follow_ratio_inf'] ) );
+			$out['view_platform'] = self::$view_pf;
+		}
+		return $out;
 	}
 
-	// 1.25.12 Follow (Arash 2026-10-23): per admin user, in user meta (survives reloads and devices): {alumni id: followed_at UTC}.
-	const FOLLOW_META = 'aq_alumni_follows';
+	/** The platform the current list/export is scoped to (empty = person-level totals, legacy). */
+	private static $view_pf = '';
 
-	/** The current user's followed rows: [id => 'Y-m-d H:i:s' UTC]. */
+	// 1.25.12 Follow (Arash 2026-10-23): per admin user, in user meta (survives reloads and devices): {alumni id: followed_at UTC}.
+	// 1.25.37: that shared map is legacy. The live state is PF_FOLLOW_META: {alumni id: {platform: followed_at UTC}}.
+	const FOLLOW_META = 'aq_alumni_follows';
+	const PF_FOLLOW_META    = 'aq_alumni_pf_follows';
+	const PF_BACKFILL_FLAG  = 'aq_alumni_pf_follows_v1';
+	private static $pf_bf_done = [];
+
+	/** The current user's legacy shared follows: [id => 'Y-m-d H:i:s' UTC]. Used only to migrate. */
 	private static function follows() {
 		$m = get_user_meta( get_current_user_id(), self::FOLLOW_META, true );
 		return is_array( $m ) ? $m : [];
+	}
+
+	/** Current user's per-platform follows: [id => [platform => 'Y-m-d H:i:s' UTC]]. Backfills once. */
+	private static function pf_follows( $uid = 0 ) {
+		$uid = $uid ?: get_current_user_id();
+		if ( $uid <= 0 ) { return []; }
+		self::pf_backfill( $uid );
+		$m = get_user_meta( $uid, self::PF_FOLLOW_META, true );
+		return is_array( $m ) ? $m : [];
+	}
+
+	/** followed_at for one person on one platform, or null. Empty $pf → any platform (first). */
+	private static function followed_at_for( $id, $pf ) {
+		$m = self::pf_follows()[ (int) $id ] ?? [];
+		if ( ! is_array( $m ) ) { return null; }
+		if ( $pf === '' ) { return $m ? (string) reset( $m ) : null; }
+		return isset( $m[ $pf ] ) && is_string( $m[ $pf ] ) ? $m[ $pf ] : null;
+	}
+
+	/**
+	 * Pure merge of legacy shared + LinkedIn maps into the per-platform shape (tested in tools/test-alumni-pf-follows.php).
+	 * Existing per-platform timestamps are kept. Shared follows are copied onto every non-LinkedIn
+	 * platform the person had at migration time; LinkedIn comes from the LinkedIn map.
+	 *
+	 * @param array $legacy_shared [id => timestamp]
+	 * @param array $legacy_li     [id => timestamp]
+	 * @param array $keys_by_id    [id => [platform, ...]]
+	 * @param array $existing      [id => [platform => timestamp]]
+	 */
+	public static function merge_pf_follows( array $legacy_shared, array $legacy_li, array $keys_by_id, array $existing = [] ) {
+		$out = $existing;
+		foreach ( $legacy_li as $id => $at ) {
+			$id = (int) $id;
+			if ( $id <= 0 || ! is_string( $at ) || $at === '' ) { continue; }
+			if ( ! isset( $out[ $id ] ) || ! is_array( $out[ $id ] ) ) { $out[ $id ] = []; }
+			if ( ! isset( $out[ $id ]['linkedin'] ) ) { $out[ $id ]['linkedin'] = $at; }
+		}
+		foreach ( $legacy_shared as $id => $at ) {
+			$id = (int) $id;
+			if ( $id <= 0 || ! is_string( $at ) || $at === '' ) { continue; }
+			$keys = $keys_by_id[ $id ] ?? [];
+			if ( ! isset( $out[ $id ] ) || ! is_array( $out[ $id ] ) ) { $out[ $id ] = []; }
+			foreach ( $keys as $pf ) {
+				$pf = strtolower( preg_replace( '/[^a-z0-9_]/', '', (string) $pf ) );
+				if ( $pf === '' || $pf === 'linkedin' ) { continue; }
+				if ( ! isset( $out[ $id ][ $pf ] ) ) { $out[ $id ][ $pf ] = $at; }
+			}
+		}
+		foreach ( $out as $id => $m ) {
+			if ( ! is_array( $m ) || ! $m ) { unset( $out[ $id ] ); }
+		}
+		return $out;
+	}
+
+	/** One-time per user: copy legacy shared + LinkedIn follow maps into PF_FOLLOW_META. Idempotent. */
+	private static function pf_backfill( $uid ) {
+		global $wpdb;
+		$uid = (int) $uid;
+		if ( $uid <= 0 || isset( self::$pf_bf_done[ $uid ] ) ) { return; }
+		self::$pf_bf_done[ $uid ] = true;
+		if ( get_user_meta( $uid, self::PF_BACKFILL_FLAG, true ) ) { return; }
+		$legacy_shared = get_user_meta( $uid, self::FOLLOW_META, true );
+		$legacy_li     = get_user_meta( $uid, self::LI_FOLLOW_META, true );
+		$existing      = get_user_meta( $uid, self::PF_FOLLOW_META, true );
+		$legacy_shared = is_array( $legacy_shared ) ? $legacy_shared : [];
+		$legacy_li     = is_array( $legacy_li ) ? $legacy_li : [];
+		$existing      = is_array( $existing ) ? $existing : [];
+		$ids = array_values( array_unique( array_map( 'intval', array_merge( array_keys( $legacy_shared ), array_keys( $legacy_li ) ) ) ) );
+		$keys_by_id = [];
+		if ( $ids ) {
+			$in   = implode( ',', $ids );
+			$rows = (array) $wpdb->get_results( 'SELECT id, profiles FROM ' . self::t() . " WHERE id IN ({$in})", ARRAY_A );
+			foreach ( $rows as $r ) {
+				$pr = json_decode( (string) $r['profiles'], true );
+				$keys_by_id[ (int) $r['id'] ] = is_array( $pr ) ? array_keys( $pr ) : [];
+			}
+		}
+		$merged = self::merge_pf_follows( $legacy_shared, $legacy_li, $keys_by_id, $existing );
+		if ( $merged !== $existing ) { update_user_meta( $uid, self::PF_FOLLOW_META, $merged ); }
+		update_user_meta( $uid, self::PF_BACKFILL_FLAG, gmdate( 'Y-m-d H:i:s' ) );
+	}
+
+	/** Schema migrate hook (1.25.37 / schema 1.90.2): backfill every admin who has any follow map. */
+	public static function migrate_pf_follows() {
+		global $wpdb;
+		$keys = [ self::FOLLOW_META, self::LI_FOLLOW_META, self::PF_FOLLOW_META ];
+		$in   = implode( ',', array_map( function ( $k ) use ( $wpdb ) { return $wpdb->prepare( '%s', $k ); }, $keys ) );
+		$uids = array_values( array_unique( array_map( 'intval', (array) $wpdb->get_col( "SELECT DISTINCT user_id FROM {$wpdb->usermeta} WHERE meta_key IN ({$in})" ) ) ) );
+		foreach ( $uids as $uid ) { self::pf_backfill( $uid ); }
 	}
 
 	// 1.25.23 LinkedIn Follow (Arash 2026-10-30: "linkedin to have its own separate follow button since it has lower weekly limit").
@@ -357,43 +484,61 @@ final class AlumniSearch {
 		return self::li_quota();
 	}
 
-	/** POST outreach/alumni/follow {id, follow: bool, platform?: 'linkedin'} -> {id, followed_at|null, li_followed_at|null, quota?}.
-	 *  Without platform: the shared (non-LinkedIn) follow state, unchanged since 1.25.12. Unfollow only flips the state.
-	 *  platform=linkedin: needs a LinkedIn profile on the row; never refused (1.25.26: the weekly number is a soft counter only). */
+	/** POST outreach/alumni/follow {id, follow: bool, platform: required} -> {id, platform, followed_at|null, li_followed_at?, quota?}.
+	 *  1.25.37: platform is required; state is stored per platform. LinkedIn keeps its own lock, click log and li_follows row (kept in sync). */
 	public static function follow( $req ) {
 		global $wpdb;
 		$id = Rest::pint( $req, 'id' );
 		$row = $id ? $wpdb->get_row( $wpdb->prepare( 'SELECT id, profiles FROM ' . self::t() . ' WHERE id = %d', $id ), ARRAY_A ) : null;
 		if ( ! $row ) { return new \WP_Error( 'not_found', 'no such person', 404 ); }
-		$on = rest_sanitize_boolean( Rest::p( $req, 'follow', true ) );
-		if ( sanitize_key( (string) Rest::p( $req, 'platform' ) ) === 'linkedin' ) {
-			$pr = json_decode( (string) $row['profiles'], true );
+		$pf = sanitize_key( (string) Rest::p( $req, 'platform' ) );
+		if ( $pf === '' || ! preg_match( '/^[a-z0-9_]{1,40}$/', $pf ) ) { return new \WP_Error( 'platform', 'platform is required', 400 ); }
+		$pr = json_decode( (string) $row['profiles'], true );
+		$pr = is_array( $pr ) ? $pr : [];
+		if ( $pf === 'linkedin' ) {
 			if ( ! self::is_linkedin_url( (string) ( $pr['linkedin']['url'] ?? '' ) ) ) { return new \WP_Error( 'no_linkedin', 'this person has no LinkedIn profile', 400 ); }
+		} elseif ( empty( $pr[ $pf ]['url'] ) ) {
+			return new \WP_Error( 'no_profile', 'this person has no ' . $pf . ' profile', 400 );
+		}
+		$on  = rest_sanitize_boolean( Rest::p( $req, 'follow', true ) );
+		$uid = get_current_user_id();
+		$at  = null;
+		$quota = null;
+		if ( $pf === 'linkedin' ) {
 			// Serialize this user's LinkedIn follows (two fast clicks / two tabs must not both take the last slot):
 			// a MySQL named lock around the read-modify-write of the two user-meta rows; the meta cache is dropped so we read fresh.
-			$uid  = get_current_user_id();
 			$lock = 'aq_li_follow_' . $uid;
 			if ( ! (int) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 5)', $lock ) ) ) { return new \WP_Error( 'busy', 'try again', 503 ); }
 			try {
 				wp_cache_delete( $uid, 'user_meta' );
 				$m = self::li_follows(); $log = self::li_log();
 				if ( $on && ! isset( $m[ $id ] ) ) {
-					// 1.25.26 (Arash 2026-11-03: "there shouldn't be any hard limit on the linkedin button. remove the deactivation"):
-					// no refusal past the weekly number any more; the click is still logged so the counter stays as a soft display.
+					// 1.25.26: no refusal past the weekly number; the click is still logged so the counter stays as a soft display.
 					$m[ $id ] = $log[] = gmdate( 'Y-m-d H:i:s' );
 				} elseif ( ! $on ) { unset( $m[ $id ] ); }
 				update_user_meta( $uid, self::LI_FOLLOW_META, $m );
 				update_user_meta( $uid, self::LI_LOG_META, array_slice( $log, -1000 ) ); // pruned to 7 days by li_log(); hard bound too
-				return [ 'id' => $id, 'li_followed_at' => $m[ $id ] ?? null, 'quota' => self::li_quota( $log ) ];
+				$at = $m[ $id ] ?? null;
+				$quota = self::li_quota( $log );
 			} finally {
 				$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) );
 			}
 		}
-		$m = self::follows();
-		if ( $on ) { $m[ $id ] = $m[ $id ] ?? gmdate( 'Y-m-d H:i:s' ); }
-		else { unset( $m[ $id ] ); }
-		update_user_meta( get_current_user_id(), self::FOLLOW_META, $m );
-		return [ 'id' => $id, 'followed_at' => $m[ $id ] ?? null ];
+		wp_cache_delete( $uid, 'user_meta' );
+		$map = self::pf_follows( $uid );
+		if ( $on ) {
+			if ( ! isset( $map[ $id ] ) || ! is_array( $map[ $id ] ) ) { $map[ $id ] = []; }
+			$map[ $id ][ $pf ] = $map[ $id ][ $pf ] ?? ( $at ?: gmdate( 'Y-m-d H:i:s' ) );
+			$at = $map[ $id ][ $pf ];
+		} else {
+			if ( isset( $map[ $id ][ $pf ] ) ) { unset( $map[ $id ][ $pf ] ); }
+			if ( isset( $map[ $id ] ) && ! $map[ $id ] ) { unset( $map[ $id ] ); }
+			$at = null;
+		}
+		update_user_meta( $uid, self::PF_FOLLOW_META, $map );
+		$out = [ 'id' => $id, 'platform' => $pf, 'followed_at' => $at ];
+		if ( $pf === 'linkedin' ) { $out['li_followed_at'] = $at; $out['quota'] = $quota; }
+		return $out;
 	}
 
 	/** WHERE clause + args from ?year=&department=&platform=&platforms=a,b,email&country=&location=&q= */
@@ -422,10 +567,17 @@ final class AlumniSearch {
 			if ( $k === 'email' ) { $w[] = self::HAS_EMAIL; }
 			else { $w[] = 'platforms LIKE %s'; $a[] = '%,' . $k . ',%'; }
 		}
-		// ?followed=1 / 0: only people the current admin follows / does not follow (1.25.12)
+		// ?followed=1 / 0: people the current admin follows / does not follow. 1.25.37: when ?platform= is set, that platform only.
 		$fo = (string) Rest::p( $req, 'followed' );
 		if ( $fo === '1' || $fo === '0' ) {
-			$ids = array_values( array_unique( array_map( 'intval', array_merge( array_keys( self::follows() ), array_keys( self::li_follows() ) ) ) ) ); // 1.25.23: either button counts
+			$view = sanitize_key( (string) Rest::p( $req, 'platform' ) );
+			$view = ( $view !== '' && $view !== 'email' && preg_match( '/^[a-z0-9_]{1,40}$/', $view ) ) ? $view : '';
+			$ids = [];
+			foreach ( self::pf_follows() as $aid => $m ) {
+				if ( ! is_array( $m ) || ! $m ) { continue; }
+				if ( $view === '' || isset( $m[ $view ] ) ) { $ids[] = (int) $aid; }
+			}
+			$ids = array_values( array_unique( array_filter( $ids ) ) );
 			if ( $fo === '1' ) { $w[] = $ids ? 'id IN (' . implode( ',', $ids ) . ')' : '1=0'; }
 			elseif ( $ids ) { $w[] = 'id NOT IN (' . implode( ',', $ids ) . ')'; }
 		}
@@ -464,20 +616,52 @@ final class AlumniSearch {
 	 *  (or a sanitised per-platform JSON path for followers_platform), never raw user text. */
 	public static function order( $req ) {
 		$s = sanitize_key( (string) Rest::p( $req, 'sort' ) );
+		$pf = sanitize_key( (string) Rest::p( $req, 'platform' ) );
 		if ( $s === 'followers_platform' ) {
-			$pf = sanitize_key( (string) Rest::p( $req, 'sort_platform' ) );
-			if ( preg_match( '/^[a-z0-9_]{1,40}$/', (string) $pf ) ) {
-				$path = '$.' . $pf . '.followers';
-				return "(JSON_EXTRACT(profiles, '{$path}') IS NULL) ASC, CAST(JSON_EXTRACT(profiles, '{$path}') AS UNSIGNED) DESC, grad_year DESC, department ASC, full_name ASC, id ASC";
-			}
+			$sp = sanitize_key( (string) Rest::p( $req, 'sort_platform' ) );
+			if ( preg_match( '/^[a-z0-9_]{1,40}$/', (string) $sp ) ) { $pf = $sp; }
 			$s = 'followers_total_desc';
 		}
+		if ( $pf !== '' && $pf !== 'email' && preg_match( '/^[a-z0-9_]{1,40}$/', $pf )
+			&& in_array( $s, [ 'followers_total_desc', 'followers_max_desc', 'following_total_desc', 'follow_ratio_desc', 'gpa_follow_score_desc' ], true ) ) {
+			return self::platform_order( $pf, $s );
+		}
 		return self::ORDERS[ $s ] ?? self::ORDERS['gpa_desc'];
+	}
+
+	/** ORDER BY for the selected platform's own counts (JSON paths; $pf is a sanitised key). */
+	private static function platform_order( $pf, $sort ) {
+		$fol  = "CAST(JSON_EXTRACT(profiles, '$.{$pf}.followers') AS UNSIGNED)";
+		$fing = "CAST(JSON_EXTRACT(profiles, '$.{$pf}.following') AS UNSIGNED)";
+		$has_fol  = "JSON_EXTRACT(profiles, '$.{$pf}.followers') IS NOT NULL";
+		$has_fing = "JSON_EXTRACT(profiles, '$.{$pf}.following') IS NOT NULL";
+		$blank_ratio = "(CASE WHEN NOT {$has_fol} AND NOT {$has_fing} THEN 1 WHEN {$has_fol} AND {$fol} = 0 AND {$has_fing} THEN 0 WHEN NOT {$has_fol} OR NOT {$has_fing} THEN 1 ELSE 0 END)";
+		$inf = "(CASE WHEN {$has_fol} AND {$fol} = 0 AND {$has_fing} THEN 1 ELSE 0 END)";
+		$ratio = "({$fing} / NULLIF({$fol}, 0))";
+		$tie = 'grad_year DESC, department ASC, full_name ASC, id ASC';
+		if ( $sort === 'following_total_desc' ) {
+			return "(JSON_EXTRACT(profiles, '$.{$pf}.following') IS NULL) ASC, {$fing} DESC, {$tie}";
+		}
+		if ( $sort === 'follow_ratio_desc' ) {
+			return "{$blank_ratio} ASC, {$inf} DESC, {$ratio} DESC, {$tie}";
+		}
+		if ( $sort === 'gpa_follow_score_desc' ) {
+			return "(CASE WHEN gpa IS NULL THEN 1 ELSE {$blank_ratio} END) ASC, {$inf} DESC, (gpa * {$ratio}) DESC, gpa DESC, {$tie}";
+		}
+		// followers_total_desc and followers_max_desc: one account, so they are the same.
+		return "(JSON_EXTRACT(profiles, '$.{$pf}.followers') IS NULL) ASC, {$fol} DESC, {$tie}";
+	}
+
+	/** The ?platform= key when it names a real social network (not 'any' or 'email'). */
+	private static function view_platform( $req ) {
+		$pf = sanitize_key( (string) Rest::p( $req, 'platform' ) );
+		return ( $pf !== '' && $pf !== 'any' && $pf !== 'email' && preg_match( '/^[a-z0-9_]{1,40}$/', $pf ) ) ? $pf : '';
 	}
 
 	/** GET outreach/alumni — highest estimated GPA first by default (?sort=gpa_desc|gpa_asc|class|name, self::ORDERS); ?cursor= is an opaque offset (0 = first page) + the filtered total. */
 	public static function list( $req ) {
 		global $wpdb;
+		self::$view_pf = self::view_platform( $req );
 		[ $w, $a ] = self::where( $req );
 		$total  = (int) $wpdb->get_var( $a ? $wpdb->prepare( 'SELECT COUNT(*) FROM ' . self::t() . " WHERE {$w}", $a ) : 'SELECT COUNT(*) FROM ' . self::t() . " WHERE {$w}" );
 		$cursor = max( 0, Rest::pint( $req, 'cursor' ) );
@@ -520,6 +704,7 @@ final class AlumniSearch {
 	/** GET outreach/alumni/export — the filtered set as CSV, formula-guarded. */
 	public static function export( $req ) {
 		global $wpdb;
+		self::$view_pf = self::view_platform( $req );
 		[ $w, $a ] = self::where( $req );
 		$sql  = 'SELECT * FROM ' . self::t() . " WHERE {$w} ORDER BY " . self::order( $req ) . ' LIMIT 100000';
 		$rows = (array) $wpdb->get_results( $a ? $wpdb->prepare( $sql, $a ) : $sql, ARRAY_A );

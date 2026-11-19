@@ -15,7 +15,7 @@ final class Schema {
 
 	/** Bump this whenever migrate() gains new DDL so existing installs actually run it.
 	 *  1.25.33 added follower/following columns but left this at 1.90.0, so production never got them and every ingest upsert failed silently. */
-	const VERSION = '1.90.1';
+	const VERSION = '1.90.2';
 
 	/** Map of unprefixed table key → CREATE TABLE body (without prefix/charset). */
 	public static function tables() {
@@ -1653,6 +1653,16 @@ final class Schema {
 		}
 		if ( self::table_exists( "{$p}aq_alumni" ) && self::column_exists( "{$p}aq_alumni", 'platforms' ) ) {
 			$wpdb->query( "ALTER TABLE {$p}aq_alumni MODIFY platforms VARCHAR(500) NOT NULL DEFAULT ''" );
+		}
+		// 1.25.37 — per-platform Outreach follow state lives in user meta (aq_alumni_pf_follows).
+		// Bumping schema runs the backfill once on existing installs: legacy shared follows
+		// (aq_alumni_follows) are copied onto each non-LinkedIn platform the person had, and
+		// aq_alumni_li_follows is copied onto linkedin. Idempotent; existing per-platform values win.
+		if ( get_option( 'aq_alumni_pf_follows_migrated' ) !== '1.90.2' ) {
+			if ( class_exists( __NAMESPACE__ . '\\AlumniSearch' ) ) {
+				AlumniSearch::migrate_pf_follows();
+			}
+			update_option( 'aq_alumni_pf_follows_migrated', '1.90.2', true );
 		}
 		// 1.70.0 — a proposed new time for a meeting, and who proposed it. One pending proposal per
 		// meeting is deliberate: two people trading times is a conversation, and they have one.

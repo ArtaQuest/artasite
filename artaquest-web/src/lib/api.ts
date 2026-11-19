@@ -3314,10 +3314,14 @@ export type Alumnus = {
   photo_meta?: { platform: AlumniPlatform; profile_url: string; fetched_at: string } | null;
   /** 1.25.7: confident-only — the roster's own address (source "roster") or a high-confidence address with the https page it was published on */
   emails?: AlumniEmail[];
-  /** 1.25.12: when the signed-in admin followed this person (UTC), else null */
+  /** 1.25.37: when the signed-in admin followed this person on the list's selected platform (UTC), else null */
   followed_at?: string | null;
-  /** 1.25.23: when the signed-in admin followed this person on LinkedIn (separate button), else null */
+  /** 1.25.23: when the signed-in admin followed this person on LinkedIn, else null */
   li_followed_at?: string | null;
+  /** 1.25.37: per-platform follow timestamps for the signed-in admin */
+  follows?: Record<string, string>;
+  /** 1.25.37: set when the list is scoped to one platform (counts/ratio/score are for that platform). */
+  view_platform?: string;
   profiles: Partial<Record<string, AlumniProfile>>; updated_at: string;
 };
 /** platforms: comma list of AlumniPlatform | "email"; a row matches when it has ALL of them (1.25.13; absent = everyone). location: free text against location/city/country (1.25.19). */
@@ -3341,10 +3345,12 @@ export const AlumniApi = {
   facets: () => get<AlumniFacets>("/outreach/alumni/facets"),
   photoUrl: (id: number) => `${BASE}/outreach/alumni/photo/${id}?_wpnonce=${encodeURIComponent(restNonce())}`,
   exportCsv: (p: AlumniFilter) => get<{ filename: string; rows: number; csv: string }>("/outreach/alumni/export", alumniParams(p)),
-  follow: (id: number, follow: boolean) => post<{ id: number; followed_at: string | null }>("/outreach/alumni/follow", { id, follow }),
-  /** 1.25.23: LinkedIn's own follow state. 1.25.26 dropped the hard weekly cap (no 429); 1.25.36 dropped the counter from the UI. */
+  /** 1.25.37: platform is required; state is stored per platform. */
+  follow: (id: number, follow: boolean, platform: string) =>
+    post<{ id: number; platform: string; followed_at: string | null; li_followed_at?: string | null; quota?: LinkedInQuota }>("/outreach/alumni/follow", { id, follow, platform }),
+  /** LinkedIn keeps its own action (same endpoint with platform=linkedin; still logs the click). */
   followLinkedIn: (id: number, follow: boolean) =>
-    post<{ id: number; li_followed_at: string | null; quota: LinkedInQuota }>("/outreach/alumni/follow", { id, follow, platform: "linkedin" }),
+    post<{ id: number; platform: string; followed_at: string | null; li_followed_at: string | null; quota: LinkedInQuota }>("/outreach/alumni/follow", { id, follow, platform: "linkedin" }),
   linkedInQuota: () => get<LinkedInQuota>("/outreach/alumni/linkedin-quota"),
   setLinkedInCap: (cap: number) => post<LinkedInQuota>("/outreach/alumni/linkedin-quota", { cap }),
   toQueue: (id: number, platforms: AlumniPlatform[]) =>
